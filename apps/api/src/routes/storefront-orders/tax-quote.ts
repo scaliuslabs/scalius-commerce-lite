@@ -13,6 +13,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { billingTaxLocation } from "@scalius/core/modules/orders";
 import { billingAddressBodyShape } from "../../schemas/billing-address";
+import { checkoutFxSchema } from "../../schemas/markets";
 import { fromMinor } from "@scalius/shared/money";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
@@ -27,6 +28,7 @@ import {
     storefrontLinePropertiesHashes,
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
+    presentQuoteFx,
 } from "@scalius/core/modules/checkout";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
@@ -78,6 +80,7 @@ const taxQuoteResponseSchema = z.object({
   shippingTaxed: z.boolean(),
   currencyCode: z.string(),
   decimalPlaces: z.number().int(),
+  fx: checkoutFxSchema,
   settingsVersion: z.number().int(),
   subtotalMinor: z.number().int(),
   subtotalAmount: z.number(),
@@ -307,6 +310,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     handles: (data.giftCards ?? []).map((card) => card.handle),
     masterSecret: readMasterSecret(c.env),
     taxQuote: quote,
+    money: cartValidation.money,
     giftCardLineIds: new Set(cartValidation.items
       .filter((item) => item.isGiftCard)
       .map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId))),
@@ -321,6 +325,8 @@ app.openapi(taxQuoteRoute, async (c) => {
       // A method that doesn't serve the delivery country is not offered (cash on delivery: Bangladesh).
       delivery.address?.countryCode ?? null,
       paymentProviders,
+      // A gateway that can't charge the order's currency is not offered.
+      quote.currencyCode,
     ), paymentProviders);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
@@ -335,6 +341,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     shippingTaxed: quote.shippingTaxed,
     currencyCode: quote.currencyCode,
     decimalPlaces: quote.decimalPlaces,
+    // The rate this quote converts shop amounts at, and how long an order keeps it (MARKETS-DESIGN step 6).
+    fx: presentQuoteFx(cartValidation.money),
     settingsVersion: quote.settingsVersion,
     subtotalMinor: quote.subtotalMinor,
     subtotalAmount: toAmount(quote.subtotalMinor),

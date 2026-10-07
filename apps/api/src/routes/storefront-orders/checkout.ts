@@ -364,12 +364,15 @@ function assertGatewayPrecommitReadiness(
   amountDueMinor: number,
   currencyCode: string,
   giftCardsApplied: boolean,
+  /** The order is in a market's own currency (MARKETS-DESIGN step 6). */
+  foreignCurrency = false,
 ): void {
   const issue = providers.precommitIssue({
     paymentMethod,
     currencyCode,
     totalAmountMinor: amountDueMinor,
-    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled && !giftCardsApplied,
+    // A deposit is a shop-currency amount: an order in another currency pays in full.
+    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled && !giftCardsApplied && !foreignCurrency,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
   if (issue) throw new ValidationError(issue);
@@ -539,7 +542,8 @@ app.openapi(createOrderRoute, async (c) => {
       checkoutAuthority,
       paymentProviders,
     );
-    assertGatewayCurrencyReadiness(data, currency.currencyCode, paymentProviders);
+    // A gateway must charge the order's currency: its market's (MARKETS-DESIGN step 6).
+    assertGatewayCurrencyReadiness(data, cartValidation.money.currencyCode, paymentProviders);
     diagnostics?.mark("policy");
 
     // This remains memory-only until the authoritative order batch. The
@@ -604,8 +608,9 @@ app.openapi(createOrderRoute, async (c) => {
       result.paymentMethod,
       checkoutSettings,
       result.giftCardTender.amountDueMinor,
-      currency.currencyCode,
+      result.taxQuote.currencyCode,
       result.giftCardTender.appliedTotalMinor > 0,
+      cartValidation.money.currencyCode !== cartValidation.money.shopCurrencyCode,
     );
     diagnostics?.mark("prepare");
 

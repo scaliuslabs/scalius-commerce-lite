@@ -17,6 +17,7 @@ import type { Database } from "@scalius/database/client";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import {
+    marketDecimalPlaces,
     marketListPricesSql,
     marketPriceContextOf,
     priceProductSkus,
@@ -178,7 +179,8 @@ export async function searchStorefrontProducts(
     const count = Number(countResults[0]?.count ?? 0);
     const totalPages = Math.ceil(count / limit);
 
-    const decimalPlaces = storeDecimalPlacesFromCode(countResults[0]?.storeCurrencyCode);
+    // Prices in the page market's currency (MARKETS-DESIGN step 6).
+    const decimalPlaces = marketDecimalPlaces(await marketPriceContextOf(pricing), storeDecimalPlacesFromCode(countResults[0]?.storeCurrencyCode));
     // In a priced market each product's own price is its card's (its SKUs carry their own).
     const productPrices = new Map<string, CatalogDiscountColumns>();
     const [imageMap, variantMap] = await Promise.all([

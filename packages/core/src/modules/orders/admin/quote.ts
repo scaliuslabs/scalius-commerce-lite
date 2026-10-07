@@ -290,10 +290,19 @@ async function loadManualOrderDeliveryMethod(
 function resolveManualOrderLineProperties(
     items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null }>>,
     retainedLines: ReadonlyMap<string, RetainedManualOrderLine> | undefined,
+    /** An order in a market's own currency (MARKETS-DESIGN step 6): only its own lines, at their prices. */
+    foreignCurrency: string | null = null,
 ) {
     const issues: AdminOrderSkuIssue[] = [];
     const lines = items.map((item, index) => {
         const retained = item.orderItemId ? retainedLines?.get(item.orderItemId) : undefined;
+        if (foreignCurrency && !(retained && retained.variantId === item.variantId)) {
+            // Catalogue prices are the shop currency's; the order's locked rate
+            // prices only what the buyer agreed to.
+            addAdminOrderSkuIssue(issues, item, index, "PRODUCT_UNAVAILABLE",
+                `This order is in ${foreignCurrency}. Its items keep their prices; add other items in a new order.`);
+            return null;
+        }
         if (retained && retained.variantId === item.variantId) {
             // A kept line keeps the price and buyer inputs the customer agreed to.
             const propertiesPriceMinor = retained.propertiesPriceMinor ?? 0;
@@ -450,6 +459,7 @@ export async function prepareManualOrderQuote(
             unitPriceMinor: item.catalogUnitPriceMinor,
         })),
         retainedLines,
+        currency.code !== store.code ? currency.code : null,
     );
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,
@@ -644,7 +654,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
 
     const skuByVariantId = new Map(rows.map((row) => [row.id, row]));
     const storeCurrency = storeCurrencyFromSql(rows[0]?.storeCurrencyCode, rows[0]?.storePriceIncrementMinor);
-    const [mediaByProduct, priceScope] = await Promise.all([
+    const [mediaByProduct, marketScope] = await Promise.all([
         loadProductMediaProjections(db, [...new Set(rows.map((row) => row.productId))]),
         market
             ? resolveCheckoutPriceScope(db, {
@@ -656,6 +666,10 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             })
             : Promise.resolve(null),
     ]);
+    // A staff order is in the shop currency (Shopify's draft-order default): a
+    // market that sells in its own currency prices only buyer checkouts, so
+    // its lines take base prices here (MARKETS-DESIGN step 6).
+    const priceScope = marketScope && marketScope.money.currencyCode !== storeCurrency.code ? null : marketScope;
     const quantityByVariant = new Map<string, number>();
     for (const item of items) {
         if (item.variantId) quantityByVariant.set(item.variantId, (quantityByVariant.get(item.variantId) ?? 0) + (item.quantity ?? 1));

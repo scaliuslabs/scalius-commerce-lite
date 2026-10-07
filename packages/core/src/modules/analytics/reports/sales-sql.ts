@@ -10,6 +10,7 @@
 // two-argument min/max, `= 1` on boolean columns (bigint on PostgreSQL),
 // lowercase snake_case aliases (PostgreSQL folds unquoted identifiers).
 import { sql, type SQL } from "drizzle-orm";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { zoneOffsetSchedule, type ZoneOffsetSchedule } from "@scalius/shared/commerce-time";
 import {
   analyticsBuckets,
@@ -22,13 +23,46 @@ import {
 import type { WeekDay } from "@scalius/shared/week-start";
 
 /**
- * The orders a report reads: placed in the range, presented and reported in
- * the report currency (the store's). Line measures are presentment amounts,
- * so an order presented in another currency is counted only once reports
- * read line-level shop amounts (Markets, before a second currency).
+ * The orders a report reads: placed in the range and kept in the report
+ * currency (the shop currency, `orders.shop_currency`). Every money measure
+ * is in the shop currency: an order presented in a market's own currency
+ * (MARKETS-DESIGN step 6) converts each amount at its locked rate, so
+ * nothing ever sums mixed currencies.
  */
 export interface SalesScope extends AnalyticsInstantRange {
   currency: string;
+}
+
+/**
+ * `expr` (minor units of the order's currency) in minor units of the shop
+ * currency: itself for a same-currency order, else at the order's locked
+ * rate (`so.fxm`: the rate times the exponent shift), rounded half away from
+ * zero. Binds nothing; runs on D1, TursoDB and PostgreSQL alike.
+ */
+export function shopMinorSql(expr: string, alias = "so"): string {
+  return `(case when ${alias}.fx = 0 then (${expr}) else cast(round((${expr}) * ${alias}.fxm) as bigint) end)`;
+}
+
+/** The order's shop-currency multiplier: its rate times 10^(shop places − order places), literals only. */
+function fxMultiplierText(shopDecimalPlaces: number, alias = "o"): string {
+  const shifts = [0, 1, 2, 3].map((places) => {
+    const shift = shopDecimalPlaces - places;
+    return ` when ${places} then ${shift >= 0 ? `${10 ** shift}.0` : `${1 / 10 ** -shift}`}`;
+  }).join("");
+  return `cast(${alias}.fx_rate as double precision) * (case ${alias}.currency_decimal_places${shifts} else 1.0 end)`;
+}
+
+function fxMultiplierSql(shopDecimalPlaces: number): SQL {
+  return sql.raw(fxMultiplierText(shopDecimalPlaces));
+}
+
+/**
+ * `expr` (minor units of the currency of the order row `alias`) in minor
+ * units of the shop currency, for reads that join `orders` directly (payment
+ * and refund reports): the same conversion as `shopMinorSql`.
+ */
+export function orderShopMinorSql(expr: string, shopCurrency: string, alias = "o"): SQL {
+  return sql.raw(`(case when ${alias}.currency_code = ${alias}.shop_currency then (${expr}) else cast(round((${expr}) * ${fxMultiplierText(getDecimalPlaces(shopCurrency), alias)}) as bigint) end)`);
 }
 
 /**
@@ -104,20 +138,26 @@ export function orderIdentitySql(alias = "so"): SQL {
  * reports group by and the money columns the residuals need.
  */
 export function salesOrdersCte(scope: SalesScope): SQL {
+  const fx = sql.raw("case when o.currency_code = o.shop_currency then 0 else 1 end");
+  const fxm = fxMultiplierSql(getDecimalPlaces(scope.currency));
+  // Order amounts in the shop currency (see `shopMinorSql`).
+  const money = (column: string) => sql.raw(`case when o.currency_code = o.shop_currency then o.${column} else cast(round(o.${column} * `);
+  const shop = (column: string) => sql`${money(column)}${fxm}) as bigint) end as ${sql.raw(column)}`;
   return sql`so as materialized (
     select o.id, o.created_at, o.status, o.payment_method, o.channel, o.channel_source,
       o.city_name, o.zone_name, o.fulfillment_location_id, o.fulfillment_status,
       o.shipping_method_id, o.shipping_method_kind, o.requires_shipping,
       o.customer_id, o.customer_phone, o.customer_name,
       o.prices_include_tax as incl,
-      o.shipping_amount_minor, o.discount_amount_minor, o.tax_amount_minor,
-      o.total_amount_minor, o.paid_amount_minor, o.balance_due_minor,
+      ${shop("shipping_amount_minor")}, ${shop("discount_amount_minor")}, ${shop("tax_amount_minor")},
+      ${shop("total_amount_minor")}, ${shop("paid_amount_minor")}, ${shop("balance_due_minor")},
+      ${fx} as fx,
+      case when o.currency_code = o.shop_currency then 1.0 else ${fxm} end as fxm,
       case when o.status in (${REVERSED}) then 1 else 0 end as reversed
     from orders o
     where o.deleted_at is null
       and o.created_at >= ${scope.start} and o.created_at < ${scope.endExclusive}
       and o.status not in (${NON_SALES})
-      and o.currency_code = ${scope.currency}
       and o.shop_currency = ${scope.currency}
   )`;
 }
@@ -156,9 +196,9 @@ export function salesLinesCtes(options: SalesLineOptions = {}): SQL {
     select oi.id as line_id, oi.order_id, oi.product_id, oi.variant_id, oi.quantity,
       oi.product_name, oi.variant_label, so.created_at, so.reversed,
       case when oi.fulfillment_type = 'gift_card' then 1 else 0 end as gc,
-      oi.line_subtotal_minor - case when so.incl = 1 then oi.tax_amount_minor else 0 end as gross,
-      oi.discount_amount_minor as disc,
-      oi.tax_amount_minor as tax,
+      ${sql.raw(shopMinorSql("oi.line_subtotal_minor - case when so.incl = 1 then oi.tax_amount_minor else 0 end"))} as gross,
+      ${sql.raw(shopMinorSql("oi.discount_amount_minor"))} as disc,
+      ${sql.raw(shopMinorSql("oi.tax_amount_minor"))} as tax,
       ${unitCost} as unit_cost,
       case when so.reversed = 1 then oi.quantity else coalesce(rq.approved, 0) end as returned_raw
     from so

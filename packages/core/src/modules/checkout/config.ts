@@ -7,6 +7,7 @@ import {
     normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
+import { currencySymbol } from "@scalius/shared/money-format";
 import { isReady } from "@scalius/shared/readiness";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import type { AppProviders } from "../../integrations/provider-port";
@@ -137,10 +138,17 @@ export async function getCheckoutConfig(
         label: { ...marketing.checkout.label },
     };
 
-    const localCurrencyCode = currency.currencyCode;
-    const localCurrencySymbol = currency.currencySymbol;
+    // A presence of a market in its own currency checks out in it
+    // (MARKETS-DESIGN step 6): its symbol and places, only the methods that
+    // charge it, and no advance (a deposit is a shop-currency amount).
+    const foreignCurrency = market?.currencyCode && market.currencyCode !== currency.currencyCode
+        ? market.currencyCode
+        : null;
+    const localCurrencyCode = foreignCurrency ?? currency.currencyCode;
+    const localCurrencySymbol = foreignCurrency ? currencySymbol(foreignCurrency) : currency.currencySymbol;
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
-    const { checkoutMode, partialPaymentEnabled, partialPaymentAmount } = checkout;
+    const { checkoutMode, partialPaymentAmount } = checkout;
+    const partialPaymentEnabled = checkout.partialPaymentEnabled && foreignCurrency === null;
     const [customerIdentity, checkoutReadiness] = await Promise.all([
         getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv, appProviders }),
         getCheckoutReadiness(db, { encryptionKey, runtimeEnv, appProviders }),

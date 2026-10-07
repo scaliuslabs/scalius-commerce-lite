@@ -32,31 +32,47 @@ import {
     type ResolvedPrice,
 } from "@scalius/shared/market-pricing";
 import { discountedPriceMinor } from "@scalius/shared/money";
-import { NotFoundError } from "@scalius/core/errors";
+import { AppError, NotFoundError } from "@scalius/core/errors";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { servedLanguageSql, storePriceIncrementSql } from "../markets";
+import { marketCurrencyIncrementMinor, marketPresentment, presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
 import { effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../settings";
 
 /** How one market prices for an anonymous buyer now. */
 export interface MarketPriceContext {
     marketId: string;
-    /** The market's currency: the shop currency until step 6. */
+    /** The market's currency: its own (step 6), else the shop currency. */
     currencyCode: string;
     decimalPlaces: number;
+    /** The market currency's price increment (the backup's for the shop currency). */
     incrementMinor: number;
+    /** The shop currency base prices are in. */
+    shopCurrencyCode: string;
+    /** The shop currency's increment: base catalogue discounts round to it. */
+    shopIncrementMinor: number;
     /** Its FX conversion in `fx` mode, unless it is the identity. */
     fx: FxConversion | null;
     /** An active public list is live now: list prices must be read. */
     listed: boolean;
+    /** How shop-currency amounts (fees, thresholds, surcharges) convert; null in the shop currency. */
+    money: PresentmentMoney | null;
     /** The instant the read priced at (epoch seconds). */
     atSeconds: number;
 }
 
 /** A market that prices exactly like the backup market: its reads answer the root's bytes. */
 export function isNeutralMarketPricing(context: MarketPriceContext | null | undefined): boolean {
-    return !context || (context.fx === null && !context.listed);
+    return !context || (context.fx === null && !context.listed && context.currencyCode === context.shopCurrencyCode);
+}
+
+/** Thrown when a market in its own currency has no usable rate: its prices are refused, never shown unconverted. */
+export class MarketPricesUnavailableError extends AppError {
+    constructor() {
+        super(503, "MARKET_PRICES_UNAVAILABLE", "Prices in this market are unavailable right now. Try the store's main site.");
+        this.name = "MarketPricesUnavailableError";
+    }
 }
 
 /** The FX conversion of a market row, or null when it prices at base prices. */
@@ -67,10 +83,11 @@ export function marketFxConversion(row: {
     priceRoundingMinor: number | null;
     priceEndingMinor: number | null;
 }, currency: { code: string; shopCode: string; incrementMinor: number }): FxConversion | null {
-    if (row.priceMode !== "fx") return null;
+    const own = currency.code !== currency.shopCode;
+    // A market in its own currency always converts (the database keeps it in `fx` mode).
+    if (row.priceMode !== "fx" && !own) return null;
     const rate = marketFxRate({ currencyCode: currency.code, fxRate: row.fxRate }, currency.shopCode);
-    // No rate: the market cannot derive prices; until step 6 it sells the shop
-    // currency, whose rate is always "1", so this cannot happen yet.
+    // No rate: the market cannot derive prices (`MarketPricesUnavailableError`).
     if (rate === null) return null;
     let policy: MarketFxPolicy = {
         rate,
@@ -83,7 +100,8 @@ export function marketFxConversion(row: {
     const issue = marketFxPolicyIssue(policy, currency.incrementMinor);
     if (issue === "rounding" || issue === "ending") policy = { ...policy, roundingMinor: null, endingMinor: null };
     else if (issue !== null) return null;
-    if (policy.rate === "1" && policy.adjustmentBps === 0 && policy.roundingMinor === null) return null;
+    // The identity in the shop currency prices like the backup market.
+    if (!own && policy.rate === "1" && policy.adjustmentBps === 0 && policy.roundingMinor === null) return null;
     const decimalPlaces = getDecimalPlaces(currency.code);
     return { policy, fromDecimalPlaces: getDecimalPlaces(currency.shopCode), toDecimalPlaces: decimalPlaces, incrementMinor: currency.incrementMinor };
 }
@@ -128,6 +146,7 @@ export async function readMarketPriceContext(
         priceAdjustmentBps: markets.priceAdjustmentBps,
         priceRoundingMinor: markets.priceRoundingMinor,
         priceEndingMinor: markets.priceEndingMinor,
+        marketCurrencyCode: markets.currencyCode,
         currencyCode: storeCurrencyCodeSql(),
         incrementMinor: storePriceIncrementSql(),
         // The schedules of its active public lists (a handful).
@@ -153,16 +172,27 @@ export async function readMarketPriceContext(
     deps.market(row.id);
     deps.marketPricing(row.id);
     const shopCode = storeCurrencyFromCode(row.currencyCode);
-    const incrementMinor = Number(row.incrementMinor);
+    const shopIncrementMinor = Number(row.incrementMinor);
+    const code = row.marketCurrencyCode && row.marketCurrencyCode !== shopCode ? row.marketCurrencyCode : shopCode;
+    const incrementMinor = code === shopCode ? shopIncrementMinor : marketCurrencyIncrementMinor(code);
+    const fx = marketFxConversion(row, { code, shopCode, incrementMinor });
+    if (code !== shopCode && fx === null) throw new MarketPricesUnavailableError();
     const schedules = parseJsonArray<ScheduleRow>(row.lists).map((entry) => ({ startsAt: epochOrNull(entry.s), endsAt: epochOrNull(entry.e) }));
     const boundary = nextPriceListBoundary(schedules, atSeconds);
     if (boundary !== null) deps.validUntil(boundary * 1_000);
     return {
         marketId: row.id,
-        currencyCode: shopCode,
-        decimalPlaces: getDecimalPlaces(shopCode),
+        currencyCode: code,
+        decimalPlaces: getDecimalPlaces(code),
         incrementMinor,
-        fx: marketFxConversion(row, { code: shopCode, shopCode, incrementMinor }),
+        shopCurrencyCode: shopCode,
+        shopIncrementMinor,
+        fx,
+        money: code === shopCode ? null : marketPresentment({
+            shop: { code: shopCode, decimalPlaces: getDecimalPlaces(shopCode), priceIncrementMinor: shopIncrementMinor },
+            currencyCode: code,
+            rate: fx!.policy.rate,
+        }),
         listed: schedules.some((schedule) => isPriceListLive(schedule, atSeconds)),
         atSeconds,
     };
@@ -373,7 +403,7 @@ export function priceProductSkus<TSku extends MarketSkuRow>(
         const pool = pools.get(sku.productId) ?? [];
         pool.push({ skuId: sku.id, available: !sku.trackInventory || sku.stock - sku.reservedStock > 0, resolved });
         pools.set(sku.productId, pool);
-        return { ...strip(sku), ...resolvedPriceAsCatalogPrice(resolved) };
+        return { ...inMarketCurrency(context, strip(sku)), ...resolvedPriceAsCatalogPrice(resolved) };
     });
     const optioned = new Set(skus.filter((sku) => sku.isDefault === false && Boolean(sku.optionCombinationKey?.trim())).map((sku) => sku.productId));
     const defaults = new Set(skus.filter((sku) => sku.isDefault === true).map((sku) => sku.id));
@@ -446,11 +476,41 @@ async function readCardSkus(db: Database, marketId: string, productIds: readonly
         )) as unknown as Promise<CardSkuRow[]>;
 }
 
+/**
+ * A priced row states the currency its prices are in: rows that carry the
+ * store currency (`storeCurrencyCode`, read for their decimal places) take
+ * the market's own currency (MARKETS-DESIGN step 6). Rows in the shop
+ * currency are returned as they are.
+ */
+export function inMarketCurrency<T extends object>(context: MarketPriceContext, row: T): T {
+    if (context.currencyCode === context.shopCurrencyCode || !("storeCurrencyCode" in row)) return row;
+    return { ...row, storeCurrencyCode: context.currencyCode };
+}
+
+/**
+ * A shop-currency amount a read shows (a delivery fee, a bundle price, a
+ * buyer-input surcharge) in the market's currency: converted at its rate and
+ * rounded to its increment (Shopify's rule); the shop currency keeps it.
+ */
+export function marketShopAmountMinor(context: MarketPriceContext | null | undefined, shopMinor: number): number {
+    return context?.money ? presentShopMinor(context.money, shopMinor) : shopMinor;
+}
+
+/** `marketShopAmountMinor` bound to one read's market. */
+export function marketShopAmounts(context: MarketPriceContext | null | undefined): (shopMinor: number) => number {
+    return (shopMinor) => marketShopAmountMinor(context, shopMinor);
+}
+
+/** The decimal places a read presents its prices in: its market's, else the store currency's. */
+export function marketDecimalPlaces(context: MarketPriceContext | null | undefined, storeDecimalPlaces: number): number {
+    return context ? context.decimalPlaces : storeDecimalPlaces;
+}
+
 /** A card row's pricing columns with the resolved card price (the card SKU's, and the pool's maximum). */
-function pricedCard<T extends BuyerPricingMinor>(row: T, resolved: ResolvedPrice, maxAmountMinor: number): T {
+function pricedCard<T extends BuyerPricingMinor>(context: MarketPriceContext, row: T, resolved: ResolvedPrice, maxAmountMinor: number): T {
     const shape = resolvedPriceAsCatalogPrice(resolved);
     return {
-        ...row,
+        ...inMarketCurrency(context, row),
         basePriceMinor: shape.priceMinor,
         discountType: shape.discountType,
         discountBps: shape.discountBps,
@@ -492,7 +552,7 @@ export async function priceProductCards<T extends BuyerPricingMinor & { id: stri
                 fx: context.fx,
                 incrementMinor: context.incrementMinor,
             }).amountMinor;
-            return pricedCard(row, resolved, max);
+            return pricedCard(context, row, resolved, max);
         });
     }
     const productIds = rows.map((row) => row.id);
@@ -514,7 +574,7 @@ export async function priceProductCards<T extends BuyerPricingMinor & { id: stri
                 parseMarketListPrices(sku.listPrices),
             ),
         })));
-        return card ? pricedCard(row, card.card.resolved, card.maxAmountMinor) : row;
+        return card ? pricedCard(context, row, card.card.resolved, card.maxAmountMinor) : inMarketCurrency(context, row);
     });
 }
 

@@ -397,6 +397,8 @@ export const orderSummarySchema = z.object({
   customerEmail: z.string().nullable(),
   customerId: z.string().nullable(),
   totalAmount: z.number(),
+  /** The order's currency: its market's (MARKETS-DESIGN step 6). Its amounts are in it. */
+  currencyCode: z.string().optional(),
   shippingCharge: z.number(),
   discountAmount: z.number(),
   status: z.string(),
@@ -535,6 +537,23 @@ export const orderDetailSchema = z.object({
   discountAmount: z.number(),
   currencyCode: z.string().nullable(),
   currencyDecimalPlaces: z.number().int().nullable(),
+  /**
+   * The order's money chain when the buyer paid in a market's own currency
+   * (MARKETS-DESIGN D3, step 6): its shop-currency amounts at the locked
+   * rate, shown beside the presentment amounts. Null: same-currency.
+   */
+  moneyChain: z.object({
+    shopCurrencyCode: z.string(),
+    rate: z.string().openapi({ description: "Shop currency units per order currency unit, locked at checkout." }),
+    source: z.string(),
+    asOf: z.string().nullable().openapi({ format: "date-time" }),
+    lockedUntil: z.string().nullable().openapi({ format: "date-time" }),
+    subtotalShopAmount: z.number(),
+    shippingShopAmount: z.number(),
+    discountShopAmount: z.number(),
+    taxShopAmount: z.number(),
+    totalShopAmount: z.number(),
+  }).nullable().optional(),
   subtotalAmountMinor: z.number().int().nullable(),
   shippingAmountMinor: z.number().int().nullable(),
   shippingMethodId: z.string().nullable(),

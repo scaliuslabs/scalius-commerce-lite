@@ -40,15 +40,19 @@ import {
 } from "@scalius/database/schema";
 import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, toMinor } from "@scalius/shared/money";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import {
+    marketDecimalPlaces,
     marketListPricesSql,
     marketPriceContextOf,
+    marketShopAmountMinor,
+    marketShopAmounts,
     priceProductSkus,
     type MarketPriceContext,
     type MarketPricing,
@@ -276,9 +280,13 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     const translatedBrand = translation && brand?.id
         ? applyTranslation(brand, foldedTranslationChain(translation, brandTrRows), { name: "name" }, brandTrSlug ?? null)
         : brand;
-    const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
-    const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
+    // A presence of a market in its own currency (MARKETS-DESIGN step 6) shows
+    // every amount in it: prices from the market rule, and shop-currency
+    // amounts (surcharges, bundle prices, offer thresholds) converted at its
+    // rate and rounded to its increment, as checkout charges them.
+    // (The context was read beside the product row; it is awaited where amounts are presented.)
+    const pageMarketPromise = marketPriceContextOf(pricing);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const variantRowsPromise = db.select({
@@ -346,14 +354,22 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         contentPromise.then((data) => ({ type: "content", data })),
 
         listProductBuyGetOffers(db, product.id, storeCurrency)
-            .then((offers) => ({
-                type: "offers",
-                data: offers.map(({ buyAmountMinor, basisPoints, ...offer }) => ({
-                    ...offer,
-                    buyAmount: buyAmountMinor === null ? null : fromMinor(buyAmountMinor, decimalPlaces),
-                    percentOff: basisPoints / 100,
-                })),
-            })),
+            .then(async (offers) => {
+                const market = await pageMarketPromise;
+                const places = marketDecimalPlaces(market, storeDecimalPlacesFromCode(storeCurrencyCode));
+                return {
+                    type: "offers",
+                    data: offers.map(({ buyAmountMinor, basisPoints, ...offer }) => ({
+                        ...offer,
+                        // Offer products show base prices: none in another currency (MARKETS-DESIGN step 6).
+                        ...(market && market.currencyCode !== market.shopCurrencyCode
+                            ? { products: offer.products.map((item) => ({ ...item, price: null })) }
+                            : {}),
+                        buyAmount: buyAmountMinor === null ? null : fromMinor(marketShopAmountMinor(market, buyAmountMinor), places),
+                        percentOff: basisPoints / 100,
+                    })),
+                };
+            }),
 
         // The specification table: grouped rows in the merchant's order (one
         // statement; the group join adds no round trip).
@@ -432,8 +448,17 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; listPrices?: string | null; }
     // The page's market: its SKUs, "from" price and EMI line in its prices
     // (a neutral market and the root keep the rows as read).
+    const pageMarket = await pageMarketPromise;
+    const presentShopAmount = marketShopAmounts(pageMarket);
+    const foreign = pageMarket !== null && pageMarket.currencyCode !== pageMarket.shopCurrencyCode;
+    const decimalPlaces = marketDecimalPlaces(pageMarket, storeDecimalPlacesFromCode(storeCurrencyCode));
+    const pageCurrency = pageMarket ? { code: pageMarket.currencyCode, priceIncrementMinor: pageMarket.incrementMinor } : storeCurrency;
+    const customization = readStoredCustomization(storedCustomization, decimalPlaces, {
+        giftCard: product.isGiftCard === true,
+        ...(foreign ? { presentShopAmount } : {}),
+    });
     const marketPage = priceProductPageInMarket(
-        await marketPriceContextOf(pricing),
+        pageMarket,
         product,
         variants as VariantResult[],
         storeCurrency.priceIncrementMinor,
@@ -473,7 +498,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             imageMediaId: variantImage?.mediaId ?? null,
             selectedOptions: translateSelectedOptions(translation, productChains, selectedOptionMap.get(variant.id) ?? []),
             /** Storefront-visible custom fields of this SKU, in definition order. */
-            customFields: content.variantCustomFields.get(variant.id) ?? [],
+            customFields: foreign
+                ? customFieldsInMarket(content.variantCustomFields.get(variant.id) ?? [], pageMarket!)
+                : content.variantCustomFields.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
@@ -498,7 +525,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             requiresCustomization: customization.requiresCustomization,
             // A malformed schema is a product error: checkout refuses the product.
             customizationUnavailable: customization.invalid,
-            discountedPrice: catalogDiscountedPrice(pricedProduct, storeCurrency.code, storeCurrency.priceIncrementMinor),
+            discountedPrice: catalogDiscountedPrice(pricedProduct, pageCurrency.code, pageCurrency.priceIncrementMinor),
             attributes,
             additionalInfo,
             offers,
@@ -515,9 +542,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             /** The ready files those blocks name. */
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
             /** Active quantity tiers, priced by checkout exactly as shown. */
-            bundles: content.bundles.map((tier) => presentProductBundleTier(tier, decimalPlaces)),
-            /** Storefront-visible custom fields, in definition order (money in decimal major units). */
-            customFields: content.customFields,
+            bundles: content.bundles.map((tier) => presentProductBundleTier(
+                foreign && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentShopAmount(tier.priceMinor) } : tier,
+                decimalPlaces,
+            )),
+            /** Storefront-visible custom fields, in definition order (money in decimal major units of the page's currency). */
+            customFields: foreign ? customFieldsInMarket(content.customFields, pageMarket!) : content.customFields,
             /** Published reviews (summary and the first page); null when the store's reviews are off. */
             reviews,
             /** The product's warranty policy (its current terms); null without one. */
@@ -530,7 +560,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                     terms: warranty.terms,
                 }
                 : null,
-            emi: productEmiOffer({
+            // EMI plans are the shop currency's bank offers: none in another currency.
+            emi: foreign ? null : productEmiOffer({
                 emiEligible: emiEligible === true,
                 priceMinor: marketPage.fromMinor,
                 settings: parseStoredEmiSettings(storeEmiSettings),
@@ -543,6 +574,15 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         variants: formattedVariants,
         recommendations,
     };
+}
+
+/** Money custom fields (shop-currency major units) in a foreign market's currency (MARKETS-DESIGN step 6). */
+function customFieldsInMarket<T extends { type: string; value: unknown }>(fields: readonly T[], market: MarketPriceContext): T[] {
+    const shopPlaces = getDecimalPlaces(market.shopCurrencyCode);
+    return fields.map((field) => {
+        if (field.type !== "money" || typeof field.value !== "number" || !Number.isFinite(field.value) || field.value < 0) return field;
+        return { ...field, value: fromMinor(marketShopAmountMinor(market, toMinor(field.value, shopPlaces)), market.decimalPlaces) };
+    });
 }
 
 /** A category named on its product's page (breadcrumb, description, meta). */

@@ -21,7 +21,7 @@ import {
 } from "../products";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { Database } from "@scalius/database/client";
-import { marketAmountMinor, marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
+import { marketAmountMinor, marketDecimalPlaces, marketPriceContextOf, marketShopAmounts, priceProductCards, type MarketPricing } from "../price-lists";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
@@ -468,7 +468,7 @@ async function readStorefrontCatalogResults(
     const listedRows = shelfPreview ? fetchedList : fetchedList.slice(0, limit);
     // The page's market: its cards and price range in the market's prices.
     const market = await marketPriceContextOf(pricing);
-    const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
+    const decimalPlaces = marketDecimalPlaces(market, storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode));
     const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
     const shopAllFacetsLive = unscoped
@@ -492,7 +492,7 @@ async function readStorefrontCatalogResults(
     // list prices (only when one is live) ride beside them.
     const [productsList, cardData, categoriesData, facetRows] = await Promise.all([
         priceProductCards(db, market, listedRows),
-        loadCatalogCardData(db, listedRows, decimalPlaces),
+        loadCatalogCardData(db, listedRows, decimalPlaces, marketShopAmounts(market)),
         categoryIds.length > 0
             ? db
                 .select({

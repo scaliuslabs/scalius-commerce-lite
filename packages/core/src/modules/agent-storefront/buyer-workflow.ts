@@ -452,11 +452,12 @@ export async function submitAgentStorefrontCheckout(
     ? assertStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders)
     : assertGuestStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders);
   const gatewayCurrencyIssue = isOnlinePaymentMethod(input.paymentMethod)
-    ? paymentProviders.currencyIssue(input.paymentMethod, authority.currency.currencyCode)
+    // The order's currency: its market's (MARKETS-DESIGN step 6).
+    ? paymentProviders.currencyIssue(input.paymentMethod, authority.cartValidation.money.currencyCode)
     : null;
   if (gatewayCurrencyIssue) throw new ValidationError(gatewayCurrencyIssue);
 
-  const storeDecimalPlaces = getDecimalPlaces(authority.currency.currencyCode);
+  const storeDecimalPlaces = authority.cartValidation.money.decimalPlaces;
   const data = {
     checkoutRequestId: requestId,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
@@ -589,7 +590,9 @@ export async function submitAgentStorefrontCheckout(
     paymentMethod: input.paymentMethod,
     currencyCode: prepared.taxQuote.currencyCode,
     totalAmountMinor: prepared.taxQuote.totalMinor,
-    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+    // A deposit is a shop-currency amount: an order in a market's own currency pays in full.
+    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled
+      && authority.cartValidation.money.currencyCode === authority.cartValidation.money.shopCurrencyCode,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
   if (gatewayAmountIssue) throw new ValidationError(gatewayAmountIssue);

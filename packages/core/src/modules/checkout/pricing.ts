@@ -10,6 +10,7 @@ import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppProviders } from "../../integrations/provider-port";
 import { fromMinor } from "@scalius/shared/money";
 import type { PricingCurrency } from "@scalius/shared/currency-policy";
+import { presentmentPricingCurrency, type PresentmentMoney } from "@scalius/shared/presentment";
 import { ValidationError } from "@scalius/core/errors";
 import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "../promotions";
 import {
@@ -21,7 +22,7 @@ import {
   type TaxQuote,
 } from "../tax";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, destinationCountry, listDeliveryRatesForDestination } from "../delivery";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRateInCurrency, destinationCountry, listDeliveryRatesForDestination } from "../delivery";
 import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
@@ -68,14 +69,21 @@ export interface CheckoutPricingDelivery {
 }
 
 export interface StorefrontCheckoutPricingInput {
-  cartValidation: Pick<StorefrontCartValidationResult, "items" | "subtotalMinor" | "hasFreeDeliveryProduct">;
+  cartValidation: Pick<StorefrontCartValidationResult, "items" | "subtotalMinor" | "hasFreeDeliveryProduct"> & {
+    /** The cart's currency (its market's): every amount is priced in it (MARKETS-DESIGN step 6). */
+    money?: PresentmentMoney;
+  };
   delivery: CheckoutPricingDelivery;
   discountCodes: readonly string[];
   customerId?: string | null;
   /** The signed-in account whose segments may unlock segment-limited promotions (never a guest). */
   segmentCustomerId?: string | null;
   customerPhone?: string | null;
-  /** The checkout currency at the store's price increment: every derived amount rounds to it. */
+  /**
+   * The shop currency at the store's price increment. A cart priced in a
+   * market's own currency (`cartValidation.money`) prices in that currency at
+   * its increment instead.
+   */
   currency: PricingCurrency;
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
   apps?: CheckoutAppFunctions;
@@ -149,7 +157,8 @@ async function listRateOptions(
   const country = destinationCountry(source);
   // Bangladesh needs its city; another country is a destination by itself.
   const hasDestination = country === DELIVERY_HIERARCHY_COUNTRY ? Boolean(source?.city?.trim()) : Boolean(source);
-  const rows = await listDeliveryRatesForDestination(db, hasDestination
+  const money = input.cartValidation.money;
+  const rows = (await listDeliveryRatesForDestination(db, hasDestination
     ? {
       countryCode: country,
       city: source?.city,
@@ -158,7 +167,7 @@ async function listRateOptions(
       adminArea: source?.adminArea,
       postalCode: source?.postalCode,
     }
-    : null);
+    : null)).map((row) => deliveryRateInCurrency(row, money));
   return rows
     // Without a destination only pickup is offered; apps adjust what the buyer can choose.
     .filter((row) => hasDestination || row.kind === "pickup")
@@ -191,7 +200,9 @@ export async function priceStorefrontCheckout(
   db: Database,
   input: StorefrontCheckoutPricingInput,
 ): Promise<StorefrontCheckoutPricing> {
-  const { cartValidation, delivery, currency } = input;
+  const { cartValidation, delivery } = input;
+  // The cart's currency prices everything (promotions, apps, tax).
+  const currency = cartValidation.money ? presentmentPricingCurrency(cartValidation.money) : input.currency;
   const apps = input.apps;
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
 
@@ -204,6 +215,10 @@ export async function priceStorefrontCheckout(
       cart: {
         currencyCode: currency.code,
         priceIncrementMinor: currency.priceIncrementMinor,
+        // Shop-currency amounts of a promotion convert at the locked rate (Shopify).
+        ...(cartValidation.money && cartValidation.money.currencyCode !== cartValidation.money.shopCurrencyCode
+          ? { money: cartValidation.money }
+          : {}),
         lines: cartValidation.items.map((item, position) => ({
           id: lineIds[position]!,
           productId: item.productId,
@@ -637,4 +652,21 @@ export async function buildAppCartFromOrderPayload(
       : { country: orderData.shippingCountryCode, city: orderData.cityName ?? orderData.shippingLocality, zone: orderData.zoneName },
     discountCodes: input.discountCodes,
   });
+}
+
+/**
+ * The rate a quote in a market's own currency converts shop amounts at
+ * (MARKETS-DESIGN step 6), for the buyer to see: the shop currency, the rate
+ * (presentment units per shop unit), when it was set and until when an order
+ * placed now keeps it. Null for a shop-currency quote.
+ */
+export function presentQuoteFx(money: PresentmentMoney | null | undefined, now: Date = new Date()) {
+  if (!money || money.currencyCode === money.shopCurrencyCode) return null;
+  return {
+    shopCurrencyCode: money.shopCurrencyCode,
+    rate: money.rate,
+    source: money.fxSource,
+    asOf: money.fxAsOf === null ? null : new Date(money.fxAsOf * 1_000).toISOString(),
+    lockedUntil: new Date(now.getTime() + money.lockMinutes * 60_000).toISOString(),
+  };
 }

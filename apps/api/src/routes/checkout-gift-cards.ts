@@ -18,6 +18,7 @@ import { RateLimitError, ServiceUnavailableError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../schemas/responses";
+import { listOwnMarketCurrencies } from "@scalius/core/modules/markets";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -73,7 +74,7 @@ app.openapi(createRoute({
   path: "/apply",
   tags: ["Checkout"],
   summary: "Apply a gift card to checkout",
-  description: "Proves a gift-card code and returns an opaque apply handle for the tax quote and the order. Any unusable card (unknown, disabled, expired, spent or in another currency) answers the same way.",
+  description: "Proves a gift-card code and returns an opaque apply handle for the tax quote and the order. A card in the shop currency or a market's own currency pays at the checkout's locked rate. Any unusable card (unknown, disabled, expired, spent or in a currency the store does not sell in) answers the same way.",
   request: { body: { required: true, content: { "application/json": { schema: codeBodySchema } } } },
   responses: {
     200: { description: "The card can pay", content: { "application/json": { schema: successEnvelope(appliedGiftCardSchema) } } },
@@ -87,10 +88,12 @@ app.openapi(createRoute({
   const masterSecret = readMasterSecret(c.env);
   if (!masterSecret) throw new ServiceUnavailableError("Gift cards are unavailable right now.");
   const db = c.get("db");
-  const currency = await getCurrencySettings(db);
+  // A card in the shop currency or any market's own currency can pay; the
+  // order converts it at its locked rate (MARKETS-DESIGN step 6).
+  const [currency, marketCurrencies] = await Promise.all([getCurrencySettings(db), listOwnMarketCurrencies(db)]);
   const applied = await applyGiftCardCode(db, {
     code,
-    currencyCode: currency.currencyCode,
+    currencyCode: [currency.currencyCode, ...marketCurrencies],
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     masterSecret,
   });

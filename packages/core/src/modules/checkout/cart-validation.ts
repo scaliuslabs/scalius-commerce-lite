@@ -4,7 +4,8 @@ import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
-import { NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
+import { mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
+import { isForeignPresentment, presentShopMinor, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
     isFulfillmentKind,
@@ -148,6 +149,12 @@ export interface StorefrontCartBundleSaving {
 }
 
 export interface StorefrontCartValidationResult {
+    /**
+     * The currency every amount here is in (the market's, MARKETS-DESIGN step
+     * 6) and how shop-currency amounts convert into it; checkout prices the
+     * whole order with it.
+     */
+    money: PresentmentMoney;
     valid: boolean;
     issues: StorefrontCartItemIssue[];
     items: StorefrontCartValidatedItem[];
@@ -414,12 +421,22 @@ export function resolveStorefrontCartValidationFromRows(
 ): StorefrontCartValidationResult {
     // API callers pass the normalized merchant setting. Direct Core callers
     // intentionally retain the historical BDT checkout authority fallback.
-    const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
-    const decimalPlaces = getDecimalPlaces(currencyCode);
-    const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, options.priceIncrementMinor);
+    const shopCurrencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
+    const shopIncrementMinor = resolvePriceIncrementMinor(shopCurrencyCode, options.priceIncrementMinor);
+    // The cart's currency is its market's (MARKETS-DESIGN step 6): catalogue
+    // prices, surcharges and bundle prices are in it.
+    const money = options.priceScope?.money ?? shopPresentment({
+        code: shopCurrencyCode,
+        decimalPlaces: getDecimalPlaces(shopCurrencyCode),
+        priceIncrementMinor: shopIncrementMinor,
+    });
+    const decimalPlaces = money.decimalPlaces;
+    const priceIncrementMinor = money.incrementMinor;
+    const presentShopAmount = (shopMinor: number) => presentShopMinor(money, shopMinor);
 
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
+            money,
             valid: true,
             issues: [],
             items: [],
@@ -442,6 +459,7 @@ export function resolveStorefrontCartValidationFromRows(
     });
     if (malformedVariantIssues.length > 0) {
         return markTrustedStorefrontCartValidationResult({
+            money,
             valid: false,
             issues: malformedVariantIssues,
             items: [],
@@ -625,7 +643,11 @@ export function resolveStorefrontCartValidationFromRows(
             });
             return;
         }
-        const resolvedProperties = resolveLineProperties(schemaRead.schema, item.properties);
+        // Surcharges in the cart's currency, converted as the product page shows them.
+        const resolvedProperties = resolveLineProperties(
+            isForeignPresentment(money) ? mapCustomizationPrices(schemaRead.schema, presentShopAmount) : schemaRead.schema,
+            item.properties,
+        );
         if (!resolvedProperties.ok) {
             const field = schemaRead.schema?.fields.find((candidate) => candidate.key === resolvedProperties.key);
             addIssue(issues, item, index, {
@@ -661,7 +683,7 @@ export function resolveStorefrontCartValidationFromRows(
         const baseUnitPriceMinor = calculateUnitPriceMinor(
             product,
             variant,
-            priceIncrementMinor,
+            shopIncrementMinor,
             options.priceScope ?? null,
             requestedForVariant,
         );
@@ -713,9 +735,10 @@ export function resolveStorefrontCartValidationFromRows(
         });
     });
 
-    const bundles = resolveCartBundleSavings(validatedItems, bundleRows, priceIncrementMinor);
+    const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, money), priceIncrementMinor);
 
     return markTrustedStorefrontCartValidationResult({
+        money,
         valid: issues.length === 0,
         issues,
         items: validatedItems,
@@ -723,6 +746,18 @@ export function resolveStorefrontCartValidationFromRows(
         hasFreeDeliveryProduct,
         bundles,
     });
+}
+
+/**
+ * Bundle tiers in the cart's currency: a fixed tier price (shop currency) is
+ * converted at the market's rate and rounded to its increment, as the
+ * product page shows it; percentage tiers need nothing.
+ */
+export function presentBundleRows<T extends ProductBundleRow>(rows: readonly T[], money: PresentmentMoney): T[] {
+    if (!isForeignPresentment(money)) return [...rows];
+    return rows.map((row) => row.discountType === "fixed_price" && Number.isSafeInteger(row.priceMinor) && Number(row.priceMinor) > 0
+        ? { ...row, priceMinor: presentShopMinor(money, Number(row.priceMinor)) }
+        : row);
 }
 
 /**
@@ -870,9 +905,13 @@ export function presentStorefrontCartValidation(
     propertiesHashes: readonly string[] = [],
 ) {
     // Bundle savings are checkout discounts: the tax quote shows them.
-    const { subtotalMinor, items, bundles: _bundles, ...rest } = result;
+    const { subtotalMinor, items, bundles: _bundles, money, ...rest } = result;
+    // Amounts are in the cart's currency (its market's), with its places.
+    decimalPlaces = money?.decimalPlaces ?? decimalPlaces;
     return {
         ...rest,
+        currencyCode: money?.currencyCode,
+        decimalPlaces,
         ...presentStorefrontCartFulfilmentSummary(fulfilment),
         items: items.map(({
             unitPriceMinor,
@@ -953,9 +992,16 @@ export function resolveCartPaymentMethods(
     enabledMethods: readonly string[],
     summary: Pick<StorefrontCartFulfilmentSummary, "allowsCashOnDelivery">,
     deliveryCountryCode: string | null = null,
-    providers: Pick<PaymentProviders, "countryIssue"> = BUILT_IN_PAYMENT_PROVIDERS,
+    providers: Pick<PaymentProviders, "countryIssue" | "currencyIssue"> = BUILT_IN_PAYMENT_PROVIDERS,
+    /**
+     * The order's currency (its market's, MARKETS-DESIGN step 6): a gateway
+     * that cannot charge it is not offered (`chargeCurrencies`). Absent: no
+     * currency filter (the shop currency, which settings already checked).
+     */
+    currencyCode: string | null = null,
 ): string[] {
     return enabledMethods.filter((method) =>
         (method !== "cod" || summary.allowsCashOnDelivery)
-        && providers.countryIssue(method, deliveryCountryCode) === null);
+        && providers.countryIssue(method, deliveryCountryCode) === null
+        && (currencyCode === null || providers.currencyIssue(method, currencyCode) === null));
 }

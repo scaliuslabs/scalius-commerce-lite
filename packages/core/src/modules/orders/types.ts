@@ -214,6 +214,8 @@ export interface OrderBillingAddressFields {
 
 export interface OrderListItem {
     id: string;
+    /** The order's currency (its market's, MARKETS-DESIGN step 6). */
+    currencyCode?: string | null;
     customerName: string;
     customerPhone: string | null;
     customerEmail: string | null;
@@ -268,6 +270,19 @@ export interface OrderListItem {
 }
 
 export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
+    /** Shop-currency amounts of an order paid in a market's own currency (MARKETS-DESIGN D3); null: same-currency. */
+    moneyChain?: {
+        shopCurrencyCode: string;
+        rate: string;
+        source: string;
+        asOf: string | null;
+        lockedUntil: string | null;
+        subtotalShopAmount: number;
+        shippingShopAmount: number;
+        discountShopAmount: number;
+        taxShopAmount: number;
+        totalShopAmount: number;
+    } | null;
     editReadiness: OrderEditReadiness;
     /** The order's own location (null = the store default). */
     fulfillmentLocationId: string | null;
@@ -465,8 +480,10 @@ export interface StorefrontGiftCardTenderSummary {
         handle: string;
         last4: string;
         appliedMinor: number;
-        /** The card's balance before this order. */
+        /** The card's balance before this order (in the order's currency). */
         balanceMinor: number;
+        /** A card in another store currency (MARKETS-DESIGN step 6): its currency and what this order debits in it. */
+        card?: { currencyCode: string; debitMinor: number };
     }>;
     appliedTotalMinor: number;
     /** `totalMinor − appliedTotalMinor`: what cash on delivery or a gateway collects. */
@@ -554,6 +571,19 @@ export interface StorefrontOrderCommitPayload {
         pickupHours?: string | null;
         currencyCode: string;
         currencyDecimalPlaces: number;
+        /**
+         * The order's money chain when it is not in the shop currency
+         * (MARKETS-DESIGN D3, step 6): the shop currency, the locked rate (shop
+         * units per presentment unit), its source, when it was set and until
+         * when the order keeps it (epoch seconds). Absent: same-currency.
+         */
+        fx?: {
+            shopCurrency: string;
+            fxRate: string;
+            fxSource: string;
+            fxAsOf: number | null;
+            fxLockedUntil: number | null;
+        };
         subtotalAmountMinor: number;
         shippingAmountMinor: number;
         discountAmountMinor: number;
@@ -620,7 +650,12 @@ export interface StorefrontOrderCommitPayload {
      * order; the ledger guards refuse a card that changed since the quote.
      * Absent when no card applies.
      */
-    giftCardRedemptions?: Array<{ giftCardId: string; appliedMinor: number }>;
+    giftCardRedemptions?: Array<{
+        giftCardId: string;
+        appliedMinor: number;
+        /** A card in another store currency: its currency and the debit in it (MARKETS-DESIGN step 6). */
+        card?: { currencyCode: string; debitMinor: number };
+    }>;
     requestUrl: string;
     taxQuote: TaxQuote;
 }

@@ -44,7 +44,7 @@ import {
   mediaDocument,
   seoDocument,
 } from "@scalius/core/modules/settings";
-import { readStoreCurrency, resetBackupPriceIncrement } from "@scalius/core/modules/markets";
+import { listOwnMarketCurrencies, readStoreCurrency, resetBackupPriceIncrement } from "@scalius/core/modules/markets";
 import { platformDocument } from "@scalius/core/modules/platform";
 import { getStorefrontUrlSetting, saveStorefrontUrl } from "@scalius/core/modules/platform";
 import {
@@ -167,7 +167,13 @@ const saveCurrencyRoute = createRoute({
 app.openapi(saveCurrencyRoute, async (c) => {
   const { expectedRevision, ...body } = c.req.valid("json");
   const db = c.get("db");
-  const before = await readStoreCurrency(db);
+  const [before, marketCurrencies] = await Promise.all([readStoreCurrency(db), listOwnMarketCurrencies(db)]);
+  // Market rates are units per shop currency unit: a new shop currency would
+  // make every one of them wrong. Markets go back to the shop currency first.
+  const requested = typeof body.currencyCode === "string" ? body.currencyCode.trim().toUpperCase() : before.code;
+  if (requested !== before.code && marketCurrencies.length > 0) {
+    throw new ValidationError(`Markets sell in ${marketCurrencies.join(", ")} at rates against ${before.code}. Set those markets to ${before.code} in Settings → Markets, then change the shop currency.`);
+  }
   const { revision, currencyChanged, value } = await saveCurrencySettings(db, body, { expectedRevision });
   // A new shop currency prices at its own default increment (the backup
   // market's, Settings → Markets). Every stored card price follows the

@@ -27,7 +27,8 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 import { customerSegmentMembership, readSegmentDefinitions } from "../customers";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
-import { marketFxConversion, marketListPricesSql, parseMarketListPrices } from "./market-pricing";
+import { marketFxConversion, marketListPricesSql, MarketPricesUnavailableError, parseMarketListPrices } from "./market-pricing";
+import { marketCurrencyIncrementMinor, marketPresentment, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 
 /** One active market as checkout prices in it. */
 export interface PricingMarket {
@@ -37,6 +38,12 @@ export interface PricingMarket {
     /** Its subfolder presences (`en-in`). */
     presences: readonly string[];
     fx: FxConversion | null;
+    /**
+     * The currency the buyer pays in this market and the locked rate from the
+     * shop currency (MARKETS-DESIGN step 6); null when it sells in its own
+     * currency without a usable rate (checkout refuses it).
+     */
+    money: PresentmentMoney | null;
 }
 
 /**
@@ -54,6 +61,9 @@ export function marketPricingMatrixSql(): SQL<string | null> {
             'a', CAST(pricing_row.price_adjustment_bps AS TEXT),
             'd', CAST(pricing_row.price_rounding_minor AS TEXT),
             'e', CAST(pricing_row.price_ending_minor AS TEXT),
+            'cu', pricing_row.currency_code,
+            'ao', CAST(pricing_row.fx_rate_as_of AS TEXT),
+            'lk', CAST(pricing_row.fx_lock_minutes AS TEXT),
             'c', (SELECT group_concat(pricing_country.country_code, ',') FROM market_countries AS pricing_country WHERE pricing_country.market_id = pricing_row.id),
             'p', (SELECT group_concat(pricing_presence.value, ',') FROM market_presences AS pricing_presence WHERE pricing_presence.market_id = pricing_row.id AND pricing_presence.kind = 'subfolder' AND pricing_presence.value <> '')
         ) AS entry
@@ -69,6 +79,7 @@ export function checkoutListPricesSql(variantId: SQL = sql.raw('"product_variant
 
 interface MatrixEntry {
     id?: unknown; b?: unknown; m?: unknown; r?: unknown; a?: unknown; d?: unknown; e?: unknown; c?: unknown; p?: unknown;
+    cu?: unknown; ao?: unknown; lk?: unknown;
 }
 
 function nullableNumber(value: unknown): number | null {
@@ -81,7 +92,10 @@ function list(value: unknown): string[] {
     return typeof value === "string" && value ? value.split(",").filter(Boolean) : [];
 }
 
-/** The markets of a `marketPricingMatrixSql()` value, priced in the shop currency at its increment. */
+/**
+ * The markets of a `marketPricingMatrixSql()` value: each in its own currency
+ * at its rate (step 6), else in the shop currency at the shop's increment.
+ */
 export function parseMarketPricingMatrix(value: unknown, currency: { code: string; incrementMinor: number }): PricingMarket[] {
     if (typeof value !== "string" || value === "") return [];
     let entries: MatrixEntry[] = [];
@@ -94,18 +108,32 @@ export function parseMarketPricingMatrix(value: unknown, currency: { code: strin
     return entries.flatMap((entry) => {
         if (typeof entry.id !== "string") return [];
         const isBackup = entry.b === "1" || entry.b === 1 || entry.b === "true" || entry.b === true;
+        const own = !isBackup && typeof entry.cu === "string" && /^[A-Z]{3}$/.test(entry.cu) && entry.cu !== currency.code
+            ? entry.cu
+            : null;
+        const code = own ?? currency.code;
+        const incrementMinor = own ? marketCurrencyIncrementMinor(own) : currency.incrementMinor;
+        const fx = isBackup ? null : marketFxConversion({
+            priceMode: typeof entry.m === "string" ? entry.m : null,
+            fxRate: typeof entry.r === "string" ? entry.r : null,
+            priceAdjustmentBps: nullableNumber(entry.a),
+            priceRoundingMinor: nullableNumber(entry.d),
+            priceEndingMinor: nullableNumber(entry.e),
+        }, { code, shopCode: currency.code, incrementMinor });
+        const shop = { code: currency.code, decimalPlaces: getDecimalPlaces(currency.code), priceIncrementMinor: currency.incrementMinor };
+        const lockMinutes = nullableNumber(entry.lk);
+        const money = own === null
+            ? { ...shopPresentment(shop), ...(lockMinutes === null ? {} : { lockMinutes }) }
+            : fx === null
+                ? null
+                : marketPresentment({ shop, currencyCode: own, rate: fx.policy.rate, fxAsOf: nullableNumber(entry.ao), lockMinutes });
         return [{
             id: entry.id,
             isBackup,
             countries: list(entry.c),
             presences: list(entry.p),
-            fx: isBackup ? null : marketFxConversion({
-                priceMode: typeof entry.m === "string" ? entry.m : null,
-                fxRate: typeof entry.r === "string" ? entry.r : null,
-                priceAdjustmentBps: nullableNumber(entry.a),
-                priceRoundingMinor: nullableNumber(entry.d),
-                priceEndingMinor: nullableNumber(entry.e),
-            }, { code: currency.code, shopCode: currency.code, incrementMinor: currency.incrementMinor }),
+            fx,
+            money,
         }];
     });
 }
@@ -136,8 +164,11 @@ export function pricingMarketOf(markets: readonly PricingMarket[], signals: Pric
 export interface CheckoutPriceScope {
     /** Null: the store has no market row (before 0112): base prices. */
     market: PricingMarket | null;
+    /** The presentment currency (the market's) and its increment. */
     currencyCode: string;
     incrementMinor: number;
+    /** How the checkout converts shop-currency amounts (MARKETS-DESIGN step 6). */
+    money: PresentmentMoney;
     /** The segments the signed-in buyer is in (empty for a guest). */
     segmentIds: ReadonlySet<string>;
     atSeconds: number;
@@ -286,17 +317,23 @@ export async function resolveCheckoutPriceScope(
 ): Promise<CheckoutPriceScope | null> {
     const markets = parseMarketPricingMatrix(input.productRows[0]?.pricingMatrix, input.currency);
     const listRows = input.variantRows.flatMap((row) => parseMarketListPrices(row.listPrices));
-    if (!markets.some((market) => market.fx !== null) && listRows.length === 0) return null;
+    const ownCurrency = markets.some((market) => market.money === null || market.money.currencyCode !== input.currency.code);
+    if (!ownCurrency && !markets.some((market) => market.fx !== null) && listRows.length === 0) return null;
     const country = checkoutMarketCountry(input.items, input.productRows, input.variantRows, input.signals);
     const market = pricingMarketOf(markets, country
         ? { countryCode: country }
         : { presence: input.signals.placing ? null : input.signals.presence });
     const atSeconds = input.atSeconds ?? Math.floor(Date.now() / 1_000);
     const segments = market ? segmentListIds(market.id, listRows, atSeconds) : [];
+    const shop = { code: input.currency.code, decimalPlaces: getDecimalPlaces(input.currency.code), priceIncrementMinor: input.currency.incrementMinor };
+    // A market in its own currency without a usable rate is refused, never priced unconverted.
+    if (market && market.money === null) throw new MarketPricesUnavailableError();
+    const money = market?.money ?? shopPresentment(shop);
     return {
         market,
-        currencyCode: input.currency.code,
-        incrementMinor: input.currency.incrementMinor,
+        currencyCode: money.currencyCode,
+        incrementMinor: money.incrementMinor,
+        money,
         segmentIds: segments.length > 0 ? await matchPriceListSegments(db, await input.signals.customerId, segments, atSeconds) : new Set(),
         atSeconds,
     };

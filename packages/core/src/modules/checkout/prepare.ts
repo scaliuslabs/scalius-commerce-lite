@@ -7,6 +7,13 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
 import { fromMinor } from "@scalius/shared/money";
 import {
+    convertStoreCurrencyMinor,
+    isForeignPresentment,
+    presentmentFx,
+    type PresentmentMoney,
+    type StoreCurrencyRate,
+} from "@scalius/shared/presentment";
+import {
   buildStorefrontTaxAllocationLineId,
   type StorefrontTaxAuthoritySnapshot,
   type TaxQuote,
@@ -67,6 +74,7 @@ import {
   type DeliveryRateKind,
   type DeliveryRateRow,
   DELIVERY_RATE_UNAVAILABLE_REASON,
+  deliveryRateInCurrency,
   normalizeDeliveryDestination,
   normalizePostalPrefix,
   parseDeliveryRegionRows,
@@ -179,7 +187,10 @@ export function isTrustedStorefrontCheckoutPolicySnapshot(
 
 type DeliveryPreflightCart = Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor"> & {
     items: readonly StorefrontCartFulfilmentLine[];
+    /** The cart's currency: a rate's fee and free-over amount convert into it (MARKETS-DESIGN step 6). */
+    money?: PresentmentMoney;
 };
+
 
 /**
  * The delivery facts of a cart (Wave A §2.7). A cart with a physical line
@@ -207,9 +218,10 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         });
     }
 
-    const rateRow = data.shippingMethodId
+    const storedRateRow = data.shippingMethodId
         ? shippingMethodRows.find((row) => row.id === data.shippingMethodId)
         : undefined;
+    const rateRow = storedRateRow ? deliveryRateInCurrency(storedRateRow, cartValidation.money) : undefined;
     if ((rateRow?.kind ?? "delivery") === "pickup") {
         const rate = resolveDeliveryRate({
             rate: rateRow,
@@ -462,6 +474,12 @@ export async function quoteStorefrontGiftCardTender(
         taxQuote: Pick<TaxQuote, "currencyCode" | "totalMinor" | "lines">;
         /** Tax allocation line ids of the gift-card lines. */
         giftCardLineIds: ReadonlySet<string>;
+        /**
+         * The order's currency and rate (MARKETS-DESIGN step 6): a card in the
+         * shop currency or the order's pays at the locked rate (Shopify's rule).
+         * Absent: only cards in the order's currency pay.
+         */
+        money?: PresentmentMoney;
     },
 ): Promise<StorefrontGiftCardTenderSummary> {
     const giftCardLineTotalMinor = input.taxQuote.lines
@@ -479,10 +497,12 @@ export async function quoteStorefrontGiftCardTender(
     };
     if (handles.length === 0) return none;
 
+    const rates = giftCardTenderRates(input.money);
     const quote = await quoteGiftCardTender(db, {
         handles,
         masterSecret: input.masterSecret,
         currencyCode: input.taxQuote.currencyCode,
+        ...(rates ? { rates } : {}),
         totalMinor: input.taxQuote.totalMinor,
         giftCardLineTotalMinor,
         // A deposit plan is never made for an order with gift cards: the
@@ -522,12 +542,28 @@ export async function quoteStorefrontGiftCardTender(
         giftCardLineTotalMinor,
         applied: quote.tender.applied.map((application) => {
             const card = cardById.get(application.id)!;
+            // A card in another currency is debited the application converted
+            // up at the locked rate, never above its balance (recorded as the
+            // tender's settlement).
+            const cardRate = card.cardCurrencyCode !== input.taxQuote.currencyCode
+                ? rates?.find((rate) => rate.code === card.cardCurrencyCode)
+                : undefined;
+            const orderRate = rates?.find((rate) => rate.code === input.taxQuote.currencyCode);
             return {
                 giftCardId: application.id,
                 handle: card.handle,
                 last4: card.last4,
                 appliedMinor: application.appliedMinor,
                 balanceMinor: card.balanceMinor,
+                ...(cardRate && orderRate ? {
+                    card: {
+                        currencyCode: card.cardCurrencyCode,
+                        debitMinor: Math.min(
+                            card.cardBalanceMinor,
+                            convertStoreCurrencyMinor(application.appliedMinor, orderRate, cardRate, "up"),
+                        ),
+                    },
+                } : {}),
             };
         }),
         appliedTotalMinor: quote.tender.appliedTotalMinor,
@@ -535,6 +571,19 @@ export async function quoteStorefrontGiftCardTender(
         unusableHandles: quote.unusableHandles,
         issues,
     };
+}
+
+/**
+ * The store currencies a gift card may be in for an order in `money`'s
+ * currency: the order's own and the shop currency, with their rates (units
+ * per shop unit). Null for a shop-currency order (only its own currency).
+ */
+export function giftCardTenderRates(money: PresentmentMoney | undefined): StoreCurrencyRate[] | null {
+    if (!money || !isForeignPresentment(money)) return null;
+    return [
+        { code: money.currencyCode, decimalPlaces: money.decimalPlaces, rate: money.rate },
+        { code: money.shopCurrencyCode, decimalPlaces: money.shopDecimalPlaces, rate: "1" },
+    ];
 }
 
 /**
@@ -782,9 +831,11 @@ export async function createStorefrontOrder(
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
     // ------------------------------------------------------------------
-    const isPartialEnabled = checkoutPolicySnapshot?.partialPaymentEnabled
+    // The advance (deposit) is an amount of the shop currency: an order in a
+    // market's own currency is paid in full (MARKETS-DESIGN step 6).
+    const isPartialEnabled = (checkoutPolicySnapshot?.partialPaymentEnabled
         ?? fallbackSettings?.partialPaymentEnabled
-        ?? false;
+        ?? false) && !(cartValidation.money && isForeignPresentment(cartValidation.money));
 
     // ------------------------------------------------------------------
     // GIFT CARDS AS A TENDER (§4.3): the debit at commit is the hold.
@@ -793,6 +844,7 @@ export async function createStorefrontOrder(
         handles: giftCardHandles,
         masterSecret: giftCardAuthority.masterSecret ?? null,
         taxQuote,
+        money: cartValidation.money,
         giftCardLineIds: new Set(preparedItems
             .filter((item) => item.isGiftCard)
             .map((item) => item.taxAllocationLineId)),
@@ -848,6 +900,21 @@ export async function createStorefrontOrder(
     // Build Commit Payload
     // ------------------------------------------------------------------
     const orderId = identity?.orderId ?? generateOrderId();
+    // The rate this order keeps: its market's, locked for the market's minutes
+    // from now; the quote and the order price at the same rate (the authority
+    // fence refuses a commit after the rate changed).
+    const orderFx = cartValidation.money && isForeignPresentment(cartValidation.money)
+        ? (() => {
+            const fx = presentmentFx(cartValidation.money);
+            return {
+                shopCurrency: fx.shopCurrency,
+                fxRate: fx.fxRate,
+                fxSource: fx.fxSource,
+                fxAsOf: fx.fxAsOf === null ? null : Math.floor(fx.fxAsOf.getTime() / 1_000),
+                fxLockedUntil: fx.fxLockedUntil === null ? null : Math.floor(fx.fxLockedUntil.getTime() / 1_000),
+            };
+        })()
+        : null;
     const checkoutToken = identity?.checkoutToken ?? `chk_${nanoid()}`;
 
     const commitPayload = {
@@ -878,6 +945,8 @@ export async function createStorefrontOrder(
             pickupHours: deliveryPreflight.pickup?.hours ?? null,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
+            // An order in a market's own currency keeps its locked rate (MARKETS-DESIGN D3).
+            ...(orderFx ? { fx: orderFx } : {}),
             subtotalAmountMinor: taxQuote.subtotalMinor,
             shippingAmountMinor: taxQuote.shippingMinor,
             discountAmountMinor: taxQuote.discountMinor,
@@ -935,9 +1004,10 @@ export async function createStorefrontOrder(
         ...(pricing.appStorageCommits.length > 0 ? { appStorageCommits: pricing.appStorageCommits } : {}),
         ...(giftCardsApplied
             ? {
-                giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor }) => ({
+                giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor, card }) => ({
                     giftCardId,
                     appliedMinor,
+                    ...(card ? { card } : {}),
                 })),
             }
             : {}),

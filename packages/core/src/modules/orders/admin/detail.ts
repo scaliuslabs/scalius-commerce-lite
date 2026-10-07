@@ -18,6 +18,7 @@ import { listOrderHolds } from "../holds";
 import { sql, desc, eq } from "drizzle-orm";
 import { customerKind } from "../../customers";
 import { fromMinor } from "@scalius/shared/money";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { unixToDate } from "@scalius/shared/utils";
 import type { OrderDetails, OrderShipmentSummary } from "../types";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
@@ -94,6 +95,17 @@ async function getOrderDetailsOnce(
             customerId: orders.customerId,
             ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
+            // The money chain (MARKETS-DESIGN D3): shown when the buyer paid in another currency.
+            shopCurrency: orders.shopCurrency,
+            fxRate: orders.fxRate,
+            fxSource: orders.fxSource,
+            fxAsOf: sql<number | null>`CAST(${orders.fxAsOf} AS INTEGER)`,
+            fxLockedUntil: sql<number | null>`CAST(${orders.fxLockedUntil} AS INTEGER)`,
+            subtotalShopMinor: orders.subtotalShopMinor,
+            shippingShopMinor: orders.shippingShopMinor,
+            discountShopMinor: orders.discountShopMinor,
+            taxShopMinor: orders.taxShopMinor,
+            totalShopMinor: orders.totalShopMinor,
             subtotalAmountMinor: orders.subtotalAmountMinor,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodName: orders.shippingMethodName,
@@ -259,12 +271,37 @@ async function getOrderDetailsOnce(
         refundedMinor: _refundedMinor,
         effectiveFulfillmentLocationId,
         effectiveFulfillmentLocationName,
+        shopCurrency,
+        fxRate,
+        fxSource,
+        fxAsOf,
+        fxLockedUntil,
+        subtotalShopMinor,
+        shippingShopMinor,
+        discountShopMinor,
+        taxShopMinor,
+        totalShopMinor,
         ...publicOrder
     } = omitOrderEditEvidence(order);
+    const shopAmount = (minor: number) => fromMinor(minor, getDecimalPlaces(shopCurrency));
 
     return {
         ...publicOrder,
         ...orderMoneyAmounts(order),
+        moneyChain: order.currencyCode && shopCurrency && order.currencyCode !== shopCurrency
+            ? {
+                shopCurrencyCode: shopCurrency,
+                rate: fxRate,
+                source: fxSource,
+                asOf: fxAsOf ? new Date(fxAsOf * 1_000).toISOString() : null,
+                lockedUntil: fxLockedUntil ? new Date(fxLockedUntil * 1_000).toISOString() : null,
+                subtotalShopAmount: shopAmount(subtotalShopMinor),
+                shippingShopAmount: shopAmount(shippingShopMinor),
+                discountShopAmount: shopAmount(discountShopMinor),
+                taxShopAmount: shopAmount(taxShopMinor),
+                totalShopAmount: shopAmount(totalShopMinor),
+            }
+            : null,
         ...presentOrderListFacts(order),
         pickup: presentOrderPickup({
             shippingMethodKind: order.shippingMethodKind,

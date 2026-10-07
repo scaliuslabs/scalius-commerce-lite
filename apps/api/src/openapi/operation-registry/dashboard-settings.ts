@@ -93,6 +93,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.languages.list": {},
   "dashboard.languages.update": {},
   "dashboard.markets.create": {},
+  "dashboard.markets.currencies": {},
   "dashboard.markets.delete": { risk: "destructive", revision: "required" },
   "dashboard.markets.get": {},
   "dashboard.markets.list": {},

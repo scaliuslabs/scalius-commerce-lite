@@ -12,6 +12,7 @@ import {
   summarizeStorefrontCartFulfilment,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
+  giftCardTenderRates,
 } from "@scalius/core/modules/checkout";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
@@ -47,6 +48,7 @@ import {
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import type { Database } from "@scalius/database/client";
 import type { StorefrontGiftCardIssue } from "@scalius/core/modules/orders";
+import type { StoreCurrencyRate } from "@scalius/shared/presentment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -170,6 +172,9 @@ const cartValidationRoute = createRoute({
               productImage: z.string().url().nullable(),
             })),
             subtotal: z.number(),
+            /** The cart's currency: its market's (MARKETS-DESIGN step 6). Every amount here is in it. */
+            currencyCode: z.string().optional(),
+            decimalPlaces: z.number().int().optional(),
             hasFreeDeliveryProduct: z.boolean(),
             /** Some line is physical: the buyer must choose delivery or pickup. */
             requiresDeliveryMethod: z.boolean(),
@@ -210,9 +215,10 @@ async function giftCardHandleIssues(
   handles: readonly string[],
   masterSecret: string | null,
   currencyCode: string,
+  rates: StoreCurrencyRate[] | null,
 ): Promise<StorefrontGiftCardIssue[]> {
   if (handles.length === 0) return [];
-  const resolution = await resolveGiftCardTenderCards(db, { handles, masterSecret, currencyCode });
+  const resolution = await resolveGiftCardTenderCards(db, { handles, masterSecret, currencyCode, ...(rates ? { rates } : {}) });
   const usable = new Set(resolution.cards.map((card) => card.handle));
   const unusable = new Set(resolution.unusableHandles);
   return handles.flatMap((handle): StorefrontGiftCardIssue[] => {
@@ -257,18 +263,12 @@ app.openapi(cartValidationRoute, async (c) => {
       cartValidation: result,
       delivery,
       apps,
-      currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+      // Apps see the cart in its currency (its market's).
+      currency: { code: result.money.currencyCode, decimalPlaces: result.money.decimalPlaces },
       customerId: session?.customerId ?? null,
       channel: "online_store",
     });
   };
-  const giftCardIssues = await giftCardHandleIssues(
-    db,
-    (data.giftCards ?? []).map((card) => card.handle),
-    readMasterSecret(c.env),
-    currency.code,
-  );
-  const decimalPlaces = currency.decimalPlaces;
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
@@ -281,9 +281,18 @@ app.openapi(cartValidationRoute, async (c) => {
         getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
     },
   });
+  // The cart's currency: its market's (MARKETS-DESIGN step 6).
+  const decimalPlaces = result.money.decimalPlaces;
+  const giftCardIssues = await giftCardHandleIssues(
+    db,
+    (data.giftCards ?? []).map((card) => card.handle),
+    readMasterSecret(c.env),
+    result.money.currencyCode,
+    giftCardTenderRates(result.money),
+  );
   const propertiesHashes = await storefrontLinePropertiesHashes(result);
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);
-  const cartOnlyPayment = resolveCartPaymentMethods(paymentMethods.enabledMethods, cartOnly);
+  const cartOnlyPayment = resolveCartPaymentMethods(paymentMethods.enabledMethods, cartOnly, null, paymentProviders, result.money.currencyCode);
   // Delivery is priced once a method is chosen: a pickup rate needs no
   // address, a delivery rate needs city and zone.
   const wantsDelivery = Boolean(data.shippingMethodId) || Boolean(data.city && data.zone);
@@ -322,6 +331,7 @@ app.openapi(cartValidationRoute, async (c) => {
       delivery.fulfilment,
       delivery.address?.countryCode ?? null,
       paymentProviders,
+      result.money.currencyCode,
     ),
     giftCardIssues,
     ...(delivery.kind && delivery.shippingMethod

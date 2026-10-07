@@ -7,7 +7,11 @@
 // because card prices round to it.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { createMarket, deleteMarket, getMarket, listMarkets, readStoreCurrency, updateMarket } from "@scalius/core/modules/markets";
+import { createMarket, deleteMarket, getMarket, listMarkets, listOwnMarketCurrencies, readStoreCurrency, updateMarket } from "@scalius/core/modules/markets";
+import { getActivePaymentMethods } from "@scalius/core/modules/payments";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import { created, ok } from "../../../utils/api-response";
 import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
@@ -30,7 +34,7 @@ app.openapi(createRoute({
   path: "/",
   tags: [TAG],
   summary: "Markets: the backup market first, then by name",
-  description: "Each market with its status, countries, currency and web presence. Every market sells in the shop currency until markets get their own currency.",
+  description: "Each market with its status, countries, currency and web presence. The backup market sells in the shop currency; another market sells in it or in its own currency.",
   responses: {
     200: { description: "Markets", content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(marketRecordSchema) })) } } },
     ...errorResponses,
@@ -38,6 +42,35 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   return ok(c, { items: (await listMarkets(c.get("db"))).map(presentMarket) });
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.markets.currencies",
+  method: "get",
+  path: "/currencies",
+  tags: [TAG],
+  summary: "The currencies a market can sell in",
+  description: "The shop currency, the currencies the store's active payment methods can charge (`any` when one charges every currency) and the currencies markets sell in now. A market may sell in its own currency only when an active payment method charges it (MARKETS-DESIGN step 6).",
+  responses: {
+    200: {
+      description: "Market currencies",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        shopCurrencyCode: z.string(),
+        chargeable: z.union([z.literal("any"), z.array(z.string())]),
+        marketCurrencies: z.array(z.string()),
+      })) } },
+    },
+    ...errorResponses,
+  },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const [currency, chargeable, marketCurrencies] = await Promise.all([
+    readStoreCurrency(db),
+    chargeableCurrencies(c, db),
+    listOwnMarketCurrencies(db),
+  ]);
+  return ok(c, { shopCurrencyCode: currency.code, chargeable: chargeable === "any" ? "any" as const : [...chargeable], marketCurrencies });
 });
 
 app.openapi(createRoute({
@@ -80,7 +113,7 @@ app.openapi(createRoute({
   path: "/{id}",
   tags: [TAG],
   summary: "Edit a market under the revision the editor loaded",
-  description: "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it. Other markets may price by FX: product prices adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5).",
+  description: "Fields left out keep their value. The backup market stays active at the root URL, sells in the shop currency and alone sets a price increment. Another market may sell in its own currency (one an active payment method charges) at its exchange rate, and may price by FX: product prices converted, adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5, step 6). A currency change makes open checkouts price again in the new currency.",
   request: {
     params: marketParam,
     body: { required: true, content: { "application/json": { schema: updateMarketSchema } } },
@@ -93,10 +126,19 @@ app.openapi(createRoute({
   noStore(c);
   const { priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding, ...body } = c.req.valid("json");
   const db = c.get("db");
-  // Pricing amounts arrive in major units of the shop currency (every market sells it until step 6).
-  const currencyCode = priceRounding !== undefined || priceEnding !== undefined ? (await readStoreCurrency(db)).code : "BDT";
+  const id = c.req.valid("param").id;
+  // Pricing amounts arrive in major units of the currency the market will sell in.
+  const amounts = priceRounding !== undefined || priceEnding !== undefined;
+  const current = amounts || body.currencyCode ? await getMarket(db, id) : null;
+  const currencyCode = body.currencyCode !== undefined
+    ? normalizeSupportedCurrencyCode(body.currencyCode) ?? current?.shopCurrencyCode ?? "BDT"
+    : current?.currencyCode ?? "BDT";
   const pricing = marketPricingInput({ priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding }, currencyCode);
-  const { market, priceIncrementChanged } = await updateMarket(db, c.req.valid("param").id, { ...body, ...pricing });
+  // A market's own currency must be one an active payment method charges.
+  const chargeable = body.currencyCode
+    ? await chargeableCurrencies(c, db)
+    : "any" as const;
+  const { market, priceIncrementChanged } = await updateMarket(db, id, { ...body, ...pricing }, { chargeable });
   if (priceIncrementChanged) {
     // Card prices in the catalogue projections round to the increment.
     await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
@@ -127,5 +169,24 @@ app.openapi(createRoute({
   await deleteMarket(c.get("db"), id, c.req.valid("query").expectedRevision);
   return ok(c, { id });
 });
+
+/**
+ * The currencies the store's active payment methods can charge: "any" when
+ * one charges every currency (Stripe), else their declared currencies. Cash
+ * on delivery collects any currency in its cash increment, but only for its
+ * countries, so it counts only for the shop currency.
+ */
+async function chargeableCurrencies(c: Context<{ Bindings: Env }>, db: Parameters<typeof getActivePaymentMethods>[0]): Promise<readonly string[] | "any"> {
+  const providers = await requestPaymentProviders(c as never);
+  const active = await getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), providers);
+  const codes = new Set<string>();
+  for (const methodId of active.enabledMethods) {
+    const gateway = providers.get(methodId);
+    if (!gateway) continue;
+    if (gateway.chargeCurrencies === "any") return "any";
+    for (const code of gateway.chargeCurrencies) codes.add(code);
+  }
+  return [...codes];
+}
 
 export { app as marketsSettingsRoutes };
