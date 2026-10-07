@@ -446,6 +446,15 @@ export const storefrontSectionListSchema = z.array(storefrontSectionSchema).max(
     });
   });
 
+/** A new section id on a page: the type (`app` for an app's), then -2, -3… until it is free. */
+export function storefrontNextSectionId(type: string, taken: Iterable<{ id: string }>): string {
+  const used = new Set([...taken].map((each) => each.id));
+  if (!used.has(type)) return type;
+  for (let number = 2; ; number += 1) {
+    if (!used.has(`${type}-${number}`)) return `${type}-${number}`;
+  }
+}
+
 /** A new section of a type with its default settings. */
 export function storefrontSectionDefault<Type extends StorefrontSectionType>(type: Type, id: string): StorefrontSectionOf<Type> {
   return {

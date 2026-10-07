@@ -39,6 +39,9 @@ function internals(schema: unknown): ZodInternals["_zod"] {
   return zod;
 }
 
+/** The optional flag a hidden block carries (storefrontVisibleSection). */
+const BLOCK_HIDDEN_KEY = "hidden";
+
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
@@ -81,7 +84,11 @@ export function describeSetting(schema: unknown): SettingSpec {
       return { kind: "choice", values: [literalValue(schema)] };
     case "object": {
       const shape = def.shape as Record<string, unknown>;
-      return { kind: "object", fields: Object.entries(shape).map(([key, value]) => ({ key, spec: describeSetting(value) })) };
+      // A block's `hidden` is the editor's show/hide toggle in its tree, not a field.
+      return {
+        kind: "object",
+        fields: Object.entries(shape).filter(([key]) => key !== BLOCK_HIDDEN_KEY).map(([key, value]) => ({ key, spec: describeSetting(value) })),
+      };
     }
     case "array":
       return {

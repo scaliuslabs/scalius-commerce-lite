@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveSectionTo } from "./theme-editor/editor-state";
+import { moveItem } from "./theme-editor/editor-state";
 import {
   DEFAULT_STOREFRONT_THEME,
   EMPTY_STORE_SHAPE,
@@ -125,7 +125,7 @@ describe("templates", () => {
     const applied = storefrontTemplateTheme("boutique");
     const changed = [
       { ...applied, tokens: { ...applied.tokens, density: "compact" as const } },
-      { ...applied, pages: { ...applied.pages, home: moveSectionTo(applied.pages.home, applied.pages.home.findIndex((section) => section.id === "testimonials"), applied.pages.home.findIndex((section) => section.id === "testimonials") - 1) } },
+      { ...applied, pages: { ...applied.pages, home: moveItem(applied.pages.home, applied.pages.home.findIndex((section) => section.id === "testimonials"), applied.pages.home.findIndex((section) => section.id === "testimonials") - 1) } },
       setThemeColor(applied, "background", "#fafafa"),
       setBlockVariant(applied, "desktopNav", "mega-panel"),
       setBlockVariant(applied, "gallery", "classic"),

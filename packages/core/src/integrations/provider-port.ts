@@ -1,4 +1,4 @@
-// The SMS, email, fraud, tax and translation ports as core calls them (docs/platform/PLUGINS.md,
+// The SMS, email, fraud, tax, translation and AI ports as core calls them (docs/platform/PLUGINS.md,
 // "Providers"). Every provider a merchant can choose, built in (an adapter in
 // this package bound to its saved settings) or an app's
 // (`<plugin id>:<provider id>`), is one `BoundProvider` of its port: callers
@@ -61,7 +61,7 @@ export function bindProvider<K extends ProviderKind, S>(kind: K, adapter: BuiltI
   return bound as BoundProvider<K>;
 }
 
-export type AppProviderKind = "sms" | "email" | "fraud" | "tax" | "translation";
+export type AppProviderKind = "sms" | "email" | "fraud" | "tax" | "translation" | "ai";
 
 /**
  * Whether a saved choice names an app provider (`<plugin id>:<provider id>`)

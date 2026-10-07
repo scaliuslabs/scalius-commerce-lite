@@ -9,6 +9,8 @@
  */
 import { THEME_PREVIEW_BODY_MAX } from "@scalius/shared/theme-editor-bridge";
 import { getLayoutData, type LayoutData } from "@/lib/api";
+import { renderForPresence } from "@/lib/api/runtime";
+import { isMarketSubfolder } from "@scalius/shared/markets";
 import { isTrustedBrowserContinuationPostOrigin } from "@/lib/browser-continuation-relay";
 import { resolveRequestTheme, type RequestTheme } from "@/lib/storefront-theme-context";
 import { clearThemePreviewCookieHeader, readThemePreviewCookie } from "@/lib/theme-preview-cookie";
@@ -52,6 +54,9 @@ export async function readThemePreviewPost<Body>(
   }
   const result = schema.safeParse(parsed);
   if (!result.success) return themePreviewRefusal(400);
+  // The market the editor previews (its currency, prices and language).
+  const presence = (result.data as { presence?: unknown }).presence;
+  if (typeof presence === "string" && isMarketSubfolder(presence)) renderForPresence(presence);
   const layoutData = await getLayoutData();
   if (!layoutData) return themePreviewRefusal(503);
   const requestTheme = await resolveRequestTheme(astro, layoutData);

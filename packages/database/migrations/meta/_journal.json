@@ -869,6 +869,13 @@
       "when": 1791390000000,
       "tag": "0123_market_currencies",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "6",
+      "when": 1791389890620,
+      "tag": "0124_theme_restore_points",
+      "breakpoints": true
     }
   ]
 }

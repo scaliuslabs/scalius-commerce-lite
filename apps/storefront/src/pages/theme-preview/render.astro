@@ -55,11 +55,8 @@ const deliveryFacts = showsDeliveryFacts
     })
   : [];
 const content = homepageContent(sectionData, deliveryFacts);
-// The previewed market's language words (the newsletter's), else the store's.
-const presenceLocale = presence
-  ? layoutData.markets?.markets.flatMap((market) => market.presences).find((each) => each.value === presence)?.locale
-  : undefined;
-const languageCode = presenceLocale ?? layoutData.storefrontCopy?.languageCode;
+// The layout is the previewed market's (lib/theme-preview-post.ts): its language's words.
+const languageCode = layoutData.storefrontCopy?.languageCode;
 const only = body.only;
 const target = only ? regions.find((region) => region.sections.some((section) => section.id === only)) ?? null : null;
 ---

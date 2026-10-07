@@ -29,6 +29,7 @@ import {
   getThemeVersion,
   restoreThemeVersion,
   discardThemeDraft,
+  getThemeRestorePoint,
   saveThemePageDraft,
   createThemePreviewSession,
   THEME_PUBLISH_NOTE_MAX,
@@ -70,8 +71,17 @@ import {
   storefrontThemeDocumentApiSchema,
 } from "../../../schemas/storefront-theme";
 import { appSettingField, appSettingFieldSchema } from "../../../schemas/app-settings";
+import {
+  boundedThemeStatus,
+  themeDateTimeSchema,
+  themeDraftReceipt,
+  themeDraftReceiptSchema,
+  themeIso,
+  themeStatusSchema,
+} from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
-import { listPluginInstallations } from "@scalius/core/modules/plugins";
+import { listActiveProviderPlugins, listPluginInstallations } from "@scalius/core/modules/plugins";
+import { qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { pluginSurfaceKey } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -198,45 +208,10 @@ app.openapi(saveCurrencyRoute, async (c) => {
 // operation) and `document_get` (an authenticated JSON artifact for agents);
 // every command answers revisions only, so each agent result stays small.
 
-/** A stored timestamp, sent as its ISO string. */
-const dateTimeSchema = z.string().openapi({ format: "date-time" });
-const iso = (date: Date) => date.toISOString();
-
-const themeDraftReceiptSchema = z.object({
-  revision: revisionSchema,
-  basePublishedRevision: revisionSchema,
-  updatedAt: dateTimeSchema.nullable(),
-});
-/** A draft's revisions, with its save time as the contract states it. */
-const draftReceipt = <Draft extends { updatedAt: Date | null }>(draft: Draft) =>
-  ({ ...draft, updatedAt: draft.updatedAt && iso(draft.updatedAt) });
-
-const themeStatusSchema = z.object({
-  published: z.object({ revision: revisionSchema }),
-  draft: themeDraftReceiptSchema,
-  draftDiffersFromLive: z.boolean(),
-  lastPublished: z.object({
-    revision: revisionSchema,
-    publishedBy: z.string().max(160).nullable(),
-    publishedByName: z.string().max(200).nullable(),
-    createdAt: dateTimeSchema,
-  }).nullable(),
-});
-
-type ThemeStatusValue = ReturnType<typeof themeStatus>;
-/** The status as the contract states it: ISO times, and bounded strings for agent results (a user's name has no length limit of its own). */
-function boundedStatus(status: ThemeStatusValue) {
-  return {
-    ...status,
-    draft: draftReceipt(status.draft),
-    lastPublished: status.lastPublished && {
-      ...status.lastPublished,
-      publishedBy: status.lastPublished.publishedBy?.slice(0, 160) ?? null,
-      publishedByName: status.lastPublished.publishedByName?.slice(0, 200) ?? null,
-      createdAt: iso(status.lastPublished.createdAt),
-    },
-  };
-}
+const dateTimeSchema = themeDateTimeSchema;
+const iso = themeIso;
+const draftReceipt = themeDraftReceipt;
+const boundedStatus = boundedThemeStatus;
 
 const themeStatusResponses = {
   200: { description: "Theme revisions", content: { "application/json": { schema: successEnvelope(themeStatusSchema) } } },
@@ -308,7 +283,8 @@ const getThemeEditorRoute = createRoute({
         "application/json": {
           schema: successEnvelope(themeStatusSchema.extend({
             published: z.object({ theme: storefrontThemeDocumentApiSchema, revision: revisionSchema }),
-            draft: themeDraftReceiptSchema.extend({ theme: storefrontThemeDocumentApiSchema }),
+            /** The shared draft, and who saved it last (the editor's conflict notice names them). */
+            draft: themeDraftReceiptSchema.extend({ theme: storefrontThemeDocumentApiSchema, updatedByName: z.string().max(200).nullable() }),
             /** What the theme's fit rules read, as the storefront reads it. */
             storeShape: storeShapeApiSchema,
             /** Every image the draft names (brand, hero slides, section images), for the editor's previews. */
@@ -321,6 +297,8 @@ const getThemeEditorRoute = createRoute({
             })),
             /** Sections and product blocks the store's active apps offer (the editor adds them; the apps draw them). */
             apps: z.array(themeAppSurfacesSchema),
+            /** Active apps' AI providers (Draft with AI); empty when no app provides one. */
+            aiProviders: z.array(z.object({ id: z.string(), name: z.string(), appName: z.string(), appId: z.string() })),
           })),
         },
       },
@@ -331,14 +309,27 @@ const getThemeEditorRoute = createRoute({
 
 app.openapi(getThemeEditorRoute, async (c) => {
   const db = c.get("db");
-  const [[workspace, media], storeShape, apps] = await Promise.all([
+  const [[workspace, media], storeShape, apps, aiApps] = await Promise.all([
     getThemeWorkspace(db).then(async (workspace) =>
       [workspace, await readThemeMedia(db, workspace.draft.theme)] as const),
     readStoreShape(db),
     readThemeAppSurfaces(db),
+    listActiveProviderPlugins(db, "ai"),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
-  return ok(c, { ...workspace, draft: draftReceipt(workspace.draft), lastPublished, storeShape, media, apps });
+  const { updatedBy: _updatedBy, updatedByName, ...draft } = workspace.draft;
+  const aiProviders = aiApps.flatMap((installation) => installation.manifest.providers
+    .filter((provider) => provider.kind === "ai")
+    .map((provider) => ({ id: qualifiedProviderId(installation.pluginId, provider.id), name: provider.name, appName: installation.manifest.name, appId: installation.pluginId })));
+  return ok(c, {
+    ...workspace,
+    draft: { ...draftReceipt(draft), updatedByName: updatedByName?.slice(0, 200) ?? null },
+    lastPublished,
+    storeShape,
+    media,
+    apps,
+    aiProviders,
+  });
 });
 
 app.openapi(createRoute({
@@ -374,13 +365,15 @@ app.openapi(createRoute({
   method: "get",
   path: "/theme/document",
   tags: ["Admin - Settings"],
-  summary: "Read the whole draft, live or one published version's theme document",
+  summary: "Read the whole draft, live, one published version's or one restore point's theme document",
   operationId: "dashboard.theme.document_get",
   request: {
     query: z.object({
-      source: z.enum(["draft", "published", "version"]).default("draft"),
+      source: z.enum(["draft", "published", "version", "restore-point"]).default("draft"),
       /** The published version, with `source=version`. */
       revision: z.coerce.number().int().positive().optional(),
+      /** The restore point, with `source=restore-point`. */
+      id: z.string().regex(/^themerp_[A-Za-z0-9_-]{4,32}$/).optional(),
     }),
   },
   responses: {
@@ -389,7 +382,7 @@ app.openapi(createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            source: z.enum(["draft", "published", "version"]),
+            source: z.enum(["draft", "published", "version", "restore-point"]),
             revision: revisionSchema,
             document: storefrontThemeDocumentApiSchema,
           })),
@@ -403,12 +396,17 @@ app.openapi(createRoute({
   if ((query.source === "version") !== (query.revision !== undefined)) {
     throw new ValidationError("Choose a revision exactly when reading a published version.");
   }
+  if ((query.source === "restore-point") !== (query.id !== undefined)) {
+    throw new ValidationError("Choose a restore point exactly when reading one.");
+  }
   const db = c.get("db");
   const source = query.source === "version"
     ? await getThemeVersion(db, query.revision!)
-    : (await getThemeWorkspace(db))[query.source];
+    : query.source === "restore-point"
+      ? await getThemeRestorePoint(db, query.id!).then((point) => ({ revision: point.draftRevision, theme: point.theme }))
+      : (await getThemeWorkspace(db))[query.source];
   // Agents receive this as an authenticated artifact; the editor reads it as JSON.
-  c.header("Content-Disposition", `inline; filename="theme-${query.source}-${source.revision}.json"`);
+  c.header("Content-Disposition", `inline; filename="theme-${query.source}-${query.id ?? source.revision}.json"`);
   c.header("Cache-Control", "private, no-store");
   return ok(c, { source: query.source, revision: source.revision, document: source.theme });
 });
