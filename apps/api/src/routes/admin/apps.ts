@@ -36,8 +36,13 @@ import {
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
+  appSettingsSections,
+  providerOwnSettingKeys,
+  providerSettingKeys,
   type PluginGrantRequest,
+  type PluginManifest,
 } from "@scalius/shared/plugins";
+import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { appSettingField, appSettingFieldSchema, appSettingValueSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
@@ -54,6 +59,7 @@ import {
   pluginAssetKey,
   pluginAssetPath,
   pluginAssetResponse,
+  providerIconUrl,
 } from "../../plugins/listing";
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
 
@@ -109,6 +115,9 @@ const appTranslationsSchema = z.object({
     cards: z.record(z.string(), z.string()).optional(),
     actions: z.record(z.string(), z.string()).optional(),
     widgets: z.record(z.string(), z.string()).optional(),
+    tabs: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+    settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
+    settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional() })).optional(),
   }).optional(),
 }).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles in other dashboard languages (null: English only)." });
 
@@ -173,6 +182,26 @@ const settingFieldSchema = appSettingFieldSchema;
 
 const routeSchema = z.object({ name: z.string(), methods: z.array(z.string()) });
 
+/** An app page's tabs (each its own admin route); null: one page. */
+const pageTabsSchema = z.array(z.object({ id: z.string(), title: z.string(), route: z.string() })).nullable();
+
+const appPageSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  placement: z.enum(PLUGIN_NAV_PLACEMENTS),
+  route: z.string(),
+  tabs: pageTabsSchema,
+});
+
+/** A provider the app offers, where the merchant sets it up (its capability's settings page). */
+const appProviderEntrySchema = z.object({
+  id: z.string().openapi({ description: "<plugin id>:<provider id>, as the capability's settings store it." }),
+  providerId: z.string(),
+  kind: z.enum(PROVIDER_KINDS),
+  name: z.string(),
+  icon: z.string().nullable().openapi({ description: "Same-origin address of the provider's own mark, else the app's icon." }),
+}).openapi("AppProviderEntry");
+
 const appDetailSchema = appSummarySchema.extend({
   ...listingDetailFields,
   grantKey: z.string().openapi({ description: "Send back on activation: approving a request nobody was shown is refused." }),
@@ -192,7 +221,16 @@ const appDetailSchema = appSummarySchema.extend({
     values: z.record(z.string(), settingValueSchema),
     secrets: z.record(z.string(), z.boolean()).openapi({ description: "Whether each secret is set; secret values are never returned." }),
     missing: z.array(z.string()).openapi({ description: "Required settings still empty (activation needs them)." }),
+    sections: z.array(z.object({
+      group: z.object({ id: z.string(), title: z.string(), description: z.string().nullable() }).nullable(),
+      keys: z.array(z.string()),
+    })).openapi({ description: "The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider." }),
   }),
+  providers: z.array(appProviderEntrySchema.extend({
+    settings: z.array(z.string()).openapi({ description: "The setting keys shown with the provider where it is set up." }),
+    own: z.boolean().openapi({ description: "Whether the provider has fields of its own (otherwise it uses the app's general settings)." }),
+    required: z.array(z.string()).openapi({ description: "The keys its readiness needs set: its declared settings, else the app's required ones." }),
+  })).openapi({ description: "The providers the app offers, each set up on its capability's settings page." }),
   routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(z.string()) }),
   cron: z.array(z.object({
     name: z.string(),
@@ -210,15 +248,15 @@ const appDetailSchema = appSummarySchema.extend({
   storefront: z.object({
     proxy: z.boolean(),
     head: z.boolean(),
-    sections: z.number().int(),
-    productBlocks: z.number().int(),
+    sections: z.array(z.object({ type: z.string(), name: z.string() })),
+    productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(["buy-box", "below"]) })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
   }),
   admin: z.object({
-    pages: z.array(z.object({ id: z.string(), title: z.string(), placement: z.string(), route: z.string() })),
-    cards: z.number().int(),
-    actions: z.number().int(),
-    widgets: z.number().int(),
+    pages: z.array(appPageSchema),
+    cards: z.array(z.object({ id: z.string(), target: z.enum(PLUGIN_ADMIN_TARGETS), title: z.string() })),
+    actions: z.array(z.object({ id: z.string(), target: z.enum(PLUGIN_ADMIN_TARGETS), label: z.string(), bulk: z.boolean() })),
+    widgets: z.array(z.object({ id: z.string(), title: z.string() })),
   }),
   limits: z.object({ cpuMs: z.number().int(), wallMs: z.number().int() }),
 }).openapi("AppDetail");
@@ -281,6 +319,26 @@ function summary(installation: PluginInstallation) {
 
 const settingField = appSettingField;
 
+function pageEntry(page: PluginManifest["admin"]["pages"][number]) {
+  return {
+    id: page.id,
+    title: page.title,
+    placement: page.placement,
+    route: page.route,
+    tabs: page.tabs ? page.tabs.map((tab) => ({ id: tab.id, title: tab.title, route: tab.route })) : null,
+  };
+}
+
+function providerEntry(installation: PluginInstallation, provider: PluginManifest["providers"][number]) {
+  return {
+    id: qualifiedProviderId(installation.pluginId, provider.id),
+    providerId: provider.id,
+    kind: provider.kind,
+    name: provider.name,
+    icon: providerIconUrl(installation.pluginId, installation.manifest, provider.id, installation.bundleSha256),
+  };
+}
+
 function missingSettings(installation: PluginInstallation, described: ReturnType<typeof describePluginSettings>): string[] {
   return installation.manifest.settings
     .filter((field) => field.required)
@@ -342,7 +400,14 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       values: described.values,
       secrets: described.secrets,
       missing: missingSettings(installation, described),
+      sections: appSettingsSections(manifest),
     },
+    providers: manifest.providers.map((provider) => ({
+      ...providerEntry(installation, provider),
+      settings: providerSettingKeys(manifest, provider.id),
+      own: providerOwnSettingKeys(manifest, provider.id).length > 0,
+      required: provider.settings ? [...provider.settings] : manifest.settings.filter((field) => field.required).map((field) => field.key),
+    })),
     routes: {
       admin: manifest.routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
       public: manifest.routes.public.map((route) => ({ name: route.name, methods: [...route.methods] })),
@@ -369,15 +434,15 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     storefront: {
       proxy: manifest.storefront.proxy,
       head: manifest.storefront.head,
-      sections: manifest.storefront.sections.length,
-      productBlocks: manifest.storefront.productBlocks.length,
+      sections: manifest.storefront.sections.map((section) => ({ type: section.type, name: section.name })),
+      productBlocks: manifest.storefront.productBlocks.map((block) => ({ type: block.type, name: block.name, placement: block.placement })),
       scripts: manifest.storefront.scripts.map((script) => ({ src: script.src, placement: script.placement, pages: [...script.pages] })),
     },
     admin: {
-      pages: manifest.admin.pages.map((page) => ({ id: page.id, title: page.title, placement: page.placement, route: page.route })),
-      cards: manifest.admin.cards.length,
-      actions: manifest.admin.actions.length,
-      widgets: manifest.admin.widgets.length,
+      pages: manifest.admin.pages.map(pageEntry),
+      cards: manifest.admin.cards.map((card) => ({ id: card.id, target: card.target, title: card.title })),
+      actions: manifest.admin.actions.map((action) => ({ id: action.id, target: action.target, label: action.label, bulk: action.bulk })),
+      widgets: manifest.admin.widgets.map((widget) => ({ id: widget.id, title: widget.title })),
     },
     limits: { cpuMs: manifest.limits.cpuMs, wallMs: manifest.limits.wallMs },
   };
@@ -559,7 +624,7 @@ const surfaceRouteSchema = z.object({
 const appAdminSurfacesSchema = z.object({
   id: z.string(),
   name: z.string(),
-  pages: z.array(z.object({ id: z.string(), title: z.string(), placement: z.enum(PLUGIN_NAV_PLACEMENTS), route: z.string() })),
+  pages: z.array(appPageSchema),
   cards: z.array(z.object({ id: z.string(), target: z.enum(PLUGIN_ADMIN_TARGETS), title: z.string(), route: z.string() })),
   actions: z.array(z.object({
     id: z.string(),
@@ -572,6 +637,8 @@ const appAdminSurfacesSchema = z.object({
   widgets: z.array(z.object({ id: z.string(), title: z.string(), route: z.string() })),
   /** The app's admin routes: buttons and forms in its UI may call only these, with these methods. */
   routes: z.array(surfaceRouteSchema),
+  /** Its providers: dashboard search opens each one's setup where its capability lives. */
+  providers: z.array(appProviderEntrySchema),
   translations: appTranslationsSchema.optional(),
 }).openapi("AppAdminSurfaces");
 
@@ -581,7 +648,7 @@ const surfacesRoute = createRoute({
   operationId: "dashboard.apps.surfaces",
   tags: ["Admin - Apps"],
   summary: "List what active apps add to the dashboard",
-  description: "Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.",
+  description: "Pages (navigation entries, with their tabs), resource cards, actions, home widgets and providers of every active app, from their manifests. Their content comes from each app's own admin routes.",
   responses: {
     200: {
       description: "Dashboard surfaces of active apps",
@@ -602,7 +669,7 @@ app.openapi(surfacesRoute, async (c) => {
       return {
         id: installation.pluginId,
         name,
-        pages: admin.pages.map((page) => ({ id: page.id, title: page.title, placement: page.placement, route: page.route })),
+        pages: admin.pages.map(pageEntry),
         cards: admin.cards.map((card) => ({ id: card.id, target: card.target, title: card.title, route: card.route })),
         actions: admin.actions.map((action) => ({
           id: action.id,
@@ -614,10 +681,11 @@ app.openapi(surfacesRoute, async (c) => {
         })),
         widgets: admin.widgets.map((widget) => ({ id: widget.id, title: widget.title, route: widget.route })),
         routes: routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
+        providers: installation.manifest.providers.map((provider) => providerEntry(installation, provider)),
         translations: translations ?? null,
       };
     })
-    .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length > 0)
+    .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length + surfaces.providers.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return ok(c, { apps });
 });

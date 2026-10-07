@@ -27,11 +27,25 @@ const label = z.string().trim().min(1).max(80);
 const help = z.string().trim().min(1).max(280).optional();
 const choice = z.object({ value: z.string().min(1).max(64), label }).strict();
 
+/**
+ * A settings group or provider id (`manifest.settingsGroups[].id`,
+ * `manifest.providers.*[].id`): the same lowercase name both use.
+ */
+export const PLUGIN_SETTING_GROUP = /^[a-z][a-z0-9-]{0,47}$/;
+
 const base = {
   key: z.string().regex(PLUGIN_SETTING_KEY),
   label,
   help,
   required: z.boolean().default(false),
+  /**
+   * Where the dashboard shows the field: one of the manifest's
+   * `settingsGroups` (an app-wide section), or one of its provider ids (the
+   * field is that provider's, shown with it where the merchant sets the
+   * provider up). Left out: the app's general settings, or the provider whose
+   * `settings` names it. Presentation only; storage and validation ignore it.
+   */
+  group: z.string().regex(PLUGIN_SETTING_GROUP).optional(),
 };
 
 export const pluginSettingFieldSchema = z.discriminatedUnion("type", [

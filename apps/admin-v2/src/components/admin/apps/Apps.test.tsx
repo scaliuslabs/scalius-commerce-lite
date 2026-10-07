@@ -23,6 +23,8 @@ vi.mock("sonner", () => ({ toast: toasts }));
 vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
+  useLocation: (options?: { select?: (location: { hash: string; pathname: string }) => unknown }) =>
+    (options?.select ? options.select({ hash: "", pathname: "/admin/apps" }) : { hash: "", pathname: "/admin/apps" }),
   Link: ({ to, params, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params?: Record<string, string>; children: ReactNode }) => (
     <a href={params ? to.replace("$pluginId", params.pluginId ?? "") : to} {...props}>{children}</a>
   ),
@@ -123,13 +125,15 @@ function detail(overrides: Record<string, unknown> = {}) {
       values: { points_per_taka: 2, program_name: "Acme rewards", tiers: ["gold"] },
       secrets: { api_key: true },
       missing: [],
+      sections: [{ group: null, keys: ["points_per_taka", "program_name", "tiers", "api_key"] }],
     },
+    providers: [],
     routes: { admin: [], public: [], webhooks: [] },
     cron: [],
     storage: [],
     customFields: [],
-    storefront: { proxy: false, head: false, sections: 0, productBlocks: 0, scripts: [] },
-    admin: { pages: [], cards: 0, actions: 0, widgets: 0 },
+    storefront: { proxy: false, head: false, sections: [], productBlocks: [], scripts: [] },
+    admin: { pages: [], cards: [], actions: [], widgets: [] },
     limits: { cpuMs: 50, wallMs: 1000 },
     ...overrides,
   };
@@ -695,5 +699,97 @@ describe("App page", () => {
     expect(text()).toContain("চেকআউট ফাংশন");
     expect(text()).toContain("ডেলিভারি অপশন বদলায়");
     expect(text()).toContain("প্রায়োরিটি ৩");
+  });
+});
+
+/** A regional pack: one app-wide group, and two services with fields of their own. */
+function pack(overrides: Record<string, unknown> = {}) {
+  return detail({
+    id: "acme.pack",
+    name: "Acme pack",
+    status: "active",
+    settings: {
+      fields: [
+        field({ key: "store_code", label: "Store code", type: "text", group: "general" }),
+        field({ key: "alpha_key", label: "API key", type: "secret", group: "alpha" }),
+        field({ key: "alpha_sender", label: "Sender name", type: "text", group: "alpha" }),
+        field({ key: "beta_token", label: "Token", type: "secret", group: "beta" }),
+        field({ key: "beta_weight", label: "Default weight", type: "number", group: "beta" }),
+      ],
+      values: { store_code: "DHK-1", alpha_sender: "ACME", beta_weight: 0.5 },
+      secrets: { alpha_key: true, beta_token: false },
+      missing: [],
+      sections: [{ group: { id: "general", title: "Store", description: "How the pack names your store." }, keys: ["store_code"] }],
+    },
+    providers: [
+      { id: "acme.pack:alpha", providerId: "alpha", kind: "sms", name: "Alpha SMS", icon: null, settings: ["alpha_key", "alpha_sender"], own: true, required: ["alpha_key"] },
+      { id: "acme.pack:beta", providerId: "beta", kind: "courier", name: "Beta Courier", icon: null, settings: ["beta_token", "beta_weight"], own: true, required: ["beta_token"] },
+    ],
+    ...overrides,
+  });
+}
+
+describe("App page: settings and services", () => {
+  it("has Overview, Settings and Permissions tabs", async () => {
+    await renderApp(detail(), MANAGER);
+    const tabs = document.querySelector('[role="tablist"][aria-label="App sections"]')!;
+    expect([...tabs.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(["Overview", "Settings", "Permissions"]);
+  });
+
+  it("shows only app-wide settings in the sections the app declares, each service as a collapsed group with its status", async () => {
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
+    await render(<AppRoute id="acme.pack" />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Acme pack"));
+
+    expect(text()).toContain("How the pack names your store.");
+    expect(input("store_code").value).toBe("DHK-1");
+    // A service's fields are never on the app page itself, nor named with a prefix.
+    for (const key of ["alpha_key", "alpha_sender", "beta_token", "beta_weight"]) expect(input(key)).toBeNull();
+    expect(text()).toContain("Services");
+    const triggers = [...document.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].filter((element) => element.closest('[data-slot="accordion-item"]'));
+    expect(triggers.map((trigger) => trigger.textContent)).toEqual([
+      expect.stringContaining("Alpha SMS"),
+      expect.stringContaining("Beta Courier"),
+    ]);
+    expect(triggers[0]!.textContent).toContain("Configured");
+    expect(triggers[1]!.textContent).toContain("Not set");
+    expect(triggers.every((trigger) => trigger.getAttribute("aria-expanded") === "false")).toBe(true);
+    // Open: each field reads Set or Not set, and the service links to where it is used.
+    await click(triggers[1]!);
+    expect(triggers[1]!.getAttribute("aria-expanded")).toBe("true");
+    const group = triggers[1]!.closest('[data-slot="accordion-item"]')!;
+    expect(group.textContent).toContain("TokenNot set");
+    expect(group.textContent).toContain("Default weightSet");
+    expect(group.querySelector("a")?.getAttribute("href")).toBe("/admin/settings/shipping");
+  });
+
+  it("opens a service's setup sheet with only its own fields, never a saved secret, and saves through the app", async () => {
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
+    sdk.putApiV1AdminAppsByIdSettings.mockImplementation(({ body }: { body: { values: Record<string, unknown> } }) =>
+      ok({ app: pack({ revision: 4, settings: { ...pack().settings, values: { ...pack().settings.values, alpha_sender: body.values.alpha_sender } } }) }));
+    await render(<AppRoute id="acme.pack" />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Acme pack"));
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.includes("Alpha SMS"))!;
+    await click(trigger);
+    await click(button("Edit Alpha SMS settings"));
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain("by Acme pack"));
+
+    const sheet = dialog();
+    const ids = [...sheet.querySelectorAll("input")].map((element) => element.id).filter(Boolean);
+    expect(ids).toEqual(["provider-setting-alpha_key", "provider-setting-alpha_sender"]);
+    const secret = sheet.querySelector<HTMLInputElement>("#provider-setting-alpha_key")!;
+    expect(secret.type).toBe("password");
+    expect(secret.value).toBe("");
+    expect(sheet.textContent).toContain("Configured");
+    expect(sheet.textContent).not.toContain("Token");
+
+    await type(sheet.querySelector<HTMLInputElement>("#provider-setting-alpha_sender")!, "ACMEBD");
+    await click(button("Save", sheet));
+    await vi.waitFor(() => expect(sdk.putApiV1AdminAppsByIdSettings).toHaveBeenCalledTimes(1));
+    // This service's field as edited; every other field as last saved; no secret unless typed.
+    expect(sdk.putApiV1AdminAppsByIdSettings.mock.calls[0]![0]).toEqual({
+      path: { id: "acme.pack" },
+      body: { expectedRevision: 3, values: { store_code: "DHK-1", alpha_sender: "ACMEBD", beta_weight: 0.5 } },
+    });
   });
 });

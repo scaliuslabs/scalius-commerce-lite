@@ -30,11 +30,11 @@ Activation then does three things:
 
 1. It moves the keys that the store saved in core before the move (see [Keys saved before the pack](#keys-saved-before-the-pack)).
 2. It loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
-3. The next steps show in the setup step and on the places page: enter the keys in the pack's settings, add Pathao or Steadfast in Settings → Shipping → Couriers, choose the SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations.
+3. The next steps show in the setup step and on the places page: add Pathao or Steadfast in Settings → Shipping → Couriers, choose the SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered there, in its setup sheet.
 
 ## Settings
 
-Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPTION_KEY` and never shown again. Each provider names the settings it needs (`providers.<kind>[].settings`), so each one is ready or not on its own. A missing key of one gateway never stops another.
+Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPTION_KEY` and never shown again. Each field belongs to one provider (`group: <provider id>`), so the dashboard shows it only in that provider's setup sheet, where the provider is set up (Notifications, Shipping → Couriers, Apps and integrations); the app's page lists each provider as a collapsed group with its status. Each provider names the settings it needs (`providers.<kind>[].settings`), so each one is ready or not on its own. A missing key of one gateway never stops another.
 
 | Provider | Settings it needs |
 |----------|-------------------|

@@ -868,14 +868,21 @@ function Node({ node }: { node: PluginUiNode }) {
 export interface PluginUiRendererProps {
   document: PluginUiDocument;
   host: PluginUiHost;
-  /** `page`: a dashboard page of its own (the root page draws the header); `embedded`: a card, widget or dialog body. */
-  variant: "page" | "embedded";
+  /**
+   * `page`: a dashboard page of its own (the root page draws the header);
+   * `tab`: one tab of an app page (the dashboard draws the page's title and
+   * tabs; the root page's description and actions open the tab);
+   * `embedded`: a card, widget or dialog body.
+   */
+  variant: "page" | "tab" | "embedded";
   /** The page title when the app's root page gives none (its manifest title). */
   fallbackTitle?: string;
+  /** Beside the page title (`page` only): "Provided by <app>". */
+  badge?: ReactNode;
 }
 
 /** Draws one validated document. Callers parse it first (`parsePluginUiDocument`). */
-export function PluginUiRenderer({ document, host, variant, fallbackTitle }: PluginUiRendererProps) {
+export function PluginUiRenderer({ document, host, variant, fallbackTitle, badge }: PluginUiRendererProps) {
   const t = useMessages(appUiMessages);
   const canUse = useCanUseApps();
   const hasActions = useMemo(() => pluginUiRouteActions(document.root).length > 0, [document]);
@@ -889,6 +896,7 @@ export function PluginUiRenderer({ document, host, variant, fallbackTitle }: Plu
             <>
               <PageHeader
                 title={(root.type === "page" ? root.title : undefined) || fallbackTitle || host.app.name}
+                badge={badge}
                 actions={root.type === "page" && root.actions?.length ? <ButtonRow buttons={root.actions} /> : undefined}
               />
               <div className="space-y-4">
@@ -899,6 +907,17 @@ export function PluginUiRenderer({ document, host, variant, fallbackTitle }: Plu
                 {root.type === "page" ? <Children nodes={root.children} /> : <Node node={root} />}
               </div>
             </>
+          ) : variant === "tab" ? (
+            <div className="space-y-4">
+              {root.type === "page" && (root.description || root.actions?.length) ? (
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  {root.description ? <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-body text-muted-foreground">{root.description}</p> : <span />}
+                  {root.actions?.length ? <ButtonRow buttons={root.actions} /> : null}
+                </div>
+              ) : null}
+              {note}
+              {root.type === "page" ? <Children nodes={root.children} /> : <Node node={root} />}
+            </div>
           ) : (
             <div className="space-y-3">
               {note}

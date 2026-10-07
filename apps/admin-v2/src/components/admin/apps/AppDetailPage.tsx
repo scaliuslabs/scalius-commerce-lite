@@ -1,11 +1,12 @@
-// One installed app (Shopify's app details): its icon and name, what it is
-// (tagline, description, screenshots, developer, categories, countries,
-// links, version and changelog), what it may do, its settings, its scheduled
-// jobs and its activity. Everything is drawn from the API's description of
-// the app; no app code runs in the dashboard. A Super Admin activates (or
+// One installed app (Shopify's app details), in three tabs. Overview: what it
+// is (tagline, description, screenshots, developer, categories, countries,
+// links, version and changelog), where it appears, its checkout functions,
+// scheduled jobs and activity. Settings: its app-wide settings in their
+// sections, and each service it offers as a collapsed group. Permissions:
+// what it may do. Everything is drawn from the API's description of the
+// app; no app code runs in the dashboard. A Super Admin activates (or
 // approves an update); managers change settings, deactivate and uninstall.
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
@@ -22,7 +23,7 @@ import {
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useLocale, useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
-import { localizedAppDetail } from "./app-text";
+import { localizedAppDetail } from "./app-detail-text";
 import { resourceMessages } from "~/i18n/resource";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
@@ -33,9 +34,13 @@ import { AppActivity } from "./AppActivity";
 import { AppIcon } from "./AppIcon";
 import { AppListingFacts, AppScreenshots, Fact } from "./AppListingParts";
 import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./AppDialogs";
-import { AppSettingsForm } from "./AppSettingsForm";
+import { appSurfacesMessages } from "~/i18n/app-surfaces";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { APP_PAGE_TABS, type AppPageTab } from "./app-page-tabs";
+import { AppProviderSheetHost } from "./AppProviderSheetHost";
+import { AppSettingsTab } from "./AppSettingsTab";
+import { AppWhereItAppears } from "./AppWhereItAppears";
 import { AppStatusBadge } from "./app-status";
-import { appPagePath } from "./ui/surfaces";
 
 type DialogName = "activate" | "deactivate" | "uninstall" | null;
 
@@ -44,9 +49,6 @@ const JOB_VARIANT = { running: "info", succeeded: "success", failed: "destructiv
 /** Shopify's app details: what it is (tagline, description, screenshots), then the listing's facts and this install's. */
 function Overview({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
-  const pages = app.admin.pages;
-  // Only an active app answers its pages; otherwise they are named only.
-  const linked = app.status === "active";
   return (
     <Card>
       <CardHeader>
@@ -60,19 +62,6 @@ function Overview({ app }: { app: AppDetail }) {
           <Fact label={t("runsIn")}>{t(app.runtime === "bundled" ? "runtime_bundled" : "runtime_sandbox")}</Fact>
           <Fact label={t("approvedBy")}>{app.activatedBy?.name ?? t("notApproved")}</Fact>
           {app.activatedAt ? <Fact label={t("activeSince")}>{formatWhen(app.activatedAt) ?? "—"}</Fact> : null}
-          {pages.length > 0 ? (
-            <Fact label={t("pages")}>
-              <ul className="space-y-0.5">
-                {pages.map((page) => (
-                  <li key={page.id}>
-                    {linked ? (
-                      <Link to={appPagePath(app.id, page.id)} className="text-link hover:underline">{page.title}</Link>
-                    ) : page.title}
-                  </li>
-                ))}
-              </ul>
-            </Fact>
-          ) : null}
         </AppListingFacts>
       </CardContent>
     </Card>
@@ -133,8 +122,9 @@ function Jobs({ app }: { app: AppDetail }) {
   );
 }
 
-function AppPage({ app }: { app: AppDetail }) {
+function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: (tab: AppPageTab) => void }) {
   const t = useMessages(installedAppsMessages);
+  const tabs = useMessages(appSurfacesMessages);
   const r = useMessages(resourceMessages);
   const { hasPermission, isSuperAdmin } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.APPS_MANAGE);
@@ -210,20 +200,33 @@ function AppPage({ app }: { app: AppDetail }) {
           </Alert>
         ) : null}
         {note ? <p role="status" className="rounded-lg bg-muted px-4 py-2 text-body text-muted-foreground">{t(note)}</p> : null}
-        <Overview app={app} />
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("accessTitle")}</CardTitle>
-            <CardDescription>{t("accessDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AppAccess app={app} />
-          </CardContent>
-        </Card>
-        {functions.length > 0 ? <CheckoutFunctions functions={functions} /> : null}
-        {app.settings.fields.length > 0 ? <AppSettingsForm app={app} canManage={canManage} /> : null}
-        {app.cron.length > 0 ? <Jobs app={app} /> : null}
-        <AppActivity appId={app.id} canManage={canManage} />
+        <Tabs value={tab} onValueChange={(value) => onTab(value as AppPageTab)}>
+          <TabsList aria-label={tabs("tabsLabel")}>
+            {APP_PAGE_TABS.map((value) => <TabsTrigger key={value} value={value}>{tabs(`tab_${value}`)}</TabsTrigger>)}
+          </TabsList>
+          {/* Every tab stays mounted: unsaved settings survive a look at another tab. */}
+          <TabsContent value="overview" forceMount className="space-y-4 data-[state=inactive]:hidden">
+            <Overview app={app} />
+            <AppWhereItAppears app={app} />
+            {functions.length > 0 ? <CheckoutFunctions functions={functions} /> : null}
+            {app.cron.length > 0 ? <Jobs app={app} /> : null}
+            <AppActivity appId={app.id} canManage={canManage} />
+          </TabsContent>
+          <TabsContent value="settings" forceMount className="data-[state=inactive]:hidden">
+            <AppSettingsTab app={app} canManage={canManage} />
+          </TabsContent>
+          <TabsContent value="permissions" forceMount className="data-[state=inactive]:hidden">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("accessTitle")}</CardTitle>
+                <CardDescription>{t("accessDescription")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AppAccess app={app} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {isSuperAdmin ? <ActivateAppDialog app={app} open={dialog === "activate"} onOpenChange={closeDialog} /> : null}
@@ -237,14 +240,21 @@ function AppPage({ app }: { app: AppDetail }) {
   );
 }
 
-/** The app page with its own save bar (the settings card registers with it). */
-export function AppDetailPage({ app }: { app: AppDetail }) {
+/**
+ * The app page with its own save bar (the Settings tab registers with it)
+ * and the service setup sheets its Settings tab opens.
+ */
+export function AppDetailPage({ app, tab = "overview", onTab }: { app: AppDetail; tab?: AppPageTab; onTab?: (tab: AppPageTab) => void }) {
   const t = useMessages(installedAppsMessages);
-  // The app's name, description and page titles in the dashboard's language.
+  // The route keeps the tab in the address; without one the page keeps it itself.
+  const [own, setOwn] = useState<AppPageTab>(tab);
+  // The app's name, description, page titles and settings in the dashboard's language.
   const locale = useLocale();
   return (
     <SaveBarProvider savedMessage={t("settingsSaved")}>
-      <AppPage app={localizedAppDetail(app, locale)} />
+      <AppProviderSheetHost>
+        <AppPage app={localizedAppDetail(app, locale)} tab={onTab ? tab : own} onTab={onTab ?? setOwn} />
+      </AppProviderSheetHost>
     </SaveBarProvider>
   );
 }

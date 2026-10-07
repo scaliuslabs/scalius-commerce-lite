@@ -11,6 +11,11 @@ import {
   pluginGrantRequest,
   pluginSettingDefaults,
   validatePluginSettingValues,
+  appSettingsSections,
+  appWideSettingKeys,
+  providerOwnSettingKeys,
+  providerSettingKeys,
+  qualifiedSettingLabel,
   type PluginManifestInput,
 } from "../plugins";
 
@@ -229,6 +234,95 @@ describe("storefront surfaces in the manifest", () => {
     const block = { type: "stars", name: "Stars", placement: "below", route: "draw" } as const;
     expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
     expect(issues({ ...base, storefront: { productBlocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.productBlocks.0.route Public route missing is not declared."]);
+  });
+});
+
+describe("settings groups and page tabs in the manifest", () => {
+  const issues = (input: unknown) => {
+    const parsed = parsePluginManifest(input);
+    return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
+  };
+  const pack = {
+    ...FULL,
+    providers: { sms: [{ id: "alpha", name: "Alpha", settings: ["alpha_key"] }], courier: [{ id: "beta", name: "Beta" }] },
+    settings: [
+      { key: "store_code", label: "Store code", type: "text", group: "store" },
+      { key: "region", label: "Region", type: "text" },
+      { key: "alpha_key", label: "API key", type: "secret" },
+      { key: "alpha_sender", label: "Sender", type: "text", group: "alpha" },
+      { key: "beta_token", label: "Token", type: "secret", group: "beta" },
+    ],
+    settingsGroups: [
+      { id: "store", title: "Store", description: "How the app names your store.", order: 50 },
+      { id: "extras", title: "Extras" },
+    ],
+  } satisfies PluginManifestInput;
+
+  it("puts provider fields with their provider and app-wide ones in their sections", () => {
+    const parsed = parsePluginManifest(pack);
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    const { manifest } = parsed;
+    expect(manifest.settingsGroups.map((group) => [group.id, group.order])).toEqual([["store", 50], ["extras", 100]]);
+    expect(providerOwnSettingKeys(manifest, "alpha")).toEqual(["alpha_key", "alpha_sender"]);
+    expect(providerOwnSettingKeys(manifest, "beta")).toEqual(["beta_token"]);
+    expect(appWideSettingKeys(manifest)).toEqual(["store_code", "region"]);
+    // An empty group is left out; the ungrouped fields come first.
+    expect(appSettingsSections(manifest)).toEqual([
+      { group: null, keys: ["region"] },
+      { group: { id: "store", title: "Store", description: "How the app names your store." }, keys: ["store_code"] },
+    ]);
+    expect(qualifiedSettingLabel(manifest, "alpha_key")).toBe("Alpha: API key");
+    expect(qualifiedSettingLabel(manifest, "region")).toBe("Region");
+  });
+
+  it("gives a provider without fields of its own the app's general settings", () => {
+    const single = parsePluginManifest({
+      ...FULL,
+      providers: { payment: [{ id: "pay", name: "Pay", chargeCurrencies: ["BDT"], operations: ["verifyReturn", "queryPayment"] }] },
+    });
+    if (!single.ok) throw new Error(JSON.stringify(single.issues));
+    expect(providerOwnSettingKeys(single.manifest, "pay")).toEqual([]);
+    expect(providerSettingKeys(single.manifest, "pay")).toEqual(["points_per_taka", "api_key", "tier"]);
+  });
+
+  it("refuses a group that names nothing, a group named like a provider and groups on storefront settings", () => {
+    expect(issues({ ...pack, settings: [...pack.settings, { key: "x", label: "X", type: "text", group: "nowhere" }] }))
+      .toEqual(["settings.5.group Group nowhere is neither a settings group nor a provider id."]);
+    expect(issues({ ...pack, settingsGroups: [{ id: "alpha", title: "Alpha" }] }))
+      .toContain('settingsGroups.0.id alpha is a provider id: provider fields join their provider with group: "alpha".');
+    expect(issues({ ...pack, settingsGroups: [{ id: "store", title: "A" }, { id: "store", title: "B" }] }))
+      .toContain("settingsGroups Settings group ids must be unique.");
+    expect(issues({
+      ...pack,
+      routes: { ...FULL.routes, public: [{ name: "draw", methods: ["GET"] }] },
+      storefront: { sections: [{ type: "s", name: "S", route: "draw", settings: [{ key: "a", label: "A", type: "text", group: "store" }] }] },
+    })).toEqual(["storefront.sections.0.settings.0.group Groups are for the app's own settings."]);
+  });
+
+  it("draws a page's tabs from declared routes, one of them the page's own", () => {
+    const tabs = [{ id: "summary", title: "Summary", route: "dashboard" }, { id: "adjust", title: "Adjust", route: "adjust" }];
+    const page = { id: "overview", title: "Loyalty", route: "dashboard", tabs };
+    const parsed = parsePluginManifest({ ...FULL, admin: { ...FULL.admin, pages: [page] } });
+    expect(parsed.ok && parsed.manifest.admin.pages[0]!.tabs).toEqual(tabs);
+    expect(issues({ ...FULL, admin: { ...FULL.admin, pages: [{ ...page, route: "other" }] } })).toContain("admin.pages.0.route Admin route other is not declared.");
+    expect(issues({ ...FULL, admin: { ...FULL.admin, pages: [{ ...page, tabs: [tabs[1], { ...tabs[1], id: "more" }] }] } }))
+      .toEqual(["admin.pages.0.route A page with tabs draws one of them: use a tab's route."]);
+    expect(issues({ ...FULL, admin: { ...FULL.admin, pages: [{ ...page, tabs: [tabs[0], { ...tabs[1], id: "summary" }] }] } }))
+      .toEqual(["admin.pages.0.tabs Tab ids must be unique."]);
+    expect(issues({ ...FULL, admin: { ...FULL.admin, pages: [{ ...page, tabs: [{ ...tabs[1], route: "missing" }, tabs[0]] }] } }))
+      .toEqual(["admin.pages.0.tabs.0.route Admin route missing is not declared."]);
+  });
+
+  it("translates group titles, tab titles and setting labels it declares, and nothing else", () => {
+    const tabs = [{ id: "summary", title: "Summary", route: "dashboard" }, { id: "adjust", title: "Adjust", route: "adjust" }];
+    const withTabs = { ...pack, admin: { ...FULL.admin, pages: [{ id: "overview", title: "Loyalty", route: "dashboard", tabs }] } };
+    const bn = { tabs: { overview: { summary: "সারসংক্ষেপ" } }, settingsGroups: { store: { title: "স্টোর" } }, settings: { alpha_key: { label: "এপিআই কী" } } };
+    expect(issues({ ...withTabs, translations: { bn } })).toEqual([]);
+    expect(issues({ ...withTabs, translations: { bn: { tabs: { overview: { nope: "x" } }, settingsGroups: { nope: { title: "x" } }, settings: { nope: { label: "x" } } } } })).toEqual([
+      "translations.bn.tabs.overview.nope No tab nope on page overview to translate.",
+      "translations.bn.settingsGroups.nope No settings group nope to translate.",
+      "translations.bn.settings.nope No setting nope to translate.",
+    ]);
   });
 });
 

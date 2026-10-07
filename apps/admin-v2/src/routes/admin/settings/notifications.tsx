@@ -4,6 +4,7 @@ import {
   SendingCard,
   StaffNotificationsCard,
 } from "~/components/admin/settings/NotificationSettings";
+import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -26,10 +27,12 @@ export const Route = createFileRoute("/admin/settings/notifications")({
 function NotificationsPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
   return (
-    <SettingsPage page="notifications" readOnly={!canEdit}>
-      <CustomerNotificationsCard />
-      <StaffNotificationsCard />
-      <SendingCard />
-    </SettingsPage>
+    <AppProviderSheetHost>
+      <SettingsPage page="notifications" readOnly={!canEdit}>
+        <CustomerNotificationsCard />
+        <StaffNotificationsCard />
+        <SendingCard />
+      </SettingsPage>
+    </AppProviderSheetHost>
   );
 }

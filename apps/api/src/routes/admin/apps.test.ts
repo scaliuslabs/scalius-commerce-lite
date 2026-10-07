@@ -273,15 +273,58 @@ describe("admin app routes", () => {
     expect(apps.map((entry: Json) => entry.id)).toEqual(["scalius.hello", "scalius.wishlist"]);
     expect(apps[0]).toMatchObject({
       name: "Hello",
-      pages: [{ id: "overview", title: "Hello", placement: "apps", route: "dashboard" }],
+      pages: [{
+        id: "overview",
+        title: "Hello",
+        placement: "apps",
+        route: "dashboard",
+        tabs: [{ id: "summary", title: "Summary", route: "dashboard" }, { id: "about", title: "How it works", route: "about" }],
+      }],
       cards: [{ id: "greeting", target: "order", title: "Hello", route: "order-card" }],
       actions: [{ id: "wave", target: "product", label: "Wave hello", route: "wave", bulk: true, destructive: false }],
       widgets: [{ id: "summary", title: "Hello", route: "widget" }],
     });
     expect(apps[0].routes).toEqual(expect.arrayContaining([{ name: "reset", methods: ["POST"] }, { name: "dashboard", methods: ["GET"] }]));
+    expect(apps[0].providers).toEqual([]);
     expect(apps[1]).toMatchObject({
-      pages: [{ id: "most-wished", placement: "products", route: "most-wished" }],
+      pages: [{ id: "most-wished", placement: "products", route: "most-wished", tabs: null }],
       cards: [{ id: "wishes", target: "product", route: "product-card" }],
+    });
+  });
+
+  it("describes where an app's settings and surfaces show: sections, services and every surface", async () => {
+    await call("GET", "/apps");
+    const pack = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
+    // Every pack field is a service's: none on the app page itself.
+    expect(pack.settings.sections).toEqual([]);
+    expect(pack.providers).toHaveLength(10);
+    expect(pack.providers.find((provider: Json) => provider.providerId === "pathao")).toMatchObject({
+      id: "scalius.bangladesh:pathao",
+      kind: "courier",
+      name: "Pathao",
+      icon: expect.stringContaining("/assets/provider-pathao?v="),
+      own: true,
+      required: ["pathao_base_url", "pathao_client_id", "pathao_client_secret", "pathao_username", "pathao_password", "pathao_store_id"],
+      settings: expect.arrayContaining(["pathao_item_weight", "pathao_webhook_secret"]),
+    });
+    expect(pack.settings.fields.find((field: Json) => field.key === "pathao_client_id")).toMatchObject({ label: "Client ID", group: "pathao" });
+    expect(pack.translations.bn.settings.pathao_client_id).toEqual({ label: "ক্লায়েন্ট আইডি" });
+
+    const hello = (await call("GET", "/apps/scalius.hello")).json.data.app;
+    expect(hello.settings.sections).toEqual([
+      { group: null, keys: ["greeting"] },
+      { group: { id: "discount", title: "Welcome discount", description: "The discount Hello offers at checkout." }, keys: ["discount_percent", "min_subtotal_minor"] },
+      { group: { id: "connection", title: "Connection", description: "Keys for Hello's outside service and its webhook." }, keys: ["api_key", "webhook_secret"] },
+    ]);
+    expect(hello.providers).toEqual([]);
+    expect(hello.admin).toMatchObject({
+      cards: [{ id: "greeting", target: "order", title: "Hello" }],
+      actions: [{ id: "wave", target: "product", label: "Wave hello", bulk: true }],
+      widgets: [{ id: "summary", title: "Hello" }],
+    });
+    expect(hello.storefront).toMatchObject({
+      sections: [{ type: "greeting", name: "Greeting" }],
+      productBlocks: [{ type: "note", name: "Hello note", placement: "below" }],
     });
   });
 });

@@ -27,13 +27,16 @@ export interface PluginSurfaceProps {
   query: Readonly<Record<string, string>>;
   /** A resource card's record (actions inside it say which record they're about). */
   resource?: { target: string; id: string } | null;
-  variant: "page" | "embedded";
+  /** `tab`: one tab of an app page whose title and tabs the dashboard draws. */
+  variant: "page" | "tab" | "embedded";
   /** The manifest title: the page header while loading and when the app's page names none. */
   title?: string;
+  /** Beside a page's title ("Provided by <app>"). */
+  badge?: ReactNode;
 }
 
-function StateFrame({ variant, title, children }: { variant: "page" | "embedded"; title?: string; children: ReactNode }) {
-  if (variant === "embedded") return <>{children}</>;
+function StateFrame({ variant, title, children }: { variant: "page" | "tab" | "embedded"; title?: string; children: ReactNode }) {
+  if (variant !== "page") return <>{children}</>;
   return (
     <>
       <PageHeader title={title ?? ""} />
@@ -42,7 +45,7 @@ function StateFrame({ variant, title, children }: { variant: "page" | "embedded"
   );
 }
 
-export function PluginSurface({ app, route, query, resource = null, variant, title }: PluginSurfaceProps) {
+export function PluginSurface({ app, route, query, resource = null, variant, title, badge }: PluginSurfaceProps) {
   // Cursors of the table pages visited; the last one is the page shown.
   const [cursors, setCursors] = useState<string[]>([]);
   const cursor = cursors.at(-1);
@@ -70,7 +73,7 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
       </StateFrame>
     );
   }
-  if (document.isPending) return <SurfaceSkeleton variant={variant} title={title} />;
+  if (document.isPending) return <SurfaceSkeleton variant={variant === "page" ? "page" : "embedded"} title={title} />;
   if (document.isError) {
     return (
       <StateFrame variant={variant} title={title}>
@@ -113,6 +116,7 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
       host={host}
       variant={variant}
       fallbackTitle={title}
+      badge={badge}
     />
   );
 }

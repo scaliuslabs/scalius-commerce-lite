@@ -19,6 +19,7 @@ export const appSettingFieldSchema = z.object({
   max: z.number().nullable(),
   integer: z.boolean(),
   maxLength: z.number().int().nullable(),
+  group: z.string().optional().openapi({ description: "The settings group or provider id the field shows with (absent: the app's general settings)." }),
 }).openapi("AppSettingField");
 
 export function appSettingField(field: PluginSettingField): z.infer<typeof appSettingFieldSchema> {
@@ -36,5 +37,6 @@ export function appSettingField(field: PluginSettingField): z.infer<typeof appSe
     max: field.type === "number" ? field.max ?? null : null,
     integer: field.type === "number" ? field.integer : false,
     maxLength: field.type === "text" || field.type === "textarea" ? field.maxLength : null,
+    ...(field.group ? { group: field.group } : {}),
   };
 }

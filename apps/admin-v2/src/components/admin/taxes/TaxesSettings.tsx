@@ -24,7 +24,9 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { EMPTY_LOCATION, LocationPicker, type LocationValue } from "~/components/admin/location/LocationPicker";
+import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { countryName } from "~/lib/country-name";
@@ -48,7 +50,8 @@ import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { taxesMessages } from "~/i18n/settings-taxes";
 import { appProvidersMessages } from "~/i18n/settings-app-providers";
-import { appProviderOption } from "../settings/AppProviderStatus";
+import { useOpenAppProvider } from "../apps/AppProviderSheetHost";
+import { AppProviderStatus, appProviderOption } from "../settings/AppProviderStatus";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "../settings/SettingsLoadFailure";
@@ -89,7 +92,7 @@ export function useTaxServices() {
   ];
   const name = (id: string | null | undefined) =>
     options.find((option) => option.value === (id ?? SYSTEM_TAX_PROVIDER_ID))?.label ?? id ?? t("systemService");
-  return { options, name, hasApps: (providers.data?.length ?? 0) > 0 };
+  return { options, name, hasApps: (providers.data?.length ?? 0) > 0, providers: providers.data ?? [] };
 }
 
 // ── Tax collection ──────────────────────────────────────────────────────
@@ -100,6 +103,8 @@ export function TaxCollectionCard() {
   const canEdit = useCanManageTaxes();
   const groupName = useGroupName();
   const services = useTaxServices();
+  const openProvider = useOpenAppProvider();
+  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   const configuration = useQuery(configurationQuery);
   const config = configuration.data;
   const { values, setValue, isLoadError, refetch } = useSettingsForm<TaxSettingsRecord, TaxSettingsRecord>({
@@ -161,6 +166,7 @@ export function TaxCollectionCard() {
   };
   const groups = config?.classes ?? [];
 
+  const appService = services.providers.find((provider) => provider.id === values.providerId) ?? null;
   return (
     <SettingsCard id="taxCollection" title={t("collectionTitle")}>
       <SwitchRow
@@ -177,13 +183,19 @@ export function TaxCollectionCard() {
             aria-describedby="tax-service-note"
             value={values.providerId}
             disabled={!canEdit}
-            onValueChange={(value) => setValue("providerId", value)}
+            onValueChange={(value) => {
+              setValue("providerId", value);
+              // An app tax service not set up yet opens its own setup.
+              const chosen = services.providers.find((provider) => provider.id === value);
+              if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
+            }}
             options={services.options}
             ariaLabel={t("service")}
             triggerClassName="w-full"
           />
         </SettingsField>
       ) : null}
+      {appService ? <AppProviderStatus provider={appService} /> : null}
       <SettingsField id="tax-default-group" label={t("defaultGroup")} help={t("defaultGroupHelp")} error={errorFor("default")}>
         <SearchableSelect
           id="tax-default-group"

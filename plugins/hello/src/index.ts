@@ -21,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const manifest = {
   id: "scalius.hello",
   name: "Hello",
-  version: "0.3.2",
+  version: "0.4.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Greets paid orders, offers a welcome discount and shows what it did.",
   author: { name: "Scalius" },
@@ -36,6 +36,7 @@ export const manifest = {
   routes: {
     admin: [
       { name: "dashboard", methods: ["GET"] },
+      { name: "about", methods: ["GET"], description: "How Hello works, with its current settings." },
       { name: "reset", methods: ["POST"], description: "Resets the counters." },
       { name: "order-card", methods: ["GET"], description: "Whether an order was greeted." },
       { name: "wave", methods: ["POST"], description: "Waves at the selected products." },
@@ -55,13 +56,22 @@ export const manifest = {
   },
   settings: [
     { key: "greeting", label: "Greeting", type: "text", default: "Hello" },
-    { key: "discount_percent", label: "Welcome discount (%)", type: "number", integer: true, min: 0, max: 50, default: 10 },
-    { key: "min_subtotal_minor", label: "Minimum subtotal (minor units)", type: "number", integer: true, min: 0, default: 100000 },
-    { key: "api_key", label: "API key", type: "secret", help: "Never shown again once saved." },
-    { key: "webhook_secret", label: "Webhook signing secret", type: "secret", help: "Signs pings sent to the ping webhook (HMAC-SHA256 of the body, hex, in x-hello-signature)." },
+    { key: "discount_percent", label: "Welcome discount (%)", type: "number", integer: true, min: 0, max: 50, default: 10, group: "discount" },
+    { key: "min_subtotal_minor", label: "Minimum subtotal (minor units)", type: "number", integer: true, min: 0, default: 100000, group: "discount" },
+    { key: "api_key", label: "API key", type: "secret", help: "Never shown again once saved.", group: "connection" },
+    { key: "webhook_secret", label: "Webhook signing secret", type: "secret", help: "Signs pings sent to the ping webhook (HMAC-SHA256 of the body, hex, in x-hello-signature).", group: "connection" },
+  ],
+  settingsGroups: [
+    { id: "discount", title: "Welcome discount", description: "The discount Hello offers at checkout." },
+    { id: "connection", title: "Connection", description: "Keys for Hello's outside service and its webhook.", order: 200 },
   ],
   admin: {
-    pages: [{ id: "overview", title: "Hello", route: "dashboard" }],
+    pages: [{
+      id: "overview",
+      title: "Hello",
+      route: "dashboard",
+      tabs: [{ id: "summary", title: "Summary", route: "dashboard" }, { id: "about", title: "How it works", route: "about" }],
+    }],
     cards: [{ id: "greeting", target: "order", title: "Hello", route: "order-card" }],
     actions: [{ id: "wave", target: "product", label: "Wave hello", route: "wave", bulk: true }],
     widgets: [{ id: "summary", title: "Hello", route: "widget" }],
@@ -72,6 +82,9 @@ export const manifest = {
       tagline: "অ্যাপের সব জায়গা ব্যবহার করা একটি উদাহরণ অ্যাপ",
       description: "পেমেন্ট হওয়া অর্ডারকে শুভেচ্ছা জানায়, স্বাগত ডিসকাউন্ট দেয় আর কী করেছে তা দেখায়।",
       pages: { overview: "হ্যালো" },
+      tabs: { overview: { summary: "সারসংক্ষেপ", about: "কীভাবে কাজ করে" } },
+      settingsGroups: { discount: { title: "স্বাগত ডিসকাউন্ট" }, connection: { title: "সংযোগ" } },
+      settings: { greeting: { label: "শুভেচ্ছা" } },
       cards: { greeting: "হ্যালো" },
       actions: { wave: "হ্যালো জানান" },
       widgets: { summary: "হ্যালো" },
@@ -210,6 +223,17 @@ export default definePlugin({
           }),
         };
       },
+      about: async (_request, ctx) => ({
+        body: ui.page([
+          ui.card("How Hello works", [
+            ui.text("Hello greets each paid order, counts new orders and offers a welcome discount at checkout."),
+            ui.keyValue([
+              { label: "Greeting", value: String(ctx.settings.greeting ?? "Hello") },
+              { label: "Welcome discount", value: `${Number(ctx.settings.discount_percent ?? 0)}%` },
+            ]),
+          ]),
+        ], { title: "Hello" }),
+      }),
       reset: async (request, ctx) => {
         await Promise.all([ctx.kv.delete("paid_count"), ctx.kv.delete("created_count"), ctx.kv.delete("greet_visits")]);
         ctx.log.info("Counters reset", { by: request.staffId });

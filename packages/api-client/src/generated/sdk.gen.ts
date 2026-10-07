@@ -6117,7 +6117,7 @@ export const getApiV1AdminAppsByIdAssetsByAsset = <ThrowOnError extends boolean 
 /**
  * List what active apps add to the dashboard
  *
- * Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.
+ * Pages (navigation entries, with their tabs), resource cards, actions, home widgets and providers of every active app, from their manifests. Their content comes from each app's own admin routes.
  */
 export const getApiV1AdminAppsSurfaces = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAppsSurfacesData, ThrowOnError>): RequestResult<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError>({ url: '/api/v1/admin/apps/surfaces', ...options });
 

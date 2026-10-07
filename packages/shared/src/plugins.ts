@@ -4,6 +4,7 @@
 // `PLUGIN_API_VERSION`; changes within a version are additive only.
 export * from "./plugins/settings-schema";
 export * from "./plugins/manifest";
+export * from "./plugins/settings-layout";
 export * from "./plugins/functions";
 export * from "./plugins/handlers";
 export * from "./plugins/cron";

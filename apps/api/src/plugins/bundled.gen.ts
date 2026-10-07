@@ -6,8 +6,8 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.bangladesh": {
-    version: "1.1.0",
-    sha256: "4bdcb359d6f1d863b4db84021589e4d5060ee33e595c0fc63b2bd89ec459cdc8",
+    version: "1.2.0",
+    sha256: "d44793cc14747b1353dfcf8030d55c6981643fecc6beff07e37783d328af2ca5",
     load: () => import("../../../../plugins/bangladesh/src/index"),
   },
   "scalius.bkash": {

@@ -2076,6 +2076,10 @@ export type AppSettingField = {
     max: number | null;
     integer: boolean;
     maxLength: number | null;
+    /**
+     * The settings group or provider id the field shows with (absent: the app's general settings).
+     */
+    group?: string;
 };
 
 export type ThemeVersionSummary = {
@@ -2431,6 +2435,23 @@ export type AppTranslations = {
         widgets?: {
             [key: string]: string;
         };
+        tabs?: {
+            [key: string]: {
+                [key: string]: string;
+            };
+        };
+        settingsGroups?: {
+            [key: string]: {
+                title?: string;
+                description?: string;
+            };
+        };
+        settings?: {
+            [key: string]: {
+                label?: string;
+                help?: string;
+            };
+        };
     };
 } | null;
 
@@ -2490,6 +2511,11 @@ export type AppAdminSurfaces = {
         title: string;
         placement: 'apps' | 'orders' | 'products' | 'customers' | 'marketing' | 'content' | 'analytics' | 'settings';
         route: string;
+        tabs: Array<{
+            id: string;
+            title: string;
+            route: string;
+        }> | null;
     }>;
     cards: Array<{
         id: string;
@@ -2514,7 +2540,22 @@ export type AppAdminSurfaces = {
         name: string;
         methods: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
     }>;
+    providers: Array<AppProviderEntry>;
     translations?: AppTranslations;
+};
+
+export type AppProviderEntry = {
+    /**
+     * <plugin id>:<provider id>, as the capability's settings store it.
+     */
+    id: string;
+    providerId: string;
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+    name: string;
+    /**
+     * Same-origin address of the provider's own mark, else the app's icon.
+     */
+    icon: string | null;
 };
 
 export type AppDetail = AppSummary & {
@@ -2563,7 +2604,35 @@ export type AppDetail = AppSummary & {
          * Required settings still empty (activation needs them).
          */
         missing: Array<string>;
+        /**
+         * The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider.
+         */
+        sections: Array<{
+            group: {
+                id: string;
+                title: string;
+                description: string | null;
+            } | null;
+            keys: Array<string>;
+        }>;
     };
+    /**
+     * The providers the app offers, each set up on its capability's settings page.
+     */
+    providers: Array<AppProviderEntry & {
+        /**
+         * The setting keys shown with the provider where it is set up.
+         */
+        settings: Array<string>;
+        /**
+         * Whether the provider has fields of its own (otherwise it uses the app's general settings).
+         */
+        own: boolean;
+        /**
+         * The keys its readiness needs set: its declared settings, else the app's required ones.
+         */
+        required: Array<string>;
+    }>;
     routes: {
         admin: Array<{
             name: string;
@@ -2596,8 +2665,15 @@ export type AppDetail = AppSummary & {
     storefront: {
         proxy: boolean;
         head: boolean;
-        sections: number;
-        productBlocks: number;
+        sections: Array<{
+            type: string;
+            name: string;
+        }>;
+        productBlocks: Array<{
+            type: string;
+            name: string;
+            placement: 'buy-box' | 'below';
+        }>;
         scripts: Array<{
             src: string;
             placement: string;
@@ -2608,12 +2684,29 @@ export type AppDetail = AppSummary & {
         pages: Array<{
             id: string;
             title: string;
-            placement: string;
+            placement: 'apps' | 'orders' | 'products' | 'customers' | 'marketing' | 'content' | 'analytics' | 'settings';
             route: string;
+            tabs: Array<{
+                id: string;
+                title: string;
+                route: string;
+            }> | null;
         }>;
-        cards: number;
-        actions: number;
-        widgets: number;
+        cards: Array<{
+            id: string;
+            target: 'product' | 'variant' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page' | 'return';
+            title: string;
+        }>;
+        actions: Array<{
+            id: string;
+            target: 'product' | 'variant' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page' | 'return';
+            label: string;
+            bulk: boolean;
+        }>;
+        widgets: Array<{
+            id: string;
+            title: string;
+        }>;
     };
     limits: {
         cpuMs: number;

@@ -6,6 +6,7 @@ import {
   TaxOverridesCard,
   TaxRegionsCard,
 } from "~/components/admin/taxes/TaxesSettings";
+import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { TaxRegionPage } from "~/components/admin/taxes/TaxRegionPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -58,11 +59,13 @@ function TaxesPage() {
   // A fresh page per country: switching countries never carries a draft over.
   if (region) return <TaxRegionPage key={region} regionId={region} />;
   return (
-    <SettingsPage page="taxes" readOnly={!canEdit}>
-      <TaxCollectionCard />
-      <TaxRegionsCard />
-      <TaxGroupsCard />
-      <TaxOverridesCard />
-    </SettingsPage>
+    <AppProviderSheetHost>
+      <SettingsPage page="taxes" readOnly={!canEdit}>
+        <TaxCollectionCard />
+        <TaxRegionsCard />
+        <TaxGroupsCard />
+        <TaxOverridesCard />
+      </SettingsPage>
+    </AppProviderSheetHost>
   );
 }
