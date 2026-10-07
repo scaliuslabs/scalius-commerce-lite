@@ -54,18 +54,36 @@ const fixture = {
   partialPaymentAmount: 150,
 };
 
-const paymentReadinessGateways = [
+// SSLCommerz is a provider of the Bangladesh pack (`scalius.bangladesh`), so
+// its session route takes the qualified id. The retired built-in id `sslcommerz`
+// stays for orders placed before the move: it must keep failing closed until
+// the pack is active. With the pack not installed in the local store, the
+// qualified id is an unknown gateway (400); with it installed but unset up, 503.
+const bangladeshSslcommerzId = "scalius.bangladesh:sslcommerz";
+export const paymentReadinessGateways = [
   {
     gateway: "stripe",
+    slug: "stripe",
     orderId: "ops006_order_stripe",
     token: "chk_ops006_stripe",
     path: "/api/v1/payment/stripe/session",
+    expectedStatuses: [503],
+  },
+  {
+    gateway: bangladeshSslcommerzId,
+    slug: "bd_sslcommerz",
+    orderId: "ops006_order_bd_sslcommerz",
+    token: "chk_ops006_bd_sslcommerz",
+    path: `/api/v1/payment/${encodeURIComponent(bangladeshSslcommerzId)}/session`,
+    expectedStatuses: [400, 503],
   },
   {
     gateway: "sslcommerz",
+    slug: "sslcommerz",
     orderId: "ops006_order_sslcommerz",
     token: "chk_ops006_sslcommerz",
     path: "/api/v1/payment/sslcommerz/session",
+    expectedStatuses: [503],
   },
 ];
 
@@ -413,7 +431,7 @@ function seedOtpFixture(config) {
 
 export function buildPaymentReadinessFixtureSql() {
   const orderIds = paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ");
-  const onlineMethods = ["stripe", "sslcommerz", "cod"];
+  const onlineMethods = ["stripe", bangladeshSslcommerzId, "sslcommerz", "cod"];
 
   return [
     `DELETE FROM payment_session_attempts WHERE order_id IN (${orderIds})`,
@@ -434,7 +452,7 @@ export function buildPaymentReadinessFixtureSql() {
       const subtotalAmountMinor = fixture.price * 100;
       const shippingAmountMinor = fixture.shippingCharge * 100;
       const totalAmountMinor = totalAmount * 100;
-      const requestKey = `ops006_payment_readiness:${gateway.gateway}`;
+      const requestKey = `ops006_payment_readiness:${gateway.slug}`;
       const responsePayload = JSON.stringify({
         success: true,
         data: {
@@ -456,9 +474,9 @@ export function buildPaymentReadinessFixtureSql() {
           fulfillment_status, inventory_pool, inventory_action, version,
           created_at, updated_at, deleted_at
         ) VALUES (
-          ${sqlString(gateway.orderId)}, ${sqlString(`OPS006 ${gateway.gateway} Buyer`)},
+          ${sqlString(gateway.orderId)}, ${sqlString(`OPS006 ${gateway.slug} Buyer`)},
           ${sqlString(`+88017${String(20000000 + index).slice(-8)}`)},
-          ${sqlString(`ops006-${gateway.gateway}@example.com`)},
+          ${sqlString(`ops006-${gateway.slug}@example.com`)},
           'House 1, Road 10, Mirpur DOHS, Dhaka',
           ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
           'Dhaka', 'Mirpur 10', 'Sector 10',
@@ -473,7 +491,7 @@ export function buildPaymentReadinessFixtureSql() {
           id, order_id, product_id, variant_id, quantity, unit_price_minor, line_subtotal_minor,
           taxable_amount_minor, product_name, variant_label, inventory_tracked, fulfillment_status, created_at
         ) VALUES (
-          ${sqlString(`ops006_item_${gateway.gateway}`)}, ${sqlString(gateway.orderId)},
+          ${sqlString(`ops006_item_${gateway.slug}`)}, ${sqlString(gateway.orderId)},
           ${sqlString(fixture.productId)}, ${sqlString(fixture.variantId)},
           1, ${subtotalAmountMinor}, ${subtotalAmountMinor}, ${subtotalAmountMinor},
           ${sqlString(fixture.productName)}, NULL, 0, 'pending', unixepoch()
@@ -483,7 +501,7 @@ export function buildPaymentReadinessFixtureSql() {
           payment_method, total_amount_minor, response_payload, attempts,
           claim_id, claim_expires_at, last_error, created_at, updated_at
         ) VALUES (
-          ${sqlString(`ops006_attempt_${gateway.gateway}`)}, ${sqlString(requestKey)},
+          ${sqlString(`ops006_attempt_${gateway.slug}`)}, ${sqlString(requestKey)},
           ${sqlString(`${requestKey}:hash`)}, ${sqlString(gateway.token)},
           ${sqlString(gateway.orderId)}, 'committed', ${sqlString(gateway.gateway)},
           ${totalAmountMinor}, ${sqlString(responsePayload)}, 1,
@@ -684,7 +702,7 @@ async function runPaymentReadinessSmoke(config) {
         paymentType: "deposit",
         depositAmount: fixture.partialPaymentAmount,
       },
-      [503],
+      gateway.expectedStatuses,
     );
     results.push({
       gateway: gateway.gateway,

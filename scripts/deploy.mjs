@@ -105,6 +105,12 @@ const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
 const API_READYZ_TIMEOUT_MS = 10_000;
+// After a migration D1 read replicas can serve the previous schema ledger for a
+// short window, so /readyz reports d1:error although the deploy is healthy.
+// Wait for stable readiness, bounded, before judging.
+const API_READYZ_SETTLE_MAX_MS = 180_000;
+const API_READYZ_SETTLE_DELAY_MS = 10_000;
+const API_READYZ_SETTLE_STABLE_COUNT = 3;
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -184,6 +190,20 @@ function runJson(cmd, label, cwd = root) {
     stdio: ["ignore", "pipe", "inherit"],
   });
   return JSON.parse(output);
+}
+
+// ── Run a read-only shell command and return its stdout (still echoed)
+function runCapture(cmd, label, cwd = root) {
+  console.log(`\n▶ ${label}`);
+  console.log(`  $ ${cmd}\n`);
+  const output = execSync(cmd, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+  process.stdout.write(output);
+  return output;
+}
+
+// Wrangler prints this exact line when `migrations list|apply` has nothing to do.
+export function d1MigrationsPending(listOutput) {
+  return !listOutput.includes("No migrations to apply");
 }
 
 // ── Run a shell command with retries for transient Cloudflare API errors
@@ -584,18 +604,108 @@ async function fetchReadinessSample(url, {
   }
 }
 
+function warnSetupPending(samples) {
+  const setupPending = [...new Set(samples.flatMap((sample) => sample.setupPending ?? []))];
+  if (setupPending.length > 0) {
+    console.warn(
+      `⚠ API infrastructure is healthy but merchant setup is incomplete (${setupPending.join(", ")}). ` +
+      "Sign in to the dashboard and complete Settings -> System -> Platform; " +
+      "storefront browser features stay disabled until then.",
+    );
+  }
+  return setupPending;
+}
+
+function isReadyzSampleSettled(sample) {
+  // `ok` already requires every check ok. The d1 detail names the schema
+  // ledger the API accepted, so a stale replica cannot pass as settled.
+  const d1 = sample.payload?.checks?.d1;
+  return sample.ok && typeof d1?.detail === "string" && d1.detail.startsWith("schema ");
+}
+
+function describeUnsettledReadiness(samples) {
+  const last = samples.at(-1);
+  const checks = last?.payload?.checks;
+  const failing = checks && typeof checks === "object"
+    ? Object.entries(checks).filter(([name, check]) =>
+        check?.status !== "ok" && !SETUP_PENDING_READINESS_CHECKS.has(name))
+    : [];
+  const others = failing.filter(([name]) => name !== "d1").map(([name]) => name);
+  if (others.length > 0) {
+    return `non-d1 check(s) failing (${others.join(", ")}), not replica lag`;
+  }
+  return "d1 did not report the expected schema (read replicas may still serve the old one)";
+}
+
+async function waitForSettledApiReadiness(readyzUrl, {
+  maxMs,
+  delayMs,
+  stableCount,
+  timeoutMs,
+  fetchImpl,
+  sleepImpl,
+}) {
+  console.log(
+    `  Migrations were applied: waiting up to ${Math.round(maxMs / 1000)}s for ` +
+    `${stableCount} consecutive ready samples with the expected d1 schema.\n`,
+  );
+  const samples = [];
+  let stable = 0;
+  const startedAt = Date.now();
+  for (let index = 1; ; index += 1) {
+    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs });
+    samples.push(sample);
+    const settled = isReadyzSampleSettled(sample);
+    stable = settled ? stable + 1 : 0;
+    console.log(
+      `${settled ? "✓" : "⚠"} /readyz sample ${index} (${stable}/${stableCount} stable): ` +
+      `${sample.status || "error"} in ${sample.durationMs}ms (${sample.summary})`,
+    );
+    if (stable >= stableCount) return samples;
+    // Count the wait by planned sleeps so injected clocks in tests stay simple.
+    if ((index) * delayMs >= maxMs || Date.now() - startedAt >= maxMs) break;
+    await sleepImpl(delayMs);
+  }
+  throw new Error(
+    `API /readyz did not settle within ${Math.round(maxMs / 1000)}s after migrations: ` +
+    `${describeUnsettledReadiness(samples)}; final=${samples.at(-1)?.status ?? "none"} ` +
+    `(${samples.at(-1)?.summary ?? "missing sample"})`,
+  );
+}
+
 export async function sampleApiReadiness(apiBaseUrl, {
   sampleCount = API_READYZ_SAMPLE_COUNT,
   delayMs = API_READYZ_SAMPLE_DELAY_MS,
   timeoutMs = API_READYZ_TIMEOUT_MS,
   fetchImpl = fetch,
   sleepImpl = sleep,
+  migrationsApplied = false,
+  settleMaxMs = API_READYZ_SETTLE_MAX_MS,
+  settleDelayMs = API_READYZ_SETTLE_DELAY_MS,
+  settleStableCount = API_READYZ_SETTLE_STABLE_COUNT,
 } = {}) {
   const readyzUrl = buildApiV1Url(apiBaseUrl, "/readyz");
   const samples = [];
 
   console.log(`\n▶ Verify live API /readyz recovery window`);
   console.log(`  GET ${readyzUrl} (${sampleCount} samples)\n`);
+
+  if (migrationsApplied) {
+    const settledSamples = await waitForSettledApiReadiness(readyzUrl, {
+      maxMs: settleMaxMs,
+      delayMs: settleDelayMs,
+      stableCount: settleStableCount,
+      timeoutMs,
+      fetchImpl,
+      sleepImpl,
+    });
+    console.log(`✓ API /readyz settled after migrations (${settleStableCount} stable samples).`);
+    return {
+      readyCount: settledSamples.filter((sample) => sample.ok).length,
+      samples: settledSamples,
+      setupPending: warnSetupPending(settledSamples),
+    };
+  }
 
   for (let index = 0; index < sampleCount; index += 1) {
     const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs });
@@ -629,15 +739,7 @@ export async function sampleApiReadiness(apiBaseUrl, {
     console.log(`✓ API /readyz returned ready for all ${sampleCount} samples.`);
   }
 
-  const setupPending = [...new Set(samples.flatMap((sample) => sample.setupPending ?? []))];
-  if (setupPending.length > 0) {
-    console.warn(
-      `⚠ API infrastructure is healthy but merchant setup is incomplete (${setupPending.join(", ")}). ` +
-      "Sign in to the dashboard and complete Settings -> System -> Platform; " +
-      "storefront browser features stay disabled until then.",
-    );
-  }
-
+  const setupPending = warnSetupPending(samples);
   return { readyCount, samples, setupPending };
 }
 
@@ -968,7 +1070,7 @@ async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {
     console.log("✓ Custom API health-only verification skipped production binding readiness checks.");
     return;
   }
-  await sampleApiReadiness(apiBaseUrl);
+  await sampleApiReadiness(apiBaseUrl, { migrationsApplied: options.migrationsApplied === true });
 }
 
 export async function verifyPostDeployTarget(
@@ -1131,19 +1233,35 @@ export async function main() {
       const migrationConfigFlag = customWranglerConfigPath
         ? ` --config ${shellQuote(customWranglerConfigPath)}`
         : "";
+      // Remote only: a migration leaves read replicas on the old schema for a
+      // short window, so the live /readyz check must wait. If the pending
+      // check itself fails, assume migrations apply: waiting is the safe side.
+      let pending = target === "remote";
+      if (pending) {
+        try {
+          pending = d1MigrationsPending(runCapture(
+            `${pnpm} exec wrangler d1 migrations list ${migrationTarget} --remote${migrationConfigFlag}`,
+            `Check pending D1 migrations → ${dbName ?? migrationTarget}`,
+            apiDir,
+          ));
+        } catch {
+          pending = true;
+        }
+      }
       runWithRetry(
         `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}`
           + `${persistFlag}${migrationConfigFlag}`,
         `Apply D1 migrations → ${dbName ?? migrationTarget} (${target})`,
         apiDir,
       );
-      return;
+      return pending;
     }
     runWithRetry(
       getExternalSchemaPreflightCommand(databaseProvider, databaseTargetHost),
       `Verify current ${databaseProvider} schema → ${databaseTargetHost}`,
       root,
     );
+    return false;
   };
 
   if (migrateOnly) {
@@ -1195,13 +1313,16 @@ export async function main() {
         return;
       }
 
-      if (requestedTarget === "api") prepareSelectedProviderSchema();
+      const migrationsApplied = requestedTarget === "api"
+        ? prepareSelectedProviderSchema()
+        : false;
 
       const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
       deployTarget(requestedTarget, targetConfigPath, plan);
       await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
         healthOnly,
         deploymentUrls,
+        migrationsApplied,
       });
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
@@ -1220,13 +1341,13 @@ export async function main() {
     // 3. D1 is upgraded locally by Wrangler. External authorities are upgraded
     // only by the frozen control-plane workflow; ordinary deploys prove they
     // are already current without mutating them.
-    prepareSelectedProviderSchema();
+    const migrationsApplied = prepareSelectedProviderSchema();
 
     // 4. Deploy both workers
     for (const targetName of deployTargets) {
       const targetConfigPath = targetName === "api" ? apiDeployConfigPath : null;
       deployTarget(targetName, targetConfigPath, plan);
-      await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls });
+      await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls, migrationsApplied });
     }
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);
