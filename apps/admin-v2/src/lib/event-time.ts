@@ -1,6 +1,6 @@
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { formatDateTime, translate } from "~/i18n";
-import { dataTableMessages } from "~/i18n/data-table";
+import { eventTimeMessages } from "~/i18n/event-time";
 import { getStoreTimeZone } from "~/lib/store-time-zone";
 
 type Translate = (key: "justNow" | "minutesAgo" | "todayAt" | "yesterdayAt" | "dateAt" | "dateOnAt", vars?: Record<string, string | number>) => string;
@@ -43,5 +43,5 @@ export function eventTime(value: Date | string | number | null | undefined, opti
   if (value === null || value === undefined || value === "") return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return eventTimeLabel(date, new Date(), (key, vars) => translate(dataTableMessages, key, vars), { withTime: true, ...options });
+  return eventTimeLabel(date, new Date(), (key, vars) => translate(eventTimeMessages, key, vars), { withTime: true, ...options });
 }

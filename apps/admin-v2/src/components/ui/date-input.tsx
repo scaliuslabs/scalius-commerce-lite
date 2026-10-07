@@ -4,9 +4,11 @@ import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
 import { dataTableMessages } from "~/i18n/data-table";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
-import { Calendar } from "./calendar";
 import { fieldClassName } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+
+// The calendar loads when a date field is opened, not with every screen that has one.
+const Calendar = React.lazy(() => import("./calendar").then((module) => ({ default: module.Calendar })));
 
 type DateInputProps = {
   /** A calendar day as "2026-10-07", or "" for none. */
@@ -50,18 +52,20 @@ export function DateInput({ value, onValueChange, min, max, id, disabled = false
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
-        <Calendar
-          autoFocus
-          mode="single"
-          defaultMonth={day ?? earliest}
-          selected={day}
-          disabled={[...(earliest ? [{ before: earliest }] : []), ...(latest ? [{ after: latest }] : [])]}
-          onSelect={(next) => {
-            if (!next) return;
-            onValueChange(formatDateOnly(next) ?? "");
-            setOpen(false);
-          }}
-        />
+        <React.Suspense fallback={<div className="h-72 w-64" />}>
+          <Calendar
+            autoFocus
+            mode="single"
+            defaultMonth={day ?? earliest}
+            selected={day}
+            disabled={[...(earliest ? [{ before: earliest }] : []), ...(latest ? [{ after: latest }] : [])]}
+            onSelect={(next) => {
+              if (!next) return;
+              onValueChange(formatDateOnly(next) ?? "");
+              setOpen(false);
+            }}
+          />
+        </React.Suspense>
         {value ? (
           <div className="flex justify-end border-t p-1.5">
             <button

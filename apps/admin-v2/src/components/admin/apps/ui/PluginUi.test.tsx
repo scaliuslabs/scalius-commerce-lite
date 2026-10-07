@@ -326,6 +326,10 @@ describe("app forms", () => {
     // Shown with the month as a word, empty until picked.
     expect(field("Joined").textContent).toContain("Pick a date");
     await click(field("Joined"));
+    // The calendar's code arrives when the field is opened.
+    for (let attempt = 0; attempt < 60 && !document.querySelector("[data-day]"); attempt += 1) {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    }
     const earlier = document.querySelector<HTMLButtonElement>('button[data-day="2026-01-15"]');
     const later = document.querySelector<HTMLButtonElement>('button[data-day="2026-02-15"]');
     expect(earlier === null || earlier.disabled).toBe(true);

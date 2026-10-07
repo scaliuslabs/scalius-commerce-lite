@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
-import { dataTableMessages } from "~/i18n/data-table";
+import { eventTimeMessages } from "~/i18n/event-time";
 import { eventTimeLabel } from "~/lib/event-time";
 
 type Timestamp = Date | string | number | null | undefined;
@@ -38,7 +38,7 @@ export const LIST_DATE_WIDTH = { en: 164, bn: 132 } as const;
 
 /** A list's created or updated date (`listDateLabel`), the full date and time on hover. */
 export function ListDate({ value, className }: { value: Timestamp; className?: string }) {
-  const t = useMessages(dataTableMessages);
+  const t = useMessages(eventTimeMessages);
   const minute = useSyncExternalStore(subscribe, currentMinute, currentMinute);
   const date = unixToDate(value ?? null);
   const base = cn("whitespace-nowrap text-muted-foreground", className);
