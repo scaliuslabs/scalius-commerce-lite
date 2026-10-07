@@ -16,6 +16,7 @@ import {
   type ProductRecommendations,
 } from "@/lib/api";
 import { recommendationTitle } from "@/lib/recommendations";
+import { searchWording } from "@/lib/search-wording";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
@@ -85,12 +86,15 @@ if (products.length === 0) {
 }
 
 const resultCountLabel = `${catalogCountText(pagination.total, pagination.totalIsCapped)} ${pagination.total === 1 && !pagination.totalIsCapped ? "result" : "results"}`;
-const pageTitle = `${query ? `Search results for "${query}"` : "All products"}${
-  pagination.page > 1 ? ` – Page ${pagination.page}` : ""
-}`;
-const pageDescription = query
-  ? `${resultCountLabel} for "${correctedQuery ?? query}".`
-  : "Explore our full collection of products.";
+const wording = searchWording({
+  query,
+  correctedQuery,
+  resultCountLabel,
+  productCount: products.length,
+  page: pagination.page,
+});
+const pageTitle = wording.title;
+const pageDescription = wording.description;
 // Internal search results are never indexed; the plain listing stays self-canonical.
 const canonicalUrl = isIndexableProductListView(currentFilters)
   ? productListCanonicalUrl(buildAbsoluteStorefrontSeoUrl("/search"), pagination.page)
@@ -126,9 +130,7 @@ const analyticsProductData = products.map((p) => ({
       count: pagination.total,
       countCapped: pagination.totalIsCapped,
       // Amazon's results bar: the count and the words searched for.
-      countLabel: products.length === 0
-        ? null
-        : query ? `${resultCountLabel} for “${correctedQuery ?? query}”` : resultCountLabel,
+      countLabel: wording.countLabel,
     }}
     listing={{
       products,
@@ -146,11 +148,11 @@ const analyticsProductData = products.map((p) => ({
       listingName: "all products",
     }}
   >
-      {correctedQuery && query && products.length > 0 && (
+      {wording.correction && (
         <p slot="intro" class="mt-2 text-sm text-muted-foreground" aria-live="polite">
-          No results for “{query}”. Showing{" "}
-          <span class="font-semibold text-foreground">{resultCountLabel}</span> for{" "}
-          <span class="font-semibold text-foreground">“{correctedQuery}”</span> instead.
+          Showing results for{" "}
+          <span class="font-semibold text-foreground">“{wording.correction.shownQuery}”</span>.
+          No exact results for “{wording.correction.originalQuery}”.
         </p>
       )}
 

@@ -26,6 +26,7 @@ import {
   publicRequestOrigin,
 } from "@scalius/shared/platform-config";
 import { isValidTimeZone } from "@scalius/shared/commerce-time";
+import { presenceCountry } from "@scalius/shared/markets";
 import {
   deriveRuntimeSecret,
   readMasterSecret,
@@ -254,9 +255,9 @@ export function applyPlatformOrigins(
   const timeZone = layout?.timeZone;
   store.STORE_TIME_ZONE = isValidTimeZone(timeZone) ? timeZone : undefined;
   const presence = store.MARKET_PRESENCE;
-  const country = presence
-    ? presence.slice(3).toUpperCase()
-    : layout?.markets?.markets.find((market) => market.isBackup)?.countries[0];
+  // A market's subfolder names its country; the root and a language subfolder are the backup's.
+  const country = presenceCountry(presence)
+    ?? layout?.markets?.markets.find((market) => market.isBackup)?.countries[0];
   store.STORE_REGION = country && /^[A-Z]{2}$/.test(country) ? country : undefined;
 }
 

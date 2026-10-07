@@ -6,7 +6,7 @@ import ProductShortcode from "./ProductShortcode";
 import type { ProductPageData } from "@/lib/api";
 import { addToCart } from "@/store/cart";
 
-vi.mock("@/store/cart", () => ({ addToCart: vi.fn(async () => true) }));
+vi.mock("@/store/cart", () => ({ addToCart: vi.fn(async () => true), cartLineKeyFor: vi.fn(async () => "line_key") }));
 vi.mock("@/lib/analytics", () => ({ trackFbAddToCart: vi.fn() }));
 
 const option = { id: "format", name: "Format", position: 0, standardMapping: "none" as const, values: [

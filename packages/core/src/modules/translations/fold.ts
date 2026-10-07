@@ -19,6 +19,7 @@
 //   `group_concat`, which both providers run.
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { BACKUP_MARKET_ID } from "@scalius/database/schema";
 import {
   isSluggedResourceType,
   parseTranslationFields,
@@ -28,7 +29,7 @@ import {
   type TranslatableResourceType,
   type TranslationRow,
 } from "@scalius/shared/translations";
-import { isMarketSubfolder } from "@scalius/shared/markets";
+import { isLanguageSubfolder, isMarketSubfolder } from "@scalius/shared/markets";
 import { deps } from "../../cache-deps";
 
 /** A presence read's translation scope: the subfolder and its locale. */
@@ -52,9 +53,20 @@ const typeLiteral = (type: TranslatableResourceType) => sql.raw(`'${type}'`);
 const presenceLiteral = (scope: TranslationScope) => sql.raw(`'${scope.presence}'`);
 const localeLiteral = (scope: TranslationScope) => sql.raw(`'${scope.locale}'`);
 
-/** The rows of a translation a presence resolves: its locale and the default locale, every market or its own. */
+/**
+ * The rows of a translation a presence resolves: its locale and the default
+ * locale, every market or its own. A language subfolder of the backup market
+ * (`bn`) is not stored: its locale while the language is published, and the
+ * backup market.
+ */
 function presenceRowsCondition(scope: TranslationScope, alias: string): SQL {
   const row = sql.raw(alias);
+  if (isLanguageSubfolder(scope.presence)) {
+    return sql`${row}.locale IN (
+        (SELECT tr_language.locale FROM store_languages AS tr_language WHERE tr_language.locale = ${localeLiteral(scope)} AND tr_language.published = 1),
+        (SELECT tr_presence.locale FROM market_presences AS tr_presence WHERE tr_presence.kind = 'subfolder' AND tr_presence.value = ''))
+      AND (${row}.market_id IS NULL OR ${row}.market_id = ${sql.raw(`'${BACKUP_MARKET_ID}'`)})`;
+  }
   return sql`${row}.locale IN (SELECT tr_presence.locale FROM market_presences AS tr_presence WHERE tr_presence.kind = 'subfolder' AND tr_presence.value IN (${presenceLiteral(scope)}, ''))
     AND (${row}.market_id IS NULL OR ${row}.market_id = (SELECT tr_market.market_id FROM market_presences AS tr_market WHERE tr_market.kind = 'subfolder' AND tr_market.value = ${presenceLiteral(scope)}))`;
 }

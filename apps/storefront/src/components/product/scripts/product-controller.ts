@@ -1,4 +1,4 @@
-import { addToCart, replaceCartLine, startBuyNow, type CartItemOption } from "@/store/cart";
+import { addToCart, cartLineKeyFor, replaceCartLine, startBuyNow, type CartItemOption } from "@/store/cart";
 import { clearCartLineEdit, readCartLineEdit, type CartLineEdit } from "@/lib/cart/line-edit";
 import { getCurrencyCode } from "@/lib/currency";
 import {
@@ -600,10 +600,16 @@ function showMissingOption(definitionId: string, message: string) {
 async function add(redirect: boolean) {
   if (state.adding || state.customizationUnavailable) return;
   state.adding = true;
+  // Busy while the line is added, so a slow phone shows the press took.
+  const button = redirect ? null : cache.addButton;
+  button?.setAttribute("aria-busy", "true");
+  button?.classList.add("opacity-70", "cursor-progress");
   try {
     await addSelected(redirect);
   } finally {
     state.adding = false;
+    button?.removeAttribute("aria-busy");
+    button?.classList.remove("opacity-70", "cursor-progress");
   }
 }
 
@@ -689,7 +695,11 @@ async function addSelected(redirect: boolean) {
       quantity,
     });
   if (redirect) window.location.href = pagePath("/cart");
-  else document.dispatchEvent(new CustomEvent("open-cart"));
+  else {
+    // The drawer confirms this line ("Added to your cart") and lists it first.
+    const addedLineKey = await cartLineKeyFor(line).catch(() => undefined);
+    document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
+  }
 }
 
 /** A problem with the purchase stays next to the buttons until the next try. */

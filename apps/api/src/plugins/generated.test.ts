@@ -60,11 +60,13 @@ describe("generated plugin modules", () => {
         translations: { bn: { tagline: expect.any(String) } },
       });
     }
-    // The payment apps carry their brand's logo and serve Bangladesh only.
+    // The payment apps carry their brand's logo (the listing icon and the
+    // cropped checkout mark their provider declares) and serve Bangladesh only.
     for (const source of ["plugins/bkash", "plugins/nagad"]) {
       const { manifest, assets } = await packPlugin(source);
       expect(manifest, source).toMatchObject({ icon: "assets/icon.svg", countries: ["BD"] });
-      expect(assets.map((asset) => asset.path)).toEqual(["assets/icon.svg"]);
+      expect((manifest.providers as Array<{ icon?: string }>).map((provider) => provider.icon), source).toEqual(["assets/mark.svg"]);
+      expect(assets.map((asset) => asset.path).sort()).toEqual(["assets/icon.svg", "assets/mark.svg"]);
     }
   });
 

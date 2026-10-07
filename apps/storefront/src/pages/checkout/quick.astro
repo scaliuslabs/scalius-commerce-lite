@@ -33,7 +33,7 @@ import {
 import { processOrder } from "@/lib/cart/server";
 import { describeRejectedCode } from "@/lib/cart/discount-panel";
 import { formatMoney } from "@/lib/currency";
-import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { ENDED_CUSTOMER_SESSION_COOKIES, getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import {
@@ -235,6 +235,10 @@ if (!codAvailable) {
       });
       const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
       if (receiptCookie) headers.append("Set-Cookie", receiptCookie);
+      // Placed as a guest's: the ended session's cookies go.
+      if ("customerSessionEnded" in result && result.customerSessionEnded) {
+        for (const cookie of ENDED_CUSTOMER_SESSION_COOKIES) headers.append("Set-Cookie", cookie);
+      }
       return new Response(null, { status: 303, headers });
     }
     const resultError = "error" in result ? result.error : undefined;

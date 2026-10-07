@@ -13,7 +13,7 @@
       "id": "scalius.bkash",
       "version": "0.1.2",
       "source": "plugins/bkash",
-      "sha256": "3596ecf6186eda956eca1f17c110b3d080ce8dd6b1fa122bd2c3dbdd4e38fa8a"
+      "sha256": "d95039c0b1daa851e17c5e276edcd7ebbfea1eee6d3bcd2de0ad81361137bd1d"
     },
     {
       "id": "scalius.bulk-discount",
@@ -31,7 +31,7 @@
       "id": "scalius.nagad",
       "version": "0.1.2",
       "source": "plugins/nagad",
-      "sha256": "fd8ed2742f12ba4000385647cf28b4fe1467b6ab5683408e6dac139c7890d880"
+      "sha256": "e2dac744e78b60ec3b0e5d621712ed494f5d7a621f104b3fa5d92f250c6ebc91"
     },
     {
       "id": "scalius.order-tagger",

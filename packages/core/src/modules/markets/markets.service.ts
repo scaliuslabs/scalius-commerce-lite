@@ -29,7 +29,7 @@ import {
     MARKET_HANDLE_PATTERN,
     MARKET_LOCALE_PATTERN,
     MARKET_NAME_MAX_LENGTH,
-    MARKET_SUBFOLDER_PATTERN,
+    MARKET_COUNTRY_SUBFOLDER_PATTERN,
     MAX_MARKET_COUNTRIES,
     MAX_MARKETS,
 } from "@scalius/shared/markets";
@@ -275,7 +275,7 @@ function cleanPresence(presence: MarketPresenceRecord): MarketPresenceRecord {
     const value = presence.value.trim().toLowerCase();
     const locale = presence.locale.trim().toLowerCase();
     if (!MARKET_LOCALE_PATTERN.test(locale)) throw new ValidationError("Choose the language of the market's pages.");
-    if (!MARKET_SUBFOLDER_PATTERN.test(value) || value.slice(0, 2) !== locale) {
+    if (!MARKET_COUNTRY_SUBFOLDER_PATTERN.test(value) || value.slice(0, 2) !== locale) {
         throw new ValidationError(`A subfolder is the language and the country, such as ${locale}-in.`);
     }
     return { value, locale };

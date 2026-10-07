@@ -5,7 +5,7 @@ import { initQuickAddCards, quickAddCartLine } from "./quick-add-card";
 
 const buyer = vi.hoisted(() => ({ read: vi.fn(), add: vi.fn(), track: vi.fn() }));
 vi.mock("@/lib/api/products", () => ({ getProductBySlugResult: buyer.read }));
-vi.mock("@/store/cart", () => ({ addToCart: buyer.add }));
+vi.mock("@/store/cart", () => ({ addToCart: buyer.add, cartLineKeyFor: async () => "line_rice" }));
 vi.mock("@/components/product/lib/product-analytics", () => ({ trackProductAddToCart: buyer.track }));
 
 const simple = {
@@ -41,10 +41,10 @@ describe("card quick add", () => {
     link.href = "/products/rice";
     link.dataset.cardQuickAdd = "Rice";
     document.body.append(link);
-    const opened = new Promise((resolve) => document.addEventListener("open-cart", resolve, { once: true }));
+    const opened = new Promise<Event>((resolve) => document.addEventListener("open-cart", resolve, { once: true }));
     initQuickAddCards();
     link.click();
-    await opened;
+    expect(((await opened) as CustomEvent).detail).toEqual({ addedLineKey: "line_rice" });
     expect(buyer.read).toHaveBeenCalledWith("rice");
     expect(buyer.add).toHaveBeenCalledWith(expect.objectContaining({ variantId: "sku_rice", price: 1080 }));
     expect(buyer.track).toHaveBeenCalledOnce();

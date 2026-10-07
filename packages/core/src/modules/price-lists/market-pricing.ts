@@ -15,6 +15,7 @@
 import type { Database } from "@scalius/database/client";
 import { marketPresences, markets, productVariants, products } from "@scalius/database/schema";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { isLanguageSubfolder } from "@scalius/shared/markets";
 import {
     applicablePriceListPrices,
     cardPriceOf,
@@ -35,7 +36,7 @@ import { discountedPriceMinor } from "@scalius/shared/money";
 import { AppError, NotFoundError } from "@scalius/core/errors";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import { servedLanguageSql, storePriceIncrementSql } from "../markets";
+import { languageSubfolderServedSql, servedLanguageSql, storePriceIncrementSql } from "../markets";
 import { marketCurrencyIncrementMinor, marketPresentment, presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
 import { channelAvailableStockSql, effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../settings";
@@ -157,7 +158,15 @@ export async function readMarketPriceContext(
         WHERE context_list.market_id = ${markets.id} AND context_list.status = 'active' AND context_list.kind <> 'segment')`,
     })
         .from(markets)
-        .innerJoin(marketPresences, and(
+        // A language subfolder (`bn`) is the backup market in that language:
+        // its prices are the root's (no list or FX prices the backup market).
+        .innerJoin(marketPresences, isLanguageSubfolder(presence) ? and(
+            eq(marketPresences.marketId, markets.id),
+            eq(marketPresences.kind, "subfolder"),
+            eq(marketPresences.value, ""),
+            eq(markets.isBackup, true),
+            languageSubfolderServedSql(sql`${markets.id}`, sql`${presence}`),
+        ) : and(
             eq(marketPresences.marketId, markets.id),
             eq(marketPresences.kind, "subfolder"),
             eq(marketPresences.value, presence),

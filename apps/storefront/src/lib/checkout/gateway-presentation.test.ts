@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  APP_GATEWAY_MARKS,
   APP_GATEWAY_MARK_SRC,
   APP_PROVIDER_MARKS,
   appGatewayName,
@@ -32,15 +31,21 @@ describe("gateway presentation", () => {
         hosted: true,
       });
     }
-    // A gift card is the tender itself: no mark, as before.
+    // Every method shows a mark in the same badge: a brandless one a plain icon.
+    expect(getGatewayPresentation("cod", "Cash on Delivery")).toMatchObject({
+      buyerLabel: "Cash on delivery",
+      markSrc: "/payment-marks/cash.svg",
+      markKind: "icon",
+    });
     expect(getGatewayPresentation("gift_card", "Gift card")).toEqual({
       buyerLabel: "Gift card",
       description: "",
       providerLabel: null,
-      markSrc: null,
-      markKind: "none",
-      hosted: true,
+      markSrc: "/payment-marks/gift.svg",
+      markKind: "icon",
+      hosted: false,
     });
+    expect(getGatewayPresentation("custom", "Custom pay")).toMatchObject({ markSrc: APP_GATEWAY_MARK_SRC, markKind: "icon" });
   });
 
   it("shows an app's wallet by its checkout name with its logo, else a neutral wallet mark", () => {
@@ -56,21 +61,21 @@ describe("gateway presentation", () => {
     expect(getGatewayPresentation("acme.pay:wallet", "Acme wallet")).toMatchObject({ markSrc: APP_GATEWAY_MARK_SRC, markKind: "icon" });
   });
 
-  it("serves a pack provider's declared mark, byte for byte", () => {
+  it("serves each app provider's declared mark, byte for byte", () => {
+    // The provider id, the plugin package and the mark its manifest declares.
+    const declared: Record<string, { plugin: string; icon: string }> = {
+      [SSLCOMMERZ_GATEWAY_ID]: { plugin: "bangladesh", icon: "assets/sslcommerz.png" },
+      "scalius.bkash:bkash": { plugin: "bkash", icon: "assets/mark.svg" },
+      "scalius.nagad:nagad": { plugin: "nagad", icon: "assets/mark.svg" },
+    };
+    expect(Object.keys(APP_PROVIDER_MARKS).sort()).toEqual(Object.keys(declared).sort());
     for (const [id, src] of Object.entries(APP_PROVIDER_MARKS)) {
-      expect(id).toBe(SSLCOMMERZ_GATEWAY_ID);
+      const { plugin, icon } = declared[id]!;
+      const manifest = readFileSync(new URL(`../../../../../plugins/${plugin}/src/index.ts`, import.meta.url), "utf8");
+      expect(manifest, id).toContain(`icon: "${icon}"`);
       const served = readFileSync(new URL(`../../../public${src}`, import.meta.url));
-      const declared = readFileSync(new URL("../../../../../plugins/bangladesh/assets/sslcommerz.png", import.meta.url));
-      expect(served.equals(declared), id).toBe(true);
-    }
-  });
-
-  it("serves the wallet apps' own listing icons, byte for byte", () => {
-    for (const [pluginId, src] of Object.entries(APP_GATEWAY_MARKS)) {
-      const app = pluginId.split(".")[1];
-      const served = readFileSync(new URL(`../../../public${src}`, import.meta.url));
-      const icon = readFileSync(new URL(`../../../../../plugins/${app}/assets/icon.svg`, import.meta.url));
-      expect(served.equals(icon), pluginId).toBe(true);
+      const mark = readFileSync(new URL(`../../../../../plugins/${plugin}/${icon}`, import.meta.url));
+      expect(served.equals(mark), id).toBe(true);
     }
   });
 

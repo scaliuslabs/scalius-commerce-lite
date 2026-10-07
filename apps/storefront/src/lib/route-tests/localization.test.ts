@@ -60,6 +60,21 @@ describe("POST /localization", () => {
     expect((await post({ country_code: "IN", return_to: "/cart" })).headers.get("Set-Cookie")).toBeNull();
   });
 
+  it("takes the language form's choice: the page's market in that language (`/en`, Shopify's language subfolder)", async () => {
+    mocks.getLayoutData.mockResolvedValue({ markets: { markets: [
+      { ...MATRIX.markets[0]!, presences: [{ value: "", locale: "bn" }, { value: "en", locale: "en" }] },
+      MATRIX.markets[1]!,
+    ] } });
+    const english = await post({ country_code: "BD", locale_code: "en", return_to: "/products/tee" });
+    expect(english.headers.get("Location")).toBe("/en/products/tee");
+    expect(english.headers.get("Set-Cookie")).toContain("localization=BD%3Aen;");
+    const bangla = await post({ country_code: "BD", locale_code: "bn", return_to: "/en/products/tee" });
+    expect(bangla.headers.get("Location")).toBe("/products/tee");
+    // A language the market does not serve leaves the buyer on its own URL.
+    const french = await post({ country_code: "BD", locale_code: "fr", return_to: "/cart" });
+    expect(french.headers.get("Location")).toBe("/cart");
+  });
+
   it("refuses a cross-site post and answers GET with 405", async () => {
     const forged = await post({ country_code: "IN", return_to: "/" }, { Origin: "https://evil.example", Cookie: "cs_auth=1" });
     expect(forged.status).toBe(403);

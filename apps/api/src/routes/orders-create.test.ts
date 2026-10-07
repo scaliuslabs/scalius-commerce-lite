@@ -2335,9 +2335,36 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
-  it("rejects stale customer sessions with a recoverable code when guest checkout is enabled", async () => {
-    mocks.getCustomerBySession.mockResolvedValue(null);
-    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
+  // Every sign-in permutation: a guest store never stops a buyer for a
+  // session (absent or ended); a sign-in-only store says what to do.
+  it.each([
+    { guests: true, session: "none", status: 201, customerId: null, ended: false },
+    { guests: true, session: "ended", status: 201, customerId: null, ended: true },
+    { guests: true, session: "live", status: 201, customerId: "customer_live", ended: false },
+    { guests: false, session: "none", status: 401, customerId: null, ended: false },
+    { guests: false, session: "ended", status: 401, customerId: null, ended: false },
+    { guests: false, session: "live", status: 201, customerId: "customer_live", ended: false },
+  ] as const)("guest checkout $guests with a $session session answers $status", async ({ guests, session, status, customerId, ended }) => {
+    mocks.getCustomerBySession.mockResolvedValue(session === "live"
+      ? {
+        token: "session_live",
+        email: "buyer@example.com",
+        name: "Signed In Buyer",
+        phone: "+8801712345678",
+        customerId: "customer_live",
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 86_400_000,
+      }
+      : null);
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_order_session",
+      orderId: "order_session",
+      paymentMethod: "cod",
+      totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
+      commitPayload: { orderData: { id: "order_session" } },
+    });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: guests });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2345,26 +2372,32 @@ describe("create order commit/KV ordering", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Customer-Session": "expired_session",
+          ...(session === "none" ? {} : { "X-Customer-Session": `session_${session}` }),
         },
         body: JSON.stringify(validOrderBody),
       },
       { CACHE: kv } as never,
     );
 
-    expect(response.status).toBe(401);
-    expect(await response.json()).toMatchObject({
-      success: false,
-      error: {
-        code: "CUSTOMER_SESSION_STALE",
-        message: "Your session expired. Please sign in again or continue as a guest.",
-      },
-    });
-    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "expired_session", undefined);
-    expect(mocks.limiter.limit).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(response.status, await response.clone().text()).toBe(status);
+    expect(response.headers.get("X-Customer-Session-Ended")).toBe(ended ? "1" : null);
+    if (status === 401) {
+      expect(await response.json()).toMatchObject({
+        success: false,
+        error: {
+          code: "CUSTOMER_SIGN_IN_REQUIRED",
+          message: "Sign in to place your order. This store sells only to signed-in customers.",
+        },
+      });
+      expect(mocks.limiter.limit).not.toHaveBeenCalled();
+      expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+      expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+      return;
+    }
+    expect(mocks.createStorefrontOrder.mock.calls[0]?.[6]).toEqual(customerId
+      ? { customerId, source: "authenticated" }
+      : undefined);
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
   it("binds signed-in checkout to the session customer when guest checkout is enabled", async () => {

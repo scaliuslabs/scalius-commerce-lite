@@ -1,4 +1,4 @@
-import type { AddToCartEventDetail } from "@/components/CartFlyout";
+import type { AddToCartEventDetail, OpenCartEventDetail } from "@/components/CartFlyout";
 import type { AuthModalOpenDetail } from "@/components/AuthModal";
 
 function hasCustomerAuthMirrorCookie(): boolean {
@@ -58,23 +58,39 @@ export function installLazyGlobalUi(): void {
 
   let cartLoading: Promise<void> | null = null;
   let cartReady = false;
-  const queueCartEvent = (
-    event: Event,
-    pending:
-      | { type: "open" }
-      | { type: "add"; detail: AddToCartEventDetail },
-  ) => {
-    if (cartReady) return;
-    event.stopImmediatePropagation();
-    (window.__scaliusCartPendingEvents ??= []).push(pending);
+  const loadCart = () => {
     cartLoading ??= import("@/components/client/mount-cart-flyout")
       .then(({ mountCartFlyout }) => mountCartFlyout())
       .then(() => {
         cartReady = true;
       });
   };
+  const queueCartEvent = (
+    event: Event,
+    pending:
+      | { type: "open"; detail?: OpenCartEventDetail }
+      | { type: "add"; detail: AddToCartEventDetail },
+  ) => {
+    if (cartReady) return;
+    event.stopImmediatePropagation();
+    (window.__scaliusCartPendingEvents ??= []).push(pending);
+    loadCart();
+  };
+  // Start loading the drawer when a buyer reaches for an add button, so it is
+  // ready the moment the line is in and opens without a visible gap.
+  const warmCart = (event: Event) => {
+    if (cartReady || cartLoading) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('[data-action="add-to-cart"], a[data-card-quick-add]')) loadCart();
+  };
+  document.addEventListener("pointerover", warmCart, { passive: true });
+  document.addEventListener("pointerdown", warmCart, { passive: true });
+  document.addEventListener("focusin", warmCart, { passive: true });
   document.addEventListener("open-cart", (event) => {
-    queueCartEvent(event, { type: "open" });
+    queueCartEvent(event, {
+      type: "open",
+      detail: (event as CustomEvent<OpenCartEventDetail | undefined>).detail,
+    });
   });
   document.addEventListener("add-to-cart", (event) => {
     const detail = (event as CustomEvent<AddToCartEventDetail>).detail;

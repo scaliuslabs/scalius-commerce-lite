@@ -4,13 +4,15 @@
 import { recentlyViewedRecordScript } from "@/lib/recently-viewed";
 
 interface Props {
+  /** The product id, so the row can later be checked against the public catalogue. */
+  id: string;
   slug: string;
   name: string;
   /** A card-sized photo URL, or null. */
   image: string | null;
 }
 
-const { slug, name, image } = Astro.props;
+const { id, slug, name, image } = Astro.props;
 ---
 
-<script is:inline set:html={recentlyViewedRecordScript({ slug, name, image })} />
+<script is:inline set:html={recentlyViewedRecordScript({ id, slug, name, image })} />

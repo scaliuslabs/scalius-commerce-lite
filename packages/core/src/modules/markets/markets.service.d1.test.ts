@@ -11,7 +11,8 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { withDependencyScope } from "../../cache-deps";
 import { createMarket, deleteMarket, getMarket, listMarkets, resetBackupPriceIncrement, updateMarket } from "./markets.service";
-import { readMarketMatrix } from "./matrix";
+import { readMarketMatrix, readPresenceMarketWithDocuments } from "./matrix";
+import { addStoreLanguage, setStoreLanguagePublished } from "../translations/store-languages.service";
 import { orderMarketId, orderMarketIdSql } from "./order-market";
 import { readStoreCurrency } from "./pricing";
 
@@ -142,12 +143,46 @@ describe("markets", () => {
 });
 
 describe("the presence matrix", () => {
+    // Shopify's language subfolders on the primary market: one published
+    // language, one `/<locale>`, from the language list alone (never stored).
+    it("serves each published language on the backup market at /<locale>", async () => {
+        const backupPresences = async () => (await readMarketMatrix(db)).markets.find((market) => market.isBackup)!.presences;
+        // A single-language store: the root alone, as before.
+        expect(await backupPresences()).toEqual([{ value: "", locale: "en" }]);
+        await expect(readPresenceMarketWithDocuments(db, "bn", [])).resolves.toMatchObject({ market: null });
+
+        await addStoreLanguage(db, { locale: "bn", published: false });
+        expect(await backupPresences()).toEqual([{ value: "", locale: "en" }]);
+
+        await setStoreLanguagePublished(db, "bn", true);
+        expect(await backupPresences()).toEqual([{ value: "", locale: "en" }, { value: "bn", locale: "bn" }]);
+        const read = await withDependencyScope(() => readPresenceMarketWithDocuments(db, "bn", []));
+        expect(read.value.market).toMatchObject({ id: "mkt_backup", isBackup: true, presence: { value: "bn", locale: "bn" } });
+        // Publication and the backup market's presences decide it.
+        expect(read.dependencies.keys).toEqual(expect.arrayContaining(["mk:mkt_backup", "tr:locales"]));
+        // The default language is the root's: never a second URL.
+        await expect(readPresenceMarketWithDocuments(db, "en", [])).resolves.toMatchObject({ market: null });
+
+        // A market's own subfolder in that language keeps it there; /bn is not served twice.
+        await createMarket(db, { name: "Bangla India", status: "active", countries: ["IN"], presence: { value: "bn-in", locale: "bn" } });
+        expect(await backupPresences()).toEqual([{ value: "", locale: "en" }, { value: "bn", locale: "bn" }]);
+
+        await setStoreLanguagePublished(db, "bn", false);
+        expect(await backupPresences()).toEqual([{ value: "", locale: "en" }]);
+        await expect(readPresenceMarketWithDocuments(db, "bn", [])).resolves.toMatchObject({ market: null });
+    });
+
+    it("refuses to store a language subfolder: a market's own is `<locale>-<country>`", async () => {
+        await expect(createMarket(db, { ...india, presence: { value: "en", locale: "en" } })).rejects.toBeInstanceOf(ValidationError);
+    });
+
     it("holds active markets only, backup first, and declares mk:*", async () => {
         const created = await createMarket(db, india);
         await createMarket(db, { ...india, name: "Draft", status: "draft", countries: ["LK"], presence: { value: "si-lk", locale: "si" } });
         const read = await withDependencyScope(() => readMarketMatrix(db), { strict: true });
         expect(read.value).toEqual({ markets: [
-            { id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "en" }] },
+            // Sinhala is published (the draft market's presence added it): the backup market serves it at /si.
+            { id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "en" }, { value: "si", locale: "si" }] },
             { id: created.id, handle: "india", name: "India", isBackup: false, countries: ["IN", "NP"], presences: [{ value: "en-in", locale: "en" }] },
         ] });
         expect(read.dependencies.keys).toContain("mk:*");

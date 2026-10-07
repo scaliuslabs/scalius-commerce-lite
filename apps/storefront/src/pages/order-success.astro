@@ -497,21 +497,18 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 data-payment-type={retryPaymentType}
                 data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
               >
-                <span class="flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2" aria-hidden="true">
+                <span class="flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5" aria-hidden="true">
                   {option.presentation.markSrc && (
                     <img
                       src={option.presentation.markSrc}
                       alt=""
-                      width={option.presentation.markKind === "wordmark" ? 72 : 20}
-                      height={24}
-                      class={`${option.presentation.markKind === "wordmark" ? "h-4 max-w-18" : "h-5 w-5"} object-contain ${option.presentation.darkMarkSrc ? "dark:hidden" : ""}`}
+                      width={option.presentation.markKind === "wordmark" ? 52 : 20}
+                      height={20}
+                      class={`${option.presentation.markKind === "wordmark" ? "h-5 w-full" : "h-5 w-5"} object-contain ${option.presentation.darkMarkSrc ? "dark:hidden" : ""}`}
                     />
                   )}
                   {option.presentation.darkMarkSrc && (
                     <img src={option.presentation.darkMarkSrc} alt="" width="20" height="20" class="hidden h-5 w-5 object-contain dark:block" />
-                  )}
-                  {option.presentation.markKind === "icon" && option.presentation.providerLabel && (
-                    <span class="text-[11px] font-semibold text-foreground">{option.presentation.providerLabel}</span>
                   )}
                 </span>
                 <span class="min-w-0">

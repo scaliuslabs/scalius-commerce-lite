@@ -39,12 +39,22 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
     markKind: "wordmark",
     hosted: true,
   },
+  // Every method shows a mark in the same badge (Shopify's payment rows):
+  // methods without a brand show a plain icon.
   cod: {
     buyerLabel: "Cash on delivery",
     description: "Pay when you receive your order",
     providerLabel: null,
-    markSrc: null,
-    markKind: "none",
+    markSrc: "/payment-marks/cash.svg",
+    markKind: "icon",
+    hosted: false,
+  },
+  gift_card: {
+    buyerLabel: "Gift card",
+    description: "",
+    providerLabel: null,
+    markSrc: "/payment-marks/gift.svg",
+    markKind: "icon",
     hosted: false,
   },
 };
@@ -56,20 +66,13 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
 export const APP_GATEWAY_MARK_SRC = "/payment-marks/wallet.svg";
 
 /**
- * The first-party wallet apps' logos, by plugin id: copies of each app's
- * listing icon (`plugins/<app>/assets/icon.svg`; a test keeps them equal).
- */
-export const APP_GATEWAY_MARKS: Readonly<Record<string, string>> = {
-  "scalius.bkash": "/payment-marks/bkash.svg",
-  "scalius.nagad": "/payment-marks/nagad.svg",
-};
-
-/**
- * A pack's payment providers' own marks, by provider id: copies of the mark
- * each declares (`providers.payment[].icon`; a test keeps them equal).
+ * The first-party apps' payment providers' marks, by provider id: copies of
+ * the mark each declares (`providers.payment[].icon`; a test keeps them equal).
  */
 export const APP_PROVIDER_MARKS: Readonly<Record<string, string>> = {
   [SSLCOMMERZ_GATEWAY_ID]: "/payment-marks/sslcommerz.png",
+  "scalius.bkash:bkash": "/payment-marks/bkash.svg",
+  "scalius.nagad:nagad": "/payment-marks/nagad.svg",
 };
 
 /** The name a retired id's replacement had as a built-in gateway ("SSLCommerz"), or null. */
@@ -109,14 +112,13 @@ export function getGatewayPresentation(
   const known = GATEWAY_PRESENTATION[currentPaymentMethodId(gatewayId)];
   if (known) return known;
   if (isAppGatewayId(gatewayId)) {
-    // An app's hosted wallet: its own checkout name, and its provider's mark,
-    // its app's logo or a neutral mark. The name doubles as the provider in
-    // "Continue to …" copy.
+    // An app's hosted wallet: its own checkout name, and its provider's mark
+    // or a neutral one. The name doubles as the provider in "Continue to …" copy.
     const id = currentPaymentMethodId(gatewayId);
     const name = fallbackLabel.trim() && fallbackLabel !== gatewayId
       ? fallbackLabel.trim()
       : appGatewayName(id) ?? fallbackLabel;
-    const logo = APP_PROVIDER_MARKS[id] ?? APP_GATEWAY_MARKS[parseQualifiedProviderId(id)?.pluginId ?? ""];
+    const logo = APP_PROVIDER_MARKS[id];
     return {
       buyerLabel: name,
       description: "",
@@ -130,8 +132,8 @@ export function getGatewayPresentation(
     buyerLabel: fallbackLabel,
     description: "",
     providerLabel: null,
-    markSrc: null,
-    markKind: "none",
+    markSrc: APP_GATEWAY_MARK_SRC,
+    markKind: "icon",
     hosted: true,
   };
 }

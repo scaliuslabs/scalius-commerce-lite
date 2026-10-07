@@ -128,7 +128,10 @@ interface Window {
   __scaliusAuthModalDetailPending?: import("@/components/AuthModal").AuthModalOpenDetail;
   __scaliusSearchPaletteOpenPending?: boolean;
   __scaliusCartPendingEvents?: Array<
-    | { type: "open" }
+    | {
+        type: "open";
+        detail?: import("@/components/CartFlyout").OpenCartEventDetail;
+      }
     | {
         type: "add";
         detail: import("@/components/CartFlyout").AddToCartEventDetail;

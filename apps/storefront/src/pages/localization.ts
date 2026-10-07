@@ -1,9 +1,10 @@
 /**
- * The market selector's target (Shopify's `/localization`): a buyer's
- * explicit market choice. A plain form POST, so it works without
- * JavaScript. It saves the country and the presence it resolves to in the
- * `localization` cookie and answers 303 to the same page under that
- * presence. The gateway then keeps later navigations there
+ * The market and language selectors' target (Shopify's `/localization`): a
+ * buyer's explicit choice. A plain form POST, so it works without
+ * JavaScript. The country picks the market; `locale_code` (the language
+ * form) picks that market's presence in the language, else the market's own
+ * URL. It saves the country and the presence in the `localization` cookie
+ * and answers 303 to the same page under that presence. The gateway then keeps later navigations there
  * (lib/market-presence.ts). Never cached; never a geo decision.
  */
 import type { APIRoute } from "astro";
@@ -45,7 +46,10 @@ export const POST: APIRoute = async ({ request, url }) => {
   const matrix = (await getLayoutData())?.markets;
   if (!country || !matrix) return seeOther(returnTo);
   const market = marketOfCountry(matrix, country) ?? backupMarket(matrix);
-  const presence = market ? primaryPresence(market) : null;
+  const locale = form.get("locale_code");
+  const presence = market
+    ? market.presences.find((each) => typeof locale === "string" && each.locale === locale) ?? primaryPresence(market)
+    : null;
   if (!presence) return seeOther(returnTo);
   const cookie = marketSelectionCookieHeader(
     formatMarketSelection({ country, presence: presence.value }),
