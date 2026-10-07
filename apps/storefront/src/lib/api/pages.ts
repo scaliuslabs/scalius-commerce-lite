@@ -11,7 +11,9 @@ import {
   getApiV1Pages,
   getApiV1StorefrontPagesSlugBySlug,
   getApiV1StorefrontLandingBySlug,
+  getApiV1StorefrontTemplateByKind,
 } from "@scalius/api-client/sdk";
+import type { StorefrontPageTemplate } from "@scalius/shared/storefront-theme";
 
 /**
  * Fetches a single CMS page by its URL-friendly slug.
@@ -71,6 +73,26 @@ export async function getLandingPageData(slug: string): Promise<LandingPageData 
     if (response?.status === 404) return "missing";
     if (!response?.ok) return null;
     return unwrapEnvelope<LandingPageData>(data);
+  }, { ttlSeconds: CACHE_TTL.LONG });
+}
+
+/**
+ * What a page template's sections show (the sections around a product,
+ * listing, cart or CMS page's fixed part); null when the read failed, so
+ * the page renders without them. Starts beside the layout read and joins
+ * its one public batch.
+ */
+export async function getTemplateSectionsData(kind: StorefrontPageTemplate): Promise<HomepageSectionData | null> {
+  return withEdgeCache<HomepageSectionData | null>(`template_${kind}_${BUILD_ID}`, async () => {
+    try {
+      const { data, response } = await getApiV1StorefrontTemplateByKind({
+        client: getConfiguredSdkClient(), path: { kind },
+      });
+      if (!response?.ok) return null;
+      return unwrapEnvelope<{ sections: HomepageSectionData }>(data).sections;
+    } catch {
+      return null;
+    }
   }, { ttlSeconds: CACHE_TTL.LONG });
 }
 

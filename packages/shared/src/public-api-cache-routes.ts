@@ -72,6 +72,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/storefront/pages/slug", market: { keyed: true } },
   // A landing page's product lists are priced in the page's market.
   { path: "/api/v1/storefront/landing", isEligible: presenceOnly, market: { keyed: true } },
+  // A page template's product lists are priced in the page's market, like a landing page's.
+  { path: "/api/v1/storefront/template", isEligible: presenceOnly, market: { keyed: true } },
   // The layout: the whole presence matrix (the same everywhere), and the
   // page's menus, category tree, policies and storefront copy in its language (step 4b).
   { path: "/api/v1/storefront/layout", exact: true, isEligible: presenceOnly, market: { keyed: true } },

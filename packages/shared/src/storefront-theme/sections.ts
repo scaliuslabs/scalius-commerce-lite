@@ -9,6 +9,19 @@ import { storefrontLinkSchema } from "./links";
 
 const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
 
+/**
+ * A block (one item of a section's list: a slide, a card, a question) the
+ * merchant hid: it keeps its settings and renders nothing
+ * (`storefrontVisibleSection`). Optional, so stored items stay valid.
+ */
+const blockHidden = { hidden: z.boolean().optional() };
+/**
+ * A section an AI drafted that no one has opened in the editor yet. It
+ * renders like any other; the editor marks it until it is opened, and the
+ * publish summary names it.
+ */
+const aiDraft = z.literal(true).optional();
+
 /** How `category-tiles` draws the categories (see the section's comment). */
 export const STOREFRONT_CATEGORY_TILE_STYLES = ["photo", "photo-grid", "round", "round-small", "round-row", "icons", "quad", "square"] as const;
 export type StorefrontCategoryTileStyle = (typeof STOREFRONT_CATEGORY_TILE_STYLES)[number];
@@ -67,6 +80,7 @@ export const storefrontHeroSlideSchema = z.object({
   text: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text).optional(),
   buttonLabel: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel).optional(),
   link: storefrontLinkSchema.nullable(),
+  ...blockHidden,
 }).strict();
 export type StorefrontHeroSlide = z.infer<typeof storefrontHeroSlideSchema>;
 
@@ -96,6 +110,7 @@ function section<const Type extends string, Settings extends z.ZodType>(spec: {
       type: z.literal(spec.type),
       version: z.literal(1),
       hidden: z.boolean().optional(),
+      aiDraft,
       settings: spec.settings,
     }).strict(),
   };
@@ -123,6 +138,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
         /** What the image shows (its alt text). */
         alt: z.string().trim().max(160),
         href: href.nullable(),
+        ...blockHidden,
       }).strict()).max(2).optional(),
       /**
        * `full-screen` on phones: the first screen (`screen`, the default), or
@@ -143,7 +159,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
         z.object({ kind: z.literal("delivery-facts") }).strict(),
         z.object({
           kind: z.literal("custom"),
-          items: z.array(z.object({ title: z.string().trim().min(1).max(60), detail: z.string().trim().max(80) }).strict()).min(1).max(4),
+          items: z.array(z.object({ title: z.string().trim().min(1).max(60), detail: z.string().trim().max(80), ...blockHidden }).strict()).min(1).max(4),
         }).strict(),
       ]),
     }).strict(),
@@ -223,7 +239,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
     type: "product-tabs",
     settings: z.object({
       title,
-      tabs: z.array(z.object({ label: z.string().trim().max(40), source: storefrontProductSourceSchema }).strict()).min(2).max(4),
+      tabs: z.array(z.object({ label: z.string().trim().max(40), source: storefrontProductSourceSchema, ...blockHidden }).strict()).min(2).max(4),
       limit: z.number().int().min(4).max(12),
     }).strict(),
     defaults: {
@@ -244,7 +260,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
     type: "shop-by",
     settings: z.object({
       title,
-      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), href }).strict()).max(8),
+      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), href, ...blockHidden }).strict()).max(8),
     }).strict(),
     defaults: { title: "", cards: [] },
   }),
@@ -260,6 +276,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
         /** What the image shows (its alt text). */
         alt: z.string().trim().max(160),
         href: href.nullable(),
+        ...blockHidden,
       }).strict()).max(5),
     }).strict(),
     defaults: { tiles: [] },
@@ -310,11 +327,11 @@ export const STOREFRONT_SECTION_REGISTRY = {
       z.object({
         layout: z.literal("multicolumn"),
         heading,
-        columns: z.array(z.object({ title, text: z.string().trim().max(400) }).strict()).max(4),
+        columns: z.array(z.object({ title, text: z.string().trim().max(400), ...blockHidden }).strict()).max(4),
       }).strict(),
       z.object({
         layout: z.literal("testimonial"),
-        quotes: z.array(z.object({ quote: z.string().trim().min(1).max(400), author: title }).strict()).max(6),
+        quotes: z.array(z.object({ quote: z.string().trim().min(1).max(400), author: title, ...blockHidden }).strict()).max(6),
       }).strict(),
     ]),
     defaults: { layout: "rich-text", heading: "", body: "" },
@@ -326,6 +343,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
       items: z.array(z.object({
         question: z.string().trim().min(1).max(200),
         answer: z.string().trim().min(1).max(1000),
+        ...blockHidden,
       }).strict()).max(20),
     }).strict(),
     defaults: { heading: "", items: [] },
@@ -333,7 +351,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
   "utility-cards": section({
     type: "utility-cards",
     settings: z.object({
-      cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href }).strict()).max(4),
+      cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href, ...blockHidden }).strict()).max(4),
     }).strict(),
     defaults: { cards: [] },
   }),
@@ -392,6 +410,7 @@ export const storefrontAppSectionSchema = z.object({
   type: z.literal("app"),
   version: z.literal(1),
   hidden: z.boolean().optional(),
+  aiDraft,
   settings: z.object({ app: storefrontAppKeySchema, values: storefrontAppValuesSchema }).strict(),
 }).strict();
 export type StorefrontAppSection = z.infer<typeof storefrontAppSectionSchema>;
@@ -479,7 +498,9 @@ function filled(...values: Array<string | null | undefined>): boolean {
  * storefront never renders them. Sections that show store data (products,
  * categories, brands, delivery facts) are judged on that data instead.
  */
-export function storefrontSectionNeedsContent(each: StorefrontSection): boolean {
+export function storefrontSectionNeedsContent(section: StorefrontSection): boolean {
+  // Hidden blocks show nothing: a hero whose slides are all hidden needs content.
+  const each = storefrontVisibleSection(section);
   switch (each.type) {
     case "hero":
       return each.settings.slides.length === 0;
@@ -518,4 +539,61 @@ export function storefrontSectionNeedsContent(each: StorefrontSection): boolean 
     default:
       return false;
   }
+}
+
+/**
+ * The blocks of each section type: the lists in its settings whose items a
+ * merchant adds, orders, hides and removes one by one (Shopify's blocks).
+ * `path` is the list's place in the settings (`source.items` for a custom
+ * strip); a list another layout does not have is simply absent.
+ */
+export const STOREFRONT_SECTION_BLOCKS = {
+  hero: [{ path: "slides", kind: "slide" }, { path: "sideBanners", kind: "side-banner" }],
+  "usp-strip": [{ path: "source.items", kind: "point" }],
+  "product-tabs": [{ path: "tabs", kind: "tab" }],
+  "shop-by": [{ path: "cards", kind: "card" }],
+  "banner-mosaic": [{ path: "tiles", kind: "tile" }],
+  editorial: [{ path: "columns", kind: "column" }, { path: "quotes", kind: "quote" }],
+  faq: [{ path: "items", kind: "question" }],
+  "utility-cards": [{ path: "cards", kind: "link-card" }],
+} as const satisfies Partial<Record<StorefrontSectionType, ReadonlyArray<{ path: string; kind: string }>>>;
+export type StorefrontBlockKind = (typeof STOREFRONT_SECTION_BLOCKS)[keyof typeof STOREFRONT_SECTION_BLOCKS][number]["kind"];
+
+/** A section type's block lists ([] for a section without blocks or for an app section). */
+export function storefrontSectionBlockLists(type: StorefrontSection["type"]): ReadonlyArray<{ path: string; kind: StorefrontBlockKind }> {
+  return (STOREFRONT_SECTION_BLOCKS as Partial<Record<string, ReadonlyArray<{ path: string; kind: StorefrontBlockKind }>>>)[type] ?? [];
+}
+
+/** The value at a dotted settings path, or undefined. */
+export function storefrontSettingAt(settings: unknown, path: string): unknown {
+  let value: unknown = settings;
+  for (const key of path.split(".")) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    value = (value as Record<string, unknown>)[key];
+  }
+  return value;
+}
+
+/** Settings with the value at a dotted path replaced (a copy along the path; the rest shared). */
+export function storefrontSettingWith<Settings>(settings: Settings, path: string, next: unknown): Settings {
+  const [key, ...rest] = path.split(".");
+  const record = (settings ?? {}) as Record<string, unknown>;
+  return { ...record, [key!]: rest.length === 0 ? next : storefrontSettingWith(record[key!], rest.join("."), next) } as Settings;
+}
+
+const isHidden = (item: unknown) => (item as { hidden?: unknown } | null)?.hidden === true;
+
+/**
+ * The section as buyers see it: its hidden blocks left out. The resolver
+ * and the section data planner read sections through this, so a hidden
+ * slide neither renders nor reads its image.
+ */
+export function storefrontVisibleSection<Section extends StorefrontSection>(section: Section): Section {
+  let settings: unknown = section.settings;
+  for (const { path } of storefrontSectionBlockLists(section.type)) {
+    const list = storefrontSettingAt(settings, path);
+    if (!Array.isArray(list) || !list.some(isHidden)) continue;
+    settings = storefrontSettingWith(settings, path, list.filter((item) => !isHidden(item)));
+  }
+  return settings === section.settings ? section : { ...section, settings } as Section;
 }

@@ -4,6 +4,7 @@
 // the current draft. Entries carry ids and area names only, never content.
 import { z } from "zod";
 import type { StorefrontThemeDocument } from "./document";
+import { STOREFRONT_PAGE_TEMPLATES } from "./pages";
 
 /** Theme-wide settings, grouped the way the editor shows them. */
 export const THEME_CHANGE_AREAS = [
@@ -12,7 +13,7 @@ export const THEME_CHANGE_AREAS = [
 ] as const;
 export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
 
-/** `home`, or `landing/<slug>`. */
+/** `home`, `landing/<slug>` or `template/<product|collection|cart|page>`. */
 const pageKey = z.string().max(108);
 const sectionRef = { page: pageKey, sectionId: z.string().max(40), sectionType: z.string().max(32) };
 
@@ -88,6 +89,17 @@ export function compareThemeDocuments(before: StorefrontThemeDocument, after: St
       if (old.title !== next.title || old.description !== next.description) changes.push({ kind: "page-changed", page });
       changes.push(...compareSections(page, old.sections, next.sections));
     }
+  }
+  for (const kind of STOREFRONT_PAGE_TEMPLATES) {
+    const page = `template/${kind}`;
+    const old = before.pages.templates[kind];
+    const next = after.pages.templates[kind];
+    const sections = compareSections(page, old.sections, next.sections);
+    // The fixed part moving among the sections is a reorder too.
+    if (old.main !== next.main && !sections.some((change) => change.kind === "sections-reordered")) {
+      sections.push({ kind: "sections-reordered", page });
+    }
+    changes.push(...sections);
   }
   const changed = new Set<ThemeChangeArea>([
     ...(before.template === after.template ? [] : ["template" as const]),

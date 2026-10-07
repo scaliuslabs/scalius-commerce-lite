@@ -1,3 +1,5 @@
+import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
+
 const PUBLIC_RESOURCE_PREFIXES = new Set([
   "products",
   "categories",
@@ -27,9 +29,14 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
 ]);
 
 function isSafePublicPath(pathname: string): boolean {
-  if (pathname === "/" || pathname === "/search") return true;
+  // A market presence's page (`/en-in/products/x`): the page under its subfolder.
+  const presence = presenceOfPath(pathname);
+  const page = presence ? stripPresencePath(pathname, presence) : pathname;
+  if (presence && page === pathname) return false;
+  // The cart is a page template the theme editor previews.
+  if (page === "/" || page === "/search" || page === "/cart") return true;
 
-  const segments = pathname.split("/").filter(Boolean);
+  const segments = page.split("/").filter(Boolean);
   if (segments.length === 2 && PUBLIC_RESOURCE_PREFIXES.has(segments[0]!)) {
     return /^[A-Za-z0-9_-]+$/.test(segments[1]!);
   }

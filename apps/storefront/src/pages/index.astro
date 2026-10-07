@@ -65,7 +65,7 @@ const requestTheme = await resolveRequestTheme(Astro, layoutData);
 const homeSections = requestTheme.resolved.pages.home;
 let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
 if (requestTheme.preview && requestTheme.previewToken) {
-  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken, { presence: getRuntimePresence() })) ?? EMPTY_HOMEPAGE_SECTION_DATA;
 }
 
 // A product homepage answers `/` with its product's own page while that

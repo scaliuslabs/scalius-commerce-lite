@@ -1,0 +1,90 @@
+---
+// The theme editor's preview-only render route: the editor's unsaved
+// sections of one page (the homepage, a landing page or a template), drawn
+// by the same components as the page and resolved against the store the
+// same way (hidden and unfit sections and hidden blocks left out). It
+// answers the page's section regions, or `only` the unit holding one
+// section, which the editor's bridge swaps in place. POST from the page
+// itself under a live preview cookie; private and never stored (checks:
+// lib/theme-preview-post.ts). The section data comes from the API's
+// token-verified preview read for these sections, priced in the previewed
+// market.
+export const partial = true;
+export const prerender = false;
+
+import { storefrontPreviewRenderSchema, storefrontScopeRegions, storefrontThemeWithScope, homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import HomepageSections from "@/components/homepage/HomepageSections.astro";
+import { getCheckoutConfig, getShippingMethods, getThemePreviewHomepageSections } from "@/lib/api";
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
+import { buildDeliveryFacts } from "@/lib/delivery-facts";
+import { formatMoney } from "@/lib/currency";
+import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent, homepageLeadSection } from "@/lib/homepage-sections";
+import { readStoreShape, requestThemeFor } from "@/lib/storefront-theme-context";
+import { THEME_PREVIEW_ROUTE_HEADERS, readThemePreviewPost } from "@/lib/theme-preview-post";
+
+const post = await readThemePreviewPost(Astro, storefrontPreviewRenderSchema);
+if (post instanceof Response) return post;
+for (const [name, value] of Object.entries(THEME_PREVIEW_ROUTE_HEADERS)) Astro.response.headers.set(name, value);
+
+const { body, token, layoutData, requestTheme } = post;
+const draft = storefrontThemeWithScope(requestTheme.theme, body.scope, body.sections);
+const resolved = requestThemeFor(draft, readStoreShape(layoutData.storeShape)).resolved;
+const regions = storefrontScopeRegions(resolved.pages, body.scope);
+const shown = regions.flatMap((region) => region.sections);
+const presence = body.presence ?? null;
+
+const sectionData = (await getThemePreviewHomepageSections(token, {
+  ...(body.scope.kind === "landing" ? { pageSlug: body.scope.slug } : {}),
+  sections: shown,
+  presence,
+})) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
+const showsDeliveryFacts = homeSectionsShowDeliveryFacts(shown);
+const [shippingMethods, checkoutConfig] = showsDeliveryFacts
+  ? await Promise.all([getShippingMethods(), getCheckoutConfig()])
+  : [null, null];
+const deliveryFacts = showsDeliveryFacts
+  ? buildDeliveryFacts({
+      shippingMethods,
+      checkoutConfig,
+      returnPolicy: layoutData.seo?.returnPolicy,
+      formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+      countries: presenceMarketCountries(layoutData.markets, presence),
+    })
+  : [];
+const content = homepageContent(sectionData, deliveryFacts);
+// The previewed market's language words (the newsletter's), else the store's.
+const presenceLocale = presence
+  ? layoutData.markets?.markets.flatMap((market) => market.presences).find((each) => each.value === presence)?.locale
+  : undefined;
+const languageCode = presenceLocale ?? layoutData.storefrontCopy?.languageCode;
+const only = body.only;
+const target = only ? regions.find((region) => region.sections.some((section) => section.id === only)) ?? null : null;
+---
+
+{only
+  ? target && (
+    <HomepageSections
+      sections={target.sections}
+      content={content}
+      leadSectionId={homepageLeadSection(target.sections, content)?.id ?? null}
+      currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
+      only={only}
+      languageCode={languageCode}
+    />
+  )
+  : regions.map((region) => (
+    <HomepageSections
+      sections={region.sections}
+      content={content}
+      leadSectionId={region.region === "after" ? null : homepageLeadSection(region.sections, content)?.id ?? null}
+      currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
+      previewMarks
+      region={region.region}
+      languageCode={languageCode}
+    />
+  ))}

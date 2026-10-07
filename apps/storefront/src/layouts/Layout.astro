@@ -11,8 +11,8 @@ import ThemeFonts from "../components/ThemeFonts.astro";
 import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { productGridFluidCss, productGridSpec } from "@/lib/product-card-layout";
-import { cardIconIds, cardLookTokens, cardPageAttributes } from "@/components/cards/card-model";
+import { themePaint } from "@/lib/theme-paint";
+import { cardIconIds } from "@/components/cards/card-model";
 import CardIconSprite from "../components/cards/CardIconSprite.astro";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
@@ -44,9 +44,6 @@ import {
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import {
-  buildStorefrontThemeTokens,
-} from "@scalius/shared/storefront-theme";
 import {
   clearThemePreviewCookieHeader,
 } from "@/lib/theme-preview-cookie";
@@ -295,25 +292,9 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // CSS comes only from shared enum constants and schema-validated hex colours
 // (plus the fluid grid steps derived from the density constants, widened for
 // portrait photos). Body data attributes carry the tokens CSS selects on.
-const themeTokens = storefrontTheme.tokens;
-const productGrid = productGridSpec(themeLayout.grid, themeTokens.imageRatio);
-const fluidGrid = productGridFluidCss(productGrid);
-// Every card of the store shares one look and its flags: written once here
-// (theme-cards.css draws with them), never repeated per card.
-const cardVariant = resolvedTheme.blocks.card.variant;
-const themeTokenEntries = Object.entries({
-  ...buildStorefrontThemeTokens(storefrontTheme),
-  "theme-card-min-tablet": productGrid.cardMin.tablet,
-  "theme-card-min-desktop": productGrid.cardMin.desktop,
-  "grid-card-min-fluid": fluidGrid.cardMin,
-  "grid-gap-fluid": fluidGrid.gap,
-  ...Object.fromEntries(cardLookTokens(cardVariant, themeLayout.productCard)),
-});
-const cardAttributes = cardPageAttributes(cardVariant, themeLayout.productCard);
-const cardIcons = cardIconIds(cardVariant, themeLayout.productCard);
-const themeStyleBlock = `:root, .site-root { ${themeTokenEntries
-  .map(([key, value]) => `--${key}: ${value}`)
-  .join("; ")}; }`;
+// The theme editor's paint route returns the same three for an unsaved document.
+const paint = themePaint(storefrontTheme, resolvedTheme);
+const cardIcons = cardIconIds(resolvedTheme.blocks.card.variant, themeLayout.productCard);
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
@@ -430,7 +411,7 @@ const pageStoreTimeZone = storeTimeZone();
     {/* The Style's self-hosted fonts: the heading's Latin face preloads after
         the page's LCP image hints; every face swaps over a metric-matched
         fallback, so text never shifts. */}
-    <ThemeFonts pairing={storefrontTheme.tokens.typography} />
+    <ThemeFonts fonts={paint.fonts} preview={isThemePreview} />
 
     {/* Without JavaScript the phone menu and search buttons and the drawers'
         close buttons do nothing; each renders a <noscript> link in its place
@@ -495,21 +476,15 @@ const pageStoreTimeZone = storeTimeZone();
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
     {appHeadScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
-    {themeStyleBlock && <style set:html={themeStyleBlock} />}
+    <style set:html={paint.css} data-theme-tokens={isThemePreview ? "" : undefined} />
 
     <slot name="head" />
   </head>
   <body
     class="flex flex-col min-h-screen site-root"
-    data-theme-density={themeLayout.density}
-    data-theme-card-style={themeLayout.cardSurface}
-    data-theme-typography={themeTokens.typography}
-    data-theme-type-scale={themeTokens.typeScale}
-    data-theme-heading-case={themeTokens.headingCase}
-    data-theme-image-fit={themeTokens.imageFit}
-    data-theme-radius={themeTokens.radius}
+    {...paint.attributes}
     data-storefront-route={storefrontRouteKind}
-    {...cardAttributes}
+    {...paint.cardAttributes}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
     <CardIconSprite icons={cardIcons} />

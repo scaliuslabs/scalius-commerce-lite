@@ -291,15 +291,27 @@ export function getLayoutData(): Promise<LayoutData | null> {
   return runtime.layout;
 }
 
+/** What a preview reads section data for: a landing page, the editor's unsaved sections, a market. */
+export interface ThemePreviewSectionsRead {
+  pageSlug?: string;
+  /** A page template's sections (the draft's), instead of the homepage's. */
+  template?: string;
+  /** The theme editor's unsaved sections of the page (the preview-only render route). */
+  sections?: unknown[];
+  /** The previewed market presence (`en-in`); none: the root. */
+  presence?: string | null;
+}
+
 /**
- * The homepage section data of a theme preview's draft: the API reads what
- * the current saved draft's sections name, behind the preview token (private, never
- * cached). Only rendered under a live dashboard preview cookie; the
- * published homepage comes from its one batch part.
+ * The section data of a theme preview's page: the API reads what the
+ * current saved draft's sections name (or the editor's unsaved ones),
+ * behind the preview token (private, never cached). Only rendered under a
+ * live dashboard preview cookie; the published homepage comes from its one
+ * batch part.
  */
 export async function getThemePreviewHomepageSections(
   token: string,
-  pageSlug?: string,
+  read: ThemePreviewSectionsRead = {},
 ): Promise<HomepageSectionData | null> {
   const normalizedToken = token.trim();
   if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
@@ -309,7 +321,13 @@ export async function getThemePreviewHomepageSections(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: normalizedToken, ...(pageSlug ? { pageSlug } : {}) }),
+        body: JSON.stringify({
+          token: normalizedToken,
+          ...(read.pageSlug ? { pageSlug: read.pageSlug } : {}),
+          ...(read.template ? { template: read.template } : {}),
+          ...(read.sections ? { sections: read.sections } : {}),
+          ...(read.presence ? { presence: read.presence } : {}),
+        }),
         cache: "no-store",
       },
       { retries: 0, timeout: 4_000, auth: false },

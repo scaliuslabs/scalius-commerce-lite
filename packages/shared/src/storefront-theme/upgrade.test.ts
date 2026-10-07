@@ -6,6 +6,7 @@ import v4 from "./fixtures/v4.json";
 import v5 from "./fixtures/v5.json";
 import v6 from "./fixtures/v6.json";
 import v7 from "./fixtures/v7.json";
+import v8 from "./fixtures/v8.json";
 import partialV1 from "./fixtures/v1-partial.json";
 import colorsV1 from "./fixtures/v1-colors.json";
 import {
@@ -14,7 +15,7 @@ import {
   storefrontThemeDocumentSchema, upgradeThemeDocument,
 } from "../storefront-theme";
 
-const goldenFixtures = [v1, v2, v3, v4, v5, v6, v7];
+const goldenFixtures = [v1, v2, v3, v4, v5, v6, v7, v8];
 const fixture = (version: number) => JSON.parse(JSON.stringify(goldenFixtures[version - 1]));
 type Section = { id: string; settings: Record<string, unknown> };
 
@@ -26,7 +27,7 @@ describe("step-wise stored theme upgrades", () => {
     expect(storefrontThemeDocumentSchema.safeParse(fixture(STOREFRONT_THEME_DOCUMENT_VERSION)).success).toBe(true);
   });
 
-  for (const version of [1, 2, 3, 4, 5, 6, 7]) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) {
     it(`upgrades the golden v${version} fixture to a valid current document, keeping merchant content and the input`, () => {
       const stored = fixture(version);
       const before = structuredClone(stored);
@@ -60,7 +61,7 @@ describe("step-wise stored theme upgrades", () => {
         expect(upgraded.brand).toEqual(stored.brand);
         expect(upgraded.pages.home[0]).toEqual(stored.pages.home[0]);
       }
-      if (version === 7) expect(upgraded).toEqual(stored);
+      if (version === STOREFRONT_THEME_DOCUMENT_VERSION) expect(upgraded).toEqual(stored);
       else expect(storefrontThemeDocumentSchema.safeParse(stored).success).toBe(false);
     });
   }

@@ -1,0 +1,42 @@
+---
+// The sections a merchant placed around a page template's fixed part
+// (`pages.templates`: the product information, the products and filters,
+// the cart, a CMS page's content): `region="before"` above it, `"after"`
+// below it, drawn by the homepage's components from the template's one
+// batch part. Template sections never lead the page (its own image does).
+// Under a theme editor preview each region renders even when empty and is
+// marked, so the editor's bridge can add and move sections in it.
+import type { StorefrontPageTemplateValue } from "@scalius/shared/storefront-theme";
+import type { HomepageSectionData } from "@/lib/api/storefront";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent } from "@/lib/homepage-sections";
+import HomepageSections from "./HomepageSections.astro";
+
+interface Props {
+  /** The resolved template (hidden and unfit sections left out). */
+  template: StorefrontPageTemplateValue;
+  region: "before" | "after";
+  data: HomepageSectionData | null;
+  deliveryFacts?: DeliveryFact[];
+  currencySymbol: string;
+  currencyCode: string;
+  preview: boolean;
+  languageCode?: string | null;
+}
+
+const { template, region, data, deliveryFacts = [], currencySymbol, currencyCode, preview, languageCode } = Astro.props;
+const sections = region === "before" ? template.sections.slice(0, template.main) : template.sections.slice(template.main);
+---
+
+{(sections.length > 0 || preview) && (
+  <HomepageSections
+    sections={sections}
+    content={homepageContent(data ?? EMPTY_HOMEPAGE_SECTION_DATA, deliveryFacts)}
+    leadSectionId={null}
+    currencySymbol={currencySymbol}
+    currencyCode={currencyCode}
+    previewMarks={preview}
+    region={region}
+    languageCode={languageCode}
+  />
+)}

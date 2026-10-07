@@ -35,7 +35,7 @@ const landing = requestTheme.resolved.pages.landing[slug];
 if (!landing || (!requestTheme.preview && pageData === "missing")) return new Response(null, { status: 404 });
 const sections = landing.sections;
 const data = requestTheme.preview && requestTheme.previewToken
-  ? await getThemePreviewHomepageSections(requestTheme.previewToken, slug) ?? EMPTY_HOMEPAGE_SECTION_DATA
+  ? await getThemePreviewHomepageSections(requestTheme.previewToken, { pageSlug: slug, presence: getRuntimePresence() }) ?? EMPTY_HOMEPAGE_SECTION_DATA
   : pageData && pageData !== "missing" ? pageData.sections : EMPTY_HOMEPAGE_SECTION_DATA;
 const currency = layoutData.currency ?? DEFAULT_CURRENCY;
 const [shippingMethods, checkoutConfig] = await Promise.all([shippingPromise, checkoutPromise]);

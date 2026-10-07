@@ -27,9 +27,15 @@ import {
   getActiveCheckoutLanguage,
   type CheckoutLanguageData,
   getCheckoutConfig,
+  getTemplateSectionsData,
   isCheckoutConfigReadFailure,
   isCodOnly,
 } from "@/lib/api";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+import TemplateSections from "@/components/homepage/TemplateSections.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
@@ -54,7 +60,9 @@ import {
 // reads only public, generation-cached settings and never a cookie, a query
 // parameter or the buyer's cart. The lines paint from localStorage and
 // everything buyer-specific comes from no-store APIs or the POST below.
-// Parallel fetch: layout + cities + shipping methods + checkout language + checkout config
+// Parallel fetch: layout + cities + shipping methods + checkout language +
+// checkout config, and the cart template's own sections (one batch).
+const templatePromise = getTemplateSectionsData("cart");
 const [
   layoutData,
   citiesResponse,
@@ -305,6 +313,10 @@ const errorClass = "mt-1 hidden text-sm font-medium text-destructive";
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 // Settings → Customers: the marketing consent box (unchecked, never required).
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
+// The cart template's own sections (Online store, theme editor), around the cart.
+const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
+const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
+const templateData = await templateSectionData("cart", cartRequestTheme, templatePromise);
 ---
 
 <Layout
@@ -345,8 +357,19 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   >
   </div>
 
+  <TemplateSections
+    template={cartTemplate}
+    region="before"
+    data={templateData}
+    currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
+    currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
+    preview={cartRequestTheme.preview !== null}
+    languageCode={layoutData?.storefrontCopy?.languageCode}
+  />
+
   <div
     id="cartPageRoot"
+    data-theme-section-id={cartRequestTheme.preview ? THEME_EDITOR_MARKS.cart : undefined}
     data-cart-ready="false"
     data-cart-has-items="false"
     data-cart-state="loading"
@@ -988,6 +1011,16 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
       </div>
     </div>
   </div>
+
+  <TemplateSections
+    template={cartTemplate}
+    region="after"
+    data={templateData}
+    currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
+    currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
+    preview={cartRequestTheme.preview !== null}
+    languageCode={layoutData?.storefrontCopy?.languageCode}
+  />
 </Layout>
 
 <CheckoutLoadingOverlay

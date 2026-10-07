@@ -1,7 +1,7 @@
-// The storefront theme document (version 7): the template it is based on
+// The storefront theme document (version 8): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
-// the shared navigation source, the listing's filter style and page chrome)
-// and the page sections. The dashboard
+// the shared navigation source, the listing's filter style and page chrome),
+// the page sections and the page templates' sections. The dashboard
 // and a future builder write it; the storefront renders it. Contract:
 // ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
 import { z } from "zod";
@@ -25,11 +25,11 @@ import {
 } from "./blocks";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
-import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf } from "./pages";
+import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import { upgradeThemeDocumentSteps } from "./upgrade";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 7 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 8 as const;
 
 /** Templates are named by archetype, never by the site they were measured on. */
 export const STOREFRONT_TEMPLATE_IDS = [
@@ -116,6 +116,7 @@ export type StorefrontSchemaNamer = <Schema extends z.ZodType>(name: string, sch
 export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer = (_name, schema) => schema) {
   const sections = name("StorefrontSectionList", storefrontSectionListSchema);
   const landingPage = name("StorefrontLandingPage", storefrontLandingPageSchemaOf(sections));
+  const pageTemplate = name("StorefrontPageTemplate", storefrontPageTemplateSchemaOf(sections));
   const document = z.object({
     version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
     /**
@@ -129,14 +130,16 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
     brand: storefrontThemeBrandSchema,
     blocks: storefrontThemeBlocksSchema,
     /**
-     * Section pages: the homepage and landing pages (`/pages/<slug>`). Product,
-     * collection and search pages take their structure from `blocks`.
+     * Section pages: the homepage and landing pages (`/pages/<slug>`), and the
+     * sections around the product, listing, cart and CMS pages' fixed parts.
+     * A fixed part's own structure is `blocks`.
      */
     pages: z.object({
       home: sections,
       /** What `/` shows: the sections, or one product's page. */
       homeMode: storefrontHomeModeSchema,
       landing: storefrontLandingPagesSchemaOf(landingPage),
+      templates: storefrontPageTemplatesSchemaOf(pageTemplate),
     }).strict(),
   }).strict().superRefine((value, context) => {
     for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value)) {
@@ -150,7 +153,7 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
       context.addIssue({ code: "custom", path: ["tokens", "colors", "muted-foreground"], message: problem });
     }
   });
-  return { document, sections, landingPage };
+  return { document, sections, landingPage, pageTemplate };
 }
 
 /** The complete, strict theme document schema. Writes and reads both use it. */

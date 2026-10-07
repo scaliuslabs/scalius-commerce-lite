@@ -4,7 +4,13 @@
 
 import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "../layouts/Layout.astro";
-import { getPageRenderData, getLayoutData } from "../lib/api";
+import { getPageRenderData, getLayoutData, getTemplateSectionsData } from "../lib/api";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+import TemplateSections from "@/components/homepage/TemplateSections.astro";
+import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { templateSectionData } from "@/lib/template-sections";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import {
@@ -63,7 +69,9 @@ if (!validSlugPattern.test(slug)) {
 }
 
 // === NOW SAFE TO MAKE API CALL ===
-// Parallel fetch: layout + page render data
+// Parallel fetch: layout + page render data, and the page template's own
+// sections around the page's content (one batch).
+const templatePromise = getTemplateSectionsData("page");
 const [layoutData, pageRenderData] = await Promise.all([
   getLayoutData(),
   getPageRenderData(slug),
@@ -137,6 +145,18 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   page.canonicalPath,
 );
 const pagePaths = localizedPaths(page, (handle) => `/${handle}`);
+// The page template's own sections, around the page's content.
+const pageRequestTheme = await resolveRequestTheme(Astro, layoutData);
+const pageTemplate = pageRequestTheme.resolved.pages.templates.page;
+const templateData = await templateSectionData("page", pageRequestTheme, templatePromise);
+const templateProps = {
+  template: pageTemplate,
+  data: templateData,
+  currencySymbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol,
+  currencyCode: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code,
+  preview: pageRequestTheme.preview !== null,
+  languageCode: layoutData?.storefrontCopy?.languageCode,
+};
 const richContentClasses =
   "prose prose-lg mx-auto w-full max-w-3xl dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
 ---
@@ -158,6 +178,8 @@ const richContentClasses =
   noindex={page.noIndex === true}
 >
   <RichTextStyles slot="head" />
+  <TemplateSections {...templateProps} region="before" />
+  <ThemeEditorMark id={templateProps.preview ? THEME_EDITOR_MARKS.pageContent : null}>
   {
     isStandaloneShortcodePage ? (
       <>
@@ -210,6 +232,8 @@ const richContentClasses =
       </div>
     )
   }
+  </ThemeEditorMark>
+  <TemplateSections {...templateProps} region="after" />
   {
     hasProductShortcode && (
       <script>import "../scripts/hydrateProductShortcodes.ts";</script>
