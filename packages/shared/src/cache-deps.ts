@@ -206,6 +206,10 @@ export const cacheDep = {
   translation: (resourceType: string, resourceId: string) => `tr:${resourceType}:${resourceId}`,
   /** Which resource of a type a localized handle names in one locale. */
   localizedSlugs: (resourceType: string, locale: string) => `tr:slugs:${resourceType}:${locale}`,
+  /** One resource's localized handles (a root page's alternates; a presence page declares `tr:<type>:<id>`). */
+  localizedHandles: (resourceType: string, resourceId: string) => `tr:handles:${resourceType}:${resourceId}`,
+  /** Which resource of a type a localized handle in any locale names (a handle lookup). */
+  localizedSlugSpace: (resourceType: string) => `tr:slugs:${resourceType}`,
   /** The locale and market of each presence, the default locale and the published languages. */
   translationLocales: () => "tr:locales",
   table: (table: string) => `t:${table}`,
@@ -887,10 +891,12 @@ const CACHE_DEP_TABLE_RULES = {
   localized_slugs: {
     kinds: ["tr"],
     noise: ["updated_at"],
-    note: "A handle advances its resource's `tr:<type>:<id>` (its pages, cards and alternates) and the handle space of its type and locale (`tr:slugs:<type>:<locale>`), which a lookup that found no resource declares.",
+    note: "A handle advances its resource's `tr:<type>:<id>` (its presence pages and cards) and `tr:handles:<type>:<id>` (a root page's alternates), the handle space of its type and locale (`tr:slugs:<type>:<locale>`, a sitemap's handles) and of its type (`tr:slugs:<type>`, which a handle lookup declares).",
     rules: everyChange([
       { prefix: "tr:", columns: ["resource_type", "resource_id"] },
+      { prefix: "tr:handles:", columns: ["resource_type", "resource_id"] },
       { prefix: "tr:slugs:", columns: ["resource_type", "locale"] },
+      { prefix: "tr:slugs:", columns: ["resource_type"] },
     ]),
   },
 

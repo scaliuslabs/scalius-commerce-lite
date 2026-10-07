@@ -140,6 +140,14 @@ export const deps = {
     declareEach((id) => cacheDep.translation(resourceType, id), resourceIds),
   /** `tr:slugs:<type>:<locale>`: which resource a localized handle names (a lookup that found none). */
   localizedSlugs: (resourceType: string, locale: string): void => declare(cacheDep.localizedSlugs(resourceType, locale)),
+  /** `tr:handles:<type>:<id>`: one resource's localized handles (a root page's alternates). */
+  localizedHandles: (resourceType: string, resourceId: Id): void =>
+    declareOne((id) => cacheDep.localizedHandles(resourceType, id), resourceId),
+  /** The handles of a page's resource: at a presence its whole translation, at the root its handles alone. */
+  resourceHandles: (translated: boolean, resourceType: string, resourceId: Id): void =>
+    declareOne((id) => translated ? cacheDep.translation(resourceType, id) : cacheDep.localizedHandles(resourceType, id), resourceId),
+  /** `tr:slugs:<type>`: which resource a localized handle in any locale names (every handle lookup). */
+  localizedSlugSpace: (resourceType: string): void => declare(cacheDep.localizedSlugSpace(resourceType)),
   /** `tr:locales`: the locale and market of each presence, the default locale and the published languages. */
   translationLocales: (): void => declare(cacheDep.translationLocales()),
 
