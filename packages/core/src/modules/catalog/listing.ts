@@ -49,6 +49,7 @@ import {
 import {
     buyerState,
     buyerStateCardSku,
+    buyerStateCardSkuJoin,
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
@@ -359,7 +360,7 @@ async function readStorefrontCatalogResults(
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
-        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
         .where(and(...conditions,

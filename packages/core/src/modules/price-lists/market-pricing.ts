@@ -470,6 +470,10 @@ export async function priceProductCards<T extends BuyerPricingMinor & { id: stri
     rows: readonly T[],
 ): Promise<T[]> {
     if (!context || isNeutralMarketPricing(context) || rows.length === 0) return [...rows];
+    // A market price reads facts a root card may not show (the pool's highest
+    // price, each SKU's own price, discount and availability): every one is a
+    // fact of `p:<product>`.
+    deps.products(rows.map((row) => row.id));
     if (!context.listed) {
         return rows.map((row) => {
             const resolved = resolvePrice({

@@ -47,6 +47,7 @@ import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from
 import {
     buyerState,
     buyerStateCardSku,
+    buyerStateCardSkuJoin,
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
@@ -467,7 +468,7 @@ async function loadRecommendationCards(
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
-        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         .leftJoin(reviewStats, reviewStatsJoin(products.id))
         .where(sql`${buyerState.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`)
         .all() as RecommendationCardRow[];
@@ -553,7 +554,7 @@ async function readStoredRecommendations(
         .from(productRecommendations)
         .leftJoin(buyerState, eq(buyerState.productId, productRecommendations.recommendedProductId))
         .leftJoin(products, eq(products.id, productRecommendations.recommendedProductId))
-        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         .leftJoin(reviewStats, reviewStatsJoin(productRecommendations.recommendedProductId))
         .where(eq(productRecommendations.productId, productId))
         .orderBy(asc(productRecommendations.position))

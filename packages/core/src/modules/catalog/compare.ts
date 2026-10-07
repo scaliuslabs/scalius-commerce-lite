@@ -24,6 +24,7 @@ import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import {
     buyerState,
     buyerStateCardSku,
+    buyerStateCardSkuJoin,
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
@@ -218,7 +219,7 @@ export async function getStorefrontProductComparison(
             })
             .from(buyerState)
             .innerJoin(products, eq(products.id, buyerState.productId))
-            .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+            .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
             .leftJoin(brands, and(
                 eq(brands.id, buyerState.brandId),
                 sql`${brands.status} = 'published'`,
