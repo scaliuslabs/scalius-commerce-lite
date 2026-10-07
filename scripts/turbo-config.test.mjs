@@ -53,7 +53,12 @@ describe("turbo cache inputs", () => {
     expect(turboConfig.tasks["@scalius/api#build"].dependsOn).toContain("@scalius/admin-v2#build");
   });
 
-  it("runs workspace typechecks sequentially on constrained release hosts", () => {
-    expect(rootPackage.scripts.typecheck).toContain("--concurrency=1");
+  it("typechecks once, with a bounded TypeScript build, on constrained release hosts", () => {
+    // One `tsc --build` over every project (two builders, two checkers), then
+    // astro check: never several workspace typechecks at once.
+    expect(rootPackage.scripts.typecheck).toBe("node scripts/typecheck.mjs");
+    const script = readFileSync(new URL("./typecheck.mjs", import.meta.url), "utf8");
+    expect(script).toContain('"--builders", "2", "--checkers", "2"');
+    expect(script).not.toContain("turbo");
   });
 });
