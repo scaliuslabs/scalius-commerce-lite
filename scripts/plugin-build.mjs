@@ -46,22 +46,32 @@ export function readLockfile(path = LOCKFILE) {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
     if (parsed?.version !== 1 || !Array.isArray(parsed.plugins)) throw new Error("Unsupported lockfile version.");
-    return { version: 1, sandbox: parsed.sandbox === true, plugins: parsed.plugins };
+    return { version: 1, sandbox: parsed.sandbox === true, plugins: parsed.plugins, trustedKeys: readTrustedKeys(parsed.trustedKeys) };
   } catch (error) {
-    if (error?.code === "ENOENT") return { version: 1, sandbox: false, plugins: [] };
+    if (error?.code === "ENOENT") return { version: 1, sandbox: false, plugins: [], trustedKeys: [] };
     throw error;
   }
+}
+
+/** Developer keys the operator trusts for `pnpm plugin add --registry` (`{ id, name, publicKey }`); malformed entries are dropped. */
+function readTrustedKeys(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((key) => key && typeof key.id === "string" && typeof key.name === "string" && typeof key.publicKey === "string")
+    .map(({ id, name, publicKey }) => ({ id, name, publicKey }));
 }
 
 export function renderLockfile(lockfile) {
   const plugins = [...lockfile.plugins]
     .map(({ id, version, source, sha256: digest }) => ({ id, version, source, sha256: digest }))
     .sort((left, right) => left.id.localeCompare(right.id));
+  const trustedKeys = readTrustedKeys(lockfile.trustedKeys).sort((left, right) => left.id.localeCompare(right.id));
   return `${JSON.stringify({
     $comment: "Plugins compiled into the API Worker (bundled loader). Maintained by `pnpm plugin`; deploy after changing it. `sandbox: true` deploys with the Dynamic Worker loader (Workers Paid).",
     version: 1,
     sandbox: lockfile.sandbox === true,
     plugins,
+    ...(trustedKeys.length > 0 ? { trustedKeys } : {}),
   }, null, 2)}\n`;
 }
 

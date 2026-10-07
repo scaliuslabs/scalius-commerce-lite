@@ -7,7 +7,13 @@
 // (catalog.gen.ts) and the sandbox wrapper in step.
 //
 //   pnpm plugin create <vendor.name> [--dir plugins/<name>]   scaffold a plugin package
+//   pnpm plugin validate [path]                                check a plugin the way a store loads it
+//   pnpm plugin pack <path> [--key <pem>] [--developer <name>] pack, sign and zip a plugin for upload or a registry
+//   pnpm plugin keygen <out-dir>                               make an Ed25519 signing key
+//   pnpm plugin index <dist-dir> ... --out <dir> --name <name> [--base-url <url>]   build a static registry
 //   pnpm plugin add <path | package>                           pack, check and bundle a plugin
+//   pnpm plugin add <vendor.name> --registry <index url> [--version <v>]   install a signed release from a registry
+//   pnpm plugin trust <name> <public key>                      trust a developer's signing key
 //   pnpm plugin remove <plugin id>                             stop bundling a plugin
 //   pnpm plugin list                                           what is bundled, and whether it is current
 //   pnpm plugin build [plugin id ...]                          repack bundled plugins, regenerate the wrapper
@@ -36,8 +42,21 @@ import {
   root,
   writeIfChanged,
 } from "./plugin-build.mjs";
+import {
+  buildRegistry,
+  generateSigningKey,
+  installFromRegistry,
+  packSigned,
+  parseCommandArgs,
+  trustedKeysWith,
+  userPath,
+} from "./plugin-registry.mjs";
+import { scaffoldFiles } from "./plugin-scaffold.mjs";
+import { runValidate } from "./plugin-validate.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { resolvePlan, withPlanProfile } from "./plan.mjs";
+
+export { scaffoldFiles };
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const API_DIR = join(root, "apps/api");
@@ -160,64 +179,6 @@ function setSandbox(value) {
     : "Sandbox off: only bundled plugins run.");
 }
 
-export function scaffoldFiles(id, name) {
-  const title = name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-  return {
-    "package.json": `${JSON.stringify({
-      name: `@scalius/plugin-${name}`,
-      version: "0.1.0",
-      private: true,
-      type: "module",
-      license: "AGPL-3.0-only",
-      exports: { ".": "./src/index.ts" },
-      scripts: { test: "vitest run", typecheck: "../../node_modules/typescript7/bin/tsc --build" },
-      dependencies: { "@scalius/plugin-sdk": "workspace:*" },
-      devDependencies: { "@scalius/tsconfig": "workspace:*", vitest: "^5.0.3" },
-    }, null, 2)}\n`,
-    "tsconfig.json": `${JSON.stringify({
-      extends: "@scalius/tsconfig/base.json",
-      compilerOptions: {
-        types: [],
-        lib: ["ES2022", "DOM"],
-        paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] },
-        noEmit: true,
-        tsBuildInfoFile: `../../node_modules/.cache/tsbuild/plugin-${name}.tsbuildinfo`,
-      },
-      include: ["src/**/*"],
-      references: [{ path: "../../packages/shared" }, { path: "../../packages/plugin-sdk" }],
-    }, null, 2)}\n`,
-    "src/index.ts": `import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
-
-export const manifest = {
-  id: ${JSON.stringify(id)},
-  name: ${JSON.stringify(title)},
-  version: "0.1.0",
-  apiVersion: PLUGIN_API_VERSION,
-  description: "Describe what ${title} does for the merchant.",
-  author: { name: ${JSON.stringify(id.split(".")[0])} },
-  permissions: ["orders.view"],
-  events: ["order.created"],
-  routes: { admin: [], public: [{ name: "status", methods: ["GET"] }], webhooks: [] },
-  settings: [{ key: "enabled_message", label: "Message", type: "text", default: "Hello" }],
-} satisfies PluginManifestInput;
-
-export default definePlugin({
-  manifest,
-  events: {
-    "order.created": async (event, ctx) => {
-      ctx.log.info("Order created", { orderId: event.resource.id });
-    },
-  },
-  routes: {
-    public: {
-      status: async (_request, ctx) => ({ body: { message: String(ctx.settings.enabled_message ?? "") } }),
-    },
-  },
-});
-`,
-  };
-}
-
 function create(id, args) {
   if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> (lowercase, e.g. acme.loyalty)");
   const dirIndex = args.indexOf("--dir");
@@ -229,7 +190,82 @@ function create(id, args) {
     mkdirSync(resolve(path, ".."), { recursive: true });
     writeFileSync(path, contents);
   }
-  console.log(`Created ${relative(root, directory)}. Run pnpm install, then pnpm plugin add ${relative(root, directory)}.`);
+  const where = relative(root, directory);
+  console.log(`Created ${where}. Run pnpm install, then:
+  pnpm --dir ${where} test         run its tests
+  pnpm plugin validate ${where}    check it the way a store loads it
+  pnpm plugin add ${where}         bundle it into this store`);
+}
+
+async function validate(target) {
+  await runValidate(userPath(target ?? "."));
+}
+
+async function pack(target, flags) {
+  if (!target) throw new Error("Usage: pnpm plugin pack <path> [--key <pem>] [--developer <name>]");
+  const key = flags.get("--key");
+  const packed = await packSigned(userPath(target), {
+    key: typeof key === "string" ? userPath(key) : null,
+    developer: typeof flags.get("--developer") === "string" ? flags.get("--developer") : null,
+  });
+  console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${relative(process.cwd(), packed.dist) || "dist"}`);
+  console.log(packed.signature
+    ? `Signed by key ${packed.signature.keyId} (${packed.signature.developer}).`
+    : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <pem> (make a key with: pnpm plugin keygen <folder>).");
+  console.log(`Upload package: ${relative(process.cwd(), packed.zipPath)}`);
+}
+
+async function keygen(outDir) {
+  if (!outDir) throw new Error("Usage: pnpm plugin keygen <out-dir>");
+  const directory = userPath(outDir);
+  const key = await generateSigningKey(directory);
+  console.log(`Private key: ${key.keyFile}`);
+  console.log(`Public key:  ${key.publicKey}`);
+  console.log(`Key id:      ${key.keyId}`);
+  console.log("\nKeep the private key out of this repository and out of version control: anyone who has it can publish apps as you.");
+  if (!relative(root, directory).startsWith("..")) {
+    console.log("! This folder is inside the repository. Move signing-key.pem somewhere private before you commit anything.");
+  }
+  console.log("Share the public key: stores add it with `pnpm plugin trust <your name> <public key>`.");
+}
+
+async function index(distDirs, flags) {
+  const out = flags.get("--out");
+  if (typeof out !== "string") throw new Error("Usage: pnpm plugin index <dist-dir> [<dist-dir> ...] --out <registry-dir> --name <registry name> [--base-url <url>]");
+  const { index: written, added } = await buildRegistry(distDirs.map((dir) => userPath(dir)), {
+    out: userPath(out),
+    name: typeof flags.get("--name") === "string" ? flags.get("--name") : null,
+  });
+  for (const entry of added) console.log(`Listed ${entry.id}@${entry.version} (${entry.sha256.slice(0, 12)}, ${entry.size} bytes)`);
+  console.log(`Wrote ${join(relative(process.cwd(), userPath(out)) || ".", "index.json")}: ${written.apps.length} release${written.apps.length === 1 ? "" : "s"} in "${written.name}".`);
+  const baseUrl = flags.get("--base-url");
+  if (typeof baseUrl === "string") {
+    const indexUrl = `${baseUrl.replace(/\/+$/, "")}/index.json`;
+    console.log(`Serve the folder over https at ${baseUrl}. Stores add ${indexUrl}; on Workers Free: pnpm plugin add <vendor.name> --registry ${indexUrl}`);
+  }
+}
+
+async function addFromRegistry(id, flags) {
+  const indexUrl = flags.get("--registry");
+  if (!id || typeof indexUrl !== "string") throw new Error("Usage: pnpm plugin add <vendor.name> --registry <index url> [--version <v>]");
+  if (!PLUGIN_ID.test(id)) throw new Error(`${id} is not a plugin id (vendor.name, lowercase).`);
+  const installed = await installFromRegistry({
+    id,
+    indexUrl,
+    version: typeof flags.get("--version") === "string" ? flags.get("--version") : null,
+    pluginsDir: join(root, "plugins"),
+    lockfilePath: LOCKFILE,
+  });
+  console.log(`Downloaded ${installed.id}@${installed.version} from "${installed.registryName}"; signature by ${installed.signer.name} (key ${installed.signer.id}) verified.`);
+  await add(relative(root, installed.directory));
+}
+
+async function trust(name, publicKey) {
+  if (!name || !publicKey) throw new Error("Usage: pnpm plugin trust <name> <base64 public key>");
+  const lockfile = readLockfile();
+  const { key, trustedKeys } = await trustedKeysWith(lockfile, name, publicKey);
+  writeIfChanged(LOCKFILE, renderLockfile({ ...lockfile, trustedKeys }));
+  console.log(`Trusting ${key.name} (key ${key.id}) for \`pnpm plugin add --registry\`. Apps they sign can now be installed.`);
 }
 
 async function main(argv) {
@@ -238,8 +274,26 @@ async function main(argv) {
   switch (command) {
     case "create":
       return create(positional[0], rest);
-    case "add":
-      return add(positional[0]);
+    case "validate":
+      return validate(parseCommandArgs(rest).positional[0]);
+    case "pack": {
+      const parsed = parseCommandArgs(rest);
+      return pack(parsed.positional[0], parsed.flags);
+    }
+    case "keygen":
+      return keygen(parseCommandArgs(rest).positional[0]);
+    case "index": {
+      const parsed = parseCommandArgs(rest);
+      return index(parsed.positional, parsed.flags);
+    }
+    case "trust": {
+      const parsed = parseCommandArgs(rest);
+      return trust(parsed.positional[0], parsed.positional[1]);
+    }
+    case "add": {
+      const parsed = parseCommandArgs(rest);
+      return parsed.flags.has("--registry") ? addFromRegistry(parsed.positional[0], parsed.flags) : add(parsed.positional[0]);
+    }
     case "remove":
       return remove(positional[0]);
     case "list":

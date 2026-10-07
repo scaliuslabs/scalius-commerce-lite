@@ -27,6 +27,8 @@ export interface PluginLockfile {
   version: 1;
   sandbox: boolean;
   plugins: Array<{ id: string; version: string; source: string; sha256: string }>;
+  /** Developer keys `pnpm plugin add --registry` accepts. */
+  trustedKeys?: Array<{ id: string; name: string; publicKey: string }>;
 }
 
 export declare const root: string;
