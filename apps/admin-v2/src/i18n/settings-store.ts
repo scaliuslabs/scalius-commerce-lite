@@ -41,7 +41,7 @@ export const storeSettingsMessages = defineMessages({
     socialRow: "Social profiles",
     socialHelp: "Shown in your store's header, footer and phone menu, in this order.",
     noSocial: "No social profiles",
-    socialCount: "{count} profiles",
+    socialCount: "{count, plural, one {# profile} other {# profiles}}",
     socialProfile: "Profile {number}",
     socialLabel: "Name",
     socialLabelPlaceholder: "Facebook",

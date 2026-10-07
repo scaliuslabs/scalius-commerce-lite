@@ -5,9 +5,9 @@ export const customerBulkMessages = defineMessages({
   en: {
     addTags: "Add tags",
     removeTags: "Remove tags",
-    addTagsTitle: "Add tags to {count} customers",
+    addTagsTitle: "Add tags to {count, plural, one {# customer} other {# customers}}",
     addTagsTitleOne: "Add tags to 1 customer",
-    removeTagsTitle: "Remove tags from {count} customers",
+    removeTagsTitle: "Remove tags from {count, plural, one {# customer} other {# customers}}",
     removeTagsTitleOne: "Remove tags from 1 customer",
     bulkTagsHelp: "Up to {count} tags at a time.",
     tagsAdded: "Tags added",
@@ -25,7 +25,7 @@ export const customerBulkMessages = defineMessages({
     exportCapped: "Only the first {count} customers are exported.",
     exportCustomers: "Export customers",
     exported: "Customers exported",
-    exportedRows: "{count} customers in the file",
+    exportedRows: "{count, plural, one {# customer} other {# customers}} in the file",
     exportFailed: "Couldn't export. Try again.",
   },
   bn: {

@@ -20,8 +20,8 @@ export const digitalMessages = defineMessages({
     downloadLimit: "{count} downloads per purchase",
     unlimitedDownloads: "Unlimited downloads",
     accessForever: "Never expires",
-    accessDays: "Access for {count} days",
-    delivered: "Delivered {count} times",
+    accessDays: "Access for {count, plural, one {# day} other {# days}}",
+    delivered: "Delivered {count, plural, one {# time} other {# times}}",
     actionsFor: "Actions for {name}",
     edit: "Edit",
     replaceFile: "Replace file",
@@ -71,7 +71,7 @@ export const digitalMessages = defineMessages({
     stockTrackedHelp: "Each sale uses one licence key: the quantity is the keys you import.",
     stockUntrackedHelp: "Buyers download your files: there's no quantity to keep.",
     stockPoolKeepsTracking: "Each sale uses one licence key, so tracking stays on while this product has a key pool.",
-    stockCellKeys: "{count} keys",
+    stockCellKeys: "{count, plural, one {# key} other {# keys}}",
     stockCellUnlimited: "Unlimited",
     stockCellNotReady: "Not ready",
 
@@ -112,7 +112,7 @@ export const digitalMessages = defineMessages({
     // Order page
     orderTitle: "Digital · Delivered automatically",
     downloadsOf: "{count} of {limit} downloads",
-    downloadsCount: "{count} downloads",
+    downloadsCount: "{count, plural, one {# download} other {# downloads}}",
     expires: "Expires {date}",
     expired: "Expired {date}",
     revoked: "Revoked",

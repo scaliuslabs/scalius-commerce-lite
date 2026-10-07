@@ -30,7 +30,7 @@ export const appUiMessages = defineMessages({
     emptyTitle: "Nothing here yet",
     previousPage: "Previous page",
     nextPage: "Next page",
-    total: "{count} results",
+    total: "{count, plural, one {# result} other {# results}}",
     opensInNewTab: "(opens in a new tab)",
     choose: "Choose…",
     fixFields: "Check the marked fields.",

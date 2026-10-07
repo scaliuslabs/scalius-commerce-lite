@@ -41,7 +41,7 @@ export const advancedSettingsMessages = defineMessages({
     setupTokenHelp: "Stops strangers from claiming a new install.",
     connectedRow: "Connected sites",
     connectedNone: "None",
-    connectedCount: "{count} sites",
+    connectedCount: "{count, plural, one {# site} other {# sites}}",
     connectedDescription: "For developers: other sites of yours that share customer sign-in or call your store.",
     cookieDomain: "Shared sign-in domain",
     cookieDomainHelp: "e.g. yourshop.com. Leave empty if unsure.",

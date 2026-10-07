@@ -24,6 +24,25 @@ describe("dashboard messages", () => {
     expect(formatNumber(1234567)).toBe("১২,৩৪,৫৬৭");
   });
 
+  it("picks the plural branch of the number in the dashboard language", () => {
+    const plurals = defineMessages({
+      en: {
+        variants: "{count, plural, one {# variant} other {# variants}}",
+        stock: "{count} in stock for {variants, plural, =0 {no variants} one {# variant} other {# variants}}",
+        verb: "{count, plural, one {# order is} other {# orders are}} held",
+      },
+      bn: { variants: "{count}টি ভ্যারিয়েন্ট", stock: "{count}টি স্টকে", verb: "{count}টি আটকে আছে" },
+    });
+    expect(translate(plurals, "variants", { count: 1 })).toBe("1 variant");
+    expect(translate(plurals, "variants", { count: 0 })).toBe("0 variants");
+    expect(translate(plurals, "variants", { count: 1200 })).toBe("1,200 variants");
+    expect(translate(plurals, "stock", { count: 5, variants: 0 })).toBe("5 in stock for no variants");
+    expect(translate(plurals, "stock", { count: 5, variants: 1 })).toBe("5 in stock for 1 variant");
+    expect(translate(plurals, "verb", { count: 2 })).toBe("2 orders are held");
+    setLocale("bn");
+    expect(translate(plurals, "variants", { count: 1 })).toBe("১টি ভ্যারিয়েন্ট");
+  });
+
   it("writes numbers as the store's country does (CLDR), Bangla digits unchanged", () => {
     setStoreRegion("US");
     expect(formatNumber(1234567.5)).toBe("1,234,567.5");

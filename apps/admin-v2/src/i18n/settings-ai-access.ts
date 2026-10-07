@@ -37,7 +37,7 @@ export const aiAccessMessages = defineMessages({
     resource_dashboard: "Your dashboard",
     resource_storefront: "Your online store",
     expiresAfter: "Expires after",
-    days: "{count} days",
+    days: "{count, plural, one {# day} other {# days}}",
     oneYear: "1 year",
 
     createKey: "Create access key",

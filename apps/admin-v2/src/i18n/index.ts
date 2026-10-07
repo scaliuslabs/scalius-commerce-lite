@@ -18,6 +18,7 @@
  * (`formatNumber`, `formatDateTime`, `dashboardNumberLocale`).
  */
 import { useCallback, useSyncExternalStore } from "react";
+import { pluralCategory } from "@scalius/shared/locale-words";
 import {
   dateLocale,
   formatDateTime as formatDateTimeIn,
@@ -92,9 +93,59 @@ export function defineMessages<K extends string>(catalog: MessageCatalog<K>): Me
   return catalog;
 }
 
+/**
+ * `{count, plural, one {# variant} other {# variants}}`: the branch is the
+ * language's plural category of the number (CLDR, `pluralCategory`); `=0 {…}`
+ * matches that number exactly, and `#` is the number. Branches may hold
+ * `{name}` variables. Bangla needs no branches ("{count}টি ভ্যারিয়েন্ট").
+ */
+function expandPlurals(template: string, vars: Vars): string {
+  let out = "";
+  let index = 0;
+  while (index < template.length) {
+    const open = template.indexOf("{", index);
+    if (open === -1) return out + template.slice(index);
+    out += template.slice(index, open);
+    const head = /^\{(\w+),\s*plural,\s*/.exec(template.slice(open));
+    const end = head ? closing(template, open) : -1;
+    const count = head ? vars[head[1]!] : undefined;
+    if (!head || end === -1 || typeof count !== "number") {
+      out += "{";
+      index = open + 1;
+      continue;
+    }
+    const branches = new Map<string, string>();
+    let cursor = open + head[0].length;
+    while (cursor < end) {
+      const name = /^\s*(=?\w+)\s*\{/.exec(template.slice(cursor, end));
+      if (!name) break;
+      const start = cursor + name[0].length - 1;
+      const stop = closing(template, start);
+      if (stop === -1 || stop > end) break;
+      branches.set(name[1]!, template.slice(start + 1, stop));
+      cursor = stop + 1;
+    }
+    const chosen = branches.get(`=${count}`) ?? branches.get(pluralCategory(count, current)) ?? branches.get("other") ?? "";
+    out += expandPlurals(chosen.replaceAll("#", `{${head[1]}}`), vars);
+    index = end + 1;
+  }
+  return out;
+}
+
+/** The index of the `}` that closes the `{` at `open`, or -1. */
+function closing(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === "{") depth += 1;
+    else if (text[i] === "}" && (depth -= 1) === 0) return i;
+  }
+  return -1;
+}
+
 function interpolate(template: string, vars?: Vars): string {
   if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+  const expanded = template.includes(", plural,") ? expandPlurals(template, vars) : template;
+  return expanded.replace(/\{(\w+)\}/g, (match, name: string) =>
     name in vars ? formatNumberForLocale(vars[name]!) : match,
   );
 }
