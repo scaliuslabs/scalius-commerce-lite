@@ -855,6 +855,13 @@
       "when": 1791370000000,
       "tag": "0121_translations",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "6",
+      "when": 1791380000000,
+      "tag": "0122_sales_channels",
+      "breakpoints": true
     }
   ]
 }

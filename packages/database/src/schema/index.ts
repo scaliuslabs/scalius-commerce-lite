@@ -38,3 +38,4 @@ export * from "./custom-fields";
 export * from "./plugins";
 export * from "./price-lists";
 export * from "./translations";
+export * from "./sales-channels";

@@ -369,7 +369,7 @@ describe("complete desired-state runtime", () => {
         isActive: true, discountType: "percentage", discountPercentage: 10, discountAmount: null,
         freeDelivery: true, metaTitle: "Demo title", metaDescription: "Demo description",
         canonicalPath: null, noIndex: false, excludeFromSitemap: false,
-        excludeFromProductFeed: false, productCondition: "new",
+        productCondition: "new",
         media: [{ id: "pmed_1", mediaId: "media_1", altText: "Demo", isPrimary: true }],
         attributes: [{ attributeId: "attr_brand", value: "Brand" }],
         additionalInfo: [{ id: "section_1", title: "Care", content: "Carefully", sortOrder: 0 }],

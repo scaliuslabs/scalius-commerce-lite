@@ -417,10 +417,16 @@ export async function seedLiveCheckoutTarget(
       {
         sql: `INSERT INTO products
                 (id, name, description, price_minor, slug, no_index,
-                 exclude_from_sitemap, exclude_from_product_feed, is_active)
+                 exclude_from_sitemap, is_active)
               VALUES (?, 'Disposable Atomic Spread Fixture',
-                      'Synthetic isolated load-test fixture.', 199900, ?, 1, 1, 1, 1)`,
+                      'Synthetic isolated load-test fixture.', 199900, ?, 1, 1, 1)`,
         args: [fixture.spreadProductId, fixture.spreadSlug],
+      },
+      {
+        // Off the catalogue feeds and AI agents (sales channels, 0122).
+        sql: `UPDATE product_channel_publications SET unpublished_at = unixepoch()
+              WHERE product_id = ? AND channel_id <> 'sc_online_store' AND unpublished_at IS NULL`,
+        args: [fixture.spreadProductId],
       },
       {
         sql: `INSERT INTO product_variants
@@ -437,10 +443,16 @@ export async function seedLiveCheckoutTarget(
       {
         sql: `INSERT INTO products
                 (id, name, description, price_minor, slug, no_index,
-                 exclude_from_sitemap, exclude_from_product_feed, is_active)
+                 exclude_from_sitemap, is_active)
               VALUES (?, 'Disposable Atomic Hot Fixture',
-                      'Synthetic isolated load-test fixture.', 249900, ?, 1, 1, 1, 1)`,
+                      'Synthetic isolated load-test fixture.', 249900, ?, 1, 1, 1)`,
         args: [fixture.hotProductId, fixture.hotSlug],
+      },
+      {
+        // Off the catalogue feeds and AI agents (sales channels, 0122).
+        sql: `UPDATE product_channel_publications SET unpublished_at = unixepoch()
+              WHERE product_id = ? AND channel_id <> 'sc_online_store' AND unpublished_at IS NULL`,
+        args: [fixture.hotProductId],
       },
       {
         sql: `INSERT INTO product_variants

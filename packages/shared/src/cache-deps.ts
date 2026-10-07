@@ -395,6 +395,18 @@ const TIMESTAMPS = ["created_at", "updated_at"] as const;
 /** A translation of a resource with its own key (every type but a product's SKUs, options and values). */
 const TRANSLATION_OWNS_ITS_KEY = "SELECT 1 WHERE R.resource_type NOT IN ('product_variant', 'product_option', 'product_option_value')";
 
+/**
+ * A merchant unlinked some location from some channel (MARKETS-DESIGN D6): a
+ * channel's sellable stock is then the on-hand of its linked locations, which
+ * a stock or reservation change can move inside a SKU's raw availability
+ * band. A new channel links every location and a new location every channel
+ * (triggers), so a store that never unlinked one never matches.
+ */
+const CHANNEL_STOCK_PARTIAL = "SELECT 1 FROM sales_channels AS partial_channel, inventory_locations AS partial_location WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS partial_link WHERE partial_link.channel_id = partial_channel.id AND partial_link.location_id = partial_location.id)";
+
+/** The default online store's id (`ONLINE_STORE_CHANNEL_ID` in `@scalius/shared/sales-channels`). */
+const ONLINE_STORE_CHANNEL = "sc_online_store";
+
 const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_created_at"] as const;
 const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
 
@@ -462,6 +474,8 @@ const CACHE_DEP_TABLE_RULES = {
       },
       {
         name: "seo", event: "update", image: "new",
+        // exclude_from_product_feed: dropped in 0122 (the feed channels'
+        // publications replace it); deployed 0100's trigger still names it.
         changed: ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
         keys: [{ dep: "lm:seo" }],
       },
@@ -518,6 +532,12 @@ const CACHE_DEP_TABLE_RULES = {
       { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("product_id")] },
       { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id", "fulfillment_kind"], keys: [SHAPE] },
       { name: "band", event: "update", image: "new", bandChanged: true, keys: [p("product_id")] },
+      // A channel's band reads the on-hand of its linked locations; only once
+      // a merchant unlinked one can raw stock inside its band move it (0122).
+      {
+        name: "chstock", event: "update", image: "new", changed: ["stock", "reserved_stock"],
+        where: { exists: CHANNEL_STOCK_PARTIAL }, keys: [p("product_id")],
+      },
       { name: "sale_ins", event: "insert", image: "new", where: SALE_SKU, keys: [SALE] },
       { name: "sale_del", event: "delete", image: "old", where: SALE_SKU, keys: [SALE] },
       {
@@ -892,6 +912,31 @@ const CACHE_DEP_TABLE_RULES = {
       { prefix: "tr:", columns: ["resource_type", "resource_id"] },
       { prefix: "tr:slugs:", columns: ["resource_type", "locale"] },
     ]),
+  },
+
+  // --- Sales channels (docs/MARKETS-DESIGN.md D6) -----------------------------------
+  sales_channels: {
+    kinds: ["lm"],
+    noise: ["handle", "name", "position", "created_at", "updated_at"],
+    note: "Catalogue feeds and the UCP catalogue read their channel's status (an inactive channel lists nothing): they declare `lm:seo`. The online store is always active. Names and handles are dashboard-only.",
+    rules: everyChange([{ dep: "lm:seo" }]),
+  },
+  product_channel_publications: {
+    kinds: ["p", "lm", "srch"],
+    noise: ["published_at"],
+    note: "A product is published to a channel while its row has no unpublished_at. Any channel: the product's own keys and the discovery key (feeds and UCP read their channel's rows). The online store's rows also decide public membership for live readers (site search, collection lists, a product page's 404), so they advance `lm:all` and `srch`; listings and sitemaps read the buyer-state projection, refreshed in the same batch.",
+    rules: [
+      ...everyChange([p("product_id"), { dep: "lm:seo" }]),
+      ...everyChange([{ dep: "lm:all" }, { dep: "srch" }]).map((rule): CacheDepRule => ({
+        ...rule, name: `store_${rule.name}`, where: { equals: { channel_id: ONLINE_STORE_CHANNEL } },
+      })),
+    ],
+  },
+  sales_channel_locations: {
+    kinds: ["store"],
+    noise: ["created_at"],
+    note: "Which locations' on-hand a channel sells: linking or unlinking one can change the availability of every product a channel shows, so it advances `store` (a rare merchant setting).",
+    rules: everyChange([{ dep: "store" }]),
   },
 
   orders: {

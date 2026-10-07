@@ -28,6 +28,7 @@ export const EVENT_TOPICS = [
   "product.created",
   "product.updated",
   "product.deleted",
+  "product.publication_changed",
   "inventory.level_changed",
   "inventory.purchase_order_updated",
   "inventory.transfer_updated",
@@ -61,6 +62,7 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "product.created": "product",
   "product.updated": "product",
   "product.deleted": "product",
+  "product.publication_changed": "product",
   "inventory.level_changed": "variant",
   "inventory.purchase_order_updated": "purchase_order",
   "inventory.transfer_updated": "inventory_transfer",
@@ -132,6 +134,17 @@ export const EVENT_FACT_SCHEMAS = {
     productId: id,
     /** `trashed` (restorable) or `permanent` (the row is gone). */
     deletion: z.enum(["trashed", "permanent"]),
+  }),
+  /**
+   * A product was published to or unpublished from a sales channel (0122,
+   * MARKETS-DESIGN D6): a sales-channel app keeps its listings with it
+   * (Shopify's product listings). A new product is published to every
+   * channel; deleting a product unpublishes it from each.
+   */
+  "product.publication_changed": z.object({
+    productId: id,
+    channelId: id,
+    state: z.enum(["published", "unpublished"]),
   }),
   "inventory.level_changed": z.object({
     variantId: id,

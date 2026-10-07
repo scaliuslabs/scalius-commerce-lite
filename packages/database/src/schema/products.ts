@@ -47,7 +47,6 @@ export const products = sqliteTable(
         canonicalPath: text("canonical_path"),
         noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
         excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
-        excludeFromProductFeed: integer("exclude_from_product_feed", { mode: "boolean" }).notNull().default(false),
         productCondition: text("product_condition", { enum: ["new", "refurbished", "used"] }),
         aggregateRevision: integer("aggregate_revision").notNull().default(1),
         createdAt: integer("created_at", { mode: "timestamp" })

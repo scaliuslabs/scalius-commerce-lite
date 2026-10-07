@@ -168,7 +168,6 @@ export function buildProductFixturePayload({
     canonicalPath: null,
     noIndex: true,
     excludeFromSitemap: true,
-    excludeFromProductFeed: true,
     productCondition: "new",
     variantOption1Label: "Size",
     variantOption2Label: "Color",

@@ -224,7 +224,8 @@ describe(`${MIGRATION} triggers (D1)`, () => {
 
   it("products: created, updated by revision or tax class, trashed, restored and permanently deleted", () => {
     insertProduct(sqlite, "p1");
-    expect(topics(sqlite)).toEqual(["product.created"]);
+    // A new product is published to every sales channel (0122).
+    expect(topics(sqlite).filter((topic) => topic !== "product.publication_changed")).toEqual(["product.created"]);
 
     clear(sqlite);
     sqlite.exec("UPDATE products SET name = 'Draft name' WHERE id = 'p1'");
@@ -247,8 +248,50 @@ describe(`${MIGRATION} triggers (D1)`, () => {
     clear(sqlite);
     sqlite.exec("DELETE FROM product_variants WHERE product_id = 'p1'");
     sqlite.exec("DELETE FROM products WHERE id = 'p1'");
-    expect(events(sqlite).map((row) => [row.topic, row.resource_id, JSON.parse(row.data).deletion])).toEqual([
+    expect(events(sqlite).filter((row) => row.topic !== "product.publication_changed")
+      .map((row) => [row.topic, row.resource_id, JSON.parse(row.data).deletion])).toEqual([
       ["product.deleted", "p1", "permanent"],
+    ]);
+    expectReadableFacts();
+  });
+
+  it("product publications: published to every channel, unpublished, republished and removed with the product", () => {
+    insertProduct(sqlite, "p9");
+    const publications = () => events(sqlite)
+      .filter((row) => row.topic === "product.publication_changed")
+      .map((row) => {
+        const facts = JSON.parse(row.data) as { productId: string; channelId: string; state: string };
+        return `${row.resource_id} ${facts.channelId} ${facts.state}`;
+      })
+      .sort();
+    expect(publications()).toEqual([
+      "p9 sc_agents published",
+      "p9 sc_google published",
+      "p9 sc_meta published",
+      "p9 sc_online_store published",
+    ]);
+
+    clear(sqlite);
+    sqlite.exec("UPDATE product_channel_publications SET unpublished_at = unixepoch() WHERE product_id = 'p9' AND channel_id = 'sc_meta'");
+    // Unpublishing what is unpublished, or touching the date only, is no event.
+    sqlite.exec("UPDATE product_channel_publications SET unpublished_at = unixepoch() + 1 WHERE product_id = 'p9' AND channel_id = 'sc_meta'");
+    sqlite.exec("UPDATE product_channel_publications SET published_at = published_at WHERE product_id = 'p9'");
+    expect(publications()).toEqual(["p9 sc_meta unpublished"]);
+
+    clear(sqlite);
+    sqlite.exec("UPDATE product_channel_publications SET unpublished_at = NULL, published_at = unixepoch() WHERE product_id = 'p9' AND channel_id = 'sc_meta'");
+    expect(publications()).toEqual(["p9 sc_meta published"]);
+
+    clear(sqlite);
+    sqlite.exec("UPDATE product_channel_publications SET unpublished_at = unixepoch() WHERE product_id = 'p9' AND channel_id = 'sc_google'");
+    clear(sqlite);
+    sqlite.exec("DELETE FROM product_variants WHERE product_id = 'p9'");
+    sqlite.exec("DELETE FROM products WHERE id = 'p9'");
+    // Only the channels it was published to report it gone.
+    expect(publications()).toEqual([
+      "p9 sc_agents unpublished",
+      "p9 sc_meta unpublished",
+      "p9 sc_online_store unpublished",
     ]);
     expectReadableFacts();
   });

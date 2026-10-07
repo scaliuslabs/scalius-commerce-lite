@@ -102,10 +102,10 @@ function seedDemoCatalog(database) {
 
   const insertProduct = (id, name, slug, price, categoryId) => run(
     `INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description,
-      canonical_path, no_index, exclude_from_sitemap, exclude_from_product_feed, product_condition,
+      canonical_path, no_index, exclude_from_sitemap, product_condition,
       aggregate_revision, created_at, updated_at, is_active, discount_bps, discount_type,
       discount_amount_minor, free_delivery, tax_class_id, tax_classification_version)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, 0, 'new', 1, ?, ?, 1, 0, 'percentage', 0, 0, NULL, 1)`,
+     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, 'new', 1, ?, ?, 1, 0, 'percentage', 0, 0, NULL, 1)`,
     id, name, `A ${name} you'll like`, Math.round(price * 100), categoryId, slug, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
   insertProduct("prod_halo", "Halo Arc Table Lamp", "halo-arc-table-lamp", 149.5, "cat_lighting");

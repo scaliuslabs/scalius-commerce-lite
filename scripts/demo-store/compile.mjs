@@ -167,7 +167,6 @@ function productBasePayload(product, categoryId, { isActive, expectedAggregateRe
     canonicalPath: null,
     noIndex: false,
     excludeFromSitemap: false,
-    excludeFromProductFeed: false,
     productCondition: product.condition,
     slug: product.slug,
     media: productMediaPayload(product, existing),

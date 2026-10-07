@@ -73,6 +73,9 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   store_languages: "0121_translations",
   translations: "0121_translations",
   localized_slugs: "0121_translations",
+  sales_channels: "0122_sales_channels",
+  product_channel_publications: "0122_sales_channels",
+  sales_channel_locations: "0122_sales_channels",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -103,7 +106,25 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_market_presences_locales_ins: "0121_translations",
   cdep_market_presences_locales_del: "0121_translations",
   cdep_market_presences_locales_upd: "0121_translations",
+  // Sales channels (0122) drop products.exclude_from_product_feed (the feed
+  // channels' publications replace it): the triggers that name it are
+  // reinstalled without it. A channel's sellable stock reads its linked
+  // locations, so raw stock moves a SKU's keys once a location is unlinked.
+  cdep_products_upd: "0122_sales_channels",
+  cdep_products_seo: "0122_sales_channels",
+  cdep_product_variants_chstock: "0122_sales_channels",
+  cdep_product_variants_chstock_old: "0122_sales_channels",
 };
+
+/**
+ * Rules added to a baseline table after deployed 0100 (not reinstalled ones):
+ * 0100 never had them, so its render leaves them out; the migration named in
+ * `CACHE_DEP_LATER_TRIGGERS` installs them.
+ */
+export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
+  "cdep_product_variants_chstock",
+  "cdep_product_variants_chstock_old",
+]);
 
 /**
  * Baseline tables whose columns changed after deployed 0100, with the
@@ -112,6 +133,13 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
  * name them (`CACHE_DEP_LATER_TRIGGERS`).
  */
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  products: [
+    "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",
+    "canonical_path", "no_index", "exclude_from_sitemap", "exclude_from_product_feed", "product_condition",
+    "aggregate_revision", "created_at", "updated_at", "deleted_at", "is_active", "discount_bps", "discount_type",
+    "discount_amount_minor", "free_delivery", "tax_class_id", "tax_classification_version", "is_gift_card",
+    "customization_schema", "brand_id", "page_template", "emi_eligible", "warranty_policy_id",
+  ],
   tax_rates: [
     "id", "tax_class_id", "name", "rate_bps", "jurisdiction_type", "jurisdiction_id", "jurisdiction_label",
     "priority", "is_compound", "is_active", "version", "created_at", "updated_at", "deleted_at",
@@ -318,12 +346,22 @@ function assertColumn(table: string, column: string): void {
   }
 }
 
+/**
+ * A column deployed 0100 saw that a later migration dropped: a rule may still
+ * name it (0100 renders it), and every later render leaves it out.
+ */
+function droppedSinceBaseline(table: string, column: string): boolean {
+  return !renderingBaseline
+    && (CACHE_DEP_BASELINE_COLUMNS[table]?.includes(column) ?? false)
+    && !(tableColumns.get(table) ?? []).includes(column);
+}
+
 function changedColumns(table: string, spec: CacheDepTableSpec, rule: CacheDepRule): string[] {
   if (rule.bandChanged) return [];
   if (rule.changed === undefined) return [];
   const columns = rule.changed === "visible"
     ? columnsOf(table).filter((column) => !spec.noise.includes(column))
-    : [...rule.changed];
+    : rule.changed.filter((column) => !droppedSinceBaseline(table, column));
   for (const column of columns) assertColumn(table, column);
   return columns;
 }
@@ -631,7 +669,8 @@ function sourceSha256(statements: readonly string[]): string {
 
 /** Both migration files, byte for byte. */
 export function renderCacheDepMigration(): { sqlite: string; postgres: string } {
-  const baseline = generatedBaseline.filter((trigger) => isBaselineTable(trigger.table));
+  const baseline = generatedBaseline.filter((trigger) =>
+    isBaselineTable(trigger.table) && !CACHE_DEP_ADDED_BASELINE_TRIGGERS.has(trigger.name));
   const sqliteBody = [...TABLES_SQLITE, ...CLOCK_TRIGGERS_SQLITE, ...baseline.map((trigger) => trigger.sqlite)];
   const sqliteStatements = sqliteBody.map((statement, index) => `${index === 0 ? `${HEADER}\n` : ""}${statement};`);
   const sha = sourceSha256(sqliteStatements);

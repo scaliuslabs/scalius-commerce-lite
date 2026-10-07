@@ -114,10 +114,16 @@ export async function addLiveCheckoutHotFixture(
       {
         sql: `INSERT INTO products
                 (id, name, description, price_minor, slug, no_index,
-                 exclude_from_sitemap, exclude_from_product_feed, is_active)
+                 exclude_from_sitemap, is_active)
               VALUES (?, ?, 'Synthetic isolated hot-contention fixture.',
-                      249900, ?, 1, 1, 1, 1)`,
+                      249900, ?, 1, 1, 1)`,
         args: [productId, `Disposable Atomic Hot Fixture ${options.suffix}`, slug],
+      },
+      {
+        // Off the catalogue feeds and AI agents (sales channels, 0122).
+        sql: `UPDATE product_channel_publications SET unpublished_at = unixepoch()
+              WHERE product_id = ? AND channel_id <> 'sc_online_store' AND unpublished_at IS NULL`,
+        args: [productId],
       },
       {
         sql: `INSERT INTO product_variants
