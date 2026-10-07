@@ -32,6 +32,9 @@ export const dataTableMessages = defineMessages({
     todayAt: "Today at {time}",
     yesterdayAt: "Yesterday at {time}",
     dateAt: "{date} at {time}",
+    dateOnAt: "{date}, {time}",
+    pickDate: "Pick a date",
+    clearDate: "Clear date",
   },
   bn: {
     columnMenu: "সাজানো ও কলাম",
@@ -63,5 +66,8 @@ export const dataTableMessages = defineMessages({
     todayAt: "আজ {time}",
     yesterdayAt: "গতকাল {time}",
     dateAt: "{date} {time}",
+    dateOnAt: "{date}, {time}",
+    pickDate: "তারিখ বাছাই করুন",
+    clearDate: "তারিখ মুছুন",
   },
 });

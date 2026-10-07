@@ -47,6 +47,7 @@ import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem 
 import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-status";
 import { CostInput, Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SupplierPicker, type SupplierChoice } from "./SupplierPicker";
+import { DateInput } from "~/components/ui/date-input";
 
 type DialogName = "details" | "cancel" | null;
 
@@ -504,7 +505,7 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="po-details-expected">{t("expectedArrival")}</Label>
-              <Input id="po-details-expected" type="date" value={expectedOn} onChange={(event) => setExpectedOn(event.target.value)} />
+              <DateInput id="po-details-expected" value={expectedOn} onValueChange={setExpectedOn} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="po-details-reference">{t("reference")}</Label>

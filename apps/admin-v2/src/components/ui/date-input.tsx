@@ -1,0 +1,85 @@
+import * as React from "react";
+import { CalendarDays, X } from "lucide-react";
+
+import { cn } from "@scalius/shared/utils";
+import { formatDateTime, useMessages } from "~/i18n";
+import { dataTableMessages } from "~/i18n/data-table";
+import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
+import { Calendar } from "./calendar";
+import { fieldClassName } from "./input";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+
+type DateInputProps = {
+  /** A calendar day as "2026-10-07", or "" for none. */
+  value: string;
+  onValueChange: (value: string) => void;
+  /** The earliest and latest day that can be picked, as "2026-10-07". */
+  min?: string;
+  max?: string;
+  id?: string;
+  disabled?: boolean;
+  className?: string;
+  "aria-label"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-describedby"?: string;
+};
+
+/**
+ * A day, written with its month as a word ("Oct 7, 2026"), never "07/10/2026",
+ * which reads as two different days in two countries. The value is the same
+ * "YYYY-MM-DD" a native date field holds; the calendar opens below the field.
+ */
+export function DateInput({ value, onValueChange, min, max, id, disabled = false, className, ...aria }: DateInputProps) {
+  const t = useMessages(dataTableMessages);
+  const [open, setOpen] = React.useState(false);
+  const day = parseDateOnly(value);
+  const earliest = parseDateOnly(min);
+  const latest = parseDateOnly(max);
+  // A calendar day has no time zone: write it as the same day everywhere.
+  const label = day ? formatDateTime(new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate())), { dateStyle: "medium", timeZone: "UTC" }) : null;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          id={id}
+          disabled={disabled}
+          className={cn(fieldClassName, "flex h-11 items-center gap-2 py-1 text-start sm:h-9", className)}
+          {...aria}
+        >
+          <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label ?? t("pickDate")}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          autoFocus
+          mode="single"
+          defaultMonth={day ?? earliest}
+          selected={day}
+          disabled={[...(earliest ? [{ before: earliest }] : []), ...(latest ? [{ after: latest }] : [])]}
+          onSelect={(next) => {
+            if (!next) return;
+            onValueChange(formatDateOnly(next) ?? "");
+            setOpen(false);
+          }}
+        />
+        {value ? (
+          <div className="flex justify-end border-t p-1.5">
+            <button
+              type="button"
+              className="flex h-9 items-center gap-2 rounded-md px-3 text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
+              onClick={() => {
+                onValueChange("");
+                setOpen(false);
+              }}
+            >
+              <X aria-hidden="true" className="size-3.5" />
+              {t("clearDate")}
+            </button>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}

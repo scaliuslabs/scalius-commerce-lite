@@ -19,12 +19,13 @@ import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
 import { accountFailureKey } from "./account-error";
+import { eventTime } from "~/lib/event-time";
 
 const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Laptop, unknown: MonitorSmartphone } as const;
 
 function when(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : formatDateTime(date, { dateStyle: "medium", timeStyle: "short" });
+  return eventTime(date) ?? "—";
 }
 
 /** Signed-in devices: where this account is signed in, with sign out per device or for all others. */

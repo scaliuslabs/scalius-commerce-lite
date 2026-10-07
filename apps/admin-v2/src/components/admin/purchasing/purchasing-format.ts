@@ -1,5 +1,6 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import { formatDateTime } from "~/i18n";
+import { eventTime } from "~/lib/event-time";
 
 /** A YYYY-MM-DD day (expected arrival) in the dashboard language, or null. */
 export function formatDay(value: string | null | undefined): string | null {
@@ -12,7 +13,7 @@ export function formatDay(value: string | null | undefined): string | null {
 /** An API timestamp with date and time, or null. */
 export function formatMoment(value: string | number | null | undefined): string | null {
   const date = unixToDate(value ?? null);
-  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : null;
+  return date ? eventTime(date) : null;
 }
 
 /** A product line's name: the product, then its option values ("Kori Trainer · 42"). */

@@ -52,6 +52,7 @@ import {
   useSetDiscountActive,
   useUpdateDiscount,
 } from "~/lib/api-mutations/discounts";
+import { DateInput } from "~/components/ui/date-input";
 
 function Field({
   id,
@@ -596,12 +597,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
               <CardContent className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field id="start-date" label={t("startDate")} error={shown("startDate")}>
-                    <Input
+                    <DateInput
                       id="start-date"
-                      type="date"
                       value={draft.startDate}
                       aria-invalid={shown("startDate") ? true : undefined}
-                      onChange={(event) => update({ startDate: event.target.value })}
+                      onValueChange={(startDate) => update({ startDate })}
                     />
                   </Field>
                   <Field id="start-time" label={t("startTime")}>
@@ -612,12 +612,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                 {draft.hasEnd ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field id="end-date" label={t("endDate")} error={shown("endDate")}>
-                      <Input
+                      <DateInput
                         id="end-date"
-                        type="date"
                         value={draft.endDate}
                         aria-invalid={shown("endDate") ? true : undefined}
-                        onChange={(event) => update({ endDate: event.target.value })}
+                        onValueChange={(endDate) => update({ endDate })}
                       />
                     </Field>
                     <Field id="end-time" label={t("endTime")}>

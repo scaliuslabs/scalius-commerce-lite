@@ -46,6 +46,7 @@ import { PurchaseOrderStatusBadge } from "./purchasing-status";
 import { CostInput, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SkuPicker } from "./SkuPicker";
 import { SupplierPicker } from "./SupplierPicker";
+import { DateInput } from "~/components/ui/date-input";
 
 type Busy = "save" | "order" | null;
 
@@ -299,11 +300,10 @@ export function PurchaseOrderEditor({ order, onReload }: {
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="po-expected">{t("expectedArrival")}</Label>
-                <Input
+                <DateInput
                   id="po-expected"
-                  type="date"
                   value={draft.expectedOn}
-                  onChange={(event) => update({ expectedOn: event.target.value })}
+                  onValueChange={(expectedOn) => update({ expectedOn })}
                 />
               </div>
               <div className="space-y-2">

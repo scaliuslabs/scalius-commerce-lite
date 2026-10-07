@@ -16,6 +16,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { resourceMessages } from "~/i18n/resource";
+import { eventTime } from "~/lib/event-time";
 
 const PAGE = { orders: 10, history: 10 } as const;
 
@@ -27,7 +28,7 @@ const day = (value: string | number | null | undefined) => {
 /** Change-log entries carry the time too: several can land on one day. */
 const when = (value: string | number | null | undefined) => {
   const date = unixToDate(value);
-  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "";
+  return date ? eventTime(date) ?? "" : "";
 };
 
 /** What a change-log entry records: the contact (addresses are in the address book). */

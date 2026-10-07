@@ -37,6 +37,7 @@ import {
 } from "~/lib/api-query-options/price-lists";
 import { PriceListPrices } from "./PriceListPrices";
 import { KIND_HELP, KIND_LABEL, scheduleText, priceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
+import { DateInput } from "~/components/ui/date-input";
 
 // The grid is the heaviest part of the page and only staff who edit open it.
 const PriceGridSheet = lazy(() => import("./PriceGridSheet").then((module) => ({ default: module.PriceGridSheet })));
@@ -267,13 +268,12 @@ function ScheduleField({ id, label, help, error, date, time, onChange }: {
   return (
     <SettingsField id={id} label={label} help={help} error={error}>
       <div className="flex flex-wrap items-center gap-2">
-        <Input
+        <DateInput
           id={id}
-          type="date"
           className="w-auto min-w-0 flex-1"
           value={date}
           aria-invalid={error ? true : undefined}
-          onChange={(event) => onChange(event.target.value, event.target.value ? time : "")}
+          onValueChange={(next) => onChange(next, next ? time : "")}
         />
         <Input
           type="time"

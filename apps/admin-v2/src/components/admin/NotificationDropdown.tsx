@@ -8,6 +8,7 @@ import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 import { TOP_BAR_BUTTON } from "./layout/nav-button";
+import { eventTime } from "~/lib/event-time";
 
 interface AdminNotification {
   id: string;
@@ -133,7 +134,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                 <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
                 {notification.message ? <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p> : null}
                 <p className="mt-0.5 text-caption text-muted-foreground">
-                  {formatDateTime(new Date(notification.timestamp), { dateStyle: "medium", timeStyle: "short" })}
+                  {eventTime(new Date(notification.timestamp))}
                 </p>
               </button>
             ))

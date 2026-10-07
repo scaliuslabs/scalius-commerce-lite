@@ -1,6 +1,7 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import { formatDateTime } from "~/i18n";
 import { cn } from "@scalius/shared/utils";
+import { eventTime } from "~/lib/event-time";
 
 interface ShipmentMetadataDisplayProps {
   metadata: Record<string, unknown> | string | null;
@@ -98,7 +99,7 @@ export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadat
       {lastWebhookAt && Number.isFinite(lastWebhookAt.getTime()) && (
         <div className="flex justify-between gap-4 border-t pt-1">
           <dt className="text-muted-foreground">Last update</dt>
-          <dd className="text-muted-foreground">{formatDateTime(lastWebhookAt, { dateStyle: "medium", timeStyle: "short" })}</dd>
+          <dd className="text-muted-foreground">{eventTime(lastWebhookAt)}</dd>
         </div>
       )}
     </dl>
