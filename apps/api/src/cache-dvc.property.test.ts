@@ -73,7 +73,9 @@ const RACE = Number(process.env.DVC_RACE ?? (MODE === "long" ? 0.02 : 0.01));
 const SEEDS = process.env.DVC_SEED
   ? [process.env.DVC_SEED]
   : Array.from({ length: Number(process.env.DVC_SEEDS ?? 1) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
-const TIMEOUT = MODE === "long" ? 24 * 3600_000 : 240_000;
+// A loaded machine slows the same steps down; DVC_TIMEOUT_MS gives them time
+// without weakening the check.
+const TIMEOUT = Number(process.env.DVC_TIMEOUT_MS ?? (MODE === "long" ? 24 * 3600_000 : 240_000));
 
 /**
  * `s4` (default): S4's production part cache end to end (the part reader's
