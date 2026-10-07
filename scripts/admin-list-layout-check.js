@@ -26,6 +26,8 @@
     const cut = [];
     for (const element of table.querySelectorAll("tbody td *")) {
       if (element.children.length > 0 || !element.textContent.trim()) continue;
+      // Screen-reader-only labels are clipped on purpose.
+      if (element.closest(".sr-only")) continue;
       if (element.scrollWidth <= element.clientWidth + 1) continue;
       if (!element.closest("[title]")) cut.push(element.textContent.trim().slice(0, 40));
     }
