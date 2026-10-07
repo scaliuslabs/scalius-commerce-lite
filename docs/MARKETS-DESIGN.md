@@ -1040,8 +1040,11 @@ rebuild.
 online store's rows also advance `lm:all` and `srch` (live readers).
 `sales_channel_locations` advances `store`. Once a location is unlinked, a
 raw stock or reservation change advances the SKU's `p:` key
-(`cdep_product_variants_chstock`); before that it advances nothing. The
-products triggers that named the dropped flag are reinstalled. The harness
+(`cdep_product_variants_chstock`); before that it advances nothing. A
+level at a location that some channel does not sell advances its SKU's `p:`
+key (`inventory_levels`). A product discount advances its `lo:price` scopes,
+because the price filter calculates SKU prices live. The products triggers
+that named the dropped flag are reinstalled. The harness
 seeds a second location, a product off the Meta feed and the old feed flag,
 and runs publish, unpublish, set-channels and location-link actions. The
 property and race gate reports zero findings.

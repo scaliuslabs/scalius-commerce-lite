@@ -411,6 +411,9 @@ const CHANNEL_STOCK_PARTIAL = "SELECT 1 FROM sales_channels AS partial_channel, 
 /** The default online store's id (`ONLINE_STORE_CHANNEL_ID` in `@scalius/shared/sales-channels`). */
 const ONLINE_STORE_CHANNEL = "sc_online_store";
 
+/** A stock level at a location some channel does not sell (`R.location_id`). */
+const LEVEL_AT_UNLINKED_LOCATION = "SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = R.location_id)";
+
 const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_created_at"] as const;
 const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
 
@@ -462,7 +465,7 @@ const CACHE_DEP_TABLE_RULES = {
   products: {
     kinds: ["p", "lo", "lm", "srch"],
     noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
-    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch. `lm:shape`: the layout's count of active products and their SKUs.",
+    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch; the price filter alone reads the product discount live (`price_order`). `lm:shape`: the layout's count of active products and their SKUs.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
       { name: "del", event: "delete", image: "old", keys: [p("id"), { dep: "srch" }, SHAPE] },
@@ -475,6 +478,14 @@ const CACHE_DEP_TABLE_RULES = {
       {
         name: "name_order", event: "update", image: "new", changed: ["name"],
         keys: [{ scopes: "lo:name", from: { product: "id" } }],
+      },
+      // The price filter (buyerCatalogHasSkuInPriceRange) computes each SKU's
+      // effective price live from these product columns, so a raw product
+      // discount write can move the product across a listing's price bounds
+      // before its buyer state is refreshed (0122).
+      {
+        name: "price_order", event: "update", image: "new", changed: [...SALE_DISCOUNT],
+        keys: [{ scopes: "lo:price", from: { product: "id" } }],
       },
       {
         name: "seo", event: "update", image: "new",
@@ -549,6 +560,15 @@ const CACHE_DEP_TABLE_RULES = {
         changed: [...SALE_DISCOUNT, "created_at", "deleted_at", "product_id"], keys: [SALE],
       },
     ],
+  },
+  inventory_levels: {
+    kinds: ["p"],
+    noise: ["updated_at"],
+    note: "A channel's sellable stock subtracts its SKU's on-hand at the locations it does not sell (0122), so only a level at such a location is buyer-visible: it advances its SKU's product. Levels at linked locations sum into the SKU's stock, whose own rules (band, chstock) cover them.",
+    rules: everyChange([{
+      prefix: "p:",
+      lookup: { table: "product_variants", select: "product_id", key: "id", column: "variant_id" },
+    }]).map((rule): CacheDepRule => ({ ...rule, where: { exists: LEVEL_AT_UNLINKED_LOCATION } })),
   },
   product_media: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_option_definitions: {
@@ -1001,7 +1021,6 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   scalius_schema_migrations: "Schema ledger; a release changes the Worker version, which is in every cache key.",
   inventory_movements: DERIVED_STOCK,
   inventory_operations: DERIVED_STOCK,
-  inventory_levels: DERIVED_STOCK,
   inventory_locations: "Where physical stock is held; buyers see SKU availability bands, never locations.",
   product_low_stock_alerts: DERIVED_STOCK,
   // Purchasing and transfers (0109): staff-only documents. Their stock

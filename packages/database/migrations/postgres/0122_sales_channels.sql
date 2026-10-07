@@ -372,6 +372,38 @@ FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."name" IS DISTINCT FROM NEW."name" OR OLD."description" IS DISTINCT FROM NEW."description" OR OLD."price_minor" IS DISTINCT FROM NEW."price_minor" OR OLD."category_id" IS DISTINCT FROM NEW."category_id" OR OLD."slug" IS DISTINCT FROM NEW."slug" OR OLD."meta_title" IS DISTINCT FROM NEW."meta_title" OR OLD."meta_description" IS DISTINCT FROM NEW."meta_description" OR OLD."canonical_path" IS DISTINCT FROM NEW."canonical_path" OR OLD."no_index" IS DISTINCT FROM NEW."no_index" OR OLD."exclude_from_sitemap" IS DISTINCT FROM NEW."exclude_from_sitemap" OR OLD."product_condition" IS DISTINCT FROM NEW."product_condition" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at" OR OLD."is_active" IS DISTINCT FROM NEW."is_active" OR OLD."discount_bps" IS DISTINCT FROM NEW."discount_bps" OR OLD."discount_type" IS DISTINCT FROM NEW."discount_type" OR OLD."discount_amount_minor" IS DISTINCT FROM NEW."discount_amount_minor" OR OLD."free_delivery" IS DISTINCT FROM NEW."free_delivery" OR OLD."tax_class_id" IS DISTINCT FROM NEW."tax_class_id" OR OLD."is_gift_card" IS DISTINCT FROM NEW."is_gift_card" OR OLD."customization_schema" IS DISTINCT FROM NEW."customization_schema" OR OLD."brand_id" IS DISTINCT FROM NEW."brand_id" OR OLD."page_template" IS DISTINCT FROM NEW."page_template" OR OLD."emi_eligible" IS DISTINCT FROM NEW."emi_eligible" OR OLD."warranty_policy_id" IS DISTINCT FROM NEW."warranty_policy_id"))
 EXECUTE FUNCTION scalius_compat."cdep_products_upd_fn"();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_price_order_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['t:products']::text[]) AS key_list(value) UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM "product_buyer_state" AS scope_state, unnest(ARRAY['all', 'brand:' || scope_state."brand_id", 'cat:' || scope_state."category_id"]::text[]) AS scope_list(value) WHERE scope_state."product_id" = NEW."id" AND scope_state."is_public" = 1 UNION ALL SELECT 'cat:' || scope_closure."ancestor_id" FROM "product_buyer_state" AS scope_state JOIN "category_closure" AS scope_closure ON scope_closure."descendant_id" = scope_state."category_id" WHERE scope_state."product_id" = NEW."id" AND scope_state."is_public" = 1) AS scope_rows, unnest(ARRAY['lo:price']::text[]) AS facet_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_products_price_order"
+AFTER UPDATE ON "products"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."discount_type" IS DISTINCT FROM NEW."discount_type" OR OLD."discount_amount_minor" IS DISTINCT FROM NEW."discount_amount_minor" OR OLD."discount_bps" IS DISTINCT FROM NEW."discount_bps"))
+EXECUTE FUNCTION scalius_compat."cdep_products_price_order_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_price_order_old_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['t:products']::text[]) AS key_list(value) UNION SELECT facet_list.value || ':' || scope_rows.scope FROM (SELECT scope_list.value AS scope FROM "product_buyer_state" AS scope_state, unnest(ARRAY['all', 'brand:' || scope_state."brand_id", 'cat:' || scope_state."category_id"]::text[]) AS scope_list(value) WHERE scope_state."product_id" = OLD."id" AND scope_state."is_public" = 1 UNION ALL SELECT 'cat:' || scope_closure."ancestor_id" FROM "product_buyer_state" AS scope_state JOIN "category_closure" AS scope_closure ON scope_closure."descendant_id" = scope_state."category_id" WHERE scope_state."product_id" = OLD."id" AND scope_state."is_public" = 1) AS scope_rows, unnest(ARRAY['lo:price']::text[]) AS facet_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_products_price_order_old"
+AFTER UPDATE ON "products"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."discount_type" IS DISTINCT FROM NEW."discount_type" OR OLD."discount_amount_minor" IS DISTINCT FROM NEW."discount_amount_minor" OR OLD."discount_bps" IS DISTINCT FROM NEW."discount_bps") AND (OLD."id" IS DISTINCT FROM NEW."id"))
+EXECUTE FUNCTION scalius_compat."cdep_products_price_order_old_fn"();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_products_seo_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -425,6 +457,80 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 WHEN ((OLD."stock" IS DISTINCT FROM NEW."stock" OR OLD."reserved_stock" IS DISTINCT FROM NEW."reserved_stock") AND (OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_variants_chstock_old_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_inventory_levels_ins_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = NEW.location_id))), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || (SELECT "product_id" FROM "product_variants" WHERE "id" = NEW."variant_id"), 't:inventory_levels']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_inventory_levels_ins"
+AFTER INSERT ON "inventory_levels"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_inventory_levels_ins_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_inventory_levels_del_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = OLD.location_id))), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || (SELECT "product_id" FROM "product_variants" WHERE "id" = OLD."variant_id"), 't:inventory_levels']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_inventory_levels_del"
+AFTER DELETE ON "inventory_levels"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION scalius_compat."cdep_inventory_levels_del_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_inventory_levels_upd_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = NEW.location_id))), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || (SELECT "product_id" FROM "product_variants" WHERE "id" = NEW."variant_id"), 't:inventory_levels']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_inventory_levels_upd"
+AFTER UPDATE ON "inventory_levels"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."variant_id" IS DISTINCT FROM NEW."variant_id" OR OLD."location_id" IS DISTINCT FROM NEW."location_id" OR OLD."on_hand" IS DISTINCT FROM NEW."on_hand"))
+EXECUTE FUNCTION scalius_compat."cdep_inventory_levels_upd_fn"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_inventory_levels_upd_old_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce((EXISTS (SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = OLD.location_id))), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || (SELECT "product_id" FROM "product_variants" WHERE "id" = OLD."variant_id"), 't:inventory_levels']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_inventory_levels_upd_old"
+AFTER UPDATE ON "inventory_levels"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."variant_id" IS DISTINCT FROM NEW."variant_id" OR OLD."location_id" IS DISTINCT FROM NEW."location_id"))
+EXECUTE FUNCTION scalius_compat."cdep_inventory_levels_upd_old_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_sales_channels_ins_fn"()
 RETURNS trigger
@@ -644,4 +750,4 @@ FOR EACH ROW
 WHEN ((OLD."channel_id" IS DISTINCT FROM NEW."channel_id" OR OLD."location_id" IS DISTINCT FROM NEW."location_id"))
 EXECUTE FUNCTION scalius_compat."cdep_sales_channel_locations_upd_fn"();
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (122, '0122_sales_channels', '3b5f2dcf1a57cb669bb5fbe3a828ff25203e8dd8ddcd6e659226531a057ffa6f');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (122, '0122_sales_channels', '7a6b5cac792843fd099faa6d18fe59aa54ce4ff5defe29d2e34a72218e15e69d');

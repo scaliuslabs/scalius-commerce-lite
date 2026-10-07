@@ -25,7 +25,7 @@ The SQL that buyer reads fold into their own statements is a product fact and li
 - `resolveStaffOrderSalesChannel`: an active channel, else the online store. Staff may sell any product.
 - `listChannelProducts` pages a channel's live published product ids (keyset by id, at most 100): the port a sales-channel app syncs from, with the `product.publication_changed` event.
 - Triggers keep the online store, a channel's kind and app, an order's channel, and refuse to delete a channel with orders. Unpublishing a product and switching a channel off advance the checkout authority fence.
-- DVC: `sales_channels` advances `lm:seo`; publications advance `p:<product>` and `lm:seo` (the online store's also `lm:all` and `srch`); a location link advances `store`.
+- DVC: `sales_channels` advances `lm:seo`; publications advance `p:<product>` and `lm:seo` (the online store's also `lm:all` and `srch`); a location link advances `store`; a stock level at a location some channel does not sell advances its SKU's `p:`.
 
 ## Routes
 

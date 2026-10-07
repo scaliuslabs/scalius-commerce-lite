@@ -98,10 +98,15 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
   expect(await bumped(driver, "UPDATE products SET no_index = 1 WHERE id = 'p1'"))
     .toEqual(["lm:seo", "p:p1", "t:products"]);
   // The on-sale candidate window: a discount marker on or off, on the product or a live SKU.
+  // A product discount also moves the price filter's live SKU prices in its scopes (0122).
+  const productDiscountKeys = [
+    "lo:price:all", "lo:price:brand:brd_xbrand01", "lo:price:cat:cat_leaf", "lo:price:cat:cat_root",
+    "lo:sale:all", "p:p1", "t:products",
+  ];
   expect(await bumped(driver, "UPDATE products SET discount_type = 'percentage', discount_bps = 500 WHERE id = 'p1'"))
-    .toEqual(["lo:sale:all", "p:p1", "t:products"]);
+    .toEqual(productDiscountKeys);
   expect(await bumped(driver, "UPDATE products SET discount_bps = 0 WHERE id = 'p1'"))
-    .toEqual(["lo:sale:all", "p:p1", "t:products"]);
+    .toEqual(productDiscountKeys);
   expect(await bumped(driver, "UPDATE product_variants SET discount_type = 'flat', discount_amount_minor = 10 WHERE id = 'v1'"))
     .toEqual(["lo:sale:all", "p:p1", "t:product_variants"]);
   expect(await bumped(driver, "UPDATE product_variants SET discount_amount_minor = 0 WHERE id = 'v1'"))

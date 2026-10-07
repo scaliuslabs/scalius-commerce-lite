@@ -390,7 +390,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 122,
     name: "0122_sales_channels",
-    sourceSha256: "3b5f2dcf1a57cb669bb5fbe3a828ff25203e8dd8ddcd6e659226531a057ffa6f",
+    sourceSha256: "7a6b5cac792843fd099faa6d18fe59aa54ce4ff5defe29d2e34a72218e15e69d",
   },
 ] as const;
 

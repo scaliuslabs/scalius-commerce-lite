@@ -24,9 +24,10 @@ describe(`${NAME} files`, () => {
   it("installs the generated cache and event triggers verbatim on every provider", () => {
     const triggers = cacheDepTriggersForMigration(NAME);
     expect(Object.entries(CACHE_DEP_LATER_TABLES).filter(([, name]) => name === NAME).map(([table]) => table))
-      .toEqual(["sales_channels", "product_channel_publications", "sales_channel_locations"]);
+      .toEqual(["sales_channels", "product_channel_publications", "sales_channel_locations", "inventory_levels"]);
     expect(Object.entries(CACHE_DEP_LATER_TRIGGERS).filter(([, name]) => name === NAME).map(([trigger]) => trigger))
-      .toEqual(["cdep_products_upd", "cdep_products_seo", "cdep_product_variants_chstock", "cdep_product_variants_chstock_old"]);
+      .toEqual(["cdep_products_upd", "cdep_products_seo", "cdep_product_variants_chstock", "cdep_product_variants_chstock_old",
+        "cdep_products_price_order", "cdep_products_price_order_old"]);
     const sqlite = migration();
     const postgres = migration("postgres/");
     for (const trigger of triggers) {
@@ -195,6 +196,15 @@ describe(`${NAME} over a populated 0121 database`, () => {
     database.exec("DELETE FROM sales_channel_locations WHERE channel_id = 'sc_online_store' AND location_id = 'loc_dhk'");
     stock(7);
     expect(dep("p:p_tee")).toBeGreaterThan(start);
+    // A level at the unlinked location is the channel's gap; one at a linked location is not.
+    database.exec("INSERT INTO inventory_levels (variant_id, location_id, on_hand) VALUES ('v_tee', 'loc_default', 3) ON CONFLICT DO UPDATE SET on_hand = 3");
+    database.exec("INSERT INTO sales_channel_locations (channel_id, location_id) VALUES ('sc_online_store', 'loc_dhk')");
+    database.exec("DELETE FROM sales_channel_locations WHERE channel_id = 'sc_meta' AND location_id = 'loc_dhk'");
+    const linked = dep("p:p_tee");
+    database.exec("UPDATE inventory_levels SET on_hand = 2 WHERE variant_id = 'v_tee' AND location_id = 'loc_default'");
+    expect(dep("p:p_tee")).toBe(linked);
+    database.exec("INSERT INTO inventory_levels (variant_id, location_id, on_hand) VALUES ('v_tee', 'loc_dhk', 1)");
+    expect(dep("p:p_tee")).toBeGreaterThan(linked);
   });
 
   it("gives the untouched default location the store's country, and leaves an edited one", () => {

@@ -76,6 +76,8 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   sales_channels: "0122_sales_channels",
   product_channel_publications: "0122_sales_channels",
   sales_channel_locations: "0122_sales_channels",
+  // A channel's sellable stock reads the levels at its unlinked locations.
+  inventory_levels: "0122_sales_channels",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -114,6 +116,9 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_products_seo: "0122_sales_channels",
   cdep_product_variants_chstock: "0122_sales_channels",
   cdep_product_variants_chstock_old: "0122_sales_channels",
+  // The price filter reads the product discount live (`lo:price`).
+  cdep_products_price_order: "0122_sales_channels",
+  cdep_products_price_order_old: "0122_sales_channels",
 };
 
 /**
@@ -124,6 +129,8 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
 export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
   "cdep_product_variants_chstock",
   "cdep_product_variants_chstock_old",
+  "cdep_products_price_order",
+  "cdep_products_price_order_old",
 ]);
 
 /**

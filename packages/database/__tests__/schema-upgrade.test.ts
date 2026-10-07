@@ -586,8 +586,8 @@ describe("provider-neutral schema upgrades", () => {
         // its reinstalled triggers, the order column, the default location's
         // country, the channel, publication and order guards and fences, the
         // generated event and cache triggers and the ledger: one each.
-        sqliteStatements: 51,
-        postgresStatements: 51,
+        sqliteStatements: 57,
+        postgresStatements: 57,
       },
     ]);
   });
