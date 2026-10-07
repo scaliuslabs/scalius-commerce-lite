@@ -8,7 +8,6 @@ import {
   getProductAppBlocks,
   getProductBySlugResult,
   getShippingMethods,
-  getTemplateSectionsData,
   getThemePreviewProductAppBlocks,
 } from "@/lib/api";
 import AppHeadTags from "@/components/apps/AppHeadTags.astro";
@@ -123,8 +122,6 @@ const productPromise = getProductBySlugResult(slug);
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
 const productAppsPromise = getProductAppBlocks(slug);
-// The product template's own sections (around the product information).
-const templatePromise = getTemplateSectionsData("product");
 
 // Parallel fetch, one batch: layout, product, shipping and payment data, and
 // the app blocks the published theme places on product pages.
@@ -163,7 +160,7 @@ const renderedApps = requestTheme.preview && requestTheme.previewToken
 const appBlocks = renderedApps.blocks;
 if (renderedApps.failed) markRenderUncacheable(Astro.response.headers);
 const productTemplate = requestTheme.resolved.pages.templates.product;
-const templateData = await templateSectionData("product", requestTheme, templatePromise);
+const templateData = await templateSectionData("product", requestTheme);
 const appHeads = appBlocks.map((block) => block.head);
 
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the

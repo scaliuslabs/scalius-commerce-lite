@@ -169,15 +169,19 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
   const document = new Window().document as unknown as Document;
   document.write(html);
   expect(response.status, html.slice(0, 200)).toBe(200);
-  // The batch, then a preview's private reads (resolve, a product's app blocks, and the draft template's sections when it has any; never on search); an empty search also reads suggestions.
-  const templateRead = kind !== "search" && options.preview && options.preview.pages.templates[kind === "product" ? "product" : "collection"].sections.length > 0 ? 1 : 0;
-  expect(calls).toHaveLength(options.preview ? 2 + (kind === "product" ? 1 : 0) + templateRead : options.empty ? 3 : 1);
+  // The batch, then a preview's private reads (resolve, a product's app blocks); an empty search also
+  // reads suggestions. A template with sections reads them after the batch (the live part, or the
+  // draft's on the preview read); a template without sections reads nothing (never on search).
+  const templateKind = kind === "product" ? "product" : "collection";
+  const shown = options.preview ?? theme;
+  const templateRead = kind !== "search" && shown.pages.templates[templateKind].sections.length > 0 ? 1 : 0;
+  expect(calls).toHaveLength((options.preview ? 2 + (kind === "product" ? 1 : 0) : options.empty ? 3 : 1) + templateRead);
   expect(calls[0]!.pathname).toBe("/api/v1/storefront/batch");
-  // Every page's parts plus the template part (product, category and collection pages; not search).
+  // The page's own parts only: the template part is never in the batch.
   const parts = calls[0]!.searchParams.getAll("r");
-  expect(parts).toHaveLength((kind === "product" ? 5 : 2) + (kind === "search" ? 0 : 1));
-  if (kind !== "search") expect(parts).toContain(`/api/v1/storefront/template/${kind === "product" ? "product" : "collection"}`);
-  else expect(parts.some((part) => part.includes("/storefront/template/"))).toBe(false);
+  expect(parts).toHaveLength(kind === "product" ? 5 : 2);
+  expect(parts.some((part) => part.includes("/storefront/template/"))).toBe(false);
+  if (templateRead && !options.preview) expect(calls.some((call) => call.pathname === `/api/v1/storefront/template/${templateKind}` || call.searchParams.getAll("r").includes(`/api/v1/storefront/template/${templateKind}`))).toBe(true);
   const ids = [...document.querySelectorAll("[id]")].map((element) => element.id);
   expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
   return { document, html, response, calls };

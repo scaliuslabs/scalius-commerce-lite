@@ -4,7 +4,7 @@
 
 import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "../layouts/Layout.astro";
-import { getPageRenderData, getLayoutData, getTemplateSectionsData } from "../lib/api";
+import { getPageRenderData, getLayoutData } from "../lib/api";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
@@ -70,8 +70,6 @@ if (!validSlugPattern.test(slug)) {
 
 // === NOW SAFE TO MAKE API CALL ===
 // Parallel fetch: layout + page render data, and the page template's own
-// sections around the page's content (one batch).
-const templatePromise = getTemplateSectionsData("page");
 const [layoutData, pageRenderData] = await Promise.all([
   getLayoutData(),
   getPageRenderData(slug),
@@ -148,7 +146,7 @@ const pagePaths = localizedPaths(page, (handle) => `/${handle}`);
 // The page template's own sections, around the page's content.
 const pageRequestTheme = await resolveRequestTheme(Astro, layoutData);
 const pageTemplate = pageRequestTheme.resolved.pages.templates.page;
-const templateData = await templateSectionData("page", pageRequestTheme, templatePromise);
+const templateData = await templateSectionData("page", pageRequestTheme);
 const templateProps = {
   template: pageTemplate,
   data: templateData,

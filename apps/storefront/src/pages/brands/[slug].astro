@@ -8,7 +8,7 @@ import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
-import { getProductsByBrand, getTemplateSectionsData } from "@/lib/api";
+import { getProductsByBrand } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
@@ -39,8 +39,6 @@ if (!slug) return new Response(null, { status: 404 });
 let queryState = resolveProductListQueryState({ url: Astro.url, allowUnknownAttributes: true });
 if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
 
-// The collection template's own sections, read in the same batch.
-const templatePromise = getTemplateSectionsData("collection");
 const { layoutData, pageData: brandResult } = await loadPageWithLayout(
   () => getProductsByBrand(slug, queryState.options),
 );
@@ -129,7 +127,7 @@ const collectionJsonLd =
   </Fragment>
 
   <CatalogListingPage
-    template={templatePromise}
+    template
     kind="brand"
     data={{ "data-brand-name": brand.name }}
     hero={{

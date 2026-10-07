@@ -6,7 +6,6 @@ import Layout from "@/layouts/Layout.astro";
 import {
   getProductsByCategory,
   getLayoutData,
-  getTemplateSectionsData,
   type Product,
   type ProductListOptions,
   type CategoryProductsResponse,
@@ -58,8 +57,6 @@ let productsResponse: CategoryProductsResponse | null;
 let layoutData: LayoutData | null;
 const productListOptions: ProductListOptions = initialQueryState.options;
 
-// The collection template's own sections, read in the same batch.
-const templatePromise = getTemplateSectionsData("collection");
 try {
   [layoutData, productsResponse] = await Promise.all([
     getLayoutData(),
@@ -232,7 +229,7 @@ const collectionJsonLd =
     }
   </Fragment>
   <CatalogListingPage
-    template={templatePromise}
+    template
     kind="category"
     data={{
       "data-category-name": category.name,

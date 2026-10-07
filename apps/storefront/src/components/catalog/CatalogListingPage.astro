@@ -21,7 +21,6 @@ import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { getLayoutData } from "@/lib/api";
-import type { HomepageSectionData } from "@/lib/api/storefront";
 import { templateSectionData } from "@/lib/template-sections";
 
 type ListingProps = ComponentProps<typeof CatalogListing>;
@@ -50,15 +49,15 @@ interface Props {
   content?: { html: string; label: string } | null;
   /** `data-*` attributes on the page root (analytics reads them). */
   data?: Record<`data-${string}`, string | undefined>;
-  /** The collection template's section data, started beside the layout read (not on search). */
-  template?: Promise<HomepageSectionData | null>;
+  /** Draws the collection template's sections (category, collection and brand pages; not search). */
+  template?: boolean;
 }
 
 const { kind, listing, hero, content, data = {}, template } = Astro.props;
 const requestTheme = await currentRequestTheme(Astro.locals);
 const { resolved, preview } = requestTheme;
 const collectionTemplate = template ? resolved.pages.templates.collection : null;
-const templateData = template ? await templateSectionData("collection", requestTheme, template) : null;
+const templateData = template ? await templateSectionData("collection", requestTheme) : null;
 const currency = template ? (await getLayoutData())?.currency ?? DEFAULT_CURRENCY : DEFAULT_CURRENCY;
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;

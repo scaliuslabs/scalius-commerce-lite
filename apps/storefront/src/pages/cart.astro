@@ -27,7 +27,6 @@ import {
   getActiveCheckoutLanguage,
   type CheckoutLanguageData,
   getCheckoutConfig,
-  getTemplateSectionsData,
   isCheckoutConfigReadFailure,
   isCodOnly,
 } from "@/lib/api";
@@ -61,8 +60,6 @@ import {
 // parameter or the buyer's cart. The lines paint from localStorage and
 // everything buyer-specific comes from no-store APIs or the POST below.
 // Parallel fetch: layout + cities + shipping methods + checkout language +
-// checkout config, and the cart template's own sections (one batch).
-const templatePromise = getTemplateSectionsData("cart");
 const [
   layoutData,
   citiesResponse,
@@ -316,7 +313,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart template's own sections (Online store, theme editor), around the cart.
 const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
-const templateData = await templateSectionData("cart", cartRequestTheme, templatePromise);
+const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
 
 <Layout

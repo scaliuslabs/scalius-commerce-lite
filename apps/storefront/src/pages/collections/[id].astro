@@ -3,7 +3,7 @@ import Layout from "@/layouts/Layout.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
 import { catalogCategoryLinks } from "@/lib/catalog-listing";
-import { getCollectionByIdResult, getTemplateSectionsData } from "@/lib/api";
+import { getCollectionByIdResult } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
@@ -38,8 +38,6 @@ let queryState = resolveProductListQueryState({
 });
 if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
 
-// The collection template's own sections, read in the same batch.
-const templatePromise = getTemplateSectionsData("collection");
 const { layoutData, pageData: collectionResult } = await loadPageWithLayout(
   () => getCollectionByIdResult(id, queryState.options),
 );
@@ -172,7 +170,7 @@ const collectionJsonLd =
   </Fragment>
 
   <CatalogListingPage
-    template={templatePromise}
+    template
     kind="collection"
     hero={{
       title: collection.name,
