@@ -48,6 +48,7 @@ export const appSurfacesMessages = defineMessages({
     kind_email: "Email sender",
     kind_fraud: "Fraud checker",
     kind_tax: "Tax service",
+    kind_translation: "Machine translation",
 
     generalSettings: "General",
     providersTitle: "Services",
@@ -105,6 +106,7 @@ export const appSurfacesMessages = defineMessages({
     kind_email: "ইমেইল প্রেরক",
     kind_fraud: "ফ্রড চেকার",
     kind_tax: "ট্যাক্স সার্ভিস",
+    kind_translation: "মেশিন অনুবাদ",
 
     generalSettings: "সাধারণ",
     providersTitle: "সার্ভিস",

@@ -86,6 +86,7 @@ import type {
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
+import { LazyResourceTranslationsCard } from "./translations/LazyResourceTranslationsCard";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -485,6 +486,7 @@ function ProductEditor({
               )}
               <AttributesSection form={form} defaultOpen={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
+              {isEdit && productId ? <LazyResourceTranslationsCard type="product" id={productId} /> : null}
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">

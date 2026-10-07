@@ -14,7 +14,8 @@ describe("admin sidebar", () => {
     // Without products.view the section opens its first reachable page.
     expect(nav[0]).toMatchObject({ to: "/admin/categories" });
     expect(nav[0]!.children.map((child) => child.key)).toEqual(["categories", "brands"]);
-    expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts"]);
+    // Translations: a page viewer translates the pages they can open (MARKETS-DESIGN D9).
+    expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts", "translations"]);
   });
 
   it("lists Reviews under Products", () => {
