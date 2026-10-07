@@ -297,7 +297,14 @@ describe("admin app routes", () => {
     const pack = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
     // Every pack field is a service's: none on the app page itself.
     expect(pack.settings.sections).toEqual([]);
-    expect(pack.providers).toHaveLength(10);
+    expect(pack.providers).toHaveLength(11);
+    expect(pack.providers.find((provider: Json) => provider.providerId === "sslcommerz")).toMatchObject({
+      id: "scalius.bangladesh:sslcommerz",
+      kind: "payment",
+      name: "SSLCommerz",
+      icon: expect.stringContaining("/assets/provider-sslcommerz?v="),
+      required: ["sslcommerz_environment", "sslcommerz_store_id", "sslcommerz_store_password"],
+    });
     expect(pack.providers.find((provider: Json) => provider.providerId === "pathao")).toMatchObject({
       id: "scalius.bangladesh:pathao",
       kind: "courier",

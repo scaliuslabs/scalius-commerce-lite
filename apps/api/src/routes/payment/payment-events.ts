@@ -152,8 +152,10 @@ export async function reconcileOrderPayment(input: {
     paymentIntentId: orders.paymentIntentId,
   }).from(orders).where(eq(orders.id, input.orderId)).get();
   if (!order) throw new NotFoundError("Order not found");
-  const gateway = (await paymentProvidersFor(input.providers, order.paymentMethod)).get(order.paymentMethod);
-  if (!gateway?.queryPayment || !order.paymentIntentId || (input.provider && input.provider !== gateway.id)) {
+  const providers = await paymentProvidersFor(input.providers, order.paymentMethod);
+  const gateway = providers.get(order.paymentMethod);
+  // The caller may name the order's gateway by a retired built-in id (`sslcommerz`): the same gateway.
+  if (!gateway?.queryPayment || !order.paymentIntentId || (input.provider && providers.get(input.provider) !== gateway)) {
     throw new ValidationError("This order does not have an online payment to verify.");
   }
   if (order.paymentStatus === PaymentStatus.PAID) {

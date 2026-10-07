@@ -9,6 +9,7 @@ import { GiftCardChangedError, sealGiftCardApplyHandle } from "../gift-cards";
 import { validateStorefrontCartItems } from "./cart-validation";
 import { buildCheckoutAttemptIdentity, resolveExistingCheckoutAttempt } from "./attempts";
 import { GIFT_CARD_REMAINDER_TOO_SMALL_MESSAGE, assertStorefrontGiftCardTenderReviewed } from "./prepare";
+import { createSslcommerzPackProviders, PACK_SSLCOMMERZ_ID } from "../payments/gateways/testing";
 import {
     DELIVERY,
     TEST_MASTER_SECRET,
@@ -150,10 +151,10 @@ describe("gift cards as a checkout tender", () => {
         await expect(store.prepare({
             ...DELIVERY,
             items: [line("p_mug", "v_mug", 1, 300)],
-            paymentMethod: "sslcommerz",
+            paymentMethod: PACK_SSLCOMMERZ_ID,
             giftCards: [{ handle: card.handle }],
             expectedAmountDueMinor: 500,
-        })).rejects.toThrow(GIFT_CARD_REMAINDER_TOO_SMALL_MESSAGE);
+        }, { paymentProviders: createSslcommerzPackProviders().providers })).rejects.toThrow(GIFT_CARD_REMAINDER_TOO_SMALL_MESSAGE);
         // Cash on delivery takes any remainder.
         const result = await store.checkout({
             ...DELIVERY,

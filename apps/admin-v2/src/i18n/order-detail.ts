@@ -87,6 +87,8 @@ export const orderDetailMessages = defineMessages({
 
     "payment.title": "Payment",
     "payment.method": "Payment method",
+    "payment.appInactive": "Activate {app} in Apps to refund or check this {method} payment.",
+    "payment.bangladeshPack": "Bangladesh pack",
     "payment.paidWith": "Paid · {method}",
     "payment.refunded": "Refunded",
     "payment.net": "Net payment",
@@ -695,6 +697,8 @@ export const orderDetailMessages = defineMessages({
 
     "payment.title": "পেমেন্ট",
     "payment.method": "পেমেন্ট মাধ্যম",
+    "payment.appInactive": "এই {method} পেমেন্ট রিফান্ড বা যাচাই করতে Apps-এ {app} চালু করুন।",
+    "payment.bangladeshPack": "বাংলাদেশ প্যাক",
     "payment.paidWith": "পরিশোধ · {method}",
     "payment.refunded": "রিফান্ড",
     "payment.net": "নিট পেমেন্ট",

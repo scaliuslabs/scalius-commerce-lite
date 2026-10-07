@@ -47,13 +47,11 @@ function methods(enabledMethods: string[] = ["cod"]) {
     revision: 7,
     gateways: [
       { id: "stripe", label: "Stripe", checkoutName: "Card", flow: "card", pluginId: null, supportsRefund: true, chargeCurrencies: "any" },
-      { id: "sslcommerz", label: "SSLCommerz", checkoutName: "SSLCommerz", flow: "hosted", pluginId: null, supportsRefund: true, chargeCurrencies: ["BDT"] },
       { id: BKASH, label: "bKash", checkoutName: "bKash", flow: "hosted", pluginId: "scalius.bkash", supportsRefund: true, chargeCurrencies: ["BDT"] },
     ],
     gatewayStatus: {
       cod: { ...ready, environment: "not_applicable", checkoutSelected: true },
       stripe: { configured: false, enabled: false, usable: false, missingFields: ["secretKey"], providerEnabled: false },
-      sslcommerz: { configured: false, enabled: false, usable: false, missingFields: ["storeId"], providerEnabled: false },
       [BKASH]: { ...ready, environment: "test" },
     },
   };

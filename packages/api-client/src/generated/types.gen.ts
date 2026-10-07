@@ -33765,21 +33765,14 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                 supportsRefund: boolean;
                 chargeCurrencies: 'any' | Array<string>;
                 countries: 'any' | Array<string>;
+                amountLimits?: {
+                    currency: string;
+                    min: number;
+                    max: number;
+                };
             }>;
             gatewayStatus: {
                 stripe: {
-                    configured: boolean;
-                    enabled: boolean;
-                    usable?: boolean;
-                    missingFields?: Array<string>;
-                    credentialErrors?: Array<string>;
-                    blockedReason?: string;
-                    providerEnabled?: boolean;
-                    checkoutSelected?: boolean;
-                    checkoutVisible?: boolean;
-                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
-                };
-                sslcommerz: {
                     configured: boolean;
                     enabled: boolean;
                     usable?: boolean;
@@ -33804,17 +33797,6 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
                 [key: string]: {
-                    configured: boolean;
-                    enabled: boolean;
-                    usable?: boolean;
-                    missingFields?: Array<string>;
-                    credentialErrors?: Array<string>;
-                    blockedReason?: string;
-                    providerEnabled?: boolean;
-                    checkoutSelected?: boolean;
-                    checkoutVisible?: boolean;
-                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
-                } | {
                     configured: boolean;
                     enabled: boolean;
                     usable?: boolean;
@@ -34090,182 +34072,6 @@ export type PostApiV1AdminSettingsStripeResponses = {
 };
 
 export type PostApiV1AdminSettingsStripeResponse = PostApiV1AdminSettingsStripeResponses[keyof PostApiV1AdminSettingsStripeResponses];
-
-export type DeleteApiV1AdminSettingsSslcommerzData = {
-    body: {
-        expectedRevision: number;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/sslcommerz';
-};
-
-export type DeleteApiV1AdminSettingsSslcommerzErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type DeleteApiV1AdminSettingsSslcommerzError = DeleteApiV1AdminSettingsSslcommerzErrors[keyof DeleteApiV1AdminSettingsSslcommerzErrors];
-
-export type DeleteApiV1AdminSettingsSslcommerzResponses = {
-    /**
-     * SSLCommerz keys removed
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            revision: number;
-        };
-    };
-};
-
-export type DeleteApiV1AdminSettingsSslcommerzResponse = DeleteApiV1AdminSettingsSslcommerzResponses[keyof DeleteApiV1AdminSettingsSslcommerzResponses];
-
-export type GetApiV1AdminSettingsSslcommerzData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/sslcommerz';
-};
-
-export type GetApiV1AdminSettingsSslcommerzErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type GetApiV1AdminSettingsSslcommerzError = GetApiV1AdminSettingsSslcommerzErrors[keyof GetApiV1AdminSettingsSslcommerzErrors];
-
-export type GetApiV1AdminSettingsSslcommerzResponses = {
-    /**
-     * SSLCommerz settings
-     */
-    200: {
-        success: true;
-        data: {
-            revision: number;
-            storeId: string;
-            storePassword: string;
-            sandbox: boolean;
-            enabled: boolean;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsSslcommerzResponse = GetApiV1AdminSettingsSslcommerzResponses[keyof GetApiV1AdminSettingsSslcommerzResponses];
-
-export type PostApiV1AdminSettingsSslcommerzData = {
-    body: {
-        expectedRevision: number;
-        storeId?: string;
-        storePassword?: string;
-        sandbox?: boolean;
-        enabled?: boolean;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/sslcommerz';
-};
-
-export type PostApiV1AdminSettingsSslcommerzErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-    /**
-     * Service unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type PostApiV1AdminSettingsSslcommerzError = PostApiV1AdminSettingsSslcommerzErrors[keyof PostApiV1AdminSettingsSslcommerzErrors];
-
-export type PostApiV1AdminSettingsSslcommerzResponses = {
-    /**
-     * SSLCommerz settings saved
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            revision: number;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsSslcommerzResponse = PostApiV1AdminSettingsSslcommerzResponses[keyof PostApiV1AdminSettingsSslcommerzResponses];
 
 export type GetApiV1AdminSettingsCheckoutReadinessData = {
     body?: never;

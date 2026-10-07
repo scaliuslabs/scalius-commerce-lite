@@ -9,7 +9,7 @@ Scalius Commerce Lite is a self-hosted commerce platform: a merchant dashboard, 
 
 ## Stack
 
-A Turborepo monorepo. The dashboard is a React 19 SPA, the storefront is Astro 7 SSR, and the API is Hono with `@hono/zod-openapi` and Better Auth (optional TOTP and email OTP 2FA). Drizzle ORM runs on D1 (default), TursoDB or PostgreSQL/Neon. Built-in providers: Stripe, SSLCommerz, cash on delivery, Pathao, Steadfast, Cloudflare Email, Resend, four SMS providers, WhatsApp and FCM push. `@scalius/plugin-sdk` builds plugins.
+A Turborepo monorepo. The dashboard is a React 19 SPA, the storefront is Astro 7 SSR, and the API is Hono with `@hono/zod-openapi` and Better Auth (optional TOTP and email OTP 2FA). Drizzle ORM runs on D1 (default), TursoDB or PostgreSQL/Neon. Built-in providers: Stripe, cash on delivery, Cloudflare Email, Resend, WhatsApp and FCM push; the Bangladesh pack app adds SSLCommerz, Pathao, Steadfast, four SMS providers and the fraud checkers. `@scalius/plugin-sdk` builds plugins.
 
 ## Repository layout
 

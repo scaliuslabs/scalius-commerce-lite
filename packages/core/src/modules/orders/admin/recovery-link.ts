@@ -207,7 +207,7 @@ export async function previewOrderPaymentRecoveryLink(
 }
 
 /**
- * Issues a fresh private receipt proof for an unpaid SSLCommerz order
+ * Issues a fresh private receipt proof for an unpaid hosted-gateway order
  * whose hosted payment flow can still be recovered from the receipt page.
  */
 export async function createOrderPaymentRecoveryLink(

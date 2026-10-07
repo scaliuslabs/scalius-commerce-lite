@@ -144,10 +144,10 @@ const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
   partial: "Partly fulfilled",
   complete: "Fulfilled",
 };
+/** The export's words for cash and cards; any other method is named by its provider. */
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cod: "Cash on delivery",
   stripe: "Card (Stripe)",
-  sslcommerz: "SSLCommerz",
 };
 const CHANNEL_LABELS: Record<OrderChannel, string> = {
   online_store: "Online store",
@@ -173,6 +173,12 @@ const COD_STATUS_LABELS: Record<string, string> = {
 function label(labels: Record<string, string>, value: string | null | undefined): string {
   if (!value) return "";
   return labels[value] ?? value.replace(/_/g, " ");
+}
+
+/** The export's words for cash and cards, else the method's provider name, else the stored id. */
+function paymentMethodColumn(method: string | null | undefined, paymentMethodName?: (id: string) => string): string {
+  if (!method) return "";
+  return PAYMENT_METHOD_LABELS[method] ?? paymentMethodName?.(method) ?? method.replace(/_/g, " ");
 }
 
 /** "2026-09-24 05:28" in store time (the store's zone), so orders land on the right day. */
@@ -274,7 +280,7 @@ function deliveryMethodLabel(order: OrderCsvRow): string {
   return "Delivery";
 }
 
-function orderColumns(order: OrderCsvRow, timeZone: string): unknown[] {
+function orderColumns(order: OrderCsvRow, timeZone: string, paymentMethodName?: (id: string) => string): unknown[] {
   // Pickup and no-ship orders have no address; never print a stale one.
   const ships = order.requiresShipping !== false;
   // Bangladesh fills Area, Thana and City from its delivery locations; another
@@ -294,7 +300,7 @@ function orderColumns(order: OrderCsvRow, timeZone: string): unknown[] {
     deliveryMethodLabel(order),
     label(ORDER_STATUS_LABELS, order.status),
     paymentLabel(order),
-    label(PAYMENT_METHOD_LABELS, order.paymentMethod),
+    paymentMethodColumn(order.paymentMethod, paymentMethodName),
     label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatus),
     order.courierName,
     order.trackingId,
@@ -341,6 +347,8 @@ export function createOrdersCsvArtifactBuilder(
   /** The store's zone: dates are store time. */
   timeZone: string,
   maxBytes = ORDER_CSV_ARTIFACT_MAX_BYTES,
+  /** A payment method's name from its provider (an app's, or a retired built-in id's). */
+  paymentMethodName?: (id: string) => string,
 ) {
   if (format === "items") {
     return createCsvArtifactBuilder<OrderCsvRow>([
@@ -348,7 +356,7 @@ export function createOrdersCsvArtifactBuilder(
       "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
       ...ADDRESS_TAIL_HEADERS,
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
-      ...orderColumns(order, timeZone),
+      ...orderColumns(order, timeZone, paymentMethodName),
       line?.productName ?? "",
       line?.variantLabel ?? "",
       line?.properties?.join("; ") ?? "",
@@ -370,7 +378,7 @@ export function createOrdersCsvArtifactBuilder(
     "Total", "Paid", "Refunded", "Cash to collect", "Cash on delivery", "Note",
     ...ADDRESS_TAIL_HEADERS,
   ], (order) => [[
-    ...orderColumns(order, timeZone),
+    ...orderColumns(order, timeZone, paymentMethodName),
     order.lines.map(describeLine).join("; "),
     order.lines.reduce((sum, line) => sum + line.quantity, 0),
     order.subtotalAmount,

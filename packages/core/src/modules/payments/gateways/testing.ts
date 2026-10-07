@@ -112,3 +112,21 @@ export function createFakeGateway(id = FAKE_GATEWAY_ID): {
   };
   return { gateway, state, providers: createPaymentProviders([gateway]) };
 }
+
+/** The Bangladesh pack's SSLCommerz provider id (`sslcommerz` on orders made before it moved there). */
+export const PACK_SSLCOMMERZ_ID = "scalius.bangladesh:sslcommerz";
+
+/**
+ * A request's gateways with the Bangladesh pack's SSLCommerz active: a fake
+ * hosted gateway under its id, with its declared name and BDT limits (10 to
+ * 500,000 taka). Orders that still name `sslcommerz` resolve to it.
+ */
+export function createSslcommerzPackProviders(): { gateway: PaymentGateway<FakeGatewaySettings>; state: FakeGatewayState; providers: PaymentProviders } {
+  const fake = createFakeGateway(PACK_SSLCOMMERZ_ID);
+  const gateway: PaymentGateway<FakeGatewaySettings> = {
+    ...fake.gateway,
+    label: "SSLCommerz",
+    amountLimits: { currency: "BDT", minMinor: 1_000, maxMinor: 50_000_000 },
+  };
+  return { gateway, state: fake.state, providers: createPaymentProviders([gateway]) };
+}

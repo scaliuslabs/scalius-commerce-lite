@@ -12,11 +12,12 @@ import {
     getActivePaymentMethods,
     getStripeSettings,
     getStripeCheckoutReadiness,
-    getSSLCommerzCheckoutReadiness,
-    getSSLCommerzSettings,
     COD_PAYMENT_METHOD,
+    isAppPaymentMethod,
     isPaymentMethodId,
+    isRetiredPaymentMethod,
     paymentMethodLabel,
+    publicAmountLimits,
     type GatewaySettings,
     type PaymentProviders,
 } from "@scalius/core/modules/payments";
@@ -25,9 +26,7 @@ import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     checkoutDocument,
     paymentMethodsDocument,
-    sslcommerzDocument,
     stripeDocument,
-    type SSLCommerzSettingsDocument,
     type StripeSettingsDocument,
     getCurrencySettings,
 } from "@scalius/core/modules/settings";
@@ -93,14 +92,6 @@ const saveStripeSchema = z.object({
     enabled: z.boolean().optional()
 });
 
-const saveSSLCommerzSchema = z.object({
-    expectedRevision: revisionSchema,
-    storeId: z.string().optional(),
-    storePassword: z.string().optional(),
-    sandbox: z.boolean().optional(),
-    enabled: z.boolean().optional()
-});
-
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
 
 /**
@@ -150,21 +141,6 @@ function getEffectiveStripeCheckoutSettings(
     };
 }
 
-function getEffectiveSSLCommerzCheckoutSettings(
-    body: z.infer<typeof saveSSLCommerzSchema>,
-    storedSettings: Awaited<ReturnType<typeof getSSLCommerzSettings>>,
-) {
-    return {
-        storeId: body.storeId === undefined || body.storeId === MASKED
-            ? storedSettings?.storeId ?? ""
-            : body.storeId.trim(),
-        storePassword: submittedSecret(body.storePassword) ?? storedSettings?.storePassword ?? "",
-        sandbox: body.sandbox ?? storedSettings?.sandbox ?? true,
-        enabled: body.enabled ?? storedSettings?.enabled ?? false,
-        credentialErrors: storedSettings?.credentialErrors,
-    };
-}
-
 const gatewayStatusSchema = z.object({
     configured: z.boolean(),
     enabled: z.boolean(),
@@ -190,6 +166,8 @@ const paymentGatewaySchema = z.object({
     chargeCurrencies: z.union([z.literal("any"), z.array(z.string())]),
     /** The delivery countries it serves ("any" for every country). */
     countries: z.union([z.literal("any"), z.array(z.string())]),
+    /** Provider charge limits in major units (an advance payment must fit them), when it has any. */
+    amountLimits: z.object({ currency: z.string(), min: z.number(), max: z.number() }).optional(),
 });
 
 const paymentMethodsResponseSchema = z.object({
@@ -268,6 +246,16 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             ...selection(gateway.id),
         };
     }
+    // A saved choice of a retired built-in gateway whose app is not active
+    // (`sslcommerz` before the Bangladesh pack is activated): never usable,
+    // with the app's reason.
+    for (const method of rawConfig.enabledMethods) {
+        if (!isRetiredPaymentMethod(method) || gatewayStatus[method]) continue;
+        const gateway = providers.get(method);
+        if (!gateway || gateway.id !== method) continue;
+        const readiness = gateway.readiness(null);
+        gatewayStatus[method] = { ...readiness, environment: "unknown", providerEnabled: false, ...selection(method) };
+    }
     gatewayStatus[COD_PAYMENT_METHOD] = {
         configured: true,
         enabled: true,
@@ -295,6 +283,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             supportsRefund: gateway.supportsRefund,
             chargeCurrencies: gateway.chargeCurrencies === "any" ? "any" as const : [...gateway.chargeCurrencies],
             countries: providers.countries(gateway.id) === "any" ? "any" as const : [...providers.countries(gateway.id) as readonly string[]],
+            ...(publicAmountLimits(gateway) ? { amountLimits: publicAmountLimits(gateway) } : {}),
         })),
         gatewayStatus,
     });
@@ -325,7 +314,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const currencySettings = await getCurrencySettings(db);
     // App gateways are read only when the merchant selects one.
-    const providers = await requestPaymentProviders(c, data.enabledMethods.find(isQualifiedProviderId) ?? COD_PAYMENT_METHOD);
+    const providers = await requestPaymentProviders(c, data.enabledMethods.find(isAppPaymentMethod) ?? COD_PAYMENT_METHOD);
     for (const method of data.enabledMethods) {
         if (method === COD_PAYMENT_METHOD) continue;
         const gateway = providers.require(method);
@@ -435,7 +424,8 @@ app.openapi(saveStripeRoute, async (c) => {
             : undefined;
 
         if (body.enabled === false) {
-            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "stripe");
+            // Another method that keeps checkout working may be an app's (SSLCommerz, bKash).
+            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "stripe", await requestPaymentProviders(c));
         }
 
         const patch: Partial<StripeSettingsDocument> = {
@@ -454,90 +444,6 @@ app.openapi(saveStripeRoute, async (c) => {
 });
 
 // ─────────────────────────────────────────
-// SSLCOMMERZ
-// ─────────────────────────────────────────
-
-const sslCommerzSettingsResponseSchema = z.object({
-    revision: revisionSchema,
-    storeId: z.string(),
-    storePassword: z.string(),
-    sandbox: z.boolean(),
-    enabled: z.boolean(),
-});
-
-const getSSLCommerzRoute = createRoute({
-    method: "get",
-    path: "/sslcommerz",
-    operationId: "dashboard.payments.sslcommerz_get",
-    tags: ["Admin - Settings"],
-    summary: "Get SSLCommerz settings",
-    responses: {
-        200: { description: "SSLCommerz settings", content: { "application/json": { schema: successEnvelope(sslCommerzSettingsResponseSchema) } } },
-        ...errorResponses,
-    }
-});
-
-app.openapi(getSSLCommerzRoute, async (c) => {
-    const db = c.get("db");
-        const stored = await sslcommerzDocument.readDetailed(db);
-
-        return ok(c, {
-            revision: stored.revision,
-            storeId: stored.value.storeId,
-            storePassword: maskedSecret(stored, "storePassword"),
-            sandbox: stored.value.sandbox,
-            enabled: stored.stored && stored.value.enabled,
-        });
-});
-
-const saveSSLCommerzRoute = createRoute({
-    method: "post",
-    path: "/sslcommerz",
-    operationId: "dashboard.payments.sslcommerz_update",
-    tags: ["Admin - Settings"],
-    summary: "Save SSLCommerz settings",
-    request: { body: { required: true, content: { "application/json": { schema: saveSSLCommerzSchema } } } },
-    responses: {
-        200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
-        ...errorResponses,
-        409: conflictResponse,
-        503: serviceUnavailableResponse,
-    }
-});
-
-app.openapi(saveSSLCommerzRoute, async (c) => {
-    const db = c.get("db");
-        const body = c.req.valid("json");
-        const storedSettings = await getSSLCommerzSettings(
-            db,
-            getCredentialEncryptionKey(c.env as Record<string, unknown>),
-        );
-        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(body, storedSettings);
-        const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
-        assertGatewayCanTurnOn("SSLCommerz", sslReadiness);
-        const hasSecretWrite = Boolean(body.storePassword && body.storePassword !== MASKED && body.storePassword.trim());
-        const encKey = hasSecretWrite
-            ? requireEncryptionKey(c.env as Record<string, unknown>)
-            : undefined;
-
-        if (body.enabled === false) {
-            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "sslcommerz");
-        }
-
-        const patch: Partial<SSLCommerzSettingsDocument> = {
-            storeId: body.storeId?.trim() || undefined,
-            storePassword: submittedSecret(body.storePassword),
-            sandbox: body.sandbox,
-            enabled: body.enabled,
-        };
-        const { revision } = await sslcommerzDocument.write(db, patch, { encryptionKey: encKey }, {
-            expectedRevision: body.expectedRevision,
-        });
-
-        return ok(c, { message: "SSLCommerz settings saved successfully", revision });
-});
-
-// ─────────────────────────────────────────
 // REMOVE KEYS (Shopify/Stripe apps: Disconnect)
 // ─────────────────────────────────────────
 
@@ -551,17 +457,16 @@ const removeKeysSchema = z.object({ expectedRevision: revisionSchema });
 async function removeGatewayKeys(
     db: Database,
     env: Env,
-    gatewayId: "stripe" | "sslcommerz",
+    gatewayId: "stripe",
     expectedRevision: number,
+    providers: PaymentProviders,
 ): Promise<number> {
-    await assertDisablingGatewayKeepsCheckoutFlow(db, env, gatewayId);
+    await assertDisablingGatewayKeepsCheckoutFlow(db, env, gatewayId, providers);
     const methods = await paymentMethodsDocument.readDetailed(db);
     const selected = methods.value.enabledMethods;
     const remaining = selected?.filter((method) => method !== gatewayId) ?? null;
     const [written] = await writeSettingsDocuments(db, [
-        gatewayId === "stripe"
-            ? { document: stripeDocument, patch: { secretKey: "", publishableKey: "", webhookSecret: "", enabled: false }, expectedRevision }
-            : { document: sslcommerzDocument, patch: { storeId: "", storePassword: "", sandbox: true, enabled: false }, expectedRevision },
+        { document: stripeDocument, patch: { secretKey: "", publishableKey: "", webhookSecret: "", enabled: false }, expectedRevision },
         ...(remaining && remaining.length !== selected!.length
             ? [{
                 document: paymentMethodsDocument,
@@ -578,7 +483,7 @@ async function removeGatewayKeys(
     return written!.revision;
 }
 
-for (const gateway of ["stripe", "sslcommerz"] as const) {
+for (const gateway of ["stripe"] as const) {
     const label = paymentMethodLabel(gateway);
     app.openapi(createRoute({
         method: "delete",
@@ -594,7 +499,7 @@ for (const gateway of ["stripe", "sslcommerz"] as const) {
         },
     }), async (c) => {
         const { expectedRevision } = c.req.valid("json");
-        const revision = await removeGatewayKeys(c.get("db"), c.env, gateway, expectedRevision);
+        const revision = await removeGatewayKeys(c.get("db"), c.env, gateway, expectedRevision, await requestPaymentProviders(c));
 
         return ok(c, { message: `${label} keys removed`, revision });
     });

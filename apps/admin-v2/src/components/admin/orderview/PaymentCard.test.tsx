@@ -193,6 +193,25 @@ describe("PaymentCard", () => {
     });
   });
 
+  it("says an SSLCommerz payment waits for the Bangladesh pack until the pack's provider is active", async () => {
+    const paid = { ...order, status: "delivered", paymentMethod: "sslcommerz", paymentStatus: "paid", paidAmount: 1300 };
+    const show = async (providers: unknown[]) => {
+      client.setQueryData(["settings", "app-providers", "payment"], providers);
+      await act(async () => root.render(
+        <QueryClientProvider client={client}>
+          <PermissionProvider isSuperAdmin>
+            <PaymentCard order={paid} />
+          </PermissionProvider>
+        </QueryClientProvider>,
+      ));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    };
+    await show([]);
+    expect(host.textContent).toContain("Activate Bangladesh pack in Apps to refund or check this SSLCommerz payment.");
+    await show([{ id: "scalius.bangladesh:sslcommerz", name: "SSLCommerz", appName: "Bangladesh pack", readiness: { enabled: true } }]);
+    expect(host.textContent).not.toContain("Activate Bangladesh pack in Apps");
+  });
+
   it("summarises a partial refund as paid, refunded and net, with its own badge", async () => {
     await render({
       id: "order_refund", status: "delivered", paymentMethod: "stripe", paymentStatus: "partially_refunded",

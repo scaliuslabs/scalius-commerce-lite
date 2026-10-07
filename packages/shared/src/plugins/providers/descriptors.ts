@@ -62,6 +62,13 @@ function base<K extends ProviderKind>(kind: K) {
       .refine((keys) => new Set(keys).size === keys.length, "List each setting once.")
       .optional(),
     icon: providerIcon.optional(),
+    /**
+     * The select setting (`sandbox` or `live`) that says whether this provider
+     * talks to its test or its live system, shown to the merchant and the
+     * storefront's test notice. Left out: the app's `environment` setting. A
+     * pack names one per provider (`sslcommerz_environment`).
+     */
+    environmentSetting: settingKey.optional(),
   };
 }
 
@@ -82,6 +89,16 @@ export const paymentProviderDescriptorSchema = z.object({
   amountLimits: paymentAmountLimitsSchema.optional(),
   /** Per-currency wire forms (amount.ts); currencies without one are sent as ISO minor units. */
   amountCodecs: providerAmountCodecsSchema.optional(),
+  /**
+   * A hosted page that posts the merchant reference (`correlationId`) back,
+   * unsigned, with a failed or cancelled return names its form field here
+   * (SSLCommerz: `tran_id`). The platform then releases the attempt that
+   * reference names on such a return without calling the app: the reference
+   * selects an attempt the platform created, it never proves a payment. A
+   * success return still goes through `verifyReturn`. Left out: every return
+   * is authenticated by `verifyReturn`.
+   */
+  returnCorrelationField: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).optional(),
 }).strict().superRefine((descriptor, context) => {
   const has = (operation: string) => descriptor.operations.includes(operation);
   // A hosted page returns the buyer, and a buyer may ask whether it went through.

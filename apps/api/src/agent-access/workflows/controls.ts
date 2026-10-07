@@ -14,7 +14,7 @@ const BANGLADESH_SETUP_SAFE_READS = [
 
 const BANGLADESH_SETUP_FORBIDDEN_WRITES = [
   "dashboard.settings.currency_update",
-  "dashboard.payments.sslcommerz_update",
+  "dashboard.apps.settings_update",
   "dashboard.payments.methods_update",
   "dashboard.shipping_zones.create",
   "dashboard.shipping_zones.update",

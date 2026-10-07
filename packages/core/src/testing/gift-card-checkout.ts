@@ -21,11 +21,18 @@ import {
 } from "../modules/checkout/prepare";
 import type { CreateStorefrontOrderInput, CreateStorefrontOrderResult } from "../modules/orders/types";
 import type { AtomicCheckoutAttempt } from "../modules/checkout/attempts";
+import type { PaymentProviders } from "../modules/payments/gateways/registry";
 
 export const TEST_MASTER_SECRET = "test-master-secret-for-gift-card-handles-0123456789";
 const TEST_CREDENTIAL_KEY = "test-credential-encryption-key-for-gift-cards-0123456789";
 
 type Line = CreateStorefrontOrderInput["items"][number];
+
+/** A store's checkout options for one prepared order: the advance setting, and the request's gateways (built-in only when absent). */
+export interface GiftCardCheckoutOptions {
+    partialPaymentEnabled?: boolean;
+    paymentProviders?: PaymentProviders;
+}
 
 export const line = (productId: string, variantId: string, quantity: number, price: number, properties?: Line["properties"]): Line =>
     ({ productId, variantId, quantity, price, properties });
@@ -60,9 +67,9 @@ export interface GiftCardCheckoutFixture {
     issueCard(amountMinor: number, id?: string): Promise<{ giftCardId: string; handle: string }>;
     balance(giftCardId: string): number;
     /** Prepare as the route does, then the reviewed-tender check (no write). */
-    prepare(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }, options?: { partialPaymentEnabled?: boolean }): Promise<PreparedGiftCardCheckout>;
+    prepare(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }, options?: GiftCardCheckoutOptions): Promise<PreparedGiftCardCheckout>;
     commit(prepared: PreparedGiftCardCheckout): Promise<void>;
-    checkout(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }, options?: { partialPaymentEnabled?: boolean }): Promise<CreateStorefrontOrderResult>;
+    checkout(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }, options?: GiftCardCheckoutOptions): Promise<CreateStorefrontOrderResult>;
     close(): void;
 }
 
@@ -104,7 +111,7 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
 
     async function prepare(
         overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] },
-        options: { partialPaymentEnabled?: boolean } = {},
+        options: GiftCardCheckoutOptions = {},
     ): Promise<PreparedGiftCardCheckout> {
         const data: CreateStorefrontOrderInput = {
             checkoutRequestId: `request_${crypto.randomUUID()}`,
@@ -151,6 +158,7 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
             }),
             authority.taxAuthority,
             { masterSecret: TEST_MASTER_SECRET },
+            options.paymentProviders ? { paymentProviders: options.paymentProviders } : undefined,
         );
         assertStorefrontGiftCardTenderReviewed(result.giftCardTender, data.expectedAmountDueMinor);
         return { data, attempt, result };

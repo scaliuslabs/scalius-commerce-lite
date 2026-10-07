@@ -1118,7 +1118,8 @@ async function dispatchRefund(
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
     const settings = await gateway.loadSettings(db, encryptionKey);
     if (!settings) throw new ServiceUnavailableError(`${gateway.label} is not configured`);
-    if (!settings.enabled) throw new ServiceUnavailableError(`${gateway.label} payment gateway is disabled`);
+    // A gateway that is off says why (an app gateway: "Activate … in Apps to use it.").
+    if (!settings.enabled) throw new ServiceUnavailableError(gateway.readiness(settings).blockedReason ?? `${gateway.label} payment gateway is disabled`);
     if (settings.credentialErrors?.length) throw new ServiceUnavailableError(`${gateway.label} credentials are not readable`);
     if (!payment.providerRef) throw new ValidationError(`No ${gateway.label} payment reference found on payment record`);
     if (!Number.isSafeInteger(refundAmountMinor) || refundAmountMinor <= 0) {

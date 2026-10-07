@@ -601,6 +601,12 @@ export const stripeDocument = defineSettingsDocument<StripeSettingsDocument>({
   secretFields: { secretKey: "Stripe secret key", webhookSecret: "Stripe webhook secret" },
 });
 
+/**
+ * Retired: SSLCommerz moved into the Bangladesh pack (`scalius.bangladesh:
+ * sslcommerz`), whose own settings hold its keys. A store set up before the
+ * move keeps this document until the pack's activation moves its fields and
+ * clears it (payments/retired-gateways.ts); nothing else reads it.
+ */
 export interface SSLCommerzSettingsDocument {
   storeId: string;
   storePassword: string;

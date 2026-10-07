@@ -288,7 +288,7 @@ const createOrderSchema = z.object({
   /** A delivery or pickup rate; required when a line is physical. */
   shippingMethodId: z.string().optional().nullable(),
   /**
-   * `cod`, a gateway id (`stripe`, `sslcommerz`, or an app provider's
+   * `cod`, a gateway id (`stripe`, or an app provider's
    * `<plugin id>:<provider id>`), or `gift_card` only when the applied gift
    * cards cover the whole order. Checkout accepts only methods enabled now.
    */

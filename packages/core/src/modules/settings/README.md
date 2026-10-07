@@ -50,7 +50,8 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `firebase` | `publicConfig` | `serviceAccount` |
 | `whatsapp` | `phoneNumberId`, `authTemplateName` | `accessToken` |
 | `sms` | active provider + provider fields | provider tokens/API keys |
-| `stripe` / `sslcommerz` | provider fields, `enabled`, `sandbox` | secret key, webhook secret / store password |
+| `stripe` | provider fields, `enabled` | secret key, webhook secret |
+| `sslcommerz` (retired) | read once by the Bangladesh pack's activation, then cleared | store password |
 | `payment_methods` | `enabledMethods` (`null` = COD implied), `defaultMethod` | -- |
 | `meta_conversions` | `pixelId`, `testEventCode`, `isEnabled`, `logRetentionDays` | `accessToken` |
 
@@ -153,7 +154,7 @@ WhatsApp saves require a ready provider that is not paused by
 - `site.ts` -- currency (a price-increment change queues the projection rebuild), the theme (editor, workspace, document, versions, draft, page draft, publish, restore, discard, preview session), media, SEO (partial discovery/return-policy patches, feed diagnostics, live probe), storefront URL, allowed countries. Public caches need no bump: a save advances the document's cache dependency in the same transaction (dependency-validated caching, `packages/shared/src/cache-deps.ts`).
 - `notification-channels.ts`, `notification-templates.ts` -- customer and admin order channels, message templates.
 - `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
-- `payments.ts` -- payment methods, Stripe, SSLCommerz. Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.
+- `payments.ts` -- payment methods and Stripe (SSLCommerz is the Bangladesh pack's; its keys are the pack's settings). Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.
 - `meta-conversions-admin.ts` -- Meta CAPI settings; a save clears the `meta-capi:browser-events:circuit` KV marker.
 - `business.ts`, `sms.ts`, `platform.ts`.
 

@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   APP_GATEWAY_MARKS,
   APP_GATEWAY_MARK_SRC,
+  APP_PROVIDER_MARKS,
   appGatewayName,
   getGatewayPresentation,
   isAppGatewayId,
+  SSLCOMMERZ_GATEWAY_ID,
 } from "./gateway-presentation";
 
 const BKASH = "scalius.bkash:bkash";
@@ -20,13 +22,16 @@ describe("gateway presentation", () => {
       markKind: "wordmark",
       hosted: false,
     });
-    expect(getGatewayPresentation("sslcommerz", "SSLCommerz")).toMatchObject({
-      buyerLabel: "Pay online",
-      providerLabel: "SSLCommerz",
-      markSrc: "/payment-marks/sslcommerz.png",
-      markKind: "wordmark",
-      hosted: true,
-    });
+    // SSLCommerz is the Bangladesh pack's now; buyers see it as before, by either id.
+    for (const id of ["sslcommerz", SSLCOMMERZ_GATEWAY_ID]) {
+      expect(getGatewayPresentation(id, "Online Payment")).toMatchObject({
+        buyerLabel: "Pay online",
+        providerLabel: "SSLCommerz",
+        markSrc: "/payment-marks/sslcommerz.png",
+        markKind: "wordmark",
+        hosted: true,
+      });
+    }
     // A gift card is the tender itself: no mark, as before.
     expect(getGatewayPresentation("gift_card", "Gift card")).toEqual({
       buyerLabel: "Gift card",
@@ -51,6 +56,15 @@ describe("gateway presentation", () => {
     expect(getGatewayPresentation("acme.pay:wallet", "Acme wallet")).toMatchObject({ markSrc: APP_GATEWAY_MARK_SRC, markKind: "icon" });
   });
 
+  it("serves a pack provider's declared mark, byte for byte", () => {
+    for (const [id, src] of Object.entries(APP_PROVIDER_MARKS)) {
+      expect(id).toBe(SSLCOMMERZ_GATEWAY_ID);
+      const served = readFileSync(new URL(`../../../public${src}`, import.meta.url));
+      const declared = readFileSync(new URL("../../../../../plugins/bangladesh/assets/sslcommerz.png", import.meta.url));
+      expect(served.equals(declared), id).toBe(true);
+    }
+  });
+
   it("serves the wallet apps' own listing icons, byte for byte", () => {
     for (const [pluginId, src] of Object.entries(APP_GATEWAY_MARKS)) {
       const app = pluginId.split(".")[1];
@@ -70,8 +84,12 @@ describe("gateway presentation", () => {
     expect(appGatewayName(BKASH, gateways)).toBe("bKash");
     expect(appGatewayName("scalius.nagad:nagad", gateways)).toBe("Nagad");
     expect(appGatewayName(BKASH, [{ id: BKASH, name: "  " }])).toBe("Bkash");
-    expect(appGatewayName("sslcommerz", gateways)).toBeNull();
+    expect(appGatewayName("stripe", gateways)).toBeNull();
+    // A retired built-in id reads as the provider that replaced it.
+    expect(appGatewayName("sslcommerz", gateways)).toBe("SSLCommerz");
+    expect(appGatewayName("sslcommerz", [{ id: SSLCOMMERZ_GATEWAY_ID, name: "Online Payment" }])).toBe("Online Payment");
     expect(isAppGatewayId(BKASH)).toBe(true);
-    expect(isAppGatewayId("sslcommerz")).toBe(false);
+    expect(isAppGatewayId("sslcommerz")).toBe(true);
+    expect(isAppGatewayId("stripe")).toBe(false);
   });
 });

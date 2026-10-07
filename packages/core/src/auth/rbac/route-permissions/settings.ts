@@ -146,11 +146,6 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  "/api/v1/admin/settings/sslcommerz": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
   "/api/v1/admin/settings/marketing-consent": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },

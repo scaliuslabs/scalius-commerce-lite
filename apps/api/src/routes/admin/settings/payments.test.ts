@@ -2,7 +2,8 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { getSSLCommerzSettings, getStripeSettings } from "@scalius/core/modules/payments";
+import { BUILT_IN_PAYMENT_PROVIDERS, getStripeSettings, type PaymentProviders } from "@scalius/core/modules/payments";
+import { createFakeGateway } from "@scalius/core/testing";
 import {
     checkoutDocument,
     currencyDocument,
@@ -10,6 +11,13 @@ import {
     sslcommerzDocument,
     stripeDocument,
 } from "@scalius/core/modules/settings";
+
+// The request's gateways: built in, unless a test installs the Bangladesh pack's SSLCommerz.
+const appProviders = vi.hoisted(() => ({ current: null as PaymentProviders | null }));
+vi.mock("../../../plugins/providers/payment", () => ({
+    requestPaymentProviders: async () => appProviders.current ?? BUILT_IN_PAYMENT_PROVIDERS,
+}));
+const PACK_SSLCOMMERZ = "scalius.bangladesh:sslcommerz";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -102,6 +110,7 @@ async function expectValidationError(response: Response, message?: string) {
 describe("payment settings", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        appProviders.current = null;
     });
 
     describe("reads", () => {
@@ -113,9 +122,9 @@ describe("payment settings", () => {
             await expect(stripeResponse.json()).resolves.toMatchObject({
                 data: { secretKey: MASKED, publishableKey: "pk_live_existing", webhookSecret: MASKED },
             });
-            const ssl = await sslResponse.json() as { data: Record<string, unknown> };
-            expect(ssl.data).toMatchObject({ storeId: "real_store_123", storePassword: MASKED });
-            expect(JSON.stringify(ssl)).not.toContain("stored-real-password");
+            // SSLCommerz is the Bangladesh pack's now: its keys are the pack's settings, never served here.
+            expect(sslResponse.status).toBe(404);
+            expect(await sslResponse.text()).not.toContain("stored-real-password");
         });
 
         it("returns raw selected methods separately from effective active checkout methods", async () => {
@@ -167,26 +176,54 @@ describe("payment settings", () => {
             });
         });
 
-        it("excludes a configured SSLCommerz method from dashboard checkout readiness outside BDT", async () => {
+        it("shows a saved SSLCommerz choice as waiting for the Bangladesh pack and keeps it out of checkout", async () => {
             const { request } = await createTestApp({
                 sslcommerz: liveSsl,
-                currency: { currencyCode: "USD" },
                 payment_methods: { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
             });
 
             await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
                 data: {
+                    enabledMethods: ["sslcommerz", "cod"],
                     activeMethods: ["cod"],
                     activeDefaultMethod: "cod",
                     gatewayStatus: {
                         sslcommerz: {
-                            configured: true,
+                            configured: false,
                             usable: false,
+                            checkoutSelected: true,
                             checkoutVisible: false,
-                            blockedReason: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
+                            blockedReason: "SSLCommerz: Activate Bangladesh pack in Apps to use it.",
                         },
                     },
                 },
+            });
+        });
+
+        it("lists the pack's SSLCommerz with its charge limits and excludes it outside BDT", async () => {
+            appProviders.current = createFakeGateway(PACK_SSLCOMMERZ).providers;
+            const { request } = await createTestApp({
+                currency: { currencyCode: "USD" },
+                payment_methods: { enabledMethods: [PACK_SSLCOMMERZ, "cod"], defaultMethod: PACK_SSLCOMMERZ },
+            });
+
+            const body = await (await request("/payment-methods")).json() as { data: { gateways: Array<Record<string, unknown>> } };
+            expect(body).toMatchObject({
+                data: {
+                    activeMethods: ["cod"],
+                    gatewayStatus: {
+                        [PACK_SSLCOMMERZ]: {
+                            configured: true,
+                            usable: false,
+                            checkoutVisible: false,
+                            blockedReason: "FakePay checkout requires the store currency to be BDT. Current currency: USD.",
+                        },
+                    },
+                },
+            });
+            expect(body.data.gateways.find((gateway) => gateway.id === PACK_SSLCOMMERZ)).toMatchObject({
+                pluginId: "scalius.bangladesh",
+                amountLimits: { currency: "BDT", min: 10, max: 100_000 },
             });
         });
     });
@@ -212,9 +249,9 @@ describe("payment settings", () => {
 
         it.each([
             ["duplicate methods", {}, {}, { enabledMethods: ["cod", "cod"], defaultMethod: "cod" }, undefined],
-            ["SSLCommerz outside BDT", { sslcommerz: liveSsl, currency: { currencyCode: "USD" } }, {},
+            ["a retired SSLCommerz choice before the Bangladesh pack is active", { sslcommerz: liveSsl }, {},
                 { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
-                "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD."],
+                "SSLCommerz: Activate Bangladesh pack in Apps to use it."],
             ["removing every online gateway under partial payments", {}, { partialPaymentEnabled: true },
                 { enabledMethods: ["cod"], defaultMethod: "cod" }, undefined],
             ["a default method hidden by the checkout flow", { stripe: liveStripe }, { partialPaymentEnabled: true },
@@ -253,24 +290,8 @@ describe("payment settings", () => {
 
         });
 
-        it("encrypts SSLCommerz store passwords and keeps masked updates on the stored secret", async () => {
-            const { request, db, sqlite } = await createTestApp();
-
-            expect((await request("/sslcommerz", { storeId: "real_store_123", storePassword: "ssl_secret" })).status).toBe(200);
-            expect((await request("/sslcommerz", { storePassword: MASKED, sandbox: true, enabled: true })).status).toBe(200);
-
-            expect(storedRows(sqlite, "sslcommerz").storePassword).not.toContain("ssl_secret");
-            await expect(getSSLCommerzSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
-                storeId: "real_store_123",
-                storePassword: "ssl_secret",
-                sandbox: true,
-                enabled: true,
-            });
-        });
-
         it.each([
             ["/stripe", { secretKey: "sk_live_missing_key" }],
-            ["/sslcommerz", { storePassword: "ssl_secret_missing_key" }],
         ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {
             const { request, sqlite } = await createTestApp();
 
@@ -309,14 +330,6 @@ describe("payment settings", () => {
             ["Stripe when a masked stored credential is a placeholder", "/stripe",
                 { stripe: { ...liveStripe, secretKey: "sk_test_your_key_here", enabled: false } }, { enabled: true },
                 "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."],
-            ["SSLCommerz without an effective store password", "/sslcommerz", {},
-                { storeId: "store-id", enabled: true }, undefined],
-            ["SSLCommerz with submitted placeholder credentials", "/sslcommerz", {},
-                { storeId: "dummy", storePassword: "real-store-password", enabled: true },
-                "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account."],
-            ["SSLCommerz when a masked stored credential is a placeholder", "/sslcommerz",
-                { sslcommerz: { ...liveSsl, storePassword: "password", enabled: false } }, { storePassword: MASKED, enabled: true },
-                "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account."],
         ] as const)("rejects enabling %s without persisting", async (_, path, stored, body, message) => {
             const { request, sqlite } = await createTestApp(stored as Stored);
             const before = storedRows(sqlite, path.slice(1));
@@ -347,23 +360,8 @@ describe("payment settings", () => {
             await expect(getStripeSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({ enabled: false });
         });
 
-        it("saves a partial SSLCommerz setup while it stays off", async () => {
-            const { request, db } = await createTestApp();
-
-            expect((await request("/sslcommerz", { storeId: "real_store_123", enabled: false })).status).toBe(200);
-            await expect(getSSLCommerzSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
-                storeId: "real_store_123",
-                enabled: false,
-            });
-            await expectValidationError(
-                await request("/sslcommerz", { enabled: true }),
-                "Add the store password to turn on SSLCommerz.",
-            );
-        });
-
         it.each([
             ["/stripe", { stripe: liveStripe }, { secretKey: "", publishableKey: "", webhookSecret: "", enabled: false }],
-            ["/sslcommerz", { sslcommerz: liveSsl }, { storeId: "", storePassword: "", sandbox: true, enabled: false }],
         ] as const)("removes every saved %s key, turns it off and takes it out of checkout", async (path, stored, cleared) => {
             const gateway = path.slice(1);
             const { request, remove, sqlite } = await createTestApp({
@@ -414,10 +412,11 @@ describe("payment settings", () => {
             await expectValidationError(await lastGateway.request("/stripe", { enabled: false }));
             expect(storedRows(lastGateway.sqlite, "stripe").enabled).toBe(true);
 
+            // The fallback may be an app's gateway (the Bangladesh pack's SSLCommerz).
+            appProviders.current = createFakeGateway(PACK_SSLCOMMERZ).providers;
             const withFallback = await createTestApp({
                 stripe: liveStripe,
-                sslcommerz: liveSsl,
-                payment_methods: { enabledMethods: ["stripe", "sslcommerz", "cod"], defaultMethod: "sslcommerz" },
+                payment_methods: { enabledMethods: ["stripe", PACK_SSLCOMMERZ, "cod"], defaultMethod: PACK_SSLCOMMERZ },
             }, { partialPaymentEnabled: true });
             expect((await withFallback.request("/stripe", { enabled: false })).status).toBe(200);
             expect(storedRows(withFallback.sqlite, "stripe").enabled).toBe(false);

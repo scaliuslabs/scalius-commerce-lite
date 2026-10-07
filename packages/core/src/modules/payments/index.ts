@@ -1,5 +1,5 @@
 // Barrel exports for the payments module. Gateway adapters live in
-// ./gateways (port.ts, one file per provider, registry.ts).
+// ./gateways (port.ts, one file per built-in provider, registry.ts).
 export * from "./browser";
 export * from "./gateways/port";
 export * from "./gateways/correlation";
@@ -19,23 +19,25 @@ export {
   CASH_ON_DELIVERY_AMOUNT_REASON,
   COD_PAYMENT_METHOD,
   createPaymentProviders,
+  isAppPaymentMethod,
   isOnlinePaymentMethod,
   isPaymentMethodId,
+  isRetiredPaymentMethod,
   onlinePaymentMethodCondition,
+  paymentMethodAliases,
   paymentMethodLabel,
   paymentProvidersFor,
+  RETIRED_PAYMENT_GATEWAY_IDS,
 } from "./gateways/registry";
 export type { CheckoutGatewayPrecommitInput, PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
 
 // --- Gateway settings ---
 export {
   getStripeSettings,
-  getSSLCommerzSettings,
   getActivePaymentMethods,
 } from "./gateway-settings";
 export type {
   StripeSettings,
-  SSLCommerzSettings,
   PaymentMethodsConfig,
 } from "./gateway-settings";
 
@@ -109,7 +111,6 @@ export { PartialRefundProcessedError } from "./refund-service";
 export {
   getPaymentGatewaySettingsSnapshot,
   getPaymentMethodPreferences,
-  getSSLCommerzCheckoutReadiness,
   getStripeCheckoutReadiness,
   resolveActivePaymentMethodsFromRows,
   resolveAppPaymentUsability,
@@ -122,3 +123,9 @@ export type { HostedPaymentReturnResult } from "./hosted-payment-return";
 export type { PaymentSessionAttemptProcessingResult } from "./payment-session-attempts";
 export { createCODTrackingInsertValues, toCashOnDeliveryMinor, validateCODCollectionDetails } from "./cod";
 export { resolveActiveRefundOperationsForOrders, selectActiveRefundAttemptRowsForOrders } from "./refund-attempt-visibility";
+export {
+  readRetiredPaymentSettings,
+  repointRetiredPaymentChoice,
+  repointRetiredPaymentRows,
+} from "./retired-gateways";
+export type { RetiredPaymentSettings } from "./retired-gateways";

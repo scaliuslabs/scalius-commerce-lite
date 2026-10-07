@@ -13,6 +13,12 @@ export interface AnalyticsContext {
   /** The store's IANA zone: every merchant day, week and month is a day in it. */
   timeZone: string;
   now: Date;
+  /**
+   * A payment method's name from its provider (the request's gateways: an
+   * app's, or a retired built-in id's replacement), for exports. Absent: the
+   * report's own words, else the stored id.
+   */
+  paymentMethodName?: (id: string) => string;
 }
 
 export async function createAnalyticsContext(db: Database, timeZone: string, now: Date = new Date()): Promise<AnalyticsContext> {

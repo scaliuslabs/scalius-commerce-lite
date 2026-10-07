@@ -109,7 +109,8 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
         existingAttempt,
         commitReads: PREFETCHED_COMMIT_READS,
         functionRegistrations: [],
-        paymentProviders: (await import("@scalius/core/modules/payments")).BUILT_IN_PAYMENT_PROVIDERS,
+        // SSLCommerz is the Bangladesh pack's: these stores have it active (orders name it by its old id too).
+        paymentProviders: await sslcommerzPackProviders(),
         authority: () => {
           if (!snapshot) throw new Error("replay");
           if ("error" in snapshot) throw snapshot.error;
@@ -127,6 +128,11 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
       withWaveAPreflightDefaults(await mocks.validateStorefrontDeliveryPreflight(db, input, cart), input, cart),
   };
 });
+
+/** The request's gateways with the Bangladesh pack's SSLCommerz (its declared name and BDT limits). */
+async function sslcommerzPackProviders() {
+  return (await import("@scalius/core/testing")).createSslcommerzPackProviders().providers;
+}
 
 function withWaveALineDefaults<T>(result: T): T {
   if (!result || typeof result !== "object" || !Array.isArray((result as { items?: unknown }).items)) return result;

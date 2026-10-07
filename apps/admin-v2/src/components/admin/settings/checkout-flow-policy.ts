@@ -1,7 +1,3 @@
-import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "@scalius/shared/payment-gateway-environment";
-
-export const CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS = SSL_COMMERZ_BDT_AMOUNT_LIMITS;
-
 /** Issue keys; the payments catalog words them. */
 export type CheckoutFlowIssue =
     | "readinessUnknown"
@@ -9,10 +5,22 @@ export type CheckoutFlowIssue =
     | "codOff"
     | "noOnline"
     | "amountInvalid"
-    | "sslRange"
+    | "advanceRange"
     | "wholeTaka"
     | "codWithAdvance"
     | "advanceNeedsOnline";
+
+/**
+ * A provider's charge limits in major units (`GET /admin/settings/payment-methods`
+ * gateways' `amountLimits`): an advance it collects must fit them.
+ */
+export interface AdvanceAmountLimit {
+    /** The payment method whose limit it is. */
+    method: string;
+    currency: string;
+    min: number;
+    max: number;
+}
 
 export interface CheckoutFlowPreviewOptions {
     checkoutMode: string;
@@ -22,25 +30,26 @@ export interface CheckoutFlowPreviewOptions {
     paymentMethodsLoaded: boolean;
     codEnabled: boolean;
     activeOnlineMethodCount: number;
-    sslCommerzEnabled: boolean;
+    /** The limits of the online methods checkout offers (a provider without limits adds none). */
+    advanceLimits?: readonly AdvanceAmountLimit[];
     /** The store prices in whole units (a BDT store's default): the advance has no paisa. */
     wholeTaka?: boolean;
 }
 
+/** The first offered method's limit the advance falls outside, or null. */
+export function violatedAdvanceLimit(amount: unknown, limits: readonly AdvanceAmountLimit[] = []): AdvanceAmountLimit | null {
+    const numericAmount = Number(amount);
+    return limits.find((limit) => numericAmount < limit.min || numericAmount > limit.max) ?? null;
+}
+
 export function getCheckoutAdvancePaymentAmountIssue(
     amount: unknown,
-    options: { sslCommerzEnabled: boolean; wholeTaka?: boolean },
+    options: { advanceLimits?: readonly AdvanceAmountLimit[]; wholeTaka?: boolean },
 ): CheckoutFlowIssue | null {
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) return "amountInvalid";
     if (options.wholeTaka && !Number.isInteger(numericAmount)) return "wholeTaka";
-    if (options.sslCommerzEnabled && (
-        numericAmount < CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min ||
-        numericAmount > CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max
-    )) {
-        return "sslRange";
-    }
-    return null;
+    return violatedAdvanceLimit(numericAmount, options.advanceLimits) ? "advanceRange" : null;
 }
 
 /**
@@ -60,7 +69,7 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
     if (!options.partialPaymentEnabled) return issues;
 
     const amountIssue = getCheckoutAdvancePaymentAmountIssue(options.partialPaymentAmount, {
-        sslCommerzEnabled: options.sslCommerzEnabled,
+        advanceLimits: options.advanceLimits,
         wholeTaka: options.wholeTaka,
     });
     if (amountIssue) issues.push(amountIssue);

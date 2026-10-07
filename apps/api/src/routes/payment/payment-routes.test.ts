@@ -1,7 +1,8 @@
 // Behaviour tests for the gateway-agnostic payment routes on the migrated
-// SQLite schema: session creation (SSLCommerz adapter with a stubbed provider),
-// webhook and buyer-return claim-once (a test-only app gateway in the request's
-// providers), and queue application that credits an order exactly once.
+// SQLite schema: session creation, webhook and buyer-return claim-once (a
+// test-only app gateway in the request's providers), queue application that
+// credits an order exactly once, and a retired built-in id (`sslcommerz`)
+// failing closed until the app that replaced it is active.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,10 +13,9 @@ import {
   checkoutDocument,
   currencyDocument,
   paymentMethodsDocument,
-  sslcommerzDocument,
 } from "@scalius/core/modules/settings";
 import { recordOrderReceipt } from "@scalius/core/modules/orders";
-import type { PaymentEvent } from "@scalius/core/modules/payments";
+import { PaymentProviderError, type PaymentEvent } from "@scalius/core/modules/payments";
 import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "@scalius/core/testing";
 import type { PaymentProviders } from "@scalius/core/modules/payments";
 
@@ -61,16 +61,10 @@ function createApp() {
   return app;
 }
 
-async function seed(options: { paymentMethod: string; enabledMethods: string[]; sslPassword?: string }) {
+async function seed(options: { paymentMethod: string; enabledMethods: string[] }) {
   await checkoutDocument.write(db, { checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 });
   await paymentMethodsDocument.write(db, { enabledMethods: options.enabledMethods, defaultMethod: options.enabledMethods[0]! });
   await currencyDocument.write(db, { currencyCode: "BDT" });
-  await sslcommerzDocument.write(db, {
-    storeId: "real_store_1",
-    storePassword: options.sslPassword ?? "real-store-password",
-    sandbox: true,
-    enabled: true,
-  }, { encryptionKey: CREDENTIAL_ENCRYPTION_KEY });
   await db.insert(orders).values({
     id: "order_1",
     customerName: "Buyer",
@@ -120,63 +114,80 @@ afterEach(() => {
 });
 
 describe("POST /payment/{provider}/session", () => {
+  let fake: ReturnType<typeof createFakeGateway>;
+
+  beforeEach(() => {
+    fake = createFakeGateway();
+    requestProviders.current = fake.providers;
+  });
+  afterEach(() => {
+    requestProviders.current = null;
+  });
+
   it("claims the attempt locally, calls the provider once, and replays the stored session", async () => {
-    await seed({ paymentMethod: "sslcommerz", enabledMethods: ["sslcommerz", "cod"] });
-    fetchMock.mockImplementation(async () => Response.json({
-      status: "SUCCESS",
-      GatewayPageURL: "https://sandbox.sslcommerz.com/pay/abc",
-      sessionkey: "sess_1",
-    }));
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: [FAKE_GATEWAY_ID, "cod"] });
     const app = createApp();
 
-    const first = await post(app, "/payment/sslcommerz/session", { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
-    const second = await post(app, "/payment/sslcommerz/session", { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
+    const path = `/payment/${FAKE_GATEWAY_ID}/session`;
+    const first = await post(app, path, { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
+    const second = await post(app, path, { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
 
-    const expected = { success: true, data: { gatewayUrl: "https://sandbox.sslcommerz.com/pay/abc", sessionKey: "sess_1" } };
+    const [session] = fake.state.sessions;
+    expect(fake.state.sessions).toHaveLength(1);
+    const expected = { success: true, data: { gatewayUrl: `https://pay.fake.test/${session!.correlationId}`, sessionKey: `fs_${session!.attemptKey.slice(-8)}` } };
     await expect(first.json()).resolves.toEqual(expected);
     await expect(second.json()).resolves.toEqual(expected);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const form = new URLSearchParams(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-    expect(form.get("total_amount")).toBe("1500.00");
-    expect(form.get("ipn_url")).toBe("https://api.example.test/api/v1/webhooks/sslcommerz");
-    expect(form.get("success_url")).toMatch(/^https:\/\/api\.example\.test\/api\/v1\/payment\/sslcommerz\/success\?order_id=order_1/);
-    expect(form.get("value_b")).toBe("order_1");
+    expect(session).toMatchObject({ orderId: "order_1", amountMinor: 150_000, wireAmount: { decimal: "1500.00" } });
+    expect(session!.urls.webhook).toBe(`https://api.example.test/api/v1/webhooks/${encodeURIComponent(FAKE_GATEWAY_ID)}`);
+    expect(session!.urls.success).toMatch(new RegExp(`^https://api\\.example\\.test/api/v1/payment/${encodeURIComponent(FAKE_GATEWAY_ID)}/success\\?order_id=order_1`));
 
     const attempt = sqlite.prepare("SELECT gateway, status, provider_session_id, provider_correlation_id FROM payment_session_attempts").get() as Record<string, string>;
-    expect(attempt).toMatchObject({ gateway: "sslcommerz", status: "created", provider_session_id: "sess_1" });
-    expect(form.get("tran_id")).toBe(attempt.provider_correlation_id);
-    expect(sqlite.prepare("SELECT payment_intent_id FROM orders").get()).toEqual({ payment_intent_id: "sess_1" });
+    expect(attempt).toMatchObject({ gateway: FAKE_GATEWAY_ID, status: "created", provider_session_id: expected.data.sessionKey });
+    expect(session!.correlationId).toBe(attempt.provider_correlation_id);
+    expect(sqlite.prepare("SELECT payment_intent_id FROM orders").get()).toEqual({ payment_intent_id: expected.data.sessionKey });
   });
 
   it("fails closed without calling the provider when the gateway is not selected or not configured", async () => {
-    await seed({ paymentMethod: "sslcommerz", enabledMethods: ["cod"] });
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: ["cod"] });
     const app = createApp();
-    expect((await post(app, "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(503);
+    const path = `/payment/${FAKE_GATEWAY_ID}/session`;
+    expect((await post(app, path, { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(503);
 
-    sqlite.prepare("UPDATE settings SET value = ? WHERE category = 'payment_methods' AND key = 'enabled_methods'")
-      .run(JSON.stringify(["sslcommerz"]));
-    sqlite.prepare("UPDATE settings SET value = 'dummy' WHERE category = 'sslcommerz' AND key = 'store_id'").run();
-    expect((await post(app, "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(503);
+    sqlite.prepare("UPDATE settings SET value = ? WHERE category = 'payment_methods' AND key = 'document'")
+      .run(JSON.stringify({ enabledMethods: [FAKE_GATEWAY_ID], defaultMethod: FAKE_GATEWAY_ID }));
+    fake.state.settings = { enabled: true, apiKey: "dummy" };
+    expect((await post(app, path, { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(503);
 
     expect((await post(app, "/payment/unknownpay/session", { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fake.state.sessions).toEqual([]);
     expect(sqlite.prepare("SELECT count(*) AS n FROM payment_session_attempts").get()).toEqual({ n: 0 });
   });
 
   it("records a provider rejection on the attempt and lets the buyer retry", async () => {
-    await seed({ paymentMethod: "sslcommerz", enabledMethods: ["sslcommerz"] });
-    fetchMock.mockImplementationOnce(async () => Response.json({ status: "FAILED", failedreason: "Store is inactive" }));
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: [FAKE_GATEWAY_ID] });
+    const createSession = fake.gateway.createSession;
+    fake.gateway.createSession = vi.fn(createSession).mockRejectedValueOnce(new PaymentProviderError("Store is inactive"));
     const app = createApp();
+    const path = `/payment/${FAKE_GATEWAY_ID}/session`;
 
-    const rejected = await post(app, "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT });
+    const rejected = await post(app, path, { orderId: "order_1", receiptToken: RECEIPT });
     expect(rejected.status).toBe(500);
     await expect(rejected.json()).resolves.toMatchObject({ error: { code: "PAYMENT_ERROR", message: "Store is inactive" } });
     expect(sqlite.prepare("SELECT status FROM payment_session_attempts").get()).toEqual({ status: "failed" });
 
-    fetchMock.mockImplementationOnce(async () => Response.json({ status: "SUCCESS", GatewayPageURL: "https://x.test/pay", sessionkey: "s2" }));
-    expect((await post(app, "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((await post(app, path, { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(200);
+    expect(fake.gateway.createSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a session for a retired SSLCommerz order until the Bangladesh pack is active, calling nothing", async () => {
+    requestProviders.current = null;
+    await seed({ paymentMethod: "sslcommerz", enabledMethods: ["sslcommerz", "cod"] });
+    const response = await post(createApp(), "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { message: "SSLCommerz: Activate Bangladesh pack in Apps to use it." } });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sqlite.prepare("SELECT count(*) AS n FROM payment_session_attempts").get()).toEqual({ n: 0 });
   });
 });
 

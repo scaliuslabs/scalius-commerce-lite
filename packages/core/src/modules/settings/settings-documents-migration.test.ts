@@ -23,9 +23,9 @@ import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getCapiSettings } from "../../integrations/meta/capi-settings";
 import {
   getPaymentMethodPreferences,
-  getSSLCommerzSettings,
   getStripeSettings,
 } from "../payments/gateway-settings";
+import { readRetiredPaymentSettings } from "../payments/retired-gateways";
 import { getBusinessSettings } from "./business-settings.service";
 import { getCheckoutFlowSettingsDocument } from "../checkout/flow-settings";
 import { getCustomerRequestPolicy } from "./customer-request-policy";
@@ -245,13 +245,14 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       enabled: true,
       credentialErrors: [],
     });
-    expect(await getSSLCommerzSettings(db, KEY)).toEqual({
-      storeId: "shop01",
-      storePassword: "store-pass-xyz",
-      sandbox: false,
+    // SSLCommerz moved into the Bangladesh pack: its document is read for the pack's activation.
+    expect(await readRetiredPaymentSettings(db, KEY)).toEqual([expect.objectContaining({
+      id: "sslcommerz",
+      values: { sslcommerz_store_id: "shop01", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live" },
+      unreadable: [],
       enabled: false,
-      credentialErrors: [],
-    });
+      stored: true,
+    })]);
     expect(await getPaymentMethodPreferences(db)).toEqual({
       enabledMethods: ["cod", "stripe"],
       defaultMethod: "stripe",
@@ -295,7 +296,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
     expect(await customerAuthDocument.read(db)).toEqual(DEFAULT_CUSTOMER_IDENTITY);
     // All keys and no saved switch: the dashboard showed Stripe enabled.
     expect((await getStripeSettings(db, KEY))?.enabled).toBe(true);
-    expect(await getSSLCommerzSettings(db, KEY)).toBeNull();
+    expect(await readRetiredPaymentSettings(db, KEY)).toEqual([expect.objectContaining({ id: "sslcommerz", values: {}, stored: false })]);
     expect(await getPaymentMethodPreferences(db)).toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
