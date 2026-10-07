@@ -12238,6 +12238,14 @@
             "type": "boolean",
             "description": "An update asks for more access than was approved; the app waits until a Super Admin approves it."
           },
+          "thirdParty": {
+            "type": "boolean",
+            "description": "Not published by Scalius: the emergency switch for third-party apps stops it."
+          },
+          "signed": {
+            "type": "boolean",
+            "description": "Its code was verified against a trusted developer key (registry or signed upload); bundled code is the operator's own."
+          },
           "failureReason": {
             "type": "string",
             "nullable": true
@@ -12312,6 +12320,8 @@
           "source",
           "status",
           "needsApproval",
+          "thirdParty",
+          "signed",
           "failureReason",
           "revision",
           "installedAt",
@@ -12811,6 +12821,213 @@
           "kind",
           "name",
           "icon"
+        ]
+      },
+      "RegistryState": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "official": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "official",
+          "status",
+          "error"
+        ]
+      },
+      "RegistryApp": {
+        "type": "object",
+        "properties": {
+          "registryId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "tagline": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "signer": {
+            "$ref": "#/components/schemas/AppSigner"
+          },
+          "compatible": {
+            "type": "boolean"
+          },
+          "incompatibleReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why this Scalius cannot run it (plugin API version or platform release)."
+          },
+          "installed": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "bundled",
+                  "registry",
+                  "upload"
+                ]
+              }
+            },
+            "required": [
+              "version",
+              "source"
+            ]
+          },
+          "updateAvailable": {
+            "type": "boolean",
+            "description": "Newer than the installed version (a bundled app updates with a deploy)."
+          },
+          "installCommand": {
+            "type": "string",
+            "description": "The operator's command on Workers Free (bundles the app; then deploy)."
+          }
+        },
+        "required": [
+          "registryId",
+          "id",
+          "name",
+          "version",
+          "tagline",
+          "description",
+          "author",
+          "signer",
+          "compatible",
+          "incompatibleReason",
+          "installed",
+          "updateAvailable",
+          "installCommand"
+        ]
+      },
+      "AppSigner": {
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The trusted key's name; null when this store does not trust the key."
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "official": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "keyId",
+          "name",
+          "trusted",
+          "official"
+        ]
+      },
+      "AppRegistrySettings": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "officialConfigured": {
+            "type": "boolean"
+          },
+          "registries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "indexUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "indexUrl"
+              ]
+            }
+          },
+          "trustedKeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrustedAppKey"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "officialConfigured",
+          "registries",
+          "trustedKeys"
+        ]
+      },
+      "TrustedAppKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "publicKey": {
+            "type": "string"
+          },
+          "official": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "publicKey",
+          "official"
         ]
       },
       "AppDetail": {
@@ -13474,11 +13691,96 @@
                   },
                   "wallMs": {
                     "type": "integer"
+                  },
+                  "subrequests": {
+                    "type": "integer",
+                    "description": "Platform calls per run."
+                  },
+                  "invocationsPerMinute": {
+                    "type": "integer"
+                  },
+                  "storageBytes": {
+                    "type": "integer",
+                    "description": "The most its storage may hold."
                   }
                 },
                 "required": [
                   "cpuMs",
-                  "wallMs"
+                  "wallMs",
+                  "subrequests",
+                  "invocationsPerMinute",
+                  "storageBytes"
+                ],
+                "description": "What one run may use: the app's own limits within the plan's."
+              },
+              "storageUsage": {
+                "type": "object",
+                "properties": {
+                  "bytes": {
+                    "type": "integer"
+                  },
+                  "measuredAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "bytes",
+                  "measuredAt"
+                ],
+                "description": "Its stored data at the last daily measurement."
+              },
+              "signer": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "keyId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "official": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "keyId",
+                  "name",
+                  "official"
+                ],
+                "description": "The developer key that verified its code; null for bundled code and unsigned uploads."
+              },
+              "migrations": {
+                "type": "object",
+                "properties": {
+                  "declared": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "description"
+                      ]
+                    }
+                  },
+                  "applied": {
+                    "type": "integer",
+                    "description": "The newest data update that ran."
+                  }
+                },
+                "required": [
+                  "declared",
+                  "applied"
                 ]
               }
             },
@@ -13505,7 +13807,10 @@
               "customFields",
               "storefront",
               "admin",
-              "limits"
+              "limits",
+              "storageUsage",
+              "signer",
+              "migrations"
             ]
           }
         ]
@@ -190492,6 +190797,1280 @@
         }
       }
     },
+    "/api/v1/admin/apps/registry": {
+      "get": {
+        "operationId": "dashboard.apps.registry_list",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Browse the app registries this store uses",
+        "description": "Reads each configured registry's signed index on the server. Signatures are verified when an app is installed; a listing only says whether its key is trusted. On Workers Free each app shows its install command.",
+        "responses": {
+          "200": {
+            "description": "Registry apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "officialConfigured": {
+                          "type": "boolean",
+                          "description": "False until the official registry and its key are published."
+                        },
+                        "installMode": {
+                          "type": "string",
+                          "enum": [
+                            "dashboard",
+                            "command"
+                          ],
+                          "description": "dashboard: one-click install (Workers Paid); command: run installCommand, then deploy."
+                        },
+                        "registries": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RegistryState"
+                          }
+                        },
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RegistryApp"
+                          }
+                        }
+                      },
+                      "required": [
+                        "officialConfigured",
+                        "installMode",
+                        "registries",
+                        "apps"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      }
+    },
+    "/api/v1/admin/apps/registry/settings": {
+      "get": {
+        "operationId": "dashboard.apps.registry_settings_get",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "The registries this store browses and the developer keys it trusts",
+        "responses": {
+          "200": {
+            "description": "Registry settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AppRegistrySettings"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.apps.registry_settings_update",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Change the registries and trusted developer keys (Super Admin)",
+        "description": "The whole list of the store's own registries and trusted keys. A key is the developer's base64 Ed25519 public key; its id is derived. The official registry and key are pinned in code and cannot be changed here.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "registries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+                          "description": "The registry's id (`official` for the official registry)."
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "indexUrl": {
+                          "type": "string",
+                          "maxLength": 500,
+                          "format": "uri"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "indexUrl"
+                      ]
+                    },
+                    "maxItems": 10
+                  },
+                  "trustedKeys": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "publicKey": {
+                          "type": "string",
+                          "minLength": 40,
+                          "maxLength": 64
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "publicKey"
+                      ]
+                    },
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "registries",
+                  "trustedKeys"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AppRegistrySettings"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 65536,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Choosing which developers and registries the store trusts is a Super Admin's decision in the dashboard; agents can read it."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/registry/install": {
+      "post": {
+        "operationId": "dashboard.apps.registry_install",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Install an app from a registry (Workers Paid)",
+        "description": "Downloads the release, verifies its SHA-256, its compatibility and its signature against the trusted keys, stores it, and installs it. Nothing runs until a Super Admin approves its access (dashboard.apps.activate).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "registryId": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+                    "description": "The registry's id (`official` for the official registry)."
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 80,
+                    "description": "A listed version; left out, the newest one."
+                  }
+                },
+                "required": [
+                  "registryId",
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installed, waiting for approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        }
+                      },
+                      "required": [
+                        "app"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The release failed verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The registry could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/update": {
+      "post": {
+        "operationId": "dashboard.apps.update",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Update an app from its registry (Workers Paid)",
+        "description": "Verifies and stores the new release, then replaces the code. An update that asks for more access waits for a Super Admin's approval. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "registryId": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+                    "description": "The registry's id (`official` for the official registry)."
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 80,
+                    "description": "A listed version; left out, the newest one."
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "registryId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated, waiting for approval, or rolled back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "rolledBack": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "rolledBack",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The release failed verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The registry could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/upload": {
+      "post": {
+        "operationId": "dashboard.apps.upload",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Install or update an app from a package file (Workers Paid)",
+        "description": "A ZIP of what `pnpm plugin pack` writes (manifest.json, plugin.js, assets/, signature.json when signed). It goes through the registry's checks. An unsigned package (allowUnsigned) or one signed by a developer the store does not trust yet (trustDeveloper) needs a Super Admin's explicit choice.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "true: a Super Admin accepts a package without a signature."
+            },
+            "required": false,
+            "description": "true: a Super Admin accepts a package without a signature.",
+            "name": "allowUnsigned",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "true: a Super Admin trusts the package's developer key from now on."
+            },
+            "required": false,
+            "description": "true: a Super Admin trusts the package's developer key from now on.",
+            "name": "trustDeveloper",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installed (waiting for approval), updated, or rolled back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "updated": {
+                          "type": "boolean"
+                        },
+                        "rolledBack": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "updated",
+                        "rolledBack",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The release failed verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "A package file upload, and the trust choices that may come with it, are a person's in the dashboard; agents install from a registry (dashboard.apps.registry_install)."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/stop-third-party": {
+      "post": {
+        "operationId": "dashboard.apps.stop_third_party",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Emergency stop: every running third-party app",
+        "description": "Stops every active app not published by Scalius at once, without running their code. Their data and settings stay; a Super Admin starts each again by approving it.",
+        "responses": {
+          "200": {
+            "description": "Stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stopped": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stopped"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/stop": {
+      "post": {
+        "operationId": "dashboard.apps.stop",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Emergency stop: one app, at once",
+        "description": "Stops the app without running its code and without a revision check. Its data and settings stay; a Super Admin starts it again by approving it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "stopped": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "stopped"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
     "/api/v1/admin/apps/{id}": {
       "get": {
         "operationId": "dashboard.apps.get",
@@ -212307,6 +213886,41 @@
         ]
       },
       {
+        "id": "dashboard.apps-install",
+        "surface": "dashboard",
+        "kind": "mixed",
+        "title": "Install, update or stop apps",
+        "summary": "Browse app registries, install or update an app from one, and stop one app or every third-party app at once.",
+        "examples": [
+          "Are there updates for my apps?",
+          "An app is misbehaving: stop it now."
+        ],
+        "tags": [
+          "apps",
+          "plugins",
+          "registry",
+          "security"
+        ],
+        "operationIds": [
+          "dashboard.apps.registry_list",
+          "dashboard.apps.registry_settings_get",
+          "dashboard.apps.registry_install",
+          "dashboard.apps.update",
+          "dashboard.apps.stop",
+          "dashboard.apps.stop_third_party",
+          "dashboard.apps.get"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "Install and update only when installMode is dashboard (Workers Paid); otherwise give the merchant the installCommand.",
+          "A new install, or an update that asks for more access, waits for a Super Admin's approval in the dashboard.",
+          "An update may roll back by itself: report rolledBack and its error in plain words.",
+          "The emergency stop runs no app code and needs no revision; a Super Admin starts the app again."
+        ]
+      },
+      {
         "id": "dashboard.apps-manage",
         "surface": "dashboard",
         "kind": "mixed",
@@ -216705,6 +218319,7 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
+            "dashboard.apps-install",
             "dashboard.apps-manage"
           ]
         },
@@ -216725,11 +218340,51 @@
           ]
         },
         {
+          "operationId": "dashboard.apps.registry_install",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.registry_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.registry_settings_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
+          ]
+        },
+        {
           "operationId": "dashboard.apps.settings_update",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.stop",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.stop_third_party",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
           ]
         },
         {
@@ -216746,6 +218401,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
           ]
         },
         {

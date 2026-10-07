@@ -49,7 +49,7 @@ export const DASHBOARD_APP_OPERATIONS = {
   },
   // Registries, installs, updates and the emergency stop
   // (docs/platform/PLUGINS.md, "Registry", "Quotas and kill switch").
-  "dashboard.apps.registry_list": { openWorld: true, limits: { response: 262_144 } },
+  "dashboard.apps.registry_list": { openWorld: true, limits: { response: 65_536 } },
   "dashboard.apps.registry_settings_get": { limits: { response: 65_536 } },
   "dashboard.apps.registry_settings_update": {
     exposure: "excluded",
