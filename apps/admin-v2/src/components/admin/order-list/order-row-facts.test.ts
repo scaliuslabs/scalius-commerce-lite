@@ -4,7 +4,7 @@ import { translate } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 import { orderMessages } from "~/i18n/orders";
 import { shipmentStatusMessages } from "~/i18n/shipment-status";
-import { codToCollect, deliveryMethod, deliveryStatus, fulfilmentShown, orderAttention, paymentShown } from "./order-row-facts";
+import { codToCollect, deliveryMethod, deliveryStatus, fulfilmentShown, orderAttention, orderNextStep, paymentShown } from "./order-row-facts";
 
 const t = (key: string, vars?: Record<string, string | number>) => translate(orderListMessages, key as never, vars);
 const o = (key: string, vars?: Record<string, string | number>) => translate(orderMessages, key as never, vars);
@@ -61,5 +61,18 @@ describe("orders list row facts", () => {
     expect(fulfilmentShown(order({ shippingMethodKind: "pickup", pickupReadyAt: new Date() as never }))).toBe("readyForPickup");
     expect(codToCollect(order({ paidAmount: 180 }))).toBe(500);
     expect(codToCollect(order({ status: "cancelled" }))).toBe(0);
+  });
+
+  it("names the one next step of each order, so a confirmed order is never a dead end", () => {
+    expect(orderNextStep(order({ status: "pending" }))).toBe("confirm");
+    expect(orderNextStep(order({ status: "processing" }))).toBe("confirm");
+    expect(orderNextStep(order({ status: "confirmed", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 680 }))).toBe("fulfil");
+    // Cash on its way is collected, whatever else is open.
+    expect(orderNextStep(order({ status: "shipped", fulfillmentStatus: "complete" }))).toBe("collect");
+    expect(orderNextStep(order({ status: "shipped", fulfillmentStatus: "complete", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 680 }))).toBe("deliver");
+    expect(orderNextStep(order({ status: "completed" }))).toBeNull();
+    expect(orderNextStep(order({ status: "cancelled" }))).toBeNull();
+    expect(orderNextStep(order({ status: "pending", onHold: true }))).toBeNull();
+    expect(orderNextStep(order({ status: "pending", archivedAt: new Date() }))).toBeNull();
   });
 });

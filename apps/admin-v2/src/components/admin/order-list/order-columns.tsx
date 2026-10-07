@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { Archive, CircleAlert, Undo } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Archive, Check, CircleAlert, ExternalLink, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -28,6 +28,7 @@ import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canRefreshShipment } from "~/lib/shipment-action-policy";
+import { getAdminOrderStatusOptions } from "~/lib/admin-order-status-policy";
 import { orderSkipReason } from "./order-bulk-actions";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
@@ -39,6 +40,7 @@ import {
   deliveryStatus,
   fulfilmentShown,
   orderAttention,
+  orderNextStep,
   paymentShown,
   TONE_TEXT,
 } from "./order-row-facts";
@@ -254,7 +256,10 @@ function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers)
 }
 
 function StatusCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
+  const t = useMessages(orderListMessages);
   const lockedReason = useStatusLockedReason(order, handlers);
+  // Shipping and delivering are done on the order page: say so where the status menu stops at Cancelled.
+  const step = orderNextStep(order);
   return (
     <div data-part="status" className="flex items-center">
       <OrderStatusSelector
@@ -263,6 +268,7 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
         isLoading={handlers.updatingStatusIds.has(order.id)}
         lockedReason={lockedReason}
         onStatusUpdate={(status) => handlers.onStatusUpdate(order, status)}
+        openOrder={step && step !== "confirm" ? { orderId: order.id, label: t(`nextStep.${step}`) } : undefined}
       />
     </div>
   );
@@ -271,7 +277,19 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
 function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
+  const navigate = useNavigate();
+  const open = () => void navigate({ to: "/admin/orders/$orderId", params: { orderId: order.id } });
+  const step = orderNextStep(order);
+  // Confirming happens right here; the other steps need the order page, which opens on them.
+  const locked = useStatusLockedReason(order, handlers);
+  const canConfirm = step === "confirm" && !locked
+    && getAdminOrderStatusOptions(order.status, order).some((option) => option.status === "confirmed" && option.block === null);
   const actions = [
+    canConfirm
+      ? { label: t("nextStep.confirm"), icon: Check, onClick: () => handlers.onStatusUpdate(order, "confirmed") }
+      : step && step !== "confirm"
+        ? { label: t(`nextStep.${step}`), icon: ExternalLink, onClick: open }
+        : null,
     !handlers.showArchived && handlers.orderActions.canDeleteOrders && !orderSkipReason(order, "archive")
       ? { label: t("archive"), icon: Archive, onClick: () => handlers.onArchive(order) }
       : null,
@@ -279,8 +297,8 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
       ? { label: t("unarchive"), icon: Undo, onClick: () => handlers.onRestore(order) }
       : null,
   ].filter((action) => action !== null);
-  // A row without actions keeps the menu's place, so every row is the same width.
-  if (actions.length === 0) return <span data-part="actions" className="block size-7" aria-hidden="true" />;
+  // Every order has a menu: when nothing else is offered, it opens the order.
+  if (actions.length === 0) actions.push({ label: t("viewOrder"), icon: ExternalLink, onClick: open });
   return (
     <span data-part="actions" className="block">
       <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />
