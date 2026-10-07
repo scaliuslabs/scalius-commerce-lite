@@ -653,7 +653,9 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     async run({ db, env, executionCtx, runContext, timed }) {
       const { runScheduledPluginMaintenance } = await import("./plugins/scheduled");
       const plugins = await timed("plugin_maintenance", () =>
-        runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt));
+        runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt, {
+          nightly: isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env)),
+        }));
       const { bundled, cron } = plugins;
       if (bundled.installed.length > 0 || bundled.updated.length > 0 || bundled.failed.length > 0 || cron.due > 0 || cron.expired > 0) {
         console.log(

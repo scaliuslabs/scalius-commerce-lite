@@ -12,6 +12,7 @@ import {
   installPlugin,
   listPluginLogs,
   listPluginMigrations,
+  measureDuePluginStorageStatement,
   measurePluginStorage,
   pendingPluginMigrations,
   pluginDueForStorageMeasurement,
@@ -149,6 +150,16 @@ describe("app safety", () => {
     expect(bytes).toBeGreaterThan(100);
     expect((await requirePluginInstallation(db, "acme.loyalty")).storageBytes).toBe(bytes);
     expect(await pluginDueForStorageMeasurement(db)).toBeNull();
+  });
+
+  it("measures the app due in one statement, and nothing when none is due", async () => {
+    await installActive(db);
+    await putPluginRecord(db, "acme.loyalty", "ledger", { indexes: ["customerId"], unique: [] }, "r1", { customerId: "c1", note: "y".repeat(50) });
+    const [measured] = await measureDuePluginStorageStatement(db);
+    expect(measured).toMatchObject({ pluginId: "acme.loyalty" });
+    expect(measured!.bytes).toBeGreaterThan(50);
+    expect((await requirePluginInstallation(db, "acme.loyalty")).storageBytes).toBe(measured!.bytes);
+    expect(await measureDuePluginStorageStatement(db)).toEqual([]);
   });
 
   it("puts back the release an update replaced, with its grant, status and settings", async () => {

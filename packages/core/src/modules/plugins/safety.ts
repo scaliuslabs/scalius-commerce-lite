@@ -22,7 +22,7 @@ export const PLUGIN_BREACH_DEBOUNCE_SECONDS = 60;
 /** Breaches older than this (seconds since the last one) start a new window. */
 export const PLUGIN_BREACH_WINDOW_SECONDS = 3_600;
 /** How often each app's storage is measured. */
-export const PLUGIN_STORAGE_MEASURE_INTERVAL_SECONDS = 24 * 3_600;
+export const PLUGIN_STORAGE_MEASURE_INTERVAL_SECONDS = 20 * 3_600;
 
 export type PluginBreachKind = "cpu" | "wall_time" | "subrequests" | "storage" | "invocations";
 
@@ -192,6 +192,20 @@ export async function measurePluginStorage(db: Database, pluginId: string): Prom
   await db.update(pluginInstallations).set({ storageBytes: bytes, storageMeasuredAt: sql`unixepoch()` })
     .where(eq(pluginInstallations.pluginId, pluginId));
   return bytes;
+}
+
+/**
+ * The scheduled measurement as one statement: every app not measured in the
+ * last 20 hours gets its size. The nightly tick batches it with the
+ * cron-history prune, so it adds no database call; the read is one pass over
+ * the apps' rows a day.
+ */
+export function measureDuePluginStorageStatement(db: Database, nowSeconds = Math.floor(Date.now() / 1000)) {
+  return db.update(pluginInstallations).set({
+    storageBytes: sql`(SELECT COALESCE(SUM(length(r.data_json) + length(r.id)), 0) FROM ${pluginRecords} AS r WHERE r.plugin_id = ${pluginInstallations.pluginId})
+      + (SELECT COALESCE(SUM(length(k.value_json) + length(k.key)), 0) FROM ${pluginKv} AS k WHERE k.plugin_id = ${pluginInstallations.pluginId})`,
+    storageMeasuredAt: nowSeconds,
+  }).where(or(isNull(pluginInstallations.storageMeasuredAt), lt(pluginInstallations.storageMeasuredAt, nowSeconds - PLUGIN_STORAGE_MEASURE_INTERVAL_SECONDS))).returning({ pluginId: pluginInstallations.pluginId, bytes: pluginInstallations.storageBytes });
 }
 
 /** The app whose storage is the longest unmeasured, when its last measurement is older than a day (null: none due). */
