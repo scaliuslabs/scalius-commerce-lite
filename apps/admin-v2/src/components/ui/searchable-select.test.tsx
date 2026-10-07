@@ -38,6 +38,30 @@ describe("SearchableSelect", () => {
     act(() => root.unmount());
   });
 
+  it("shows the search box only for a long list, and keeps the keyboard working without it", async () => {
+    const onValueChange = vi.fn();
+    const options = (count: number) => Array.from({ length: count }, (_, index) => ({ value: `v${index}`, label: `Option ${index}` }));
+    const searchBox = () => document.body.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+
+    await act(async () => root.render(
+      <SearchableSelect value="v0" onValueChange={onValueChange} options={options(2)} ariaLabel="Status" />,
+    ));
+    await act(async () => host.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Status"]')!.click());
+    await flushUi();
+    // Two choices are read, not searched: the input stays for the keyboard, out of sight.
+    expect(searchBox().parentElement?.className).toContain("sr-only");
+    await act(async () => searchBox().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    await act(async () => searchBox().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(onValueChange).toHaveBeenCalledWith("v1", expect.anything());
+
+    await act(async () => root.render(
+      <SearchableSelect value="v0" onValueChange={onValueChange} options={options(12)} ariaLabel="Status" />,
+    ));
+    await act(async () => host.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Status"]')!.click());
+    await flushUi();
+    expect(searchBox().parentElement?.className).not.toContain("sr-only");
+  });
+
   it("focuses search, filters a long list, and returns the selected value", async () => {
     const onValueChange = vi.fn();
 
