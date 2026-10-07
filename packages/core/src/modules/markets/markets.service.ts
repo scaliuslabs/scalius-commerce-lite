@@ -40,6 +40,7 @@ import {
 } from "@scalius/shared/market-pricing";
 import { isFxRate } from "@scalius/shared/money-chain";
 import { readStoreCurrency } from "./pricing";
+import { checkoutCopyFollowsDefaultWrites, ensureStoreLanguageWrites } from "../translations";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -280,6 +281,7 @@ function marketWriteError(error: unknown): unknown {
     if (/FOREIGN KEY|foreign key/i.test(text)) return new ConflictError("This market has orders, so it can't be deleted. Set it to draft instead.");
     if (/MARKET_BACKUP_REQUIRED/.test(text)) return new ValidationError("The backup market can't be deleted or replaced.");
     if (/MARKET_ROOT_PRESENCE_BACKUP_ONLY/.test(text)) return new ValidationError("Only the backup market is sold at the root URL.");
+    if (/STORE_LANGUAGE_REQUIRED/.test(text)) return new ValidationError("Publish the language in Settings → Languages first.");
     return error;
 }
 
@@ -339,6 +341,8 @@ export async function createMarket(db: Database, input: MarketInput): Promise<Ma
         await safeBatch(db, [
             db.insert(markets).values({ id, handle, name, status: input.status, isBackup: false, priceIncrementMinor: null, pricesIncludeTax, revision: 1 }),
             ...countryWrites(db, id, countries),
+            // The presence's language joins the store's languages (published) when it is new.
+            ...(presence ? ensureStoreLanguageWrites(db, [presence.locale]) : []),
             ...(presence ? [db.insert(marketPresences).values({ id: `mkp_${nanoid(16)}`, marketId: id, kind: "subfolder", ...presence })] : []),
         ] as never);
     } catch (error) {
@@ -385,8 +389,14 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
             if (!update.presence || update.presence.value !== "") throw new ValidationError("The backup market is sold at the root URL.");
             const locale = update.presence.locale.trim().toLowerCase();
             if (!MARKET_LOCALE_PATTERN.test(locale)) throw new ValidationError("Choose the language of the market's pages.");
-            writes.push(db.update(marketPresences).set({ locale })
-                .where(and(eq(marketPresences.marketId, id), eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, ""))));
+            // The root's language is the store's default language: published,
+            // and the checkout copy in use follows it.
+            if (locale !== current.presence?.locale) {
+                writes.push(...ensureStoreLanguageWrites(db, [locale], { publish: true }));
+                writes.push(db.update(marketPresences).set({ locale })
+                    .where(and(eq(marketPresences.marketId, id), eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, ""))));
+                writes.push(...checkoutCopyFollowsDefaultWrites(db, locale));
+            }
         } else {
             const presence = update.presence ? cleanPresence(update.presence) : null;
             const unchanged = presence?.value === current.presence?.value && presence?.locale === current.presence?.locale;
@@ -394,6 +404,7 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
                 await assertPresenceFree(db, presence, id);
                 writes.push(db.delete(marketPresences).where(and(eq(marketPresences.marketId, id), eq(marketPresences.kind, "subfolder"))));
                 if (presence) {
+                    writes.push(...ensureStoreLanguageWrites(db, [presence.locale]));
                     writes.push(db.insert(marketPresences).values({ id: `mkp_${nanoid(16)}`, marketId: id, kind: "subfolder", ...presence }));
                 }
             }
@@ -514,7 +525,10 @@ export function backupMarketSetupWrites(db: Database, setup: {
             updatedAt: sql`unixepoch()`,
         }).where(eq(markets.id, BACKUP_MARKET_ID)),
         ...countryWrites(db, BACKUP_MARKET_ID, cleanCountries([setup.countryCode])),
+        // The store's default language: published, with the checkout copy in use following it.
+        ...ensureStoreLanguageWrites(db, [setup.locale], { publish: true }),
         db.update(marketPresences).set({ locale: setup.locale })
             .where(and(eq(marketPresences.marketId, BACKUP_MARKET_ID), eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, ""))),
+        ...checkoutCopyFollowsDefaultWrites(db, setup.locale),
     ];
 }

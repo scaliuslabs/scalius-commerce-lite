@@ -70,6 +70,9 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   places: "0118_places",
   price_lists: "0120_price_lists",
   price_list_prices: "0120_price_lists",
+  store_languages: "0121_translations",
+  translations: "0121_translations",
+  localized_slugs: "0121_translations",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -96,6 +99,10 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // A market's pricing columns (0120) advance its `pl:` key.
   cdep_markets_pricing: "0120_price_lists",
   cdep_markets_pricing_old: "0120_price_lists",
+  // A presence's locale decides which translations it reads (`tr:locales`, 0121).
+  cdep_market_presences_locales_ins: "0121_translations",
+  cdep_market_presences_locales_del: "0121_translations",
+  cdep_market_presences_locales_upd: "0121_translations",
 };
 
 /**

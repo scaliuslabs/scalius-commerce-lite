@@ -132,6 +132,17 @@ export const deps = {
   marketProductPricing: (marketId: string, productIds: Iterable<Id>): void =>
     declareEach((productId) => cacheDep.marketProductPricing(marketId, productId), productIds),
 
+  // --- Translations (MARKETS-DESIGN D9) -----------------------------------------------
+  /** `tr:<type>:<id>`: one resource's translations and localized handles (a product's parts advance their product's). */
+  translation: (resourceType: string, resourceId: Id): void =>
+    declareOne((id) => cacheDep.translation(resourceType, id), resourceId),
+  translations: (resourceType: string, resourceIds: Iterable<Id>): void =>
+    declareEach((id) => cacheDep.translation(resourceType, id), resourceIds),
+  /** `tr:slugs:<type>:<locale>`: which resource a localized handle names (a lookup that found none). */
+  localizedSlugs: (resourceType: string, locale: string): void => declare(cacheDep.localizedSlugs(resourceType, locale)),
+  /** `tr:locales`: the locale and market of each presence, the default locale and the published languages. */
+  translationLocales: (): void => declare(cacheDep.translationLocales()),
+
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */
   table: (table: string): void => declare(cacheDep.table(table)),

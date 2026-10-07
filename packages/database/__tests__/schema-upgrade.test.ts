@@ -568,6 +568,16 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 31,
         postgresStatements: 30,
       },
+      {
+        version: 121,
+        name: "0121_translations",
+        // The three tables and their indexes, the store-language backfill
+        // (presences, the default from the active checkout copy, the other
+        // copies), the language, handle and cleanup guards, the generated
+        // cache triggers and the ledger: one statement each.
+        sqliteStatements: 69,
+        postgresStatements: 69,
+      },
     ]);
   });
 
@@ -737,6 +747,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 118, name: "0118_places" },
           { version: 119, name: "0119_billing_addresses" },
           { version: 120, name: "0120_price_lists" },
+          { version: 121, name: "0121_translations" },
         ],
       });
     } finally {

@@ -67,6 +67,7 @@ describe("mk:selling", () => {
 
     // Identity and presence edits advance the market keys, never the selling set.
     database.exec("UPDATE markets SET name = 'India store', handle = 'india-store' WHERE id = 'mkt_in'");
+    database.exec("INSERT INTO store_languages (locale, published) VALUES ('bn', 1), ('hi', 1)");
     database.exec("UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_in'");
     database.exec("INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_in2', 'mkt_in', 'subfolder', 'hi-in', 'hi')");
     database.exec("UPDATE markets SET price_increment_minor = 1 WHERE id = 'mkt_backup'");
