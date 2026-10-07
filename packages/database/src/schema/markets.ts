@@ -1,9 +1,9 @@
 // src/db/schema/markets.ts
 // Markets (docs/MARKETS-DESIGN.md D4): the configuration bundle a buyer is
-// matched to. Step 2 holds the countries and the URL presences of each
-// market; every market sells in the shop currency at base prices. Price lists,
-// tax inclusivity and per-market delivery and payment links arrive in later
-// steps as their own columns or tables.
+// matched to: its countries and URL presences (step 2), whether its prices
+// include tax (step 3c) and how it prices (step 4a: fixed or FX-derived, with
+// its price lists in price-lists.ts). Every market sells in the shop currency
+// until step 6; per-market delivery and payment links arrive later.
 
 import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -12,6 +12,9 @@ import { UNIX_NOW } from "./shared";
 
 export const MARKET_STATUSES = ["draft", "active"] as const;
 export type MarketStatus = (typeof MARKET_STATUSES)[number];
+
+/** Mirrors `MARKET_PRICE_MODES` in `@scalius/shared/market-pricing`. */
+export const MARKET_PRICE_MODES = ["fixed", "fx"] as const;
 
 /** `subfolder`: a path prefix on the store's own origin (`''` is the root). `domain` is reserved for a later step. */
 export const MARKET_PRESENCE_KINDS = ["subfolder", "domain"] as const;
@@ -45,6 +48,26 @@ export const markets = sqliteTable("markets", {
      * 0116): checkout and the order's tax snapshot read the order's market.
      */
     pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(false),
+    /**
+     * How the market prices (MARKETS-DESIGN D5, migration 0120): `fixed` sells
+     * at base prices and its fixed price lists; `fx` derives its prices from
+     * the base prices at its exchange rate, adjustment, rounding and ending.
+     * The backup market is always `fixed` (its prices are the base prices).
+     * Triggers keep the shape (`MARKET_PRICING_INVALID`).
+     */
+    priceMode: text("price_mode", { enum: MARKET_PRICE_MODES }).notNull().default("fixed"),
+    /**
+     * The manual exchange rate (market currency units per shop currency
+     * unit, a decimal string); null uses the rate source. A market in the
+     * shop currency converts at "1" whatever this holds.
+     */
+    fxRate: text("fx_rate"),
+    /** Percentage adjustment of FX-derived prices, in basis points (−9,900 to 100,000). */
+    priceAdjustmentBps: integer("price_adjustment_bps").notNull().default(0),
+    /** FX-derived prices round up to this step (minor units); null rounds half-up to the price increment. */
+    priceRoundingMinor: integer("price_rounding_minor"),
+    /** What a rounded price ends in within its step (`.99`: 99 of a 100 step); null for none. */
+    priceEndingMinor: integer("price_ending_minor"),
     /** Optimistic concurrency of the market aggregate (row, countries, presences). */
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -71,6 +94,12 @@ export const markets = sqliteTable("markets", {
         sql`(${table.isBackup} = 1 AND ${table.priceIncrementMinor} IS NOT NULL AND ${table.priceIncrementMinor} IN (1, 10, 100, 1000)) OR (${table.isBackup} = 0 AND ${table.priceIncrementMinor} IS NULL)`,
     ),
     check("markets_revision_positive", sql`${table.revision} >= 1`),
+    // Pricing (0120): the backup market sells at base prices.
+    check("markets_price_mode_check", sql`${table.priceMode} IN ('fixed', 'fx') AND (${table.isBackup} = 0 OR ${table.priceMode} = 'fixed')`),
+    check("markets_fx_rate_shape", sql`${table.fxRate} IS NULL OR (length(${table.fxRate}) BETWEEN 1 AND 25 AND ${table.fxRate} GLOB '[0-9]*' AND ${table.fxRate} NOT GLOB '*[^0-9.]*')`),
+    check("markets_price_adjustment_range", sql`${table.priceAdjustmentBps} BETWEEN -9900 AND 100000`),
+    check("markets_price_rounding", sql`${table.priceRoundingMinor} IS NULL OR ${table.priceRoundingMinor} BETWEEN 1 AND 100000000`),
+    check("markets_price_ending", sql`${table.priceEndingMinor} IS NULL OR (${table.priceRoundingMinor} IS NOT NULL AND ${table.priceEndingMinor} > 0 AND ${table.priceEndingMinor} < ${table.priceRoundingMinor})`),
 ]);
 
 /** One market per country: the country code is the key. */

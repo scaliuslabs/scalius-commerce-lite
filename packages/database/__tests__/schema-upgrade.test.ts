@@ -557,6 +557,17 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 20,
         postgresStatements: 20,
       },
+      {
+        version: 120,
+        name: "0120_price_lists",
+        // Price lists and their prices with their indexes, the market's five
+        // pricing columns, the backup-market guards, the checkout fences
+        // (the market's re-created on SQLite, its function replaced on
+        // PostgreSQL), the generated cache triggers and the ledger: one
+        // statement each.
+        sqliteStatements: 31,
+        postgresStatements: 30,
+      },
     ]);
   });
 
@@ -725,6 +736,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 117, name: "0117_phoneless_guest_customers" },
           { version: 118, name: "0118_places" },
           { version: 119, name: "0119_billing_addresses" },
+          { version: 120, name: "0120_price_lists" },
         ],
       });
     } finally {
