@@ -33,12 +33,9 @@ import { adminFraudCheckerRoutes } from "./fraud-checker";
 const providerRecord = {
   id: "provider_fraudbd",
   name: "FraudBD",
-  apiUrl: "https://fraudbd.example/api",
-  apiKey: "fraudbd-key",
-  apiSecret: "fraudbd-password",
-  userId: "merchant-user",
   isActive: true,
-  providerType: "fraudbd",
+  providerType: "scalius.bangladesh:fraudbd",
+  retired: false,
 };
 
 function createTestApp() {
@@ -78,55 +75,22 @@ describe("admin fraud checker credential handling", () => {
     vi.clearAllMocks();
   });
 
-  it("passes the credential encryption key and masks provider secrets in list responses", async () => {
+  it("lists rows with the credential encryption key and no credential fields", async () => {
     const { app, env } = createTestApp();
+    mocks.getFraudProviders.mockResolvedValueOnce([{ ...providerRecord, apiKey: "must-not-leave" }, { ...providerRecord, id: "old", retired: true }]);
 
     const response = await app.request("/api/v1/admin/fraud-checker", { method: "GET" }, env);
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.getFraudProviders).toHaveBeenCalledWith(
-      { id: "db" },
-      "credential-key",
-      { limit: 21, offset: 0 },
-    );
-    await expect(response.json()).resolves.toMatchObject({
+    expect(mocks.getFraudProviders).toHaveBeenCalledWith({ id: "db" }, "credential-key", { limit: 21, offset: 0 });
+    const body = await response.json();
+    expect(body).toEqual({
       success: true,
       data: {
-        providers: [
-          {
-            apiKey: "••••••••••••",
-            apiSecret: "••••••••••••",
-            userId: "••••••••••••",
-          },
-        ],
+        providers: [providerRecord, { ...providerRecord, id: "old", retired: true }],
         pagination: { page: 1, limit: 20, hasMore: false },
       },
     });
-  });
-
-  it("requires the credential encryption key before creating providers", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request("/api/v1/admin/fraud-checker", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "FraudBD",
-        apiUrl: "https://fraudbd.example/api",
-        apiKey: "new-key",
-        apiSecret: "new-secret",
-        userId: "merchant-user",
-        isActive: true,
-        providerType: "fraudbd",
-      }),
-    }, env);
-
-    expect(response.status, await response.clone().text()).toBe(201);
-    expect(mocks.saveFraudProvider).toHaveBeenCalledWith(
-      { id: "db" },
-      expect.objectContaining({ apiKey: "new-key", apiSecret: "new-secret" }),
-      "credential-key",
-    );
   });
 
   it("fails closed before create writes when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {
@@ -136,86 +100,26 @@ describe("admin fraud checker credential handling", () => {
     const response = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "FraudBD",
-        apiUrl: "https://fraudbd.example/api",
-        apiKey: "new-key",
-        apiSecret: "new-secret",
-        userId: "merchant-user",
-        isActive: true,
-        providerType: "fraudbd",
-      }),
+      body: JSON.stringify({ name: "FraudBD", providerType: "scalius.bangladesh:fraudbd", isActive: true }),
     }, env);
 
-    expect(response.status, await response.clone().text()).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
-      },
-    });
+    expect(response.status).toBe(503);
     expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
   });
 
-  it("restores masked update secrets through the credential encryption key", async () => {
+  it("refuses a built-in checker type: every checker is an app's", async () => {
     const { app, env } = createTestApp();
-
-    const response = await app.request("/api/v1/admin/fraud-checker", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: "provider_fraudbd",
-        name: "FraudBD",
-        apiUrl: "https://fraudbd.example/api",
-        apiKey: "••••••••••••",
-        apiSecret: "••••••••••••",
-        userId: "••••••••••••",
-        isActive: true,
-        providerType: "fraudbd",
-      }),
-    }, env);
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.getFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
-    expect(mocks.saveFraudProvider).toHaveBeenCalledWith(
-      { id: "db" },
-      expect.objectContaining({
-        apiKey: "fraudbd-key",
-        apiSecret: "fraudbd-password",
-        userId: "merchant-user",
-      }),
-      "credential-key",
-    );
-  });
-
-  it("fails closed instead of saving masked placeholders when stored credentials are unreadable", async () => {
-    const { app, env } = createTestApp();
-    mocks.getFraudProvider.mockResolvedValueOnce(null);
-
-    const response = await app.request("/api/v1/admin/fraud-checker", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: "provider_fraudbd",
-        name: "FraudBD",
-        apiUrl: "https://fraudbd.example/api",
-        apiKey: "••••••••••••",
-        apiSecret: "••••••••••••",
-        userId: "merchant-user",
-        isActive: true,
-        providerType: "fraudbd",
-      }),
-    }, env);
-
-    expect(response.status, await response.clone().text()).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Masked fraud checker credentials could not be restored. Re-enter credentials before saving.",
-      },
-    });
+    for (const body of [
+      { name: "FraudBD", providerType: "fraudbd", isActive: true },
+      { name: "Custom", apiUrl: "https://fraudchecker.link/api/v1/qc/", apiKey: "k", isActive: true },
+    ]) {
+      const response = await app.request("/api/v1/admin/fraud-checker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }, env);
+      expect(response.status).toBe(400);
+    }
     expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
   });
 
@@ -292,65 +196,32 @@ describe("admin fraud checker credential handling", () => {
     );
   });
 
-  it("returns generic connection status instead of upstream provider messages", async () => {
+  it("says why a connected checker's app cannot be asked, without asking it", async () => {
     const { app, env } = createTestApp();
-    mocks.testFraudProvider.mockResolvedValueOnce({
-      success: false,
-      message: "Authorization failed for secret-token",
-    });
+    mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({ status: "unavailable", provider: "FraudBD", reason: "Activate Bangladesh pack in Apps to use it." });
 
-    const response = await app.request(
-      "/api/v1/admin/fraud-checker/provider_fraudbd/test",
-      { method: "POST" },
-      env,
-    );
-    const body = await response.json();
-
-    expect(body).toMatchObject({
-      data: { success: false, message: "Connection failed" },
-    });
-    expect(JSON.stringify(body)).not.toContain("secret-token");
-  });
-
-  it("rejects provider URLs that can carry credentials or query secrets", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request("/api/v1/admin/fraud-checker", {
+    const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Unsafe",
-        apiUrl: "https://user:password@example.com/check?token=secret",
-        apiKey: "new-key",
-        isActive: false,
-      }),
+      body: JSON.stringify({ phone: "+8801700000000" }),
     }, env);
 
-    expect(response.status).toBe(400);
-    expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      success: true,
+      data: { configured: true, unavailable: { provider: "FraudBD", reason: "Activate Bangladesh pack in Apps to use it." } },
+    });
   });
 
-  it.each([
-    "https://127.0.0.1/check",
-    "https://localhost/check",
-    "https://fraud.internal/check",
-    "https://fraud.example.test:8443/check",
-  ])("rejects non-public provider URL %s", async (apiUrl) => {
+  it("returns the checker's merchant-safe connection message, bounded", async () => {
     const { app, env } = createTestApp();
+    mocks.testFraudProvider.mockResolvedValueOnce({ success: false, message: `FraudBD refused the saved credentials (HTTP 401).${" ".repeat(10)}${"x".repeat(400)}` });
 
-    const response = await app.request("/api/v1/admin/fraud-checker", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Unsafe",
-        apiUrl,
-        apiKey: "merchant-key",
-        isActive: false,
-      }),
-    }, env);
+    const response = await app.request("/api/v1/admin/fraud-checker/provider_fraudbd/test", { method: "POST" }, env);
+    const body = await response.json() as { data: { success: boolean; message: string } };
 
-    expect(response.status).toBe(400);
-    expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
+    expect(body.data.success).toBe(false);
+    expect(body.data.message.startsWith("FraudBD refused the saved credentials (HTTP 401).")).toBe(true);
+    expect(body.data.message.length).toBeLessThanOrEqual(300);
   });
 
   it("does not use JWT_SECRET as the provider read key", async () => {
@@ -376,7 +247,7 @@ describe("admin fraud checker credential handling", () => {
   it("saves an installed app's fraud provider as a row without credentials", async () => {
     const { app, env } = createTestApp();
     const appRow = { name: "Acme Radar", providerType: "acme.radar:radar", isActive: true };
-    mocks.saveFraudProvider.mockResolvedValueOnce({ id: "row_app", ...appRow, apiUrl: "", apiKey: "" });
+    mocks.saveFraudProvider.mockResolvedValueOnce({ id: "row_app", ...appRow, retired: false });
 
     const response = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",
@@ -386,10 +257,8 @@ describe("admin fraud checker credential handling", () => {
 
     expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.assertAppProviderInstalled).toHaveBeenCalledWith({ id: "db" }, "fraud", "acme.radar:radar");
-    expect(mocks.saveFraudProvider).toHaveBeenCalledWith({ id: "db" }, { ...appRow, apiUrl: "", apiKey: "" }, "credential-key");
-    await expect(response.json()).resolves.toMatchObject({
-      data: { id: "row_app", providerType: "acme.radar:radar", apiUrl: "", apiKey: "", isActive: true },
-    });
+    expect(mocks.saveFraudProvider).toHaveBeenCalledWith({ id: "db" }, appRow, "credential-key");
+    await expect(response.json()).resolves.toEqual({ success: true, data: { id: "row_app", ...appRow, retired: false } });
 
     const withCredentials = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",
@@ -397,5 +266,13 @@ describe("admin fraud checker credential handling", () => {
       body: JSON.stringify({ ...appRow, apiKey: "should-live-in-the-app" }),
     }, env);
     expect(withCredentials.status).toBe(400);
+
+    const updated = await app.request("/api/v1/admin/fraud-checker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "row_app", ...appRow, isActive: false }),
+    }, env);
+    expect(updated.status).toBe(200);
+    expect(mocks.saveFraudProvider).toHaveBeenLastCalledWith({ id: "db" }, { id: "row_app", ...appRow, isActive: false }, "credential-key");
   });
 });

@@ -44,7 +44,7 @@ Bangladesh addresses carry place ids in `city`, `zone` (the thana) and `area`. O
 
 ## Datasets
 
-A dataset is a directory `data/places/<country>/`:
+A dataset is a directory `places/` in the app that owns it. The Bangladesh dataset is `plugins/bangladesh/places/`; the Bangladesh pack loads it through the place import when it is activated:
 
 - `places.json`: one `PlaceDatasetEntry` per line, sorted by level, parent key, lower-case name, key (`serializePlaceDataset()`).
 - `manifest.json`: `id` (the source), `country`, the level labels, the counts and the SHA-256 of `places.json` (the version).
@@ -77,9 +77,9 @@ Callers:
 | Caller | How |
 |--------|-----|
 | Dashboard, agents, CLI | `POST /api/v1/admin/settings/delivery-locations/import` (`dashboard.delivery_locations.import`, permission `settings.delivery_locations.edit`). |
-| Plugins | `ctx.api.call("dashboard.delivery_locations.import", { body })` through the plugin bridge. The manifest must request `settings.delivery_locations.edit`. |
-| Local dev | `pnpm places:import [--dataset data/places/bd] [--state .wrangler/state]` opens the local D1 file with Miniflare. `pnpm dev:post-sale:seed` runs it. |
-| Pathao refresh | `pnpm places:pathao-dataset --credentials <file.json>` rewrites `data/places/bd`. Review the diff, then commit it. |
+| Plugins | `ctx.api.call("dashboard.delivery_locations.import", { body })` through the plugin bridge. The manifest must request `settings.delivery_locations.edit`. The Bangladesh pack loads its dataset this way on activation and finishes or refreshes it with its hourly job (`plugins/bangladesh/src/places.ts`). Removing the pack keeps every place. |
+| Local dev | `pnpm places:import [--dataset plugins/bangladesh/places] [--state .wrangler/state]` opens the local D1 file with Miniflare. `pnpm dev:post-sale:seed` runs it. |
+| Pathao refresh | `pnpm places:pathao-dataset --credentials <file.json>` rewrites `plugins/bangladesh/places`. Review the diff, then commit it. |
 | Dashboard Pathao import | `processPathaoImportChunk()` applies Pathao's live places through `importPlaces()` with source `bd`, without `finish`. |
 
 ## Dashboard

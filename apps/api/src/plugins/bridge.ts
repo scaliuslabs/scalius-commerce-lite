@@ -288,7 +288,13 @@ export class PluginBridgeHost implements PluginBridgeApi {
         fail("http.invalid_request", "timeoutMs is 1 to 30000.");
       }
       const timeoutMs = rawTimeout as number;
-      if (!(await pluginWithinRateLimit(this.runtime.env, "http", this.pluginId))) fail("rate_limited", "Too many outbound requests; try again in a minute.");
+      // A provider operation runs only when the platform calls it (a send, a
+      // lookup, a booking), paced by the queue or request that needs it, so its
+      // calls to its own provider are not the app's to limit: an SMS gateway
+      // must keep up with a burst of sign-in codes.
+      if (!this.props.provider && !(await pluginWithinRateLimit(this.runtime.env, "http", this.pluginId))) {
+        fail("rate_limited", "Too many outbound requests; try again in a minute.");
+      }
 
       const deadline = Date.now() + timeoutMs;
       let current = url;

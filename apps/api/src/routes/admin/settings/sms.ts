@@ -1,74 +1,41 @@
+// The merchant's SMS gateway: an installed app's SMS provider
+// (`<plugin id>:<provider id>`). Its keys are the app's own settings
+// (encrypted, masked there); this route saves only the choice. A choice
+// saved before the Bangladesh gateways moved into the Bangladesh pack reads
+// as the pack's provider and says why it cannot send until the pack is active.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-    BUILT_IN_SMS_PROVIDER_IDS,
-    getSmsSettings,
-    isSmsProviderChoice,
-    saveSmsSettings,
-} from "@scalius/core/integrations/sms";
+import { getSmsSettings, saveSmsSettings } from "@scalius/core/integrations/sms";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
-import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const MASKED = "••••••••••••";
-const SMS_SECRET_MAX_LENGTH = 2_048;
-const SMS_USERNAME_MAX_LENGTH = 320;
-const SMS_SENDER_MAX_LENGTH = 128;
-const SMS_BASE_URL_MAX_LENGTH = 2_048;
 const SMS_PROVIDER_ERROR_MAX_LENGTH = 1_000;
 
-/** A built-in gateway, or an installed app's SMS provider (`<plugin id>:<provider id>`). */
-const smsProviderChoiceSchema = z.union([
-    z.enum(BUILT_IN_SMS_PROVIDER_IDS),
-    z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>."),
-]);
+/** An installed app's SMS provider (`<plugin id>:<provider id>`). */
+const smsProviderChoiceSchema = z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>.");
 
 // ─────────────────────────────────────────
-// GET /sms — returns SMS provider settings with masked credentials
+// GET /sms — the gateway choice and whether it can send
 // ─────────────────────────────────────────
 
 const smsSettingsSchema = z.object({
-    /** A built-in gateway id or an app provider's `<plugin id>:<provider id>`. */
+    /** An app provider's `<plugin id>:<provider id>`. */
     activeProvider: z.string().max(160).nullable(),
     activeProviderConfigured: z.boolean(),
+    /** Why the chosen gateway cannot send now, in the merchant's words. */
     activeProviderError: z.string().max(SMS_PROVIDER_ERROR_MAX_LENGTH).nullable(),
-    bdbulksmsToken: z.string().max(MASKED.length),
-    mimsmsUsername: z.string().max(SMS_USERNAME_MAX_LENGTH),
-    mimsmsApiKey: z.string().max(MASKED.length),
-    mimsmsSenderName: z.string().max(SMS_SENDER_MAX_LENGTH),
-    smsnetbdApiKey: z.string().max(MASKED.length),
-    smsnetbdSenderId: z.string().max(SMS_SENDER_MAX_LENGTH),
-    gennetApiToken: z.string().max(MASKED.length),
-    gennetBaseUrl: z.string().max(SMS_BASE_URL_MAX_LENGTH),
-    gennetSid: z.string().max(SMS_SENDER_MAX_LENGTH),
     revision: z.number().int().nonnegative(),
 });
 
-function projectSmsSettings(
-    data: Awaited<ReturnType<typeof getSmsSettings>>,
-) {
-    const masked = (value: string) => (value ? MASKED : "");
+function projectSmsSettings(data: Awaited<ReturnType<typeof getSmsSettings>>) {
     return {
-        activeProvider: data.activeProvider && isSmsProviderChoice(data.activeProvider)
-            ? data.activeProvider
-            : null,
+        activeProvider: data.activeProvider && isQualifiedProviderId(data.activeProvider) ? data.activeProvider : null,
         activeProviderConfigured: data.activeProviderConfigured,
-        activeProviderError:
-            typeof data.activeProviderError === "string"
-                ? data.activeProviderError.slice(0, SMS_PROVIDER_ERROR_MAX_LENGTH)
-                : null,
-        bdbulksmsToken: masked(data.bdbulksmsToken),
-        mimsmsUsername: data.mimsmsUsername.slice(0, SMS_USERNAME_MAX_LENGTH),
-        mimsmsApiKey: masked(data.mimsmsApiKey),
-        mimsmsSenderName: data.mimsmsSenderName.slice(0, SMS_SENDER_MAX_LENGTH),
-        smsnetbdApiKey: masked(data.smsnetbdApiKey),
-        smsnetbdSenderId: data.smsnetbdSenderId.slice(0, SMS_SENDER_MAX_LENGTH),
-        gennetApiToken: masked(data.gennetApiToken),
-        gennetBaseUrl: data.gennetBaseUrl.slice(0, SMS_BASE_URL_MAX_LENGTH),
-        gennetSid: data.gennetSid.slice(0, SMS_SENDER_MAX_LENGTH),
+        activeProviderError: typeof data.activeProviderError === "string" ? data.activeProviderError.slice(0, SMS_PROVIDER_ERROR_MAX_LENGTH) : null,
         revision: data.revision,
     };
 }
@@ -78,7 +45,7 @@ const getSmsRoute = createRoute({
     path: "/sms",
     operationId: "dashboard.settings_sms.get_sms",
     tags: ["Admin - Settings"],
-    summary: "Get SMS provider settings",
+    summary: "Get the SMS gateway choice",
     responses: {
         200: { description: "SMS settings", content: { "application/json": { schema: successEnvelope(smsSettingsSchema) } } },
         ...errorResponses,
@@ -86,49 +53,25 @@ const getSmsRoute = createRoute({
 });
 
 app.openapi(getSmsRoute, async (c) => {
-    const db = c.get("db");
-    const data = await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
+    const data = await getSmsSettings(c.get("db"), getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
     return ok(c, projectSmsSettings(data));
 });
 
 // ─────────────────────────────────────────
-// POST /sms — saves SMS provider settings (encrypted where needed)
+// POST /sms — saves the gateway choice
 // ─────────────────────────────────────────
 
 const saveSmsSchema = z.object({
     activeProvider: smsProviderChoiceSchema.optional(),
-    bdbulksmsToken: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
-    mimsmsUsername: z.string().max(SMS_USERNAME_MAX_LENGTH).optional(),
-    mimsmsApiKey: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
-    mimsmsSenderName: z.string().max(SMS_SENDER_MAX_LENGTH).optional(),
-    smsnetbdApiKey: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
-    smsnetbdSenderId: z.string().max(SMS_SENDER_MAX_LENGTH).optional(),
-    gennetApiToken: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
-    gennetBaseUrl: z.string().max(SMS_BASE_URL_MAX_LENGTH).optional(),
-    gennetSid: z.string().max(SMS_SENDER_MAX_LENGTH).optional(),
     expectedRevision: z.number().int().nonnegative(),
 }).strict();
-
-const SMS_SECRET_FIELDS = [
-    "bdbulksmsToken",
-    "mimsmsApiKey",
-    "smsnetbdApiKey",
-    "gennetApiToken",
-] as const;
-
-function hasSmsSecretWrite(body: Omit<z.infer<typeof saveSmsSchema>, "expectedRevision">): boolean {
-    return SMS_SECRET_FIELDS.some((field) => {
-        const value = body[field];
-        return typeof value === "string" && value.trim() !== "" && !value.startsWith("••••");
-    });
-}
 
 const saveSmsRoute = createRoute({
     method: "post",
     path: "/sms",
     operationId: "dashboard.settings_sms.sms",
     tags: ["Admin - Settings"],
-    summary: "Save SMS provider settings",
+    summary: "Save the SMS gateway choice",
     request: { body: { required: true, content: { "application/json": { schema: saveSmsSchema } } } },
     responses: {
         200: { description: "SMS settings saved", content: { "application/json": { schema: successEnvelope(smsSettingsSchema) } } },
@@ -141,13 +84,8 @@ const saveSmsRoute = createRoute({
 app.openapi(saveSmsRoute, async (c) => {
     const db = c.get("db");
     const { expectedRevision, ...body } = c.req.valid("json");
-    if (body.activeProvider && isQualifiedProviderId(body.activeProvider)) {
-        await assertAppProviderInstalled(db, "sms", body.activeProvider);
-    }
-    const encKey = hasSmsSecretWrite(body)
-        ? requireEncryptionKey(c.env as Record<string, unknown>)
-        : getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    await saveSmsSettings(db, body, encKey, { expectedRevision });
+    if (body.activeProvider) await assertAppProviderInstalled(db, "sms", body.activeProvider);
+    await saveSmsSettings(db, body, undefined, { expectedRevision });
     await clearNotificationProviderBlocks(db, { channel: "sms" });
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.

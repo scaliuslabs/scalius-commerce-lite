@@ -8,7 +8,7 @@
  *   without its own names uses the generic ones.
  * - Bangladesh addresses keep their City/Thana/Area adapter fields (`city`,
  *   `zone`, `area`): `deliveryHierarchyField()` maps a level to its field.
- * - A dataset (`data/places/<country>/`) is the source of imported places:
+ * - A dataset (a pack's `places/` directory, such as `plugins/bangladesh/places/`) is the source of imported places:
  *   one `PlaceDatasetEntry` per place, keyed by a stable source `key`.
  */
 

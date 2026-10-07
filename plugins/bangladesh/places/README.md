@@ -22,7 +22,10 @@ The import matches a place by `key`, then by `legacyId`, and never deletes or
 switches off a merchant's own places. The rules are in
 [docs/PLACES.md](../../../docs/PLACES.md).
 
-- Load it into the local store: `pnpm places:import`.
+- The Bangladesh pack (`scalius.bangladesh`) owns this dataset. Activating the
+  pack loads it into the store; its hourly job finishes a load and loads a
+  newer version after an update.
+- Load it into the local store without the pack: `pnpm places:import`.
 - Do not edit a place by hand. Refresh the dataset from Pathao's location API
   (`pnpm places:pathao-dataset --credentials <file.json>`), then review the
   diff.

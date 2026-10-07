@@ -139,7 +139,7 @@ describe("local post-sale smoke CLI", () => {
   });
 
   it("takes its delivery places from the Bangladesh dataset, not an ad-hoc seed", () => {
-    const places = JSON.parse(readFileSync("data/places/bd/places.json", "utf8"));
+    const places = JSON.parse(readFileSync("plugins/bangladesh/places/places.json", "utf8"));
     const byKey = new Map(places.map((place) => [place.key, place]));
     const payload = buildCheckoutPayload({ sequence: 1 });
     expect(byKey.get(FIXTURE_PLACE_KEYS.cityId)).toMatchObject({ level: 1, name: "Dhaka", legacyId: payload.city });

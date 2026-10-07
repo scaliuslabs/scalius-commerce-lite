@@ -1,8 +1,8 @@
 /**
- * Refreshes the Bangladesh place dataset (data/places/bd) from Pathao's
+ * Refreshes the Bangladesh place dataset (plugins/bangladesh/places, the Bangladesh pack's) from Pathao's
  * location API: a courier refresh becomes a reviewed diff of places.json.
  *
- *   pnpm places:pathao-dataset --credentials <file.json> [--dataset data/places/bd]
+ *   pnpm places:pathao-dataset --credentials <file.json> [--dataset plugins/bangladesh/places]
  *
  * The credentials file holds { baseUrl, clientId, clientSecret, username,
  * password } of a Pathao merchant account; keep it outside the repository.
@@ -34,7 +34,7 @@ const fromRoot = (path: string) => (isAbsolute(path) ? path : resolve(root, path
 async function main() {
   const credentialsPath = option("credentials");
   if (!credentialsPath) throw new Error("Pass --credentials <file.json> (Pathao baseUrl, clientId, clientSecret, username, password).");
-  const dataset = fromRoot(option("dataset") ?? "data/places/bd");
+  const dataset = fromRoot(option("dataset") ?? "plugins/bangladesh/places");
   const manifest = JSON.parse(readFileSync(join(dataset, "manifest.json"), "utf8")) as PlaceDatasetManifest;
   const previous = JSON.parse(readFileSync(join(dataset, "places.json"), "utf8")) as PlaceDatasetEntry[];
   const legacyIds = new Map(previous.flatMap((place) => (place.legacyId ? [[place.key, place.legacyId] as const] : [])));

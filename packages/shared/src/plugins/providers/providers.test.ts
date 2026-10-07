@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PLUGIN_PROVIDERS_MAX,
   PROVIDER_KINDS,
   PROVIDER_OPERATIONS,
   PROVIDER_PORTS,
@@ -249,6 +250,21 @@ describe("provider declarations", () => {
     expect(parses({ ...wallet, flow: "instructions" })).toBe(false);
     expect(parses({ ...wallet, operations: ["capture"] })).toBe(false);
     expect(parsePluginManifest({ ...manifest, providers: { sms: [{ id: "a", name: "A" }], email: [{ id: "a", name: "B" }] } }).ok).toBe(false);
+  });
+
+  it("fits a regional pack: up to PLUGIN_PROVIDERS_MAX providers, readiness per provider's own settings", () => {
+    const sms = Array.from({ length: 12 }, (_, index) => ({ id: `gateway-${index}`, name: `Gateway ${index}` }));
+    const fraud = Array.from({ length: 12 }, (_, index) => ({ id: `checker-${index}`, name: `Checker ${index}`, countries: ["BD"] }));
+    expect(PLUGIN_PROVIDERS_MAX).toBe(24);
+    expect(parsePluginManifest({ ...manifest, providers: { sms, fraud } }).ok).toBe(true);
+    expect(parsePluginManifest({ ...manifest, providers: { sms: [...sms, { id: "one-more", name: "One more" }], fraud } }).ok).toBe(false);
+
+    const settings = [{ key: "gateway_token", label: "Token", type: "secret" }];
+    const declared = parsePluginManifest({ ...manifest, settings, providers: { sms: [{ id: "gateway", name: "Gateway", settings: ["gateway_token"] }] } });
+    expect(declared.ok && declared.manifest.providers[0]).toMatchObject({ kind: "sms", settings: ["gateway_token"] });
+    // A provider names only declared settings, each once.
+    expect(parsePluginManifest({ ...manifest, settings, providers: { sms: [{ id: "gateway", name: "Gateway", settings: ["other_token"] }] } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, settings, providers: { sms: [{ id: "gateway", name: "Gateway", settings: ["gateway_token", "gateway_token"] }] } }).ok).toBe(false);
   });
 
   it("checks an implementation against its port when the plugin loads", () => {

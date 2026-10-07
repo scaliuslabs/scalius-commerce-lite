@@ -1,4 +1,4 @@
-// The committed Bangladesh dataset (data/places/bd) against the stores it
+// The committed Bangladesh dataset (plugins/bangladesh/places) against the stores it
 // must serve: the demo store it was exported from (rows under their legacy
 // ids, migrated by 0118) and a new store. Both end with the same 11,550 keyed
 // places; neither import creates a duplicate, and a second run changes nothing.
@@ -23,7 +23,7 @@ import type { Database } from "@scalius/database/client";
 
 import { importPlaces, type PlaceImportResult } from "./places-import";
 
-const DATASET = join(import.meta.dirname, "../../../../../data/places/bd");
+const DATASET = join(import.meta.dirname, "../../../../../plugins/bangladesh/places");
 const text = readFileSync(join(DATASET, "places.json"), "utf8");
 const manifest = JSON.parse(readFileSync(join(DATASET, "manifest.json"), "utf8")) as PlaceDatasetManifest;
 const places = JSON.parse(text) as PlaceDatasetEntry[];

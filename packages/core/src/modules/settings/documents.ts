@@ -560,51 +560,21 @@ export const whatsappDocument = defineSettingsDocument<WhatsAppSettings>({
   secretFields: { accessToken: "WhatsApp Cloud API access token" },
 });
 
+/**
+ * The merchant's SMS gateway: an app provider id (`<plugin id>:<provider id>`).
+ * A store set up before the Bangladesh gateways moved into the Bangladesh
+ * pack may still hold their old id and encrypted keys here; the schema keeps
+ * those fields untouched (a loose object) until the pack's activation moves
+ * them (apps/api/src/plugins/provider-handoff.ts) and replaces the document.
+ */
 export interface SmsSettings {
   activeProvider: string;
-  bdbulksmsToken: string;
-  mimsmsUsername: string;
-  mimsmsApiKey: string;
-  mimsmsSenderName: string;
-  smsnetbdApiKey: string;
-  smsnetbdSenderId: string;
-  gennetApiToken: string;
-  gennetBaseUrl: string;
-  gennetSid: string;
 }
 
 export const smsDocument = defineSettingsDocument<SmsSettings>({
   key: "sms",
-  schema: z.object({
-    activeProvider: z.string(),
-    bdbulksmsToken: z.string(),
-    mimsmsUsername: z.string(),
-    mimsmsApiKey: z.string(),
-    mimsmsSenderName: z.string(),
-    smsnetbdApiKey: z.string(),
-    smsnetbdSenderId: z.string(),
-    gennetApiToken: z.string(),
-    gennetBaseUrl: z.string(),
-    gennetSid: z.string(),
-  }),
-  defaults: {
-    activeProvider: "",
-    bdbulksmsToken: "",
-    mimsmsUsername: "",
-    mimsmsApiKey: "",
-    mimsmsSenderName: "",
-    smsnetbdApiKey: "",
-    smsnetbdSenderId: "",
-    gennetApiToken: "",
-    gennetBaseUrl: "",
-    gennetSid: "",
-  },
-  secretFields: {
-    bdbulksmsToken: "BDBulkSMS token",
-    mimsmsApiKey: "MIM SMS API key",
-    smsnetbdApiKey: "SMS.net.bd API key",
-    gennetApiToken: "GenNet API token",
-  },
+  schema: z.looseObject({ activeProvider: z.string() }),
+  defaults: { activeProvider: "" },
 });
 
 // ─────────────────────────────────────────

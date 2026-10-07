@@ -1,4 +1,3 @@
-export * from "./browser";
 export {
   getFraudProviders,
   getFraudProvider,
@@ -7,14 +6,8 @@ export {
   testFraudProvider,
   fraudLookup,
   fraudLookupWithActiveProvider,
-  getFraudProviderUrlIssue,
+  readRetiredFraudCheckers,
+  replaceRetiredFraudChecker,
 } from "./fraud-checker.service";
-export type { FraudCheckerProvider } from "./fraud-checker.service";
-export type { FraudAdapter, FraudCheckProviderConfig, FraudProvider } from "./provider";
-export {
-  builtInFraudChecker,
-  defaultFraudChecker,
-  eCourierFraudChecker,
-  fraudBdChecker,
-  fraudGuardChecker,
-} from "./provider";
+export type { FraudCheckerProvider, FraudLookupResult, RetiredFraudChecker } from "./fraud-checker.service";
+export type { FraudProvider } from "./provider";

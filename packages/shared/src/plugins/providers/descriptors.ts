@@ -25,6 +25,15 @@ import { paymentAmountLimitsSchema } from "./payment";
 
 const providerId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 const title = z.string().trim().min(1).max(80);
+const settingKey = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
+
+/**
+ * The most providers one app declares. A regional pack bundles a country's
+ * integrations in one app (the Bangladesh pack: 4 SMS gateways, 4 fraud
+ * checkers, its couriers and a payment gateway), so the limit is sized for
+ * that, not for a single-provider app.
+ */
+export const PLUGIN_PROVIDERS_MAX = 24;
 
 function base<K extends ProviderKind>(kind: K) {
   const optional = PROVIDER_OPERATIONS[kind].optional as readonly string[];
@@ -35,6 +44,16 @@ function base<K extends ProviderKind>(kind: K) {
       .max(optional.length)
       .refine((operations) => new Set(operations).size === operations.length, "List each operation once.")
       .default([]),
+    /**
+     * The app settings this provider needs (keys of the manifest's
+     * `settings`). The provider is ready only when each one is set, readable
+     * and not an obvious placeholder, so an app with several providers (a
+     * regional pack) reports readiness per provider; its fields need not be
+     * `required` for the whole app. Left out: the app's required settings only.
+     */
+    settings: z.array(settingKey).max(40)
+      .refine((keys) => new Set(keys).size === keys.length, "List each setting once.")
+      .optional(),
   };
 }
 
@@ -112,11 +131,11 @@ export type PluginProviderDeclaration =
  * named `shipping` (now `courier`) and `messaging` (now `sms`).
  */
 export const pluginProvidersSchema = z.union([
-  z.object(Object.fromEntries(PROVIDER_KINDS.map((kind) => [kind, z.array(PROVIDER_DESCRIPTOR_SCHEMAS[kind]).max(10).optional()])) as {
+  z.object(Object.fromEntries(PROVIDER_KINDS.map((kind) => [kind, z.array(PROVIDER_DESCRIPTOR_SCHEMAS[kind]).max(PLUGIN_PROVIDERS_MAX).optional()])) as {
     [K in ProviderKind]: z.ZodOptional<z.ZodArray<(typeof PROVIDER_DESCRIPTOR_SCHEMAS)[K]>>;
   }).strict().transform((groups) => PROVIDER_KINDS.flatMap((kind) =>
     (groups[kind] ?? []).map((descriptor) => ({ kind, ...descriptor }) as PluginProviderDeclaration))),
-  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping", "messaging"]) })).max(10)
+  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping", "messaging"]) })).max(PLUGIN_PROVIDERS_MAX)
     .transform((entries, context) => entries.map((entry, index) => {
       const { kind: named, ...descriptor } = entry;
       const kind: ProviderKind = named === "shipping" ? "courier" : named === "messaging" ? "sms" : named;
@@ -129,7 +148,7 @@ export const pluginProvidersSchema = z.union([
       }
       return { kind, ...parsed.data } as PluginProviderDeclaration;
     })),
-]).default([]).refine((providers) => providers.length <= 10, "At most 10 providers.");
+]).default([]).refine((providers) => providers.length <= PLUGIN_PROVIDERS_MAX, `At most ${PLUGIN_PROVIDERS_MAX} providers.`);
 
 /** The operations the host may call on a declared provider: the port's required ones and the declared optional ones. */
 export function declaredProviderOperations(declaration: Pick<PluginProviderDeclaration, "kind" | "operations">): string[] {

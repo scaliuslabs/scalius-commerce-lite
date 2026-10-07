@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, Globe, ImageOff, Inbox, Menu, Package, Palette, Receipt, Store, Truck } from "lucide-react";
+import { ChevronRight, CreditCard, Globe, ImageOff, Inbox, Menu, Package, Palette, Receipt, Store, TriangleAlert, Truck } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -15,6 +15,8 @@ import { AppHomeWidgets } from "~/components/admin/apps/ui/AppResourceCards";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
+import { homeSmsQueryOptions } from "~/lib/api-query-options/dashboard-home";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { getStoreTimeZone } from "~/lib/store-time-zone";
 import {
@@ -96,6 +98,9 @@ function HomePage() {
     staleTime: HOME_FEED_STALE_TIME_MS,
   });
   const placements = useQuery({ ...navigationPlacementsQueryOptions(), enabled: canOpen("/admin/online-store/navigation") });
+  // A chosen SMS gateway that cannot send (its app is not active, as after the
+  // Bangladesh gateways moved into the Bangladesh pack): order texts and sign-in codes stop.
+  const sms = useQuery({ ...homeSmsQueryOptions(), enabled: isSuperAdmin || permissions.has(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW) });
 
   if (summary.isError) {
     return (
@@ -126,7 +131,8 @@ function HomePage() {
   const feedGaps = countFeedGaps(feed.data);
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
     placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
-  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu;
+  const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
+  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked;
 
   return (
     <div className="space-y-4 pb-8">
@@ -215,6 +221,11 @@ function HomePage() {
             {needsHeaderMenu ? (
               <TodoLink to="/admin/online-store/navigation" icon={<Menu className="h-4 w-4" />}>
                 {t("addHeaderMenu")}
+              </TodoLink>
+            ) : null}
+            {smsBlocked ? (
+              <TodoLink to="/admin/settings/notifications" icon={<TriangleAlert className="h-4 w-4" />}>
+                {t("smsCannotSend", { reason: sms.data?.activeProviderError ?? "" })}
               </TodoLink>
             ) : null}
             {caughtUp ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}

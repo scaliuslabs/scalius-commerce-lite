@@ -7,6 +7,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
+vi.mock("../../plugins/bundled.gen", async (importOriginal) => (await import("../../plugins/testing/hello-bundled")).withHelloBundled(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { putPluginRecord, requirePluginInstallation } from "@scalius/core/modules/plugins";

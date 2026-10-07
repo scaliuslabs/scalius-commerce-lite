@@ -58,7 +58,7 @@ async function resolveChoice(
   const installation = await getPluginInstallation(runtime.db, parsed.pluginId);
   const declaration = installation?.manifest.providers.find((provider) => provider.kind === kind && provider.id === parsed.providerId);
   if (!installation || !declaration) return notInstalled;
-  const settings = await readAppProviderSettings(runtime, installation, kind, encryptionKey);
+  const settings = await readAppProviderSettings(runtime, installation, declaration, encryptionKey);
   if (!settings.enabled || settings.missingFields.length > 0 || settings.credentialErrors.length > 0) {
     return { provider: null, issue: settings.blockedReason ?? `${declaration.name} is not ready.` };
   }

@@ -1,5 +1,5 @@
 // Dataset import into the place directory (docs/PLACES.md): an idempotent,
-// chunked upsert of `PlaceDatasetEntry` rows (data/places/<country>/), for
+// chunked upsert of `PlaceDatasetEntry` rows (a pack's places/ directory, plugins/bangladesh/places), for
 // the dashboard, agents, plugins (`dashboard.delivery_locations.import`,
 // permission settings.delivery_locations.edit), the dev seed and the Pathao
 // refresh.

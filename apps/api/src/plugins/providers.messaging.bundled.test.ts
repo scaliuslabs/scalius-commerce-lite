@@ -161,7 +161,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
     );
     expect(email).toEqual({ success: true, providerRef: "M-outbox2:emai", rawStatus: "Queued for [email]", provider: MAIL });
 
-    const row = await saveFraudProvider(db, { name: "Acme Radar", providerType: RADAR, isActive: true, apiUrl: "", apiKey: "" }, KEY);
+    const row = await saveFraudProvider(db, { name: "Acme Radar", providerType: RADAR, isActive: true }, KEY);
     const lookup = await fraudLookupWithActiveProvider(db, "01712-345678", KEY, providers);
     expect(lookup.status).toBe("checked");
     if (lookup.status !== "checked") return;
@@ -180,8 +180,9 @@ describe("app messaging and fraud providers through the bundled loader", () => {
       issues: [{ message: "Acme Notify credentials could not be opened. Save them again in the app's settings." }],
     });
     await expect(getActiveSmsProvider(db, KEY, otherKey)).resolves.toBeNull();
-    await saveFraudProvider(db, { name: "Acme Radar", providerType: RADAR, isActive: true, apiUrl: "", apiKey: "" }, KEY);
-    await expect(fraudLookupWithActiveProvider(db, "01712345678", KEY, otherKey)).rejects.toThrow("could not be opened");
+    await saveFraudProvider(db, { name: "Acme Radar", providerType: RADAR, isActive: true }, KEY);
+    await expect(fraudLookupWithActiveProvider(db, "01712345678", KEY, otherKey))
+      .resolves.toMatchObject({ status: "unavailable", reason: expect.stringContaining("could not be opened") });
     // Nothing ran: the app was never invoked without readable credentials.
     expect(await listPluginLogs(db, NOTIFY_FIXTURE_ID)).toEqual([]);
 

@@ -4347,12 +4347,12 @@ export const putApiV1AdminSettingsNotificationChannelsAdminChannels = <ThrowOnEr
 });
 
 /**
- * Get SMS provider settings
+ * Get the SMS gateway choice
  */
 export const getApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSmsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/sms', ...options });
 
 /**
- * Save SMS provider settings
+ * Save the SMS gateway choice
  */
 export const postApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsSmsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsSmsResponses, PostApiV1AdminSettingsSmsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsSmsResponses, PostApiV1AdminSettingsSmsErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/sms',

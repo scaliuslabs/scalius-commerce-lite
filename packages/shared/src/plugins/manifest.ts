@@ -441,6 +441,14 @@ export const pluginManifestSchema = z.object({
     }
   });
   unique(manifest.providers.map((provider) => provider.id), ["providers"], "Provider ids");
+  const settingKeys = new Set(manifest.settings.map((field) => field.key));
+  manifest.providers.forEach((provider, index) => {
+    for (const key of provider.settings ?? []) {
+      if (!settingKeys.has(key)) {
+        context.addIssue({ code: "custom", path: ["providers", index, "settings"], message: `Setting ${key} is not declared in settings.` });
+      }
+    }
+  });
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");

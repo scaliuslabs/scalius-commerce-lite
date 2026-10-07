@@ -4,6 +4,7 @@ import {
   getApiV1AdminDashboardHomeSummary,
   getApiV1AdminInventoryAlerts,
   getApiV1AdminOrders,
+  getApiV1AdminSettingsSms,
 } from "@scalius/api-client/sdk";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
@@ -40,3 +41,15 @@ export const homeLowStockQueryOptions = () =>
 
 /** Home's store-readiness tasks can wait a few minutes between reads. */
 export const HOME_FEED_STALE_TIME_MS = 5 * 60_000;
+
+/**
+ * The SMS gateway choice, for Home's to-do: a chosen gateway that cannot send
+ * (its app is not active). The same key as Settings → Notifications, so a
+ * save there refreshes Home.
+ */
+export const homeSmsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.sms(),
+    queryFn: () => apiData(getApiV1AdminSettingsSms()),
+    staleTime: DASHBOARD_STALE_TIME_MS,
+  });

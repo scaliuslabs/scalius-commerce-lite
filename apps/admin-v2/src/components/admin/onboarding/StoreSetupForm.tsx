@@ -2,6 +2,7 @@
 // your store"): store name, country/region, currency (the country's, CLDR),
 // store language, time zone (the browser's) and units (the country's). One
 // request writes them all; the API refuses a store that is no longer new.
+// A store in Bangladesh then sees the Bangladesh pack step.
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +26,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { setStoreTimeZone } from "~/lib/store-time-zone";
 import { browserTimeZone, timeZoneOptions } from "~/lib/time-zone-options";
 import type { StoreSetupStatus } from "~/lib/api-query-options/store-defaults";
+import { BangladeshPackStep } from "./BangladeshPackStep";
 
 /** A labelled field with its help or error line (the sign-in screens' shape, without their icons). */
 function Field({ id, label, error, hint, children }: { id: string; label: string; error?: string | null; hint?: string; children: ReactNode }) {
@@ -83,6 +85,7 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
   const [nameError, setNameError] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [packStep, setPackStep] = useState(false);
 
   const countries = useMemo(
     () => getCountries()
@@ -143,12 +146,21 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
         },
       }));
       setStoreTimeZone(saved.timeZone);
+      // Bangladesh: the regional pack (SMS, fraud checks, places) before Home.
+      if (draft.countryCode === "BD") {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
+        setPackStep(true);
+        setBusy(false);
+        return;
+      }
       await finish();
     } catch (error) {
       setFailure(error instanceof AdminApiResponseError && error.status === 409 ? t("alreadySetUp") : t("saveFailed"));
       setBusy(false);
     }
   }
+
+  if (packStep) return <BangladeshPackStep onDone={() => void finish()} />;
 
   return (
     <form ref={formRef} method="post" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">

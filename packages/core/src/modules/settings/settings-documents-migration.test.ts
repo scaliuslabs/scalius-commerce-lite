@@ -14,7 +14,8 @@ import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { DEFAULT_CUSTOMER_IDENTITY } from "@scalius/shared/customer-auth-policy";
 
-import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
+import { encodeEncryptedCredential, encryptCredentials, readStoredCredentialStrict } from "../../utils/credential-encryption";
+import { selectSettingsDocuments } from "../../settings-store";
 import { getEmailRuntimeSettings } from "../../integrations/email/settings";
 import { readFirebaseSettings } from "../../integrations/firebase/settings";
 import { getSmsSettings } from "../../integrations/sms/sms-settings";
@@ -28,7 +29,7 @@ import {
 import { getBusinessSettings } from "./business-settings.service";
 import { getCheckoutFlowSettingsDocument } from "../checkout/flow-settings";
 import { getCustomerRequestPolicy } from "./customer-request-policy";
-import { customerAuthDocument, securityDocument } from "./documents";
+import { customerAuthDocument, securityDocument, smsDocument } from "./documents";
 import { getPlatformSettings } from "../platform/platform-settings.service";
 import {
   getAdminNotificationChannels,
@@ -364,12 +365,17 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
   expect((await getAdminNotificationChannels(db)).order_created).toEqual([]);
   expect((await getAdminNotificationChannels(db)).order_cancelled).toEqual(["push"]);
   expect(await getOrderWhatsAppTemplateSettings(db)).toEqual({ templateName: "order_update", languageCode: "bn" });
+  // SMS.net.bd is the Bangladesh pack's now: the choice reads as the pack's
+  // provider, and its key and sender wait in the document, encrypted, for the
+  // pack's activation to move them.
   expect(await getSmsSettings(db, KEY)).toMatchObject({
-    activeProvider: "smsnetbd",
-    activeProviderConfigured: true,
-    smsnetbdApiKey: "•".repeat(12),
-    smsnetbdSenderId: "SHOP",
+    activeProvider: "scalius.bangladesh:smsnetbd",
+    activeProviderConfigured: false,
   });
+  const [sms] = await selectSettingsDocuments(db, [smsDocument]);
+  const kept = JSON.parse(sms!.value) as Record<string, string>;
+  expect(kept.smsnetbdSenderId).toBe("SHOP");
+  await expect(readStoredCredentialStrict(kept.smsnetbdApiKey, KEY)).resolves.toMatchObject({ value: "sms-live-key-8841" });
 }
 
 function expectOnlyDocumentRows(sqlite: DatabaseSync) {
