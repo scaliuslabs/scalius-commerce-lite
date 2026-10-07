@@ -34,7 +34,8 @@ import { queryKeys } from "~/lib/query-keys";
 import { addressCountriesQueryOptions, addressRulesQueryOptions } from "~/lib/api-query-options/address-rules";
 import { countryName } from "~/lib/country-name";
 import { CountryChecklist } from "~/components/admin/shared/CountryChecklist";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
+import { getStoreRegion, useStoreDefaultsVersion } from "~/lib/store-time-zone";
 import { locationMessages } from "~/i18n/location";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
@@ -212,7 +213,7 @@ function RatesEditor({
                 id={id("fee")}
                 label={`${t("fee")} (${symbol})`}
                 help={rate.kind === "pickup" ? t("pickupFeeHelp") : undefined}
-                error={errors.fee ? t(errors.fee) : null}
+                error={errors.fee ? t(errors.fee, { max: formatNumber(MAX_AMOUNT) }) : null}
               >
                 <Input
                   id={id("fee")}
@@ -228,7 +229,7 @@ function RatesEditor({
               id={id("freeOver")}
               label={`${t("freeOver")} (${symbol})`}
               help={t("freeOverHelp")}
-              error={errors.freeOver ? t(errors.freeOver) : null}
+              error={errors.freeOver ? t(errors.freeOver, { max: formatNumber(MAX_AMOUNT) }) : null}
             >
               <Input
                 id={id("freeOver")}
@@ -878,6 +879,9 @@ export function DeliveryZonesCard() {
   const canViewPlaces = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW);
   const placeCounts = useQuery({ ...areaCountsQuery, enabled: canViewPlaces }).data;
   const hasPlaces = placeCounts ? placeCounts.cities > 0 : true;
+  // The suggested setups are Dhaka's: a store in another country starts from its own zone.
+  useStoreDefaultsVersion();
+  const suggestsSetups = getStoreRegion() === "BD" || (placeCounts?.cities ?? 0) > 0;
   const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"] | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const applyTemplate = useMutation({
@@ -900,7 +904,7 @@ export function DeliveryZonesCard() {
     <SettingsCard
       id="deliveryCharges"
       title={t("zonesTitle")}
-      description={data.zones.length ? t("zonesDescription") : t("noZones")}
+      description={data.zones.length ? t("zonesDescription") : t(suggestsSetups ? "noZones" : "noZonesOwn")}
       action={
         <SettingsDialog title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
           <ZoneForm zone={null} zones={data.zones} />
@@ -915,7 +919,7 @@ export function DeliveryZonesCard() {
               <ZoneForm zone={zone} zones={data.zones} />
             </SettingsDialog>
           ))}
-          {data.zones.length === 0 && canEdit ? (
+          {data.zones.length === 0 && canEdit && suggestsSetups ? (
             // Suggestions, not zones: nothing here is live until the merchant uses one.
             <section aria-labelledby="suggested-setups" className="border-t border-border first:border-t-0">
               <h3 id="suggested-setups" className="px-4 pt-3 text-heading-sm text-muted-foreground">{t("suggestedSetups")}</h3>

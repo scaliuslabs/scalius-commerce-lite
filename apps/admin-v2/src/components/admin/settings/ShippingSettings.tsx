@@ -25,6 +25,7 @@ import {
 } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
+import { getStoreRegion, useStoreDefaultsVersion } from "~/lib/store-time-zone";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
 import { resolveProviderReadiness } from "../delivery-providers/provider-readiness";
@@ -48,9 +49,12 @@ export function DeliveryAreasCard() {
   const t = useMessages(shippingMessages);
   const canView = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW);
   const { data, isError, refetch } = useQuery({ ...areaCountsQuery, enabled: canView });
+  useStoreDefaultsVersion();
   if (!canView) return null;
   if (isError) return <SettingsLoadFailure title={t("loadAreas")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
+  // Cities, thanas and areas are Bangladesh's: another country's store has none to manage.
+  if (getStoreRegion() !== "BD" && data.cities + data.zones + data.areas === 0) return null;
   return (
     <SettingsCard id="deliveryAreas"
       title={t("areasTitle")}

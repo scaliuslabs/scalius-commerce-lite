@@ -28,6 +28,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
+import { CreatePriceListDialog } from "./CreatePriceListDialog";
 import { PriceListEditor } from "./PriceListEditor";
 import { PriceListsList } from "./PriceListsList";
 
@@ -94,6 +95,21 @@ describe("price lists", () => {
     expect(first).toContain("From ");
     expect(second).toContain("Wholesale in Bangladesh");
     expect(second).toContain("Always");
+  });
+
+  it("offers a one-market store only a customer segment list, and asks for no market", async () => {
+    sdk.getApiV1AdminPriceListsChoices.mockImplementation(() => envelope({
+      markets: [{ id: "mkt_backup", name: "Bangladesh", isBackup: true, currencyCode: "BDT" }],
+      segments: [{ id: "seg_1", name: "Wholesale" }],
+    }));
+    await render(<CreatePriceListDialog open onOpenChange={() => undefined} />);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Customer segment"));
+    const radios = [...document.body.querySelectorAll<HTMLButtonElement>("button[role=radio]")];
+    expect(radios.map((radio) => radio.disabled)).toEqual([true, false, true]);
+    expect(radios[1]!.getAttribute("aria-checked")).toBe("true");
+    expect(document.body.textContent).toContain("Add a second market in Settings › Markets first.");
+    expect(document.body.querySelector("#price-list-create-market")).toBeNull();
+    expect(document.body.querySelector("#price-list-create-segment")).not.toBeNull();
   });
 
   it("shows a list's SKU prices and saves its details under the revision it loaded", async () => {

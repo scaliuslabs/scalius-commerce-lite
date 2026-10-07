@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   getApiV1AdminTaxes: vi.fn(),
   getApiV1AdminTaxesRegionsById: vi.fn(),
+  getApiV1AdminTaxesSettings: vi.fn(),
+  postApiV1AdminTaxesClasses: vi.fn(),
   postApiV1AdminTaxesRegions: vi.fn(),
   putApiV1AdminTaxesRegionsById: vi.fn(),
   deleteApiV1AdminTaxesRegionsById: vi.fn(),
@@ -37,7 +39,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { SaveScope } from "../shared/SaveBar";
 import { TaxRegionPage } from "./TaxRegionPage";
-import { TaxRegionsCard } from "./TaxesSettings";
+import { TaxCollectionCard, TaxRegionsCard } from "./TaxesSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -132,6 +134,26 @@ describe("tax regions settings", () => {
     await vi.waitFor(() => expect(container.querySelectorAll("tbody tr")[1]!.textContent).toContain("Avalara"));
     expect(us!.slice(0, 3)).toEqual(["United States", "1", "1"]);
     expect(container.textContent).toContain("Tax is collected only in the countries you add.");
+  });
+
+  it("starts a store with no tax group from one button, and chooses the group it makes", async () => {
+    const standard = { id: "taxc_new", name: "Standard", description: null, isExempt: false, version: 1, createdAt: stamp, updatedAt: stamp, deletedAt: null };
+    let made = false;
+    const empty = { ...configuration, settings: { ...configuration.settings, enabled: false, defaultTaxClassId: null }, classes: [], regions: [], rates: [] };
+    sdk.getApiV1AdminTaxes.mockImplementation(() => envelope(made ? { ...empty, classes: [standard] } : empty));
+    sdk.getApiV1AdminTaxesSettings.mockImplementation(() => envelope({ settings: empty.settings }));
+    sdk.postApiV1AdminTaxesClasses.mockImplementation(() => {
+      made = true;
+      return envelope({ taxClass: standard });
+    });
+    await render(<TaxCollectionCard />);
+    await vi.waitFor(() => expect(container.textContent).toContain("Start with one group for all your products."));
+    const start = [...container.querySelectorAll("button")].find((button) => button.textContent === "Create a Standard group")!;
+    await act(async () => { start.click(); });
+    await vi.waitFor(() => expect(sdk.postApiV1AdminTaxesClasses).toHaveBeenCalledWith({ body: { name: "Standard", isExempt: false } }));
+    // The group exists now, so the one-button start is gone and the default group names it.
+    await vi.waitFor(() => expect(container.textContent).not.toContain("Start with one group for all your products."));
+    expect(container.querySelector("#tax-default-group")?.textContent).toContain("Standard");
   });
 
   it("shows a country's rates with where each applies, and its places", async () => {
