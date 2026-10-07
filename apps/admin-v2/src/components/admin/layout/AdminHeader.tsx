@@ -24,8 +24,6 @@ function HelpButton({ label, onShortcuts }: { label: string; onShortcuts: () => 
     <button
       type="button"
       aria-label={label}
-      aria-haspopup="menu"
-      aria-expanded={open}
       onClick={asked ? undefined : () => { setAsked(true); setOpen(true); }}
       className={cn(TOP_BAR_BUTTON, "hidden md:flex")}
     >

@@ -161,8 +161,7 @@ export function isOrderConflict(error: unknown): boolean {
 export function orderErrorMessage(error: unknown): string {
   switch (classifyAdminError(error)) {
     case "network": return msg("error.network");
-    case "server": return msg("error.server");
-    default: return getServerFnError(error, msg("error.server"));
+    default: return getServerFnError(error);
   }
 }
 

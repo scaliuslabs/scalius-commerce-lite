@@ -131,23 +131,17 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
  * same way and never blames the connection for an answer it did receive:
  * - `network`: no answer arrived (offline, timed out, aborted);
  * - `server`: the server answered with a fault (5xx);
- * - `notFound` (404) and `forbidden` (401, 403): the server answered no;
- * - `other`: any other refusal (validation, conflict), which carries its own message.
+ * - `notFound`: the server answered 404;
+ * - `other`: any other refusal (validation, conflict, no access), which carries its own message.
  */
-export type AdminErrorClass = "network" | "server" | "notFound" | "forbidden" | "other";
+export type AdminErrorClass = "network" | "server" | "notFound" | "other";
 
 const NETWORK_ERROR_NAMES = new Set(["TypeError", "AbortError", "TimeoutError"]);
 
 export function classifyAdminError(error: unknown): AdminErrorClass {
   const status = readAdminApiError(error)?.status ?? null;
-  if (status !== null) {
-    if (status >= 500) return "server";
-    if (status === 404) return "notFound";
-    if (status === 401 || status === 403) return "forbidden";
-    return "other";
-  }
-  if (error instanceof Error && NETWORK_ERROR_NAMES.has(error.name)) return "network";
-  return "other";
+  if (status === null) return error instanceof Error && NETWORK_ERROR_NAMES.has(error.name) ? "network" : "other";
+  return status >= 500 ? "server" : status === 404 ? "notFound" : "other";
 }
 
 /** The API's error code (e.g. BRAND_REVISION_CONFLICT), or null. */

@@ -275,7 +275,7 @@ describe("failure classes", () => {
     expect(classifyAdminError(new AdminApiResponseError("API error", 500))).toBe("server");
     expect(classifyAdminError({ cause: { statusCode: 503 } })).toBe("server");
     expect(classifyAdminError(new AdminApiResponseError("Order not found", 404, "NOT_FOUND"))).toBe("notFound");
-    expect(classifyAdminError(new AdminApiResponseError("No access", 403, "FORBIDDEN"))).toBe("forbidden");
+    expect(classifyAdminError(new AdminApiResponseError("No access", 403, "FORBIDDEN"))).toBe("other");
     expect(classifyAdminError(new AdminApiResponseError("Already used", 409))).toBe("other");
     expect(classifyAdminError(new Error("Something odd"))).toBe("other");
   });

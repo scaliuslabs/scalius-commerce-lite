@@ -4,7 +4,8 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderView } from "~/components/admin/OrderView";
 import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
+import { translate, useMessages } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
@@ -169,7 +170,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
   const notFound = kind === "notFound";
   const [title, help] = kind === "notFound" ? [t("notFound"), t("notFoundHelp")]
     : kind === "network" ? [t("error.network"), t("error.networkHelp")]
-      : kind === "server" ? [t("error.server"), t("error.serverHelp")]
+      : kind === "server" ? [t("loadFailed"), translate(saveBarMessages, "serverError")]
         : [t("loadFailed"), error.message];
   return (
     <section className="mx-auto max-w-xl space-y-4 rounded-xl bg-card p-6 shadow-card">
