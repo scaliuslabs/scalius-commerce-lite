@@ -247,6 +247,8 @@ export const PLUGIN_SCREENSHOT_TYPES = { png: "image/png", jpg: "image/jpeg", jp
 export const PLUGIN_ICON_MAX_BYTES = 64 * 1024;
 export const PLUGIN_SCREENSHOT_MAX_BYTES = 512 * 1024;
 export const PLUGIN_SCREENSHOTS_MAX = 6;
+/** Data updates a manifest may declare. */
+export const PLUGIN_MIGRATIONS_MAX = 200;
 
 /**
  * A file in the plugin's package (`assets/icon.svg`): relative, lowercase,
@@ -388,6 +390,16 @@ export const pluginManifestSchema = z.object({
     .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
   customFields: z.array(customFieldSchema).max(50).default([]),
   /**
+   * Versioned data updates of the app's own storage (`migrations` handlers,
+   * keyed by version). The platform runs each one once, in order, before the
+   * app's next run after an install or update, and records it per app; a
+   * rollback never reverses one. Append only: never renumber or remove one.
+   */
+  migrations: z.array(z.object({
+    version: z.number().int().min(1).max(10_000),
+    description: z.string().trim().min(1).max(200),
+  }).strict()).max(PLUGIN_MIGRATIONS_MAX).default([]),
+  /**
    * Sales channels the app sells through (Shopify's sales-channel apps,
    * MARKETS-DESIGN D6): each becomes the channel `<plugin id>:<id>`, on while
    * the app is active. Merchants publish products to it (Products, the
@@ -502,6 +514,12 @@ export const pluginManifestSchema = z.object({
     if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: `${what} must be unique.` });
   };
   unique(manifest.functions.map((fn) => fn.point), ["functions"], "Function points");
+  manifest.migrations.forEach((migration, index) => {
+    const previous = manifest.migrations[index - 1];
+    if (previous && migration.version <= previous.version) {
+      context.addIssue({ code: "custom", path: ["migrations", index, "version"], message: "Migration versions must increase." });
+    }
+  });
   unique(manifest.categories, ["categories"], "Categories");
   unique(manifest.screenshots, ["screenshots"], "Screenshots");
   unique(manifest.countries ?? [], ["countries"], "Countries");
@@ -571,6 +589,34 @@ export function parsePluginManifest(value: unknown):
     ok: false,
     issues: result.error.issues.slice(0, 20).map((issue) => ({ path: issue.path.join(".") || "(root)", message: issue.message })),
   };
+}
+
+/**
+ * Whether this platform can run a manifest, before the full parse: the
+ * plugin API version it was built for (`apiVersion`, one of
+ * `SUPPORTED_PLUGIN_API_VERSIONS`) and the oldest platform release it needs
+ * (`minPlatformVersion`). Install, activation and update refuse an
+ * incompatible manifest (the parse refuses it too); the Apps page shows why.
+ */
+export function pluginCompatibility(value: unknown):
+  | { ok: true }
+  | { ok: false; reason: "api_version" | "platform_version"; message: string } {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as { apiVersion?: unknown; minPlatformVersion?: unknown };
+  if (typeof raw.apiVersion !== "string" || !(SUPPORTED_PLUGIN_API_VERSIONS as readonly string[]).includes(raw.apiVersion)) {
+    return {
+      ok: false,
+      reason: "api_version",
+      message: `Built for plugin API ${typeof raw.apiVersion === "string" ? raw.apiVersion : "(none)"}; this Scalius supports ${SUPPORTED_PLUGIN_API_VERSIONS.join(", ")}.`,
+    };
+  }
+  if (typeof raw.minPlatformVersion === "string" && SEMVER.test(raw.minPlatformVersion) && semverBelow(SCALIUS_PLATFORM_VERSION, raw.minPlatformVersion)) {
+    return {
+      ok: false,
+      reason: "platform_version",
+      message: `Needs Scalius ${raw.minPlatformVersion} or later; this is ${SCALIUS_PLATFORM_VERSION}.`,
+    };
+  }
+  return { ok: true };
 }
 
 // ── Consent ───────────────────────────────────────────────────────────────

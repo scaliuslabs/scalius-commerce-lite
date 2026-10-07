@@ -8,6 +8,7 @@
 //     routes: { admin: { dashboard: async (request, ctx) => ({ body: … }) } },
 //     cron: { "expire-points": async (ctx) => { … } },
 //     providers: { wallet: definePaymentProvider({ createSession: async (input, ctx) => { … }, … }) },
+//     migrations: { "1": async (ctx) => { … } },
 //   });
 //
 // The manifest declares everything; handlers for undeclared events, routes,
@@ -120,7 +121,17 @@ export interface PluginDefinition {
     /** `keepData` is false when the merchant chose to delete the plugin's data. */
     uninstall?: (ctx: PluginContext, options: { keepData: boolean }) => Promise<void> | void;
   };
+  /**
+   * Data updates keyed by the manifest's `migrations[].version`. Each runs
+   * once, in order, before the app's next run after an install or update.
+   * Make each one idempotent (it may run again after a crash) and keep the
+   * previous version able to read the result: a failed update rolls the code
+   * back, never the data.
+   */
+  migrations?: Record<string, PluginMigrationHandler>;
 }
+
+export type PluginMigrationHandler = (ctx: PluginContext) => Promise<void> | void;
 
 /** Identity at runtime; gives plugin authors full types. */
 export function definePlugin<const T extends PluginDefinition>(definition: T): T {

@@ -53,6 +53,21 @@ export type PluginErrorCode =
   /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
   | "render.not_allowed"
   | "rate_limited"
+  /** Quotas (docs/platform/PLUGINS.md, "Quotas"): over the plan's storage size or calls per run. */
+  | "quota.storage"
+  | "quota.subrequests"
+  /** Registry and upload installs. */
+  | "registry.not_configured"
+  | "registry.unavailable"
+  | "registry.not_found"
+  | "package.invalid"
+  | "package.hash_mismatch"
+  | "signature.missing"
+  | "signature.untrusted"
+  | "signature.invalid"
+  | "installation.incompatible"
+  | "installation.sandbox_required"
+  | "installation.source_conflict"
   | "internal";
 
 const STATUS: Partial<Record<PluginErrorCode, number>> = {
@@ -78,6 +93,19 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "messaging.unavailable": 503,
   "render.not_allowed": 403,
   rate_limited: 429,
+  "quota.storage": 507,
+  "quota.subrequests": 429,
+  "registry.not_configured": 409,
+  "registry.unavailable": 502,
+  "registry.not_found": 404,
+  "package.invalid": 422,
+  "package.hash_mismatch": 422,
+  "signature.missing": 409,
+  "signature.untrusted": 409,
+  "signature.invalid": 422,
+  "installation.incompatible": 409,
+  "installation.sandbox_required": 409,
+  "installation.source_conflict": 409,
   internal: 500,
 };
 

@@ -14,6 +14,8 @@ export * from "./installations";
 export * from "./kv";
 export * from "./logs";
 export * from "./registry";
+export * from "./registry-trust";
+export * from "./safety";
 export * from "./settings-crypto";
 export * from "./storage";
 export * from "./storefront";

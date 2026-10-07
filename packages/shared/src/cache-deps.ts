@@ -828,7 +828,11 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Apps (docs/platform/PLUGINS.md) -------------------------------------------
   plugin_installations: {
     kinds: ["plg"],
-    noise: ["revision", "updated_at", "installed_by", "activated_by", "installed_at", "activated_at", "failure_reason"],
+    noise: [
+      "revision", "updated_at", "installed_by", "activated_by", "installed_at", "activated_at", "failure_reason",
+      // 0125: lifecycle bookkeeping no buyer read shows.
+      "migrated_version", "signer_key_id", "storage_bytes", "storage_measured_at", "breach_count", "last_breach_at",
+    ],
     note: "Storefront app output (sections, product blocks, scripts) and the checkout's app payment methods read the installation's status, version, grant, manifest and settings.",
     rules: everyChange(own("plg", "plugin_id")),
   },
@@ -1110,6 +1114,8 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Plugin event deliveries and cron claims (0107): platform bookkeeping.
   plugin_event_deliveries: PRIVATE,
   plugin_cron_runs: PRIVATE,
+  // The data-update ledger (0125): platform bookkeeping.
+  plugin_migrations: PRIVATE,
   user: PRIVATE,
   session: PRIVATE,
   account: PRIVATE,

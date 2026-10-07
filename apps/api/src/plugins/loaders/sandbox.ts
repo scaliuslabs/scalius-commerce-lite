@@ -5,6 +5,7 @@
 // limited. It reaches the platform only through a fresh `PluginBridge` stub
 // passed with each call, bound by the host to this installation's authority.
 
+import { planLimits } from "@scalius/shared/plan-limits";
 import { SANDBOX_RUNTIME_MODULE } from "../sandbox-runtime.gen";
 import { pluginBridgeFactory } from "./sandbox-availability";
 import type { PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
@@ -12,8 +13,10 @@ import { PluginLoadError, type PluginLoader, type PluginLoadTarget } from "./typ
 
 /** The plugin isolate's compatibility date; the platform moves it, plugins do not choose it. */
 export const PLUGIN_SANDBOX_COMPATIBILITY_DATE = "2026-07-30";
-/** Bridge calls (each is a subrequest) one invocation may make. */
-export const PLUGIN_SANDBOX_SUBREQUESTS = 200;
+/** Bridge calls (each is a subrequest) one invocation may make: the plan's ceiling (`planLimits().plugins.subrequests`). */
+export function pluginSandboxSubrequests(): number {
+  return planLimits().plugins.subrequests;
+}
 
 /** Where a sandboxed plugin's bundle is stored (private prefix: never served by the media host). */
 export function pluginBundleKey(pluginId: string, version: string, sha256: string): string {
@@ -27,6 +30,8 @@ interface SandboxEntrypoint {
   invokeRoute(bridge: unknown, seed: unknown, surface: string, name: string, request: unknown): Promise<PluginInvocationResult>;
   invokeCron(bridge: unknown, seed: unknown, name: string, scheduledAt: string): Promise<PluginInvocationResult>;
   invokeLifecycle(bridge: unknown, seed: unknown, hook: string, options: { keepData?: boolean }): Promise<PluginInvocationResult>;
+  invokeMigration(bridge: unknown, seed: unknown, version: number): Promise<PluginInvocationResult>;
+  invokeCheck(seed: unknown): Promise<PluginInvocationResult>;
 }
 
 export { isPluginSandboxAvailable, pluginBridgeFactory } from "./sandbox-availability";
@@ -72,7 +77,10 @@ export class SandboxLoader implements PluginLoader {
           },
           env: {},
           globalOutbound: null,
-          limits: { cpuMs: installation.manifest.limits.cpuMs, subRequests: PLUGIN_SANDBOX_SUBREQUESTS },
+          limits: {
+            cpuMs: Math.min(installation.manifest.limits.cpuMs, planLimits().plugins.cpuMs),
+            subRequests: pluginSandboxSubrequests(),
+          },
         };
       } catch (error) {
         load.failure = error instanceof PluginLoadError
@@ -83,7 +91,7 @@ export class SandboxLoader implements PluginLoader {
     });
     const entrypoint = worker.getEntrypoint() as unknown as SandboxEntrypoint;
     // A fresh bridge binding per invocation: bindings are tied to this request.
-    const bridge = invocation.kind === "function" ? null : factory({ props: target.bridgeProps });
+    const bridge = invocation.kind === "function" || invocation.kind === "check" ? null : factory({ props: target.bridgeProps });
     try {
       return await this.call(entrypoint, bridge, target);
     } catch (error) {
@@ -107,6 +115,10 @@ export class SandboxLoader implements PluginLoader {
         return entrypoint.invokeCron(bridge, seed, invocation.name, invocation.scheduledAt);
       case "lifecycle":
         return entrypoint.invokeLifecycle(bridge, seed, invocation.hook, { keepData: invocation.keepData });
+      case "migration":
+        return entrypoint.invokeMigration(bridge, seed, invocation.version);
+      case "check":
+        return entrypoint.invokeCheck(seed);
     }
   }
 }

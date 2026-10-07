@@ -86,7 +86,7 @@ export class BundledLoader implements PluginLoader {
       module,
       structuredClone(target.invocation),
       structuredClone(target.seed),
-      target.invocation.kind === "function" ? null : bridge,
+      target.invocation.kind === "function" || target.invocation.kind === "check" ? null : bridge,
     );
     // What crosses back must be plain data, as over RPC.
     return structuredClone(result);

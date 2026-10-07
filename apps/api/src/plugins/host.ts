@@ -15,11 +15,17 @@ import {
   effectivePluginPermissions,
   markPluginFailed,
   maskPluginLogText,
+  pendingPluginMigrations,
   readPluginRuntimeSettings,
+  recordPluginBreach,
+  recordPluginMigration,
   writePluginLogs,
+  type PluginBreachKind,
   type PluginInstallation,
   type PluginLogInput,
 } from "@scalius/core/modules/plugins";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { isWithinRateLimit } from "../utils/rate-limit";
 import { readStoreIdentity } from "@scalius/core/modules/notifications";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
@@ -62,7 +68,12 @@ const ROUTE_FORBIDDEN_HEADERS = /^(?:set-cookie|content-length|transfer-encoding
  * returned an invalid value, or (provider operations only) its secrets could
  * not be opened.
  */
-export type PluginInvocationFailure = "inactive" | "outdated" | "unavailable" | "load_failed" | "timeout" | "error" | "invalid" | "settings_unreadable";
+export type PluginInvocationFailure =
+  | "inactive" | "outdated" | "unavailable" | "load_failed" | "timeout" | "error" | "invalid" | "settings_unreadable"
+  /** Over its runs a minute (quota); a delivery retries later. */
+  | "limited"
+  /** A data update failed; the app is now failed. */
+  | "migration_failed";
 
 export interface PluginInvocationOutcome<T = null> {
   ok: boolean;
@@ -158,6 +169,9 @@ export class PluginHost {
   private storeInfo: Promise<PluginStoreInfo> | null = null;
   private readonly storeSource: (() => Promise<PluginStoreInfo>) | undefined;
   private readonly settings = new Map<string, Promise<Awaited<ReturnType<typeof readPluginRuntimeSettings>>>>();
+  /** Installations (id@revision) whose data updates ran or were found current in this host. */
+  private readonly migrated = new Set<string>();
+  private readonly migratedVersions = new Map<string, number>();
 
   constructor(options: PluginHostOptions) {
     this.env = options.env;
@@ -341,10 +355,17 @@ export class PluginHost {
   }
 
   private bridgeProps(installation: PluginInstallation, mode: BridgeMode): PluginBridgeProps {
+    const caps = planLimits().plugins;
     return {
       pluginId: installation.pluginId,
       version: installation.version,
       authority: pluginBridgeAuthority(installation),
+      limits: {
+        subrequests: caps.subrequests,
+        storageFull: installation.storageBytes >= caps.storageBytes,
+        storageBytes: caps.storageBytes,
+        breachesBeforeStop: caps.breachesBeforeStop,
+      },
       ...(mode.render ? { render: mode.render } : {}),
       ...(mode.provider ? { provider: mode.provider } : {}),
     };
@@ -355,17 +376,97 @@ export class PluginHost {
     await this.incident(installation, source, message);
   }
 
+  /**
+   * Runs the app's data updates that have not run yet (`manifest.migrations`
+   * above `migratedVersion`), each once, in order, recording each one. Stops
+   * at the first failure and reports it; the caller decides what follows (an
+   * update rolls back, a lazy run marks the app failed).
+   */
+  async runPendingMigrations(
+    installation: PluginInstallation,
+  ): Promise<{ ok: true; ran: number[] } | { ok: false; ran: number[]; version: number; error: string }> {
+    const key = `${installation.pluginId}@${installation.revision}`;
+    const ran: number[] = [];
+    if (this.migrated.has(key)) return { ok: true, ran };
+    const done = this.migratedVersions.get(installation.pluginId) ?? installation.migratedVersion;
+    for (const migration of pendingPluginMigrations(installation.manifest, done)) {
+      const started = Date.now();
+      const outcome = await this.run(
+        installation,
+        { kind: "migration", version: migration.version },
+        `migration:${migration.version}`,
+        installation.manifest.limits.wallMs,
+      );
+      if (!outcome.ok) return { ok: false, ran, version: migration.version, error: outcome.error };
+      await recordPluginMigration(this.db, {
+        pluginId: installation.pluginId,
+        version: migration.version,
+        pluginVersion: installation.version,
+        durationMs: Date.now() - started,
+      });
+      this.migratedVersions.set(installation.pluginId, migration.version);
+      ran.push(migration.version);
+    }
+    this.migrated.add(key);
+    return { ok: true, ran };
+  }
+
+  /**
+   * Loads the installed code and checks it against the manifest (handlers,
+   * identity, bundle hash) without running app code: the load check of an
+   * update, so a release that cannot load is rolled back at once.
+   */
+  async checkLoads(installation: PluginInstallation): Promise<PluginInvocationOutcome> {
+    const outcome = await this.run(installation, { kind: "check" }, "load-check", Math.min(installation.manifest.limits.wallMs, 5_000));
+    return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
+  }
+
+  /** Records a limit breach; repeated breaches stop the app (safety.ts) and tell the staff. */
+  private async breach(installation: PluginInstallation, kind: PluginBreachKind, detail: string): Promise<void> {
+    try {
+      const outcome = await recordPluginBreach(this.db, installation.pluginId, {
+        kind,
+        detail,
+        threshold: planLimits().plugins.breachesBeforeStop,
+      });
+      if (outcome.stopped) await noticeStoppedPlugin(this.db, this.env, installation);
+    } catch {
+      console.warn(`[plugins] ${installation.pluginId} breach record failed`);
+    }
+  }
+
   private async run(
     installation: PluginInstallation,
     invocation: PluginInvocation,
     source: string,
-    wallMs: number,
+    requestedWallMs: number,
     mode: BridgeMode = {},
   ): Promise<RunOutcome> {
     if (installation.status !== "active") {
       return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
     }
-    const { seed, secrets, unreadable } = await this.seed(installation, invocation.kind !== "function");
+    const caps = planLimits().plugins;
+    const wallMs = Math.min(requestedWallMs, caps.wallMs);
+    // Runs the app starts or that come from outside are paced per app; checkout
+    // functions, provider operations and storefront output are paced by the platform.
+    if (invocation.kind === "event" || invocation.kind === "cron" || (invocation.kind === "route" && !mode.render)) {
+      if (!(await pluginWithinInvocationRate(this.env, installation.pluginId, caps.invocationsPerMinute))) {
+        const error = `${installation.manifest.name} is over its ${caps.invocationsPerMinute} runs a minute; try again shortly.`;
+        await this.breach(installation, "invocations", `more than ${caps.invocationsPerMinute} runs a minute`);
+        return { ok: false, value: null, error, failure: "limited" };
+      }
+    }
+    // Data updates run before the app's first run of a new version (functions are pure and never wait).
+    if (invocation.kind !== "function" && invocation.kind !== "migration" && invocation.kind !== "check"
+      && pendingPluginMigrations(installation.manifest, this.migratedVersions.get(installation.pluginId) ?? installation.migratedVersion).length > 0) {
+      const migrated = await this.runPendingMigrations(installation);
+      if (!migrated.ok) {
+        const reason = `Data update ${migrated.version} failed: ${migrated.error}`;
+        await markPluginFailed(this.db, installation.pluginId, reason);
+        return { ok: false, value: null, error: reason, failure: "migration_failed" };
+      }
+    }
+    const { seed, secrets, unreadable } = await this.seed(installation, invocation.kind !== "function" && invocation.kind !== "check");
     const lines: PluginLogInput[] = [];
     if (unreadable.length > 0) {
       lines.push({ level: "warn", source: "host", message: `Secret settings could not be opened: ${unreadable.join(", ")}.` });
@@ -395,6 +496,7 @@ export class PluginHost {
       if (thrown instanceof PluginTimeoutError) {
         error = `${source} exceeded its ${wallMs} ms wall-time limit.`;
         failure = "timeout";
+        await this.breach(installation, "wall_time", `${source} ran longer than ${wallMs} ms`);
       } else if (thrown instanceof PluginLoadError && thrown.outdated) {
         // The deployment carries a newer build: bring the installation in
         // step (bundled-sync.ts); the next call runs the new version, or
@@ -412,6 +514,12 @@ export class PluginHost {
         if (thrown.markFailed) await markPluginFailed(this.db, installation.pluginId, thrown.message);
       } else {
         error = `${source} failed: ${thrown instanceof Error ? thrown.name : "error"}.`;
+        // The sandbox enforces CPU and calls per run itself and throws when one runs out.
+        const limit = isolateLimitOf(thrown);
+        if (limit) {
+          error = `${source} went over its ${limit === "cpu" ? "CPU time" : "calls per run"} limit.`;
+          await this.breach(installation, limit, `${source} ran out of ${limit === "cpu" ? "CPU time" : "calls"}`);
+        }
       }
     } finally {
       if (timer !== undefined) clearTimeout(timer);
@@ -489,14 +597,60 @@ function providerFailure(outcome: Extract<RunOutcome, { ok: false }>, providerNa
       return new ProviderError("retryable", `${providerName} did not answer in time.`, { uncertain: true, code: "provider.timeout" });
     case "outdated":
       return new ProviderError("retryable", `${providerName} was just updated; try again.`, { code: "provider.updated" });
+    case "limited":
+      return new ProviderError("retryable", `${providerName} is busy; try again shortly.`, { code: "provider.limited" });
     case "inactive":
     case "unavailable":
     case "load_failed":
     case "settings_unreadable":
+    case "migration_failed":
       return new ProviderError("misconfigured", outcome.error.slice(0, 300), { code: `provider.${outcome.failure}` });
     default:
       // A throw that was not a ProviderError: the provider may have acted before it.
       return new ProviderError("retryable", `${providerName} could not complete the operation.`, { uncertain: true, code: "provider.error" });
+  }
+}
+
+/**
+ * The limit a sandboxed run ran out of, from the isolate's error (Workers
+ * reports CPU and subrequest exhaustion as thrown errors); null otherwise.
+ */
+export function isolateLimitOf(thrown: unknown): "cpu" | "subrequests" | null {
+  const message = thrown instanceof Error ? thrown.message : typeof thrown === "string" ? thrown : "";
+  if (/exceeded\s+(?:its\s+)?cpu|cpu\s+time\s+limit|cpu limit/i.test(message)) return "cpu";
+  if (/too many subrequests|subrequest limit/i.test(message)) return "subrequests";
+  return null;
+}
+
+/**
+ * Runs a minute per app, through the native rate limiter. The binding allows
+ * 60 a minute per key, so the quota is spread over `ceil(limit / 60)` keys
+ * picked at random: an approximate ceiling, which is all a runaway guard
+ * needs. Without the binding (tests) runs are not limited.
+ */
+export async function pluginWithinInvocationRate(env: Env, pluginId: string, perMinute: number): Promise<boolean> {
+  if (!env.RL_STANDARD) return true;
+  const shards = Math.max(1, Math.ceil(perMinute / 60));
+  const shard = shards === 1 ? 0 : crypto.getRandomValues(new Uint32Array(1))[0]! % shards;
+  try {
+    return await isWithinRateLimit(env, "RL_STANDARD", "plugin-run", `${pluginId}:${shard}`);
+  } catch {
+    return true;
+  }
+}
+
+/** Tells the staff an app stopped itself after repeated limit breaches (best effort). */
+async function noticeStoppedPlugin(db: Database, env: Env, installation: PluginInstallation): Promise<void> {
+  try {
+    const { resolveDashboardLink, sendAdminPushNotice } = await import("@scalius/core/modules/notifications");
+    await sendAdminPushNotice(db, env, {
+      title: `${installation.manifest.name} was stopped`,
+      body: "It went over its limits again and again. Check its log, then start it again.",
+      link: resolveDashboardLink(env, `/admin/apps/${installation.pluginId}`),
+      data: { pluginId: installation.pluginId, notificationType: "plugin_stopped" },
+    });
+  } catch {
+    console.warn(`[plugins] ${installation.pluginId} stop notice failed`);
   }
 }
 

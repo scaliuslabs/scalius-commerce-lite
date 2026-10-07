@@ -12,6 +12,7 @@ import {
   pluginInstallations,
   pluginKv,
   pluginLogEntries,
+  pluginMigrations,
   pluginRecords,
   pluginRegistrations,
   salesChannels,
@@ -24,6 +25,7 @@ import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placehol
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
   parsePluginManifest,
+  pluginCompatibility,
   pluginGrantExpands,
   pluginGrantKey,
   pluginGrantRequest,
@@ -66,6 +68,13 @@ export interface PluginInstallation {
   installedAt: number;
   activatedAt: number | null;
   updatedAt: number;
+  /** The newest data update that ran (`manifest.migrations`). */
+  migratedVersion: number;
+  /** The trusted key that verified the bundle (registry or signed upload); null for bundled code and unsigned uploads. */
+  signerKeyId: string | null;
+  /** Bytes in its storage and key/value data at the last measurement (null: not measured yet). */
+  storageBytes: number;
+  storageMeasuredAt: number | null;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -128,6 +137,10 @@ export function toPluginInstallation(row: PluginInstallationRow): PluginInstalla
     installedAt: row.installedAt,
     activatedAt: row.activatedAt,
     updatedAt: row.updatedAt,
+    migratedVersion: row.migratedVersion ?? 0,
+    signerKeyId: row.signerKeyId ?? null,
+    storageBytes: row.storageBytes ?? 0,
+    storageMeasuredAt: row.storageMeasuredAt ?? null,
   };
 }
 
@@ -151,6 +164,10 @@ export async function listPluginInstallations(db: Database): Promise<PluginInsta
 
 /** A manifest the store can install: parsed, known permissions only, nothing reserved. */
 export function requireInstallableManifest(value: unknown, source: PluginInstallationSource): PluginManifest {
+  // The plugin API version and the platform release first: a clear "needs a
+  // newer Scalius" instead of a schema error.
+  const compatible = pluginCompatibility(value);
+  if (!compatible.ok) throw new PluginError("installation.incompatible", compatible.message, { reason: compatible.reason });
   const parsed = parsePluginManifest(value);
   if (!parsed.ok) {
     throw new PluginError("manifest.invalid", `The plugin manifest is invalid: ${parsed.issues[0]?.path} ${parsed.issues[0]?.message}`, {
@@ -310,6 +327,13 @@ export interface InstallPluginInput {
   source: PluginInstallationSource;
   bundleSha256: string;
   actorUserId?: string | null;
+  /** The trusted key that verified the bundle (registry or signed upload). */
+  signerKeyId?: string | null;
+}
+
+/** The newest data update this app ran before (kept with its data across a keep-data uninstall). */
+function migratedVersionSql(pluginId: string) {
+  return sql`(SELECT COALESCE(MAX(${pluginMigrations.version}), 0) FROM ${pluginMigrations} WHERE ${pluginMigrations.pluginId} = ${pluginId})`;
 }
 
 /** Installs (status `installed`, nothing runs yet) with the manifest's setting defaults. */
@@ -333,6 +357,8 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
         installedBy: input.actorUserId ?? null,
         installedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
+        migratedVersion: migratedVersionSql(manifest.id),
+        signerKeyId: input.signerKeyId ?? null,
       }),
       ...registrationInserts(db, manifest.id, manifest),
       ...salesChannelStatements(db, manifest.id, manifest.salesChannels, false),
@@ -471,6 +497,8 @@ export interface UpdatePluginInput {
   source: PluginInstallationSource;
   bundleSha256: string;
   expectedRevision: number;
+  /** The trusted key that verified the new bundle (null: bundled code or an unsigned upload). */
+  signerKeyId?: string | null;
 }
 
 /**
@@ -511,6 +539,7 @@ export async function updatePluginInstallation(
         grantJson: grant ? JSON.stringify(grant) : null,
         grantKey: grant ? pluginGrantKey(grant) : null,
         settingsJson: JSON.stringify(settings),
+        signerKeyId: input.signerKeyId ?? null,
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
@@ -526,6 +555,53 @@ export async function updatePluginInstallation(
   for (const [collection, declaration] of Object.entries(manifest.storage)) {
     const before = current.manifest.storage[collection];
     if (before && JSON.stringify(before) === JSON.stringify(declaration)) continue;
+    await reindexPluginCollection(db, pluginId, collection, declaration);
+  }
+  return requirePluginInstallation(db, pluginId);
+}
+
+/**
+ * Puts back the release an update replaced (its code, manifest, grant,
+ * status and settings as they were), after the update failed: a data update
+ * threw or the new code could not load. Data updates that ran stay recorded
+ * (a rollback never reverses data). `reason` is kept as the failure reason
+ * the dashboard shows.
+ */
+export async function restorePluginRelease(
+  db: Database,
+  previous: PluginInstallation,
+  options: { expectedRevision: number; reason: string },
+): Promise<PluginInstallation> {
+  const pluginId = previous.pluginId;
+  const current = await requirePluginInstallation(db, pluginId);
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, options.expectedRevision),
+      db.update(pluginInstallations).set({
+        version: previous.version,
+        source: previous.source,
+        bundleSha256: previous.bundleSha256,
+        manifestJson: JSON.stringify(previous.manifest),
+        status: previous.status,
+        failureReason: options.reason.trim().slice(0, MAX_FAILURE_REASON) || null,
+        grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
+        grantKey: previous.grant ? pluginGrantKey(previous.grant) : null,
+        settingsJson: JSON.stringify(previous.storedSettings),
+        signerKeyId: previous.signerKeyId,
+        revision: sql`${pluginInstallations.revision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(pluginInstallations.pluginId, pluginId)),
+      db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
+      ...registrationInserts(db, pluginId, previous.manifest),
+      ...salesChannelStatements(db, pluginId, previous.manifest.salesChannels, previous.status === "active", current.manifest.salesChannels.length > 0),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
+    throw error;
+  }
+  for (const [collection, declaration] of Object.entries(previous.manifest.storage)) {
+    const after = current.manifest.storage[collection];
+    if (after && JSON.stringify(after) === JSON.stringify(declaration)) continue;
     await reindexPluginCollection(db, pluginId, collection, declaration);
   }
   return requirePluginInstallation(db, pluginId);
@@ -569,6 +645,8 @@ export async function uninstallPlugin(
           db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
           db.delete(pluginEventDeliveries).where(eq(pluginEventDeliveries.pluginId, pluginId)),
           db.delete(pluginCronRuns).where(eq(pluginCronRuns.pluginId, pluginId)),
+          // Its data is gone, so a reinstall runs every data update again.
+          db.delete(pluginMigrations).where(eq(pluginMigrations.pluginId, pluginId)),
           // Plugin namespaces are plugin ids (COMMERCE-HOOKS H4); values cascade.
           db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
         ]),
