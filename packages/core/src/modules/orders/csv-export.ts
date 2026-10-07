@@ -1,4 +1,6 @@
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
+import { orderBillingDisplayAddress } from "./billing-display";
+import type { OrderBillingAddressFields } from "./types";
 import { timeZoneOffsetSeconds } from "@scalius/shared/commerce-time";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -231,6 +233,8 @@ export interface OrderCsvRow {
   requiresShipping?: boolean;
   /** The one delivery method's kind; null when the order needs none. */
   shippingMethodKind?: string | null;
+  /** The billing snapshot (0119); absent: none. */
+  billing?: Partial<OrderBillingAddressFields>;
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
@@ -384,12 +388,34 @@ export function createOrdersCsvArtifactBuilder(
   ]], maxBytes);
 }
 
-/** Region, postal code and country: appended last, so the earlier columns keep their places. */
-const ADDRESS_TAIL_HEADERS = ["Region", "Postal code", "Country"];
+/**
+ * Region, postal code and country, then the billing address (Shopify's
+ * export: the billing name, street, city, region, postal code and country;
+ * the shipping address's when it bills): appended last, so the earlier
+ * columns keep their places.
+ */
+const ADDRESS_TAIL_HEADERS = [
+  "Region", "Postal code", "Country",
+  "Billing name", "Billing address", "Billing city", "Billing region", "Billing postal code", "Billing country",
+];
 
 function addressTail(order: OrderCsvRow): unknown[] {
-  if (order.requiresShipping === false || !order.shippingAddress) return ["", "", ""];
-  return [order.shippingAdminArea ?? "", order.shippingPostalCode ?? "", order.shippingCountryCode ?? "BD"];
+  const ships = order.requiresShipping !== false && Boolean(order.shippingAddress);
+  const shipping = ships
+    ? [order.shippingAdminArea ?? "", order.shippingPostalCode ?? "", order.shippingCountryCode ?? "BD"]
+    : ["", "", ""];
+  const billing = order.billing ? orderBillingDisplayAddress({ ...order, ...order.billing }) : null;
+  if (!billing) return [...shipping, "", "", "", "", "", ""];
+  const sameAsShipping = order.billing?.billingSameAsShipping === true;
+  return [
+    ...shipping,
+    sameAsShipping ? order.customerName : order.billing?.billingName ?? order.customerName,
+    [billing.line1, billing.line2].filter(Boolean).join(", "),
+    usesDeliveryHierarchy(billing.countryCode) ? billing.cityName ?? billing.locality ?? "" : billing.locality ?? "",
+    billing.adminArea ?? "",
+    billing.postalCode ?? "",
+    billing.countryCode ?? "",
+  ];
 }
 
 function cashToCollect(order: OrderCsvRow): number | string {

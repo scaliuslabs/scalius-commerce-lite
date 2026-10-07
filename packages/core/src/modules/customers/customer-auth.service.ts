@@ -848,6 +848,7 @@ async function prepareNewAccount(
             id: firstCustomerAddressId(values.id),
             customerId: values.id,
             isDefault: true,
+            isDefaultBilling: false,
             countryCode: latestOrder.shippingCountryCode ?? "BD",
             name: latestOrder.shippingName,
             company: latestOrder.shippingCompany,

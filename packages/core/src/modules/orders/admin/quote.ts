@@ -31,7 +31,8 @@ import {
     createOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "../../payments";
-import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from "../../tax";
+import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote, taxAddressSource } from "../../tax";
+import { billingTaxLocation } from "../billing-address";
 import { type TaxQuote } from "../../tax/browser";
 import {
   loadProductMediaProjections,
@@ -465,8 +466,14 @@ export async function prepareManualOrderQuote(
         locationNames,
     };
     const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);
+    // The taxed address: the shipping address; for an order that ships
+    // nothing, its billing address when staff gave one; else (pickup, or no
+    // billing address) where the store ships from.
+    const billingLocation = taxAddressSource({
+        deliveryKind: plan.requiresShipping ? "delivery" : plan.deliveryMethodKind === "pickup" ? "pickup" : null,
+        hasBillingAddress: Boolean(data.billingCountryCode?.trim()),
+    }) === "billing" ? billingTaxLocation(data) : null;
     const taxQuote = await calculateStorefrontTaxQuote(db, {
-        // No address (pickup, service): taxed where the store ships from.
         destination: {
             city: address?.city ?? null,
             zone: address?.zone ?? null,
@@ -477,7 +484,13 @@ export async function prepareManualOrderQuote(
                 adminArea: data.shippingAdminArea ?? null,
                 postalCode: data.shippingPostalCode ?? null,
             } : {}),
+            ...(billingLocation ? {
+                countryCode: billingLocation.countryCode,
+                adminArea: billingLocation.adminArea,
+                postalCode: billingLocation.postalCode,
+            } : {}),
         },
+        ...(billingLocation ? { addressSource: "billing" as const } : {}),
         lines: manualOrderTaxLines(trackedItems, allocationLineIds),
         shippingMinor: appPricing.shippingMinor,
         // Tax follows every discount: the staff discount and the apps'.

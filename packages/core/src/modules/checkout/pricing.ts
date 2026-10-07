@@ -15,6 +15,7 @@ import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "../promot
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
+  taxAddressSource,
   type StorefrontTaxAuthoritySnapshot,
   type TaxDiscountAllocationInput,
   type TaxQuote,
@@ -81,6 +82,13 @@ export interface StorefrontCheckoutPricingInput {
   /** The request's app providers: an app tax provider is asked through them (none: it fails closed). */
   appProviders?: AppProviders;
   channel: FunctionCart["channel"];
+  /**
+   * Where tax regions locate the billing address of an order that ships
+   * nothing (`taxAddressSource`): its country, admin area code and postal
+   * code. Ignored for an order that ships (taxed at its shipping address)
+   * and for pickup (taxed where it is collected).
+   */
+  billing?: { countryCode: string; adminArea: string | null; postalCode: string | null } | null;
   /** The buyer's destination, to list the options a shipping-rates app may adjust. */
   location?: {
     countryCode?: string | null;
@@ -339,8 +347,15 @@ export async function priceStorefrontCheckout(
     : quote;
   const discount = withoutClaimed(platform.discount);
 
-  // No address (pickup, service, digital): taxed where the store ships from.
-  const taxAddress = delivery.fulfilment.requiresShipping ? delivery.address : null;
+  // The taxed address (Shopify's rule): the shipping address of an order
+  // that ships; the billing address of one that ships nothing; else (pickup,
+  // or no billing address) where the store ships from.
+  const addressSource = taxAddressSource({
+    deliveryKind: delivery.fulfilment.requiresShipping ? "delivery" : delivery.kind === "pickup" ? "pickup" : null,
+    hasBillingAddress: Boolean(input.billing?.countryCode),
+  });
+  const taxAddress = addressSource === "shipping" ? delivery.address : null;
+  const billing = addressSource === "billing" ? input.billing! : null;
   const taxQuoteInput = {
     destination: {
       city: taxAddress?.city ?? null,
@@ -354,7 +369,13 @@ export async function priceStorefrontCheckout(
         adminArea: taxAddress.adminArea ?? null,
         postalCode: taxAddress.postalCode ?? null,
       } : {}),
+      ...(billing ? {
+        countryCode: billing.countryCode,
+        adminArea: billing.adminArea,
+        postalCode: billing.postalCode,
+      } : {}),
     },
+    ...(billing ? { addressSource: "billing" as const } : {}),
     lines: cartValidation.items.map((item, position) => ({
       lineId: lineIds[position]!,
       productId: item.productId,

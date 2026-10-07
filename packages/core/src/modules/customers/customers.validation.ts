@@ -31,9 +31,13 @@ export const addressInputSchema = z.object({
     area: text(180),
 }).strict();
 
-/** An address-book write: the address, whether it becomes the default, and (staff only) skipping its rules. */
+/**
+ * An address-book write: the address, whether it becomes the default (and
+ * the default billing address), and (staff only) skipping its rules.
+ */
 export const customerAddressInputSchema = addressInputSchema.extend({
     isDefault: z.boolean().optional(),
+    isDefaultBilling: z.boolean().optional(),
     skipValidation: z.boolean().optional(),
 }).strict();
 

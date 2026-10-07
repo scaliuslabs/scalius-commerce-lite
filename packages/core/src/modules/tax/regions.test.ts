@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AppProviders, BoundProvider } from "../../integrations/provider-port";
 import { calculateTaxQuote, TAX_UNAVAILABLE_REASON } from "./calculator";
 import { quoteTax, SYSTEM_TAX_PROVIDER } from "./provider";
-import { matchTaxRegions, ratesForTaxClass, taxProviderIdFor } from "./region-match";
+import { matchTaxRegions, ratesForTaxClass, taxAddressSource, taxProviderIdFor } from "./region-match";
 import { marketTaxInclusionFromSql, pricesIncludeTaxFor } from "./tax.service";
 import { orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "./snapshot";
 import type { CalculateTaxQuoteInput, TaxRateDefinition, TaxRegionDefinition } from "./types";
@@ -196,7 +196,7 @@ describe("tax provider selection", () => {
     it("gives the built-in provider the same port: calculate through the registry, no-op documents", async () => {
         const system = await quoteTax(input());
         expect(system).toEqual(calculateTaxQuote(input()));
-        expect(system.jurisdiction).toEqual({ countryCode: "US", providerId: "system", calculationId: null });
+        expect(system.jurisdiction).toEqual({ countryCode: "US", providerId: "system", calculationId: null, addressSource: "shipping" });
         const settings = { classes: [], regions: [], rates: [], defaultTaxClassId: null, priceIncrementMinor: 1 };
         const document = { calculationId: "c", orderId: "ord_1", idempotencyKey: "k" };
         await expect(SYSTEM_TAX_PROVIDER.commit!(document, { settings })).resolves.toEqual({ documentId: "system:ord_1" });
@@ -222,6 +222,23 @@ describe("order tax snapshots", () => {
             "components", "discountMinor", "grossAmountMinor", "taxClassId", "taxClassName", "taxMinor", "taxableAmountMinor", "totalMinor",
         ]);
         expect(JSON.parse(order.destinationSnapshot)).toEqual({ city: null, zone: null, area: null });
+    });
+});
+
+describe("the taxed address (Shopify's rule, migration 0119)", () => {
+    it("taxes a shipped order at its shipping address, a pickup at the store, and an order that ships nothing at its billing address", () => {
+        expect(taxAddressSource({ deliveryKind: "delivery", hasBillingAddress: true })).toBe("shipping");
+        expect(taxAddressSource({ deliveryKind: "pickup", hasBillingAddress: true })).toBe("origin");
+        expect(taxAddressSource({ deliveryKind: null, hasBillingAddress: true })).toBe("billing");
+        expect(taxAddressSource({ deliveryKind: null, hasBillingAddress: false })).toBe("origin");
+    });
+
+    it("records which address was taxed, in the quote and as a literal in the order snapshot", () => {
+        const billed = calculateTaxQuote(input({ addressSource: "billing" }));
+        expect(billed.jurisdiction.addressSource).toBe("billing");
+        expect(orderTaxSnapshotColumns(billed).addressSource).toMatchObject({ queryChunks: [expect.objectContaining({ value: ["'billing'"] })] });
+        const origin = calculateTaxQuote(input({ destination: { city: null, zone: null, area: null } }));
+        expect(origin.jurisdiction.addressSource).toBe("origin");
     });
 });
 

@@ -4,6 +4,7 @@ import { orders, customerAddresses, customers, deliveryShipments, firstCustomerA
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { customerAddressColumns, guestRecordForContact, resolveAddress } from "../../customers";
 import { orderAddressInput, orderShippingAddressColumns } from "../shipping-address";
+import { orderBillingAddressColumns, resolveStaffBillingAddress } from "../billing-address";
 import { nanoid } from "nanoid";
 import type { UpdateOrderDetailsInput } from "../validation";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -29,12 +30,25 @@ const ORDER_DETAIL_FIELDS = [
     "city",
     "zone",
     "area",
+    "billingSameAsShipping",
+    "billingName",
+    "billingCompany",
+    "billingAddress",
+    "billingAddressLine2",
+    "billingCountryCode",
+    "billingDependentLocality",
+    "billingLocality",
+    "billingAdminArea",
+    "billingPostalCode",
+    "billingPhone",
+    "billingValidationSkipped",
 ] as const;
 
 /**
- * Corrects the customer and delivery details of an order that has not shipped
- * (the phone-confirmation call). Money, items and tax snapshots are untouched;
- * a changed phone links the order to that phone's customer.
+ * Corrects the customer, delivery and billing details of an order that has
+ * not shipped (the phone-confirmation call). Money, items and tax snapshots
+ * are untouched; a changed phone links the order to that phone's customer.
+ * An edit that sends no billing field keeps the order's billing address.
  */
 export async function updateOrderDetails(
     db: Database,
@@ -62,6 +76,10 @@ export async function updateOrderDetails(
     const address = ships
         ? await resolveAddress(db, orderAddressInput(data), { skipValidation: data.skipAddressValidation === true })
         : null;
+    const sendsBilling = data.billingSameAsShipping !== undefined || data.billingCountryCode !== undefined;
+    const billing = sendsBilling
+        ? resolveStaffBillingAddress(data, { ships, skipValidation: data.skipAddressValidation === true })
+        : undefined;
     const next = {
         customerName,
         customerPhone: data.customerPhone,
@@ -71,8 +89,10 @@ export async function updateOrderDetails(
             address && { ...address, name: order.shippingName, phone: order.shippingPhone },
             { name: customerName, phone: data.customerPhone },
         ),
+        ...(billing === undefined ? {} : orderBillingAddressColumns(billing, { name: customerName, phone: data.customerPhone })),
     };
-    const changedFields = ORDER_DETAIL_FIELDS.filter((field) => (order[field] ?? null) !== (next[field] ?? null));
+    const changedFields = ORDER_DETAIL_FIELDS.filter((field) =>
+        field in next && (order[field] ?? null) !== ((next as Record<string, unknown>)[field] ?? null));
     if (changedFields.length === 0) return { id: orderId, version: order.version, changedFields: [] };
     if (next.customerPhone !== order.customerPhone) {
         await validateCustomerPhoneCountry(db, next.customerPhone);

@@ -179,6 +179,19 @@ language with the merchant's edits).
   leaves absent values out, so no extra bound parameter). No address-book
   write: trigger `orders_seed_customer_address` gives a new guest record its
   first address.
+- **Billing address** (migration 0119, Shopify's rule;
+  `resolveCheckoutBillingAddress()` in `orders/billing-address.ts`). An
+  order that ships is billed at its shipping address. An order that ships
+  nothing needs one: by default its country (absent: the store's only
+  selling country) plus the admin area and postal code its rules require;
+  with Settings → Checkout `requireFullBillingAddress`, a full one (a
+  shipped order then may send `billingSameAsShipping: false` and an
+  address). A pickup order needs none unless the merchant requires it. The
+  country must be one an active market sells to. The order is taxed at its
+  billing address and placed in its country's market (`taxAddressSource()`
+  in `tax/region-match.ts`). The insert writes both billing flags as SQL
+  literals (`orderBillingAddressInsertColumns()`), so a shipped order binds
+  nothing more.
 
 ## Quantity bundles (catalogue slice 1c)
 

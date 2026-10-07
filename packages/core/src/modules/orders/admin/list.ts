@@ -28,7 +28,8 @@ import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
 import type { OrderChannel } from "@scalius/shared/order-channel";
-import type { OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types";
+import type { OrderBillingAddressFields, OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types";
+import { orderBillingAddressFields, orderBillingAddressSelection } from "../billing-address";
 import { orderNumberSearchCondition } from "../number";
 import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
@@ -681,6 +682,8 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
         shippingDependentLocality: string | null;
         shippingAdminArea: string | null;
         shippingPostalCode: string | null;
+        /** The billing snapshot (0119). */
+        billing: OrderBillingAddressFields;
         notes: string | null;
         /** Every parcel's courier and tracking, in the order they left. */
         courierName: string | null;
@@ -704,6 +707,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 shippingDependentLocality: orders.shippingDependentLocality,
                 shippingAdminArea: orders.shippingAdminArea,
                 shippingPostalCode: orders.shippingPostalCode,
+                ...orderBillingAddressSelection(orders),
                 notes: orders.notes,
                 currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
@@ -749,6 +753,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 shippingDependentLocality: row.shippingDependentLocality,
                 shippingAdminArea: row.shippingAdminArea,
                 shippingPostalCode: row.shippingPostalCode,
+                billing: orderBillingAddressFields(row),
                 notes: row.notes,
                 courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
                 trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,

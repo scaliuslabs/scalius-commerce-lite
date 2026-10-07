@@ -57,6 +57,23 @@ const orderBaseContentSchema = z.object({
     shippingCompany: addressText(ADDRESS_FIELD_MAX_LENGTH.company),
     /** Staff only: keep an address that breaks its country's rules (stored marked). */
     skipAddressValidation: z.boolean().optional(),
+    /**
+     * The billing address (migration 0119). An order that ships uses its
+     * shipping address unless `billingSameAsShipping` is false. Otherwise
+     * optional: a billing country taxes and places an order that ships
+     * nothing; without a street line only the country, region and postal
+     * code are kept (checked as its rules require).
+     */
+    billingSameAsShipping: z.boolean().nullable().optional(),
+    billingCountryCode: z.string().trim().min(2).max(2).nullable().optional(),
+    billingName: addressText(ADDRESS_FIELD_MAX_LENGTH.name),
+    billingCompany: addressText(ADDRESS_FIELD_MAX_LENGTH.company),
+    billingAddress: addressText(ADDRESS_FIELD_MAX_LENGTH.line1),
+    billingAddressLine2: addressText(ADDRESS_FIELD_MAX_LENGTH.line2),
+    billingDependentLocality: addressText(ADDRESS_FIELD_MAX_LENGTH.dependentLocality),
+    billingLocality: addressText(ADDRESS_FIELD_MAX_LENGTH.locality),
+    billingAdminArea: addressText(ADDRESS_FIELD_MAX_LENGTH.adminArea),
+    billingPostalCode: addressText(ADDRESS_FIELD_MAX_LENGTH.postalCode),
     city: z.string().min(1, "City is required").nullable().optional(),
     zone: z.string().min(1, "Zone is required").nullable().optional(),
     area: z.string().nullable().optional(),
@@ -152,6 +169,10 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     // Shipping zones outside Bangladesh match on them (apps' delivery options).
     shippingAdminArea: true,
     shippingPostalCode: true,
+    // An order that ships nothing is taxed at its billing address.
+    billingCountryCode: true,
+    billingAdminArea: true,
+    billingPostalCode: true,
     items: true,
     discountAmount: true,
     shippingCharge: true,
@@ -208,6 +229,16 @@ export const updateOrderDetailsSchema = orderBaseContentSchema.pick({
     city: true,
     zone: true,
     area: true,
+    billingSameAsShipping: true,
+    billingCountryCode: true,
+    billingName: true,
+    billingCompany: true,
+    billingAddress: true,
+    billingAddressLine2: true,
+    billingDependentLocality: true,
+    billingLocality: true,
+    billingAdminArea: true,
+    billingPostalCode: true,
 }).extend({
     expectedVersion: z.number().int().min(1),
 }).superRefine(refineDeliveryLine);

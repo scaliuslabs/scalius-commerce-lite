@@ -187,6 +187,31 @@ export interface OrderShippingAddressFields {
     areaName: string | null;
 }
 
+/**
+ * An order's billing-address snapshot (migration 0119): the canonical fields
+ * with a `billing` prefix, without Bangladesh's courier adapter.
+ * `billingSameAsShipping` true means the shipping address bills (the other
+ * fields are then null); false without a country means no billing address.
+ */
+export interface OrderBillingAddressFields {
+    billingSameAsShipping: boolean;
+    /** The billing name when not the order contact; null means `customerName`. */
+    billingName: string | null;
+    billingCompany: string | null;
+    /** The first street line; null for a minimal billing address. */
+    billingAddress: string | null;
+    billingAddressLine2: string | null;
+    /** ISO 3166-1 alpha-2; an order that ships nothing is taxed and placed here. */
+    billingCountryCode: string | null;
+    billingDependentLocality: string | null;
+    billingLocality: string | null;
+    billingAdminArea: string | null;
+    billingPostalCode: string | null;
+    /** E.164 when not the contact's. */
+    billingPhone: string | null;
+    billingValidationSkipped: boolean;
+}
+
 export interface OrderListItem {
     id: string;
     customerName: string;
@@ -242,7 +267,7 @@ export interface OrderListItem {
     pickupReadyAt: Date | null;
 }
 
-export interface OrderDetails extends OrderListItem {
+export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
     editReadiness: OrderEditReadiness;
     /** The order's own location (null = the store default). */
     fulfillmentLocationId: string | null;
@@ -386,6 +411,23 @@ export interface CreateStorefrontOrderInput {
     city?: string | null;
     zone?: string | null;
     area?: string | null;
+    /**
+     * The billing address (migration 0119, Shopify's rule). An order that
+     * ships uses its shipping address unless `billingSameAsShipping` is false
+     * and a billing address is sent. An order that ships nothing needs one:
+     * at least its country (absent: the store's only selling country), plus
+     * what its rules and the merchant's "Require full billing address" ask.
+     */
+    billingSameAsShipping?: boolean | null;
+    billingCountryCode?: string | null;
+    billingName?: string | null;
+    billingCompany?: string | null;
+    billingAddress?: string | null;
+    billingAddressLine2?: string | null;
+    billingDependentLocality?: string | null;
+    billingLocality?: string | null;
+    billingAdminArea?: string | null;
+    billingPostalCode?: string | null;
     notes: string | null;
     items: StorefrontOrderItem[];
     /** Discount codes the buyer applied; each must still apply at commit. */
@@ -488,8 +530,11 @@ export interface StorefrontOrderCommitPayload {
     };
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
-    /** The shipping-address snapshot (all null unless something ships) and the order's other facts. */
-    orderData: OrderShippingAddressFields & {
+    /**
+     * The shipping-address snapshot (all null unless something ships), the
+     * billing-address snapshot and the order's other facts.
+     */
+    orderData: OrderShippingAddressFields & Partial<OrderBillingAddressFields> & {
         id: string;
         customerName: string;
         /** Null without a phone; stored as NO_PHONE (`storedPhone`). */

@@ -292,6 +292,8 @@ export interface CustomerAddress extends ResolvedAddress {
     id: string;
     customerId: string;
     isDefault: boolean;
+    /** The default billing address (migration 0119); none means the default address bills too. */
+    isDefaultBilling: boolean;
     createdAt: number;
     updatedAt: number;
 }
@@ -306,6 +308,7 @@ export function customerAddressFromRow(row: CustomerAddressRow): CustomerAddress
         id: row.id,
         customerId: row.customerId,
         isDefault: Boolean(row.isDefault),
+        isDefaultBilling: Boolean(row.isDefaultBilling),
         countryCode: row.countryCode,
         name: row.name,
         company: row.company,
@@ -387,14 +390,27 @@ function defaultWrites(db: Database, customerId: string, addressId: string) {
     ] as const;
 }
 
+/** Clears the customer's other default billing address, then makes `addressId` it (one batch). */
+function defaultBillingWrites(db: Database, customerId: string, addressId: string) {
+    return [
+        db.update(customerAddresses)
+            .set({ isDefaultBilling: false, updatedAt: sql`unixepoch()` })
+            .where(and(eq(customerAddresses.customerId, customerId), eq(customerAddresses.isDefaultBilling, true), ne(customerAddresses.id, addressId))),
+        db.update(customerAddresses)
+            .set({ isDefaultBilling: true, updatedAt: sql`unixepoch()` })
+            .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId))),
+    ] as const;
+}
+
 /**
  * Adds an address. The customer's first address is the default; `isDefault`
- * makes a later one the default. At most MAX_CUSTOMER_ADDRESSES.
+ * makes a later one the default and `isDefaultBilling` the default billing
+ * address. At most MAX_CUSTOMER_ADDRESSES.
  */
 export async function createCustomerAddress(
     db: Database,
     customerId: string,
-    input: AddressInput & { isDefault?: boolean },
+    input: AddressInput & { isDefault?: boolean; isDefaultBilling?: boolean },
     options: ResolveAddressOptions = {},
 ): Promise<CustomerAddress> {
     const { addressCount: existing } = await requireCustomer(db, customerId);
@@ -412,18 +428,27 @@ export async function createCustomerAddress(
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
     });
+    const writes = [
+        insert,
+        ...(makeDefault ? defaultWrites(db, customerId, id) : []),
+        ...(input.isDefaultBilling === true ? defaultBillingWrites(db, customerId, id) : []),
+    ];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple typing.
-    await db.batch((makeDefault ? [insert, ...defaultWrites(db, customerId, id)] : [insert]) as any);
+    await db.batch(writes as any);
     const row = await db.select().from(customerAddresses).where(eq(customerAddresses.id, id)).get();
     return customerAddressFromRow(row!);
 }
 
-/** Replaces an address's fields (`isDefault: true` also makes it the default). */
+/**
+ * Replaces an address's fields (`isDefault: true` also makes it the default,
+ * `isDefaultBilling` true or false makes it the default billing address or
+ * clears that).
+ */
 export async function updateCustomerAddress(
     db: Database,
     customerId: string,
     addressId: string,
-    input: AddressInput & { isDefault?: boolean },
+    input: AddressInput & { isDefault?: boolean; isDefaultBilling?: boolean },
     options: ResolveAddressOptions = {},
 ): Promise<CustomerAddress> {
     const current = await db.select({ id: customerAddresses.id }).from(customerAddresses)
@@ -434,8 +459,18 @@ export async function updateCustomerAddress(
     const update = db.update(customerAddresses)
         .set({ ...customerAddressColumns(address), updatedAt: sql`unixepoch()` })
         .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)));
+    const writes = [
+        update,
+        ...(input.isDefault === true ? defaultWrites(db, customerId, addressId) : []),
+        ...(input.isDefaultBilling === true ? defaultBillingWrites(db, customerId, addressId) : []),
+        ...(input.isDefaultBilling === false
+            ? [db.update(customerAddresses)
+                .set({ isDefaultBilling: false, updatedAt: sql`unixepoch()` })
+                .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId), eq(customerAddresses.isDefaultBilling, true)))]
+            : []),
+    ];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple typing.
-    await db.batch((input.isDefault === true ? [update, ...defaultWrites(db, customerId, addressId)] : [update]) as any);
+    await db.batch(writes as any);
     const row = await db.select().from(customerAddresses).where(eq(customerAddresses.id, addressId)).get();
     return customerAddressFromRow(row!);
 }
@@ -452,7 +487,23 @@ export async function setDefaultCustomerAddress(db: Database, customerId: string
     return customerAddressFromRow(row!);
 }
 
-/** Deletes an address; when it was the default, the most recently updated other address becomes the default. */
+/** Makes an address the customer's default billing address. */
+export async function setDefaultBillingCustomerAddress(db: Database, customerId: string, addressId: string): Promise<CustomerAddress> {
+    const current = await db.select({ id: customerAddresses.id }).from(customerAddresses)
+        .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)))
+        .get();
+    if (!current) throw new NotFoundError("Address not found");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple typing.
+    await db.batch(defaultBillingWrites(db, customerId, addressId) as any);
+    const row = await db.select().from(customerAddresses).where(eq(customerAddresses.id, addressId)).get();
+    return customerAddressFromRow(row!);
+}
+
+/**
+ * Deletes an address; when it was the default, the most recently updated
+ * other address becomes the default. A deleted default billing address
+ * leaves none (the default address then bills, Shopify's rule).
+ */
 export async function deleteCustomerAddress(db: Database, customerId: string, addressId: string): Promise<void> {
     const deleted = await db.delete(customerAddresses)
         .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)))

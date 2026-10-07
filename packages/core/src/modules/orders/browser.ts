@@ -5,4 +5,5 @@ export * from "./archive-policy";
 export * from "./money";
 export * from "./search";
 export * from "./csv-export";
+export * from "./billing-display";
 export * from "./line-presentation";

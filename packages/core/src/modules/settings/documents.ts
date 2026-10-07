@@ -276,6 +276,13 @@ export interface CheckoutFlowSettings {
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
   autoFulfilMode: AutoFulfilMode;
+  /**
+   * Every order asks for a full billing address, by its country's rules
+   * (Shopify's "Require full billing address"). Off: an order that ships
+   * uses its shipping address, and one that ships nothing asks only its
+   * country plus the region and postal code its rules require.
+   */
+  requireFullBillingAddress: boolean;
 }
 
 export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
@@ -286,6 +293,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentEnabled: z.boolean(),
     partialPaymentAmount: z.number(),
     autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
+    requireFullBillingAddress: z.boolean(),
   }),
   defaults: {
     guestCheckoutEnabled: true,
@@ -293,6 +301,7 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentEnabled: false,
     partialPaymentAmount: 0,
     autoFulfilMode: "after_payment",
+    requireFullBillingAddress: false,
   },
 });
 

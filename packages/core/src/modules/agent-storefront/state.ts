@@ -25,6 +25,19 @@ export interface AgentStorefrontDeliverySelection {
   shippingMethodId: string | null;
 }
 
+/**
+ * A context's billing location for a cart with nothing physical: its
+ * delivery selection's country, region and postal code (the quote taxes it
+ * there, and submit bills it there). Null without a country.
+ */
+export function agentContextBillingLocation(
+  row: { countryCode?: string | null; adminArea?: string | null; postalCode?: string | null },
+): { billingCountryCode: string; billingAdminArea: string | null; billingPostalCode: string | null } | null {
+  return row.countryCode
+    ? { billingCountryCode: row.countryCode, billingAdminArea: row.adminArea ?? null, billingPostalCode: row.postalCode ?? null }
+    : null;
+}
+
 function normalizeVariantId(value: unknown): string {
   if (typeof value !== "string") {
     throw new ValidationError("A saved product variant is required.");
