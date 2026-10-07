@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/OrderStatusCard";
+import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/cancel-order";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { UpdateOrderStatusInput } from "~/lib/api-mutations/orders";

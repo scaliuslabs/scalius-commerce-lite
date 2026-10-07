@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layers3 } from "lucide-react";
 import {
@@ -21,7 +22,7 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
-import { DateText, sortHeader } from "~/components/admin/resource/columns";
+import { sortHeader } from "~/components/admin/resource/columns";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -104,12 +105,7 @@ function CollectionsPage() {
         <StatusBadge status={row.original.isActive ? "active" : "draft"}>{t(row.original.isActive ? "active" : "draft")}</StatusBadge>
       ),
     },
-    {
-      accessorKey: "updatedAt",
-      header: sortHeader(t("updated")),
-      meta: { priority: 40, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
-    },
+    createDateColumn("updatedAt", t("updated")),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 

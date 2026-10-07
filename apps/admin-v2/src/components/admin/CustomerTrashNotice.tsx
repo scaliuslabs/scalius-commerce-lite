@@ -8,7 +8,7 @@ import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
 
 export interface TrashedCustomer {
@@ -21,7 +21,7 @@ export interface TrashedCustomer {
  * only names that account (it can't be restored); one in Trash offers Restore.
  */
 export function CustomerTrashNotice({ customer, canRestore }: { customer: TrashedCustomer; canRestore: boolean }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   const tr = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const restore = useMutation({

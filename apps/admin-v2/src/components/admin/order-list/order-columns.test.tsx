@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { fitColumns } from "~/components/admin/data-table/column-layout";
+import { fitList } from "~/components/admin/data-table/list-width.fixture";
 import { getOrderColumns } from "./order-columns";
 import { OrderMobileCard } from "./OrderMobileCard";
 
@@ -142,21 +143,8 @@ describe("order list delivery state", () => {
 });
 
 describe("order columns on a narrow screen", () => {
-  const layout = () => getOrderColumns({ ...handlers, selectable: true }).map((column) => {
-    const id = column.id!;
-    const meta = column.meta as { priority?: number; minWidth?: number; primary?: boolean } | undefined;
-    const locked = id === "select" || id === "actions" || Boolean(meta?.primary);
-    return {
-      id,
-      priority: locked ? Number.POSITIVE_INFINITY : meta?.priority ?? 50,
-      minWidth: meta?.minWidth ?? (id === "select" ? 40 : 56),
-      locked,
-    };
-  });
-  const shownAt = (width: number) => {
-    const hidden = fitColumns(layout(), width);
-    return layout().map((column) => column.id).filter((id) => !hidden.has(id) && id !== "select" && id !== "actions");
-  };
+  const shownAt = (width: number) =>
+    fitList(getOrderColumns({ ...handlers, selectable: true }), width).shown.filter((id) => id !== "select" && id !== "actions");
 
   it("shows Shopify's columns when there is room, in Shopify's order", () => {
     expect(shownAt(4000)).toEqual([
@@ -164,18 +152,23 @@ describe("order columns on a narrow screen", () => {
     ]);
   });
 
-  it("drops the delivery method, items and channel first; then delivery status, date, fulfilment, payment, total, status and customer; never the order", () => {
-    const dropped: string[] = [];
-    let previous = shownAt(4000);
-    for (let width = 4000; width >= 10; width -= 10) {
+  it("drops the delivery method, items, channel and delivery status first; folds payment and fulfilment into one cell; then drops it, the total, status and customer; never the order or the date", () => {
+    const states: string[][] = [];
+    for (let width = 4000; width >= 10; width -= 2) {
       const shown = shownAt(width);
-      dropped.push(...previous.filter((id) => !shown.includes(id)));
-      previous = shown;
+      if (states.at(-1)?.join() !== shown.join()) states.push(shown);
     }
-    expect(dropped).toEqual([
-      "deliveryMethod", "items", "channel", "deliveryStatus", "date", "fulfillment", "payment", "total", "status", "customer",
+    expect(states.slice(1)).toEqual([
+      ["order", "date", "customer", "channel", "total", "payment", "fulfillment", "items", "deliveryStatus", "status"],
+      ["order", "date", "customer", "channel", "total", "payment", "fulfillment", "deliveryStatus", "status"],
+      ["order", "date", "customer", "total", "payment", "fulfillment", "deliveryStatus", "status"],
+      ["order", "date", "customer", "total", "payment", "fulfillment", "status"],
+      ["order", "date", "customer", "total", "paymentFulfillment", "status"],
+      ["order", "date", "customer", "total", "status"],
+      ["order", "date", "customer", "status"],
+      ["order", "date", "customer"],
+      ["order", "date"],
     ]);
-    expect(previous).toEqual(["order"]);
   });
 });
 
@@ -195,14 +188,15 @@ describe("a long customer name", () => {
     const columns = getOrderColumns(handlers);
     const customer = columns.find((column) => column.id === "customer")!;
     // The column never grows past its cap; the money and status columns keep their room.
-    expect(customer.meta).toMatchObject({ minWidth: 180, maxWidth: 240 });
-    const room = columns.reduce((sum, column) => sum + ((column.meta as { minWidth?: number } | undefined)?.minWidth ?? 56), 0)
-      - 180 + 240;
+    expect(customer.meta).toMatchObject({ minWidth: 188, maxWidth: 176 });
+    const room = columns
+      .filter((column) => !column.meta?.combines)
+      .reduce((sum, column) => sum + ((column.meta as { minWidth?: number } | undefined)?.minWidth ?? 48), 0);
     expect(fitColumns(
-      columns.map((column) => ({
+      columns.filter((column) => !column.meta?.combines).map((column) => ({
         id: column.id!,
         priority: (column.meta as { priority?: number; primary?: boolean } | undefined)?.primary ? Number.POSITIVE_INFINITY : (column.meta as { priority?: number } | undefined)?.priority ?? 50,
-        minWidth: (column.meta as { minWidth?: number } | undefined)?.minWidth ?? 56,
+        minWidth: (column.meta as { minWidth?: number } | undefined)?.minWidth ?? 48,
         locked: column.id === "actions" || Boolean((column.meta as { primary?: boolean } | undefined)?.primary),
       })),
       room,

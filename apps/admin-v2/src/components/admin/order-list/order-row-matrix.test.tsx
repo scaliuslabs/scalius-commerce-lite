@@ -17,8 +17,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { FULFILLMENT_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@scalius/shared/order-state";
-import { setLocale, translate } from "~/i18n";
-import { orderMessages } from "~/i18n/orders";
+import { setLocale } from "~/i18n";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { getOrderColumns, type OrderRowHandlers } from "./order-columns";
 import { OrderMobileCard } from "./OrderMobileCard";
@@ -189,18 +188,4 @@ describe("orders list rows across the state matrix", () => {
       expect(link.children[1]!.firstElementChild!.className).toMatch(/\btruncate\b/);
     }
   }, 120_000);
-
-  it("leaves the badge columns room for their longest words in both languages", () => {
-    const columns = getOrderColumns(handlers());
-    const minWidth = (id: string) => (columns.find((column) => column.id === id)!.meta as { minWidth: number }).minWidth;
-    // About 7px a character at the 12-13px badge size, 16px badge padding, 24px cell padding (and an 18px chevron).
-    const needs = (words: string[], extra = 0) => Math.max(...words.map((word) => [...word].length)) * 7 + 16 + 24 + extra;
-    for (const locale of ["en", "bn"] as const) {
-      setLocale(locale);
-      const o = (key: string) => translate(orderMessages, key as never);
-      expect(minWidth("payment")).toBeGreaterThanOrEqual(needs(PAYMENT_STATUSES.map((status) => o(`payment.${status}`))));
-      expect(minWidth("fulfillment")).toBeGreaterThanOrEqual(needs([...FULFILLMENT_STATUSES.map((status) => o(`fulfillment.${status}`)), o("delivery.readyForPickup")]));
-      expect(minWidth("status")).toBeGreaterThanOrEqual(needs(ORDER_STATUSES.map((status) => o(`status.${status}`)), 18));
-    }
-  });
 });

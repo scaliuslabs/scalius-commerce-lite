@@ -32,7 +32,7 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customerMarketingMessages } from "~/i18n/customer-marketing";
-import { customersMessages } from "~/i18n/customers";
+import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
 import { CONSENT_BADGE, consentFacts, suggestedConsentChange } from "./marketing-display";
 
@@ -51,7 +51,7 @@ const when = (value: string | null | undefined) => {
 
 function ChannelStatus({ consent }: { consent: CustomerConsent }) {
   const t = useMessages(customerMarketingMessages);
-  const c = useMessages(customersMessages);
+  const c = useMessages(customerPageMessages);
   const facts = consentFacts(consent);
   const detail = facts.kind === "no_contact"
     ? t(consent.channel === "email" ? "noEmail" : "noPhone")
@@ -73,7 +73,7 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
 
 function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
   const t = useMessages(customerMarketingMessages);
-  const c = useMessages(customersMessages);
+  const c = useMessages(customerPageMessages);
   const actor = event.actor === "staff"
     ? event.actorName ? t("eventByStaff", { name: event.actorName }) : t("eventByStaffUnknown")
     : event.actor === "buyer"
@@ -102,7 +102,7 @@ function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
  */
 export function CustomerMarketingCard({ customerId, canEdit }: { customerId: string; canEdit: boolean }) {
   const t = useMessages(customerMarketingMessages);
-  const c = useMessages(customersMessages);
+  const c = useMessages(customerPageMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const marketing = useQuery(customerMarketingQueryOptions(customerId));

@@ -87,12 +87,13 @@ export function DataTableHeadCell<TData extends TableRowData>({
   hasSelect: boolean;
 }) {
   const size = column.getSize();
-  const { style: _cap, ...attributes } = columnAttributes(column, hasSelect);
+  const { style: _cap, className: _padding, ...attributes } = columnAttributes(column, hasSelect);
   const maxWidth = column.columnDef.meta?.maxWidth;
   return (
     <TableHead
       {...attributes}
-      className={cn(size !== 150 && "w-(--column-width)")}
+      // INDEX_CELL's padding, written out for the class checker.
+      className={cn("px-1.5 first:pl-3 last:pr-3", size !== 150 && "w-(--column-width)")}
       style={{ "--column-width": `${size}px`, "--column-max": maxWidth ? `${maxWidth}px` : undefined } as CSSProperties}
     >
       {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Award } from "lucide-react";
 import {
@@ -24,7 +25,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
-import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
+import { Thumb, sortHeader } from "~/components/admin/resource/columns";
 import { useMessages } from "~/i18n";
 import { brandMessages } from "~/i18n/brands";
 import { pageHead } from "~/i18n/page-titles";
@@ -104,12 +105,7 @@ function BrandsPage() {
         );
       },
     },
-    {
-      accessorKey: "updatedAt",
-      header: sortHeader(t("updated")),
-      meta: { priority: 40, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
-    },
+    createDateColumn("updatedAt", t("updated")),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 

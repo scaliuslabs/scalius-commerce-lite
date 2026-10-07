@@ -38,6 +38,18 @@ export interface ServerColumnMeta {
   primary?: boolean;
   /** Higher stays longer when the table runs out of width (default 50). */
   priority?: number;
+  /**
+   * Never stepped aside to fit the width (the orders list's Date): the
+   * merchant can still hide it in the column menu.
+   */
+  keep?: boolean;
+  /**
+   * A stand-in for these columns (ids), shown in their place when the table
+   * is too narrow for them side by side but has room for this one (Shopify
+   * folds Payment and Fulfillment into one cell). It is not in the column
+   * menu: it follows the columns it stands for.
+   */
+  combines?: readonly string[];
   /** Narrowest width (px) the column still reads well at (default 120). */
   minWidth?: number;
   /**

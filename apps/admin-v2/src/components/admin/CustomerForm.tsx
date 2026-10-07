@@ -26,7 +26,7 @@ import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { customerPageMessages } from "~/i18n/customer-page";
 import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
@@ -53,7 +53,7 @@ interface CustomerFormProps {
 
 /** Under the phone field after a save: links the customer that already uses the number. */
 export function PhoneUsedBy({ customer }: { customer: CustomerPhoneConflict }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   const [before, after] = t("phoneUsedBy").split("{name}");
   return (
     <p className="text-body">
@@ -100,7 +100,7 @@ function toNewCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV
  * customers.edit (or .create for a new customer); orders need view_history.
  */
 export function CustomerForm({ defaultValues, isEdit = false, record }: CustomerFormProps) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   const ta = useMessages(customerAddressesMessages);
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();

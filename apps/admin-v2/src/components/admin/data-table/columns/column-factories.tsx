@@ -2,17 +2,17 @@ import type { ColumnDef, TableRowData } from "../table-config";
 import { Checkbox } from "~/components/ui/checkbox";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
-import { getStoreTimeZone } from "~/lib/store-time-zone";
+import { localeWidth } from "../column-layout";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { DataTableRowActions, type ExtraAction } from "../DataTableRowActions";
+import { LIST_DATE_WIDTH, ListDate } from "../ListDate";
 
 /**
  * Shared column factories to eliminate boilerplate across entity column definitions.
  *
  * Usage:
  *   createSelectColumn<ProductListItem>()
- *   createDateColumn<ProductListItem>("updatedAt", "Last Updated")
+ *   createDateColumn<Brand>("updatedAt", t("updated"))
  *   createActionsColumn<ProductListItem>({ ... })
  */
 
@@ -78,31 +78,20 @@ export function createSelectColumn<T extends TableRowData>(
 
 // ── Date column ──────────────────────────────────────────────────────
 
-interface DateColumnOptions {
-  /** Whether the column header is sortable (default true). */
-  sortable?: boolean;
-  /** Column width (default 130). */
-  size?: number;
-}
-
+/** A created or updated date, as every list shows it (`ListDate`). */
 export function createDateColumn<T extends TableRowData>(
   field: keyof T & string,
   title: string,
-  opts?: DateColumnOptions,
+  opts: { id?: string; sortable?: boolean; priority?: number } = {},
 ): ColumnDef<T, unknown> {
-  const sortable = opts?.sortable !== false;
+  const sortable = opts.sortable !== false;
   return {
-    accessorKey: field,
-    header: sortable
-      ? ({ column }) => <DataTableColumnHeader column={column} title={title} />
-      : () => <span className="text-caption">{title}</span>,
-    cell: ({ row }) => (
-      <span className="text-body text-muted-foreground" suppressHydrationWarning>
-        {formatDate((row.original as Record<string, unknown>)[field] as string | Date | null, getStoreTimeZone())}
-      </span>
-    ),
+    id: opts.id ?? field,
+    accessorFn: (row) => row[field],
+    header: sortable ? ({ column }) => <DataTableColumnHeader column={column} title={title} /> : title,
     enableSorting: sortable,
-    size: opts?.size ?? 130,
+    meta: { label: title, priority: opts.priority ?? 40, minWidth: localeWidth(LIST_DATE_WIDTH) },
+    cell: ({ row }) => <ListDate value={row.original[field] as Date | string | number | null} />,
   };
 }
 

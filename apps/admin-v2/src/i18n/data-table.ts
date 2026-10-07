@@ -27,6 +27,11 @@ export const dataTableMessages = defineMessages({
     copied: "Copied",
     reorderRow: "Reorder {name}",
     reorderRowNumber: "Reorder row {number}",
+    justNow: "Just now",
+    minutesAgo: "{count} min ago",
+    todayAt: "Today at {time}",
+    yesterdayAt: "Yesterday at {time}",
+    dateAt: "{date} at {time}",
   },
   bn: {
     columnMenu: "সাজানো ও কলাম",
@@ -53,5 +58,10 @@ export const dataTableMessages = defineMessages({
     copied: "কপি হয়েছে",
     reorderRow: "{name} এর ক্রম বদলান",
     reorderRowNumber: "সারি {number} এর ক্রম বদলান",
+    justNow: "এইমাত্র",
+    minutesAgo: "{count} মিনিট আগে",
+    todayAt: "আজ {time}",
+    yesterdayAt: "গতকাল {time}",
+    dateAt: "{date} {time}",
   },
 });

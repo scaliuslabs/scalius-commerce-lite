@@ -40,9 +40,8 @@ export const BUNDLE_BUDGETS = {
     "admin/orders/_list/index.tsx": 290,
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
     // +1 (catalogue dashboard): the Brands link and its search words in the shell.
-    // 289 (was 288): the store time zone (G1a), the place directory (G1b) and
-    // the billing address block (0119) share one 1 KiB raise; win it back.
-    "admin/orders/$orderId/index.tsx": 289,
+    // The status card's cancel confirmation loads when first asked for (list UX).
+    "admin/orders/$orderId/index.tsx": 288,
     "admin/products/index.tsx": 290,
     // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.
     // +1 (catalogue dashboard): categories named by their tree path, and saving the
@@ -55,9 +54,8 @@ export const BUNDLE_BUDGETS = {
     // page, and the shared icon and SDK chunks the new catalogue screens regrouped.
     "admin/products/new.tsx": 365,
     "admin/inventory/index.tsx": 255,
-    // 246 (was 245): billing addresses (0119) shifted shared chunks by 0.1 KiB;
-    // the list UX slice is to win it back.
-    "admin/customers/index.tsx": 246,
+    // The customer page's own copy is apart from the list's (list UX).
+    "admin/customers/index.tsx": 245,
     "admin/settings/store.tsx": 291,
   },
 };

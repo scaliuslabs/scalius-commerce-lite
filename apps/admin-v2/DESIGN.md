@@ -19,7 +19,7 @@ Use the Tailwind names. Values for both themes are in `global.css`.
 | Charts | `bg-chart-1` to `bg-chart-5` |
 | Elevation | `shadow-card` · `shadow-button` (outline buttons) · `shadow-button-primary` · `shadow-button-critical` · `shadow-popover` · `shadow-modal` · pressed: `shadow-pressed`, `shadow-pressed-strong`. The card, button, popover and modal shadows draw their own 1px ring edge. |
 | Radius | `rounded-md` 6px (menu items) · `rounded-lg` 8px (controls, badges, navigation rows) · `rounded-xl` 12px (cards, popovers, menus, alerts) · `rounded-2xl` 16px (dialogs) |
-| Spacing | Tailwind 4px scale. Cards `p-4`. Page stacks `gap-4`. Table cells `px-3 py-1.5`. Page content `max-w-7xl`, padding `px-3 sm:px-4 md:px-6`. |
+| Spacing | Tailwind 4px scale. Cards `p-4`. Page stacks `gap-4`. Table cells `px-3 py-1.5`; list tables (`DataTable`) `px-1.5 py-1.5`, `pl-3`/`pr-3` at the table's edges. Page content `max-w-7xl`, padding `px-3 sm:px-4 md:px-6`. |
 
 ## Type
 
@@ -91,7 +91,11 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 - The header row is sticky by itself, under the top bar. When the columns are wider than the card, the table scrolls both ways inside a viewport-high box and the header sticks there.
 - Any wrapper between a table and the page uses `overflow-clip`, never `overflow-hidden` or `overflow-auto`. Otherwise sticky stops working.
-- Density follows Polaris IndexTable: 12px side padding, 6px row padding, a subdued header.
+- List tables (`DataTable`) copy Polaris IndexTable's density: 6px each side of a cell, 12px at the table's edges, 6px row padding, a subdued header (`INDEX_CELL`).
+- Every cell is one line (two for a title or name over phone, on every row, `min-h-[2lh]`), so rows never change height with their data. Free text truncates at `meta.maxWidth` with the whole value in `title`. An empty cell reads "—".
+- A column's `meta.minWidth` is its widest content in the dashboard's language plus padding (`localeWidth({ en, bn })`). Too narrow a table steps the lowest `meta.priority` aside first; the title column and `meta.keep` columns (the orders list's Date) never go. `meta.combines` names a stand-in column that takes the place of two columns that no longer fit side by side (Payment over Fulfillment). `list-layout.test.tsx` measures every list's widest content with the fonts' real glyph widths at 1024, 1280, 1440 and 1920px.
+- Apps' columns are data-backed (`dataColumns`): the list reads the values in its one read; their priority stays below every list's working set.
+- Created and updated dates use `ListDate` (or `createDateColumn`): store time, "Just now", "41 min ago", "Today at 3:42 PM", "Yesterday at …", the weekday within a week, "Oct 3 at …", and "Oct 3, 2025" for another year, the full date and time on hover.
 
 ### Overlays
 

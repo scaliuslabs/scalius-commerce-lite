@@ -1,9 +1,9 @@
 import { useMemo } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftRight } from "lucide-react";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { DateText } from "~/components/admin/resource/columns";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
@@ -88,12 +88,7 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
       meta: { priority: 50, minWidth: 130 },
       cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{formatDay(row.original.expectedOn) ?? "—"}</span>,
     },
-    {
-      id: "created",
-      header: t("colCreated"),
-      meta: { priority: 30, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.createdAt} />,
-    },
+    createDateColumn("createdAt", t("colCreated"), { id: "created", sortable: false, priority: 30 }),
   ], [t]);
 
   const createButton = canEdit && !oneLocation ? (
