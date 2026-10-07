@@ -4,7 +4,7 @@
 // Schedule times are the store's wall time (as discounts show them).
 import { MAX_PRICE_LIST_QUANTITY_BREAKS, PRICE_LIST_MIN_QUANTITY_MAX, PRICE_LIST_PRIORITY_MAX } from "@scalius/shared/market-pricing";
 import { epochToStoreTime, latinDigits, storeTimeToEpoch } from "~/components/admin/discounts/discount-form";
-import { formatAdminTimestamp } from "~/lib/admin-time";
+import { formatOrderTimestamp } from "~/components/admin/orderview/formatters";
 import type { PriceListMessageKey } from "~/i18n/price-lists";
 import type {
   PriceList,
@@ -30,8 +30,8 @@ type Messages = (key: PriceListMessageKey, vars?: Record<string, string | number
 
 /** "Always", "From …", "Until …" or "… to …", in store time. */
 export function scheduleText(list: Pick<PriceList, "startsAt" | "endsAt">, t: Messages): string {
-  const start = formatAdminTimestamp(list.startsAt);
-  const end = formatAdminTimestamp(list.endsAt);
+  const start = formatOrderTimestamp(list.startsAt);
+  const end = formatOrderTimestamp(list.endsAt);
   if (start && end) return t("betweenDates", { start, end });
   if (start) return t("fromDate", { date: start });
   if (end) return t("untilDate", { date: end });
