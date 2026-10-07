@@ -195,7 +195,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEdi
   const actions = canEdit ? (
     <div className="flex w-full flex-wrap items-center justify-end gap-2">
       {view.resource.translation ? (
-        <Button type="button" variant="ghost" className="mr-auto" onClick={() => setDeleting(true)}>
+        <Button type="button" variant="ghost" className="me-auto" onClick={() => setDeleting(true)}>
           {t("deleteTranslation")}
         </Button>
       ) : null}
