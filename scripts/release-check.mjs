@@ -1774,6 +1774,37 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
   return { pages };
 }
 
+/**
+ * The public reads a storefront page renders from, asked of the API itself.
+ * A page can be served from cache; after a deploy the API's cache keys carry
+ * the new Worker version, so these reads reach the database and prove it can
+ * still run them on real data (a homepage statement once exceeded D1's
+ * planning memory while every local test passed).
+ */
+export const PUBLIC_API_READS = [
+  "/storefront/homepage",
+  "/storefront/layout",
+  "/storefront/markets",
+  "/checkout/config",
+  "/products?limit=24",
+  "/categories?limit=24",
+  "/collections?limit=24",
+];
+
+async function checkPublicApiReads(options, { fetchImpl, logger }) {
+  const reads = [];
+  for (const path of PUBLIC_API_READS) {
+    const [route, search = ""] = path.split("?");
+    const url = new URL(buildApiV1Url(options.apiBaseUrl, route));
+    url.search = search;
+    const response = await fetchJson(url.toString(), { fetchImpl, timeoutMs: options.timeoutMs });
+    requireStatus(response, `API ${path}`, (status) => status >= 200 && status < 300);
+    reads.push({ path, statusCode: response.statusCode, durationMs: response.durationMs });
+  }
+  logger?.log(`PASS public API reads: ${reads.length} storefront reads returned 2xx.`);
+  return { reads };
+}
+
 async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   const publicPages = [];
   for (const path of ["/", "/search?q=release-check"]) {
@@ -2359,6 +2390,8 @@ export async function runReleaseCheck(options, {
     checkDashboard(options, { fetchImpl, logger }));
   await runStep(result, "storefront", () =>
     checkStorefrontPages(options, { fetchImpl, logger }));
+  await runStep(result, "publicApiReads", () =>
+    checkPublicApiReads(options, { fetchImpl, logger }));
   await runStep(result, "storefrontCacheHeaders", () =>
     checkStorefrontCacheHeaders(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>

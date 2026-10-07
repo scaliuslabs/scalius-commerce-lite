@@ -434,3 +434,11 @@ describe("release UCP catalog candidate", () => {
     });
   });
 });
+
+describe("public API reads", () => {
+  it("asks the API itself for the reads a storefront page renders from, homepage first", async () => {
+    const { PUBLIC_API_READS } = await import("./release-check.mjs");
+    expect(PUBLIC_API_READS[0]).toBe("/storefront/homepage");
+    for (const read of ["/storefront/layout", "/checkout/config", "/products?limit=24"]) expect(PUBLIC_API_READS).toContain(read);
+  });
+});
