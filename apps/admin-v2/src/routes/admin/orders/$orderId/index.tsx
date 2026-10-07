@@ -170,8 +170,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
   const [title, help] = kind === "notFound" ? [t("notFound"), t("notFoundHelp")]
     : kind === "network" ? [t("error.network"), t("error.networkHelp")]
       : kind === "server" ? [t("error.server"), t("error.serverHelp")]
-        : kind === "forbidden" ? [t("error.forbidden"), t("error.forbiddenHelp")]
-          : [t("loadFailed"), error.message];
+        : [t("loadFailed"), error.message];
   return (
     <section className="mx-auto max-w-xl space-y-4 rounded-xl bg-card p-6 shadow-card">
       <div className="space-y-1">
