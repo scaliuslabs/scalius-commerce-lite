@@ -11,7 +11,7 @@ import {
   type PointerEvent,
   type ReactElement,
 } from "react";
-import { Loader2, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTrigger, DialogTitle } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
@@ -41,10 +41,7 @@ function MediaManagerLoading({ capability }: { capability: MediaManagerProps["ca
     <DialogContent>
       <DialogTitle>{t(chooseKey(capability ?? "image"))}</DialogTitle>
       <DialogDescription className="sr-only">{t("pickerLoading")}</DialogDescription>
-      <div role="status" className="flex items-center justify-center py-8 text-muted-foreground">
-        <Loader2 aria-hidden="true" className="size-5 animate-spin" />
-        <span className="sr-only">{t("pickerLoading")}</span>
-      </div>
+      <p role="status" className="py-6 text-center text-body text-muted-foreground">{t("pickerLoading")}</p>
     </DialogContent>
   );
 }

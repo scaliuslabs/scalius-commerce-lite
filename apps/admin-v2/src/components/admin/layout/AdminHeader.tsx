@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { CircleHelp, Keyboard, LifeBuoy, Menu, MessageCircleQuestion, Search } from "lucide-react";
+import { CircleHelp, Menu, Search } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -80,18 +80,15 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
               <a href={HELP_LINKS.questions} target="_blank" rel="noopener noreferrer">
-                <MessageCircleQuestion aria-hidden />
                 {t("helpQuestions")}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <a href={HELP_LINKS.problem} target="_blank" rel="noopener noreferrer">
-                <LifeBuoy aria-hidden />
                 {t("helpProblem")}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setHelpOpen(true)} aria-keyshortcuts="?">
-              <Keyboard aria-hidden />
               {t("shortcutsTitle")}
             </DropdownMenuItem>
           </DropdownMenuContent>

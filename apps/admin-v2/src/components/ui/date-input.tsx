@@ -1,5 +1,4 @@
 import * as React from "react";
-import { CalendarDays, X } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -47,7 +46,6 @@ export function DateInput({ value, onValueChange, min, max, id, disabled = false
           className={cn(fieldClassName, "flex h-11 items-center gap-2 py-1 text-start sm:h-9", className)}
           {...aria}
         >
-          <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label ?? t("pickDate")}</span>
         </button>
       </PopoverTrigger>
@@ -74,7 +72,6 @@ export function DateInput({ value, onValueChange, min, max, id, disabled = false
                 setOpen(false);
               }}
             >
-              <X aria-hidden="true" className="size-3.5" />
               {t("clearDate")}
             </button>
           </div>

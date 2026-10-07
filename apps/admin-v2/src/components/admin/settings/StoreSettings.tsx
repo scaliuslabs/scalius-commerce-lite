@@ -55,7 +55,6 @@ import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
 import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
-import { SettingsAdvanced } from "./SettingsAdvanced";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
@@ -462,6 +461,9 @@ export function BusinessCard() {
   );
 }
 
+// The collapsible loads when the section is drawn, not with the page's first download.
+const SettingsAdvanced = lazy(() => import("./SettingsAdvanced").then((module) => ({ default: module.SettingsAdvanced })));
+
 // ── Web addresses (platform origins) ────────────────────────────────────
 
 const URL_KEYS = ["storefrontUrl", "dashboardUrl", "apiUrl", "mediaUrl"] as const;
@@ -530,13 +532,15 @@ function WebAddressFields() {
     <>
       {MAIN_URL_KEYS.map(field)}
       {/* A newcomer never needs these: they stay closed, and open by themselves when one is wrong. */}
-      <SettingsAdvanced
-        label={t("advancedAddresses")}
-        forceOpen={ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
-        defaultOpen={ADVANCED_URL_KEYS.some((key) => Boolean(values[key]))}
-      >
-        {ADVANCED_URL_KEYS.map(field)}
-      </SettingsAdvanced>
+      <Suspense fallback={null}>
+        <SettingsAdvanced
+          label={t("advancedAddresses")}
+          forceOpen={ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
+          defaultOpen={ADVANCED_URL_KEYS.some((key) => Boolean(values[key]))}
+        >
+          {ADVANCED_URL_KEYS.map(field)}
+        </SettingsAdvanced>
+      </Suspense>
     </>
   );
 }
@@ -576,16 +580,18 @@ export function WebAddressesCard() {
             </div>
           ))}
         </dl>
-        <SettingsAdvanced label={t("advancedAddresses")}>
-          <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
-            {ADVANCED_URL_KEYS.map((key) => (
-              <div key={key} className="contents">
-                <dt className="text-muted-foreground">{t(URL_LABELS[key][0])}</dt>
-                <dd className="-mt-2 truncate sm:mt-0">{data[key] || t("notSet")}</dd>
-              </div>
-            ))}
-          </dl>
-        </SettingsAdvanced>
+        <Suspense fallback={null}>
+          <SettingsAdvanced label={t("advancedAddresses")}>
+            <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
+              {ADVANCED_URL_KEYS.map((key) => (
+                <div key={key} className="contents">
+                  <dt className="text-muted-foreground">{t(URL_LABELS[key][0])}</dt>
+                  <dd className="-mt-2 truncate sm:mt-0">{data[key] || t("notSet")}</dd>
+                </div>
+              ))}
+            </dl>
+          </SettingsAdvanced>
+        </Suspense>
       </div>
     </SettingsCard>
   );

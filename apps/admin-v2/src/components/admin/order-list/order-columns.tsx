@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Archive, Check, CircleAlert, ExternalLink, Undo } from "lucide-react";
+import { Archive, CircleAlert, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { displayPhone } from "~/lib/phone-display";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -286,9 +286,9 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
     && getAdminOrderStatusOptions(order.status, order).some((option) => option.status === "confirmed" && option.block === null);
   const actions = [
     canConfirm
-      ? { label: t("nextStep.confirm"), icon: Check, onClick: () => handlers.onStatusUpdate(order, "confirmed") }
+      ? { label: t("nextStep.confirm"), onClick: () => handlers.onStatusUpdate(order, "confirmed") }
       : step && step !== "confirm"
-        ? { label: t(`nextStep.${step}`), icon: ExternalLink, onClick: open }
+        ? { label: t(`nextStep.${step}`), onClick: open }
         : null,
     !handlers.showArchived && handlers.orderActions.canDeleteOrders && !orderSkipReason(order, "archive")
       ? { label: t("archive"), icon: Archive, onClick: () => handlers.onArchive(order) }
@@ -298,7 +298,7 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
       : null,
   ].filter((action) => action !== null);
   // Every order has a menu: when nothing else is offered, it opens the order.
-  if (actions.length === 0) actions.push({ label: t("viewOrder"), icon: ExternalLink, onClick: open });
+  if (actions.length === 0) actions.push({ label: t("viewOrder"), onClick: open });
   return (
     <span data-part="actions" className="block">
       <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />
