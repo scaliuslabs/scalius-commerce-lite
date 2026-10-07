@@ -39,13 +39,13 @@ import {
   getLabelShortcutQuantity,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
-  MAX_LABEL_SKUS,
   resolveBarcodeSymbol,
   type BarcodeSymbol,
   type LabelContentOptions,
   type LabelPresetId,
   type LabelQuantityShortcut,
 } from "./barcode-label-model";
+import { MAX_LABEL_SKUS } from "./barcode-label-search";
 
 const PREFERENCE_KEY = "scalius:barcode-label-preferences:v1";
 const CONTENT_OPTIONS = ["showProduct", "showVariant", "showSku", "showPrice"] as const;

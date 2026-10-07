@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_LABEL_SKUS } from "~/components/admin/barcode-labels/barcode-label-model";
-import { validateBarcodeLabelSearch } from "~/components/admin/barcode-labels/barcode-label-search";
+import { MAX_LABEL_SKUS, validateBarcodeLabelSearch } from "~/components/admin/barcode-labels/barcode-label-search";
 
 describe("barcode label workspace entry points", () => {
   it("keeps exact saved SKU selection reload-safe, deduplicated, and bounded", () => {

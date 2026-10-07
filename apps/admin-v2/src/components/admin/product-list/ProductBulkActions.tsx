@@ -26,7 +26,7 @@ import {
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import { MAX_LABEL_SKUS } from "~/components/admin/barcode-labels/barcode-label-model";
+import { MAX_LABEL_SKUS } from "~/components/admin/barcode-labels/barcode-label-search";
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";

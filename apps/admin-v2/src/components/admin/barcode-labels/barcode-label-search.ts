@@ -1,4 +1,6 @@
-import { MAX_LABEL_SKUS } from "./barcode-label-model";
+// Route search validation runs in the dashboard entry: keep this file free of
+// the label model, which brings barcode validation with it.
+export const MAX_LABEL_SKUS = 150;
 
 export type BarcodeLabelSearch = {
   variants?: string;

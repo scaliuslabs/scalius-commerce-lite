@@ -139,7 +139,7 @@ export function PriceGridSheet({ open, onOpenChange, list, onSaved }: {
                 {t("gridDescription")} {t("pricesDescription", { currency: list.currencyCode })}
               </SheetDescription>
             </SheetHeader>
-            <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={t("close")} onClick={requestClose}>
+            <Button type="button" variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")} onClick={requestClose}>
               <X className="size-4" />
             </Button>
           </div>
@@ -162,13 +162,13 @@ export function PriceGridSheet({ open, onOpenChange, list, onSaved }: {
                 }}
               />
               <div className="relative">
-                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search aria-hidden="true" className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="search"
                   aria-label={t("searchPrices")}
                   placeholder={t("searchPrices")}
                   // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-                  className="pl-9"
+                  className="ps-9"
                   value={typed}
                   onChange={(event) => {
                     setTyped(event.target.value);
@@ -212,7 +212,7 @@ export function PriceGridSheet({ open, onOpenChange, list, onSaved }: {
           </div>
           <SheetFooter className="items-center">
             {dirty ? (
-              <p className={tooMany ? "mr-auto text-body text-destructive" : "mr-auto text-body text-muted-foreground"}>
+              <p className={tooMany ? "me-auto text-body text-destructive" : "me-auto text-body text-muted-foreground"}>
                 {tooMany ? t("tooManyChanges", { count: WRITE_MAX }) : t("changes", { count: formatNumber(changeCount) })}
               </p>
             ) : null}
