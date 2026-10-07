@@ -12,6 +12,7 @@ import {
   getPriceList,
   listPriceLists,
   listPriceListVariants,
+  priceListChoices,
   setPriceListPrices,
   updatePriceList,
 } from "@scalius/core/modules/price-lists";
@@ -78,6 +79,28 @@ app.openapi(createRoute({
     endsAt: scheduleInstant(endsAt) ?? null,
   });
   return created(c, { priceList: presentPriceList(priceList) });
+});
+
+const choicesSchema = z.object({
+  markets: z.array(z.object({ id: z.string(), name: z.string(), isBackup: z.boolean() })),
+  segments: z.array(z.object({ id: z.string(), name: z.string() })),
+}).openapi("PriceListChoices");
+
+// Registered before /{id}: "choices" is not a list id.
+app.openapi(createRoute({
+  operationId: "dashboard.price_lists.choices",
+  method: "get",
+  path: "/choices",
+  tags: [TAG],
+  summary: "Markets and customer segments a price list can price",
+  description: "Every market (the backup first) and every customer segment, by name: the choices for a new price list.",
+  responses: {
+    200: { description: "The choices", content: { "application/json": { schema: successEnvelope(choicesSchema) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  noStore(c);
+  return ok(c, await priceListChoices(c.get("db")));
 });
 
 app.openapi(createRoute({

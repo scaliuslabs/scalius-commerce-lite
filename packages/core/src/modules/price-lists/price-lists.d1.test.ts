@@ -20,6 +20,7 @@ import {
     getPriceList,
     listPriceLists,
     listPriceListVariants,
+    priceListChoices,
     setPriceListPrices,
     updatePriceList,
 } from "./price-lists.service";
@@ -53,7 +54,7 @@ const line = (variantId: string, quantity = 1) => ({
 });
 const currency = { currencyCode: "BDT", priceIncrementMinor: 100 };
 
-async function unitPrices(items: ReturnType<typeof line>[], market: Parameters<typeof validateStorefrontCartItems>[2]["market"]) {
+async function unitPrices(items: ReturnType<typeof line>[], market: NonNullable<Parameters<typeof validateStorefrontCartItems>[2]>["market"]) {
     const result = await validateStorefrontCartItems(db, items, { ...currency, market });
     expect(result.issues).toEqual([]);
     return result.items.map((item) => item.unitPriceMinor);
@@ -74,6 +75,11 @@ describe("price lists", () => {
         await expect(createPriceList(db, { name: "X", kind: "market", marketId: "mkt_missing" })).rejects.toThrow(/market/);
 
         const segment = await createCustomerSegment(db, { name: "Wholesale", definition: { conditions: [{ field: "tags", op: "has_any", tags: ["wholesale"] }] } }, null);
+        // What a new list can price: the backup market first, then the others; every segment.
+        expect(await priceListChoices(db)).toEqual({
+            markets: [{ id: "mkt_backup", name: expect.any(String), isBackup: true }, { id: "mkt_in", name: "India", isBackup: false }],
+            segments: [{ id: segment.id, name: "Wholesale" }],
+        });
         const trade = await createPriceList(db, { name: "Trade", kind: "segment", marketId: "mkt_backup", segmentId: segment.id });
         expect(trade).toMatchObject({ kind: "segment", marketIsBackup: true, segmentName: "Wholesale", status: "draft", state: "draft", revision: 1, currencyCode: "BDT", priceIncrementMinor: 100 });
         // The segment stays while a price list prices it.

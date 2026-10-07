@@ -180,6 +180,30 @@ export async function listPriceLists(db: Database, filter: { marketId?: string }
     return loadRecords(db, filter);
 }
 
+/**
+ * What a new list can price: every market (the backup first) and every
+ * customer segment, by name. The price list screens read this instead of the
+ * settings and customers endpoints, so product staff need no other access.
+ */
+export async function priceListChoices(db: Database): Promise<{
+    markets: Array<{ id: string; name: string; isBackup: boolean }>;
+    segments: Array<{ id: string; name: string }>;
+}> {
+    const [marketRows, segmentRows] = await Promise.all([
+        db.select({ id: markets.id, name: markets.name, isBackup: markets.isBackup })
+            .from(markets)
+            .orderBy(sql`${markets.isBackup} DESC`, asc(markets.name), asc(markets.id)),
+        db.select({ id: customerSegments.id, name: customerSegments.name })
+            .from(customerSegments)
+            .where(sql`${customerSegments.deletedAt} IS NULL`)
+            .orderBy(asc(customerSegments.name), asc(customerSegments.id)),
+    ]);
+    return {
+        markets: marketRows.map((row) => ({ ...row, isBackup: Boolean(row.isBackup) })),
+        segments: segmentRows,
+    };
+}
+
 export async function getPriceList(db: Database, id: string): Promise<PriceListRecord> {
     const [record] = await loadRecords(db, { id });
     if (!record) throw new NotFoundError("Price list not found");

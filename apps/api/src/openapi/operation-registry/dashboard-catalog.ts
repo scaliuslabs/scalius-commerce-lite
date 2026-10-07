@@ -82,6 +82,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   },
   "dashboard.product_variants.update": { revision: "required" },
   // Price lists (MARKETS-DESIGN D5): a market's, a segment's or a sale's fixed prices.
+  "dashboard.price_lists.choices": {},
   "dashboard.price_lists.create": {},
   "dashboard.price_lists.delete": { risk: "destructive", revision: "required" },
   "dashboard.price_lists.get": {},
