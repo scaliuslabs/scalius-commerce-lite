@@ -95,17 +95,6 @@ async function getOrderDetailsOnce(
             customerId: orders.customerId,
             ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
-            // The money chain (MARKETS-DESIGN D3): shown when the buyer paid in another currency.
-            shopCurrency: orders.shopCurrency,
-            fxRate: orders.fxRate,
-            fxSource: orders.fxSource,
-            fxAsOf: sql<number | null>`CAST(${orders.fxAsOf} AS INTEGER)`,
-            fxLockedUntil: sql<number | null>`CAST(${orders.fxLockedUntil} AS INTEGER)`,
-            subtotalShopMinor: orders.subtotalShopMinor,
-            shippingShopMinor: orders.shippingShopMinor,
-            discountShopMinor: orders.discountShopMinor,
-            taxShopMinor: orders.taxShopMinor,
-            totalShopMinor: orders.totalShopMinor,
             subtotalAmountMinor: orders.subtotalAmountMinor,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodName: orders.shippingMethodName,
@@ -127,35 +116,16 @@ async function getOrderDetailsOnce(
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             fulfillmentLocationId: orders.fulfillmentLocationId,
-            // Where the order's stock leaves from: its own location, else the default.
-            effectiveFulfillmentLocationId: sql<string | null>`COALESCE(${orders.fulfillmentLocationId}, (
-                SELECT ${inventoryLocations.id} FROM ${inventoryLocations}
-                WHERE ${inventoryLocations.isDefault} = 1 AND ${inventoryLocations.status} = 'active'
-            ))`,
-            effectiveFulfillmentLocationName: sql<string | null>`(
-                SELECT ${inventoryLocations.name} FROM ${inventoryLocations}
-                WHERE ${inventoryLocations.id} = COALESCE(${orders.fulfillmentLocationId}, (
-                    SELECT default_location.id FROM ${inventoryLocations} AS default_location
-                    WHERE default_location.is_default = 1 AND default_location.status = 'active'
-                ))
-            )`,
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...orderEditEvidenceSelection(),
             ...orderListFactsSelection(),
-            // The record the order is filed under: its title can differ from the order's own name.
-            recordId: customers.id,
-            recordName: customers.name,
-            recordPhone: customers.phone,
-            recordAccountClaimedAt: customers.accountClaimedAt,
-            recordOrigin: customers.origin,
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
-        .leftJoin(customers, eq(customers.id, orders.customerId))
         .where(eq(orders.id, id))
         .get();
 
-    const [orderRow, items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
+    const [order, items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
         orderRead,
         db
             .select({
@@ -211,15 +181,71 @@ async function getOrderDetailsOnce(
         listOrderPaymentSessionAttempts(db, id),
     ]);
 
-    if (!orderRow) return null;
+    if (!order) return null;
     // A second wave keeps the read within six simultaneous D1 connections.
-    const [fulfillments, conversation, appRiskRows, holdsByOrder] = await Promise.all([
-        listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces, orderRow.status),
+    const [orderExtras, fulfillments, conversation, appRiskRows, holdsByOrder] = await Promise.all([
+        // D1 refuses a result set over 100 columns, so the order row is read in two statements on its key.
+        db
+            .select({
+                // The money chain (MARKETS-DESIGN D3): shown when the buyer paid in another currency.
+                shopCurrency: orders.shopCurrency,
+                fxRate: orders.fxRate,
+                fxSource: orders.fxSource,
+                fxAsOf: sql<number | null>`CAST(${orders.fxAsOf} AS INTEGER)`,
+                fxLockedUntil: sql<number | null>`CAST(${orders.fxLockedUntil} AS INTEGER)`,
+                subtotalShopMinor: orders.subtotalShopMinor,
+                shippingShopMinor: orders.shippingShopMinor,
+                discountShopMinor: orders.discountShopMinor,
+                taxShopMinor: orders.taxShopMinor,
+                totalShopMinor: orders.totalShopMinor,
+                // Where the order's stock leaves from: its own location, else the default.
+                effectiveFulfillmentLocationId: sql<string | null>`COALESCE(${orders.fulfillmentLocationId}, (
+                    SELECT ${inventoryLocations.id} FROM ${inventoryLocations}
+                    WHERE ${inventoryLocations.isDefault} = 1 AND ${inventoryLocations.status} = 'active'
+                ))`,
+                effectiveFulfillmentLocationName: sql<string | null>`(
+                    SELECT ${inventoryLocations.name} FROM ${inventoryLocations}
+                    WHERE ${inventoryLocations.id} = COALESCE(${orders.fulfillmentLocationId}, (
+                        SELECT default_location.id FROM ${inventoryLocations} AS default_location
+                        WHERE default_location.is_default = 1 AND default_location.status = 'active'
+                    ))
+                )`,
+                // The record the order is filed under: its title can differ from the order's own name.
+                recordId: customers.id,
+                recordName: customers.name,
+                recordPhone: customers.phone,
+                recordAccountClaimedAt: customers.accountClaimedAt,
+                recordOrigin: customers.origin,
+            })
+            .from(orders)
+            .leftJoin(customers, eq(customers.id, orders.customerId))
+            .where(eq(orders.id, id))
+            .get(),
+        listAdminOrderFulfilments(db, id, order.currencyDecimalPlaces, order.status),
         findOrderConversationForStaff(db, id),
         selectOrderAppFactRows(db, [id], ["app_risk"]).all() as Promise<OrderAppFactRow[]>,
         listOrderHolds(db, [id]),
     ]);
-    const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;
+    if (!orderExtras) return null;
+    const {
+        recordId,
+        recordName,
+        recordPhone,
+        recordAccountClaimedAt,
+        recordOrigin,
+        effectiveFulfillmentLocationId,
+        effectiveFulfillmentLocationName,
+        shopCurrency,
+        fxRate,
+        fxSource,
+        fxAsOf,
+        fxLockedUntil,
+        subtotalShopMinor,
+        shippingShopMinor,
+        discountShopMinor,
+        taxShopMinor,
+        totalShopMinor,
+    } = orderExtras;
     const customerRecord = recordId && recordName !== null && recordPhone !== null
         ? { id: recordId, name: recordName, phone: recordPhone, accountClaimedAt: recordAccountClaimedAt, origin: recordOrigin }
         : undefined;
@@ -269,18 +295,6 @@ async function getOrderDetailsOnce(
         codDeliveryAttempts: _codDeliveryAttempts,
         returnedValueMinor: _returnedValueMinor,
         refundedMinor: _refundedMinor,
-        effectiveFulfillmentLocationId,
-        effectiveFulfillmentLocationName,
-        shopCurrency,
-        fxRate,
-        fxSource,
-        fxAsOf,
-        fxLockedUntil,
-        subtotalShopMinor,
-        shippingShopMinor,
-        discountShopMinor,
-        taxShopMinor,
-        totalShopMinor,
         ...publicOrder
     } = omitOrderEditEvidence(order);
     const shopAmount = (minor: number) => fromMinor(minor, getDecimalPlaces(shopCurrency));
