@@ -119,15 +119,15 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
   const change = (next: PricePair) => {
     setPair(next);
     const out = storedFromPair(next, decimalPlaces);
-    const set = <K extends "price" | "discountType" | "discountPercentage" | "discountAmount">(name: K, value: ProductFormValues[K]) =>
-      form.setValue(name, value, { shouldDirty: true, shouldValidate: Boolean(form.getFieldState(name).error) });
-    set("price", out.price);
+    const options = (name: "price" | "discountType" | "discountPercentage" | "discountAmount") =>
+      ({ shouldDirty: true, shouldValidate: Boolean(form.getFieldState(name).error) });
+    form.setValue("price", out.price, options("price"));
     // A product with no discount keeps its empty discount fields as saved.
     const touchesDiscount = out.discounted || saleOf(price, discountType, discountPercentage, discountAmount) !== null;
     if (touchesDiscount) {
-      set("discountType", out.discounted ? "flat" : "percentage");
-      set("discountPercentage", 0);
-      set("discountAmount", out.discountAmount);
+      form.setValue("discountType", out.discounted ? "flat" : "percentage", options("discountType"));
+      form.setValue("discountPercentage", 0, options("discountPercentage"));
+      form.setValue("discountAmount", out.discountAmount, options("discountAmount"));
     }
     form.setValue("compareAtProblem", out.problem, { shouldValidate: Boolean(form.getFieldState("compareAtProblem").error) });
     setSyncedKey(touchesDiscount

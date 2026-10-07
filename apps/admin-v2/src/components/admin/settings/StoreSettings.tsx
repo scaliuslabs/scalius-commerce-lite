@@ -531,7 +531,7 @@ function WebAddressFields() {
       {MAIN_URL_KEYS.map(field)}
       {/* A newcomer never needs these: they stay closed, and open by themselves when one is wrong. */}
       <SettingsAdvanced
-        label={common("advanced")}
+        label={t("advancedAddresses")}
         forceOpen={ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
         defaultOpen={ADVANCED_URL_KEYS.some((key) => Boolean(values[key]))}
       >
@@ -576,7 +576,7 @@ export function WebAddressesCard() {
             </div>
           ))}
         </dl>
-        <SettingsAdvanced label={common("advanced")}>
+        <SettingsAdvanced label={t("advancedAddresses")}>
           <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
             {ADVANCED_URL_KEYS.map((key) => (
               <div key={key} className="contents">

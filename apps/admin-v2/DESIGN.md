@@ -40,6 +40,10 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 - Wrap SKUs, order IDs, phone numbers and tracking codes in `<code>` inside a sentence (`code`, `kbd` and `samp` render at 0.9em). A standalone mono value, such as a SKU column, uses `font-mono` at body size.
 - Format money with `useCurrency().fmt()`: store currency symbol first, digits grouped as the store's country groups them (lakhs in Bangladesh). Use `tabular-nums` outside tables.
 - Format numbers and dates with `formatNumber` and `formatDateTime` from `~/i18n` (`@scalius/shared/locale-format`: Intl for the dashboard language in the store's country, store time), lists with `formatList(items, getLocale())` (`@scalius/shared/locale-words`), and weights with `formatWeight` (`product-form/variants/weight-format.ts`). Never call `Intl` formatters or `toLocaleString` yourself (`scripts/check-source-policies.mjs`).
+- Write counts with the plural syntax in the catalog: `{count, plural, one {# variant} other {# variants}}` (CLDR rules for the dashboard language; `=0 {…}` for an exact number). Never write "1 variants". Bangla needs no branches.
+- Write when something happened with `eventTime()` (`~/lib/event-time`, the rule `ListDate` uses): "Just now", "41 min ago", "Today at 3:42 PM", "Oct 3 at 3:42 PM", "Oct 3, 2025". Write a date field with `DateInput`, its month as a word ("Oct 7, 2026"). Never a numeric date ("07/10/2026"), and never `<input type="date">`.
+- Write a stored phone number with `displayPhone()` (`~/lib/phone-display`): the store country's national format ("01712-345678" in Bangladesh), another country's with its code set apart.
+- Order and payment status words are the storefront's (`status-vocabulary.test.ts` checks them). An unpaid cash-on-delivery order is "Due on delivery".
 - Bangla (`<html lang="bn">`, set before paint) switches the same classes to the Bangla sizes and loads Noto Sans Bengali. Controls size to their line, so vowel signs never clip, and buttons grow instead of truncating. Truncate only with CSS (`truncate`, `line-clamp-*`), never by slicing strings. Keep Latin digits in inputs, SKUs, phones and IDs.
 
 ## Rules
@@ -80,7 +84,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 | Status | `Badge`. Use `default` (strong) only for counts, and the tone variants per the status table below. |
 | Page message | `Alert`, with a tone variant. |
 | List | `Table` inside a `Card`, with `Tabs` above. Right-align numeric columns (`data-numeric`). |
-| Fields | `Input`, `Textarea`, `SearchableSelect`, `Checkbox`, `RadioGroup`, `Switch`, with `Label` and `Form*`. |
+| Fields | `Input`, `Textarea`, `SearchableSelect`, `DateInput`, `Checkbox`, `RadioGroup`, `Switch`, with `Label` and `Form*`. |
 | Small edit or confirmation | `Dialog`: a bottom sheet on phones, centred from `sm`. |
 | Destructive or irreversible confirmation | `AlertDialog`: no outside-click dismiss. The title names the object: "Delete 'Cotton panjabi'?". |
 | In-context preview | `Sheet`. |
@@ -108,7 +112,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 ### Choosing one option
 
-- Use `SearchableSelect` for fixed and data-backed lists. Pass `options` for a loaded list, or `load` and `queryKey` for a large list (it searches on the server, debounced, and pages). The search never goes in the page URL.
+- Use `SearchableSelect` for fixed and data-backed lists. Pass `options` for a loaded list, or `load` and `queryKey` for a large list (it searches on the server, debounced, and pages). The search never goes in the page URL. A fixed list shows its search box only from 8 options (`SEARCH_MIN_OPTIONS`); a status or yes/no list is read, not searched.
 - Use `LocationPicker` (`components/admin/location/`) wherever the dashboard picks a delivery address: City, then Thana, then Area, each filtered by the level above.
 - Never use `NativeSelect`, Radix Select or a raw `<select>` (lint).
 

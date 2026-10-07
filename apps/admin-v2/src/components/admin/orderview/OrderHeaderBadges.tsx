@@ -17,7 +17,7 @@ import type { Order } from "./types";
  * Archived, then an unread reply (it links to the Messages card lower down).
  */
 export function OrderHeaderBadges({ order }: {
-  order: Pick<Order, "status" | "paymentStatus" | "fulfillmentStatus" | "archivedAt" | "conversation">;
+  order: Pick<Order, "status" | "paymentStatus" | "paymentMethod" | "fulfillmentStatus" | "archivedAt" | "conversation">;
 }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
