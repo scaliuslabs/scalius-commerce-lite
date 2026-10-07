@@ -113,7 +113,8 @@ describe("storefront private cache policy", () => {
     vi.mocked(getHomepageData).mockResolvedValue({ sections: { lists: [], media: [] } } as never);
     const plain = await createTestApp().request("/api/v1/storefront/homepage");
     expect(plain.status).toBe(200);
-    expect(getHomepageData).toHaveBeenCalledWith({}, { renderApps: expect.any(Function) });
+    // The root read carries no market pricing (MARKETS-DESIGN D5).
+    expect(getHomepageData).toHaveBeenCalledWith({}, { renderApps: expect.any(Function), pricing: null });
 
     // Named reads (or any other query) never reach the database or the cache.
     vi.mocked(getHomepageData).mockClear();
@@ -182,7 +183,7 @@ describe("storefront private cache policy", () => {
     const published = await createTestApp().request("/api/v1/storefront/landing/eid-offers");
     expect(published.status).toBe(200);
     expect(((await published.json()) as { data: unknown }).data).toEqual({ title: "Eid offers", description: "", sections: { lists: [], media: [] } });
-    expect(getLandingPageData).toHaveBeenCalledWith({}, "eid-offers", { renderApps: expect.any(Function) });
+    expect(getLandingPageData).toHaveBeenCalledWith({}, "eid-offers", { renderApps: expect.any(Function), pricing: null });
     vi.mocked(getLandingPageData).mockResolvedValueOnce(null);
     expect((await createTestApp().request("/api/v1/storefront/landing/missing")).status).toBe(404);
     vi.mocked(getLandingPageData).mockClear();
