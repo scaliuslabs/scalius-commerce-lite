@@ -917,8 +917,10 @@ each type, a market-specific one and localized handles.
 publish, unpublish, make default and remove, and a machine translation card.
 Content → Translate & adapt: language and market, resource type, search, a
 status per item and a side-by-side editor with Outdated markers (loaded on
-first use). Product, category and collection pages have a Translations card.
-Copy is in English and Bangla.
+first use). Product, category and collection pages have a Translations card
+with the rich text editor; Translate & adapt edits HTML fields as HTML, so
+its screen does not load the rich text editor. Copy is in English and
+Bangla.
 
 **Machine translation.** The `translation` provider port (`translate`,
 optional `testConnection`) lets an app translate a resource's fields. The
