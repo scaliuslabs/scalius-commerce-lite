@@ -2,6 +2,7 @@
 // Zod schemas for product create/update operations.
 // Imported by both admin API routes and service methods.
 
+import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
 import { z } from "zod";
 import {
     isValidResourceCanonicalPath,
@@ -126,6 +127,11 @@ const productAttributeSchema = z.array(
     })
     .optional();
 
+/** Sales channel ids (`sc_online_store`, an app's `<plugin id>:<id>`), each once. */
+export const productSalesChannelIdsSchema = z.array(
+    z.string().max(SALES_CHANNEL_ID_MAX_LENGTH).refine(isSalesChannelId, "Use a sales channel id."),
+).max(50).refine((ids) => new Set(ids).size === ids.length, "Name each sales channel once.");
+
 /** Shared additional info schema used in create and update */
 const productAdditionalInfoSchema = z.array(
     z.object({
@@ -158,7 +164,6 @@ const productBaseSchema = z.object({
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
-    excludeFromProductFeed: z.boolean().optional().default(false),
     productCondition: productConditionSchema.nullable(),
     slug: z
         .string()
@@ -236,6 +241,8 @@ export const createProductSchema = productBaseSchema
         optionMatrix: createProductOptionMatrixSchema.optional(),
         defaultSku: defaultSkuInputSchema.optional()
             .describe("Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."),
+        salesChannelIds: productSalesChannelIdsSchema.optional()
+            .describe("The sales channels to publish the new product to. Omit to publish it to every channel."),
     })
     .superRefine(requireCanonicalProductHandle)
     .superRefine(requireSellablePrice)

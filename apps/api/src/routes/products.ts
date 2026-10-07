@@ -1,5 +1,6 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
+import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
@@ -122,6 +123,9 @@ const productFeedSchema = z.object({
   ids: z.string().optional().openapi({
     description: "Comma-separated product IDs, product handles, variant IDs, or SKUs",
   }),
+  channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
+    description: "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
+  }),
 }).superRefine(validatePriceRange);
 
 const productSitemapSchema = z.object({
@@ -221,7 +225,6 @@ const storefrontFeedProductSchema = z.object({
   discountedPrice: z.number(),
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
-  excludeFromProductFeed: z.boolean(),
   /** A buyer input is required: an agent (variant + quantity) cart can't buy it; send the buyer to the product page. */
   requiresCustomization: z.boolean(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),

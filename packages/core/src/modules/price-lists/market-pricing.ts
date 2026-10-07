@@ -36,7 +36,7 @@ import { NotFoundError } from "@scalius/core/errors";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { storePriceIncrementSql } from "../markets";
-import { effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
+import { channelAvailableStockSql, effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../settings";
 
 /** How one market prices for an anonymous buyer now. */
@@ -419,7 +419,7 @@ async function readCardSkus(db: Database, marketId: string, productIds: readonly
         productId: productVariants.productId,
         priceMinor: productVariants.priceMinor,
         effectiveMinor: effective,
-        available: sql<number>`CASE WHEN ${productVariants.trackInventory} = 0 OR (${productVariants.stock} - ${productVariants.reservedStock}) > 0 THEN 1 ELSE 0 END`,
+        available: sql<number>`CASE WHEN ${productVariants.trackInventory} = 0 OR ${channelAvailableStockSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}`, reservedStock: sql`${productVariants.reservedStock}` })} > 0 THEN 1 ELSE 0 END`,
         listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { marketId }),
     })
         .from(productVariants)

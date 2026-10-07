@@ -36,6 +36,18 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  // Settings → Sales channels (MARKETS-DESIGN D6). Product staff read the list
+  // (the product page's Publishing card) and an app's channel products.
+  "/api/v1/admin/settings/sales-channels": {
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.PRODUCTS_VIEW] },
+  },
+  "/api/v1/admin/settings/sales-channels/*": {
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.PRODUCTS_VIEW] },
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/sales-channels/*/products": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
   "/api/v1/admin/taxes": {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
   },

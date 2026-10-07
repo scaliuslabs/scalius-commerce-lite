@@ -24,6 +24,9 @@ function productParts(): string[] {
     `/api/v1/products?ids=p_linen,p_silk,p_bag`,
     "/api/v1/products/search?search=linen",
     "/api/v1/products/feed",
+    // Each catalogue channel's feed (MARKETS-DESIGN D6): its publications and locations.
+    "/api/v1/products/feed?channel=sc_meta",
+    "/api/v1/products/feed?channel=sc_agents&ids=p_linen,p_bag,p_shoe",
     "/api/v1/products/sitemap",
     "/api/v1/products/recommendations?limit=8",
     "/api/v1/products/recommendations?productIds=p_linen&limit=8",
@@ -169,6 +172,7 @@ export function dvcPageCatalogue(): DvcPage[] {
     { name: "cart-shell", parts: [...SHELL, ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities"] },
     { name: "sitemap-products", parts: ["/api/v1/products/sitemap"] },
     { name: "feed", parts: ["/api/v1/products/feed", "/api/v1/seo"] },
+    { name: "feed:meta", parts: ["/api/v1/products/feed?channel=sc_meta", "/api/v1/seo"] },
   ];
   for (const slug of DVC_IDS.productSlugs.slice(0, 8)) {
     pages.push({ name: `product:${slug}`, parts: [...SHELL, `/api/v1/products/${slug}`, ...COMMERCE] });

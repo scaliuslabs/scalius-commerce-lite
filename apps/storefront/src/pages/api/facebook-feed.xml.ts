@@ -7,6 +7,7 @@
 
 import type { APIRoute, APIContext } from "astro";
 import { getFeedProducts } from "@/lib/api/products";
+import { GOOGLE_CHANNEL_ID, META_CHANNEL_ID, type CatalogChannelId } from "@scalius/shared/sales-channels";
 import type { Product } from "@/lib/api/types";
 import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
 import type { ShippingMethod } from "@/lib/api/types";
@@ -281,6 +282,7 @@ type FeedItemWindowResult =
   | { status: "unavailable" };
 
 async function readFeedItemWindow({
+  channel,
   cursor,
   limit,
   baseUrl,
@@ -289,6 +291,8 @@ async function readFeedItemWindow({
   feedsPolicy,
   feedVariantStrategy,
 }: {
+  /** The sales channel the feed serves (MARKETS-DESIGN D6). */
+  channel: CatalogChannelId;
   cursor?: string;
   limit: number;
   baseUrl: string;
@@ -303,6 +307,7 @@ async function readFeedItemWindow({
 
   do {
     const response = await getFeedProducts({
+      channel,
       ...(nextCursor ? { cursor: nextCursor } : {}),
       limit: Math.min(API_FEED_PAGE_SIZE, remainingProducts),
     });
@@ -397,6 +402,8 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
       const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, layoutData.currency?.priceIncrementMinor);
 
       const feedWindow = await readFeedItemWindow({
+        // Each feed lists what its own sales channel publishes.
+        channel: format === "meta" ? META_CHANNEL_ID : GOOGLE_CHANNEL_ID,
         cursor,
         limit,
         baseUrl,

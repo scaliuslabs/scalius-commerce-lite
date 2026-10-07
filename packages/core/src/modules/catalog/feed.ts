@@ -2,14 +2,17 @@
 import {
   buildBuyerCatalogPricingProjection,
   catalogDiscountedPrice,
+  channelOnHandSql,
   effectiveLowStockThresholdSql,
   loadProductMediaProjections,
   loadProductOptions,
   loadVariantSelectedOptions,
   normalizeDefaultSkuOptions,
   presentCatalogPrice,
+  productPublishedToChannelSql,
   type ProductMediaProjection,
   publicProductHasBuyerResolvableSku,
+  salesChannelActiveSql,
   publicProductHasPrimaryDiscoveryImage,
   resolveSkuImageRepresentation,
   type StorefrontFeedProduct,
@@ -29,6 +32,7 @@ import {
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
+import { GOOGLE_CHANNEL_ID, ONLINE_STORE_CHANNEL_ID, type CatalogChannelId } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
@@ -109,7 +113,6 @@ type StorefrontFeedProductListRow = {
     discountAmountMinor: number;
     freeDelivery: boolean;
     categoryId: string | null;
-    excludeFromProductFeed: boolean;
     productCondition: "new" | "refurbished" | "used" | null;
     createdAt: number;
     updatedAt: number;
@@ -272,6 +275,7 @@ async function readStorefrontFeedVariantMap(
     mediaMapPromise: Promise<Map<string, ProductMediaProjection[]>> =
         loadProductMediaProjections(db, productIds),
     marketPricing: FeedMarketPricing | null = null,
+    channel: CatalogChannelId = GOOGLE_CHANNEL_ID,
 ): Promise<StorefrontFeedVariantMap> {
     if (productIds.length === 0) {
         return { variants: new Map(), productsWithNonPhysicalSkus: new Set(), productPrices: new Map() };
@@ -298,7 +302,8 @@ async function readStorefrontFeedVariantMap(
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
                 priceMinor: productVariants.priceMinor,
-                stock: productVariants.stock,
+                // The units the feed's channel sells (its linked locations' on-hand).
+                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }, channel).mapWith(Number),
                 reservedStock: productVariants.reservedStock,
                 lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
@@ -383,6 +388,7 @@ export async function getStorefrontFeedProducts(
         limit = 100,
         sort = "newest",
         cursor,
+        channel = GOOGLE_CHANNEL_ID,
     } = params;
     if (page !== 1) {
         throw new ValidationError("Product feed page pagination is retired. Use the cursor returned by the previous response.");
@@ -418,7 +424,11 @@ export async function getStorefrontFeedProducts(
         includeLookupHandles: true,
         includeVariantLookups: true,
     }, buildBuyerCatalogPricingProjection(db)));
-    conditions.push(eq(products.excludeFromProductFeed, false));
+    // The feed's own channel publication (the online store's is in the public
+    // conditions above: a row links to the product page), while the channel
+    // is on (an uncorrelated check, decided once).
+    conditions.push(productPublishedToChannelSql(PRODUCT_ID_REF, channel));
+    conditions.push(salesChannelActiveSql(channel));
     conditions.push(feedSellsPhysicalGoods());
     conditions.push(publicProductHasPrimaryDiscoveryImage());
 
@@ -436,7 +446,6 @@ export async function getStorefrontFeedProducts(
             discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
-            excludeFromProductFeed: products.excludeFromProductFeed,
             customizationSchema: products.customizationSchema,
             // The published brand record only; a LEFT JOIN on its key, so the
             // page keeps its newest-first index seek.
@@ -467,6 +476,7 @@ export async function getStorefrontFeedProducts(
     const mediaMapPromise = loadProductMediaProjections(db, productIds);
     const pagePricing = buildBuyerCatalogPricingProjection(db, {
         productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)}))`,
+        channelId: channel,
     });
 
     const [mediaMap, categoriesData, attributeMap, feedVariants, optionMap, pricingRows] = await Promise.all([
@@ -490,7 +500,7 @@ export async function getStorefrontFeedProducts(
                 productDiscounts: new Map(productsList.map((product) => [product.id, product])),
                 incrementMinor: storeCurrencyFromSql(productsList[0]?.storeCurrencyCode, productsList[0]?.storePriceIncrementMinor).priceIncrementMinor,
             }
-            : null),
+            : null, channel),
         loadProductOptions(db, productIds),
         productIds.length > 0
             ? db.select({
@@ -540,7 +550,6 @@ export async function getStorefrontFeedProducts(
             discountedPrice: catalogDiscountedPrice(product, storeCurrency.code, storeCurrency.priceIncrementMinor),
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
-            excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
             // Agents and the UCP catalogue can't send buyer inputs: they skip
             // products that require one (an unreadable schema counts too).
             requiresCustomization: requiresBuyerInput(customizationSchema),
@@ -577,10 +586,12 @@ export async function getStorefrontFeedProducts(
 export async function getEligibleStorefrontFeedProductById(
     db: Database,
     productId: string,
+    channel: CatalogChannelId = GOOGLE_CHANNEL_ID,
 ): Promise<StorefrontFeedProduct | null> {
     const result = await getStorefrontFeedProducts(db, {
         ids: productId,
         limit: 10,
+        channel,
     });
     return (
         result.products.find((product) => product.id === productId) ?? null
@@ -591,7 +602,10 @@ export interface ProductFeedProjectionDiagnostic {
     productId: string;
     isActive: boolean;
     isDeleted: boolean;
-    excludeFromProductFeed: boolean;
+    /** Published to the online store, where a feed row links. */
+    publishedToOnlineStore: boolean;
+    /** Published to the feed's channel, and the channel is on. */
+    publishedToChannel: boolean;
     /** False for gift cards and products with only service or digital SKUs. */
     sellsPhysicalGoods: boolean;
     hasBuyerResolvableSku: boolean;
@@ -609,12 +623,14 @@ export async function getFeedProjectionDiagnosticById(
     db: Database,
     productId: string,
     normalizedSku = "",
+    channel: CatalogChannelId = GOOGLE_CHANNEL_ID,
 ): Promise<ProductFeedProjectionDiagnostic | null> {
     const product = await db
         .select({
             productId: products.id,
             isActive: products.isActive,
-            excludeFromProductFeed: products.excludeFromProductFeed,
+            publishedToOnlineStore: productPublishedToChannelSql(PRODUCT_ID_REF, ONLINE_STORE_CHANNEL_ID),
+            publishedToChannel: sql<boolean>`(${productPublishedToChannelSql(PRODUCT_ID_REF, channel)} AND ${salesChannelActiveSql(channel)})`,
             isDeleted: sql<boolean>`${products.deletedAt} IS NOT NULL`,
             sellsPhysicalGoods: feedSellsPhysicalGoods(),
             hasBuyerResolvableSku: publicProductHasBuyerResolvableSku(PRODUCT_ID_REF),
@@ -636,7 +652,8 @@ export async function getFeedProjectionDiagnosticById(
             productId: product.productId,
             isActive: Boolean(product.isActive),
             isDeleted: Boolean(product.isDeleted),
-            excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            publishedToOnlineStore: Boolean(product.publishedToOnlineStore),
+            publishedToChannel: Boolean(product.publishedToChannel),
             sellsPhysicalGoods: Boolean(product.sellsPhysicalGoods),
             hasBuyerResolvableSku: Boolean(product.hasBuyerResolvableSku),
             hasPrimaryDiscoveryImage: Boolean(product.hasPrimaryDiscoveryImage),

@@ -545,7 +545,7 @@ describe("UCP catalog mapping", () => {
       pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
     });
     mocks.getProductBySlug.mockResolvedValueOnce({
-      product: { ...product, excludeFromProductFeed: true },
+      product,
       category: product.category,
       media: [],
       variants: product.variants,
@@ -584,18 +584,6 @@ describe("UCP catalog mapping", () => {
         },
       ],
     });
-  });
-
-  it("filters any feed-excluded row before mapping lookup products", async () => {
-    mocks.getFeedProducts.mockResolvedValueOnce({
-      data: [{ ...productFixture(), excludeFromProductFeed: true } as Product],
-      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
-    });
-
-    const result = await lookupCatalog({ ids: ["khaki-shoes"] }, context);
-
-    expect(result.status).toBe(200);
-    expect(result.body.products).toEqual([]);
   });
 
   it("returns full product detail while ordering the requested variant first", async () => {
@@ -697,7 +685,7 @@ describe("UCP catalog mapping", () => {
       pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
     });
     mocks.getProductBySlug.mockResolvedValueOnce({
-      product: { ...product, excludeFromProductFeed: true },
+      product,
       category: product.category,
       media: [],
       variants: product.variants,
@@ -708,22 +696,6 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
-    expect(result.body.messages?.[0]).toMatchObject({
-      type: "error",
-      code: "not_found",
-      severity: "unrecoverable",
-    });
-  });
-
-  it("filters any feed-excluded row before mapping product detail", async () => {
-    mocks.getFeedProducts.mockResolvedValueOnce({
-      data: [{ ...productFixture(), excludeFromProductFeed: true } as Product],
-      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
-    });
-
-    const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
-
-    expect(result.status).toBe(200);
     expect(result.body.messages?.[0]).toMatchObject({
       type: "error",
       code: "not_found",

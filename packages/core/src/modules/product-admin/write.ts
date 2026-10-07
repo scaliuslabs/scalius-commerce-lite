@@ -49,6 +49,7 @@ import {
   rethrowGiftCardProductRuleViolation,
   STOCK_CHANGED_MESSAGE,
   toStoredCustomizationSchema,
+  productChannelChoiceStatement,
 } from "../products";
 import { storeCurrencyCodeSql, toStoreMinor } from "../settings";
 import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
@@ -494,7 +495,6 @@ export async function createProduct(
             canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
-            excludeFromProductFeed: data.excludeFromProductFeed ?? false,
             productCondition: data.productCondition,
             isActive: data.isActive,
             discountType: data.discountType || "percentage",
@@ -665,6 +665,8 @@ export async function createProduct(
     const insertWithSlug = async (slug: string) => {
         await db.batch([
             productInsert(slug),
+            // The insert published it to every channel (trigger); the form's choice narrows that.
+            ...(data.salesChannelIds ? [productChannelChoiceStatement(db, productId, data.salesChannelIds)] : []),
             ...batchOps,
             buildGiftCardProductRulesGuard(db, productId),
             ...catalogProjectionRefreshStatements(db, [productId]),
@@ -749,7 +751,6 @@ async function unchangedProductSaveRevision(
             canonicalPath: products.canonicalPath,
             noIndex: products.noIndex,
             excludeFromSitemap: products.excludeFromSitemap,
-            excludeFromProductFeed: products.excludeFromProductFeed,
             productCondition: products.productCondition,
             isActive: products.isActive,
             discountType: products.discountType,
@@ -801,7 +802,6 @@ async function unchangedProductSaveRevision(
         canonicalPath: data.canonicalPath ?? null,
         noIndex: data.noIndex ?? false,
         excludeFromSitemap: data.excludeFromSitemap ?? false,
-        excludeFromProductFeed: data.excludeFromProductFeed ?? false,
         productCondition: data.productCondition,
         isActive: data.isActive,
         discountType,
@@ -1186,7 +1186,6 @@ export async function updateProduct(
                 canonicalPath: data.canonicalPath ?? null,
                 noIndex: data.noIndex ?? false,
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
-                excludeFromProductFeed: data.excludeFromProductFeed ?? false,
                 productCondition: data.productCondition,
                 isActive: data.isActive,
                 discountType: data.discountType || "percentage",
@@ -1449,7 +1448,8 @@ export async function duplicateProduct(
         canonicalPath: null,
         noIndex: source.noIndex,
         excludeFromSitemap: source.excludeFromSitemap,
-        excludeFromProductFeed: source.excludeFromProductFeed,
+        // A copy is published where its source is.
+        salesChannelIds: source.salesChannelIds,
         productCondition: source.productCondition ?? DEFAULT_PRODUCT_CONDITION,
         slug,
         media,

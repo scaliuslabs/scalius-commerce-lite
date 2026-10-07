@@ -6,6 +6,7 @@ import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import {
     isFulfillmentKind,
     resolveLineFulfillmentType,
@@ -19,7 +20,9 @@ import {
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
 import {
+  channelOnHandSql,
   loadProductMediaProjections,
+  productPublishedToChannelSql,
   type ProductBundleRow,
   productBundleTiersByProduct,
   type ProductMediaProjection,
@@ -315,9 +318,14 @@ function addIssue(
     });
 }
 
+/**
+ * The cart's products, only those published to the order's sales channel
+ * (MARKETS-DESIGN D6): a product the channel does not sell is unavailable.
+ */
 export function selectStorefrontCartProductRows(
     db: Database,
     productIds: readonly string[],
+    salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
 ) {
     const productIdSet = JSON.stringify([...new Set(productIds)]);
     return db
@@ -344,14 +352,17 @@ export function selectStorefrontCartProductRows(
                 )`,
                 eq(products.isActive, true),
                 isNull(products.deletedAt),
+                productPublishedToChannelSql(sql`${products.id}`, salesChannelId),
             ),
         );
 }
 
+/** The cart's SKUs; `stock` is what the order's channel sells (its linked locations' on-hand). */
 export function selectStorefrontCartVariantRows(
     db: Database,
     productIds: readonly string[],
     variantIds: readonly string[],
+    salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
 ) {
     const productIdSet = JSON.stringify([...new Set(productIds)]);
     const variantIdSet = JSON.stringify([...new Set(variantIds)]);
@@ -361,7 +372,7 @@ export function selectStorefrontCartVariantRows(
             productId: productVariants.productId,
             optionCombinationKey: productVariants.optionCombinationKey,
             optionLabel: variantOptionLabelSql(productVariants.id),
-            stock: productVariants.stock,
+            stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }, salesChannelId).mapWith(Number),
             reservedStock: productVariants.reservedStock,
             preorderStock: productVariants.preorderStock,
             isDefault: productVariants.isDefault,
@@ -820,6 +831,8 @@ export async function validateStorefrontCartItems(
         priceIncrementMinor?: number | null;
         /** Which market prices the cart (MARKETS-DESIGN D5); absent: the backup market's prices. */
         market?: CheckoutMarketSignals;
+        /** The sales channel the cart sells from (MARKETS-DESIGN D6); absent: the online store. */
+        salesChannelId?: string;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -829,8 +842,8 @@ export async function validateStorefrontCartItems(
     const productIds = [...new Set(items.map((item) => item.productId))];
     const variantIds = [...new Set(items.map((item) => item.variantId))];
     const [productRows, variantRows, bundleRows] = await Promise.all([
-        selectStorefrontCartProductRows(db, productIds),
-        selectStorefrontCartVariantRows(db, productIds, variantIds),
+        selectStorefrontCartProductRows(db, productIds, options.salesChannelId),
+        selectStorefrontCartVariantRows(db, productIds, variantIds, options.salesChannelId),
         selectActiveProductBundleRows(db, productIds),
     ]);
     // Media is presentation snapshot data, so keep it outside catalog authority

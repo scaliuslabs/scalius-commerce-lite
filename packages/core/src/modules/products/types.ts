@@ -1,5 +1,6 @@
 // src/modules/products/products.types.ts
 // Zod schemas and TypeScript interfaces shared across product modules.
+import type { CatalogChannelId } from "@scalius/shared/sales-channels";
 import { z } from "zod";
 import type { BuyerPriceRange } from "./buyer-projection";
 import type { Product, ProductVariant } from "@scalius/database/schema";
@@ -119,6 +120,8 @@ export interface ProductWithDetails extends Omit<CatalogMoneyView<Product>, "cus
     media: ProductMediaProjection[];
     additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
     attributes: Array<{ attributeId: string; value: string }>;
+    /** The sales channels the product is published to, sorted (MARKETS-DESIGN D6). */
+    salesChannelIds: string[];
 }
 
 export interface ProductListItem {
@@ -147,6 +150,8 @@ export interface ProductListItem {
     mediaCount: number;
     primaryImage: string | null;
     sku?: string;
+    /** The sales channels the product is published to, sorted (MARKETS-DESIGN D6). */
+    salesChannelIds: string[];
 }
 
 export interface StorefrontProductFilterInput {
@@ -203,7 +208,15 @@ export interface CatalogFacetFilter {
 export type StorefrontFeedProductFilterInput = Pick<
     StorefrontProductFilterInput,
     "category" | "search" | "page" | "limit" | "sort" | "minPrice" | "maxPrice" | "ids"
-> & { cursor?: string };
+> & {
+    cursor?: string;
+    /**
+     * The catalogue channel the read serves (sales channels, 0122): the Google
+     * feed (default), the Meta feed or AI agents (UCP). A row needs the
+     * product published to it and to the online store (its page).
+     */
+    channel?: CatalogChannelId;
+};
 
 export interface StorefrontFeedPagination {
     limit: number;
@@ -266,7 +279,6 @@ export interface StorefrontFeedProduct {
     discountedPrice: number;
     freeDelivery: boolean;
     categoryId: string | null;
-    excludeFromProductFeed: boolean;
     /** A buyer input is required: agent carts (variant + quantity only) can't buy it. */
     requiresCustomization: boolean;
     productCondition: ProductCondition | null;

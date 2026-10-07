@@ -315,7 +315,6 @@ function buildCreateInput(
     canonicalPath: null,
     noIndex: false,
     excludeFromSitemap: false,
-    excludeFromProductFeed: false,
     productCondition: item.condition ?? "new",
     ...(item.handle && item.handleIsIdentity ? { slug: item.handle } : {}),
     media: [],
@@ -441,7 +440,6 @@ function updateInputFrom(details: ProductWithDetails) {
     canonicalPath: details.canonicalPath,
     noIndex: details.noIndex,
     excludeFromSitemap: details.excludeFromSitemap,
-    excludeFromProductFeed: details.excludeFromProductFeed,
     productCondition: details.productCondition,
     slug: details.slug,
     media: details.media.map((item) => ({

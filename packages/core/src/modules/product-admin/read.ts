@@ -32,6 +32,9 @@ import {
   type ProductMediaProjectionRow,
   productVariantBarcodeIdentityEquals,
   type ProductWithDetails,
+  parsePublishedChannelIds,
+  productPublishedToChannelSql,
+  publishedChannelIdsSql,
   readStoredCustomization,
   readStoreDecimalPlaces,
   resolveProductImageRepresentation,
@@ -95,6 +98,9 @@ export async function listProducts(db: Database, options: {
     agentSummary?: boolean;
     /** Compact dashboard lists can omit rich text while preserving the default API contract. */
     includeDescription?: boolean;
+    /** Only products published (`published`, the default) or not published (`unpublished`) to this sales channel. */
+    salesChannelId?: string;
+    salesChannelState?: "published" | "unpublished";
 }) {
     const {
         search,
@@ -109,6 +115,8 @@ export async function listProducts(db: Database, options: {
         order = "desc",
         agentSummary = false,
         includeDescription = true,
+        salesChannelId,
+        salesChannelState = "published",
     } = options;
 
     const whereConditions = [];
@@ -169,6 +177,11 @@ export async function listProducts(db: Database, options: {
     if (categoryId) {
         whereConditions.push(eq(products.categoryId, categoryId));
     }
+    if (salesChannelId) {
+        // One primary-key probe per row (MARKETS-DESIGN D6).
+        const published = productPublishedToChannelSql(sql`${products.id}`, salesChannelId);
+        whereConditions.push(salesChannelState === "published" ? published : sql`NOT ${published}`);
+    }
 
     const whereClause =
         whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -202,6 +215,7 @@ export async function listProducts(db: Database, options: {
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${products.deletedAt} AS INTEGER)`,
             categoryName: sql<string>`${categories.name}`.as("categoryName"),
+            salesChannelIds: publishedChannelIdsSql(sql`${products.id}`).as("sales_channel_ids"),
             // The sort column as stored: a cursor compares what the ORDER BY compared.
             keysetValue: sql<number | string | null>`${keysetSpec.column}`.as("keyset_value"),
         })
@@ -362,6 +376,7 @@ export async function listProducts(db: Database, options: {
         mediaCount: mediaCountMap.get(product.id) || 0,
         primaryImage: primaryImageMap.get(product.id) || null,
         sku: skuMap.get(product.id) || undefined,
+        salesChannelIds: parsePublishedChannelIds(product.salesChannelIds),
         };
     });
 
@@ -480,7 +495,7 @@ export async function getProductDetails(
             canonicalPath: products.canonicalPath,
             noIndex: products.noIndex,
             excludeFromSitemap: products.excludeFromSitemap,
-            excludeFromProductFeed: products.excludeFromProductFeed,
+            salesChannelIds: publishedChannelIdsSql(sql`${products.id}`),
             productCondition: products.productCondition,
             aggregateRevision: products.aggregateRevision,
             createdAt: products.createdAt,
@@ -535,6 +550,7 @@ export async function getProductDetails(
     const customization = readStoredCustomization(result.customizationSchema, decimalPlaces);
     return {
         ...presentCatalogPrice(result, decimalPlaces),
+        salesChannelIds: parsePublishedChannelIds(result.salesChannelIds),
         customizationSchema: customization.customization,
         customizationSchemaInvalid: customization.invalid,
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),

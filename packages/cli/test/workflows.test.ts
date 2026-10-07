@@ -479,7 +479,6 @@ describe("CLI workflow resolver adapter", () => {
         "canonicalPath",
         "noIndex",
         "excludeFromSitemap",
-        "excludeFromProductFeed",
         "productCondition",
       ]),
     })]);

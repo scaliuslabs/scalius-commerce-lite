@@ -1,6 +1,7 @@
 import { products } from "@scalius/database/schema";
 import { eq, isNull, sql, type SQL } from "drizzle-orm";
 import { generateInternalCode128Barcode } from "@scalius/shared/barcode-identity";
+import { channelAvailableStockSql, productPublishedToChannelSql, skuStockRefs } from "./channel-publications";
 
 function hasCustomerOptionPredicate(alias: string): SQL {
     return sql`trim(coalesce(${sql.raw(`${alias}.option_combination_key`)}, '')) <> ''`;
@@ -14,8 +15,9 @@ function activePersistedSkuPredicate(alias: string, productId: SQL): SQL {
     `;
 }
 
+/** The SKU can be bought now in the online store: untracked, or units left at the locations it sells from. */
 function availableSkuPredicate(alias: string): SQL {
-    const available = sql.raw(`(${alias}.stock - ${alias}.reserved_stock)`);
+    const available = channelAvailableStockSql(skuStockRefs(alias));
     return sql`(
         ${sql.raw(`${alias}.track_inventory`)} = 0
         OR ${available} > 0
@@ -171,10 +173,15 @@ export function publicProductHasPrimaryDiscoveryImage(
     )`;
 }
 
+/**
+ * A product the online store shows: active, not trashed, published to the
+ * online store (sales channels, 0122) and a buyer-resolvable SKU topology.
+ */
 export function publicProductBaseConditions(): SQL[] {
     return [
         eq(products.isActive, true),
         isNull(products.deletedAt),
+        productPublishedToChannelSql(sql`${products.id}`),
         publicProductHasBuyerResolvableSku(),
     ];
 }
@@ -184,6 +191,7 @@ export function publicCollectionProductConditions(...extraConditions: SQL[]): SQ
         ...extraConditions,
         eq(products.isActive, true),
         isNull(products.deletedAt),
+        productPublishedToChannelSql(sql`${products.id}`),
         publicProductHasBuyerResolvableSku(),
     ];
 }

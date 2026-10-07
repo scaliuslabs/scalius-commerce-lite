@@ -14,6 +14,7 @@ import {
   pluginLogEntries,
   pluginRecords,
   pluginRegistrations,
+  salesChannels,
   type PluginInstallationRow,
   type PluginInstallationSource,
   type PluginInstallationStatus,
@@ -34,7 +35,8 @@ import {
   type PluginSettingValue,
   type PluginSettingValues,
 } from "@scalius/shared/plugins";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
 import { isKnownPermission, isPluginGrantablePermission } from "./grants";
 import {
@@ -189,6 +191,61 @@ function registrationRows(pluginId: string, manifest: PluginManifest) {
   ];
 }
 
+/**
+ * The app's sales channels (`manifest.salesChannels`, MARKETS-DESIGN D6), in
+ * the batch of each manifest write: declared channels are upserted with the
+ * manifest's names and on while the app runs; a channel the manifest no
+ * longer declares is removed when no order names it, else switched off.
+ */
+function salesChannelStatements(
+  db: Database,
+  pluginId: string,
+  declaredChannels: ReadonlyArray<{ id: string; name: string }>,
+  running: boolean,
+) {
+  const declared = declaredChannels.map((channel, index) => ({
+    id: appSalesChannelId(pluginId, channel.id),
+    handle: appSalesChannelId(pluginId, channel.id),
+    name: channel.name,
+    kind: "app" as const,
+    pluginId,
+    status: running ? "active" as const : "inactive" as const,
+    position: 100 + index,
+  }));
+  const ids = declared.map((channel) => channel.id);
+  const undeclared = ids.length > 0 ? notInArray(salesChannels.id, ids) : undefined;
+  return [
+    ...(declared.length > 0
+      ? [db.insert(salesChannels).values(declared).onConflictDoUpdate({
+        target: salesChannels.id,
+        set: { name: sql`excluded.name`, status: sql`excluded.status`, updatedAt: sql`unixepoch()` },
+      })]
+      : []),
+    db.delete(salesChannels).where(and(
+      eq(salesChannels.pluginId, pluginId),
+      undeclared,
+      sql`NOT EXISTS (SELECT 1 FROM orders WHERE orders.sales_channel_id = ${salesChannels.id} AND orders.sales_channel_id <> 'sc_online_store')`,
+    )),
+    db.update(salesChannels).set({ status: "inactive", updatedAt: sql`unixepoch()` }).where(and(
+      eq(salesChannels.pluginId, pluginId),
+      undeclared,
+      eq(salesChannels.status, "active"),
+    )),
+  ];
+}
+
+/** The app's declared channels follow its status: on while it is active. */
+function salesChannelStatusStatement(db: Database, pluginId: string, manifest: PluginManifest, running: boolean) {
+  const ids = manifest.salesChannels.map((channel) => appSalesChannelId(pluginId, channel.id));
+  return db.update(salesChannels)
+    .set({ status: running ? "active" : "inactive", updatedAt: sql`unixepoch()` })
+    .where(and(
+      eq(salesChannels.pluginId, pluginId),
+      ids.length > 0 ? inArray(salesChannels.id, ids) : sql`1 = 0`,
+      sql`${salesChannels.status} <> ${running ? "active" : "inactive"}`,
+    ));
+}
+
 /** Registration inserts, chunked within D1's bound-parameter limit (4 per row). */
 function registrationInserts(db: Database, pluginId: string, manifest: PluginManifest) {
   const rows = registrationRows(pluginId, manifest);
@@ -273,6 +330,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
         updatedAt: sql`unixepoch()`,
       }),
       ...registrationInserts(db, manifest.id, manifest),
+      ...salesChannelStatements(db, manifest.id, manifest.salesChannels, false),
     ] as never);
   } catch (error) {
     if (isPrimaryKeyConflict(error)) throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
@@ -321,20 +379,26 @@ export async function activatePlugin(
       currentRevision: installation.revision,
     });
   }
-  const updated = await db.update(pluginInstallations).set({
-    status: "active",
-    grantJson: JSON.stringify(grant),
-    grantKey: pluginGrantKey(grant),
-    failureReason: null,
-    activatedBy: options.actorUserId,
-    activatedAt: sql`unixepoch()`,
-    revision: sql`${pluginInstallations.revision} + 1`,
-    updatedAt: sql`unixepoch()`,
-  }).where(and(
-    eq(pluginInstallations.pluginId, pluginId),
-    eq(pluginInstallations.revision, options.expectedRevision),
-  )).returning({ revision: pluginInstallations.revision });
-  await requireRevision(db, pluginId, options.expectedRevision, updated);
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, options.expectedRevision),
+      db.update(pluginInstallations).set({
+        status: "active",
+        grantJson: JSON.stringify(grant),
+        grantKey: pluginGrantKey(grant),
+        failureReason: null,
+        activatedBy: options.actorUserId,
+        activatedAt: sql`unixepoch()`,
+        revision: sql`${pluginInstallations.revision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(pluginInstallations.pluginId, pluginId)),
+      // Its sales channels are on while it runs.
+      salesChannelStatusStatement(db, pluginId, installation.manifest, true),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
+    throw error;
+  }
   return requirePluginInstallation(db, pluginId);
 }
 
@@ -343,15 +407,21 @@ export async function deactivatePlugin(
   pluginId: string,
   options: { expectedRevision: number },
 ): Promise<PluginInstallation> {
-  const updated = await db.update(pluginInstallations).set({
-    status: "disabled",
-    revision: sql`${pluginInstallations.revision} + 1`,
-    updatedAt: sql`unixepoch()`,
-  }).where(and(
-    eq(pluginInstallations.pluginId, pluginId),
-    eq(pluginInstallations.revision, options.expectedRevision),
-  )).returning({ revision: pluginInstallations.revision });
-  await requireRevision(db, pluginId, options.expectedRevision, updated);
+  const installation = await requirePluginInstallation(db, pluginId);
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, options.expectedRevision),
+      db.update(pluginInstallations).set({
+        status: "disabled",
+        revision: sql`${pluginInstallations.revision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(pluginInstallations.pluginId, pluginId)),
+      salesChannelStatusStatement(db, pluginId, installation.manifest, false),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
+    throw error;
+  }
   return requirePluginInstallation(db, pluginId);
 }
 
@@ -362,12 +432,17 @@ export async function deactivatePlugin(
  */
 export async function markPluginFailed(db: Database, pluginId: string, reason: string): Promise<void> {
   const trimmed = reason.trim().slice(0, MAX_FAILURE_REASON) || "The plugin could not be loaded.";
-  await db.update(pluginInstallations).set({
-    status: "failed",
-    failureReason: trimmed,
-    revision: sql`${pluginInstallations.revision} + 1`,
-    updatedAt: sql`unixepoch()`,
-  }).where(eq(pluginInstallations.pluginId, pluginId));
+  await safeBatch(db, [
+    db.update(pluginInstallations).set({
+      status: "failed",
+      failureReason: trimmed,
+      revision: sql`${pluginInstallations.revision} + 1`,
+      updatedAt: sql`unixepoch()`,
+    }).where(eq(pluginInstallations.pluginId, pluginId)),
+    // A failed app sells nothing: every channel of it is off.
+    db.update(salesChannels).set({ status: "inactive", updatedAt: sql`unixepoch()` })
+      .where(and(eq(salesChannels.pluginId, pluginId), eq(salesChannels.status, "active"))),
+  ] as never);
 }
 
 /** Stored values that are still valid under a new settings schema; new fields take their defaults. */
@@ -436,6 +511,7 @@ export async function updatePluginInstallation(
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, manifest),
+      ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active"),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -467,6 +543,8 @@ export async function uninstallPlugin(
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
+      // Its channels go (or, when orders name them, stay switched off).
+      ...salesChannelStatements(db, pluginId, [], false),
       ...(options.keepData
         ? [
           db.update(pluginEventDeliveries).set({

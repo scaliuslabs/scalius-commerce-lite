@@ -430,6 +430,8 @@ export interface OrderListFactsRow {
     archivedAt: Date | null;
     channel: OrderChannel;
     channelSource: string | null;
+    /** The sales channel the order sold from (MARKETS-DESIGN D6). */
+    salesChannelId: string;
     openRequestType: string | null;
     /** An app's hold for staff review is open (orders/holds.ts). */
     onHold: number | boolean;
@@ -455,6 +457,7 @@ export function orderListFactsSelection() {
         archivedAt: orders.archivedAt,
         channel: orders.channel,
         channelSource: orders.channelSource,
+        salesChannelId: orders.salesChannelId,
         requiresShipping: orders.requiresShipping,
         shippingMethodKind: orders.shippingMethodKind,
         pickupReadyAt: orders.pickupReadyAt,
@@ -509,6 +512,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
         archivedAt: unixToDate(order.archivedAt),
         channel: order.channel,
         channelSource: order.channelSource,
+        salesChannelId: order.salesChannelId,
         openRequestType: order.openRequestType as OrderListItem["openRequestType"],
         onHold: Boolean(Number(order.onHold)),
         cod: order.paymentMethod === PaymentMethod.COD && order.codStatus

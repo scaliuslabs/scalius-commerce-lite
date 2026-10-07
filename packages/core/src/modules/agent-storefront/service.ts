@@ -1,3 +1,4 @@
+import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -454,6 +455,7 @@ export async function mutateAgentStorefrontCart(
       currencyCode: currency.code,
       priceIncrementMinor: currency.priceIncrementMinor,
       market: agentCartMarket(db, current),
+      salesChannelId: AGENTS_CHANNEL_ID,
     });
     if (!proposedValidation.valid) {
       throw new ValidationError("The proposed storefront cart is not currently valid.", {
@@ -624,6 +626,8 @@ async function loadAgentStorefrontCart(
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
     market: agentCartMarket(db, row),
+    // A buyer agent sells what the AI agents channel publishes (MARKETS-DESIGN D6).
+    salesChannelId: AGENTS_CHANNEL_ID,
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a

@@ -49,7 +49,6 @@ function request(body: unknown, headers: HeadersInit = {}, path = "/ucp/catalog/
 }
 
 type CatalogProductOverrides = Partial<Product> & {
-  excludeFromProductFeed?: boolean;
 };
 
 function catalogProduct(overrides: CatalogProductOverrides = {}): Product {
@@ -252,11 +251,6 @@ describe("UCP storefront routes", () => {
       data: [
         catalogProduct(),
         catalogProduct({
-          id: "prod_hidden",
-          slug: "hidden-shoes",
-          excludeFromProductFeed: true,
-        }),
-        catalogProduct({
           id: "prod_inactive",
           slug: "inactive-shoes",
           isActive: false,
@@ -339,7 +333,7 @@ describe("UCP storefront routes", () => {
       pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
     });
     mocks.getProductBySlug.mockResolvedValueOnce({
-      product: catalogProduct({ excludeFromProductFeed: true }),
+      product: catalogProduct(),
       category: null,
       media: [],
       variants: [],

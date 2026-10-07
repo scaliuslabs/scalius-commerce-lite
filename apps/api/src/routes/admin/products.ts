@@ -33,6 +33,8 @@ import {
     updateProductSemanticSection,
 } from "@scalius/core/modules/product-admin";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { setProductChannels, setProductPublications } from "@scalius/core/modules/sales-channels";
+import { bulkPublicationsSchema, productPublicationsSchema, salesChannelIdSchema } from "../../schemas/sales-channels";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
@@ -121,7 +123,7 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
             canonicalPath: z.string().nullable(),
             noIndex: z.boolean(),
             excludeFromSitemap: z.boolean(),
-            excludeFromProductFeed: z.boolean(),
+            salesChannelIds: z.array(z.string()).openapi({ description: "The sales channels the product is published to (read-only here: dashboard.products.publications_set)." }),
             productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
             isActive: z.boolean(),
             discountType: z.enum(["percentage", "flat"]).nullable(),
@@ -394,6 +396,8 @@ const listRoute = createRoute({
             category: z.string().optional().openapi({ description: "Category ID filter" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
             status: z.enum(["active", "draft"]).optional().openapi({ description: "Active (on sale) or draft products only" }),
+            salesChannel: salesChannelIdSchema.optional().openapi({ description: "Only products published to this sales channel (or, with salesChannelState=unpublished, not published to it)." }),
+            salesChannelState: z.enum(["published", "unpublished"]).optional().openapi({ description: "With salesChannel: published (default) or unpublished products." }),
             view: z.enum(["full", "compact"]).optional().default("full").openapi({ description: "Compact lists omit rich descriptions" }),
             sort: z.enum(["name", "price", "category", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
@@ -420,6 +424,8 @@ app.openapi(listRoute, async (c) => {
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
         status: query.status,
+        salesChannelId: query.salesChannel,
+        salesChannelState: query.salesChannelState,
         includeDescription: query.view !== "compact",
         sort: query.sort as "name" | "price" | "category" | "createdAt" | "updatedAt" | undefined,
         order: query.order as "asc" | "desc" | undefined
@@ -631,6 +637,56 @@ app.openapi(bulkUpdateRoute, async (c) => {
         scheduleRecommendationRefreshAfterWrite(c, db, result.products.map((product) => product.id));
     }
     return ok(c, result);
+});
+
+// ── Publishing (MARKETS-DESIGN D6) ──
+
+app.openapi(createRoute({
+    method: "post",
+    path: "/publications",
+    operationId: "dashboard.products.publications_bulk",
+    tags: ["Admin - Products"],
+    summary: "Publish or unpublish products on sales channels",
+    description: "Up to 90 products on up to 10 channels in one write. A product already in that state is left alone. Unpublishing from the online store takes the product off the storefront (its page answers 404, listings and sitemaps drop it); from Google, Meta or AI agents, off that feed or UCP.",
+    request: { body: { required: true, content: { "application/json": { schema: bulkPublicationsSchema } } } },
+    responses: {
+        200: {
+            description: "The products and channels written",
+            content: { "application/json": { schema: successEnvelope(z.object({ productIds: z.array(z.string()), channelIds: z.array(z.string()) })) } },
+        },
+        ...errorResponses,
+    },
+}), async (c) => {
+    const db = c.get("db");
+    const result = await setProductPublications(db, c.req.valid("json"));
+    scheduleRecommendationRefreshAfterWrite(c, db, result.productIds);
+    return ok(c, result);
+});
+
+app.openapi(createRoute({
+    method: "put",
+    path: "/{id}/publications",
+    operationId: "dashboard.products.publications_set",
+    tags: ["Admin - Products"],
+    summary: "Publish a product to exactly these sales channels",
+    description: "The product page's Publishing card: every listed channel publishes the product, every other channel unpublishes it. It does not change the product's revision.",
+    request: {
+        params: z.object({ id: z.string().min(1).max(64) }),
+        body: { required: true, content: { "application/json": { schema: productPublicationsSchema } } },
+    },
+    responses: {
+        200: {
+            description: "The channels the product is published to",
+            content: { "application/json": { schema: successEnvelope(z.object({ salesChannelIds: z.array(z.string()) })) } },
+        },
+        ...errorResponses,
+    },
+}), async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const salesChannelIds = await setProductChannels(db, id, c.req.valid("json").channelIds);
+    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+    return ok(c, { salesChannelIds });
 });
 
 // ── Duplicate Product ──

@@ -131,6 +131,10 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   },
   "dashboard.policies.get": {},
   "dashboard.policies.update": { revision: "required" },
+  "dashboard.sales_channels.get": {},
+  "dashboard.sales_channels.list": {},
+  "dashboard.sales_channels.products": {},
+  "dashboard.sales_channels.update": {},
   "dashboard.seo.feed_diagnostics": { limits: { request: 16_384 } },
   "dashboard.seo.feed_row_preview": {
     batch: "sequential",

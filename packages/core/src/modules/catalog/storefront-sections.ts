@@ -11,6 +11,7 @@ import {
   resolveProductMediaProjectionRows,
   resolveSkuImageRepresentation,
   selectCheckoutProductMediaProjectionRows,
+  channelOnHandSql,
 } from "../products";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
@@ -717,7 +718,8 @@ export async function getStorefrontProductSection(
                 weight: productVariants.weight,
                 sku: productVariants.sku,
                 priceMinor: productVariants.priceMinor,
-                stock: productVariants.stock,
+                // The units the online store sells (its linked locations' on-hand).
+                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,

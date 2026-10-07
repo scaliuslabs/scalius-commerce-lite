@@ -55,7 +55,6 @@ const productInput = {
   canonicalPath: null,
   noIndex: false,
   excludeFromSitemap: false,
-  excludeFromProductFeed: false,
   productCondition: "new" as const,
   slug: "simple-mug",
   media: [],

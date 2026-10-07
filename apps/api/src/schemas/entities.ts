@@ -60,6 +60,7 @@ export const productSummarySchema = z.object({
   mediaCount: z.number(),
   primaryImage: z.string().nullable(),
   sku: z.string().optional(),
+  salesChannelIds: z.array(z.string()).openapi({ description: "The sales channels the product is published to." }),
 });
 
 /** Ordered image/video association returned by product detail. */
@@ -180,7 +181,7 @@ export const productDetailSchema = z.object({
   isActive: z.boolean(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  excludeFromProductFeed: z.boolean(),
+  salesChannelIds: z.array(z.string()).openapi({ description: "The sales channels the product is published to (MARKETS-DESIGN D6); change them with dashboard.products.publications_set." }),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
   options: z.array(productOptionDefinitionSchema),
   aggregateRevision: z.number().int().min(1),
@@ -308,6 +309,9 @@ const orderListFactsShape = {
   }),
   channelSource: z.string().max(ORDER_CHANNEL_SOURCE_MAX_LENGTH).nullable().openapi({
     description: "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.",
+  }),
+  salesChannelId: z.string().openapi({
+    description: "The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked.",
   }),
   openRequestType: z.enum(["cancel_pre_shipment", "return", "refund"]).nullable(),
   onHold: z.boolean().openapi({ description: "An app's hold for staff review is open: the order is not shipped or moved on until staff release it." }),

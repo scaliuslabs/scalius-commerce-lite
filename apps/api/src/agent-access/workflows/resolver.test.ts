@@ -2495,7 +2495,6 @@ describe("reviewed agent workflow resolver", () => {
         "canonicalPath",
         "noIndex",
         "excludeFromSitemap",
-        "excludeFromProductFeed",
         "productCondition",
       ]),
     })]);
@@ -3189,7 +3188,6 @@ describe("reviewed agent workflow resolver", () => {
       "canonicalPath",
       "noIndex",
       "excludeFromSitemap",
-      "excludeFromProductFeed",
       "productCondition",
     ]));
     expect(create.input.materializations).toEqual(expect.arrayContaining([

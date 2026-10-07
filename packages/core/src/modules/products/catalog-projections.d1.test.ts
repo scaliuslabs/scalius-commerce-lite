@@ -255,7 +255,6 @@ const baseInput = {
     canonicalPath: null,
     noIndex: false,
     excludeFromSitemap: false,
-    excludeFromProductFeed: false,
     productCondition: "new" as const,
     media: [],
     additionalInfo: [],

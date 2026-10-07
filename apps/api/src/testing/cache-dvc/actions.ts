@@ -20,6 +20,7 @@ import { adjustStock } from "@scalius/core/modules/inventory";
 import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import { getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
+import { setProductChannels, setProductPublications, updateSalesChannel } from "@scalius/core/modules/sales-channels";
 import type { Rng } from "./rng";
 
 export interface CuratedAction {
@@ -103,6 +104,51 @@ export const CURATED_ACTIONS: readonly CuratedAction[] = [
       const active = rng.chance(0.5);
       await bulkUpdateProducts(db, [claim], { isActive: active });
       return `bulkUpdateProducts ${claim.id} isActive=${active}`;
+    },
+  },
+  {
+    // Sales channels (MARKETS-DESIGN D6): publish or unpublish products on a
+    // channel the way the products list does (with the online store's buyer
+    // state refreshed in the same batch).
+    name: "channel-publish",
+    weight: 2,
+    async run({ sqlite, db, rng }) {
+      const products = ids(sqlite, "SELECT id FROM products");
+      const channels = ids(sqlite, "SELECT id FROM sales_channels");
+      if (products.length === 0 || channels.length === 0) return null;
+      const productIds = rng.sample(products, rng.int(1, 3));
+      const channelIds = rng.sample(channels, rng.int(1, 2));
+      const action = rng.chance(0.5) ? "publish" : "unpublish";
+      await setProductPublications(db, { productIds, channelIds, action });
+      return `setProductPublications ${action} ${productIds.join(",")} on ${channelIds.join(",")}`;
+    },
+  },
+  {
+    // The product page's Publishing card: exactly these channels.
+    name: "channel-set",
+    weight: 1,
+    async run({ sqlite, db, rng }) {
+      const products = ids(sqlite, "SELECT id FROM products");
+      const channels = ids(sqlite, "SELECT id FROM sales_channels");
+      if (products.length === 0) return null;
+      const productId = rng.pick(products);
+      const channelIds = rng.sample(channels, rng.int(0, channels.length));
+      await setProductChannels(db, productId, channelIds);
+      return `setProductChannels ${productId} -> ${channelIds.join(",") || "(none)"}`;
+    },
+  },
+  {
+    // Link or unlink a location: what a channel sells moves for every product.
+    name: "channel-locations",
+    weight: 1,
+    async run({ sqlite, db, rng }) {
+      const channels = ids(sqlite, "SELECT id FROM sales_channels");
+      const locations = ids(sqlite, "SELECT id FROM inventory_locations WHERE status = 'active'");
+      if (channels.length === 0 || locations.length === 0) return null;
+      const channelId = rng.pick(channels);
+      const locationIds = rng.sample(locations, rng.int(1, locations.length));
+      await updateSalesChannel(db, channelId, { locationIds });
+      return `updateSalesChannel ${channelId} locations=${locationIds.join(",")}`;
     },
   },
   {

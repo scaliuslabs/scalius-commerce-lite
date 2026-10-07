@@ -90,7 +90,6 @@ const details = (overrides: Record<string, unknown> = {}) => ({
   canonicalPath: null,
   noIndex: false,
   excludeFromSitemap: false,
-  excludeFromProductFeed: false,
   productCondition: null,
   slug: "panjabi-copy",
   media: [],

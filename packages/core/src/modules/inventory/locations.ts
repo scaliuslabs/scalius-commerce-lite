@@ -22,6 +22,7 @@ import {
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { z } from "zod";
 import { readIncomingStock, type IncomingStockRow } from "./inventory-insights";
+import { readStoreCountry } from "../../utils/store-country";
 
 /** RAISE message of the trigger that refuses a stock movement without an active location. */
 export const INVENTORY_LOCATION_REQUIRED = "INVENTORY_LOCATION_REQUIRED";
@@ -252,7 +253,8 @@ function locationValues(input: z.output<typeof inventoryLocationInputSchema>) {
         addressLine2: blankToNull(input.addressLine2),
         city: blankToNull(input.city),
         postalCode: blankToNull(input.postalCode),
-        countryCode: (input.countryCode ?? "BD").toUpperCase(),
+        // Omitted: a new location takes the store's country, an edit keeps its own.
+        countryCode: input.countryCode?.toUpperCase(),
         phone: blankToNull(input.phone),
     };
 }
@@ -373,11 +375,15 @@ export async function createInventoryLocation(
 ): Promise<InventoryLocationRecord> {
     const data = locationValues(parseLocationInput(inventoryLocationInputSchema, input));
     await assertCodeAvailable(db, data.code);
+    // A location without a country is in the store's (the backup market's).
+    const countryCode = data.countryCode ?? await readStoreCountry(db);
+    if (!countryCode) throw new ValidationError("Choose the location's country.", { field: "countryCode" });
     const id = `loc_${nanoid(16)}`;
     try {
         await db.insert(inventoryLocations).values({
             id,
             ...data,
+            countryCode,
             isDefault: false,
             status: "active",
             position: sql`(SELECT COALESCE(MAX(${inventoryLocations.position}), 0) + 1 FROM ${inventoryLocations})`,

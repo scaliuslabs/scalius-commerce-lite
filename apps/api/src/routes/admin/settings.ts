@@ -17,6 +17,7 @@ import { emiSettingsRoutes } from "./settings/emi";
 import { marketingConsentSettingsRoutes } from "./settings/marketing-consent";
 import { appProviderSettingsRoutes } from "./settings/providers";
 import { marketsSettingsRoutes } from "./settings/markets";
+import { salesChannelsSettingsRoutes } from "./settings/sales-channels";
 import { storeDefaultsSettingsRoutes } from "./settings/store-defaults";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -32,6 +33,7 @@ app.route("/", platformSettingsRoutes);
 app.route("/", storeDefaultsSettingsRoutes);
 app.route("/shipping-methods", shippingMethodsSettingsRoutes);
 app.route("/markets", marketsSettingsRoutes);
+app.route("/sales-channels", salesChannelsSettingsRoutes);
 app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);
 app.route("/notification-channels/templates", notificationTemplatesRoutes);

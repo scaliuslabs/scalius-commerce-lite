@@ -86,7 +86,7 @@ describe("merchant feeds list physical goods only", () => {
     it("explains the omission in the exact-product diagnostic", async () => {
         for (const productId of ["prod_consult", "prod_ebook", "prod_gift"]) {
             expect(await getFeedProjectionDiagnosticById(db, productId), productId)
-                .toMatchObject({ sellsPhysicalGoods: false, isActive: true, excludeFromProductFeed: false });
+                .toMatchObject({ sellsPhysicalGoods: false, isActive: true, publishedToChannel: true, publishedToOnlineStore: true });
         }
         expect(await getFeedProjectionDiagnosticById(db, "prod_tailored", "tailor-shirt")).toMatchObject({
             sellsPhysicalGoods: true,

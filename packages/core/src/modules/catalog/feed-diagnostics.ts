@@ -11,11 +11,15 @@ import {
     resolveCatalogDiscoveryImageUrl,
 } from "@scalius/shared/catalog-discovery-media";
 import { and, desc, inArray, isNull, sql } from "drizzle-orm";
+import { GOOGLE_CHANNEL_ID, ONLINE_STORE_CHANNEL_ID, type CatalogChannelId } from "@scalius/shared/sales-channels";
 import {
+  channelOnHandSql,
   loadProductMediaProjections,
   presentCatalogPrice,
+  productPublishedToChannelSql,
   readStoreDecimalPlaces,
   resolveProductImageRepresentation,
+  salesChannelActiveSql,
 } from "../products";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
@@ -79,7 +83,10 @@ export interface ProductFeedDiagnosticScanProduct {
     name: string;
     slug: string;
     isActive: boolean;
-    excludeFromProductFeed: boolean;
+    /** Published to the feed's sales channel while the channel is on (else an intentional exclusion). */
+    publishedToChannel: boolean;
+    /** Published to the online store, where a feed row links (else unpublished). */
+    publishedToOnlineStore: boolean;
     deletedAt: number | null;
     /** Gift cards never enter the merchant feeds. Omitted means false. */
     isGiftCard?: boolean;
@@ -318,12 +325,12 @@ export function buildProductFeedDiagnosticsFromScan({
             continue;
         }
 
-        if (product.excludeFromProductFeed) {
+        if (!product.publishedToChannel) {
             recordIssue(product, "product_feed_excluded", 0);
             continue;
         }
 
-        if (!product.isActive || product.deletedAt !== null) {
+        if (!product.isActive || product.deletedAt !== null || !product.publishedToOnlineStore) {
             recordIssue(product, "inactive_deleted_unpublished", 0);
             continue;
         }
@@ -450,8 +457,12 @@ export async function getProductFeedDiagnostics(
         storefrontBaseUrl?: string | null;
         currencyCode?: string;
         priceIncrementMinor?: number;
+        /** The catalogue channel diagnosed (default: the Google feed). */
+        channel?: CatalogChannelId;
     } = {},
 ): Promise<ProductFeedDiagnosticsReport> {
+    const channel = options.channel ?? GOOGLE_CHANNEL_ID;
+    const productId = sql.raw('"products"."id"');
     const scanLimit = boundedInteger(
         options.scanLimit,
         PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT,
@@ -470,7 +481,8 @@ export async function getProductFeedDiagnostics(
             name: products.name,
             slug: products.slug,
             isActive: products.isActive,
-            excludeFromProductFeed: products.excludeFromProductFeed,
+            publishedToChannel: sql<number>`(${productPublishedToChannelSql(productId, channel)} AND ${salesChannelActiveSql(channel)})`,
+            publishedToOnlineStore: productPublishedToChannelSql(productId, ONLINE_STORE_CHANNEL_ID),
             isGiftCard: products.isGiftCard,
             priceMinor: products.priceMinor,
             discountType: products.discountType,
@@ -492,7 +504,8 @@ export async function getProductFeedDiagnostics(
             name: row.name,
             slug: row.slug,
             isActive: Boolean(row.isActive),
-            excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
+            publishedToChannel: Boolean(row.publishedToChannel),
+            publishedToOnlineStore: Boolean(row.publishedToOnlineStore),
             isGiftCard: Boolean(row.isGiftCard),
             price: price.price,
             discountType: row.discountType,
@@ -540,7 +553,8 @@ export async function getProductFeedDiagnostics(
                 id: productVariants.id,
                 productId: productVariants.productId,
                 optionCombinationKey: productVariants.optionCombinationKey,
-                stock: productVariants.stock,
+                // The units the feed's channel sells (its linked locations' on-hand).
+                stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }, channel).mapWith(Number),
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
