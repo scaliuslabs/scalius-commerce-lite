@@ -1283,6 +1283,25 @@ async function prepareStoreCredit(
 }
 
 /**
+ * What a refund of `refundMinor` (the order's currency) gives back to the
+ * card a gift-card tender debited, in the card's own currency (MARKETS-DESIGN
+ * step 6): the same share of the debit (the tender's settlement), rounded
+ * down, so all refunds together never credit more than was debited. A card
+ * in the order's currency gets the refund as it is.
+ */
+export function giftCardRefundCreditMinor(
+    tender: Pick<CapturedPayment, "amountMinor" | "currency" | "settlementCurrency" | "settlementAmountMinor">,
+    refundMinor: number,
+): number {
+    if (!tender.settlementCurrency || tender.settlementCurrency === tender.currency || tender.amountMinor <= 0) return refundMinor;
+    const credit = Number((BigInt(refundMinor) * BigInt(tender.settlementAmountMinor)) / BigInt(tender.amountMinor));
+    if (credit <= 0) {
+        throw new ValidationError("This refund is too small to credit back to the gift card in its currency. Refund more, or issue store credit.");
+    }
+    return credit;
+}
+
+/**
  * Decides how each allocation settles. Store credit settles every allocation
  * into the one new card. Otherwise a gift-card tender is credited back to the
  * card it debited (read from the ledger; an untraceable tender fails closed),
@@ -1571,7 +1590,8 @@ export async function processRefund(
                     // Credit back to the tender's card, keyed by the attempt key (G5).
                     ...(mode === "gift_card" ? [buildGiftCardRefundStatement(db, {
                         giftCardId: allocation.giftCardId!,
-                        amountMinor: allocation.amountMinor,
+                        // The card's own currency: its share of the tender's debit.
+                        amountMinor: giftCardRefundCreditMinor(allocation.sourcePayment, allocation.amountMinor),
                         orderId: params.orderId,
                         orderPaymentId: allocation.id,
                         refundAttemptId: getRefundAttemptId(allocation),

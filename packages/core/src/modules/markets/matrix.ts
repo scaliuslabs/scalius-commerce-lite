@@ -38,6 +38,7 @@ export function marketMatrixSql(): SQL<string | null> {
             'name', matrix_row.name,
             'isBackup', CAST(matrix_row.is_backup AS TEXT),
             'priceIncrementMinor', CAST(matrix_row.price_increment_minor AS TEXT),
+            'currencyCode', matrix_row.currency_code,
             'countries', (SELECT group_concat(matrix_country.country_code, ',') FROM market_countries AS matrix_country WHERE matrix_country.market_id = matrix_row.id),
             'presences', (SELECT group_concat(matrix_presence.value || ':' || matrix_presence.locale, ',') FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder'
                 AND EXISTS (SELECT 1 FROM store_languages AS matrix_language WHERE matrix_language.locale = matrix_presence.locale AND matrix_language.published = 1))
@@ -58,6 +59,7 @@ interface MatrixEntry {
     name?: unknown;
     isBackup?: unknown;
     priceIncrementMinor?: unknown;
+    currencyCode?: unknown;
     countries?: unknown;
     presences?: unknown;
 }
@@ -96,11 +98,16 @@ export function marketMatrixFromSql(value: unknown): MarketMatrixRead {
             // The root belongs to the backup market alone (the database enforces it too).
             .filter((presence) => isBackup || presence.value !== "")
             .sort((left, right) => (left.value === "" ? -1 : right.value === "" ? 1 : compare(left.value, right.value)));
+        // A market in its own currency (step 6) states it; one in the shop currency leaves it out.
+        const currencyCode = !isBackup && typeof entry.currencyCode === "string" && /^[A-Z]{3}$/.test(entry.currencyCode)
+            ? entry.currencyCode
+            : null;
         return {
             id: String(entry.id),
             handle: String(entry.handle),
             name: String(entry.name),
             isBackup,
+            ...(currencyCode ? { currencyCode } : {}),
             countries: list(entry.countries).sort(),
             presences,
         };
@@ -120,6 +127,8 @@ export interface PresenceMarket {
     name: string;
     isBackup: boolean;
     presence: { value: string; locale: string };
+    /** Its own currency (MARKETS-DESIGN step 6); absent: the shop currency. */
+    currencyCode?: string;
 }
 
 /**
@@ -152,6 +161,7 @@ export async function readPresenceMarketWithDocuments(
         handle: markets.handle,
         name: markets.name,
         isBackup: markets.isBackup,
+        currencyCode: markets.currencyCode,
         locale: marketPresences.locale,
         category: settings.category,
         value: settings.value,
@@ -182,6 +192,7 @@ export async function readPresenceMarketWithDocuments(
             name: row.name,
             isBackup: Boolean(row.isBackup),
             presence: { value, locale: row.locale ?? "en" },
+            ...(!row.isBackup && row.currencyCode ? { currencyCode: row.currencyCode } : {}),
         },
         documentRows: rows.flatMap((each) => each.category === null || each.value === null
             ? []

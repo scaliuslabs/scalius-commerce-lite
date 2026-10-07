@@ -1,14 +1,17 @@
 // One market (docs/MARKETS-DESIGN.md D4), Shopify's market page: its name
-// and status, Countries, Currency (the shop currency, locked until markets
-// get their own), Web presence (a subfolder and its language), the price
-// increment, Pricing (Shopify's price adjustment: product prices, or adjusted
-// and rounded product prices, with its price lists) and Taxes (whether its
-// prices include tax). One save bar saves the page under the revision it
-// loaded; the delete action sits apart at the bottom.
+// and status, Countries, Currency (the shop currency, or the market's own
+// with its manual exchange rate and rate lock, step 6), Web presence (a
+// subfolder and its language), the price increment, Pricing (Shopify's price
+// adjustment: product prices, or adjusted and rounded product prices, with
+// its price lists and a rounding preview) and Taxes (whether its prices
+// include tax). One save bar saves the page under the revision it loaded;
+// the delete action sits apart at the bottom.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import { getDecimalPlaces, SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
+import { currencySymbol, formatAmount, moneyLocale } from "@scalius/shared/money-format";
+import { marketCurrencyIncrementMinor } from "@scalius/shared/presentment";
 import {
   cashOnDeliveryIncrementMinor,
   isWholeUnitIncrement,
@@ -27,15 +30,14 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
-import { useCurrency } from "~/hooks/use-currency";
 import { useSettingsForm } from "~/hooks/use-settings-form";
-import { formatNumber, getLocale, useMessages } from "~/i18n";
+import { formatDateTime, formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { settingsMarketsMessages } from "~/i18n/settings-markets";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
 import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
-import { marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
+import { marketCurrenciesQueryOptions, marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
 import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { MarketCountryPicker } from "./MarketCountryPicker";
@@ -45,6 +47,7 @@ import {
   adjustedPricePreview,
   endingChoices,
   roundingChoices,
+  sellsOwnCurrency,
   countriesTakenByOthers,
   fetchMarketForm,
   marketEditorQueryOptions,
@@ -83,7 +86,7 @@ export function MarketEditor({ marketId }: { marketId: string }) {
     canEdit,
     errorMessage: common("saveFailed"),
     label: t("detailsTitle"),
-    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix", priceAdjustmentPercent: "market-adjustment", priceRounding: "market-rounding", priceEnding: "market-ending" },
+    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix", currencyCode: "market-currency", fxRate: "market-rate", fxLockMinutes: "market-lock", priceAdjustmentPercent: "market-adjustment", priceRounding: "market-rounding", priceEnding: "market-ending" },
   });
   const back = { to: "/admin/settings/markets" as const, label: nav("markets") };
 
@@ -106,6 +109,8 @@ export function MarketEditor({ marketId }: { marketId: string }) {
   const { values, setValue, setValues } = form;
   const problems = marketFormProblems(values);
   const taken = countriesTakenByOthers(markets.data, marketId);
+  // The backup market's increment: what a market in the shop currency prices at.
+  const backupIncrement = markets.data?.find((market) => market.isBackup)?.priceIncrementMinor ?? values.priceIncrementMinor;
   const savedStatus = saved.data.status;
   return (
     <SettingsPage
@@ -162,19 +167,13 @@ export function MarketEditor({ marketId }: { marketId: string }) {
         {problems.countries ? <p id="market-countries-note" role="alert" className="text-body text-destructive">{t(problems.countries)}</p> : null}
       </SettingsCard>
 
-      <SettingsCard title={t("currencyTitle")}>
-        <p className="text-body">{displayName(values.currencyCode, "currency")} ({values.currencyCode})</p>
-        <p className="text-body text-muted-foreground">
-          {t("currencyLocked")}{" "}
-          <Link to="/admin/settings/store" hash="storeDefaults" className="text-foreground underline">{t("storeDetails")}</Link>
-        </p>
-      </SettingsCard>
+      <CurrencyCard values={values} savedCurrency={saved.data.currencyCode} canEdit={canEdit} rateError={problems.rate ? t(problems.rate) : null} lockError={problems.lock ? t(problems.lock) : null} setValues={setValues} />
 
       <WebPresenceCard values={values} canEdit={canEdit} suffixError={problems.suffix ? t(problems.suffix) : null} setValues={setValues} />
 
       <PriceIncrementCard values={values} canEdit={canEdit} onChange={(priceIncrementMinor) => setValue("priceIncrementMinor", priceIncrementMinor)} />
 
-      <PricingCard values={values} canEdit={canEdit} adjustmentError={problems.adjustment ? t(problems.adjustment) : null} setValues={setValues} />
+      <PricingCard values={values} canEdit={canEdit} backupIncrement={backupIncrement} adjustmentError={problems.adjustment ? t(problems.adjustment) : null} setValues={setValues} />
 
       <SettingsCard title={t("taxesTitle")}>
         <label className="flex min-h-11 items-center justify-between gap-4 text-body">
@@ -189,6 +188,131 @@ export function MarketEditor({ marketId }: { marketId: string }) {
 
       {!saved.data.isBackup && canEdit ? <DeleteMarket id={marketId} name={saved.data.name} revision={saved.data.revision} hasOrders={saved.data.hasOrders} /> : null}
     </SettingsPage>
+  );
+}
+
+/** An amount of any currency in the dashboard language: its symbol, then its digits. */
+function money(code: string, minor: number): string {
+  const places = getDecimalPlaces(code);
+  return `${minor < 0 ? "-" : ""}${currencySymbol(code)}${formatAmount(Math.abs(minor) / 10 ** places, moneyLocale(code, getLocale()), places)}`;
+}
+
+/**
+ * The currency buyers pay in (Shopify's market currency): the shop currency,
+ * or the market's own with its manual exchange rate (1 shop unit = rate
+ * market units) and the minutes a placed order keeps it. The backup market
+ * always sells in the shop currency. The API refuses a currency no active
+ * payment method charges, with the reason.
+ */
+function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, setValues }: {
+  values: MarketForm;
+  savedCurrency: string;
+  canEdit: boolean;
+  rateError: string | null;
+  lockError: string | null;
+  setValues: (update: (draft: MarketForm) => MarketForm) => void;
+}) {
+  const t = useMessages(settingsMarketsMessages);
+  const currencies = useQuery({ ...marketCurrenciesQueryOptions(), enabled: !values.isBackup });
+  if (values.isBackup) {
+    return (
+      <SettingsCard title={t("currencyTitle")}>
+        <p className="text-body">{displayName(values.currencyCode, "currency")} ({values.currencyCode})</p>
+        <p className="text-body text-muted-foreground">
+          {t("currencyLocked")}{" "}
+          <Link to="/admin/settings/store" hash="storeDefaults" className="text-foreground underline">{t("storeDetails")}</Link>
+        </p>
+      </SettingsCard>
+    );
+  }
+  const shop = values.shopCurrencyCode;
+  const own = sellsOwnCurrency(values);
+  // Only currencies an active payment method charges (the saved one stays listed).
+  const chargeable = currencies.data?.chargeable;
+  const others = (chargeable === "any" ? [...SUPPORTED_CURRENCY_CODES] : chargeable ?? [])
+    .filter((code) => code !== shop);
+  if (own && !others.includes(values.currencyCode)) others.unshift(values.currencyCode);
+  if (currencies.isSuccess && others.length === 0) {
+    // Nothing else can be charged: the market simply sells in the shop currency.
+    return (
+      <SettingsCard title={t("currencyTitle")}>
+        <p className="text-body">{displayName(shop, "currency")} ({shop})</p>
+        <p className="text-body text-muted-foreground">
+          {t("noOtherCurrency", { currency: shop })}{" "}
+          <Link to="/admin/settings/payments" className="text-foreground underline">{t("paymentsLink")}</Link>
+        </p>
+      </SettingsCard>
+    );
+  }
+  const options = [
+    { value: shop, label: t("shopCurrencyOption", { currency: `${displayName(shop, "currency")} (${shop})` }), keywords: [shop] },
+    ...others.map((code) => ({
+      value: code,
+      label: `${displayName(code, "currency")} (${code} ${currencySymbol(code)})`,
+      keywords: [code],
+    })),
+  ];
+  return (
+    <SettingsCard title={t("currencyTitle")}>
+      <SettingsField id="market-currency" label={t("currencyLabel")} help={t("currencyHelp", { currency: shop })}>
+        <SearchableSelect
+          id="market-currency"
+          value={values.currencyCode}
+          disabled={!canEdit}
+          triggerClassName="block w-full sm:w-80"
+          options={options}
+          onValueChange={(currencyCode) => setValues((draft) => ({
+            ...draft,
+            currencyCode,
+            // A new currency starts without a rate, a step or an ending of the old one.
+            fxRate: currencyCode === draft.currencyCode ? draft.fxRate : null,
+            priceRoundingMinor: currencyCode === draft.currencyCode ? draft.priceRoundingMinor : null,
+            priceEndingMinor: currencyCode === draft.currencyCode ? draft.priceEndingMinor : null,
+            priceMode: currencyCode !== draft.shopCurrencyCode ? "fx" : draft.priceMode,
+          }))}
+        />
+      </SettingsField>
+      {values.currencyCode !== savedCurrency ? <p className="text-body text-muted-foreground">{t("currencyChangeNote")}</p> : null}
+      {own ? (
+        <>
+          <p className="text-body text-muted-foreground">{t("ownCurrencyNote", { currency: values.currencyCode, shop })}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SettingsField id="market-rate" label={t("exchangeRate")} help={t("exchangeRateHelp", { currency: values.currencyCode, shop })} error={rateError}>
+              <Input
+                id="market-rate"
+                inputMode="decimal"
+                autoComplete="off"
+                spellCheck={false}
+                value={values.fxRate ?? ""}
+                disabled={!canEdit}
+                className="max-w-48"
+                onChange={(event) => {
+                  const fxRate = event.target.value.trim();
+                  setValues((draft) => ({ ...draft, fxRate: fxRate || null }));
+                }}
+              />
+            </SettingsField>
+            <SettingsField id="market-lock" label={t("rateLock")} help={t("rateLockHelp")} error={lockError}>
+              <NumberInput
+                id="market-lock"
+                className="max-w-32"
+                disabled={!canEdit}
+                value={values.fxLockMinutes}
+                onValueChange={(fxLockMinutes) => setValues((draft) => ({ ...draft, fxLockMinutes }))}
+              />
+            </SettingsField>
+          </div>
+          {values.fxRate && !rateError ? (
+            <p className="text-body">
+              {t("exchangeRateLine", { shop, rate: values.fxRate, currency: values.currencyCode })}
+              {values.fxRateAsOf && values.currencyCode === savedCurrency
+                ? <span className="text-muted-foreground"> · {t("rateSetAt", { date: formatDateTime(new Date(values.fxRateAsOf), { dateStyle: "medium" }) })}</span>
+                : null}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </SettingsCard>
   );
 }
 
@@ -272,6 +396,11 @@ function PriceIncrementCard({ values, canEdit, onChange }: {
   const code = values.currencyCode;
   const choices = priceIncrementChoices(code);
   const whole = isWholeUnitIncrement(code, resolvePriceIncrementMinor(code, values.priceIncrementMinor));
+  if (sellsOwnCurrency(values)) {
+    // Its own currency's increment (MARKETS-DESIGN step 6): whole taka for BDT, else the minor unit.
+    const ownWhole = isWholeUnitIncrement(code, marketCurrencyIncrementMinor(code));
+    return <SettingsCard title={t("incrementTitle")} description={t("ownIncrement", { currency: code, increment: t(ownWhole ? "ownIncrementWhole" : "ownIncrementMinor") })} />;
+  }
   if (!values.isBackup) {
     return <SettingsCard title={t("incrementTitle")} description={t(whole ? "inheritedWhole" : "inheritedMinor")} />;
   }
@@ -306,14 +435,16 @@ const PREVIEW_UNITS = [499, 1_299, 2_450];
  * rounded up to a step and ending in an amount, with a live preview. Price
  * lists win over both; the card links to them.
  */
-function PricingCard({ values, canEdit, adjustmentError, setValues }: {
+function PricingCard({ values, canEdit, backupIncrement, adjustmentError, setValues }: {
   values: MarketForm;
   canEdit: boolean;
+  /** The backup market's increment: a market in the shop currency prices at it. */
+  backupIncrement: number;
   adjustmentError: string | null;
   setValues: (update: (draft: MarketForm) => MarketForm) => void;
 }) {
   const t = useMessages(settingsMarketsMessages);
-  const { fmt } = useCurrency();
+  const own = sellsOwnCurrency(values);
   const listsLink = <Link to="/admin/price-lists" className="text-body text-foreground underline">{t("priceListsLink")}</Link>;
   if (values.isBackup) {
     return (
@@ -322,13 +453,17 @@ function PricingCard({ values, canEdit, adjustmentError, setValues }: {
       </SettingsCard>
     );
   }
-  const increment = resolvePriceIncrementMinor(values.currencyCode, values.priceIncrementMinor);
+  // Steps, endings and the preview's converted prices are amounts of the market's currency;
+  // the preview's product prices are the shop currency's.
+  const increment = own ? marketCurrencyIncrementMinor(values.currencyCode) : backupIncrement;
   const places = getDecimalPlaces(values.currencyCode);
   const unit = 10 ** places;
-  const major = (minor: number) => fmt(minor / unit);
+  const major = (minor: number) => money(values.currencyCode, minor);
+  const shopUnit = 10 ** getDecimalPlaces(values.shopCurrencyCode);
   const steps = roundingChoices(values.currencyCode, increment);
   const endings = endingChoices(values.priceRoundingMinor, increment);
-  const preview = adjustedPricePreview(values, increment, PREVIEW_UNITS.map((units) => units * unit));
+  const preview = adjustedPricePreview(values, increment, PREVIEW_UNITS.map((units) => units * shopUnit));
+  const modes = own ? (["fx"] as const) : (["fixed", "fx"] as const);
   return (
     <SettingsCard title={t("pricingTitle")}>
       <RadioGroup
@@ -337,19 +472,21 @@ function PricingCard({ values, canEdit, adjustmentError, setValues }: {
         disabled={!canEdit}
         onValueChange={(mode) => setValues((draft) => ({ ...draft, priceMode: mode === "fx" ? "fx" : "fixed" }))}
       >
-        {(["fixed", "fx"] as const).map((mode) => (
+        {modes.map((mode) => (
           <label key={mode} className="flex min-h-11 items-start gap-2 py-2 text-body">
             <span className="flex h-lh items-center"><RadioGroupItem value={mode} /></span>
             <span>
-              <span className="block font-medium">{t(mode === "fx" ? "pricingAdjusted" : "pricingFixed")}</span>
-              <span className="block text-muted-foreground">{t(mode === "fx" ? "pricingAdjustedHelp" : "pricingFixedHelp")}</span>
+              <span className="block font-medium">{t(mode === "fx" ? (own ? "convertedPrices" : "pricingAdjusted") : "pricingFixed")}</span>
+              <span className="block text-muted-foreground">
+                {mode === "fx" && own ? t("convertedPricesHelp", { currency: values.currencyCode }) : t(mode === "fx" ? "pricingAdjustedHelp" : "pricingFixedHelp")}
+              </span>
             </span>
           </label>
         ))}
       </RadioGroup>
-      {values.priceMode === "fx" ? (
+      {values.priceMode === "fx" || own ? (
         <>
-          <p className="text-body text-muted-foreground">{t("sameCurrencyRate", { currency: values.currencyCode })}</p>
+          {own ? null : <p className="text-body text-muted-foreground">{t("sameCurrencyRate", { currency: values.currencyCode })}</p>}
           <SettingsField id="market-adjustment" label={t("adjustment")} help={t("adjustmentHelp")} error={adjustmentError}>
             <NumberInput
               id="market-adjustment"
@@ -396,7 +533,7 @@ function PricingCard({ values, canEdit, adjustmentError, setValues }: {
             <div className="space-y-1 text-body">
               <p className="font-medium">{t("previewTitle")}</p>
               <ul className="text-muted-foreground">
-                {preview.map((row) => <li key={row.base}>{t("previewRow", { base: major(row.base), adjusted: major(row.adjusted) })}</li>)}
+                {preview.map((row) => <li key={row.base}>{t("previewRow", { base: money(values.shopCurrencyCode, row.base), adjusted: major(row.adjusted) })}</li>)}
               </ul>
             </div>
           ) : null}

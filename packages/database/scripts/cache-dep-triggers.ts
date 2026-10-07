@@ -119,6 +119,8 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // The price filter reads the product discount live (`lo:price`).
   cdep_products_price_order: "0122_sales_channels",
   cdep_products_price_order_old: "0122_sales_channels",
+  // A market's currency (0123) is a visible column of its row.
+  cdep_markets_upd: "0123_market_currencies",
 };
 
 /**

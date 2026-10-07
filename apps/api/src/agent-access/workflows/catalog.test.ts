@@ -70,7 +70,7 @@ describe("agent workflow catalog", () => {
       "operations.thirty-day-booked-brief.v1",
       "theme.draft-landing-page.v1",
     ]);
-    expect(catalog.routes).toHaveLength(72);
+    expect(catalog.routes).toHaveLength(73);
     expect(catalog.controls).toHaveLength(30);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);

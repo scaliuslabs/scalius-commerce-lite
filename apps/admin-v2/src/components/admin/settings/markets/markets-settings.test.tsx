@@ -16,6 +16,7 @@ const sdk = vi.hoisted(() => ({
   patchApiV1AdminSettingsMarketsById: vi.fn(),
   postApiV1AdminSettingsMarkets: vi.fn(),
   deleteApiV1AdminSettingsMarketsById: vi.fn(),
+  getApiV1AdminSettingsMarketsCurrencies: vi.fn(),
 }));
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -50,7 +51,8 @@ import {
 const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data } });
 const backup = {
   id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", status: "active" as const, isBackup: true, revision: 3,
-  countries: ["BD"], presence: { value: "", locale: "bn" }, currencyCode: "BDT", priceIncrementMinor: 100,
+  countries: ["BD"], presence: { value: "", locale: "bn" }, currencyCode: "BDT", shopCurrencyCode: "BDT", ownCurrency: false, priceIncrementMinor: 100,
+  fxRateAsOf: null as string | null, fxLockMinutes: 30,
   priceIncrementInherited: false, pricesIncludeTax: true, hasOrders: true,
   priceMode: "fixed" as "fixed" | "fx", fxRate: null as string | null, priceAdjustmentPercent: 0, priceRounding: null as number | null, priceEnding: null as number | null,
   createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
@@ -77,6 +79,7 @@ describe("market form", () => {
     expect(marketUpdateBody({ ...form, status: "active" }, 1)).toEqual({
       expectedRevision: 1, name: "India", handle: "india", status: "active", countries: ["IN", "NP"],
       presence: { value: "en-in", locale: "en" }, pricesIncludeTax: true,
+      currencyCode: null, fxRate: null,
       priceMode: "fixed", priceAdjustmentPercent: 0, priceRounding: null, priceEnding: null,
     });
     expect(marketUpdateBody(withSubfolder(form, false), 1).presence).toBeNull();
@@ -94,6 +97,17 @@ describe("market form", () => {
     expect(endingChoices(10_000, 100)).toEqual([9_900, 9_500, 9_000]);
     expect(marketFormProblems({ ...form, priceAdjustmentPercent: -100 })).toEqual({ adjustment: "adjustmentInvalid" });
     expect(adjustedPricePreview({ ...form, priceMode: "fixed" }, 100, [129_900])).toEqual([]);
+  });
+
+  it("sells a market in its own currency at the merchant's rate and previews converted prices", () => {
+    const form = { ...marketForm(india), currencyCode: "GBP", fxRate: "0.0068", priceMode: "fx" as const, priceRoundingMinor: 100, priceEndingMinor: 99 };
+    expect(marketUpdateBody(form, 1)).toMatchObject({ currencyCode: "GBP", fxRate: "0.0068", fxLockMinutes: 30, priceMode: "fx", priceRounding: 1, priceEnding: 0.99 });
+    // ৳1,299 × 0.0068 = £8.8332 → up to £9 → ending .99: £8.99.
+    expect(adjustedPricePreview(form, 1, [129_900])).toEqual([{ base: 129_900, adjusted: 899 }]);
+    expect(marketFormProblems({ ...form, fxRate: null })).toEqual({ rate: "exchangeRateInvalid" });
+    expect(marketFormProblems({ ...form, fxLockMinutes: 2 })).toEqual({ lock: "rateLockInvalid" });
+    // Back to the shop currency: no currency of its own and no rate.
+    expect(marketUpdateBody({ ...form, currencyCode: "BDT" }, 1)).toMatchObject({ currencyCode: null, fxRate: null });
   });
 
   it("names what blocks a save", () => {
@@ -124,13 +138,16 @@ describe("markets settings", () => {
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
+    // A one-currency store: only cash on delivery, which charges no other currency.
+    sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: ["BDT"], marketCurrencies: [] }));
     sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [backup, { ...india, presence: { value: "en-in", locale: "en" } }] }));
     sdk.getApiV1AdminSettingsMarketsById.mockImplementation(({ path: { id } }: { path: { id: string } }) =>
       envelope({ market: id === "mkt_backup" ? backup : india }));
     sdk.patchApiV1AdminSettingsMarketsById.mockImplementation(({ path: { id }, body }: { path: { id: string }; body: Record<string, unknown> }) => {
       const current = id === "mkt_backup" ? backup : india;
-      const { expectedRevision: _revision, ...changes } = body;
-      return envelope({ market: { ...current, ...changes, revision: current.revision + 1 } });
+      // The API answers the market's currency, never null (null in a body is the shop currency).
+      const { expectedRevision: _revision, currencyCode, ...changes } = body;
+      return envelope({ market: { ...current, ...changes, currencyCode: currencyCode ?? current.shopCurrencyCode, revision: current.revision + 1 } });
     });
   });
 
@@ -205,11 +222,22 @@ describe("markets settings", () => {
     expect(sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body).toMatchObject({ pricesIncludeTax: false });
   });
 
+  it("offers the currencies a payment method charges, and asks for a rate only for another one", async () => {
+    sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: "any", marketCurrencies: [] }));
+    await render(<MarketEditor marketId="mkt_in" />);
+    await vi.waitFor(() => expect(container.querySelector("#market-currency")).not.toBeNull());
+    expect(container.textContent).toContain("Most stores keep BDT.");
+    expect(container.textContent).not.toContain("Exchange rate");
+  });
+
   it("gives another market a subfolder and says it uses the backup market's increment", async () => {
     await render(<MarketEditor marketId="mkt_in" />);
     await vi.waitFor(() => expect(container.textContent).toContain("Sell at a subfolder"));
     expect(container.textContent).toContain("This market uses the backup market's price increment: whole amounts.");
-    expect(container.textContent).toContain("Every market sells in the shop currency for now.");
+    // A store that can charge only its own currency sees no currency choice, just how to get one.
+    await vi.waitFor(() => expect(container.textContent).toContain("This market sells in BDT, like the rest of your store."));
+    expect(container.querySelector("#market-currency")).toBeNull();
+    expect(container.textContent).not.toContain("Exchange rate");
     expect(container.textContent).toContain("Delete market");
 
     // Off, the switch says what it gives; it makes no claim about orders.

@@ -33,6 +33,7 @@ import {
 import { matchCustomerSegments, promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
 import { deps } from "../../cache-deps";
+import { isForeignPresentment, presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
 
 /**
  * A cached read that shows automatic promotions is valid only until the next
@@ -438,6 +439,8 @@ async function loadOfferProducts(
     productIds: readonly string[],
     currencyCode: string,
     priceIncrementMinor: number,
+    /** A foreign cart: base prices are the shop currency's, so none is shown (MARKETS-DESIGN step 6). */
+    money?: PresentmentMoney,
 ): Promise<Map<string, DiscountOfferProduct>> {
     const result = new Map<string, DiscountOfferProduct>();
     if (productIds.length === 0) return result;
@@ -477,7 +480,7 @@ async function loadOfferProducts(
             slug: product.slug,
             name: product.name,
             variantId: sku?.id ?? null,
-            price: sku
+            price: sku && !(money && isForeignPresentment(money))
                 ? fromMinor(discountedPriceMinor(
                     sku.priceMinor,
                     discount.discountType,
@@ -500,6 +503,37 @@ function describeOffer(offer: StorefrontDiscountOffer): string {
     }
     const benefit = offer.basisPoints >= 10_000 ? "free" : `${offer.basisPoints / 100}% off`;
     return `Add ${item} to your cart to get it ${benefit}.`;
+}
+
+/**
+ * Promotion candidates in a foreign cart's currency (MARKETS-DESIGN step 6,
+ * Shopify's rule): every amount in the shop currency (a fixed amount off, a
+ * minimum subtotal, a buy amount) converts at the cart's locked rate and
+ * rounds to its increment, and then reads as the cart's currency. A spend
+ * budget stays in its own currency: the redemption ledger sums one currency,
+ * so a budgeted discount applies only in it ("not available in the checkout
+ * currency"). Amounts in any other currency stay and fail closed.
+ */
+export function candidatesInCurrency<T extends { conditions: ReadonlyArray<{ config: unknown }>; effects: ReadonlyArray<{ config: unknown }> }>(
+    candidates: readonly T[],
+    money: PresentmentMoney | undefined,
+): T[] {
+    if (!money || !isForeignPresentment(money)) return [...candidates];
+    const convert = (config: unknown): unknown => {
+        if (!config || typeof config !== "object") return config;
+        const record = config as Record<string, unknown>;
+        let next: Record<string, unknown> = record;
+        if (record.currencyCode === money.shopCurrencyCode && typeof record.amountMinor === "number" && Number.isSafeInteger(record.amountMinor)) {
+            next = { ...next, amountMinor: presentShopMinor(money, record.amountMinor), currencyCode: money.currencyCode };
+        }
+        if (record.buy && typeof record.buy === "object") next = { ...next, buy: convert(record.buy) };
+        return next;
+    };
+    return candidates.map((candidate) => ({
+        ...candidate,
+        conditions: candidate.conditions.map((condition) => ({ ...condition, config: convert(condition.config) })),
+        effects: candidate.effects.map((effect) => ({ ...effect, config: convert(effect.config) })),
+    }));
 }
 
 /**
@@ -526,7 +560,7 @@ export async function quoteStorefrontDiscount(
     const codes = normalizeCodes(input.codes);
     const now = input.evaluatedAtEpochSeconds ?? Math.floor(Date.now() / 1_000);
     const { currencyCode } = input.cart;
-    const loaded = await loadCandidates(db, codes, input, now);
+    const loaded = candidatesInCurrency(await loadCandidates(db, codes, input, now), input.cart.money);
     const candidates = typedCandidates(loaded);
     const knownCodes = new Set(loaded.flatMap((candidate) => candidate.codes.map(({ code }) => code)));
     const candidateByCode = new Map<string, Candidate>();
@@ -666,7 +700,7 @@ export async function quoteStorefrontDiscount(
     const offerProducts = await loadOfferProducts(db, [...new Set([
         ...offerDrafts.flatMap(({ productIds }) => productIds),
         ...rejected.flatMap(({ offer }) => offer?.productIds ?? []),
-    ])], currencyCode, input.cart.priceIncrementMinor);
+    ])], currencyCode, input.cart.priceIncrementMinor, input.cart.money);
     const finishOffer = ({ productIds, ...offer }: OfferDraft): StorefrontDiscountOffer => ({
         ...offer,
         products: productIds.flatMap((id) => {
@@ -751,6 +785,7 @@ export async function quoteStorefrontDiscount(
                     id, productId, variantId, unitPriceMinor, quantity,
                 })),
                 shippingAmountMinor: input.cart.shippingAmountMinor,
+                ...(input.cart.money ? { money: input.cart.money } : {}),
                 submittedCodes: accepted,
             },
             applied,

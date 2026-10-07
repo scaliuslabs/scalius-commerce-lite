@@ -1,6 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { readMarketPriceContext } from "@scalius/core/modules/price-lists";
+import { isMarketSubfolder } from "@scalius/shared/markets";
+import { presentmentPricingCurrency } from "@scalius/shared/presentment";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
@@ -50,6 +53,7 @@ const validateDiscountSchema = z.object({
     description: "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.",
   }),
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
+  presence: z.string().max(5).optional().openapi({ description: "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root." }),
 });
 
 /** The cart's gift-card products: promotions never apply to them (Wave B §4.2). */
@@ -96,7 +100,7 @@ const validateDiscountRoute = createRoute({
 
 app.openapi(validateDiscountRoute, async (c) => {
   const db = c.get("db");
-  const { codes, items = [], shippingCost, customerPhone } = c.req.valid("json");
+  const { codes, items = [], shippingCost, customerPhone, presence } = c.req.valid("json");
   const lines = items.flatMap((item, index) => item.variantId ? [{ item, index, variantId: item.variantId }] : []);
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
@@ -105,14 +109,18 @@ app.openapi(validateDiscountRoute, async (c) => {
   // signed-in buyer, who previews as checkout will price them (their segment
   // discounts and per-customer limits); a missing or stale session is a guest.
   const sessionToken = getCustomerSessionTokenFromRequest(c);
-  const [currency, giftCardProductIds, registrations, sessionCustomer] = await Promise.all([
+  const [shopCurrency, giftCardProductIds, registrations, sessionCustomer, market] = await Promise.all([
     readStoreCurrency(db),
     selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
     listActiveFunctionRegistrations(db),
     sessionToken
       ? getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
       : null,
+    // The page's market: a currency of its own prices the preview (one more statement, at a presence only).
+    presence && isMarketSubfolder(presence) ? readMarketPriceContext(db, presence).catch(() => null) : null,
   ]);
+  const money = market?.money ?? null;
+  const currency = money ? { ...presentmentPricingCurrency(money), symbol: shopCurrency.symbol } : shopCurrency;
   const signedInCustomerId = sessionCustomer?.customerId ?? null;
   const cartLines = lines.map(({ item, index, variantId }) => ({
     id: `cart:${index}:${variantId}`,
@@ -140,11 +148,12 @@ app.openapi(validateDiscountRoute, async (c) => {
         ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
       })),
       shippingAmountMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
+      ...(money ? { money } : {}),
     },
   });
   // The same rule as the tax quote and the order: promotions or bundles,
   // whichever saves more (checkout/bundle-discounts.ts).
-  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor);
+  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor, money);
   const interplay = resolveBundlePromotionInterplay(
     cartLines.map((line) => ({
       lineId: line.id,

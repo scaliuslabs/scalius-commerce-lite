@@ -1158,6 +1158,12 @@
             "type": "boolean",
             "description": "The backup market catches every buyer no other market matches and is sold at the root URL."
           },
+          "currencyCode": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The currency it sells in when it is not the shop currency (absent: the shop currency)."
+          },
           "countries": {
             "type": "array",
             "items": {
@@ -10884,13 +10890,21 @@
           },
           "currencyCode": {
             "type": "string",
-            "description": "Every market sells in the shop currency until markets get their own currency."
+            "description": "The currency it sells in: its own, else the shop currency. The backup market always sells in the shop currency."
+          },
+          "shopCurrencyCode": {
+            "type": "string",
+            "description": "The shop currency: the store's books."
+          },
+          "ownCurrency": {
+            "type": "boolean",
+            "description": "True when it sells in its own currency: its prices are your product prices converted at its exchange rate, unless a price list fixes them."
           },
           "priceIncrementMinor": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "The price increment its prices use, in minor units: the backup market's own, inherited by every other market."
+            "description": "The price increment its prices use, in minor units: the backup market's own, inherited by every market in the shop currency; a market in its own currency uses that currency's (whole taka for BDT, else the minor unit)."
           },
           "priceIncrementInherited": {
             "type": "boolean"
@@ -10911,6 +10925,16 @@
             "type": "string",
             "nullable": true,
             "description": "The manual exchange rate (market currency per shop currency unit); null uses the rate source. A market in the shop currency converts at 1."
+          },
+          "fxRateAsOf": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the manual rate was last set."
+          },
+          "fxLockMinutes": {
+            "type": "integer",
+            "description": "How long a placed order keeps the rate it was quoted (5 to 1,440 minutes)."
           },
           "priceAdjustmentPercent": {
             "type": "number",
@@ -10949,11 +10973,15 @@
           "countries",
           "presence",
           "currencyCode",
+          "shopCurrencyCode",
+          "ownCurrency",
           "priceIncrementMinor",
           "priceIncrementInherited",
           "pricesIncludeTax",
           "priceMode",
           "fxRate",
+          "fxRateAsOf",
+          "fxLockMinutes",
           "priceAdjustmentPercent",
           "priceRounding",
           "priceEnding",
@@ -20887,6 +20915,11 @@
                     "minLength": 7,
                     "maxLength": 16,
                     "description": "Customer phone for per-customer limits"
+                  },
+                  "presence": {
+                    "type": "string",
+                    "maxLength": 5,
+                    "description": "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root."
                   }
                 }
               }
@@ -31980,7 +32013,7 @@
           "Checkout"
         ],
         "summary": "Apply a gift card to checkout",
-        "description": "Proves a gift-card code and returns an opaque apply handle for the tax quote and the order. Any unusable card (unknown, disabled, expired, spent or in another currency) answers the same way.",
+        "description": "Proves a gift-card code and returns an opaque apply handle for the tax quote and the order. A card in the shop currency or a market's own currency pays at the checkout's locked rate. Any unusable card (unknown, disabled, expired, spent or in a currency the store does not sell in) answers the same way.",
         "requestBody": {
           "required": true,
           "content": {
@@ -57330,6 +57363,12 @@
                         "subtotal": {
                           "type": "number"
                         },
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "decimalPlaces": {
+                          "type": "integer"
+                        },
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
@@ -57780,6 +57819,43 @@
                         },
                         "decimalPlaces": {
                           "type": "integer"
+                        },
+                        "fx": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "shopCurrencyCode": {
+                              "type": "string",
+                              "description": "The shop currency: the store's books."
+                            },
+                            "rate": {
+                              "type": "string",
+                              "description": "Units of the checkout currency per shop currency unit (an exact decimal)."
+                            },
+                            "source": {
+                              "type": "string",
+                              "description": "`manual`: the market's rate set by the merchant; else a rate provider's id."
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time",
+                              "description": "When the rate was set."
+                            },
+                            "lockedUntil": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "An order placed now keeps this rate until then."
+                            }
+                          },
+                          "required": [
+                            "shopCurrencyCode",
+                            "rate",
+                            "source",
+                            "asOf",
+                            "lockedUntil"
+                          ],
+                          "description": "Null when the checkout is in the shop currency."
                         },
                         "settingsVersion": {
                           "type": "integer"
@@ -58429,6 +58505,7 @@
                         "shippingTaxed",
                         "currencyCode",
                         "decimalPlaces",
+                        "fx",
                         "settingsVersion",
                         "subtotalMinor",
                         "subtotalAmount",
@@ -126681,7 +126758,7 @@
           "Admin - Markets"
         ],
         "summary": "Markets: the backup market first, then by name",
-        "description": "Each market with its status, countries, currency and web presence. Every market sells in the shop currency until markets get their own currency.",
+        "description": "Each market with its status, countries, currency and web presence. The backup market sells in the shop currency; another market sells in it or in its own currency.",
         "responses": {
           "200": {
             "description": "Markets",
@@ -127024,6 +127101,164 @@
         }
       }
     },
+    "/api/v1/admin/settings/markets/currencies": {
+      "get": {
+        "operationId": "dashboard.markets.currencies",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "The currencies a market can sell in",
+        "description": "The shop currency, the currencies the store's active payment methods can charge (`any` when one charges every currency) and the currencies markets sell in now. A market may sell in its own currency only when an active payment method charges it (MARKETS-DESIGN step 6).",
+        "responses": {
+          "200": {
+            "description": "Market currencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shopCurrencyCode": {
+                          "type": "string"
+                        },
+                        "chargeable": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "any"
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        },
+                        "marketCurrencies": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "shopCurrencyCode",
+                        "chargeable",
+                        "marketCurrencies"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
     "/api/v1/admin/settings/markets/{id}": {
       "get": {
         "operationId": "dashboard.markets.get",
@@ -127174,7 +127409,7 @@
           "Admin - Markets"
         ],
         "summary": "Edit a market under the revision the editor loaded",
-        "description": "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it. Other markets may price by FX: product prices adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5).",
+        "description": "Fields left out keep their value. The backup market stays active at the root URL, sells in the shop currency and alone sets a price increment. Another market may sell in its own currency (one an active payment method charges) at its exchange rate, and may price by FX: product prices converted, adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5, step 6). A currency change makes open checkouts price again in the new currency.",
         "parameters": [
           {
             "schema": {
@@ -127252,6 +127487,19 @@
                     "maximum": 1000,
                     "description": "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)."
                   },
+                  "currencyCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "description": "Non-backup markets: the currency it sells in (ISO 4217); null or the shop currency sells in the shop currency. Another currency needs `fxRate` and at least one active payment method that charges it. Open checkouts price again in the new currency."
+                  },
+                  "fxLockMinutes": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 1440,
+                    "description": "Minutes a placed order keeps the rate it was quoted (default 30)."
+                  },
                   "pricesIncludeTax": {
                     "type": "boolean",
                     "description": "Whether its prices include tax (checkout and the order's tax read the order's market)."
@@ -127268,7 +127516,7 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 25,
-                    "description": "The manual exchange rate; null uses the rate source. While every market sells the shop currency it is 1."
+                    "description": "The manual exchange rate: units of the market currency per shop currency unit (a market in the shop currency converts at 1)."
                   },
                   "priceAdjustmentPercent": {
                     "type": "number",
@@ -145976,6 +146224,9 @@
                               "totalAmount": {
                                 "type": "number"
                               },
+                              "currencyCode": {
+                                "type": "string"
+                              },
                               "shippingCharge": {
                                 "type": "number"
                               },
@@ -147564,6 +147815,9 @@
                               },
                               "totalAmount": {
                                 "type": "number"
+                              },
+                              "currencyCode": {
+                                "type": "string"
                               },
                               "shippingCharge": {
                                 "type": "number"
@@ -151506,6 +151760,59 @@
                         "currencyDecimalPlaces": {
                           "type": "integer",
                           "nullable": true
+                        },
+                        "moneyChain": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "shopCurrencyCode": {
+                              "type": "string"
+                            },
+                            "rate": {
+                              "type": "string",
+                              "description": "Shop currency units per order currency unit, locked at checkout."
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            },
+                            "lockedUntil": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            },
+                            "subtotalShopAmount": {
+                              "type": "number"
+                            },
+                            "shippingShopAmount": {
+                              "type": "number"
+                            },
+                            "discountShopAmount": {
+                              "type": "number"
+                            },
+                            "taxShopAmount": {
+                              "type": "number"
+                            },
+                            "totalShopAmount": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "shopCurrencyCode",
+                            "rate",
+                            "source",
+                            "asOf",
+                            "lockedUntil",
+                            "subtotalShopAmount",
+                            "shippingShopAmount",
+                            "discountShopAmount",
+                            "taxShopAmount",
+                            "totalShopAmount"
+                          ]
                         },
                         "subtotalAmountMinor": {
                           "type": "integer",
@@ -211336,6 +211643,39 @@
         ]
       },
       {
+        "id": "dashboard.market-currency",
+        "surface": "dashboard",
+        "kind": "mixed",
+        "title": "Sell a market in its own currency",
+        "summary": "Read the currencies a market can sell in, set a market's currency with the merchant's exchange rate and rate lock, and verify the market.",
+        "examples": [
+          "Let the UK market sell in GBP at 1 BDT = 0.0068 GBP, then verify its prices convert."
+        ],
+        "tags": [
+          "markets",
+          "currency",
+          "exchange rate",
+          "multi-currency",
+          "pricing"
+        ],
+        "operationIds": [
+          "dashboard.markets.currencies",
+          "dashboard.markets.list",
+          "dashboard.markets.get",
+          "dashboard.markets.update"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "The backup market always sells in the shop currency; another market sells in it or in its own currency.",
+          "A market's own currency must be one an active payment method charges (dashboard.markets.currencies); turn such a method on first.",
+          "Require the merchant's rate as units of the market currency per one shop currency unit; never look a rate up or guess one.",
+          "Open carts and checkouts price again in the new currency; placed orders keep theirs. Reports stay in the shop currency.",
+          "Confirm the currency change, then verify the market and a product's price at its presence."
+        ]
+      },
+      {
         "id": "dashboard.media-upload",
         "surface": "dashboard",
         "kind": "write",
@@ -216919,6 +217259,14 @@
           ]
         },
         {
+          "operationId": "dashboard.markets.currencies",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.market-currency"
+          ]
+        },
+        {
           "operationId": "dashboard.markets.delete",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -216929,25 +217277,25 @@
         {
           "operationId": "dashboard.markets.get",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.markets.get"
+            "dashboard.market-currency"
           ]
         },
         {
           "operationId": "dashboard.markets.list",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.markets.list"
+            "dashboard.market-currency"
           ]
         },
         {
           "operationId": "dashboard.markets.update",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.markets.update"
+            "dashboard.market-currency"
           ]
         },
         {

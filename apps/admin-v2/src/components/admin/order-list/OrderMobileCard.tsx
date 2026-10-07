@@ -5,7 +5,7 @@ import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
-import { useCurrency } from "@/hooks/use-currency";
+import { useOrderCurrency } from "@/hooks/use-order-currency";
 import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -37,7 +37,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   isSelected: boolean;
   onToggleSelection: () => void;
 }) {
-  const { fmt } = useCurrency();
+  const { fmtIn } = useOrderCurrency();
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
@@ -68,7 +68,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
             <span className="whitespace-nowrap font-mono font-medium">{orderName(order)}</span>
             <AttentionMarker order={order} plain />
           </span>
-          <span className="shrink-0 font-medium tabular-nums">{fmt(order.totalAmount)}</span>
+          <span className="shrink-0 font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
         </span>
         <span className="flex items-center justify-between gap-3 text-body">
           <span className="min-w-0 truncate">{order.customerName}</span>
@@ -94,7 +94,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           ) : delivery ? (
             <span className={cn(TONE_TEXT[delivery.tone])}>{delivery.text}</span>
           ) : deliveryMethod(order, to)}
-          {collect > 0 ? <>{" · "}<span className="text-foreground tabular-nums">{t("codToCollect", { amount: fmt(collect) })}</span></> : null}
+          {collect > 0 ? <>{" · "}<span className="text-foreground tabular-nums">{t("codToCollect", { amount: fmtIn(collect, order.currencyCode) })}</span></> : null}
         </span>
       </Link>
     </div>

@@ -16,6 +16,7 @@ import {
     type GiftCardTender,
 } from "@scalius/shared/gift-card-tender";
 import { AppError } from "../../errors";
+import { convertStoreCurrencyMinor, type StoreCurrencyRate } from "@scalius/shared/presentment";
 import { deriveGiftCardKeys, hashGiftCardCode, type GiftCardKeys } from "./crypto";
 import { openGiftCardApplyHandle, sealGiftCardApplyHandle } from "./apply-handle";
 
@@ -56,15 +57,22 @@ export function isGiftCardExpired(card: Pick<GiftCardRow, "expiresAt">, nowSecon
     return card.expiresAt !== null && card.expiresAt <= nowSeconds;
 }
 
-/** Whether a card can pay right now (mirrors the redeem trigger guard, plus currency and balance). */
+/**
+ * Whether a card can pay right now (mirrors the redeem trigger guard, plus
+ * currency and balance). `currencyCode` is the currency, or the currencies,
+ * the card may pay in: a store sells in its shop currency and its markets'
+ * own currencies, and a card of any of them pays in another at the locked
+ * rate (Shopify's rule, MARKETS-DESIGN step 6).
+ */
 export function giftCardUsability(
     card: Pick<GiftCardRow, "status" | "expiresAt" | "balanceMinor" | "currencyCode">,
-    currencyCode: string,
+    currencyCode: string | readonly string[],
     nowSeconds = Math.floor(Date.now() / 1000),
 ): GiftCardUsability {
     if (card.status !== "active") return "disabled";
     if (isGiftCardExpired(card, nowSeconds)) return "expired";
-    if (card.currencyCode !== currencyCode) return "wrong_currency";
+    const accepted = typeof currencyCode === "string" ? [currencyCode] : currencyCode;
+    if (!accepted.includes(card.currencyCode)) return "wrong_currency";
     if (card.balanceMinor <= 0) return "empty";
     return "usable";
 }
@@ -94,7 +102,7 @@ export interface AppliedGiftCard {
  */
 export async function applyGiftCardCode(
     db: Database,
-    input: { code: unknown; currencyCode: string; credentialEncryptionKey: string | null | undefined; masterSecret: string },
+    input: { code: unknown; currencyCode: string | readonly string[]; credentialEncryptionKey: string | null | undefined; masterSecret: string },
 ): Promise<AppliedGiftCard> {
     const keys = await deriveGiftCardKeys(input.credentialEncryptionKey);
     const card = await findGiftCardByCode(db, keys, input.code);
@@ -139,8 +147,12 @@ export interface ResolvedTenderCard {
     handle: string;
     giftCardId: string;
     last4: string;
+    /** What the card can pay, in the order's currency (its balance converted down at the locked rate). */
     balanceMinor: number;
     expiresAt: number | null;
+    /** The card's own currency and balance (the ledger's). */
+    cardCurrencyCode: string;
+    cardBalanceMinor: number;
 }
 
 export interface GiftCardTenderResolution {
@@ -156,7 +168,17 @@ export interface GiftCardTenderResolution {
  */
 export async function resolveGiftCardTenderCards(
     db: Database,
-    input: { handles: readonly string[]; masterSecret: string | null; currencyCode: string },
+    input: {
+        handles: readonly string[];
+        masterSecret: string | null;
+        /** The order's currency. */
+        currencyCode: string;
+        /**
+         * The store currencies a card may be in, with their rates, the order's
+         * among them (MARKETS-DESIGN step 6). Absent: only the order's currency.
+         */
+        rates?: readonly StoreCurrencyRate[];
+    },
 ): Promise<GiftCardTenderResolution> {
     if (input.handles.length === 0) return { cards: [], unusableHandles: [] };
     if (!input.masterSecret) return { cards: [], unusableHandles: [...input.handles] };
@@ -173,12 +195,23 @@ export async function resolveGiftCardTenderCards(
         : [];
     const byId = new Map(rows.map((row) => [row.id, row]));
     const now = Math.floor(Date.now() / 1000);
+    const orderRate = input.rates?.find((rate) => rate.code === input.currencyCode);
+    const accepted = orderRate ? input.rates!.map((rate) => rate.code) : [input.currencyCode];
     const cards: ResolvedTenderCard[] = [];
     const unusableHandles: string[] = [];
     const seen = new Set<string>();
     for (const entry of opened) {
         const card = entry.giftCardId ? byId.get(entry.giftCardId) : undefined;
-        if (!card || giftCardUsability(card, input.currencyCode, now) !== "usable") {
+        if (!card || giftCardUsability(card, accepted, now) !== "usable") {
+            unusableHandles.push(entry.handle);
+            continue;
+        }
+        const cardRate = orderRate ? input.rates!.find((rate) => rate.code === card.currencyCode) : undefined;
+        // Converted down: a card never pays more than its balance is worth.
+        const balanceMinor = cardRate && orderRate && card.currencyCode !== input.currencyCode
+            ? convertStoreCurrencyMinor(card.balanceMinor, cardRate, orderRate, "down")
+            : card.balanceMinor;
+        if (balanceMinor <= 0) {
             unusableHandles.push(entry.handle);
             continue;
         }
@@ -188,8 +221,10 @@ export async function resolveGiftCardTenderCards(
             handle: entry.handle,
             giftCardId: card.id,
             last4: card.codeLast4,
-            balanceMinor: card.balanceMinor,
+            balanceMinor,
             expiresAt: card.expiresAt,
+            cardCurrencyCode: card.currencyCode,
+            cardBalanceMinor: card.balanceMinor,
         });
     }
     return { cards, unusableHandles };
@@ -211,6 +246,8 @@ export async function quoteGiftCardTender(
         handles: readonly string[];
         masterSecret: string | null;
         currencyCode: string;
+        /** The store currencies a card may be in (`resolveGiftCardTenderCards`). */
+        rates?: readonly StoreCurrencyRate[];
         totalMinor: number;
         giftCardLineTotalMinor: number;
         depositPlan: boolean;

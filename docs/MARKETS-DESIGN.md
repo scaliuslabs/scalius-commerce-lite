@@ -249,7 +249,7 @@ private, and the increment lives in the `currency` document, which its
 settings dependency already covers.
 
 **Left for later steps.** Checkout locks no FX quote yet (`fx_as_of` and
-`fx_locked_until` stay null). No built-in adapter reports settlement (Stripe
+`fx_locked_until` stay null; step 6 sets them). No built-in adapter reports settlement (Stripe
 needs the balance transaction). `customer_order_stats`, order lines and
 report measures hold presentment amounts; they move to shop amounts before a
 second currency is enabled (step 6).
@@ -1074,6 +1074,131 @@ Per-channel prices and per-channel market availability. Scheduled
 publishing (`published_at` in the future). Channel-scoped reservations and
 fulfilment from the channel's nearest location. Orders list filter by sales
 channel. Creating extra online store channels for a second storefront.
+
+## Step 6 implemented
+
+A store whose markets all sell in the shop currency behaves as before: the
+same bytes for every root read, the same D1 calls and statements in every
+free-plan budget scenario and render budget, and same-currency orders
+(rate "1", shop amounts equal to presentment amounts).
+
+**Schema.** Migration `0123_market_currencies` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 123; no Drizzle snapshot, see the
+allowlist) adds to `markets`:
+
+- `currency_code`: NULL sells in the shop currency; an ISO code sells in that
+  currency. Triggers keep the backup market in the shop currency and a market
+  in its own currency in `fx` mode (`MARKET_CURRENCY_INVALID`);
+- `fx_rate_as_of`: when the manual rate was set (an order's `fx_as_of`);
+- `fx_lock_minutes` (5 to 1,440, default 30): how long a placed order keeps
+  its rate (an order's `fx_locked_until`).
+
+A change of a market's currency or lock advances the checkout authority
+fence. `customer_order_stats` sums what each customer spent in the shop
+currency (an order in another currency adds its paid share of
+`total_shop_minor`).
+
+**Currency.** Only the backup market's currency is fixed: the shop currency.
+Another market sells in the shop currency or in its own. Its own currency
+needs a manual rate (units of the market currency per shop unit) and at
+least one active payment method that charges it (`chargeCurrencies`; the
+API refuses others with the reason). `dashboard.markets.currencies` lists
+the shop currency, the chargeable currencies and the market currencies. A
+new shop currency is refused while a market sells in its own (its rate is
+against the old one).
+
+Decision: a currency change **re-prices** open carts and checkouts. The
+fence refuses a commit priced before the change, and cart validation answers
+the new prices. Placed orders keep their currency and rate. List prices in
+the old currency stay but no longer apply.
+
+**Prices** (D5). `resolvePrice()` is unchanged. In a market's own currency,
+fixed list prices in that currency come first; else the base price is
+converted at the rate, adjusted, rounded to the step and the ending. A
+market's price increment in its own currency is the currency's default (whole
+taka for BDT, else the minor unit); the step and ending round further. A
+market without a usable rate refuses its prices
+(`MARKET_PRICES_UNAVAILABLE`), never shows them unconverted.
+
+**Shop amounts** (Shopify's rule, `@scalius/shared/presentment`). Every
+amount the store keeps in the shop currency converts at the locked rate and
+rounds half-up to the market's increment, unless a fixed amount exists:
+delivery fees and free-over thresholds, promotion fixed amounts, minimum
+subtotals and buy amounts, bundle fixed prices, buyer-input surcharges and
+money custom fields. The product page, the cart and checkout convert each
+one the same way, so the buyer pays what the page showed. A promotion with a
+spend budget stays in its budget currency (the redemption ledger sums one
+currency): it is "not available in the checkout currency" elsewhere. EMI
+plans and offer product prices are not shown in another currency. App
+discounts answer in the cart's currency (the cart they see).
+
+**Checkout.** The presentment currency is the order's market currency (the
+shipping country's, else the billed country's, else the backup market; the
+cart page uses the presence). The quote returns `fx` (shop currency, rate,
+source, as-of time and the lock an order placed now gets). The order stores
+`fx_rate` as the inverse (shop units per presentment unit, 12 fraction
+digits), `fx_source` `manual`, `fx_as_of` and `fx_locked_until` (placed at +
+the market's lock), and exact shop amounts at that rate. The lock is the
+rate's: a manual rate changes only through the fence, so a quote and its
+commit always price at one rate.
+
+- Gateways that cannot charge the currency are not offered or accepted.
+  Advance (deposit) plans are a shop-currency amount: an order in another
+  currency is paid in full.
+- Cash collection uses the CLDR cash increment (`cashIncrementMinor`: CHF
+  0.05, SEK whole kronor, BDT whole taka). An amount due it cannot collect
+  is refused before the commit, never rounded silently. Cash on delivery
+  still serves Bangladesh only. No POS cash path exists yet; it takes the
+  same rule.
+- **Gift cards** (Shopify's rule): a card in the shop currency or the order's
+  currency pays; a card in another currency is converted down at the locked
+  rate (it never pays more than it holds). Its debit is the applied amount
+  converted up, in the card's currency, and the tender payment records it as
+  its settlement (`settlement_currency`, `settlement_amount_minor`,
+  `exchange_adjustment_minor` against the order's rate). A release gives the
+  card its debit back; a refund credits its share of the debit, rounded down.
+  Store credit is issued in the order's currency.
+
+**Settlement and refunds** (D2). Refunds stay in the presentment currency.
+Staff orders are in the shop currency (Shopify's draft-order default).
+Amendments keep an order's currency and rate; an order in another currency
+keeps its lines and their prices (new lines go in a new order).
+
+**Reports.** Every sales, payment, refund, cash on delivery, discount and
+recovery measure reads orders kept in the shop currency (`shop_currency`) and
+converts each amount at the order's rate. Nothing sums mixed currencies.
+Gift-card liability is per currency.
+
+**Storefront.** A presence of a market in its own currency shows it: the
+layout's currency (symbol, places, increment) comes from the matrix, so the
+catalogue, cards, product page, search, recommendations, feeds (Google's
+rule: the currency of the target country), Product JSON-LD, delivery rates
+and the checkout config are in it. The market selector names each market's
+currency. A cart moved to another market's currency takes its new prices at
+once. Emails, receipts and invoices use the order's currency.
+
+**Dashboard.** Settings → Markets → a market: Currency (the shop currency or
+another, the manual rate as "1 BDT = 0.0068 GBP", its as-of date and the rate
+lock), the price increment of its currency and the pricing card with a
+converted preview. Settings → Payments badges each method's currencies.
+Orders show their own currency; an order in another currency also shows its
+shop total and locked rate. Copy is in English and Bangla.
+
+**Agents and MCP.** New registry row `dashboard.markets.currencies` (RBAC:
+settings view) and the workflow `dashboard.market-currency`; markets take
+`currencyCode` and `fxLockMinutes`. The SDK is regenerated.
+
+**DVC.** `markets.currency_code` is visible (`mk:<id>`, `mk:*`): the presence
+matrix, presence reads and the checkout config show it. `fx_rate_as_of` and
+`fx_lock_minutes` are noise (only orders show them). A presence's delivery
+rates declare its market's `mk:<id>` and `pl:<id>` (the currency and rate
+ride in the rate statement).
+
+**Left for later.** A rate provider app through `FxRateSource`. Listing sort,
+price facets and discount sort on market prices. Per-currency fixed delivery
+and promotion amounts. Gift cards in a third currency. Duties and
+merchant-of-record. Multi-currency payouts. Staff orders in a market's
+currency.
 
 ## Non-goals in this wave
 

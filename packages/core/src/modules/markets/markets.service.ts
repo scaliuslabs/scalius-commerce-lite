@@ -3,9 +3,11 @@
 // revision. The database keeps the invariants that must never break (one
 // backup market, one market per country, the root URL for the backup only,
 // no delete of a market with orders); this service turns them into
-// merchant-facing errors and keeps the step-2 rules: every market sells in
-// the shop currency, only the backup market has a price increment, and the
-// dashboard creates subfolder presences only.
+// merchant-facing errors and keeps the rules: the backup market sells in the
+// shop currency at its own price increment; another market sells in the shop
+// currency (and uses that increment) or in its own currency (step 6), at its
+// exchange rate and its currency's increment; the dashboard creates subfolder
+// presences only.
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
@@ -39,6 +41,13 @@ import {
     type MarketPriceMode,
 } from "@scalius/shared/market-pricing";
 import { isFxRate } from "@scalius/shared/money-chain";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import {
+    DEFAULT_FX_LOCK_MINUTES,
+    MAX_FX_LOCK_MINUTES,
+    MIN_FX_LOCK_MINUTES,
+    marketCurrencyIncrementMinor,
+} from "@scalius/shared/presentment";
 import { readStoreCurrency } from "./pricing";
 import { checkoutCopyFollowsDefaultWrites, ensureStoreLanguageWrites } from "../translations";
 
@@ -63,11 +72,23 @@ export interface MarketRecord {
     countries: string[];
     /** The root presence (backup) or the market's subfolder; null when it has none. */
     presence: MarketPresenceRecord | null;
-    /** Every market sells in the shop currency until step 6. */
+    /** The currency it sells in: its own (step 6), else the shop currency. */
     currencyCode: string;
-    /** The price increment its prices use: the backup market's own, inherited by every other market. */
+    /** The shop currency (the books' currency, the backup market's). */
+    shopCurrencyCode: string;
+    /** True when it sells in its own currency, not the shop's. */
+    ownCurrency: boolean;
+    /**
+     * The price increment its prices use: the backup market's own, inherited
+     * by every market in the shop currency; a market in its own currency uses
+     * that currency's (whole taka for BDT, else the minor unit).
+     */
     priceIncrementMinor: number;
     priceIncrementInherited: boolean;
+    /** When its manual rate was last set; null without one. */
+    fxRateAsOf: Date | null;
+    /** How long a placed order keeps its rate, in minutes. */
+    fxLockMinutes: number;
     /** Whether its prices include tax (MARKETS-DESIGN D8): checkout and the order's tax snapshot read it. */
     pricesIncludeTax: boolean;
     /**
@@ -102,6 +123,12 @@ export interface MarketInput {
     pricesIncludeTax?: boolean;
 }
 
+/** Which currencies a market may sell in: those an active payment method can charge (the API reads them). */
+export interface MarketCurrencyPolicy {
+    /** Codes at least one active payment method charges; "any" when one charges every currency. */
+    chargeable: readonly string[] | "any";
+}
+
 /** How a non-backup market prices (MARKETS-DESIGN D5); amounts in minor units. */
 export interface MarketPricingUpdate {
     priceMode?: MarketPriceMode;
@@ -122,6 +149,14 @@ export interface MarketUpdate extends MarketPricingUpdate {
     /** Backup market only. */
     priceIncrementMinor?: number;
     pricesIncludeTax?: boolean;
+    /**
+     * Non-backup markets (step 6): the currency it sells in; null or the shop
+     * currency sells in the shop currency. Another currency needs an exchange
+     * rate (`fxRate`) and prices in `fx` mode.
+     */
+    currencyCode?: string | null;
+    /** Minutes a placed order keeps its rate (5 to 1,440). */
+    fxLockMinutes?: number;
 }
 
 const KNOWN_COUNTRIES: ReadonlySet<string> = new Set(getCountries());
@@ -160,9 +195,9 @@ async function loadRecords(db: Database, ids?: readonly string[]): Promise<Marke
             revision: row.revision,
             countries: countryRows.filter((country) => country.marketId === row.id).map((country) => country.countryCode),
             presence: (row.isBackup ? presences.find((each) => each.value === "") : presences.find((each) => each.value !== "")) ?? null,
-            currencyCode: currency.code,
-            priceIncrementMinor: row.isBackup ? resolvePriceIncrementMinor(currency.code, row.priceIncrementMinor) : backupIncrement,
-            priceIncrementInherited: !row.isBackup,
+            ...marketCurrencyFields(row, currency.code, backupIncrement),
+            fxRateAsOf: row.fxRateAsOf === null || row.fxRateAsOf === undefined ? null : new Date(Number(row.fxRateAsOf) * 1_000),
+            fxLockMinutes: Number(row.fxLockMinutes ?? DEFAULT_FX_LOCK_MINUTES),
             pricesIncludeTax: Boolean(row.pricesIncludeTax),
             priceMode: (row.priceMode === "fx" ? "fx" : "fixed") as MarketPriceMode,
             fxRate: row.fxRate,
@@ -177,6 +212,25 @@ async function loadRecords(db: Database, ids?: readonly string[]): Promise<Marke
         ...record,
         presence: presence ? { value: presence.value, locale: presence.locale } : null,
     }));
+}
+
+/** A market's currency facts: its own currency, else the shop's at the backup increment. */
+function marketCurrencyFields(
+    row: { isBackup: boolean | number; currencyCode?: string | null; priceIncrementMinor: number | null },
+    shopCode: string,
+    backupIncrement: number,
+) {
+    const own = !row.isBackup && row.currencyCode ? row.currencyCode : null;
+    const ownCurrency = own !== null && own !== shopCode;
+    return {
+        currencyCode: ownCurrency ? own! : shopCode,
+        shopCurrencyCode: shopCode,
+        ownCurrency,
+        priceIncrementMinor: row.isBackup
+            ? resolvePriceIncrementMinor(shopCode, row.priceIncrementMinor)
+            : ownCurrency ? marketCurrencyIncrementMinor(own!) : backupIncrement,
+        priceIncrementInherited: !row.isBackup && !ownCurrency,
+    };
 }
 
 export async function listMarkets(db: Database): Promise<MarketRecord[]> {
@@ -357,7 +411,12 @@ export interface MarketUpdateResult {
     priceIncrementChanged: boolean;
 }
 
-export async function updateMarket(db: Database, id: string, update: MarketUpdate): Promise<MarketUpdateResult> {
+export async function updateMarket(
+    db: Database,
+    id: string,
+    update: MarketUpdate,
+    currencyPolicy: MarketCurrencyPolicy = { chargeable: "any" },
+): Promise<MarketUpdateResult> {
     const current = await getMarket(db, id);
     if (current.revision !== update.expectedRevision) {
         throw new ConflictError("This market changed in another session. Reload it, then save again.");
@@ -373,7 +432,7 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
     let priceIncrementMinor: number | null = null;
     if (update.priceIncrementMinor !== undefined) {
         if (!current.isBackup) {
-            throw new ValidationError("Markets sell in the shop currency, so they use the backup market's price increment.");
+            throw new ValidationError("Only the backup market sets a price increment. A market in the shop currency uses it; a market in its own currency uses that currency's.");
         }
         if (!isPriceIncrementMinor(current.currencyCode, update.priceIncrementMinor)) {
             throw new ValidationError(`Choose how ${current.currencyCode} prices are entered: ${priceIncrementChoices(current.currencyCode).join(" or ")} minor units.`);
@@ -381,7 +440,14 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
         priceIncrementMinor = update.priceIncrementMinor;
     }
 
-    const pricing = cleanPricing(current, update);
+    const currency = cleanCurrency(current, update, currencyPolicy);
+    const pricing = cleanPricing(current, update, currency);
+    if (update.fxLockMinutes !== undefined) {
+        if (current.isBackup) throw new ValidationError("The backup market sells in the shop currency, so it locks no rate.");
+        if (!Number.isSafeInteger(update.fxLockMinutes) || update.fxLockMinutes < MIN_FX_LOCK_MINUTES || update.fxLockMinutes > MAX_FX_LOCK_MINUTES) {
+            throw new ValidationError(`A rate lock is from ${MIN_FX_LOCK_MINUTES} to ${MAX_FX_LOCK_MINUTES} minutes.`);
+        }
+    }
 
     if (update.presence !== undefined) {
         if (current.isBackup) {
@@ -421,6 +487,10 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
         ...(priceIncrementMinor === null ? {} : { priceIncrementMinor }),
         ...(update.pricesIncludeTax === undefined ? {} : { pricesIncludeTax: update.pricesIncludeTax }),
         ...pricing,
+        ...(currency.changed ? { currencyCode: currency.own ? currency.code : null } : {}),
+        // The rate's as-of time: a new manual rate is set now.
+        ...("fxRate" in pricing && pricing.fxRate !== current.fxRate ? { fxRateAsOf: pricing.fxRate === null ? null : sql`unixepoch()` } : {}),
+        ...(update.fxLockMinutes === undefined ? {} : { fxLockMinutes: update.fxLockMinutes }),
         revision: sql`${markets.revision} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(eq(markets.id, id)));
@@ -433,44 +503,96 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
     return { market, priceIncrementChanged: market.isBackup && market.priceIncrementMinor !== current.priceIncrementMinor };
 }
 
+interface CleanCurrency {
+    /** The currency the market will sell in. */
+    code: string;
+    /** It is not the shop currency. */
+    own: boolean;
+    changed: boolean;
+}
+
 /**
- * The pricing columns a market update writes (only the fields it names),
- * checked as a whole against the market's currency and price increment: the
- * backup market sells at base prices; a market in the shop currency converts
- * at "1"; a rounding step and an ending are multiples of the increment, the
- * ending inside its step.
+ * The currency a market update sells in (MARKETS-DESIGN step 6). The backup
+ * market sells in the shop currency. Another market may sell in its own
+ * currency when at least one active payment method can charge it; null or
+ * the shop currency sells in the shop currency.
  */
-function cleanPricing(current: MarketRecord, update: MarketPricingUpdate): MarketPricingUpdate {
+function cleanCurrency(current: MarketRecord, update: MarketUpdate, policy: MarketCurrencyPolicy): CleanCurrency {
+    if (update.currencyCode === undefined) {
+        return { code: current.currencyCode, own: current.ownCurrency, changed: false };
+    }
+    const shop = current.shopCurrencyCode;
+    const code = update.currencyCode === null ? shop : normalizeSupportedCurrencyCode(update.currencyCode);
+    if (!code) throw new ValidationError("Choose a supported currency.");
+    if (current.isBackup && code !== shop) {
+        throw new ValidationError(`The backup market sells in the shop currency, ${shop}. Change the shop currency in Settings → Store details.`);
+    }
+    const own = code !== shop;
+    if (own && policy.chargeable !== "any" && !policy.chargeable.includes(code)) {
+        throw new ValidationError(`No active payment method can charge ${code}. Turn on a payment method that charges ${code}, then choose it.`);
+    }
+    return { code, own, changed: code !== current.currencyCode };
+}
+
+/**
+ * The pricing columns a market update writes (only the fields it names, and
+ * all of them when its currency changes), checked as a whole against the
+ * market's currency and price increment: the backup market sells at base
+ * prices; a market in the shop currency converts at "1"; a market in its own
+ * currency converts at its rate (`fx` mode; fixed prices go in price lists);
+ * a rounding step and an ending are multiples of the increment, the ending
+ * inside its step. A new currency drops the old step and ending (they were
+ * amounts of the old currency).
+ */
+function cleanPricing(current: MarketRecord, update: MarketPricingUpdate, currency: CleanCurrency): MarketPricingUpdate {
     const named = (["priceMode", "fxRate", "priceAdjustmentBps", "priceRoundingMinor", "priceEndingMinor"] as const)
-        .filter((field) => update[field] !== undefined);
+        .filter((field) => update[field] !== undefined || (currency.changed && field !== "priceAdjustmentBps"));
     if (named.length === 0) return {};
     if (current.isBackup) {
         throw new ValidationError("The backup market sells at your product prices. Set pricing on your other markets.");
     }
+    const keepOrReset = <K extends "priceRoundingMinor" | "priceEndingMinor">(field: K) =>
+        update[field] !== undefined ? update[field]! : currency.changed ? null : current[field];
     const next = {
-        priceMode: update.priceMode ?? current.priceMode,
-        fxRate: update.fxRate === undefined ? current.fxRate : update.fxRate?.trim() || null,
+        priceMode: update.priceMode ?? (currency.own ? "fx" as const : current.priceMode),
+        fxRate: update.fxRate !== undefined ? update.fxRate?.trim() || null : currency.changed ? null : current.fxRate,
         priceAdjustmentBps: update.priceAdjustmentBps ?? current.priceAdjustmentBps,
-        priceRoundingMinor: update.priceRoundingMinor === undefined ? current.priceRoundingMinor : update.priceRoundingMinor,
-        priceEndingMinor: update.priceEndingMinor === undefined ? current.priceEndingMinor : update.priceEndingMinor,
+        priceRoundingMinor: keepOrReset("priceRoundingMinor"),
+        priceEndingMinor: keepOrReset("priceEndingMinor"),
     };
     if (!isMarketPriceMode(next.priceMode)) throw new ValidationError("Choose fixed prices or prices converted at an exchange rate.");
-    // Every market sells in the shop currency until step 6: its rate is 1.
-    if (next.fxRate !== null && (!isFxRate(next.fxRate) || Number(next.fxRate) !== 1)) {
-        throw new ValidationError(`This market sells in ${current.currencyCode}, the shop currency, so its exchange rate is 1. Use the price adjustment to raise or lower its prices.`);
+    const shop = current.shopCurrencyCode;
+    if (currency.own) {
+        if (next.priceMode !== "fx") {
+            throw new ValidationError(`This market sells in ${currency.code}, so its prices are your product prices converted at its exchange rate. Fixed ${currency.code} prices go in a price list.`);
+        }
+        if (next.fxRate === null || !isFxRate(next.fxRate)) {
+            throw new ValidationError(`Enter the exchange rate: how many ${currency.code} one ${shop} buys.`);
+        }
+    } else if (next.fxRate !== null && (!isFxRate(next.fxRate) || Number(next.fxRate) !== 1)) {
+        throw new ValidationError(`This market sells in ${shop}, the shop currency, so its exchange rate is 1. Use the price adjustment to raise or lower its prices.`);
     }
+    const incrementMinor = currency.own ? marketCurrencyIncrementMinor(currency.code) : current.priceIncrementMinor;
     const issue = marketFxPolicyIssue({
         rate: next.fxRate ?? "1",
         adjustmentBps: next.priceAdjustmentBps,
         roundingMinor: next.priceRoundingMinor,
         endingMinor: next.priceEndingMinor,
-    }, current.priceIncrementMinor);
+    }, incrementMinor);
     if (issue === "adjustment") {
         throw new ValidationError(`A price adjustment is from ${MARKET_PRICE_ADJUSTMENT_MIN_BPS / 100}% to +${MARKET_PRICE_ADJUSTMENT_MAX_BPS / 100}%.`);
     }
     if (issue === "rounding") throw new ValidationError("Round prices to a step that is a whole number of price increments.");
     if (issue === "ending") throw new ValidationError("A price ending needs a rounding step, and is above zero and below the step, in whole price increments.");
+    if (issue === "rate") throw new ValidationError(`Enter the exchange rate: how many ${currency.code} one ${shop} buys.`);
     return Object.fromEntries(named.map((field) => [field, next[field]])) as MarketPricingUpdate;
+}
+
+/** The currencies markets sell in besides the shop currency (a shop currency change waits until none). */
+export async function listOwnMarketCurrencies(db: Database): Promise<string[]> {
+    const rows = await db.selectDistinct({ code: markets.currencyCode }).from(markets)
+        .where(sql`${markets.currencyCode} IS NOT NULL`);
+    return rows.flatMap((row) => row.code ? [row.code] : []).sort();
 }
 
 export async function deleteMarket(db: Database, id: string, expectedRevision: number): Promise<void> {

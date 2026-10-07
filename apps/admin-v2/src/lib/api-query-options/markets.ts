@@ -7,6 +7,7 @@ import {
   deleteApiV1AdminSettingsMarketsById,
   getApiV1AdminSettingsMarkets,
   getApiV1AdminSettingsMarketsById,
+  getApiV1AdminSettingsMarketsCurrencies,
   patchApiV1AdminSettingsMarketsById,
   postApiV1AdminSettingsMarkets,
 } from "@scalius/api-client/sdk";
@@ -32,6 +33,20 @@ export const marketsQueryOptions = () =>
     staleTime: 30_000,
   });
 
+export type MarketCurrencies = ApiResult<typeof getApiV1AdminSettingsMarketsCurrencies>;
+
+/**
+ * The currencies a market can sell in (MARKETS-DESIGN step 6): the shop
+ * currency, what the active payment methods charge, and the currencies
+ * markets sell in now (a store with none shows no currency detail).
+ */
+export const marketCurrenciesQueryOptions = () =>
+  queryOptions({
+    queryKey: [...marketKeys.all, "currencies"] as const,
+    queryFn: async (): Promise<MarketCurrencies> => apiData(getApiV1AdminSettingsMarketsCurrencies()),
+    staleTime: 30_000,
+  });
+
 export async function fetchMarket(id: string): Promise<Market> {
   return (await apiData(getApiV1AdminSettingsMarketsById({ path: { id } }))).market;
 }
@@ -46,7 +61,7 @@ export async function saveMarket(id: string, body: UpdateMarketBody): Promise<Ma
  * market's values from the save's answer.
  */
 export function marketWriteInvalidations(): Array<readonly unknown[]> {
-  return [marketKeys.list(), queryKeys.settings.currency()];
+  return [marketKeys.list(), [...marketKeys.all, "currencies"], queryKeys.settings.currency()];
 }
 
 /** After a create or delete: the list (a deleted market's page is left, not reloaded). */

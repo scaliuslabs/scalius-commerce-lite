@@ -64,7 +64,7 @@ export interface GiftCardCheckoutFixture {
     one<T = Record<string, unknown>>(query: string, ...params: Array<string | number>): T;
     all<T = Record<string, unknown>>(query: string, ...params: Array<string | number>): T[];
     /** A real active card funded by its `issue` transaction, and a live apply handle. */
-    issueCard(amountMinor: number, id?: string): Promise<{ giftCardId: string; handle: string }>;
+    issueCard(amountMinor: number, id?: string, currencyCode?: string): Promise<{ giftCardId: string; handle: string }>;
     balance(giftCardId: string): number;
     /** Prepare as the route does, then the reviewed-tender check (no write). */
     prepare(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }, options?: GiftCardCheckoutOptions): Promise<PreparedGiftCardCheckout>;
@@ -134,10 +134,14 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
         const authority = await loadStorefrontCheckoutAuthority(db, {
             items: data.items,
             inventoryPool: data.inventoryPool,
+            shippingCountryCode: data.shippingCountryCode,
             city: data.city,
             zone: data.zone,
             area: data.area,
+            shippingAdminArea: data.shippingAdminArea,
+            shippingPostalCode: data.shippingPostalCode,
             shippingMethodId: data.shippingMethodId,
+            billingCountryCode: data.billingCountryCode,
             customerPhone: data.customerPhone,
         });
         const attempt = createAtomicCheckoutAttempt(await buildCheckoutAttemptIdentity(data));
@@ -180,14 +184,14 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
         },
         one,
         all,
-        async issueCard(amountMinor, id) {
+        async issueCard(amountMinor, id, currencyCode = "BDT") {
             const giftCardId = id ?? `gc_test_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
             const keys = await deriveGiftCardKeys(TEST_CREDENTIAL_KEY);
             const built = await buildGiftCardIssueStatements(db, keys, {
                 id: giftCardId,
                 source: "manual",
                 amountMinor,
-                currencyCode: "BDT",
+                currencyCode,
                 expiresAt: null,
                 customerId: null,
                 recipient: null,

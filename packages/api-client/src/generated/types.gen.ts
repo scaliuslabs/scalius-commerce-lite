@@ -319,6 +319,10 @@ export type PublicMarket = {
      * The backup market catches every buyer no other market matches and is sold at the root URL.
      */
     isBackup: boolean;
+    /**
+     * The currency it sells in when it is not the shop currency (absent: the shop currency).
+     */
+    currencyCode?: string;
     countries: Array<string>;
     presences: Array<MarketPresence>;
 };
@@ -2291,11 +2295,19 @@ export type Market = {
         locale: string;
     } | null;
     /**
-     * Every market sells in the shop currency until markets get their own currency.
+     * The currency it sells in: its own, else the shop currency. The backup market always sells in the shop currency.
      */
     currencyCode: string;
     /**
-     * The price increment its prices use, in minor units: the backup market's own, inherited by every other market.
+     * The shop currency: the store's books.
+     */
+    shopCurrencyCode: string;
+    /**
+     * True when it sells in its own currency: its prices are your product prices converted at its exchange rate, unless a price list fixes them.
+     */
+    ownCurrency: boolean;
+    /**
+     * The price increment its prices use, in minor units: the backup market's own, inherited by every market in the shop currency; a market in its own currency uses that currency's (whole taka for BDT, else the minor unit).
      */
     priceIncrementMinor: number;
     priceIncrementInherited: boolean;
@@ -2311,6 +2323,14 @@ export type Market = {
      * The manual exchange rate (market currency per shop currency unit); null uses the rate source. A market in the shop currency converts at 1.
      */
     fxRate: string | null;
+    /**
+     * When the manual rate was last set.
+     */
+    fxRateAsOf: string | null;
+    /**
+     * How long a placed order keeps the rate it was quoted (5 to 1,440 minutes).
+     */
+    fxLockMinutes: number;
     /**
      * Raises (positive) or lowers (negative) FX-derived prices by this percentage.
      */
@@ -5272,6 +5292,10 @@ export type PostApiV1DiscountsValidateData = {
          * Customer phone for per-customer limits
          */
         customerPhone?: string;
+        /**
+         * The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root.
+         */
+        presence?: string;
     };
     path?: never;
     query?: never;
@@ -16328,6 +16352,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                 productImage: string | null;
             }>;
             subtotal: number;
+            currencyCode?: string;
+            decimalPlaces?: number;
             hasFreeDeliveryProduct: boolean;
             requiresDeliveryMethod: boolean;
             /**
@@ -16452,6 +16478,31 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             shippingTaxed: boolean;
             currencyCode: string;
             decimalPlaces: number;
+            /**
+             * Null when the checkout is in the shop currency.
+             */
+            fx: {
+                /**
+                 * The shop currency: the store's books.
+                 */
+                shopCurrencyCode: string;
+                /**
+                 * Units of the checkout currency per shop currency unit (an exact decimal).
+                 */
+                rate: string;
+                /**
+                 * `manual`: the market's rate set by the merchant; else a rate provider's id.
+                 */
+                source: string;
+                /**
+                 * When the rate was set.
+                 */
+                asOf: string | null;
+                /**
+                 * An order placed now keeps this rate until then.
+                 */
+                lockedUntil: string;
+            } | null;
             settingsVersion: number;
             subtotalMinor: number;
             subtotalAmount: number;
@@ -37120,6 +37171,58 @@ export type PostApiV1AdminSettingsMarketsResponses = {
 
 export type PostApiV1AdminSettingsMarketsResponse = PostApiV1AdminSettingsMarketsResponses[keyof PostApiV1AdminSettingsMarketsResponses];
 
+export type GetApiV1AdminSettingsMarketsCurrenciesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/markets/currencies';
+};
+
+export type GetApiV1AdminSettingsMarketsCurrenciesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsMarketsCurrenciesError = GetApiV1AdminSettingsMarketsCurrenciesErrors[keyof GetApiV1AdminSettingsMarketsCurrenciesErrors];
+
+export type GetApiV1AdminSettingsMarketsCurrenciesResponses = {
+    /**
+     * Market currencies
+     */
+    200: {
+        success: true;
+        data: {
+            shopCurrencyCode: string;
+            chargeable: 'any' | Array<string>;
+            marketCurrencies: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMarketsCurrenciesResponse = GetApiV1AdminSettingsMarketsCurrenciesResponses[keyof GetApiV1AdminSettingsMarketsCurrenciesResponses];
+
 export type DeleteApiV1AdminSettingsMarketsByIdData = {
     body?: never;
     path: {
@@ -37249,6 +37352,14 @@ export type PatchApiV1AdminSettingsMarketsByIdData = {
          */
         priceIncrementMinor?: number;
         /**
+         * Non-backup markets: the currency it sells in (ISO 4217); null or the shop currency sells in the shop currency. Another currency needs `fxRate` and at least one active payment method that charges it. Open checkouts price again in the new currency.
+         */
+        currencyCode?: string | null;
+        /**
+         * Minutes a placed order keeps the rate it was quoted (default 30).
+         */
+        fxLockMinutes?: number;
+        /**
          * Whether its prices include tax (checkout and the order's tax read the order's market).
          */
         pricesIncludeTax?: boolean;
@@ -37257,7 +37368,7 @@ export type PatchApiV1AdminSettingsMarketsByIdData = {
          */
         priceMode?: 'fixed' | 'fx';
         /**
-         * The manual exchange rate; null uses the rate source. While every market sells the shop currency it is 1.
+         * The manual exchange rate: units of the market currency per shop currency unit (a market in the shop currency converts at 1).
          */
         fxRate?: string | null;
         /**
@@ -42549,6 +42660,7 @@ export type GetApiV1AdminOrdersResponses = {
                 customerEmail: string | null;
                 customerId: string | null;
                 totalAmount: number;
+                currencyCode?: string;
                 shippingCharge: number;
                 discountAmount: number;
                 status: string;
@@ -42992,6 +43104,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 customerEmail: string | null;
                 customerId: string | null;
                 totalAmount: number;
+                currencyCode?: string;
                 shippingCharge: number;
                 discountAmount: number;
                 status: string;
@@ -44104,6 +44217,21 @@ export type GetApiV1AdminOrdersByIdResponses = {
             discountAmount: number;
             currencyCode: string | null;
             currencyDecimalPlaces: number | null;
+            moneyChain?: {
+                shopCurrencyCode: string;
+                /**
+                 * Shop currency units per order currency unit, locked at checkout.
+                 */
+                rate: string;
+                source: string;
+                asOf: string | null;
+                lockedUntil: string | null;
+                subtotalShopAmount: number;
+                shippingShopAmount: number;
+                discountShopAmount: number;
+                taxShopAmount: number;
+                totalShopAmount: number;
+            } | null;
             subtotalAmountMinor: number | null;
             shippingAmountMinor: number | null;
             shippingMethodId: string | null;

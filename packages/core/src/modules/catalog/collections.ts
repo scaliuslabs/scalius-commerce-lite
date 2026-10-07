@@ -413,7 +413,8 @@ export function planCollectionProducts(
     statements: BatchStatement[];
     /** The statements whose rows are cards (`priceCardRowsInResults`). */
     productRowSlots: number[];
-    resolve(results: readonly unknown[]): Map<string, CollectionProductResult>;
+    /** `presentShopAmount`: a shop-currency fee in the page market's currency (none at the root). */
+    resolve(results: readonly unknown[], presentShopAmount?: (shopMinor: number) => number): Map<string, CollectionProductResult>;
 } {
     const allProductIds = new Set<string>();
     const categoryProductLimitsById = new Map<string, number>();
@@ -500,7 +501,7 @@ export function planCollectionProducts(
     return {
         statements,
         productRowSlots: productSlots,
-        resolve(results) {
+        resolve(results, presentShopAmount) {
             const rowsOf = (list: number | null) =>
                 list === null ? [] : results[productSlots[list]!] as RawProduct[];
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
@@ -513,6 +514,7 @@ export function planCollectionProducts(
                     factSlots.flatMap((slot) => results[slot] as ProductCardFactRow[]),
                     storeDecimalPlacesFromCode(allRows[0]?.storeCurrencyCode),
                     new Set(allRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                    presentShopAmount,
                 ),
                 translation,
             );

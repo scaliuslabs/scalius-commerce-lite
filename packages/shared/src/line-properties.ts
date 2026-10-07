@@ -519,3 +519,24 @@ export function serializeOrderLineProperties(properties: readonly ResolvedLinePr
   }
   return serialized;
 }
+
+/**
+ * The schema with every surcharge passed through `convert` (MARKETS-DESIGN
+ * step 6: a shop-currency surcharge in a market's currency, converted at its
+ * rate and rounded to its increment). The product page and checkout convert
+ * each surcharge the same way, so the buyer pays what the page showed. Zero
+ * stays zero; a null schema stays null.
+ */
+export function mapCustomizationPrices(
+  schema: CustomizationSchema | null,
+  convert: (priceMinor: number) => number,
+): CustomizationSchema | null {
+  if (!schema) return schema;
+  const price = (minor: number) => (minor === 0 ? 0 : convert(minor));
+  return {
+    ...schema,
+    fields: schema.fields.map((field): CustomizationField => field.type === "select"
+      ? { ...field, options: field.options.map((option) => ({ ...option, priceMinor: price(option.priceMinor) })) }
+      : { ...field, priceMinor: price(field.priceMinor) }),
+  };
+}

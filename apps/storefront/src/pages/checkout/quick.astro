@@ -281,8 +281,12 @@ const deliveryCharged = quote
   ? Math.max(0, quote.shippingAmount - deliveryDiscounts.reduce((sum, line) => sum + line.shippingAmount, 0))
   : 0;
 const dueText = mode === "pickup" ? copy.dueAtPickupText : mode === "none" ? copy.dueAtServiceText : copy.dueOnDeliveryText;
+// Rates are listed in the page's currency; the quote is in the order's
+// (its market's, MARKETS-DESIGN step 6), which checkout charges.
+const pageCurrency = { code: layoutData?.currency?.code ?? "BDT", symbol: layoutData?.currency?.symbol };
+const quoteMoney = (amount: number) => formatMoney(amount, quote && quote.currencyCode !== pageCurrency.code ? { code: quote.currencyCode } : pageCurrency);
 const rateLabel = (rate: ShippingMethod) =>
-  rate.fee === 0 ? copy.freeText : formatMoney(rate.fee);
+  rate.fee === 0 ? copy.freeText : formatMoney(rate.fee, pageCurrency);
 
 const labelClass = "mb-1 block text-sm font-medium text-foreground";
 const fieldClass =
@@ -520,7 +524,7 @@ const secondaryButtonClass =
         {quote && codAvailable && codServesDestination ? (
           <div class="space-y-2">
             <button type="submit" name="intent" value="place" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-              {copy.placeOrderText} · {formatMoney(quote.totalAmount)}
+              {copy.placeOrderText} · {quoteMoney(quote.totalAmount)}
             </button>
             <p class="text-center text-sm text-muted-foreground">{dueText}</p>
           </div>
@@ -546,9 +550,9 @@ const secondaryButtonClass =
                   {item.properties.map((property) => (
                     <p class="text-muted-foreground">{property.label}: {property.displayValue}</p>
                   ))}
-                  <p class="text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: item.quantity })} × {formatMoney(item.unitPrice)}</p>
+                  <p class="text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
                 </div>
-                <p class="shrink-0 font-medium tabular-nums text-foreground">{formatMoney(item.unitPrice * item.quantity)}</p>
+                <p class="shrink-0 font-medium tabular-nums text-foreground">{quoteMoney(item.unitPrice * item.quantity)}</p>
               </li>
             ))}
             {!quote && lines.map((line) => (
@@ -561,25 +565,25 @@ const secondaryButtonClass =
           <div class="space-y-2 border-t border-border bg-muted/40 p-4 text-sm">
             {quote ? (
               <>
-                <div class="flex justify-between text-muted-foreground"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{formatMoney(quote.subtotalAmount)}</span></div>
+                <div class="flex justify-between text-muted-foreground"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(quote.subtotalAmount)}</span></div>
                 {quote.shippingMethod && (
                   <div class="flex justify-between gap-3 text-muted-foreground">
                     <span>{copy.shippingText}</span>
                     <span class="text-end font-medium tabular-nums text-foreground">
-                      {deliveryCharged === 0 ? copy.freeText : formatMoney(deliveryCharged)}
+                      {deliveryCharged === 0 ? copy.freeText : quoteMoney(deliveryCharged)}
                       {deliveryDiscounts.length > 0 && ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})`}
                     </span>
                   </div>
                 )}
                 {quote.discounts.filter((line) => line.amount > 0).map((line) => (
-                  <div class="flex justify-between gap-3 text-primary"><span>{formatDiscountLineLabel(copy.discountText, line)}</span><span class="shrink-0 font-medium tabular-nums">-{formatMoney(line.amount)}</span></div>
+                  <div class="flex justify-between gap-3 text-primary"><span>{formatDiscountLineLabel(copy.discountText, line)}</span><span class="shrink-0 font-medium tabular-nums">-{quoteMoney(line.amount)}</span></div>
                 ))}
                 {quote.taxMinor > 0 && (
-                  <div class="flex justify-between text-muted-foreground"><span>{quote.displayLabel}{quote.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span><span class="tabular-nums text-foreground">{formatMoney(quote.taxAmount)}</span></div>
+                  <div class="flex justify-between text-muted-foreground"><span>{quote.displayLabel}{quote.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span><span class="tabular-nums text-foreground">{quoteMoney(quote.taxAmount)}</span></div>
                 )}
                 <div class="flex items-baseline justify-between border-t border-border pt-2">
                   <span class="font-semibold text-foreground">{copy.totalText}</span>
-                  <span class="text-xl font-semibold tabular-nums text-foreground">{formatMoney(quote.totalAmount)}</span>
+                  <span class="text-xl font-semibold tabular-nums text-foreground">{quoteMoney(quote.totalAmount)}</span>
                 </div>
               </>
             ) : (

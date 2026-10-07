@@ -852,7 +852,11 @@ const CACHE_DEP_TABLE_RULES = {
     // order, which read it under the checkout fence; no cached read shows it.
     // The pricing columns (0120) advance only the market's `pl:` key (rule
     // `pricing`): the presence matrix and the checkout config never show them.
-    noise: ["revision", "created_at", "updated_at", "prices_include_tax", ...MARKET_PRICING_COLUMNS],
+    // `fx_rate_as_of` and `fx_lock_minutes` (0123) are output only by the
+    // order (its rate's as-of time and lock), which checkout reads under the
+    // fence. `currency_code` is visible: a presence's prices, the matrix
+    // (the market selector shows it) and the checkout config show it.
+    noise: ["revision", "created_at", "updated_at", "prices_include_tax", "fx_rate_as_of", "fx_lock_minutes", ...MARKET_PRICING_COLUMNS],
     note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue. A market's price mode and FX policy advance `pl:<id>`, which its keyed catalogue reads declare.",
     rules: [
       ...everyChange(own("mk")),

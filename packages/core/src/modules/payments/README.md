@@ -116,7 +116,9 @@ string) and `exchange_adjustment_minor`. A confirmed payment takes the
 provider's report when the payment event carries `settlement`
 (`paymentSettlement()` in `@scalius/shared/money-chain`); the adjustment is
 the gain or loss against the order's locked `fx_rate` when it settled in the
-shop currency, else 0. Without a report, and for COD, gift-card tenders,
+shop currency, else 0. A gift-card tender in another store currency
+(MARKETS-DESIGN step 6) settles in the card's currency: its debit, at the
+locked rate. Without a report, and for COD, same-currency gift-card tenders,
 refunds and imported refunds, a row settles as presented
 (`presentedSettlement()`: same currency and amount, rate "1"). Refunds stay in
 the presentment currency. No built-in adapter reports settlement yet.

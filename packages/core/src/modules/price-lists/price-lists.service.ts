@@ -33,6 +33,8 @@ import { PriceIncrementError, fromMinor, toIncrementMinor } from "@scalius/share
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "../markets";
 import { variantOptionLabelSql } from "../products";
+import { marketCurrencyIncrementMinor } from "@scalius/shared/presentment";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -136,6 +138,7 @@ async function loadRecords(db: Database, filter: { id?: string; marketId?: strin
             list: priceLists,
             marketName: markets.name,
             marketIsBackup: markets.isBackup,
+            marketCurrencyCode: markets.currencyCode,
             segmentName: customerSegments.name,
             priceCount: priceCountSql,
             variantCount: variantCountSql,
@@ -150,29 +153,33 @@ async function loadRecords(db: Database, filter: { id?: string; marketId?: strin
             .orderBy(asc(priceLists.name), asc(priceLists.id)),
         readStoreCurrency(db),
     ]);
-    return rows.map(({ list, marketName, marketIsBackup, segmentName, priceCount, variantCount }) => ({
-        id: list.id,
-        name: list.name,
-        description: list.description,
-        kind: list.kind as PriceListKind,
-        marketId: list.marketId,
-        marketName,
-        marketIsBackup: Boolean(marketIsBackup),
-        segmentId: list.segmentId,
-        segmentName: segmentName ?? null,
-        status: list.status as PriceListStatus,
-        state: stateOf(list.status as PriceListStatus, list.startsAt, list.endsAt),
-        startsAt: list.startsAt,
-        endsAt: list.endsAt,
-        priority: list.priority,
-        revision: list.revision,
-        priceCount: Number(priceCount),
-        variantCount: Number(variantCount),
-        currencyCode: currency.code,
-        priceIncrementMinor: currency.priceIncrementMinor,
-        createdAt: list.createdAt,
-        updatedAt: list.updatedAt,
-    }));
+    return rows.map(({ list, marketName, marketIsBackup, marketCurrencyCode, segmentName, priceCount, variantCount }) => {
+        // A market in its own currency (MARKETS-DESIGN step 6) takes its list prices in it.
+        const own = !marketIsBackup && marketCurrencyCode && marketCurrencyCode !== currency.code ? marketCurrencyCode : null;
+        return {
+            id: list.id,
+            name: list.name,
+            description: list.description,
+            kind: list.kind as PriceListKind,
+            marketId: list.marketId,
+            marketName,
+            marketIsBackup: Boolean(marketIsBackup),
+            segmentId: list.segmentId,
+            segmentName: segmentName ?? null,
+            status: list.status as PriceListStatus,
+            state: stateOf(list.status as PriceListStatus, list.startsAt, list.endsAt),
+            startsAt: list.startsAt,
+            endsAt: list.endsAt,
+            priority: list.priority,
+            revision: list.revision,
+            priceCount: Number(priceCount),
+            variantCount: Number(variantCount),
+            currencyCode: own ?? currency.code,
+            priceIncrementMinor: own ? marketCurrencyIncrementMinor(own) : currency.priceIncrementMinor,
+            createdAt: list.createdAt,
+            updatedAt: list.updatedAt,
+        };
+    });
 }
 
 /** Every price list (a store keeps at most `MAX_PRICE_LISTS`), by name; optionally one market's. */
@@ -484,7 +491,7 @@ export async function setPriceListPrices(db: Database, id: string, update: Price
         throw new ValidationError("Each product appears once in a save.");
     }
     const currency = current.currencyCode;
-    const decimalPlaces = (await readStoreCurrency(db)).decimalPlaces;
+    const decimalPlaces = getDecimalPlaces(currency);
     const tiers: StoredTier[] = [];
     for (const entry of set) {
         if (entry.prices.length === 0) throw new ValidationError("Give every product a price, or remove it from the list.");

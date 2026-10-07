@@ -432,9 +432,16 @@ function buildOrderWriteBatch(
             discountAmountMinor: od.discountAmountMinor,
             taxAmountMinor: od.taxAmountMinor,
             totalAmountMinor: od.totalAmountMinor,
-            // The money chain, in this same insert: checkout prices in the shop
-            // currency, so the order is same-currency (rate 1, shop = presentment).
-            ...orderMoneyChainColumns(od),
+            // The money chain, in this same insert: a same-currency order has rate
+            // 1 and shop amounts equal to its own; an order in a market's currency
+            // keeps its locked rate and its exact shop amounts (MARKETS-DESIGN D3).
+            ...orderMoneyChainColumns(od, od.fx ? {
+                shopCurrency: od.fx.shopCurrency,
+                fxRate: od.fx.fxRate,
+                fxSource: od.fx.fxSource,
+                fxAsOf: od.fx.fxAsOf === null ? null : new Date(od.fx.fxAsOf * 1_000),
+                fxLockedUntil: od.fx.fxLockedUntil === null ? null : new Date(od.fx.fxLockedUntil * 1_000),
+            } : undefined),
             taxLabel: od.taxLabel,
             pricesIncludeTax: od.pricesIncludeTax,
             status: od.status,
@@ -728,6 +735,7 @@ function buildOrderWriteBatch(
         writes.push(...buildGiftCardRedemptionStatements(db, {
             orderId: od.id,
             currencyCode: od.currencyCode,
+            orderFx: od.fx ?? null,
             redemptions,
         }) as SQLiteBatchItem[]);
     }

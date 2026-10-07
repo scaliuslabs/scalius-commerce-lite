@@ -865,6 +865,33 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     ],
   },
   {
+    id: "dashboard.market-currency",
+    surface: "dashboard",
+    kind: "mixed",
+    title: "Sell a market in its own currency",
+    summary: "Read the currencies a market can sell in, set a market's currency with the merchant's exchange rate and rate lock, and verify the market.",
+    examples: [
+      "Let the UK market sell in GBP at 1 BDT = 0.0068 GBP, then verify its prices convert.",
+    ],
+    tags: ["markets", "currency", "exchange rate", "multi-currency", "pricing"],
+    operationIds: [
+      "dashboard.markets.currencies",
+      "dashboard.markets.list",
+      "dashboard.markets.get",
+      "dashboard.markets.update",
+    ],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "The backup market always sells in the shop currency; another market sells in it or in its own currency.",
+      "A market's own currency must be one an active payment method charges (dashboard.markets.currencies); turn such a method on first.",
+      "Require the merchant's rate as units of the market currency per one shop currency unit; never look a rate up or guess one.",
+      "Open carts and checkouts price again in the new currency; placed orders keep theirs. Reports stay in the shop currency.",
+      "Confirm the currency change, then verify the market and a product's price at its presence.",
+    ],
+  },
+  {
     id: "dashboard.delivery-provider",
     surface: "dashboard",
     kind: "write",

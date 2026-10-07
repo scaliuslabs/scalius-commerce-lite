@@ -13,6 +13,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { cn } from "@scalius/shared/utils";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -36,6 +37,7 @@ import {
 } from "~/lib/api-query-options/settings-screens";
 import { appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
 import { queryKeys } from "~/lib/query-keys";
+import { marketCurrenciesQueryOptions } from "~/lib/api-query-options/markets";
 import { formatList } from "@scalius/shared/locale-words";
 import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -343,6 +345,7 @@ export function PaymentMethodsCard() {
   const openProvider = useOpenAppProvider();
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
+  const marketCurrencies = useQuery(marketCurrenciesQueryOptions());
   // Installed apps' providers, offered or not; without them the active ones still list.
   const appProviders = useQuery({ ...appPaymentProvidersQuery, enabled: useProviderPortAccess("payment").canView });
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
@@ -398,6 +401,8 @@ export function PaymentMethodsCard() {
   }
   if (!values.enabledMethods) return <SettingsCardLoading />;
 
+  // Currency badges only once a market sells in its own currency: a one-currency store sees none.
+  const multiCurrency = (marketCurrencies.data?.marketCurrencies.length ?? 0) > 0;
   const eligibleDefaults = defaults(values);
   const methodRows = rowsFor(values);
   // Built-in methods read in the dashboard language; an app's provider by its own name.
@@ -507,7 +512,19 @@ export function PaymentMethodsCard() {
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <MethodMark row={row} />
         <div className="min-w-0 flex-1">
-          <p className="text-body font-medium">{name}</p>
+          <p className="flex flex-wrap items-center gap-2 text-body font-medium">
+            {name}
+            {/* Which currencies it charges (MARKETS-DESIGN step 6): a market in another currency doesn't offer it. */}
+            {multiCurrency ? (
+              <Badge variant="secondary" title={t("chargesCurrenciesHelp")}>
+                {method === "cod"
+                  ? t("cashCurrency")
+                  : row.chargeCurrencies === "any"
+                    ? t("chargesAny")
+                    : t("chargesCurrencies", { currencies: formatList(row.chargeCurrencies, getLocale(), "conjunction") })}
+              </Badge>
+            ) : null}
+          </p>
           {row.kind === "app" && row.appName && row.pluginId ? (
             <ProvidedByChip pluginId={row.pluginId} appName={row.appName} />
           ) : row.kind === "app" && row.appName ? (

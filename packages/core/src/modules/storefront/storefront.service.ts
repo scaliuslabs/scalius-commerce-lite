@@ -29,7 +29,7 @@ import {
   priceCardRowsInResults,
 } from "../catalog";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";
-import { marketPriceContextOf, type MarketPricing } from "../price-lists";
+import { marketPriceContextOf, marketShopAmounts, type MarketPricing } from "../price-lists";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections";
 import {
   businessDocument,
@@ -54,6 +54,9 @@ import {
   type StorefrontPageTemplate,
 } from "@scalius/shared/storefront-theme";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { currencySymbol } from "@scalius/shared/money-format";
+import { marketOfPresence } from "@scalius/shared/markets";
+import { marketCurrencyIncrementMinor } from "@scalius/shared/presentment";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
 import {
@@ -334,7 +337,8 @@ export async function getHomepageData(
   const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements)] : [];
   const listOffset = collectionPlan.statements.length;
   // Every card in the page's market (nothing at the root or in a neutral market).
-  await priceCardRowsInResults(db, await marketPriceContextOf(options.pricing), results, [
+  const market = await marketPriceContextOf(options.pricing);
+  await priceCardRowsInResults(db, market, results, [
     ...collectionPlan.productRowSlots,
     ...listPlan.productRowSlots.map((slot) => listOffset + slot),
   ]);
@@ -343,8 +347,8 @@ export async function getHomepageData(
   const promotionOffset = brandOffset + brandPlan.statements.length;
   const categoryOffset = promotionOffset + promotionPlan.statements.length;
   const productOffset = categoryOffset + categoryPlan.statements.length;
-  const resolvedMap = collectionPlan.resolve(results);
-  const productLists = listPlan.resolve(results, listOffset);
+  const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market));
+  const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market));
 
   // The collections sections' collections that have products to show.
   const formattedCollections = sectionCollections.flatMap((col) => {
@@ -640,13 +644,29 @@ export async function getLayoutData(
   );
   // The ISO 4217 places the storefront formats prices and UCP amounts with
   // (0 for JPY, 3 for KWD), from the same helper checkout prices with.
-  const currencyData = {
-    code: currency.value.currencyCode,
-    symbol: currency.value.currencySymbol,
-    decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
-    // Product pages price SKUs with the rule checkout charges, at the backup market's increment.
-    priceIncrementMinor: storeCurrencyOf(currency.value, backupPriceIncrementMinor).priceIncrementMinor,
-  };
+  // A presence of a market in its own currency (MARKETS-DESIGN step 6) shows
+  // that currency: its symbol, places and increment (the matrix carries it,
+  // so this reads nothing more). The root and every market in the shop
+  // currency show the shop currency, as before.
+  const presenceCurrency = options.presence
+    ? marketOfPresence(marketMatrix, options.presence)?.market.currencyCode ?? null
+    : null;
+  const currencyData = presenceCurrency && presenceCurrency !== currency.value.currencyCode
+    ? {
+      code: presenceCurrency,
+      symbol: currencySymbol(presenceCurrency),
+      decimalPlaces: getDecimalPlaces(presenceCurrency),
+      priceIncrementMinor: marketCurrencyIncrementMinor(presenceCurrency),
+      /** The shop currency (what the market selector shows for the other markets). */
+      shopCode: currency.value.currencyCode,
+    }
+    : {
+      code: currency.value.currencyCode,
+      symbol: currency.value.currencySymbol,
+      decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
+      // Product pages price SKUs with the rule checkout charges, at the backup market's increment.
+      priceIncrementMinor: storeCurrencyOf(currency.value, backupPriceIncrementMinor).priceIncrementMinor,
+    };
   // The storefront renders a stored theme whole or the default whole, never a mix.
   const themeRow = (themeResults as { value?: string }[])[0];
   const publishedTheme = parseStoredStorefrontThemeDocument(themeRow?.value);

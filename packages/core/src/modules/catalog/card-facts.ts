@@ -242,6 +242,8 @@ export function resolveProductCardFacts(
     rows: readonly ProductCardFactRow[],
     decimalPlaces: number,
     freeDelivery: ReadonlySet<string> = new Set(),
+    /** A shop-currency fee in the page market's currency (MARKETS-DESIGN step 6); the root keeps it. */
+    presentShopAmount: (shopMinor: number) => number = (shopMinor) => shopMinor,
 ): (productId: string) => ProductCardFacts {
     const byProduct = new Map<string, {
         brand: ProductCardFacts["brand"];
@@ -292,7 +294,7 @@ export function resolveProductCardFacts(
         if (freeDelivery.has(productId)) return { free: true };
         return deliveryFeeMinor === null || deliveryFeeMinor === 0
             ? null
-            : { free: false, feeFrom: fromMinor(deliveryFeeMinor, decimalPlaces) };
+            : { free: false, feeFrom: fromMinor(presentShopAmount(deliveryFeeMinor), decimalPlaces) };
     };
     return (productId: string): ProductCardFacts => {
         const facts = byProduct.get(productId);
@@ -330,6 +332,7 @@ export async function loadCatalogCardData(
     db: Database,
     products: ReadonlyArray<{ id: string; freeDelivery?: boolean | number | null }>,
     decimalPlaces: number,
+    presentShopAmount?: (shopMinor: number) => number,
 ): Promise<{ media: Map<string, ProductMediaProjection[]>; facts: (productId: string) => ProductCardFacts }> {
     const uniqueIds = [...new Set(products.map((product) => product.id.trim()).filter(Boolean))];
     const media = new Map<string, ProductMediaProjection[]>();
@@ -346,5 +349,5 @@ export async function loadCatalogCardData(
         factRows.push(...(chunkFacts as ProductCardFactRow[]));
     }
     const freeDelivery = new Set(products.filter((product) => Boolean(product.freeDelivery)).map((product) => product.id));
-    return { media, facts: resolveProductCardFacts(factRows, decimalPlaces, freeDelivery) };
+    return { media, facts: resolveProductCardFacts(factRows, decimalPlaces, freeDelivery, presentShopAmount) };
 }

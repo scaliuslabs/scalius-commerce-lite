@@ -24,5 +24,6 @@ Market pricing (docs/MARKETS-DESIGN.md D5, "Step 4a implemented"): price lists a
 - A market-keyed read with no live public list and no FX policy is neutral: it returns the root's bytes and runs no extra statement.
 - A presence read costs one more statement (its market's context). Cards priced from the projection cost one more while a list is live. Checkout costs nothing more; segment membership is read only when a segment list applies to the cart.
 - DVC: `pl:<market>` (pricing columns, active public lists), `pl:<market>:<product>` (their prices). A list's next start or end bounds the entry (`deps.validUntil`).
-- Writes to an active list, its prices and a market's pricing advance the checkout authority fence.
+- Writes to an active list, its prices and a market's pricing or currency advance the checkout authority fence.
+- A market in its own currency (MARKETS-DESIGN step 6) prices in it: its list prices in that currency first, else base prices at its rate. `MarketPriceContext.money` converts shop amounts (fees, surcharges, bundle prices) for its reads; `CheckoutPriceScope.money` is the order's presentment currency.
 - Limits: 100 lists, 5,000 prices per list, 5 prices per SKU per list (its price and four quantity breaks), 100 SKUs per write.

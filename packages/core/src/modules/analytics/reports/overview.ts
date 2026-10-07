@@ -27,6 +27,7 @@ import {
   orderMetricsCtes,
   salesLinesCtes,
   salesOrdersCte,
+  shopMinorSql,
   type SalesScope,
 } from "./sales-sql";
 import { num, runAnalyticsQuery, text, type AnalyticsContext } from "./context";
@@ -220,10 +221,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
           and coalesce(ct.cod_status, '') <> 'collected' then 1 else 0 end as rts,
         case when om.payment_method = 'cod' and (coalesce(ct.cod_status, '') = 'collected'
           or om.status in ('delivered', 'completed')) then 1 else 0 end as cod_delivered,
-        coalesce((
+        coalesce(${sql.raw(shopMinorSql(`(
           select sum(p.amount_minor) from order_payments p
           where p.order_id = om.id and p.payment_type = 'refund' and p.status = 'refunded'
-        ), 0) as refunded,
+        )`, "om"))}, 0) as refunded,
         case
           when om.requires_shipping = 0 then '__no_delivery'
           when om.shipping_method_kind = 'pickup' then '__pickup'
@@ -285,10 +286,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
       from cp
       union all
       select 'placed', '', '',
-        coalesce(sum(case when po.currency_code = ${scope.currency} then 1 else 0 end), 0),
+        coalesce(sum(case when po.shop_currency = ${scope.currency} then 1 else 0 end), 0),
         0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when po.currency_code = ${scope.currency} and po.status = 'cancelled' then 1 else 0 end), 0),
-        coalesce(sum(case when po.currency_code <> ${scope.currency} then 1 else 0 end), 0),
+        coalesce(sum(case when po.shop_currency = ${scope.currency} and po.status = 'cancelled' then 1 else 0 end), 0),
+        coalesce(sum(case when po.shop_currency <> ${scope.currency} then 1 else 0 end), 0),
         0, 0
       from orders po
       where po.deleted_at is null

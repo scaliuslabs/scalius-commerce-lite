@@ -2,8 +2,9 @@
 // Markets (docs/MARKETS-DESIGN.md D4): the configuration bundle a buyer is
 // matched to: its countries and URL presences (step 2), whether its prices
 // include tax (step 3c) and how it prices (step 4a: fixed or FX-derived, with
-// its price lists in price-lists.ts). Every market sells in the shop currency
-// until step 6; per-market delivery and payment links arrive later.
+// its price lists in price-lists.ts) and, from step 6, in which currency it
+// sells (migration 0123): the shop currency (NULL) or its own, at its
+// exchange rate. Per-market delivery and payment links arrive later.
 
 import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -68,6 +69,19 @@ export const markets = sqliteTable("markets", {
     priceRoundingMinor: integer("price_rounding_minor"),
     /** What a rounded price ends in within its step (`.99`: 99 of a 100 step); null for none. */
     priceEndingMinor: integer("price_ending_minor"),
+    /**
+     * The currency the market sells in (MARKETS-DESIGN step 6, migration
+     * 0123): NULL sells in the shop currency; an ISO 4217 code sells in that
+     * currency, its prices converted from the base prices at `fx_rate`
+     * (price mode `fx`, so a rate is required) unless a price list fixes
+     * them. The backup market always sells in the shop currency
+     * (`MARKET_CURRENCY_INVALID`).
+     */
+    currencyCode: text("currency_code"),
+    /** When the manual rate was last set (epoch seconds): the order's `fx_as_of`. */
+    fxRateAsOf: integer("fx_rate_as_of"),
+    /** How long a placed order keeps its rate (minutes, 5 to 1,440): the order's `fx_locked_until`. */
+    fxLockMinutes: integer("fx_lock_minutes").notNull().default(30),
     /** Optimistic concurrency of the market aggregate (row, countries, presences). */
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -100,6 +114,9 @@ export const markets = sqliteTable("markets", {
     check("markets_price_adjustment_range", sql`${table.priceAdjustmentBps} BETWEEN -9900 AND 100000`),
     check("markets_price_rounding", sql`${table.priceRoundingMinor} IS NULL OR ${table.priceRoundingMinor} BETWEEN 1 AND 100000000`),
     check("markets_price_ending", sql`${table.priceEndingMinor} IS NULL OR (${table.priceRoundingMinor} IS NOT NULL AND ${table.priceEndingMinor} > 0 AND ${table.priceEndingMinor} < ${table.priceRoundingMinor})`),
+    // Currency (0123); triggers keep it off the backup market and in `fx` mode.
+    check("markets_currency_shape", sql`${table.currencyCode} IS NULL OR (length(${table.currencyCode}) = 3 AND ${table.currencyCode} NOT GLOB '*[^A-Z]*')`),
+    check("markets_fx_lock_minutes", sql`${table.fxLockMinutes} BETWEEN 5 AND 1440`),
 ]);
 
 /** One market per country: the country code is the key. */

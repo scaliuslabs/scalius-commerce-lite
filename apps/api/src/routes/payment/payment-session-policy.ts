@@ -157,11 +157,14 @@ export async function resolvePaymentSessionPolicy(
       const currentCode = normalizeSupportedCurrencyCode(
         getCurrentCurrencyCode ? await getCurrentCurrencyCode() : null,
       );
-      if (!currentCode || currentCode !== currency.code) {
+      if (!currentCode) {
         throw new ValidationError(
           "Partial-payment settings use a different currency than this order. Restore matching currency settings or repair the order with a verified saved payment plan.",
         );
       }
+      // An order in another currency (a market's own, MARKETS-DESIGN step 6)
+      // has no advance plan: it is paid in full.
+      if (currentCode !== currency.code) return { enabled: false, amountMinor: 0 };
     }
     return { enabled: true, amountMinor: decimalToOrderMinor(rawAmount, currency, "Configured deposit amount") };
   };

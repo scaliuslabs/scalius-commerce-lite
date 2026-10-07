@@ -427,6 +427,7 @@ export function buildShipmentRecoverySummary(
 
 export interface OrderListFactsRow {
     orderNumber: number | null;
+    listCurrencyCode: string;
     archivedAt: Date | null;
     channel: OrderChannel;
     channelSource: string | null;
@@ -454,6 +455,9 @@ export function orderListFactsSelection() {
     const outerOrderId = sql`${orders.id}`;
     return {
         orderNumber: orders.orderNumber,
+        // The order's currency (MARKETS-DESIGN step 6): a list shows each order in it.
+        // An expression, not the column: D1 keys joined rows by column name.
+        listCurrencyCode: sql<string>`(${orders.currencyCode} || '')`,
         archivedAt: orders.archivedAt,
         channel: orders.channel,
         channelSource: orders.channelSource,
@@ -509,6 +513,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
     );
     return {
         orderNumber: order.orderNumber,
+        currencyCode: order.listCurrencyCode,
         archivedAt: unixToDate(order.archivedAt),
         channel: order.channel,
         channelSource: order.channelSource,

@@ -39,6 +39,7 @@ import {
     priceProductCards,
     priceSkuRows,
     type MarketPricing,
+    marketDecimalPlaces,
 } from "../price-lists";
 import { discountedPriceMinor } from "@scalius/shared/money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
@@ -525,7 +526,10 @@ export async function getStorefrontProductSection(
     // media rows the section does not return, so only the coarse key is exact.
     if (section === "summary" || section === "variants" || section === "media") deps.table("media");
     if (section === "attributes") deps.anyAttribute();
-    const decimalPlaces = storeDecimalPlacesFromCode(identity.storeCurrencyCode);
+    // Prices are presented in the page market's currency (MARKETS-DESIGN step 6).
+    const decimalPlaces = section === "summary" || section === "variants"
+        ? marketDecimalPlaces(await marketPriceContextOf(pricing), storeDecimalPlacesFromCode(identity.storeCurrencyCode))
+        : storeDecimalPlacesFromCode(identity.storeCurrencyCode);
 
     if (section === "summary") {
         return assertBoundedResult(await readSummary(db, identity, decimalPlaces, pricing));

@@ -22,6 +22,7 @@ export const publicMarketSchema = z.object({
   handle: z.string(),
   name: z.string(),
   isBackup: z.boolean().openapi({ description: "The backup market catches every buyer no other market matches and is sold at the root URL." }),
+  currencyCode: z.string().length(3).optional().openapi({ description: "The currency it sells in when it is not the shop currency (absent: the shop currency)." }),
   countries: z.array(z.string().length(2)).max(MAX_MARKET_COUNTRIES),
   presences: z.array(marketPresenceSchema).max(MAX_MARKETS),
 }).openapi("PublicMarket");
@@ -42,12 +43,16 @@ export const marketRecordSchema = z.object({
   countries: z.array(z.string().length(2)).max(MAX_MARKET_COUNTRIES),
   // Inline, not the named component: a nullable reference loses its null in the generated client types.
   presence: z.object(presenceFields).nullable().openapi({ description: "The root presence of the backup market, or the market's subfolder; null when it has none." }),
-  currencyCode: z.string().openapi({ description: "Every market sells in the shop currency until markets get their own currency." }),
-  priceIncrementMinor: z.number().int().positive().openapi({ description: "The price increment its prices use, in minor units: the backup market's own, inherited by every other market." }),
+  currencyCode: z.string().openapi({ description: "The currency it sells in: its own, else the shop currency. The backup market always sells in the shop currency." }),
+  shopCurrencyCode: z.string().openapi({ description: "The shop currency: the store's books." }),
+  ownCurrency: z.boolean().openapi({ description: "True when it sells in its own currency: its prices are your product prices converted at its exchange rate, unless a price list fixes them." }),
+  priceIncrementMinor: z.number().int().positive().openapi({ description: "The price increment its prices use, in minor units: the backup market's own, inherited by every market in the shop currency; a market in its own currency uses that currency's (whole taka for BDT, else the minor unit)." }),
   priceIncrementInherited: z.boolean(),
   pricesIncludeTax: z.boolean().openapi({ description: "Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true." }),
   priceMode: z.enum(["fixed", "fx"]).openapi({ description: "`fixed`: product prices and the market's fixed price lists. `fx`: product prices converted at its exchange rate, adjusted, rounded up and ending as set. The backup market is always `fixed`." }),
   fxRate: z.string().nullable().openapi({ description: "The manual exchange rate (market currency per shop currency unit); null uses the rate source. A market in the shop currency converts at 1." }),
+  fxRateAsOf: z.string().nullable().openapi({ format: "date-time", description: "When the manual rate was last set." }),
+  fxLockMinutes: z.number().int().openapi({ description: "How long a placed order keeps the rate it was quoted (5 to 1,440 minutes)." }),
   priceAdjustmentPercent: z.number().openapi({ description: "Raises (positive) or lowers (negative) FX-derived prices by this percentage." }),
   priceRounding: z.number().nullable().openapi({ description: "FX-derived prices round up to this step (major units, such as 10 for 10 taka); null rounds to the price increment." }),
   priceEnding: z.number().nullable().openapi({ description: "What a rounded price ends in within its step (major units: 9 with a step of 10 ends prices in 9); null for none." }),
@@ -78,10 +83,12 @@ export const updateMarketSchema = z.object({
   countries: z.array(z.string().trim().length(2)).max(MAX_MARKET_COUNTRIES).optional(),
   presence: presenceInputSchema.nullable().optional().openapi({ description: "Backup market: only the root's language. Other markets: the subfolder, or null to remove it." }),
   priceIncrementMinor: z.number().int().positive().max(1_000).optional().openapi({ description: "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)." }),
+  currencyCode: z.string().trim().length(3).nullable().optional().openapi({ description: "Non-backup markets: the currency it sells in (ISO 4217); null or the shop currency sells in the shop currency. Another currency needs `fxRate` and at least one active payment method that charges it. Open checkouts price again in the new currency." }),
+  fxLockMinutes: z.number().int().min(5).max(1_440).optional().openapi({ description: "Minutes a placed order keeps the rate it was quoted (default 30)." }),
   pricesIncludeTax: z.boolean().optional().openapi({ description: "Whether its prices include tax (checkout and the order's tax read the order's market)." }),
   // How a non-backup market prices (MARKETS-DESIGN D5).
   priceMode: z.enum(["fixed", "fx"]).optional().openapi({ description: "Non-backup markets: `fixed` or `fx` (product prices converted, adjusted and rounded)." }),
-  fxRate: z.string().trim().max(25).nullable().optional().openapi({ description: "The manual exchange rate; null uses the rate source. While every market sells the shop currency it is 1." }),
+  fxRate: z.string().trim().max(25).nullable().optional().openapi({ description: "The manual exchange rate: units of the market currency per shop currency unit (a market in the shop currency converts at 1)." }),
   priceAdjustmentPercent: z.number().min(-99).max(1_000).optional().openapi({ description: "Raises or lowers FX-derived prices by this percentage (two decimals)." }),
   priceRounding: z.number().positive().nullable().optional().openapi({ description: "Round FX-derived prices up to this step (major units); null: the price increment." }),
   priceEnding: z.number().positive().nullable().optional().openapi({ description: "End rounded prices in this amount within the step (major units); null for none." }),
@@ -95,11 +102,13 @@ export function presentMarket<T extends {
   priceAdjustmentBps: number;
   priceRoundingMinor: number | null;
   priceEndingMinor: number | null;
+  fxRateAsOf: Date | null;
 }>(market: T) {
-  const { priceAdjustmentBps, priceRoundingMinor, priceEndingMinor, ...rest } = market;
+  const { priceAdjustmentBps, priceRoundingMinor, priceEndingMinor, fxRateAsOf, ...rest } = market;
   const places = getDecimalPlaces(market.currencyCode);
   return {
     ...rest,
+    fxRateAsOf: fxRateAsOf ? fxRateAsOf.toISOString() : null,
     priceAdjustmentPercent: priceAdjustmentBps / 100,
     priceRounding: priceRoundingMinor === null ? null : fromMinor(priceRoundingMinor, places),
     priceEnding: priceEndingMinor === null ? null : fromMinor(priceEndingMinor, places),
@@ -133,3 +142,12 @@ export const marketPresenceQueryField = z.string().max(5).optional().openapi({
 });
 
 export const marketPresenceQuerySchema = z.object({ presence: marketPresenceQueryField });
+
+/** The rate a checkout in a market's own currency converts shop amounts at (MARKETS-DESIGN step 6). */
+export const checkoutFxSchema = z.object({
+  shopCurrencyCode: z.string().openapi({ description: "The shop currency: the store's books." }),
+  rate: z.string().openapi({ description: "Units of the checkout currency per shop currency unit (an exact decimal)." }),
+  source: z.string().openapi({ description: "`manual`: the market's rate set by the merchant; else a rate provider's id." }),
+  asOf: z.string().nullable().openapi({ format: "date-time", description: "When the rate was set." }),
+  lockedUntil: z.string().openapi({ format: "date-time", description: "An order placed now keeps this rate until then." }),
+}).nullable().openapi({ description: "Null when the checkout is in the shop currency." });

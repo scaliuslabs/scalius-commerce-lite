@@ -38,6 +38,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import {
+    marketDecimalPlaces,
     marketListPricesSql,
     marketPriceContextOf,
     priceProductSkus,
@@ -491,7 +492,9 @@ export async function getStorefrontFeedProducts(
         .all();
     const hasNextPage = scannedProducts.length > limit;
     const productsList = scannedProducts.slice(0, limit);
-    const decimalPlaces = storeDecimalPlacesFromCode(productsList[0]?.storeCurrencyCode);
+    // A presence's feed is in its market's currency (MARKETS-DESIGN step 6; Google's rule: the target country's).
+    const feedMarket = await marketPriceContextOf(marketPricing);
+    const decimalPlaces = marketDecimalPlaces(feedMarket, storeDecimalPlacesFromCode(productsList[0]?.storeCurrencyCode));
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
     const mediaMapPromise = loadProductMediaProjections(db, productIds);
@@ -554,7 +557,9 @@ export async function getStorefrontFeedProducts(
             : sourceBrandName;
         const translateOption = <T extends { id: string; name: string }>(option: T): T =>
             applyTranslation(option, chains.get(`product_option:${option.id}`) ?? [], NAME_FIELDS);
-        const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
+        const storeCurrency = feedMarket
+            ? { code: feedMarket.currencyCode, priceIncrementMinor: feedMarket.incrementMinor }
+            : storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
         const pricing = pricingByProduct.get(productRow.id);
         // The buyer projection counts every SKU. When a product also sells a
         // service, its feed availability comes from its physical SKUs only.

@@ -193,6 +193,12 @@ language with the merchant's edits).
   literals (`orderBillingAddressInsertColumns()`), so a shipped order binds
   nothing more.
 
+- **Market currency** (MARKETS-DESIGN step 6). `StorefrontCartValidationResult.money` is the order's
+  presentment currency and its locked rate: the cart, the delivery preflight (`deliveryRateInCurrency`),
+  promotions (`candidatesInCurrency`), apps and tax price in it. The order insert writes its fx snapshot
+  (`orderData.fx`) and exact shop amounts. Gateways are filtered by `chargeCurrencies`; deposits stay in the
+  shop currency. A gift card in the shop currency pays at the rate; its debit is the tender's settlement.
+
 ## Quantity bundles (catalogue slice 1c)
 
 - **Reads.** The authority batch carries the cart products' active

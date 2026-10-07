@@ -30,7 +30,9 @@ import {
   orderIdentitySql,
   orderMeasuresSql,
   orderMetricsCtes,
+  orderShopMinorSql,
   salesLinesCtes,
+  shopMinorSql,
   salesOrdersCte,
   scopeOffsets,
   type SalesLineOptions,
@@ -302,15 +304,15 @@ const salesByDiscount: SqlReport = {
       ctes: sql`${salesCtes(ctx, requireRange(params))},
         da as (
           select a.order_id, a.promotion_id, coalesce(a.promotion_code, '') as code,
-            max(a.promotion_name) as name, max(a.method) as method, sum(a.discount_amount_minor) as amount
+            max(a.promotion_name) as name, max(a.method) as method, case when max(so.fx) = 0 then sum(a.discount_amount_minor) else cast(round(sum(a.discount_amount_minor) * max(so.fxm)) as bigint) end as amount
           from order_discount_allocations a
           join so on so.id = a.order_id
           group by a.order_id, a.promotion_id, coalesce(a.promotion_code, '')
         ),
         md as (
-          select om.id as order_id, om.discount_amount_minor - coalesce((
+          select om.id as order_id, om.discount_amount_minor - coalesce(${sql.raw(shopMinorSql(`(
             select sum(a2.discount_amount_minor) from order_discount_allocations a2 where a2.order_id = om.id
-          ), 0) as amount
+          )`, "om"))}, 0) as amount
           from om
         )`,
       select: sql`select da.promotion_id || '|' || da.code as id, max(da.name) as discount, da.code as code,
@@ -575,7 +577,7 @@ const inventorySellThrough: SqlReport = {
 function ordersInRange(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
   const { start, endExclusive } = rangeInstants(ctx, range);
   return sql`o.deleted_at is null and o.created_at >= ${start} and o.created_at < ${endExclusive}
-    and o.currency_code = ${ctx.currency.code} and o.shop_currency = ${ctx.currency.code}`;
+    and o.shop_currency = ${ctx.currency.code}`;
 }
 
 /** Payment records (charges and refunds) of the orders placed in the range, by method, kind and status. */
@@ -586,9 +588,9 @@ const financePayments: ReportImplementation = {
     const fields = ["payment_method", "kind", "status", "transactions", "amount"] as const;
     const rows = await selectRows(ctx, sql`select p.payment_method as payment_method,
         case when p.payment_type = 'refund' then 'refund' else 'payment' end as kind,
-        p.status as status, count(*) as transactions, coalesce(sum(p.amount_minor), 0) as amount
+        p.status as status, count(*) as transactions, coalesce(sum(${orderShopMinorSql("p.amount_minor", ctx.currency.code)}), 0) as amount
       from orders o join order_payments p on p.order_id = o.id
-      where ${ordersInRange(ctx, range)} and p.currency = ${ctx.currency.code}
+      where ${ordersInRange(ctx, range)} and p.currency = o.currency_code
       group by p.payment_method, case when p.payment_type = 'refund' then 'refund' else 'payment' end, p.status`, fields);
     return {
       rows: rows.map((row) => ({
@@ -613,11 +615,11 @@ const financeRefunds: ReportImplementation = {
     const fields = ["payment_method", "orders", "refunds", "refunded", "pending", "failed"] as const;
     const rows = await selectRows(ctx, sql`select p.payment_method as payment_method,
         count(distinct p.order_id) as orders, count(*) as refunds,
-        coalesce(sum(case when p.status = 'refunded' then p.amount_minor else 0 end), 0) as refunded,
-        coalesce(sum(case when p.status = 'pending' then p.amount_minor else 0 end), 0) as pending,
-        coalesce(sum(case when p.status in ('failed', 'cancelled') then p.amount_minor else 0 end), 0) as failed
+        coalesce(sum(case when p.status = 'refunded' then ${orderShopMinorSql("p.amount_minor", ctx.currency.code)} else 0 end), 0) as refunded,
+        coalesce(sum(case when p.status = 'pending' then ${orderShopMinorSql("p.amount_minor", ctx.currency.code)} else 0 end), 0) as pending,
+        coalesce(sum(case when p.status in ('failed', 'cancelled') then ${orderShopMinorSql("p.amount_minor", ctx.currency.code)} else 0 end), 0) as failed
       from orders o join order_payments p on p.order_id = o.id
-      where ${ordersInRange(ctx, range)} and p.payment_type = 'refund' and p.currency = ${ctx.currency.code}
+      where ${ordersInRange(ctx, range)} and p.payment_type = 'refund' and p.currency = o.currency_code
       group by p.payment_method`, fields);
     return {
       rows: rows.map((row) => ({
@@ -660,7 +662,7 @@ const financeCod: ReportImplementation = {
             else 'not_shipped'
           end as cod_state,
           so.total_amount_minor, so.balance_due_minor,
-          case when ct.cod_status = 'collected' then coalesce(ct.collected_amount_minor, 0) else 0 end as collected
+          case when ct.cod_status = 'collected' then ${sql.raw(shopMinorSql("coalesce(ct.collected_amount_minor, 0)"))} else 0 end as collected
         from so left join cod_tracking ct on ct.order_id = so.id
         where so.payment_method = 'cod'
       )
@@ -857,7 +859,7 @@ const abandonedCheckouts: ReportImplementation = {
       select ${bucket} as bucket, count(*) as abandoned,
         coalesce(sum(case when ac.customer_phone is not null then 1 else 0 end), 0) as reachable,
         count(ac.order_id) as recovered,
-        coalesce(sum(case when ro.currency_code = ${ctx.currency.code} then ro.total_amount_minor else 0 end), 0) as recovered_sales
+        coalesce(sum(case when ro.shop_currency = ${ctx.currency.code} then ro.total_shop_minor else 0 end), 0) as recovered_sales
       from ac left join orders ro on ro.id = ac.order_id
       group by ${bucket}`, fields);
     const found = new Map(rows.map((row) => {

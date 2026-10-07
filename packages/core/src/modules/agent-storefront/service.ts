@@ -95,6 +95,8 @@ interface AgentStorefrontCartState {
   subtotalMinor: number;
   hasFreeDeliveryProduct: boolean;
   delivery?: DeliveryPreflight;
+  /** The cart's currency and its rate (MARKETS-DESIGN step 6). */
+  money: CartValidation["money"];
   currencyCode: string;
   decimalPlaces: number;
 }
@@ -664,8 +666,10 @@ async function loadAgentStorefrontCart(
     subtotalMinor: validation.subtotalMinor,
     hasFreeDeliveryProduct: validation.hasFreeDeliveryProduct,
     ...(delivery ? { delivery } : {}),
-    currencyCode: currency.code,
-    decimalPlaces: currency.decimalPlaces,
+    // The cart's currency: its market's (MARKETS-DESIGN step 6).
+    money: validation.money,
+    currencyCode: validation.money.currencyCode,
+    decimalPlaces: validation.money.decimalPlaces,
   };
 }
 
@@ -730,7 +734,6 @@ async function quoteAgentStorefrontDiscount(
   customerPhone?: string | null,
   apps: CheckoutAppFunctions = NO_CHECKOUT_APP_FUNCTIONS,
 ) {
-  const currency = await readStoreCurrency(db);
   const lines = projection.items.map((item) => ({
     id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
     productId: item.productId,
@@ -748,7 +751,14 @@ async function quoteAgentStorefrontDiscount(
     customerId: signedInCustomerId,
     segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
-    cart: { currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor, lines, shippingAmountMinor: shippingMinor },
+    // The cart's currency (its market's); a promotion's shop amounts convert at its rate.
+    cart: {
+      currencyCode: projection.money.currencyCode,
+      priceIncrementMinor: projection.money.incrementMinor,
+      lines,
+      shippingAmountMinor: shippingMinor,
+      ...(projection.money.currencyCode !== projection.money.shopCurrencyCode ? { money: projection.money } : {}),
+    },
   });
   const unknownCode = quote.rejectedCodes.some((rejection) => rejection.reason === "not_found");
   if (!code || !unknownCode || !apps.points.has("checkout.discounts")) {
@@ -767,9 +777,9 @@ async function quoteAgentStorefrontDiscount(
   const preview = await previewStorefrontAppDiscounts(db, {
     apps,
     currency: {
-      code: currency.code,
-      decimalPlaces: currency.decimalPlaces,
-      priceIncrementMinor: currency.priceIncrementMinor,
+      code: projection.money.currencyCode,
+      decimalPlaces: projection.money.decimalPlaces,
+      priceIncrementMinor: projection.money.incrementMinor,
     },
     lines: lines.map((line) => ({
       lineId: line.id,
@@ -925,10 +935,12 @@ export async function quoteAgentStorefrontCheckout(
   const paymentProviders = input.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS;
   const deliveryCountry = delivery.address?.countryCode ?? null;
   const abroad = deliveryCountry !== null && deliveryCountry !== DELIVERY_HIERARCHY_COUNTRY;
+  // A market's own currency may rule a gateway out (`chargeCurrencies`, MARKETS-DESIGN step 6).
+  const foreignCurrency = quote.currencyCode !== projection.money.shopCurrencyCode;
   let payment: { methods: Array<{ methodId: string; name: string }>; changed: boolean } | null = null;
-  if (apps.points.has("checkout.payment_methods") || abroad) {
+  if (apps.points.has("checkout.payment_methods") || abroad || foreignCurrency) {
     const enabled = (await getActivePaymentMethods(db, input.credentialEncryptionKey, paymentProviders)).enabledMethods;
-    const allowed = resolveCartPaymentMethods(enabled, delivery.fulfilment, deliveryCountry, paymentProviders);
+    const allowed = resolveCartPaymentMethods(enabled, delivery.fulfilment, deliveryCountry, paymentProviders, quote.currencyCode);
     payment = await resolveAppPaymentMethods(apps, pricing.appCart, allowed, paymentProviders);
     const withoutCountry = resolveCartPaymentMethods(enabled, delivery.fulfilment);
     if (allowed.length !== withoutCountry.length) payment = { ...payment, changed: true };

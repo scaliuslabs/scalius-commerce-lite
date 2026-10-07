@@ -123,6 +123,8 @@ export type CartValidationResult = {
   ruleErrors?: CartRuleError[];
   items: CartValidationItem[];
   subtotal: number;
+  /** The cart's currency: its market's (MARKETS-DESIGN step 6). Absent from older APIs. */
+  currencyCode?: string;
   hasFreeDeliveryProduct: boolean;
   /** Some line is physical: the buyer chooses delivery or pickup. */
   requiresDeliveryMethod?: boolean;

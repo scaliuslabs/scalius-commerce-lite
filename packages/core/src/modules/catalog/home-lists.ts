@@ -142,7 +142,8 @@ export function planHomeProductLists(
     statements: BatchStatement[];
     /** The statements whose rows are cards (`priceCardRowsInResults`), relative to the plan. */
     productRowSlots: number[];
-    resolve(results: readonly unknown[], offset: number): HomeProductList[];
+    /** `presentShopAmount`: a shop-currency fee in the page market's currency (none at the root). */
+    resolve(results: readonly unknown[], offset: number, presentShopAmount?: (shopMinor: number) => number): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
     const slots: Array<{ key: string; rows: number; media: number; facts: number; members: number }> = [];
@@ -237,7 +238,7 @@ export function planHomeProductLists(
     return {
         statements,
         productRowSlots: slots.map((slot) => slot.rows),
-        resolve(results, offset) {
+        resolve(results, offset, presentShopAmount) {
             const categoryRows = categorySlot === null
                 ? []
                 : translateRows(translation, "category", results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[], NAME_FIELDS);
@@ -252,6 +253,7 @@ export function planHomeProductLists(
                         results[offset + facts] as ProductCardFactRow[],
                         storeDecimalPlacesFromCode(productRows[0]?.storeCurrencyCode),
                         new Set(productRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                        presentShopAmount,
                     ),
                     translation,
                 );

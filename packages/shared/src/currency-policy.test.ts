@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cashIncrementMinor,
   cashOnDeliveryIncrementMinor,
   currencyExponent,
   currencyPolicy,
@@ -83,10 +84,13 @@ describe("price increment policy", () => {
   });
 });
 
-describe("cash on delivery cash increment", () => {
-  it("collects whole taka in BDT and leaves every other currency's COD as it was", () => {
+describe("cash increment", () => {
+  it("collects whole taka in BDT and the CLDR cash increment elsewhere", () => {
     expect(cashOnDeliveryIncrementMinor("BDT")).toBe(100);
-    expect(cashOnDeliveryIncrementMinor("CHF")).toBe(1);
+    expect(cashIncrementMinor("CHF")).toBe(5);
+    expect(cashIncrementMinor("SEK")).toBe(100);
+    expect(cashOnDeliveryIncrementMinor("CHF")).toBe(5);
     expect(cashOnDeliveryIncrementMinor("USD")).toBe(1);
+    expect(cashIncrementMinor("JPY")).toBe(1);
   });
 });

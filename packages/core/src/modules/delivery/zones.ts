@@ -53,6 +53,7 @@ import {
     type DeliveryRegionRow,
 } from "./zone-match";
 import { addressPlaceCountrySql } from "./places";
+import { isForeignPresentment, presentShopMinor, presentShopMinorOrNull, type PresentmentMoney } from "@scalius/shared/presentment";
 
 type Statement = BatchItem<"sqlite">;
 
@@ -252,6 +253,19 @@ export function resolveDeliveryRate(input: {
     };
 }
 
+/**
+ * A delivery rate in the cart's currency: its fee and its free-delivery
+ * threshold (shop currency) converted at the locked rate and rounded to the
+ * market's increment (Shopify's rule). The shop currency keeps the row.
+ */
+export function deliveryRateInCurrency<T extends { feeMinor: number; freeOverMinor: number | null }>(
+    row: T,
+    money: PresentmentMoney | null | undefined,
+): T {
+    if (!money || !isForeignPresentment(money)) return row;
+    return { ...row, feeMinor: presentShopMinor(money, row.feeMinor), freeOverMinor: presentShopMinorOrNull(money, row.freeOverMinor) };
+}
+
 // ── Storefront: rates for a destination ────────────────────────────────
 
 /**
@@ -330,7 +344,13 @@ export interface OfferedDeliveryRate {
 export async function listDeliveryRatesForDestination(
     db: Database,
     input: DeliveryDestination | null,
-): Promise<OfferedDeliveryRate[]> {
+    /**
+     * The page's presence (MARKETS-DESIGN step 6): its market's own currency
+     * and rate ride in the same statement (`presenceMarket` on each row), so a
+     * presence in another currency can show the rates in it.
+     */
+    options: { presence?: string | null } = {},
+): Promise<Array<OfferedDeliveryRate & { presenceMarket?: string | null }>> {
     deps.shipping();
     const conditions: SQL[] = [eq(shippingMethods.isActive, true), isNull(shippingMethods.deletedAt)];
     if (input) {
@@ -362,6 +382,12 @@ export async function listDeliveryRatesForDestination(
             createdAt: shippingMethods.createdAt,
             updatedAt: shippingMethods.updatedAt,
             coverage: coverageFactsSql(),
+            ...(options.presence ? {
+                presenceMarket: sql<string | null>`(SELECT json_object('id', rate_market.id, 'c', rate_market.currency_code, 'r', rate_market.fx_rate)
+                    FROM market_presences AS rate_presence
+                    INNER JOIN markets AS rate_market ON rate_market.id = rate_presence.market_id
+                    WHERE rate_presence.kind = 'subfolder' AND rate_presence.value = ${options.presence})`,
+            } : {}),
         })
         .from(shippingMethods)
         .where(and(...conditions))
@@ -371,6 +397,27 @@ export async function listDeliveryRatesForDestination(
         ...row,
         countries: row.zoneId ? zoneCountryCoverage(row.zoneId, facts) : [],
     }));
+}
+
+/**
+ * The presence market's own currency and rate a `presenceMarket` column
+ * names (null in the shop currency). Declares the market (`mk:<id>`, its
+ * currency) and its pricing (`pl:<id>`, its rate).
+ */
+export function presenceMarketCurrency(value: unknown): { currencyCode: string; rate: string | null } | null {
+    if (typeof value !== "string" || !value) return null;
+    try {
+        const parsed = JSON.parse(value) as { id?: unknown; c?: unknown; r?: unknown };
+        if (typeof parsed.id === "string") {
+            deps.market(parsed.id);
+            deps.marketPricing(parsed.id);
+        }
+        return typeof parsed.c === "string" && parsed.c
+            ? { currencyCode: parsed.c, rate: typeof parsed.r === "string" ? parsed.r : null }
+            : null;
+    } catch {
+        return null;
+    }
 }
 
 // ── Dashboard: zones and local pickup ──────────────────────────────────

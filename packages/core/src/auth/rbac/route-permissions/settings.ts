@@ -31,6 +31,7 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  // The currencies a market can sell in (MARKETS-DESIGN step 6) and every market by id.
   "/api/v1/admin/settings/markets/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },

@@ -9,6 +9,7 @@ import {
   resolveStorefrontShippingAddress,
 } from "./prepare";
 import { validateStorefrontCartItems } from "./cart-validation";
+import { shopPresentment } from "@scalius/shared/presentment";
 import { calculateStorefrontTaxQuote } from "../tax";
 import type { CreateStorefrontOrderCustomerIdentity, CreateStorefrontOrderInput } from "../orders/types";
 
@@ -1381,6 +1382,7 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         "http://localhost:8787/api/v1/orders",
         undefined,
         {
+          money: shopPresentment({ code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 }),
           valid: true,
           issues: [],
           items: [

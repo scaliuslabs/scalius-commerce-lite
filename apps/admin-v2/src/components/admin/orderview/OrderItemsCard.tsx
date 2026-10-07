@@ -137,6 +137,16 @@ export function OrderSummaryRows({ order }: { order: Order }) {
         <dt>{t("summary.total")}</dt>
         <dd>{saved ? minor(saved.totalMinor) : fmt(order.totalAmount)}</dd>
       </div>
+      {order.moneyChain && order.currencyCode ? (
+        // The buyer paid in a market's own currency: the books' amount beside it (Shopify's order page).
+        <div className="flex justify-between gap-4 text-muted-foreground">
+          <dt className="min-w-0">
+            {t("summary.shopTotal", { currency: order.moneyChain.shopCurrencyCode })}
+            <span className="block">{t("summary.lockedRate", { currency: order.currencyCode, rate: order.moneyChain.rate, shop: order.moneyChain.shopCurrencyCode })}</span>
+          </dt>
+          <dd className="shrink-0">{fmt(order.moneyChain.totalShopAmount)}</dd>
+        </div>
+      ) : null}
     </>
   );
 }

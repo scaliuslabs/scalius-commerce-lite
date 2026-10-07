@@ -14,6 +14,7 @@ import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
+import { useOrderCurrency } from "~/hooks/use-order-currency";
 import { useMessages } from "~/i18n";
 import {
   fulfillmentStatusLabel,
@@ -168,10 +169,11 @@ function CustomerCell({ order }: { order: OrderListItem }) {
 }
 
 function TotalCell({ order }: { order: OrderListItem }) {
-  const { fmt } = useCurrency();
+  const { fmtIn } = useOrderCurrency();
   return (
     <div data-part="total">
-      <span data-part="value" className="block whitespace-nowrap font-medium tabular-nums">{fmt(order.totalAmount)}</span>
+      {/* In the order's own currency (a market's, MARKETS-DESIGN step 6). */}
+      <span data-part="value" className="block whitespace-nowrap font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
     </div>
   );
 }

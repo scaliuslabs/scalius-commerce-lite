@@ -7,6 +7,7 @@
 import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import {
     CUSTOMIZATION_SCHEMA_VERSION,
+    mapCustomizationPrices,
     parseCustomizationSchema,
     parseStoredCustomizationSchema,
     serializeCustomizationSchema,
@@ -126,12 +127,17 @@ export interface StoredCustomizationRead {
 export function readStoredCustomization(
     stored: string | null | undefined,
     decimalPlaces: number,
-    options: { giftCard?: boolean } = {},
+    options: {
+        giftCard?: boolean;
+        /** A shop-currency surcharge in the page market's currency (MARKETS-DESIGN step 6). */
+        presentShopAmount?: (shopMinor: number) => number;
+    } = {},
 ): StoredCustomizationRead {
     const parsed = parseStoredCustomizationSchema(stored);
     if (!parsed.ok) return { customization: null, requiresCustomization: false, invalid: true };
     // Buyers of a gift card also see the recipient inputs (@scalius/shared/gift-card-recipient).
-    const schema = options.giftCard ? withGiftCardRecipientFields(parsed.schema) : parsed.schema;
+    const withRecipient = options.giftCard ? withGiftCardRecipientFields(parsed.schema) : parsed.schema;
+    const schema = options.presentShopAmount ? mapCustomizationPrices(withRecipient, options.presentShopAmount) : withRecipient;
     return {
         customization: presentCustomizationSchema(schema, decimalPlaces),
         requiresCustomization: schema?.fields.some((field) => field.required) ?? false,

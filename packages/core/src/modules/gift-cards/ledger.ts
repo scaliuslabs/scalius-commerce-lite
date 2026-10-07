@@ -12,7 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { chunkForD1, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
-import { presentedSettlement } from "@scalius/shared/money-chain";
+import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import type { GiftCardTransactionKind } from "./browser";
 
 type Statement = BatchItem<"sqlite">;
@@ -89,7 +89,15 @@ export function buildGiftCardTransactionInsertOnce(db: Database, input: GiftCard
 
 export interface GiftCardRedemption {
     giftCardId: string;
+    /** What the card pays, in the order's currency. */
     appliedMinor: number;
+    /**
+     * A card in another store currency (MARKETS-DESIGN step 6): what is
+     * debited from it, in its own currency (`appliedMinor` converted up at the
+     * locked rate), and that currency. The tender records it as its
+     * settlement. Absent: the card is in the order's currency.
+     */
+    card?: { currencyCode: string; debitMinor: number };
 }
 
 export const giftCardRedeemKey = (orderId: string, giftCardId: string) => `redeem:${orderId}:${giftCardId}`;
@@ -107,6 +115,8 @@ export function buildGiftCardRedemptionStatements(
     input: {
         orderId: string;
         currencyCode: string;
+        /** The order's rate to the shop currency (a tender settled in it measures its adjustment). */
+        orderFx?: { shopCurrency: string; fxRate: string } | null;
         redemptions: readonly GiftCardRedemption[];
         actor?: { type: "system" | "customer"; id: string | null };
     },
@@ -119,6 +129,11 @@ export function buildGiftCardRedemptionStatements(
         if (!Number.isSafeInteger(redemption.appliedMinor) || redemption.appliedMinor <= 0) {
             throw new RangeError("A gift-card redemption applies a positive integer amount.");
         }
+        const converted = redemption.card && redemption.card.currencyCode !== input.currencyCode ? redemption.card : null;
+        if (converted && (!Number.isSafeInteger(converted.debitMinor) || converted.debitMinor <= 0)) {
+            throw new RangeError("A converted gift-card redemption debits a positive integer amount.");
+        }
+        const debitMinor = converted ? converted.debitMinor : redemption.appliedMinor;
         const transactionId = newGiftCardTransactionId();
         const paymentId = `pay_gc_${nanoid(16)}`;
         statements.push(db.insert(orderPayments).values({
@@ -126,8 +141,16 @@ export function buildGiftCardRedemptionStatements(
             orderId: input.orderId,
             amountMinor: redemption.appliedMinor,
             currency: input.currencyCode,
-            // A gift card is a tender in the order's currency: settled as presented.
-            ...presentedSettlement(redemption.appliedMinor, input.currencyCode),
+            // A card in the order's currency settles as presented; a card in
+            // another store currency settles in its own, at the locked rate.
+            ...(converted
+                ? paymentSettlement({
+                    amountMinor: redemption.appliedMinor,
+                    currency: input.currencyCode,
+                    settlement: { currency: converted.currencyCode, amountMinor: converted.debitMinor },
+                    order: input.orderFx ?? null,
+                })
+                : presentedSettlement(redemption.appliedMinor, input.currencyCode)),
             paymentMethod: GIFT_CARD_PAYMENT_METHOD,
             paymentType: "full",
             status: "succeeded",
@@ -140,7 +163,7 @@ export function buildGiftCardRedemptionStatements(
             id: transactionId,
             giftCardId: redemption.giftCardId,
             kind: "redeem",
-            amountMinor: -redemption.appliedMinor,
+            amountMinor: -debitMinor,
             idempotencyKey: giftCardRedeemKey(input.orderId, redemption.giftCardId),
             actor: input.actor ?? { type: "system", id: null },
             orderId: input.orderId,
@@ -158,7 +181,10 @@ export function buildGiftCardRedemptionStatements(
 export interface HeldGiftCardTender {
     orderPaymentId: string;
     giftCardId: string;
+    /** In the order's currency. */
     amountMinor: number;
+    /** What the card was debited, in its own currency (the tender's settlement). */
+    cardAmountMinor: number;
     transactionId: string;
 }
 
@@ -167,6 +193,7 @@ export async function listHeldGiftCardTenders(db: Database, orderId: string): Pr
     const rows = await db.select({
         orderPaymentId: orderPayments.id,
         amountMinor: orderPayments.amountMinor,
+        settlementAmountMinor: orderPayments.settlementAmountMinor,
         transactionId: giftCardTransactions.id,
         giftCardId: giftCardTransactions.giftCardId,
         redeemedMinor: giftCardTransactions.amountMinor,
@@ -183,11 +210,13 @@ export async function listHeldGiftCardTenders(db: Database, orderId: string): Pr
         ))
         .all();
     return rows
-        .filter((row) => -row.redeemedMinor === row.amountMinor)
+        // The debit is the tender's settlement (its amount when the card is in the order's currency).
+        .filter((row) => -row.redeemedMinor === (row.settlementAmountMinor ?? row.amountMinor))
         .map((row) => ({
             orderPaymentId: row.orderPaymentId,
             giftCardId: row.giftCardId,
             amountMinor: row.amountMinor,
+            cardAmountMinor: -row.redeemedMinor,
             transactionId: row.transactionId,
         }));
 }
@@ -214,7 +243,7 @@ export function buildGiftCardReleaseStatements(
         statements.push(buildGiftCardTransactionInsertOnce(db, {
             giftCardId: tender.giftCardId,
             kind: "release",
-            amountMinor: tender.amountMinor,
+            amountMinor: tender.cardAmountMinor,
             idempotencyKey: giftCardReleaseKey(input.orderId, tender.giftCardId),
             actor: input.actor ?? { type: "system", id: null },
             orderId: input.orderId,
