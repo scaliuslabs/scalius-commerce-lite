@@ -22,6 +22,7 @@ import {
   uninstallPlugin,
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
+import { qualifiedSettingLabel } from "@scalius/shared/plugins/settings-layout";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { PluginHost, type PluginHostOptions } from "./host";
 import { handOffRetiredProviders } from "./provider-handoff";
@@ -48,8 +49,8 @@ export async function activatePluginWithHooks(
   try {
     const handoff = await handOffRetiredProviders(context.db, pluginId, getCredentialEncryptionKey(context.env as unknown as Record<string, unknown>));
     if (handoff.skipped.length > 0) {
-      const labels = new Map(installation.manifest.settings.map((field) => [field.key, field.label]));
-      handoffError = `Some saved keys could not be moved. Enter them again in ${installation.manifest.name}'s settings: ${handoff.skipped.map((key) => labels.get(key) ?? key).join(", ")}.`;
+      const label = (key: string) => qualifiedSettingLabel(installation.manifest, key);
+      handoffError = `Some saved keys could not be moved. Enter them again in ${installation.manifest.name}'s settings: ${handoff.skipped.map(label).join(", ")}.`;
     }
     if (handoff.moved.length > 0) installation = await requirePluginInstallation(context.db, pluginId);
   } catch (error) {

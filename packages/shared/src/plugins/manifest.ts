@@ -10,7 +10,7 @@ import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventT
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
-import { pluginSettingsSchemaSchema } from "./settings-schema";
+import { PLUGIN_SETTING_KEY, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { PROVIDER_KINDS } from "./providers/kinds";
 
@@ -123,14 +123,24 @@ const customFieldSchema = z.object({
   storefrontVisible: z.boolean().default(false),
 }).strict();
 
+/** The most tabs one app page declares. */
+export const PLUGIN_PAGE_TABS_MAX = 8;
+
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
     id: name,
     title,
     placement: z.enum(PLUGIN_NAV_PLACEMENTS).default("apps"),
-    /** The admin route that returns the page's UI tree. */
+    /** The admin route that returns the page's UI tree (with tabs: the first tab's). */
     route: name,
+    /**
+     * Sub-pages drawn as tabs under the page title (Polaris Tabs), each one
+     * its own admin route; the first one opens by default. The page's
+     * `route` must be one of them, so a dashboard without tabs still draws
+     * the page.
+     */
+    tabs: z.array(z.object({ id: name, title, route: name }).strict()).min(2).max(PLUGIN_PAGE_TABS_MAX).optional(),
   }).strict()).max(10).default([]),
   /** Cards on a resource's detail page. */
   cards: z.array(z.object({ id: name, target: z.enum(PLUGIN_ADMIN_TARGETS), title, route: name }).strict()).max(20).default([]),
@@ -183,6 +193,24 @@ const storefrontSchema = z.object({
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
+}).strict();
+
+// ── Settings groups ───────────────────────────────────────────────────────
+
+/** The most app-wide settings sections one app declares. */
+export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
+
+/**
+ * An app-wide section of the app's settings page (Polaris: a titled card of
+ * related fields). Fields join one with `settings[].group`; provider-scoped
+ * fields are shown with their provider instead.
+ */
+const settingsGroupSchema = z.object({
+  id: name,
+  title,
+  description: description.optional(),
+  /** Lower comes first; groups with the same order keep the manifest's order. */
+  order: z.number().int().min(0).max(1000).default(100),
 }).strict();
 
 // ── Listing ───────────────────────────────────────────────────────────────
@@ -268,6 +296,15 @@ const pluginTranslationSchema = z.object({
   cards: z.record(name, title).optional(),
   actions: z.record(name, title).optional(),
   widgets: z.record(name, title).optional(),
+  /** Page tab titles: page id → tab id → title. */
+  tabs: z.record(name, z.record(name, title)).optional(),
+  /** Settings section titles and descriptions by group id. */
+  settingsGroups: z.record(name, z.object({ title: title.optional(), description: description.optional() }).strict()).optional(),
+  /** Setting labels and help by key (app settings only). */
+  settings: z.record(z.string().regex(PLUGIN_SETTING_KEY), z.object({
+    label: z.string().trim().min(1).max(80).optional(),
+    help: z.string().trim().min(1).max(280).optional(),
+  }).strict()).optional(),
 }).strict();
 export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
 
@@ -350,6 +387,8 @@ export const pluginManifestSchema = z.object({
     .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
   customFields: z.array(customFieldSchema).max(50).default([]),
   settings: pluginSettingsSchemaSchema.default([]),
+  /** App-wide settings sections (`settings[].group`); additive, presentation only. */
+  settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
   storefront: storefrontSchema.default({ sections: [], productBlocks: [], head: false, scripts: [], proxy: false }),
@@ -371,7 +410,17 @@ export const pluginManifestSchema = z.object({
   const needAdminRoute = (path: (string | number)[], route: string) => {
     if (!adminRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Admin route ${route} is not declared.` });
   };
-  manifest.admin.pages.forEach((page, index) => needAdminRoute(["admin", "pages", index, "route"], page.route));
+  manifest.admin.pages.forEach((page, index) => {
+    needAdminRoute(["admin", "pages", index, "route"], page.route);
+    if (!page.tabs) return;
+    page.tabs.forEach((tab, tabIndex) => needAdminRoute(["admin", "pages", index, "tabs", tabIndex, "route"], tab.route));
+    if (new Set(page.tabs.map((tab) => tab.id)).size !== page.tabs.length) {
+      context.addIssue({ code: "custom", path: ["admin", "pages", index, "tabs"], message: "Tab ids must be unique." });
+    }
+    if (!page.tabs.some((tab) => tab.route === page.route)) {
+      context.addIssue({ code: "custom", path: ["admin", "pages", index, "route"], message: "A page with tabs draws one of them: use a tab's route." });
+    }
+  });
   manifest.admin.cards.forEach((card, index) => needAdminRoute(["admin", "cards", index, "route"], card.route));
   manifest.admin.actions.forEach((action, index) => needAdminRoute(["admin", "actions", index, "route"], action.route));
   manifest.admin.widgets.forEach((widget, index) => needAdminRoute(["admin", "widgets", index, "route"], widget.route));
@@ -385,6 +434,22 @@ export const pluginManifestSchema = z.object({
           context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
         }
       }
+    }
+    for (const [pageId, tabs] of Object.entries(translation.tabs ?? {})) {
+      const page = manifest.admin.pages.find((entry) => entry.id === pageId);
+      for (const tabId of Object.keys(tabs)) {
+        if (!page?.tabs?.some((tab) => tab.id === tabId)) {
+          context.addIssue({ code: "custom", path: ["translations", locale, "tabs", pageId, tabId], message: `No tab ${tabId} on page ${pageId} to translate.` });
+        }
+      }
+    }
+    const groups = new Set(manifest.settingsGroups.map((group) => group.id));
+    for (const id of Object.keys(translation.settingsGroups ?? {})) {
+      if (!groups.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "settingsGroups", id], message: `No settings group ${id} to translate.` });
+    }
+    const keys = new Set(manifest.settings.map((field) => field.key));
+    for (const key of Object.keys(translation.settings ?? {})) {
+      if (!keys.has(key)) context.addIssue({ code: "custom", path: ["translations", locale, "settings", key], message: `No setting ${key} to translate.` });
     }
   }
   const needPublicRoute = (path: (string | number)[], route: string) => {
@@ -409,6 +474,9 @@ export const pluginManifestSchema = z.object({
     surface.settings.forEach((field, fieldIndex) => {
       if (field.type === "secret") {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
+      }
+      if (field.group !== undefined) {
+        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "group"], message: "Groups are for the app's own settings." });
       }
     });
   }
@@ -447,6 +515,19 @@ export const pluginManifestSchema = z.object({
       if (!settingKeys.has(key)) {
         context.addIssue({ code: "custom", path: ["providers", index, "settings"], message: `Setting ${key} is not declared in settings.` });
       }
+    }
+  });
+  unique(manifest.settingsGroups.map((group) => group.id), ["settingsGroups"], "Settings group ids");
+  const providerIds = new Set(manifest.providers.map((provider) => provider.id));
+  manifest.settingsGroups.forEach((group, index) => {
+    if (providerIds.has(group.id)) {
+      context.addIssue({ code: "custom", path: ["settingsGroups", index, "id"], message: `${group.id} is a provider id: provider fields join their provider with group: "${group.id}".` });
+    }
+  });
+  const groupIds = new Set(manifest.settingsGroups.map((group) => group.id));
+  manifest.settings.forEach((field, index) => {
+    if (field.group !== undefined && !groupIds.has(field.group) && !providerIds.has(field.group)) {
+      context.addIssue({ code: "custom", path: ["settings", index, "group"], message: `Group ${field.group} is neither a settings group nor a provider id.` });
     }
   });
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");

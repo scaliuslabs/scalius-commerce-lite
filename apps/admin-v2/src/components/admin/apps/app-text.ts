@@ -3,12 +3,12 @@
 // Bangla (what is missing stays English). The app's screens themselves come
 // in the dashboard's language from the app (`adminContext().locale`).
 import type { Locale } from "~/i18n";
-import type { AppAdminSurfaces, AppDetail, AppSummary } from "~/lib/api-query-options/apps";
+import type { AppAdminSurfaces, AppSummary } from "~/lib/api-query-options/apps";
 
 type Translations = AppSummary["translations"];
 type Translation = NonNullable<NonNullable<Translations>["bn"]>;
 
-function translationFor(translations: Translations | undefined, locale: Locale): Translation | null {
+export function translationFor(translations: Translations | undefined, locale: Locale): Translation | null {
   return locale === "bn" ? translations?.bn ?? null : null;
 }
 
@@ -24,15 +24,7 @@ export function localizedApp<T extends Pick<AppSummary, "name" | "description"> 
   };
 }
 
-/** An app's page: its name, description and the titles of the pages it lists. */
-export function localizedAppDetail(app: AppDetail, locale: Locale): AppDetail {
-  const text = translationFor(app.translations, locale);
-  if (!text) return app;
-  return {
-    ...localizedApp(app, locale),
-    admin: { ...app.admin, pages: app.admin.pages.map((page) => ({ ...page, title: text.pages?.[page.id] ?? page.title })) },
-  };
-}
+export type { Translation };
 
 /** An app's name and its pages', cards', actions' and widgets' titles (navigation, detail pages, Home). */
 export function localizedSurfaces(app: AppAdminSurfaces, locale: Locale): AppAdminSurfaces {

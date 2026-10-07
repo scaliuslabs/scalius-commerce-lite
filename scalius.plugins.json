@@ -5,9 +5,9 @@
   "plugins": [
     {
       "id": "scalius.bangladesh",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "source": "plugins/bangladesh",
-      "sha256": "4bdcb359d6f1d863b4db84021589e4d5060ee33e595c0fc63b2bd89ec459cdc8"
+      "sha256": "d44793cc14747b1353dfcf8030d55c6981643fecc6beff07e37783d328af2ca5"
     },
     {
       "id": "scalius.bkash",

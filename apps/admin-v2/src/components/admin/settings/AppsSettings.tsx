@@ -818,7 +818,7 @@ function FraudCardBody() {
           <SettingsDialog
             key={providerType}
             title={name}
-            description={appProvider ? appT("fromApp", { app: appProvider.appName }) : undefined}
+            description={appProvider ? appT("byApp", { app: appProvider.appName }) : undefined}
             trigger={
               <SettingsRow
                 disabled={!canEdit}

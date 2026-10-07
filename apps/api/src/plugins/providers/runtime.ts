@@ -11,6 +11,7 @@ import {
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
+import { qualifiedSettingLabel } from "@scalius/shared/plugins/settings-layout";
 import { validatePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import type { PluginProviderDeclaration } from "@scalius/shared/plugins/providers";
 import { BUNDLED_PLUGINS } from "../bundled.gen";
@@ -99,7 +100,7 @@ export interface AppProviderSettings {
 export async function readAppProviderSettings(
   runtime: AppProviderRuntime,
   installation: PluginInstallation,
-  provider: Pick<PluginProviderDeclaration, "kind" | "settings">,
+  provider: Pick<PluginProviderDeclaration, "kind" | "settings"> & { name?: string },
   encryptionKey: string | undefined,
 ): Promise<AppProviderSettings> {
   const name = installation.manifest.name;
@@ -107,6 +108,8 @@ export async function readAppProviderSettings(
   const checked = validatePluginSettingValues(installation.manifest.settings, settings.values);
   const own = provider.settings;
   const labels = new Map(installation.manifest.settings.map((field) => [field.key, field.label]));
+  // Outside the provider's own sheet a field reads with its provider ("Pathao: Client ID").
+  const qualified = (key: string) => qualifiedSettingLabel(installation.manifest, key);
   const unreadable = own ? settings.unreadableSecrets.filter((key) => own.includes(key)) : settings.unreadableSecrets;
   // The app's required settings: activation itself needs them.
   const required = [...new Set(checked.ok ? [] : checked.errors.map((error) => error.key))];
@@ -122,18 +125,22 @@ export async function readAppProviderSettings(
   const missingFields = [...required, ...ownMissing];
   const credentialErrors = [
     ...(unreadable.length > 0 ? [`${name} credentials could not be opened. Save them again in the app's settings.`] : []),
-    ...placeholders.map((key) => `${labels.get(key) ?? key} looks like a placeholder. Save a real provider value in ${name}'s settings.`),
+    ...placeholders.map((key) => `${qualified(key)} looks like a placeholder. Save a real provider value in ${name}'s settings.`),
   ];
   const approved = installation.status === "active" && installation.grant?.providers.includes(provider.kind) === true;
   const runnable = runtime.canRun(installation);
   const environment = settings.values.environment === "live"
     ? "live"
     : settings.values.environment === "sandbox" ? "test" : "unknown";
-  const complete = (keys: string[]) => `Complete ${name}'s settings: ${keys.map((key) => (own ? labels.get(key) ?? key : key)).join(", ")}.`;
+  const complete = (keys: string[]) => `Complete ${name}'s settings: ${keys.map((key) => (own ? qualified(key) : key)).join(", ")}.`;
+  // The provider's own fields, named as its setup sheet names them.
+  const setUp = (keys: string[]) => (provider.name
+    ? `Set up ${provider.name}: ${keys.map((key) => labels.get(key) ?? key).join(", ")}.`
+    : complete(keys));
   const blockedReason = credentialErrors[0]
     ?? (required.length > 0 ? complete(required) : undefined)
     ?? (!approved ? `Activate ${name} in Apps to use it.` : undefined)
-    ?? (ownMissing.length > 0 ? complete(ownMissing) : undefined)
+    ?? (ownMissing.length > 0 ? setUp(ownMissing) : undefined)
     ?? (!runnable ? `${name} needs the plugin sandbox (Workers Paid) or to be compiled into this deployment.` : undefined);
   return { enabled: approved && runnable, missingFields, credentialErrors, environment, ...(blockedReason ? { blockedReason } : {}) };
 }

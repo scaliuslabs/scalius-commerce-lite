@@ -2,12 +2,18 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { localizedAppPage } from "~/components/admin/apps/app-detail-text";
+import { localizedSurfaces } from "~/components/admin/apps/app-text";
 import { PluginSurface } from "~/components/admin/apps/ui/PluginSurface";
+import type { AppSurfaces } from "~/components/admin/apps/ui/surfaces";
+import { ProvidedByChip } from "~/components/admin/apps/ProvidedByChip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { SurfaceLoadError, SurfaceSkeleton } from "~/components/admin/apps/ui/surface-states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { translate, useMessages } from "~/i18n";
+import { translate, useLocale, useMessages } from "~/i18n";
+import { appSurfacesMessages } from "~/i18n/app-surfaces";
 import { appUiMessages } from "~/i18n/app-ui";
 import { shellMessages } from "~/i18n/shell";
 import { titleHead } from "~/i18n/page-titles";
@@ -65,11 +71,51 @@ function Unavailable() {
   );
 }
 
+type Surfaces = AppSurfaces;
+type Page = Surfaces["pages"][number];
+
+/**
+ * An app page with tabs (Polaris Tabs under the page title): each tab is its
+ * own admin route, chosen by `?tab=`; the first opens by default. The app's
+ * tab document draws below; its own title gives way to the page's.
+ */
+function TabbedAppPage({ app, page, tabs, search }: { app: Surfaces; page: Page; tabs: NonNullable<Page["tabs"]>; search: Record<string, string> }) {
+  const t = useMessages(appSurfacesMessages);
+  const navigate = Route.useNavigate();
+  const { tab: requested, ...query } = search;
+  const active = tabs.find((tab) => tab.id === requested) ?? tabs[0]!;
+  return (
+    <>
+      <PageHeader title={page.title} badge={<ProvidedByChip pluginId={app.id} appName={app.name} />} />
+      <Tabs
+        value={active.id}
+        onValueChange={(next) => void navigate({ search: (next === tabs[0]!.id ? {} : { tab: next }) as never, replace: true })}
+      >
+        <TabsList aria-label={t("tabsLabel")}>
+          {tabs.map((tab) => <TabsTrigger key={tab.id} value={tab.id}>{tab.title}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value={active.id}>
+          <PluginSurface
+            // Another tab, or another link query, starts again from the first table page.
+            key={`${app.id}:${page.id}:${active.id}:${JSON.stringify(query)}`}
+            app={app}
+            route={active.route}
+            query={query}
+            variant="tab"
+            title={active.title}
+          />
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
 function AppPageRoute() {
   const { pluginId, pageId } = Route.useParams();
   const rawSearch = Route.useSearch();
   const search = useMemo(() => appPageQuery(rawSearch as Record<string, unknown>), [rawSearch]);
   const surfaces = useQuery(appSurfacesQueryOptions());
+  const locale = useLocale();
   if (surfaces.isPending) return <SurfaceSkeleton variant="page" />;
   if (surfaces.isError) {
     return (
@@ -79,9 +125,13 @@ function AppPageRoute() {
       </>
     );
   }
-  const app = surfaces.data.find((entry) => entry.id === pluginId);
-  const page = app?.pages.find((entry) => entry.id === pageId);
+  const found = surfaces.data.find((entry) => entry.id === pluginId);
+  // Titles and tab names in the dashboard's language.
+  const app = found ? localizedSurfaces(found, locale) : undefined;
+  const raw = found?.pages.find((entry) => entry.id === pageId);
+  const page = found && raw ? localizedAppPage(found, raw, locale) : undefined;
   if (!app || !page) return <Unavailable />;
+  if (page.tabs) return <TabbedAppPage app={app} page={page} tabs={page.tabs} search={search} />;
   return (
     <PluginSurface
       // Another page, or another link query, starts again from the first table page.
@@ -91,6 +141,7 @@ function AppPageRoute() {
       query={search}
       variant="page"
       title={page.title}
+      badge={<ProvidedByChip pluginId={app.id} appName={app.name} />}
     />
   );
 }

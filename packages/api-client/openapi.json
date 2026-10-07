@@ -10082,6 +10082,10 @@
           "maxLength": {
             "type": "integer",
             "nullable": true
+          },
+          "group": {
+            "type": "string",
+            "description": "The settings group or provider id the field shows with (absent: the app's general settings)."
           }
         },
         "required": [
@@ -11471,6 +11475,43 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "tabs": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "settingsGroups": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "help": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -11661,13 +11702,37 @@
                 },
                 "route": {
                   "type": "string"
+                },
+                "tabs": {
+                  "type": "array",
+                  "nullable": true,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "route": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "route"
+                    ]
+                  }
                 }
               },
               "required": [
                 "id",
                 "title",
                 "placement",
-                "route"
+                "route",
+                "tabs"
               ]
             }
           },
@@ -11803,6 +11868,12 @@
               ]
             }
           },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProviderEntry"
+            }
+          },
           "translations": {
             "$ref": "#/components/schemas/AppTranslations"
           }
@@ -11814,7 +11885,46 @@
           "cards",
           "actions",
           "widgets",
-          "routes"
+          "routes",
+          "providers"
+        ]
+      },
+      "AppProviderEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "<plugin id>:<provider id>, as the capability's settings store it."
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "payment",
+              "courier",
+              "sms",
+              "email",
+              "fraud",
+              "tax"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true,
+            "description": "Same-origin address of the provider's own mark, else the app's icon."
+          }
+        },
+        "required": [
+          "id",
+          "providerId",
+          "kind",
+          "name",
+          "icon"
         ]
       },
       "AppDetail": {
@@ -11990,14 +12100,94 @@
                       "type": "string"
                     },
                     "description": "Required settings still empty (activation needs them)."
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "group": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "description"
+                          ]
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "group",
+                        "keys"
+                      ]
+                    },
+                    "description": "The app-wide settings in their sections, in order (group null: general). Provider fields show with their provider."
                   }
                 },
                 "required": [
                   "fields",
                   "values",
                   "secrets",
-                  "missing"
+                  "missing",
+                  "sections"
                 ]
+              },
+              "providers": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AppProviderEntry"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "settings": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The setting keys shown with the provider where it is set up."
+                        },
+                        "own": {
+                          "type": "boolean",
+                          "description": "Whether the provider has fields of its own (otherwise it uses the app's general settings)."
+                        },
+                        "required": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The keys its readiness needs set: its declared settings, else the app's required ones."
+                        }
+                      },
+                      "required": [
+                        "settings",
+                        "own",
+                        "required"
+                      ]
+                    }
+                  ]
+                },
+                "description": "The providers the app offers, each set up on its capability's settings page."
               },
               "routes": {
                 "type": "object",
@@ -12154,10 +12344,48 @@
                     "type": "boolean"
                   },
                   "sections": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "name"
+                      ]
+                    }
                   },
                   "productBlocks": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "placement": {
+                          "type": "string",
+                          "enum": [
+                            "buy-box",
+                            "below"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "name",
+                        "placement"
+                      ]
+                    }
                   },
                   "scripts": {
                     "type": "array",
@@ -12208,28 +12436,141 @@
                           "type": "string"
                         },
                         "placement": {
-                          "type": "string"
+                          "type": "string",
+                          "enum": [
+                            "apps",
+                            "orders",
+                            "products",
+                            "customers",
+                            "marketing",
+                            "content",
+                            "analytics",
+                            "settings"
+                          ]
                         },
                         "route": {
                           "type": "string"
+                        },
+                        "tabs": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "route": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "route"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "id",
                         "title",
                         "placement",
-                        "route"
+                        "route",
+                        "tabs"
                       ]
                     }
                   },
                   "cards": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string",
+                          "enum": [
+                            "product",
+                            "variant",
+                            "order",
+                            "customer",
+                            "category",
+                            "collection",
+                            "brand",
+                            "page",
+                            "return"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "target",
+                        "title"
+                      ]
+                    }
                   },
                   "actions": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string",
+                          "enum": [
+                            "product",
+                            "variant",
+                            "order",
+                            "customer",
+                            "category",
+                            "collection",
+                            "brand",
+                            "page",
+                            "return"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "bulk": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "target",
+                        "label",
+                        "bulk"
+                      ]
+                    }
                   },
                   "widgets": {
-                    "type": "integer"
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -12271,6 +12612,7 @@
               "runtime",
               "runtimeAvailable",
               "settings",
+              "providers",
               "routes",
               "cron",
               "storage",
@@ -183554,7 +183896,7 @@
           "Admin - Apps"
         ],
         "summary": "List what active apps add to the dashboard",
-        "description": "Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.",
+        "description": "Pages (navigation entries, with their tabs), resource cards, actions, home widgets and providers of every active app, from their manifests. Their content comes from each app's own admin routes.",
         "responses": {
           "200": {
             "description": "Dashboard surfaces of active apps",

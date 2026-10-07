@@ -57,9 +57,11 @@ import {
 import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
 import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
+import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useWholeUnitPrices } from "../shared/MoneyInput";
+import { ProvidedByChip } from "./AppProviderStatus";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
@@ -359,6 +361,7 @@ export function PaymentMethodsCard() {
   const pendingTurnOn = useRef<MethodKey | null>(null);
   const setupButtons = useRef(new Map<MethodKey, HTMLButtonElement>());
   const canViewApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
+  const openProvider = useOpenAppProvider();
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
   // Installed apps' providers, offered or not; without them the active ones still list.
@@ -498,13 +501,17 @@ export function PaymentMethodsCard() {
             {t("testConnection")}
           </Button>
         ) : null}
-        {/* The app's own page holds its settings, keys and activation. */}
+        {/* The provider's own keys open in its setup sheet, here; the app page holds its activation. */}
         {canViewApps && row.installed && row.pluginId ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>
-              {outcome.state === "needs_setup" ? t("set_up") : unusable ? t("openApp") : t("manage")}
-            </Link>
-          </Button>
+          openProvider ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => openProvider(method)}>
+              {outcome.state === "needs_setup" ? t("set_up") : t("manage")}
+            </Button>
+          ) : (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>{unusable ? t("openApp") : t("manage")}</Link>
+            </Button>
+          )
         ) : null}
       </>
     ) : null;
@@ -514,7 +521,9 @@ export function PaymentMethodsCard() {
         <MethodMark row={row} />
         <div className="min-w-0 flex-1">
           <p className="text-body font-medium">{name}</p>
-          {row.kind === "app" && row.appName ? (
+          {row.kind === "app" && row.appName && row.pluginId ? (
+            <ProvidedByChip pluginId={row.pluginId} appName={row.appName} />
+          ) : row.kind === "app" && row.appName ? (
             <p className="text-body text-muted-foreground">{t("fromApp", { app: row.appName })}</p>
           ) : null}
           <p className="text-body text-muted-foreground">{detail}</p>

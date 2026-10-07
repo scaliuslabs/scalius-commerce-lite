@@ -37,17 +37,90 @@ import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPa
 import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
 
-const secret = (key: string, label: string, help?: string) => ({ key, label, type: "secret" as const, ...(help ? { help } : {}) });
-const text = (key: string, label: string, maxLength: number, help?: string) => ({ key, label, type: "text" as const, maxLength, ...(help ? { help } : {}) });
-const url = (key: string, label: string, fallback: string, help = "Change it only when the service gives you another address.") =>
-  ({ key, label, type: "url" as const, default: fallback, help });
-const choice = (key: string, label: string, options: Array<[string, string]>, fallback: string) =>
-  ({ key, label, type: "select" as const, options: options.map(([value, text]) => ({ value, label: text })), default: fallback });
+// Each field belongs to one provider (`group: <provider id>`): the dashboard
+// shows it only in that provider's setup sheet, where the provider is in
+// Settings (Notifications, Shipping, Apps and integrations), so the labels
+// need no provider prefix.
+type Group = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet" | "fraudchecker" | "fraudbd" | "fraudguard" | "ecourier" | "pathao" | "steadfast";
+const secret = (group: Group, key: string, label: string, help?: string) => ({ key, label, type: "secret" as const, group, ...(help ? { help } : {}) });
+const text = (group: Group, key: string, label: string, maxLength: number, help?: string) =>
+  ({ key, label, type: "text" as const, maxLength, group, ...(help ? { help } : {}) });
+const url = (group: Group, key: string, label: string, fallback: string, help = "Change it only when the service gives you another address.") =>
+  ({ key, label, type: "url" as const, default: fallback, help, group });
+const choice = (group: Group, key: string, label: string, options: Array<[string, string]>, fallback: string) =>
+  ({ key, label, type: "select" as const, options: options.map(([value, text]) => ({ value, label: text })), default: fallback, group });
+
+const SETTINGS = [
+  secret("smsnetbd", "smsnetbd_api_key", "API key"),
+  text("smsnetbd", "smsnetbd_sender_id", "Sender ID", 128, "Only when SMS.net.bd approved a sender ID for you."),
+  secret("bdbulksms", "bdbulksms_token", "Token"),
+  text("mimsms", "mimsms_username", "Username (email)", 320),
+  secret("mimsms", "mimsms_api_key", "API key"),
+  text("mimsms", "mimsms_sender_name", "Sender name", 128, "The sender name registered with MIM SMS."),
+  secret("gennet", "gennet_api_token", "API token"),
+  { key: "gennet_base_url", label: "Account address", type: "url" as const, group: "gennet" as const, help: "Your account's address, for example https://yourshop.gennet.com.bd." },
+  text("gennet", "gennet_sid", "Sender ID (SID)", 128),
+  url("fraudchecker", "fraudchecker_api_url", "API URL", "https://fraudchecker.link/api/v1/qc/"),
+  secret("fraudchecker", "fraudchecker_token", "Bearer token"),
+  url("fraudbd", "fraudbd_api_url", "API URL", "https://fraudbd.com/api/check-courier-info"),
+  secret("fraudbd", "fraudbd_api_key", "API key"),
+  text("fraudbd", "fraudbd_username", "Username", 200),
+  secret("fraudbd", "fraudbd_password", "Password"),
+  url("fraudguard", "fraudguard_api_url", "API URL", "https://fraudguard.slope.com.bd/api/v1/fraud-check"),
+  secret("fraudguard", "fraudguard_api_key", "API key"),
+  secret("fraudguard", "fraudguard_api_secret", "API secret"),
+  url("ecourier", "ecourier_api_url", "API URL", "https://backoffice.ecourier.com.bd/api/fraud-status-check"),
+  secret("ecourier", "ecourier_api_key", "API key"),
+  secret("ecourier", "ecourier_api_secret", "API secret"),
+  text("ecourier", "ecourier_user_id", "User ID", 200),
+  url("pathao", "pathao_base_url", "API address", "https://api-hermes.pathao.com", "Live: https://api-hermes.pathao.com. Test account: https://courier-api-sandbox.pathao.com."),
+  text("pathao", "pathao_client_id", "Client ID", 500),
+  secret("pathao", "pathao_client_secret", "Client secret"),
+  text("pathao", "pathao_username", "Username (email)", 320),
+  secret("pathao", "pathao_password", "Password"),
+  text("pathao", "pathao_store_id", "Store ID", 100, "The pickup store in your Pathao merchant account."),
+  choice("pathao", "pathao_delivery_type", "Delivery type", [["48", "Regular"], ["12", "Express"]], "48"),
+  choice("pathao", "pathao_item_type", "Item type", [["2", "Parcel"], ["1", "Document"]], "2"),
+  { key: "pathao_item_weight", label: "Default weight (kg)", type: "number" as const, default: 0.5, min: 0.1, max: 50, group: "pathao" as const, help: "Used when a booking does not give a weight." },
+  secret("pathao", "pathao_webhook_secret", "Webhook secret", "A long random text. Enter the same in Pathao's webhook settings, with the URL from Settings → Shipping → Couriers."),
+  url("steadfast", "steadfast_base_url", "API address", "https://portal.packzy.com/api/v1"),
+  secret("steadfast", "steadfast_api_key", "API key"),
+  secret("steadfast", "steadfast_secret_key", "Secret key"),
+  secret("steadfast", "steadfast_webhook_secret", "Webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
+];
+
+/** The field labels in Bangla (the dashboard's other language); help stays English. */
+const BN_LABELS: Record<string, string> = {
+  "API key": "এপিআই কী",
+  "API token": "এপিআই টোকেন",
+  "API secret": "এপিআই সিক্রেট",
+  "API URL": "এপিআই ইউআরএল",
+  "API address": "এপিআই ঠিকানা",
+  "Account address": "অ্যাকাউন্টের ঠিকানা",
+  "Bearer token": "বেয়ারার টোকেন",
+  "Client ID": "ক্লায়েন্ট আইডি",
+  "Client secret": "ক্লায়েন্ট সিক্রেট",
+  "Default weight (kg)": "ডিফল্ট ওজন (কেজি)",
+  "Delivery type": "ডেলিভারির ধরন",
+  "Item type": "পার্সেলের ধরন",
+  Password: "পাসওয়ার্ড",
+  "Secret key": "সিক্রেট কী",
+  "Sender ID": "সেন্ডার আইডি",
+  "Sender ID (SID)": "সেন্ডার আইডি (SID)",
+  "Sender name": "প্রেরকের নাম",
+  "Store ID": "স্টোর আইডি",
+  Token: "টোকেন",
+  "User ID": "ইউজার আইডি",
+  Username: "ইউজারনেম",
+  "Username (email)": "ইউজারনেম (ইমেইল)",
+  "Webhook secret": "ওয়েবহুক সিক্রেট",
+  "Webhook token": "ওয়েবহুক টোকেন",
+};
 
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "1.1.0",
+  version: "1.2.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Everything a store in Bangladesh needs in one app: book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
   author: { name: "Scalius" },
@@ -62,44 +135,7 @@ export const manifest = {
   // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
   permissions: ["settings.delivery_locations.import"],
   allowedHosts: [...SMS_HOSTS, ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)), ...PATHAO_HOSTS, ...STEADFAST_HOSTS],
-  settings: [
-    secret("smsnetbd_api_key", "SMS.net.bd: API key"),
-    text("smsnetbd_sender_id", "SMS.net.bd: sender ID", 128, "Only when SMS.net.bd approved a sender ID for you."),
-    secret("bdbulksms_token", "BDBulkSMS: token"),
-    text("mimsms_username", "MIM SMS: username (email)", 320),
-    secret("mimsms_api_key", "MIM SMS: API key"),
-    text("mimsms_sender_name", "MIM SMS: sender name", 128, "The sender name registered with MIM SMS."),
-    secret("gennet_api_token", "GenNet: API token"),
-    { key: "gennet_base_url", label: "GenNet: account address", type: "url", help: "Your account's address, for example https://yourshop.gennet.com.bd." },
-    text("gennet_sid", "GenNet: sender ID (SID)", 128),
-    url("fraudchecker_api_url", "FraudChecker: API URL", "https://fraudchecker.link/api/v1/qc/"),
-    secret("fraudchecker_token", "FraudChecker: bearer token"),
-    url("fraudbd_api_url", "FraudBD: API URL", "https://fraudbd.com/api/check-courier-info"),
-    secret("fraudbd_api_key", "FraudBD: API key"),
-    text("fraudbd_username", "FraudBD: username", 200),
-    secret("fraudbd_password", "FraudBD: password"),
-    url("fraudguard_api_url", "FraudGuard: API URL", "https://fraudguard.slope.com.bd/api/v1/fraud-check"),
-    secret("fraudguard_api_key", "FraudGuard: API key"),
-    secret("fraudguard_api_secret", "FraudGuard: API secret"),
-    url("ecourier_api_url", "eCourier: API URL", "https://backoffice.ecourier.com.bd/api/fraud-status-check"),
-    secret("ecourier_api_key", "eCourier: API key"),
-    secret("ecourier_api_secret", "eCourier: API secret"),
-    text("ecourier_user_id", "eCourier: user ID", 200),
-    url("pathao_base_url", "Pathao: API address", "https://api-hermes.pathao.com", "Live: https://api-hermes.pathao.com. Test account: https://courier-api-sandbox.pathao.com."),
-    text("pathao_client_id", "Pathao: client ID", 500),
-    secret("pathao_client_secret", "Pathao: client secret"),
-    text("pathao_username", "Pathao: username (email)", 320),
-    secret("pathao_password", "Pathao: password"),
-    text("pathao_store_id", "Pathao: store ID", 100, "The pickup store in your Pathao merchant account."),
-    choice("pathao_delivery_type", "Pathao: delivery type", [["48", "Regular"], ["12", "Express"]], "48"),
-    choice("pathao_item_type", "Pathao: item type", [["2", "Parcel"], ["1", "Document"]], "2"),
-    { key: "pathao_item_weight", label: "Pathao: default weight (kg)", type: "number", default: 0.5, min: 0.1, max: 50, help: "Used when a booking does not give a weight." },
-    secret("pathao_webhook_secret", "Pathao: webhook secret", "A long random text. Enter the same in Pathao's webhook settings, with the URL from Settings → Shipping → Couriers."),
-    url("steadfast_base_url", "Steadfast: API address", "https://portal.packzy.com/api/v1"),
-    secret("steadfast_api_key", "Steadfast: API key"),
-    secret("steadfast_secret_key", "Steadfast: secret key"),
-    secret("steadfast_webhook_secret", "Steadfast: webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
-  ],
+  settings: SETTINGS,
   providers: {
     courier: [
       {
@@ -159,6 +195,7 @@ export const manifest = {
       tagline: "বাংলাদেশ প্যাক: কুরিয়ার, এসএমএস, ফ্রড চেক, এলাকা",
       description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
       pages: { places: "বাংলাদেশের এলাকা" },
+      settings: Object.fromEntries(SETTINGS.flatMap((field) => (BN_LABELS[field.label] ? [[field.key, { label: BN_LABELS[field.label] }]] : []))),
     },
   },
 } satisfies PluginManifestInput;
@@ -183,9 +220,9 @@ const COPY = {
     loadedToast: "The Bangladesh places are loaded.",
     partialToast: "Some places are loaded. The rest load within the hour.",
     keep: "Removing the app keeps every place: zones, tax regions and addresses use them.",
-    next: "Next: add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Enter their keys in this app's settings.",
+    next: "Next: add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered where you set it up.",
     pathaoTitle: "Pathao's live places",
-    pathaoDescription: "Reads Pathao's current cities, thanas and areas into your places, a few dozen at a time, and links them for Pathao bookings. It needs Pathao's keys in this app's settings.",
+    pathaoDescription: "Reads Pathao's current cities, thanas and areas into your places, a few dozen at a time, and links them for Pathao bookings. It needs Pathao's keys (Settings → Shipping → Couriers).",
     pathaoIdle: "Not refreshed",
     pathaoRunning: "Refreshing",
     pathaoDone: "Refreshed",
@@ -214,9 +251,9 @@ const COPY = {
     loadedToast: "বাংলাদেশের এলাকা লোড হয়েছে।",
     partialToast: "কিছু এলাকা লোড হয়েছে। বাকিগুলো এক ঘণ্টার মধ্যে লোড হবে।",
     keep: "অ্যাপ সরালেও সব এলাকা থাকে: জোন, ট্যাক্স অঞ্চল আর ঠিকানা এগুলো ব্যবহার করে।",
-    next: "এরপর: Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। তাদের কী এই অ্যাপের সেটিংসে দিন।",
+    next: "এরপর: Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। যেখানে চালু করবেন, সেখানেই তার কী দিন।",
     pathaoTitle: "Pathao-র হালনাগাদ এলাকা",
-    pathaoDescription: "Pathao-র বর্তমান শহর, থানা ও এলাকা অল্প অল্প করে আপনার এলাকায় আনে, আর Pathao বুকিংয়ের জন্য যুক্ত করে। এর জন্য এই অ্যাপের সেটিংসে Pathao-র কী লাগবে।",
+    pathaoDescription: "Pathao-র বর্তমান শহর, থানা ও এলাকা অল্প অল্প করে আপনার এলাকায় আনে, আর Pathao বুকিংয়ের জন্য যুক্ত করে। এর জন্য Pathao-র কী লাগবে (Settings → Shipping → Couriers)।",
     pathaoIdle: "হালনাগাদ হয়নি",
     pathaoRunning: "হালনাগাদ হচ্ছে",
     pathaoDone: "হালনাগাদ হয়েছে",

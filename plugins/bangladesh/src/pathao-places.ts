@@ -329,7 +329,7 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
   try {
     account = pathaoAccount(ctx);
   } catch {
-    await save({ ...state, error: "Enter Pathao's API address, client ID, client secret, username and password in this app's settings first." });
+    await save({ ...state, error: "Enter Pathao's API address, client ID, client secret, username and password in Settings → Shipping → Couriers first." });
     return state;
   }
   let calls = 1; // the token

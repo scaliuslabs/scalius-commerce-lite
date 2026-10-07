@@ -51,7 +51,7 @@ export function BangladeshPackStep({ onDone }: { onDone: () => void }) {
           <Badge variant="success" className="self-start">{t("bdPackActive")}</Badge>
           <p className="text-body">{t("bdPackNext")}</p>
           <ul className="flex list-disc flex-col gap-1 pl-5 text-body">
-            <li><Link className="text-link hover:underline" to="/admin/apps/$pluginId" params={{ pluginId: BANGLADESH_PACK_ID }}>{t("bdPackNextKeys")}</Link></li>
+            <li><Link className="text-link hover:underline" to="/admin/settings/shipping" hash="couriers">{t("bdPackNextKeys")}</Link></li>
             <li><Link className="text-link hover:underline" to="/admin/settings/notifications">{t("bdPackNextSms")}</Link></li>
             <li><Link className="text-link hover:underline" to="/admin/settings/integrations">{t("bdPackNextFraud")}</Link></li>
             <li><Link className="text-link hover:underline" to="/admin/settings/shipping">{t("bdPackNextZones")}</Link></li>

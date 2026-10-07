@@ -39,7 +39,7 @@ const VIEWER = ["apps.view"];
 const app: AppSurfaces = {
   id: "acme.app",
   name: "Acme",
-  pages: [{ id: "overview", title: "Overview", placement: "apps", route: "dashboard" }],
+  pages: [{ id: "overview", title: "Overview", placement: "apps", route: "dashboard", tabs: null }],
   cards: [
     { id: "summary", target: "order", title: "Acme summary", route: "order-card" },
     { id: "risk", target: "order", title: "Acme risk", route: "risk-card" },
@@ -58,6 +58,7 @@ const app: AppSurfaces = {
     { name: "wave", methods: ["POST"] },
     { name: "purge", methods: ["POST"] },
   ],
+  providers: [],
 };
 
 // ── Network ───────────────────────────────────────────────────────────────
@@ -424,6 +425,18 @@ describe("app surfaces", () => {
     await click(button("Again"));
     await vi.waitFor(() => expect(text()).toContain("Served 2"));
     expect(calls("GET", "dashboard")).toHaveLength(2);
+  });
+
+  it("draws one tab of a tabbed app page without a header of its own, its description and actions first", async () => {
+    route("GET", "dashboard", () => ({
+      body: doc({ type: "page", title: "Tab title", description: "What this tab shows.", actions: [{ type: "button", label: "Reset", action: { route: "save" } }], children: [{ type: "text", text: "Tab body" }] }),
+    }));
+    await render(<PluginSurface app={app} route="dashboard" query={{}} variant="tab" title="Summary" />);
+    await vi.waitFor(() => expect(text()).toContain("Tab body"));
+    // The page around it draws the title and tabs; the tab draws no h1.
+    expect(document.querySelector("h1")).toBeNull();
+    expect(text()).toContain("What this tab shows.");
+    expect(button("Reset")).toBeTruthy();
   });
 
   it("re-requests the surface with a table's cursor", async () => {

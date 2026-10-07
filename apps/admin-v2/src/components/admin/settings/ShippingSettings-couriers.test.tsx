@@ -97,7 +97,7 @@ describe("couriers are apps", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function openCourier(row: ReturnType<typeof courierRow>, app: ReturnType<typeof appCourier>, expected = "keeps this courier's keys and options in its own settings") {
+  async function openCourier(row: ReturnType<typeof courierRow>, app: ReturnType<typeof appCourier>, expected = "This courier's keys and options are kept, encrypted, with its app.") {
     sdk.getApiV1AdminSettingsDeliveryProviders.mockImplementation(() =>
       envelope({ providers: [row], pagination: { page: 1, limit: 10, hasMore: false } }));
     sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers: [app] }));

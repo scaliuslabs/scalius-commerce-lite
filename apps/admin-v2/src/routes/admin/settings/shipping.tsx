@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DeliveryZonesCard, LocalPickupCard } from "~/components/admin/settings/DeliveryZones";
+import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { CouriersCard, DeliveryAreasCard } from "~/components/admin/settings/ShippingSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -28,11 +29,13 @@ export const Route = createFileRoute("/admin/settings/shipping")({
 
 function ShippingPage() {
   return (
-    <SettingsPage page="shipping">
-      <DeliveryZonesCard />
-      <LocalPickupCard />
-      <DeliveryAreasCard />
-      <CouriersCard />
-    </SettingsPage>
+    <AppProviderSheetHost>
+      <SettingsPage page="shipping">
+        <DeliveryZonesCard />
+        <LocalPickupCard />
+        <DeliveryAreasCard />
+        <CouriersCard />
+      </SettingsPage>
+    </AppProviderSheetHost>
   );
 }

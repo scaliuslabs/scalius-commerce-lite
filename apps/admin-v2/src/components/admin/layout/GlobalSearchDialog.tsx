@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BadgePercent,
   Barcode,
+  Blocks,
   Clock,
   FileText,
   FolderTree,
@@ -12,6 +13,7 @@ import {
   Languages,
   Layers,
   PackageMinus,
+  Plug,
   Settings,
   SunMoon,
   Tag,
@@ -32,6 +34,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useDebounce } from "~/hooks/use-debounce";
 import { apiData } from "~/lib/api";
+import { appSurfacesQueryOptions } from "~/lib/api-query-options/apps";
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { LOCALES, setLocale, useLocale, useMessages } from "~/i18n";
 import { navKeywordMessages, shellMessages } from "~/i18n/shell";
@@ -39,6 +42,10 @@ import { settingsNavMessages } from "~/i18n/settings";
 import { customersMessages } from "~/i18n/customers";
 import { customerTitle } from "~/lib/customer-title";
 import { settingsSearchMessages } from "~/i18n/settings-search";
+import { appSurfacesMessages } from "~/i18n/app-surfaces";
+import type { AppProviderKind } from "../apps/app-capabilities";
+import { searchAppSurfaces } from "../apps/app-search";
+import { localizedSurfaces } from "../apps/app-text";
 import { SETTINGS_NAV } from "../settings/settings-nav";
 import { matches, searchSettings, words } from "../settings/settings-search";
 import type { VisibleNavItem } from "./AdminNav";
@@ -152,6 +159,9 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
   const pages = useQuery(lookup("pages", "/admin/pages", () => apiData(getApiV1AdminPages({ query: listQuery }))));
   // Every discount is one small list the Discounts page caches too; match codes and titles here.
   const discounts = useQuery({ ...discountsQueryOptions(), enabled: searching && canOpen("/admin/discounts") });
+  // Active apps' pages and providers: the shell's cached surfaces read (apps.view).
+  const surfacesT = useMessages(appSurfacesMessages);
+  const apps = useQuery({ ...appSurfacesQueryOptions(), enabled: open && canOpen("/admin/apps") }).data;
 
   const places = useMemo<Entry[]>(() => {
     const hint = (to: string) => {
@@ -202,8 +212,21 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           : [];
       }),
     ];
-    return [...sections.filter((entry) => found(entry.id.slice(4))), ...tasks, ...settingEntries];
-  }, [canOpen, goKeys, locale, nav, needle, settingsCard, settingsPage, t, theme, toggleTheme]);
+    // App pages are found by their own titles; apps by name; app providers
+    // (Pathao, SMS.net.bd) open their setup where their capability lives.
+    const navMatches = sections.filter((entry) => found(entry.id.slice(4)) || (entry.id.startsWith("nav:/admin/apps/") && matches(terms, words(entry.label))));
+    const installed = (apps ?? []).map((app) => localizedSurfaces(app, locale));
+    const kindWords = (kind: AppProviderKind) => [appSurfacesMessages.en[`kind_${kind}`], appSurfacesMessages.bn[`kind_${kind}`]];
+    const appEntries: Entry[] = searchAppSurfaces(installed, needle, canOpen, kindWords).map((hit) => ({
+      id: hit.id,
+      label: hit.label,
+      detail: hit.providerKind ? surfacesT("searchProvider", { kind: surfacesT(`kind_${hit.providerKind}`), app: hit.app }) : surfacesT("searchApp"),
+      to: hit.to,
+      hash: hit.hash,
+      icon: hit.kind === "app" ? Blocks : Plug,
+    }));
+    return [...navMatches, ...tasks, ...settingEntries, ...appEntries];
+  }, [apps, canOpen, goKeys, locale, nav, needle, settingsCard, settingsPage, surfacesT, t, theme, toggleTheme]);
 
   const records = useMemo<Entry[]>(() => {
     if (!searching) return [];

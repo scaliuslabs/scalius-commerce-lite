@@ -31,6 +31,7 @@ import { resolveProviderReadiness } from "../delivery-providers/provider-readine
 import { AppIcon } from "../apps/AppIcon";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
+import { AppProviderSetupButton, ProvidedByChip } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
@@ -245,22 +246,20 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
   );
 }
 
-/** A courier app keeps its keys in its own settings: show where, whether it can book, and its update link. */
+/** A courier app's keys: whether it can book, the button that opens its setup sheet, and its update link. */
 function AppCourierFields({ app, apiUrl, courierLabel }: { app: AppProvider; apiUrl: string; courierLabel: string }) {
   const t = useMessages(shippingMessages);
-  const canOpenApp = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   return (
     <>
       <div className="space-y-3 border-t border-border pt-4">
         <div className="space-y-1">
-          <p className="text-body">{t("appCourierSetup", { app: app.appName })}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-body">{t("appCourierSetup")}</p>
+            <ProvidedByChip pluginId={app.pluginId} appName={app.appName} />
+          </div>
           <p className="text-body text-muted-foreground">{appCourierStatus(t, app)}</p>
         </div>
-        {canOpenApp ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/apps/$pluginId" params={{ pluginId: app.pluginId }}>{t("openAppSettings", { app: app.appName })}</Link>
-          </Button>
-        ) : null}
+        <AppProviderSetupButton provider={app} size="sm" />
       </div>
       {app.operations.includes("verifyWebhook") ? (
         <div className="space-y-3 border-t border-border pt-4">

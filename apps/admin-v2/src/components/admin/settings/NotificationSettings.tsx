@@ -54,6 +54,7 @@ import {
   serializeCustomerNotificationConfig,
   type NotificationEventGroup,
 } from "./notification-channel-policy";
+import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
@@ -351,6 +352,8 @@ function EmailFields() {
   // Installed apps' email providers sit beside the built-in senders.
   const apps = useQuery({ ...appProvidersQuery("email"), enabled: useProviderPortAccess("email").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
+  const openProvider = useOpenAppProvider();
+  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   if (!values.provider) return null;
   const app = apps.find((candidate) => candidate.id === values.provider);
   return (
@@ -358,7 +361,12 @@ function EmailFields() {
       <SettingsField id="email-provider" label={t("emailProvider")}>
         <RadioGroup
           value={values.provider}
-          onValueChange={(provider) => setValue("provider", provider as EmailSettings["provider"])}
+          onValueChange={(provider) => {
+            setValue("provider", provider as EmailSettings["provider"]);
+            // An app sender not set up yet opens its own setup.
+            const chosen = apps.find((candidate) => candidate.id === provider);
+            if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
+          }}
         >
           {(["cloudflare", "resend"] as const).map((provider) => (
             <label key={provider} className="flex min-h-11 items-start gap-2 py-3 text-body">
@@ -371,7 +379,7 @@ function EmailFields() {
               <RadioGroupItem className="mt-0.5" value={provider.id} />
               <span>
                 {provider.name}
-                <span className="block text-muted-foreground">{appT("fromApp", { app: provider.appName })}</span>
+                <span className="block text-muted-foreground">{appT("byApp", { app: provider.appName })}</span>
               </span>
             </label>
           ))}
@@ -439,6 +447,8 @@ function SmsFields() {
   // Every SMS gateway is an installed app's (the Bangladesh gateways: the Bangladesh pack).
   const apps = useQuery({ ...appProvidersQuery("sms"), enabled: useProviderPortAccess("sms").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
+  const openProvider = useOpenAppProvider();
+  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   const provider = values.activeProvider;
   const app = apps.find((candidate) => candidate.id === provider);
   return (
@@ -448,7 +458,12 @@ function SmsFields() {
           id="sms-provider"
           value={provider ?? ""}
           placeholder={t("chooseSmsProvider")}
-          onValueChange={(value) => setValue("activeProvider", value)}
+          onValueChange={(value) => {
+            setValue("activeProvider", value);
+            // A gateway not set up yet opens its own setup: only its fields, beside this choice.
+            const chosen = apps.find((candidate) => candidate.id === value);
+            if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
+          }}
           triggerClassName="w-full"
           options={apps.map((candidate) => appProviderOption(candidate, appT))}
         />

@@ -132,7 +132,7 @@ export interface AppNavLink {
  * Discounts; analytics and settings pages (no section of their own here)
  * sit with Apps.
  */
-const APP_PLACEMENT_SECTION: Readonly<Record<string, ShellKey>> = {
+export const APP_PLACEMENT_SECTION: Readonly<Record<string, ShellKey>> = {
   apps: "apps",
   orders: "orders",
   products: "products",

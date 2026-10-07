@@ -169,13 +169,13 @@ describe("the Bangladesh pack takes over a store's Bangladesh providers", () => 
     const installed = await requirePluginInstallation(db, PACK);
     await writePluginSettings(db, PACK, { fraudbd_username: "pack-user" }, { expectedRevision: installed.revision, credentialEncryptionKey: KEY });
     const { hookError } = await activate();
-    expect(hookError).toContain("Enter them again in Bangladesh pack's settings: BDBulkSMS: token.");
+    expect(hookError).toContain("Enter them again in Bangladesh pack's settings: BDBulkSMS (GreenWeb): Token.");
     expect((await requirePluginInstallation(db, PACK)).storedSettings).toMatchObject({ fraudbd_username: "pack-user", fraudbd_api_url: "https://fraudbd.com/api/check-courier-info" });
     // The choice moved; the unreadable token stays where it was, unused.
     expect(smsDocument()).toMatchObject({ activeProvider: `${PACK}:bdbulksms`, bdbulksmsToken: expect.any(String) });
     await expect(getSmsProviderReadiness(db, KEY, apps())).resolves.toMatchObject({
       status: "incomplete",
-      issues: [{ message: "Complete Bangladesh pack's settings: BDBulkSMS: token." }],
+      issues: [{ message: "Set up BDBulkSMS (GreenWeb): Token." }],
     });
   });
 });
