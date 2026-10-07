@@ -124,9 +124,10 @@ describe("store transfer routes", () => {
 
   /** The export's "Cost per item" cells: a whole-string search would match ids and timestamps. */
   function costCells(csv: string): string[] {
-    const rows = csv.trim().split(/\r?\n/).map((line) => [...line.matchAll(/("(?:[^"]|"")*"|[^,]*)(?:,|$)/g)].map((m) => m[1].replace(/^"|"$/g, "").replace(/""/g, '"')));
-    const column = rows[0].indexOf("Cost per item");
-    return rows.slice(1).map((row) => row[column]);
+    const rows = csv.trim().split(/\r?\n/).map((line) =>
+      [...line.matchAll(/("(?:[^"]|"")*"|[^,]*)(?:,|$)/g)].map((match) => (match[1] ?? "").replace(/^"|"$/g, "").replace(/""/g, '"')));
+    const column = (rows[0] ?? []).indexOf("Cost per item");
+    return rows.slice(1).map((row) => row[column] ?? "");
   }
 
   it("writes and exports costs per item only for staff with View product costs", async () => {
