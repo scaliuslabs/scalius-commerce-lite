@@ -54,7 +54,7 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 
 ### API placement
 
-`apps/api/wrangler.jsonc` sets `"placement": { "region": "aws:ap-southeast-1" }`, so the API fetch handler runs beside the D1 primary (Singapore), not beside the visitor. A render reads D1 in several dependent waves, and from a distant data center each wave costs a full database round trip (about 200 ms from Europe, 1-5 ms beside it). If the database moves, read `served_by_colo` from `wrangler d1 execute <db> --remote --json --command "SELECT 1"` and change the region.
+`apps/api/wrangler.jsonc` sets `"placement": { "region": "aws:ap-east-1" }`, so the API fetch handler runs beside the D1 primary (Hong Kong), not beside the visitor. A render reads D1 in several dependent waves, and from a distant data center each wave costs a full database round trip (about 200 ms from Europe, 1-5 ms beside it). If the database moves, read `served_by_colo` from `wrangler d1 execute <db> --remote --json --command "SELECT 1"` and change the region.
 
 ## Page cache
 
