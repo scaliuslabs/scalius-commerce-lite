@@ -133,7 +133,7 @@ describe("POST /theme/ai-draft", () => {
 
   it("surfaces a provider's own safe message, and a plain one for any other failure", async () => {
     const { call } = createApp();
-    fake.generate.mockRejectedValue(new ProviderError("auth", "The API key was refused."));
+    fake.generate.mockRejectedValue(new ProviderError("misconfigured", "The API key was refused."));
     const refused = await call("/theme/ai-draft", { method: "POST", body: request });
     expect(refused.status).toBe(400);
     const refusedBody = await refused.json() as { error: { message: string; details: { code: string } } };

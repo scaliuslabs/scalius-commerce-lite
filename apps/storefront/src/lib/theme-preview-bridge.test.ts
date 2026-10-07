@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Window } from "happy-dom";
+import { Window, type Element as PageElement } from "happy-dom";
 import { themePreviewBridgeScript } from "./theme-preview-bridge";
 
 const DASHBOARD = "https://admin.shop.test";
@@ -78,7 +78,7 @@ const html = (body: string, status = 200) => new Response(body, { status, header
 const UNIT = (id: string, text: string) =>
   `<div class="contents home-render-unit" data-home-render-unit data-theme-section-id="${id}"><section><h2>${text}</h2></section></div>`;
 
-const click = (harness: Harness, target: Element) => {
+const click = (harness: Harness, target: PageElement) => {
   const event = new harness.window.MouseEvent("click", { bubbles: true, cancelable: true });
   target.dispatchEvent(event);
   return event;
@@ -157,7 +157,7 @@ describe("the storefront preview bridge", () => {
   it("forwards the editor's shortcuts, but not while typing", () => {
     const harness = start();
     connect(harness);
-    const press = (target: Element, init: Record<string, unknown>) => {
+    const press = (target: PageElement, init: Record<string, unknown>) => {
       const event = new harness.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
       target.dispatchEvent(event);
       return event;
