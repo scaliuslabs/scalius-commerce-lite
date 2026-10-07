@@ -13,13 +13,7 @@ export type ProviderMarkId =
   | "firebase"
   | "whatsapp"
   | "pathao"
-  | "steadfast"
-  | "fraudbd"
-  | "ecourier"
-  | "smsnetbd"
-  | "bdbulksms"
-  | "mimsms"
-  | "gennet";
+  | "steadfast";
 
 export interface ProviderMarkManifestEntry {
   label: string;
@@ -183,72 +177,6 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
     governingTermsUrl: "https://steadfast.com.bd/",
     retrievedAt: "2026-07-14",
     sha256: "da7dd2aa0efafa0cad3d6572f196f0e9021a1f0c7beba76057a94df5734d98cd",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  fraudbd: {
-    label: "FraudBD",
-    lightSrc: "/provider-marks/fraudbd.png",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://fraudbd.com/storage/assets/images/logo_with_name.png",
-    governingTermsUrl: "https://fraudbd.com/api-documentation",
-    retrievedAt: "2026-07-14",
-    sha256: "750c31e0e25cd1e1e19f8c0fa15d5da4a5359a22c1dab90c834d216f5a083628",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  ecourier: {
-    label: "eCourier",
-    lightSrc: "/provider-marks/ecourier.svg",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://ecourier.com.bd/wp-content/themes/ecourier-2.0/images/logo.svg",
-    governingTermsUrl: "https://ecourier.com.bd/resources/",
-    retrievedAt: "2026-07-14",
-    sha256: "066318b0d1289a0dafd202ea2b8ab3f065f91216a5b589c9f781a39f89fb9d62",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  smsnetbd: {
-    label: "SMS.net.bd",
-    lightSrc: "/provider-marks/smsnetbd.svg",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://sms.net.bd/Content/img/logo/alphasms.svg",
-    governingTermsUrl: "https://sms.net.bd/",
-    retrievedAt: "2026-07-14",
-    sha256: "59b1664ea2072b9c2487a55d3d13e5f1e4ad97e27dbc2fe7f7272dc6189323c6",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  bdbulksms: {
-    label: "BDBulkSMS by GreenWeb",
-    lightSrc: "/provider-marks/bdbulksms.webp",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://cdn.bdbulksms.com/logo_bdbulksms.webp",
-    governingTermsUrl: "https://bdbulksms.com/terms-and-conditions.php",
-    retrievedAt: "2026-07-14",
-    sha256: "c7b132756409ccf57d49d15afabd07c2d45dc2aecfa0b30ab939a16df2656f15",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  mimsms: {
-    label: "MIM SMS",
-    lightSrc: "/provider-marks/mimsms.png",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://www.mimsms.com/storage/2021/04/MiM-SMS-Transparent-Logo.png",
-    governingTermsUrl: "https://www.mimsms.com/",
-    retrievedAt: "2026-07-14",
-    sha256: "659e42d7026f718bdab726c929c827a117719cf49dff5d8703910f18b2f3e5d1",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  gennet: {
-    label: "Gennet iSMS",
-    lightSrc: "/provider-marks/gennet.png",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://www.gennet.com.bd/assets/img/logo.png",
-    governingTermsUrl: "https://www.gennet.com.bd/",
-    retrievedAt: "2026-07-14",
-    sha256: "f05a55a94aa32d4155e3e28808dc311668093e103ed5895ca930e67a268664a0",
     minimumCssPixels: 48,
     allowedSurface: "direct-provider-settings",
   },

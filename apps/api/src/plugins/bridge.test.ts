@@ -140,6 +140,18 @@ describe("plugin bridge", () => {
     await expect(createInProcessBridge(offline).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[http\.not_allowed\] /);
   });
 
+  it("limits the app's own outbound requests, but not a provider operation's calls to its provider", async () => {
+    fetchMock.mockImplementation(async () => new Response("ok", { status: 200 }));
+    const limiter = environment.env.RL_STANDARD as unknown as { limit: ReturnType<typeof vi.fn> };
+    limiter.limit.mockResolvedValue({ success: false });
+    await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[rate_limited\] /);
+    const provider = new PluginBridgeHost({ ...host["props"], provider: { kind: "sms" } }, environment);
+    await expect(createInProcessBridge(provider).httpFetch("https://api.acme.example/send", { method: "POST", body: "x" })).resolves.toMatchObject({ status: 200 });
+    // The store's messaging stays refused inside a provider operation.
+    await expect(createInProcessBridge(provider).messagingSms({ to: "+8801711111111", text: "hi" })).rejects.toThrow(/^\[messaging\.not_allowed\] /);
+    limiter.limit.mockResolvedValue({ success: true });
+  });
+
   it("only reaches declared collections and returns copies", async () => {
     const bridge = createInProcessBridge(host);
     await expect(bridge.storageGet("secrets", "x")).rejects.toThrow(/^\[storage\.undeclared_collection\] /);

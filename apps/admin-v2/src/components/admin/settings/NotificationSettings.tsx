@@ -14,7 +14,7 @@ import {
   putApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
 } from "@scalius/api-client/sdk";
-import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { isQualifiedProviderId, parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { isReady } from "@scalius/shared/readiness";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -412,47 +412,9 @@ function EmailFields() {
 
 // ── Sending: SMS ────────────────────────────────────────────────────────
 
-type SmsGateway = { label: string; fields: Array<{ key: keyof SmsSettings; label: "smsApiKey" | "smsToken" | "smsUsername" | "smsSenderId" | "smsSenderName" | "smsBaseUrl"; secret?: boolean; optional?: boolean; help?: "smsSenderNameHelp" | "smsBaseUrlHelp" }> };
-
-/** The built-in gateways and their credential fields; an app provider's keys live in the app. */
-const SMS_PROVIDERS = {
-  smsnetbd: {
-    label: "SMS.net.bd",
-    fields: [
-      { key: "smsnetbdApiKey", label: "smsApiKey", secret: true },
-      { key: "smsnetbdSenderId", label: "smsSenderId", optional: true },
-    ],
-  },
-  bdbulksms: { label: "BDBulkSMS (GreenWeb)", fields: [{ key: "bdbulksmsToken", label: "smsToken", secret: true }] },
-  mimsms: {
-    label: "MIM SMS",
-    fields: [
-      { key: "mimsmsUsername", label: "smsUsername" },
-      { key: "mimsmsApiKey", label: "smsApiKey", secret: true },
-      { key: "mimsmsSenderName", label: "smsSenderName", help: "smsSenderNameHelp" },
-    ],
-  },
-  gennet: {
-    label: "GenNet iSMS",
-    fields: [
-      { key: "gennetApiToken", label: "smsToken", secret: true },
-      { key: "gennetBaseUrl", label: "smsBaseUrl", help: "smsBaseUrlHelp" },
-      { key: "gennetSid", label: "smsSenderId" },
-    ],
-  },
-} satisfies Record<string, SmsGateway>;
-type BuiltInSms = keyof typeof SMS_PROVIDERS;
-
-function builtInSms(provider: string | null | undefined): SmsGateway | null {
-  return provider && Object.hasOwn(SMS_PROVIDERS, provider) ? SMS_PROVIDERS[provider as BuiltInSms] : null;
-}
-
+/** A choice is complete when it names an app provider; whether it can send shows below it. */
 function smsComplete(values: SmsSettings): boolean {
-  const provider = values.activeProvider;
-  if (!provider) return false;
-  const gateway = builtInSms(provider);
-  // An app provider's keys are complete when the app says it is ready (shown below the choice).
-  return gateway ? gateway.fields.every((field) => field.optional || String(values[field.key] ?? "").trim()) : isQualifiedProviderId(provider);
+  return isQualifiedProviderId(values.activeProvider);
 }
 
 /** The merchant-facing name of a saved SMS or email choice, an app's from the installed apps. */
@@ -466,70 +428,35 @@ function SmsFields() {
   const { values, setValue } = useSettingsForm<SmsSettings>({
     queryKey: smsQuery.queryKey,
     fetchFn: smsQuery.queryFn,
-    saveFn: ({ activeProvider, activeProviderConfigured: _configured, activeProviderError: _error, ...credentials }, expectedRevision) =>
-      apiData(postApiV1AdminSettingsSms({ body: { ...credentials, activeProvider: activeProvider ?? undefined, expectedRevision } })),
+    saveFn: ({ activeProvider }, expectedRevision) =>
+      apiData(postApiV1AdminSettingsSms({ body: { activeProvider: activeProvider ?? undefined, expectedRevision } })),
     invalidateQueryKeys: [customerRulesQuery.queryKey],
     defaultValues: {} as SmsSettings,
     errorMessage: common("saveFailed"),
     canEdit: useCanEditNotifications(),
     isValid: smsComplete,
   });
-  // Installed apps' SMS providers sit beside the built-in gateways.
+  // Every SMS gateway is an installed app's (the Bangladesh gateways: the Bangladesh pack).
   const apps = useQuery({ ...appProvidersQuery("sms"), enabled: useProviderPortAccess("sms").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
   const provider = values.activeProvider;
-  const gateway = builtInSms(provider);
   const app = apps.find((candidate) => candidate.id === provider);
   return (
     <>
-      <SettingsField id="sms-provider" label={t("smsProvider")}>
+      <SettingsField id="sms-provider" label={t("smsProvider")} help={apps.length === 0 ? t("smsNoApps") : undefined}>
         <SearchableSelect
           id="sms-provider"
           value={provider ?? ""}
           placeholder={t("chooseSmsProvider")}
           onValueChange={(value) => setValue("activeProvider", value)}
           triggerClassName="w-full"
-          options={[
-            ...(Object.keys(SMS_PROVIDERS) as BuiltInSms[]).map((key) => ({
-              value: key,
-              label: SMS_PROVIDERS[key].label,
-              ...(apps.length > 0 ? { group: appT("builtIn") } : {}),
-            })),
-            ...apps.map((candidate) => appProviderOption(candidate, appT)),
-          ]}
+          options={apps.map((candidate) => appProviderOption(candidate, appT))}
         />
       </SettingsField>
       {app ? <AppProviderStatus provider={app} /> : null}
-      {provider && !gateway && !app && values.activeProviderError ? (
+      {provider && !app && values.activeProviderError ? (
         <Alert variant="warning">{values.activeProviderError}</Alert>
       ) : null}
-      {gateway
-        ? gateway.fields.map((field) => {
-            const value = String(values[field.key] ?? "");
-            const id = `sms-${field.key}`;
-            const missing = !field.optional && !value.trim();
-            return (
-              <SettingsField
-                key={field.key}
-                id={id}
-                label={field.optional ? `${t(field.label)} (${common("optional")})` : t(field.label)}
-                help={field.secret && value === MASKED_VALUE ? t("secretSaved") : field.help ? t(field.help) : undefined}
-                error={missing ? t("smsRequired") : null}
-              >
-                <Input
-                  id={id}
-                  type={field.secret ? "password" : "text"}
-                  autoComplete="off"
-                  value={value}
-                  aria-invalid={missing}
-                  aria-describedby={`${id}-note`}
-                  onFocus={() => field.secret && value === MASKED_VALUE && setValue(field.key, "" as never)}
-                  onChange={(event) => setValue(field.key, event.target.value as never)}
-                />
-              </SettingsField>
-            );
-          })
-        : null}
     </>
   );
 }
@@ -764,6 +691,7 @@ export function SendingCard() {
   const rules = useQuery(customerRulesQuery);
   const email = useQuery(emailQuery);
   const sms = useQuery(smsQuery);
+  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   // An app's name is read only when the saved choice is an app.
   const smsAccess = useProviderPortAccess("sms");
   const emailAccess = useProviderPortAccess("email");
@@ -771,8 +699,11 @@ export function SendingCard() {
   const emailApps = useQuery({ ...appProvidersQuery("email"), enabled: emailAccess.canView && isQualifiedProviderId(email.data?.provider) });
   if (!rules.data) return null;
   const smsName = sms.data?.activeProvider
-    ? providerName(sms.data.activeProvider, smsApps.data, (id) => builtInSms(id)?.label ?? null)
+    ? providerName(sms.data.activeProvider, smsApps.data, () => null)
     : null;
+  // A chosen gateway that cannot send (its app is not installed, active or set up): say why, where to fix it.
+  const smsBlocked = sms.data?.activeProvider && !sms.data.activeProviderConfigured ? sms.data.activeProviderError : null;
+  const smsPluginId = parseQualifiedProviderId(sms.data?.activeProvider)?.pluginId ?? null;
   const emailName = email.data?.provider
     ? providerName(email.data.provider, emailApps.data, (id) => (id === "cloudflare" || id === "resend" ? t(id) : null))
     : null;
@@ -825,6 +756,19 @@ export function SendingCard() {
           </SettingsDialog>
         </>
       }
-    />
+    >
+      {smsBlocked ? (
+        <Alert variant="warning">
+          <span className="flex flex-col items-start gap-1">
+            <span>{t("smsBlocked", { reason: smsBlocked })}</span>
+            {canSeeApps && smsPluginId ? (
+              <Button type="button" variant="link" asChild>
+                <Link to="/admin/apps/$pluginId" params={{ pluginId: smsPluginId }}>{t("smsOpenApp")}</Link>
+              </Button>
+            ) : null}
+          </span>
+        </Alert>
+      ) : null}
+    </SettingsCard>
   );
 }

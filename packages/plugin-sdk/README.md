@@ -2,7 +2,7 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. The package is private to this monorepo.
 
-Reference apps in `plugins/`: `hello` (events, routes, cron, storage, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic storage and order commits), `bkash` and `nagad` (payment providers). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
+Reference apps in `plugins/`: `hello` (a sample that no store bundles; the platform tests run it: events, routes, cron, storage, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic storage and order commits), `bkash` and `nagad` (payment providers), `bangladesh` (SMS and fraud providers, place seeding). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
 
 ## A minimal app
 
@@ -83,7 +83,7 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `allowedHosts` (20): hosts `ctx.http` may reach, exact or `*.example.com`. `host:port` names one non-default port. No IP literals or localhost. Empty means no network.
 - `events` (40): topics, `<resource>.*` or `*`.
 - `functions` (5): `{ point, priority, onError, snapshot }`.
-- `providers` (10 per port): provider declarations, grouped by port.
+- `providers` (24 in all): provider declarations, grouped by port. A regional pack (`plugins/bangladesh`) bundles a country's integrations in one app.
 - `routes`: `admin` (40) and `public` (20) entries `{ name, methods }`; `webhooks` (10) names.
 - `cron` (10): `{ name, schedule }`.
 - `storage` (20 collections): `indexes` (4) and `unique` (2), each with up to 4 fields.
@@ -200,6 +200,10 @@ An app can fill a **port**, the typed interface the platform's own adapters impl
 Each port has required operations, and optional ones that you list in `operations` (`PROVIDER_OPERATIONS` in `@scalius/shared/plugins/providers`). Required: `payment` needs `createSession` and `verifyWebhook`, `courier` needs `createShipment` and `trackShipment`, `sms` and `email` need `send`, `fraud` needs `check`, and `tax` needs `calculate`. The platform calls every operation you declare, except courier `quote`, `cancelShipment` and `reconcileCod`, sms and email `deliveryStatus`, and all `tax` operations (tax is contract only). The merchant picks a provider in Settings > Payments, Shipping and delivery, Notifications (SMS and email) or Integrations (fraud).
 
 The host validates every input and output on both sides. A provider runs only when it is ready: the app is active, approved for the port and runnable here, with complete settings and readable secrets. The dashboard shows readiness and, if you declare `testConnection`, a connection test. A setting named `environment` with the values `sandbox` or `live` marks the provider as test or live.
+
+An app with several providers names each provider's own settings: `{ id, name, settings: ["gateway_token", "gateway_sender"] }`. Those keys need not be `required` for the whole app. The provider is ready only when each one is set, readable and not an obvious placeholder ("test", "your api key"), and a save refuses such a placeholder. Only the provider's own unreadable secrets block it, so one gateway's broken key never stops another (`plugins/bangladesh`).
+
+A provider operation's `ctx.http` calls to its provider do not count against the app's outbound limit: the platform paces the operations it calls.
 
 Fail with `ProviderError(category, message, { uncertain?, code? })`:
 

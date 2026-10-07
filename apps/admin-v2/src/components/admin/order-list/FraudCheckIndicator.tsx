@@ -43,6 +43,8 @@ export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: st
   });
   const notConnected = data?.configured === false;
   const unsupported = data?.unsupportedCountry ?? null;
+  // The checker's app cannot be asked now (not installed, active or set up): its reason, and where to fix it.
+  const unavailable = data?.unavailable ?? null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -50,7 +52,7 @@ export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: st
       <PopoverContent align="start" className="w-80 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-body font-medium">{t("deliveryHistory")}</p>
-          {!notConnected && !unsupported ? (
+          {!notConnected && !unsupported && !unavailable ? (
             <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
               {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
             </Button>
@@ -59,6 +61,13 @@ export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: st
         {notConnected ? (
           <p className="text-body text-muted-foreground">
             {t("fraudNotConnected")}{" "}
+            <Link to="/admin/settings/integrations" className="text-link hover:underline">
+              {t("fraudSettingsLink")}
+            </Link>
+          </p>
+        ) : unavailable ? (
+          <p className="text-body text-muted-foreground">
+            {t("fraudUnavailable", { provider: unavailable.provider, reason: unavailable.reason })}{" "}
             <Link to="/admin/settings/integrations" className="text-link hover:underline">
               {t("fraudSettingsLink")}
             </Link>

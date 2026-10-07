@@ -1,75 +1,38 @@
 // src/server/routes/admin/fraud-checker.ts
-// Admin OpenAPI routes for the fraud checkers: built-in checkers with their
-// credentials, or an installed app's fraud provider (its credentials live in
-// the app's settings), and the order page's manual lookup through the first
-// active one. Advice for the merchant, never automatic blocking.
+// Admin OpenAPI routes for the fraud checkers: rows that name an installed
+// app's fraud provider (its credentials live in the app's settings), and the
+// order page's manual lookup through the first active one. Advice for the
+// merchant, never automatic blocking. A row saved before the Bangladesh
+// checkers moved into the Bangladesh pack reads as the pack's provider
+// (`retired: true`) until the pack's activation moves its keys.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     getFraudProviders,
-    getFraudProvider,
     saveFraudProvider,
     deleteFraudProvider,
     testFraudProvider,
     fraudLookupWithActiveProvider,
-    getFraudProviderUrlIssue,
 } from "@scalius/core/modules/fraud-checker";
-import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/browser";
 import { isQualifiedProviderId, type FraudCheck } from "@scalius/shared/plugins/providers";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 import { assertAppProviderInstalled, requestAppProviders } from "../../plugins/providers/app-providers";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { NotFoundError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const MASKED_VALUE = "••••••••••••";
 const FRAUD_PROVIDER_PAGE_LIMIT = 20;
-const providerTypeSchema = z.enum(FRAUD_CHECK_PROVIDER_TYPES);
 /** An installed app's fraud provider (`<plugin id>:<provider id>`). */
 const appProviderTypeSchema = z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>.");
 
-function safeProviderUrlForClient(value: string): string {
-    return getFraudProviderUrlIssue(value) ? "" : new URL(value).toString();
-}
-
-function maskProviderSecrets(provider: {
-    id: string;
-    name: string;
-    apiUrl: string;
-    apiKey: string;
-    apiSecret?: string;
-    userId?: string;
-    isActive: boolean;
-    providerType?: string;
-}) {
-    return {
-        id: provider.id.slice(0, 100),
-        name: provider.name.slice(0, 100),
-        apiUrl: safeProviderUrlForClient(provider.apiUrl),
-        apiKey: provider.apiKey ? MASKED_VALUE : "",
-        ...(provider.apiSecret !== undefined ? { apiSecret: provider.apiSecret ? MASKED_VALUE : "" } : {}),
-        ...(provider.userId !== undefined ? { userId: provider.userId ? MASKED_VALUE : "" } : {}),
-        isActive: provider.isActive,
-        providerType: provider.providerType,
-    };
-}
-
-const secureProviderUrlSchema = z.string().url().max(2048).superRefine((value, ctx) => {
-    const issue = getFraudProviderUrlIssue(value);
-    if (issue) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: issue,
-        });
-    }
-});
-
-function safeProviderTestResult(result: { success?: unknown }) {
+/** The checker's answer: its merchant-safe message (the port's ProviderError or the app's readiness), bounded. */
+function safeProviderTestResult(result: { success?: unknown; message?: unknown }) {
     const success = result.success === true;
+    const message = typeof result.message === "string" && result.message.trim() ? result.message.trim().slice(0, 300) : null;
     return {
         success,
-        message: success ? "Connection successful" : "Connection failed",
+        message: message ?? (success ? "Connection successful" : "Connection failed"),
     };
 }
 
@@ -119,13 +82,21 @@ function projectFraudLookupResult(result: FraudCheck) {
 const fraudProviderSchema = z.object({
     id: z.string().max(100),
     name: z.string().max(100),
-    apiUrl: z.string().max(2048),
-    apiKey: z.string().max(20),
-    apiSecret: z.string().max(20).optional(),
-    userId: z.string().max(20).optional(),
     isActive: z.boolean(),
-    providerType: z.union([providerTypeSchema, appProviderTypeSchema]).optional(),
+    providerType: appProviderTypeSchema,
+    /** The row still holds a retired built-in checker's keys: activating its app moves them. */
+    retired: z.boolean(),
 });
+
+function projectProvider(provider: { id: string; name: string; isActive: boolean; providerType: string; retired: boolean }) {
+    return {
+        id: provider.id.slice(0, 100),
+        name: provider.name.slice(0, 100),
+        isActive: provider.isActive,
+        providerType: provider.providerType,
+        retired: provider.retired,
+    };
+}
 
 const listRoute = createRoute({
     method: "get",
@@ -162,34 +133,20 @@ app.openapi(listRoute, async (c) => {
     );
     const providers = providerRows.slice(0, limit);
 
-    const maskedProviders = providers.map(maskProviderSecrets);
-
     return ok(c, {
-        providers: maskedProviders,
+        providers: providers.map(projectProvider),
         pagination: { page, limit, hasMore: providerRows.length > limit },
     });
 });
 
 // ── Create Provider ──
 
-const createBuiltInProviderSchema = z.object({
-    name: z.string().min(1).max(100),
-    apiUrl: secureProviderUrlSchema,
-    apiKey: z.string().min(1).max(4096),
-    apiSecret: z.string().max(4096).optional(),
-    userId: z.string().max(4096).optional(),
-    isActive: z.boolean().optional().default(true),
-    providerType: providerTypeSchema.optional().default("default"),
-});
-
-/** An app fraud provider: only which app and whether lookups use it; its credentials live in the app's settings. */
-const appProviderRowSchema = z.object({
+/** A fraud checker row: which app provider and whether lookups use it; its credentials live in the app's settings. */
+const createProviderSchema = z.object({
     name: z.string().min(1).max(100),
     isActive: z.boolean().optional().default(true),
     providerType: appProviderTypeSchema,
 }).strict();
-
-const createProviderSchema = z.union([createBuiltInProviderSchema, appProviderRowSchema]);
 
 const createProviderRoute = createRoute({
     method: "post",
@@ -212,32 +169,13 @@ app.openapi(createProviderRoute, async (c) => {
     const body = c.req.valid("json");
     const encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
 
-    const provider = "apiUrl" in body ? body : { ...body, apiUrl: "", apiKey: "" };
-    if (isQualifiedProviderId(provider.providerType)) await assertAppProviderInstalled(db, "fraud", provider.providerType);
-    const savedProvider = await saveFraudProvider(db, provider, encryptionKey);
-
-    const maskedResponse = maskProviderSecrets(savedProvider);
-
-    return created(c, maskedResponse);
+    await assertAppProviderInstalled(db, "fraud", body.providerType);
+    return created(c, projectProvider(await saveFraudProvider(db, body, encryptionKey)));
 });
 
 // ── Update Provider ──
 
-const updateBuiltInProviderSchema = z.object({
-    id: z.string().min(1),
-    name: z.string().min(1).max(100),
-    apiUrl: secureProviderUrlSchema,
-    apiKey: z.string().min(1).max(4096),
-    apiSecret: z.string().max(4096).optional(),
-    userId: z.string().max(4096).optional(),
-    isActive: z.boolean().default(true),
-    providerType: providerTypeSchema.optional().default("default"),
-});
-
-const updateProviderSchema = z.union([
-    updateBuiltInProviderSchema,
-    appProviderRowSchema.extend({ id: z.string().min(1) }).strict(),
-]);
+const updateProviderSchema = createProviderSchema.extend({ id: z.string().min(1) }).strict();
 
 const updateProviderRoute = createRoute({
     method: "put",
@@ -258,52 +196,8 @@ const updateProviderRoute = createRoute({
 app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
-    const env = c.env as Record<string, unknown>;
-    if (!("apiUrl" in body)) {
-        await assertAppProviderInstalled(db, "fraud", body.providerType);
-        const saved = await saveFraudProvider(db, { ...body, apiUrl: "", apiKey: "" }, requireEncryptionKey(env));
-        return ok(c, maskProviderSecrets(saved));
-    }
-    const validated = body;
-    const readKey = getCredentialEncryptionKey(env);
-    const encryptionKey = requireEncryptionKey(env);
-    let apiKey = validated.apiKey;
-    let apiSecret = validated.apiSecret;
-    const maskedCredentialMessage = "Masked fraud checker credentials could not be restored. Re-enter credentials before saving.";
-    let userId = validated.userId;
-    const existingProvider = apiKey === MASKED_VALUE || apiSecret === MASKED_VALUE || userId === MASKED_VALUE
-        ? await getFraudProvider(db, validated.id, readKey)
-        : null;
-
-    if (apiKey === MASKED_VALUE) {
-        if (existingProvider?.apiKey) {
-            apiKey = existingProvider.apiKey;
-        } else {
-            throw new ValidationError(maskedCredentialMessage);
-        }
-    }
-
-    if (apiSecret === MASKED_VALUE) {
-        if (existingProvider?.apiSecret) {
-            apiSecret = existingProvider.apiSecret;
-        } else {
-            throw new ValidationError(maskedCredentialMessage);
-        }
-    }
-
-    if (userId === MASKED_VALUE) {
-        if (existingProvider?.userId) {
-            userId = existingProvider.userId;
-        } else {
-            throw new ValidationError(maskedCredentialMessage);
-        }
-    }
-
-    const savedProvider = await saveFraudProvider(db, { ...validated, apiKey, apiSecret, userId }, encryptionKey);
-
-    const maskedResponse = maskProviderSecrets(savedProvider);
-
-    return ok(c, maskedResponse);
+    await assertAppProviderInstalled(db, "fraud", body.providerType);
+    return ok(c, projectProvider(await saveFraudProvider(db, body, requireEncryptionKey(c.env as Record<string, unknown>))));
 });
 
 // ── Delete Provider ──
@@ -370,6 +264,11 @@ const lookupResponseSchema = z.object({
      * (MARKETS-DESIGN step 3a): it was not asked, and the order page says so.
      */
     unsupportedCountry: z.object({ provider: z.string(), countryCode: z.string().nullable() }).optional(),
+    /**
+     * Set when the connected checker's app cannot be used now (not installed,
+     * not active, not set up): it was not asked, and the order page shows why.
+     */
+    unavailable: z.object({ provider: z.string().max(100), reason: z.string().max(300) }).optional(),
     total_parcels: z.number().optional(),
     total_delivered: z.number().optional(),
     total_cancel: z.number().optional(),
@@ -410,6 +309,9 @@ app.openapi(lookupRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof NotFoundError) return ok(c, { configured: false });
         throw error;
+    }
+    if (result.status === "unavailable") {
+        return ok(c, { configured: true, unavailable: { provider: result.provider.slice(0, 100), reason: result.reason.slice(0, 300) } });
     }
     if (result.status === "country_unsupported") {
         return ok(c, { configured: true, unsupportedCountry: { provider: result.provider, countryCode: result.countryCode } });

@@ -4,4 +4,5 @@
 import type { PluginCatalogEntry } from "./listing";
 
 export const PLUGIN_CATALOG: readonly PluginCatalogEntry[] = [
+  {"id":"scalius.hello","source":"plugins/hello","sha256":"6ff0b402587c138bda953d39bb2b795925b9359db87d355424d03bf0c302e8bb","listing":{"name":"Hello","version":"0.3.2","description":"Greets paid orders, offers a welcome discount and shows what it did.","author":{"name":"Scalius"},"tagline":"An example app that uses every app surface","categories":["marketing"],"screenshots":[],"support":{"url":"https://github.com/scaliuslabs/scalius-commerce-lite/issues"},"changelogUrl":"https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/hello","minPlatformVersion":"1.0.0","translations":{"bn":{"name":"হ্যালো","tagline":"অ্যাপের সব জায়গা ব্যবহার করা একটি উদাহরণ অ্যাপ","description":"পেমেন্ট হওয়া অর্ডারকে শুভেচ্ছা জানায়, স্বাগত ডিসকাউন্ট দেয় আর কী করেছে তা দেখায়।"}}}},
 ];

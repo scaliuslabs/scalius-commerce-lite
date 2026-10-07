@@ -2,8 +2,10 @@
 // "Lifecycle"). Plugin code runs only under an approved grant, so:
 //
 //   activate    approve the grant (Super Admin; core records the approver and
-//               grant key), then `install` on the first activation and
-//               `activate` every time;
+//               grant key), move the configuration of any retired built-in
+//               provider the plugin replaced into its settings
+//               (provider-handoff.ts), then `install` on the first activation
+//               and `activate` every time;
 //   deactivate  `deactivate` while still active, then stop;
 //   uninstall   `uninstall` (with the keep/delete choice) when the plugin is
 //               active, then remove it with or without its data. Uninstalling
@@ -20,7 +22,9 @@ import {
   uninstallPlugin,
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { PluginHost, type PluginHostOptions } from "./host";
+import { handOffRetiredProviders } from "./provider-handoff";
 
 export interface LifecycleContext {
   db: Database;
@@ -39,7 +43,19 @@ export async function activatePluginWithHooks(
   options: { actorUserId: string; expectedRevision: number; expectedGrantKey: string },
 ): Promise<{ installation: PluginInstallation; hookError: string | null }> {
   const before = await requirePluginInstallation(context.db, pluginId);
-  const installation = await activatePlugin(context.db, pluginId, options);
+  let installation = await activatePlugin(context.db, pluginId, options);
+  let handoffError: string | null = null;
+  try {
+    const handoff = await handOffRetiredProviders(context.db, pluginId, getCredentialEncryptionKey(context.env as unknown as Record<string, unknown>));
+    if (handoff.skipped.length > 0) {
+      const labels = new Map(installation.manifest.settings.map((field) => [field.key, field.label]));
+      handoffError = `Some saved keys could not be moved. Enter them again in ${installation.manifest.name}'s settings: ${handoff.skipped.map((key) => labels.get(key) ?? key).join(", ")}.`;
+    }
+    if (handoff.moved.length > 0) installation = await requirePluginInstallation(context.db, pluginId);
+  } catch (error) {
+    console.warn(`[plugins] ${pluginId} could not take over retired providers (${error instanceof Error ? error.name : typeof error})`);
+    handoffError = `${installation.manifest.name} could not move the keys saved before it. Activate it again, or enter them in its settings.`;
+  }
   const host = hostFor(context);
   let hookError: string | null = null;
   if (before.activatedAt === null) {
@@ -48,6 +64,7 @@ export async function activatePluginWithHooks(
   }
   const activate = await host.invokeLifecycle(installation, "activate");
   if (!activate.ok) hookError ??= activate.error;
+  if (handoffError) hookError = hookError ? `${handoffError} ${hookError}` : handoffError;
   return { installation: await requirePluginInstallation(context.db, pluginId), hookError };
 }
 

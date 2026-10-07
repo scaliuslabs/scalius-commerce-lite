@@ -1,0 +1,28 @@
+{
+  "extends": "@scalius/tsconfig/base.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "paths": {
+      "@scalius/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    },
+    "noEmit": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-bangladesh.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/plugin-sdk"
+    }
+  ]
+}

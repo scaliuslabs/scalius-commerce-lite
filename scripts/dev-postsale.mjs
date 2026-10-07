@@ -29,7 +29,7 @@ const validCommands = new Set(["seed", "checkout-smoke", "load", "otp-smoke", "p
 
 /**
  * The smoke's delivery places come from the Bangladesh dataset
- * (data/places/bd), loaded through the place import: Dhaka, Mirpur 10 and
+ * (plugins/bangladesh/places), loaded through the place import: Dhaka, Mirpur 10 and
  * Sector 10. The ids are the dataset's legacy ids, which a fresh store gets;
  * `resolveFixturePlaces()` reads the real ids by key after the import.
  */
@@ -897,9 +897,9 @@ function patchSettingsDocument(category, patch) {
       updated_at = unixepoch()`;
 }
 
-/** Loads data/places/bd through the place import (idempotent; apps/api/scripts/places-import.ts). */
+/** Loads plugins/bangladesh/places through the place import (idempotent; apps/api/scripts/places-import.ts). */
 function importDevPlaces(config) {
-  console.log("Importing the Bangladesh places (data/places/bd)...");
+  console.log("Importing the Bangladesh places (plugins/bangladesh/places)...");
   execFileSync(pnpmExecutable, [
     "--dir", "apps/api", "exec", "tsx", "scripts/places-import.ts",
     "--dataset", resolve(root, "data", "places", "bd"),

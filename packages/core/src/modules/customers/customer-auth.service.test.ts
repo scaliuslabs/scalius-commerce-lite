@@ -7,6 +7,23 @@ import type { Database } from "@scalius/database/client";
 import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ConflictError, RateLimitError, ValidationError } from "../../errors";
 import { saveSmsSettings } from "../../integrations/sms";
+
+// Every SMS gateway is an app's: these tests choose one and let it be ready
+// (the app lookup is the API's; here the readiness answers for it).
+const SMS_APP = "acme.texts:texts";
+const smsGateway = vi.hoisted(() => ({ ready: false }));
+vi.mock("../../integrations/sms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../integrations/sms")>();
+  return {
+    ...actual,
+    getSmsProviderReadiness: async (...args: Parameters<typeof actual.getSmsProviderReadiness>) =>
+      smsGateway.ready ? { status: "ready", issues: [], activeProvider: SMS_APP } : actual.getSmsProviderReadiness(...args),
+  };
+});
+const chooseSmsApp = async () => {
+  await saveSmsSettings(db, { activeProvider: SMS_APP });
+  smsGateway.ready = true;
+};
 import { getOrderDetails } from "../orders/admin/detail";
 import { getOfferedCustomerIdentity } from "./sign-in-readiness";
 import { customerAuthDocument } from "../settings/documents";
@@ -56,6 +73,7 @@ let db: Database;
 let ipCounter = 0;
 
 beforeEach(() => {
+  smsGateway.ready = false;
   sqlite = createMigratedSqlite();
   sqlite.exec(`
     INSERT INTO settings (id, key, value, type, category)
@@ -353,7 +371,7 @@ describe("a shared phone never exposes or files one person's orders under anothe
   const record = (id: string) => sqlite.prepare(
     "SELECT merged_into_customer_id AS mergedInto, deleted_at IS NOT NULL AS retired, origin, phone_verified_at IS NOT NULL AS phoneVerified FROM customers WHERE id = ?",
   ).get(id);
-  const enableSms = () => saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+  const enableSms = chooseSmsApp;
   const sendPhoneCode = async (accountId: string) => {
     const sent = await sendAccountPhoneCode(db, {
       accountId, ip: `203.0.113.${++ipCounter}`, encryptionKey: KEY, credentialEncryptionKey: KEY,
@@ -500,7 +518,7 @@ describe("merchant changes are attributed and reversible (R3-ORD-13, R3-ORD-17)"
 describe("phone sign-in (R3-SB-07)", () => {
   it("is offered only when the store chose a phone channel in Customer accounts", async () => {
     const emailOnly = { email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false } as const;
-    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    await chooseSmsApp();
     // SMS can send, but the merchant didn't choose it: it is never added.
     expect((await getOfferedCustomerIdentity(db, { ...emailOnly, channels: [...emailOnly.channels] }, { encryptionKey: KEY })).channels)
       .not.toContain("sms");
@@ -520,7 +538,7 @@ describe("phone sign-in (R3-SB-07)", () => {
       INSERT INTO markets (id, handle, name, status) VALUES ('mkt_india', 'india', 'India', 'active');
       INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_india');
     `);
-    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    await chooseSmsApp();
     await customerAuthDocument.write(db, { email: "optional", whatsapp: "off", channels: ["email", "sms"] });
     const phoneCodeFor = (identifier: string, ip: string) =>
       sendOtp(db, { method: "phone", identifier, ip, encryptionKey: KEY, credentialEncryptionKey: KEY });
@@ -535,7 +553,7 @@ describe("phone sign-in (R3-SB-07)", () => {
 
   it("fails closed when the chosen channel can't send, without falling back", async () => {
     await customerAuthDocument.write(db, { email: "required", whatsapp: "same_as_phone", channels: ["whatsapp", "sms"] });
-    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    await chooseSmsApp();
     await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, channel: "whatsapp", ip: "203.0.113.202", encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .rejects.toThrow("WhatsApp codes aren't available right now.");
   });

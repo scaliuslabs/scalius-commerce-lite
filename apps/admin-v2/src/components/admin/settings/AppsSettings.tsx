@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { Code2, Loader2, ShieldCheck } from "lucide-react";
 import {
@@ -17,14 +18,10 @@ import {
   putApiV1AdminAnalyticsById,
   putApiV1AdminFraudChecker,
 } from "@scalius/api-client/sdk";
-import {
-  FRAUD_CHECK_PROVIDER_TYPES,
-  getFraudCheckProviderDefinition,
-  type FraudCheckProviderType,
-} from "@scalius/core/modules/fraud-checker/browser";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
-import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -683,162 +680,25 @@ export function FacebookCard() {
 
 // ── Courier fraud check ─────────────────────────────────────────────────
 
-type FraudField = "apiKey" | "apiSecret" | "userId";
-
-/** Named checkers first; a custom checker last. */
-const FRAUD_ORDER: readonly FraudCheckProviderType[] = ["fraudbd", "fraudguard", "ecourier", "default"];
-const FRAUD_MARKS: Partial<Record<FraudCheckProviderType, ProviderMarkId>> = { fraudbd: "fraudbd", ecourier: "ecourier" };
-const FRAUD_FIELD_LABELS: Record<FraudCheckProviderType, Record<FraudField, AppsMessage>> = {
-  default: { apiKey: "accessKey", apiSecret: "apiSecret", userId: "userId" },
-  fraudbd: { apiKey: "apiKey", apiSecret: "password", userId: "username" },
-  fraudguard: { apiKey: "apiKey", apiSecret: "apiSecret", userId: "userId" },
-  ecourier: { apiKey: "apiKey", apiSecret: "apiSecret", userId: "userId" },
-};
-
-function fraudType(provider: FraudCheckerProvider | null, fallback: FraudCheckProviderType): FraudCheckProviderType {
-  return (provider?.providerType as FraudCheckProviderType | undefined) ?? fallback;
-}
-
-/** A saved checker that names an installed app's fraud provider (its keys live in the app). */
-function isAppChecker(provider: FraudCheckerProvider): boolean {
-  return isQualifiedProviderId(provider.providerType);
-}
-
-interface FraudDraft {
-  apiUrl: string;
-  apiKey: string;
-  apiSecret: string;
-  userId: string;
-  isActive: boolean;
-}
-
-function FraudProviderForm({
-  type,
-  provider,
-  name,
-}: {
-  type: FraudCheckProviderType;
-  provider: FraudCheckerProvider | null;
-  name: string;
-}) {
+/** A saved checker whose app is gone or not active yet: why it cannot be used, and where to fix it. */
+function FraudCheckerMoved({ provider, appProvider }: { provider: FraudCheckerProvider; appProvider: AppProvider | null }) {
   const t = useMessages(appsMessages);
-  const common = useMessages(settingsMessages);
-  const queryClient = useQueryClient();
-  const canEdit = usePermissions().hasPermission(ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT);
-  const definition = getFraudCheckProviderDefinition(type);
-  const fields = definition.requiredFields;
-  const [saved] = useState<FraudDraft>(() => ({
-    apiUrl: provider?.apiUrl || definition.defaultApiUrl,
-    apiKey: provider?.apiKey ?? "",
-    apiSecret: provider?.apiSecret ?? "",
-    userId: provider?.userId ?? "",
-    isActive: provider?.isActive ?? true,
-  }));
-  const [draft, setDraft] = useState(saved);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
-  const set = <K extends keyof FraudDraft>(key: K, value: FraudDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-  const blank = (field: FraudField | "apiUrl") => !draft[field].trim();
-  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.fraudChecker.all });
-
-  const save = useMutation({
-    mutationFn: () => {
-      const body = {
-        name: provider?.name || name,
-        providerType: type,
-        apiUrl: draft.apiUrl.trim(),
-        apiKey: draft.apiKey.trim(),
-        ...(fields.includes("apiSecret") ? { apiSecret: draft.apiSecret.trim() } : {}),
-        ...(fields.includes("userId") ? { userId: draft.userId.trim() } : {}),
-        isActive: draft.isActive,
-      };
-      return provider
-        ? apiData(putApiV1AdminFraudChecker({ body: { ...body, id: provider.id } }))
-        : apiData(postApiV1AdminFraudChecker({ body }));
-    },
-    onSuccess: refresh,
-  });
-  const remove = useMutation({
-    mutationFn: () => apiData(deleteApiV1AdminFraudCheckerById({ path: { id: provider!.id } })),
-    onSuccess: async () => {
-      toast.success(t("providerRemoved", { name }));
-      await refresh();
-    },
-    onError: () => toast.error(t("removeFailed")),
-  });
-  useSaveBar({
-    dirty,
-    saving: save.isPending,
-    invalid: !canEdit || blank("apiUrl") || fields.some(blank),
-    save: () => save.mutateAsync(),
-    discard: () => setDraft(saved),
-  });
-
+  const canSeeApps = usePermissions().hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
+  const pluginId = parseQualifiedProviderId(provider.providerType)?.pluginId;
+  if (!provider.retired || appProvider?.readiness.usable) return null;
   return (
-    <>
-      {type === "default" ? (
-        <SettingsField
-          id="fraud-address"
-          label={t("address")}
-          help={t("addressHelp")}
-          error={dirty && blank("apiUrl") ? t("fieldRequired") : null}
-        >
-          <Input
-            id="fraud-address"
-            type="url"
-            inputMode="url"
-            value={draft.apiUrl}
-            aria-describedby="fraud-address-note"
-            onChange={(event) => set("apiUrl", event.target.value)}
-          />
-        </SettingsField>
-      ) : null}
-      {fields.map((field) => {
-        const id = `fraud-${field}`;
-        const value = draft[field];
-        return (
-          <SettingsField
-            key={field}
-            id={id}
-            label={t(FRAUD_FIELD_LABELS[type][field])}
-            help={value === MASKED_VALUE ? t("secretSaved") : undefined}
-            error={dirty && blank(field) ? t("fieldRequired") : null}
-          >
-            <Input
-              id={id}
-              type={field === "userId" ? "text" : "password"}
-              aria-invalid={dirty && blank(field)}
-              aria-describedby={`${id}-note`}
-              {...secretInputProps(value, (next) => set(field, next))}
-            />
-          </SettingsField>
-        );
-      })}
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("useOnOrders")}
-        <Switch checked={draft.isActive} onCheckedChange={(on) => set("isActive", on)} />
-      </label>
-      {provider && canEdit ? (
-        <>
-          <div>
-            <Button type="button" variant="ghost" onClick={() => setConfirmRemove(true)}>
-              {t("removeProvider", { name })}
+    <Alert variant="warning">
+      <AlertDescription>
+        <div className="flex flex-col items-start gap-1">
+          <span>{t("checkerMoved", { name: provider.name, app: appProvider?.appName ?? pluginId ?? "" })}</span>
+          {canSeeApps && pluginId ? (
+            <Button type="button" variant="link" asChild>
+              <Link to="/admin/apps/$pluginId" params={{ pluginId }}>{t("openAppToActivate")}</Link>
             </Button>
-          </div>
-          <ConfirmDialog
-            open={confirmRemove}
-            onOpenChange={setConfirmRemove}
-            title={t("removeProvider", { name })}
-            description={t("removeConfirm", { name })}
-            confirmLabel={common("remove")}
-            cancelLabel={common("cancel")}
-            isLoading={remove.isPending}
-            onConfirm={() => remove.mutate()}
-          />
-        </>
-      ) : null}
-    </>
+          ) : null}
+        </div>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -894,10 +754,12 @@ function AppFraudProviderForm({
 
   return (
     <>
+      {provider ? <FraudCheckerMoved provider={provider} appProvider={appProvider} /> : null}
       {appProvider ? <AppProviderStatus provider={appProvider} /> : null}
       <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
         {t("useOnOrders")}
-        <Switch checked={draft.isActive} onCheckedChange={(on) => setDraft({ isActive: on })} />
+        {/* A moved checker keeps its old keys until its app's activation moves them: nothing to save here before. */}
+        <Switch checked={draft.isActive} disabled={provider?.retired === true} onCheckedChange={(on) => setDraft({ isActive: on })} />
       </label>
       {provider && canEdit ? (
         <>
@@ -932,47 +794,21 @@ function FraudCardBody() {
   const apps = useQuery({ ...appProvidersQuery("fraud"), enabled: useProviderPortAccess("fraud").canView }).data ?? [];
   if (isError) return <SettingsLoadFailure title={t("fraudTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
-  const builtInSaved = data.filter((provider) => !isAppChecker(provider));
-  // Every saved checker, plus one "not set up" row for each checker not saved yet.
-  const rows = [
-    ...builtInSaved.map((provider) => ({ key: provider.id, type: fraudType(provider, "default"), provider })),
-    ...FRAUD_CHECK_PROVIDER_TYPES
-      .filter((type) => !builtInSaved.some((provider) => fraudType(provider, "default") === type))
-      .map((type) => ({ key: type, type, provider: null })),
-  ].sort((a, b) => FRAUD_ORDER.indexOf(a.type) - FRAUD_ORDER.indexOf(b.type));
-  // Each installed app provider, saved or not, and saved app checkers whose app is gone.
+  // Each installed app provider, saved or not, and saved checkers whose app is gone.
   const appRows = [
     ...apps.map((appProvider) => ({ appProvider, provider: data.find((saved) => saved.providerType === appProvider.id) ?? null })),
     ...data
-      .filter((saved) => isAppChecker(saved) && !apps.some((appProvider) => appProvider.id === saved.providerType))
+      .filter((saved) => !apps.some((appProvider) => appProvider.id === saved.providerType))
       .map((provider) => ({ appProvider: null, provider })),
   ];
+  const moved = appRows.filter(({ appProvider, provider }) => provider?.retired && !appProvider?.readiness.usable);
   return (
     <SettingsCard id="fraudCheck"
       title={t("fraudTitle")}
       description={t("fraudDescription")}
-      rows={[...rows.map(({ key, type, provider }) => {
-        const name = type === "default"
-          ? provider?.name || t("customChecker")
-          : getFraudCheckProviderDefinition(type).label;
-        return (
-          <SettingsDialog
-            key={key}
-            title={t("keysTitle", { name })}
-            trigger={
-              <SettingsRow
-                disabled={!canEdit}
-                label={<MarkLabel mark={<Mark provider={FRAUD_MARKS[type]} fallback={<ShieldCheck className="size-4" />} />}>{name}</MarkLabel>}
-                value={provider ? (provider.isActive ? t("connected") : common("off")) : t("notSetUp")}
-              />
-            }
-          >
-            <FraudProviderForm type={type} provider={provider} name={name} />
-          </SettingsDialog>
-        );
-      }), ...appRows.map(({ appProvider, provider }) => {
+      rows={appRows.length > 0 ? appRows.map(({ appProvider, provider }) => {
         const name = appProvider?.name ?? provider?.name ?? "";
-        const providerType = appProvider?.id ?? provider!.providerType!;
+        const providerType = appProvider?.id ?? provider!.providerType;
         const value = !provider
           ? t("notSetUp")
           : !provider.isActive
@@ -994,8 +830,11 @@ function FraudCardBody() {
             <AppFraudProviderForm appProvider={appProvider} provider={provider} providerType={providerType} name={name} />
           </SettingsDialog>
         );
-      })]}
-    />
+      }) : undefined}
+    >
+      {moved.length > 0 ? <FraudCheckerMoved provider={moved[0]!.provider!} appProvider={moved[0]!.appProvider} /> : null}
+      {appRows.length === 0 ? <p className="text-body text-muted-foreground">{t("noFraudCheckers")}</p> : null}
+    </SettingsCard>
   );
 }
 

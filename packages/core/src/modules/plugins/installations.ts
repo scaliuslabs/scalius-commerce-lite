@@ -19,6 +19,7 @@ import {
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
 import { isCustomFieldType } from "@scalius/shared/custom-fields";
+import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
   parsePluginManifest,
@@ -526,6 +527,16 @@ export async function writePluginSettings(
     throw new PluginError("settings.invalid", checked.errors[0] ? `${checked.errors[0].key}: ${checked.errors[0].message}` : "Invalid settings.", {
       errors: checked.errors,
     });
+  }
+  // A provider's own settings never take an obvious placeholder ("test", "your api key"):
+  // the provider would read as not configured anyway, so the save says why now.
+  const providerKeys = new Set(installation.manifest.providers.flatMap((provider) => provider.settings ?? []));
+  const placeholder = schema.find((field) => providerKeys.has(field.key)
+    && typeof checked.values[field.key] === "string"
+    && looksLikePlaceholderCredential(checked.values[field.key] as string));
+  if (placeholder) {
+    const message = `${placeholder.label} looks like a placeholder. Save a real provider value.`;
+    throw new PluginError("settings.invalid", `${placeholder.key}: ${message}`, { errors: [{ key: placeholder.key, message }] });
   }
   const writesSecret = schema.some((field) => field.type === "secret" && typeof checked.values[field.key] === "string");
   const key = writesSecret ? await derivePluginSettingsKey(options.credentialEncryptionKey) : null;

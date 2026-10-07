@@ -110,7 +110,7 @@ export function appCourier(
     const key = encryptionKey ?? "";
     let read = settingsByKey.get(key);
     if (!read) {
-      read = readAppProviderSettings(runtime, installation, "courier", encryptionKey);
+      read = readAppProviderSettings(runtime, installation, declaration, encryptionKey);
       settingsByKey.set(key, read);
     }
     return read;

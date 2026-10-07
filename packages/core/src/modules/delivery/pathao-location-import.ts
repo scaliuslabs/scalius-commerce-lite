@@ -2,7 +2,7 @@
  * Pathao's delivery locations as place dataset entries (docs/PLACES.md).
  *
  * Pathao's cities, zones (thanas) and areas become `PlaceDatasetEntry` rows
- * keyed `pathao:<type>:<id>`, the shape of `data/places/bd`. Two uses:
+ * keyed `pathao:<type>:<id>`, the shape of `plugins/bangladesh/places`. Two uses:
  *
  * - `buildPathaoPlaceDataset()` reads the whole tree for a dataset refresh:
  *   a courier API refresh becomes a reviewed diff of `places.json`
@@ -54,7 +54,7 @@ export interface ImportChunkResult {
   error?: string;
 }
 
-/** The dataset Pathao's places belong to: the Bangladesh dataset (`data/places/bd`). */
+/** The dataset Pathao's places belong to: the Bangladesh dataset (`plugins/bangladesh/places`). */
 export const PATHAO_PLACE_SOURCE = "bd";
 const KV_KEY = "location_import:pathao";
 const ZONES_PER_CHUNK = 30; // Process 30 zones' areas per request

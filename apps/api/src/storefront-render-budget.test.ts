@@ -1,6 +1,8 @@
 // Extends zod with .openapi() before the shared theme schemas load (the routes need it).
 import "@hono/zod-openapi";
-import { beforeAll, describe, expect, it } from "vitest";
+import { vi, beforeAll, describe, expect, it } from "vitest";
+// The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
+vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/hello-bundled")).withHelloBundled(await importOriginal()));
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { getDb } from "@scalius/database/client";

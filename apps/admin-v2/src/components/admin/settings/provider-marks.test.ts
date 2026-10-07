@@ -8,7 +8,7 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../../../public/", import.meta.url)
 
 describe("provider mark manifest", () => {
   it("keeps every adopted mark local, traceable, and byte-verified", () => {
-    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(18);
+    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(12);
 
     for (const [id, mark] of Object.entries(PROVIDER_MARKS)) {
       expect(mark.firstPartyAssetUrl).toMatch(/^https:\/\//);

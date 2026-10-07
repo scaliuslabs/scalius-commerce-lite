@@ -1,10 +1,10 @@
 /**
- * Imports a place dataset (data/places/<country>/) into the local D1 state
+ * Imports a place dataset (plugins/<pack>/places/) into the local D1 state
  * through the same service the dashboard, agents and plugins call
  * (`importPlaces`, delivery/places-import.ts). Local only: it opens the
  * Wrangler state's D1 file with Miniflare and reads no env file.
  *
- *   pnpm places:import [--dataset data/places/bd] [--state .wrangler/state]
+ *   pnpm places:import [--dataset plugins/bangladesh/places] [--state .wrangler/state]
  *
  * The dataset's manifest names the country, the dataset id (the source) and
  * the version (the SHA-256 of places.json, checked here). Places go in calls
@@ -49,7 +49,7 @@ export function readPlaceDataset(directory: string): { manifest: PlaceDatasetMan
 }
 
 async function main() {
-  const dataset = fromRoot(option("dataset") ?? "data/places/bd");
+  const dataset = fromRoot(option("dataset") ?? "plugins/bangladesh/places");
   const state = fromRoot(option("state") ?? process.env.SCALIUS_WRANGLER_STATE ?? ".wrangler/state");
   const { manifest, places } = readPlaceDataset(dataset);
   const miniflare = new Miniflare(convertV4MiniflareOptions({

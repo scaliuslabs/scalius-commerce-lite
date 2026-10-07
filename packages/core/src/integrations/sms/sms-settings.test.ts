@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { encryptCredentials } from "../../utils/credential-encryption";
 import { ValidationError } from "../../errors";
 import type { AppProviders } from "../provider-port";
 import {
@@ -12,201 +11,53 @@ import {
   saveSmsSettings,
 } from "./sms-settings";
 
-/** Stores the SMS document exactly as given (bypassing save-time validation). */
-function createSmsSettingsDb(rows: Array<{ key: string; value: string }>) {
+/** Stores the SMS document exactly as given. */
+function createSmsSettingsDb(document: Record<string, string> | null) {
   const harness = createSqliteD1Database();
-  if (rows.length > 0) {
-    const document = Object.fromEntries(rows.map(({ key, value }) => [
-      key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
-      value,
-    ]));
+  if (document) {
     harness.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('sms', 'document', ?, 'json', 'sms')")
       .run(JSON.stringify(document));
   }
   return Object.assign(harness.db, { sqlite: harness.sqlite });
 }
 
-describe("SMS settings readiness", () => {
-  it("reports no active provider as not configured", async () => {
-    const result = await getSmsProviderReadiness(createSmsSettingsDb([]));
+const APP_ID = "acme.texts:texts";
+const appSend = vi.fn(async () => ({ success: true, providerRef: "app-1" }));
+const appProvider = { id: APP_ID, label: "Acme Texts", send: appSend };
 
-    expect(result).toEqual({
+function apps(choice: { provider: typeof appProvider; issue: null } | { provider: null; issue: string }): AppProviders & { resolve: ReturnType<typeof vi.fn> } {
+  return { resolve: vi.fn(async () => choice) } as never;
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("SMS settings", () => {
+  it("reports no chosen gateway as not configured", async () => {
+    await expect(getSmsProviderReadiness(createSmsSettingsDb(null))).resolves.toEqual({
       status: "incomplete",
       issues: [{ code: SMS_READINESS_CODE, message: "No active SMS provider selected" }],
       activeProvider: null,
     });
   });
 
-  it("reports missing active provider credentials", async () => {
-    const result = await getSmsProviderReadiness(createSmsSettingsDb([
-      { key: "active_provider", value: "bdbulksms" },
-    ]));
-
-    expect(result).toEqual({
-      status: "incomplete",
-      issues: [{ code: SMS_READINESS_CODE, message: "BDBulkSMS token is required" }],
-      activeProvider: "bdbulksms",
-    });
-  });
-
-  it("reports ready provider settings and masks configured secrets", async () => {
-    const db = createSmsSettingsDb([
-      { key: "active_provider", value: "gennet" },
-      { key: "gennet_api_token", value: "token_123" },
-      { key: "gennet_base_url", value: "https://merchant.gennet.com.bd" },
-      { key: "gennet_sid", value: "SCALIUS" },
-    ]);
-
-    await expect(getSmsProviderReadiness(db)).resolves.toEqual({
-      status: "ready",
-      issues: [],
-      activeProvider: "gennet",
-    });
-    await expect(getSmsSettings(db)).resolves.toMatchObject({
-      activeProvider: "gennet",
-      activeProviderConfigured: true,
-      activeProviderError: null,
-      gennetApiToken: "••••••••••••",
-      gennetBaseUrl: "https://merchant.gennet.com.bd",
-      gennetSid: "SCALIUS",
-    });
-  });
-
-  it("does not treat obvious placeholder SMS credentials as ready", async () => {
-    await expect(getSmsProviderReadiness(createSmsSettingsDb([
-      { key: "active_provider", value: "smsnetbd" },
-      { key: "smsnetbd_api_key", value: "dummy" },
-      { key: "smsnetbd_sender_id", value: "SCALIUS" },
-    ]))).resolves.toMatchObject({
-      status: "incomplete",
-      activeProvider: "smsnetbd",
-      issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS." }],
-    });
-
-    await expect(getSmsProviderReadiness(createSmsSettingsDb([
-      { key: "active_provider", value: "gennet" },
-      { key: "gennet_api_token", value: "realish-token-789" },
-      { key: "gennet_base_url", value: "https://example.gennet.com.bd" },
-      { key: "gennet_sid", value: "SCALIUS" },
-    ]))).resolves.toMatchObject({
-      status: "incomplete",
-      activeProvider: "gennet",
-      issues: [{ code: SMS_READINESS_CODE, message: "GenNet base URL looks like a placeholder. Save a real provider value before enabling SMS." }],
-    });
-  });
-
-  it("rejects new placeholder SMS credentials before saving", async () => {
-    await expect(saveSmsSettings({} as never, {
-      activeProvider: "bdbulksms",
-      bdbulksmsToken: "your-token-here",
-    }, "credential-key")).rejects.toBeInstanceOf(ValidationError);
-  });
-
-  it("fails before writes when changed secrets have no encryption key", async () => {
-    const db = createSmsSettingsDb([]);
-
-    await expect(saveSmsSettings(db, {
-      activeProvider: "bdbulksms",
-      bdbulksmsToken: "merchant-token-4821",
-    })).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
-    expect(db.sqlite.prepare("SELECT count(*) AS count FROM settings").get()).toEqual({ count: 0 });
-  });
-
-  it("saves plaintext settings with encrypted secrets and keeps masked secrets unchanged", async () => {
-    const db = createSmsSettingsDb([]);
-    const key = Buffer.alloc(32, 11).toString("base64");
-
-    await saveSmsSettings(db, {
-      activeProvider: "gennet",
-      gennetBaseUrl: "https://merchant.gennet.com.bd",
-      gennetSid: "SCALIUS",
-      gennetApiToken: "merchant-token-4821",
-    }, key);
-    const stored = () => JSON.parse(
-      (db.sqlite.prepare("SELECT value FROM settings WHERE category = 'sms'").get() as { value: string }).value,
-    ) as Record<string, string>;
-    const token = stored().gennetApiToken;
-    expect(token).toMatch(/^enc:/);
-    expect(token).not.toContain("merchant-token-4821");
-
-    await saveSmsSettings(db, { gennetApiToken: "••••••••••••", gennetSid: "SHOP" }, key);
-    expect(stored()).toMatchObject({ gennetApiToken: token, gennetSid: "SHOP" });
-    await expect(getSmsProviderReadiness(db, key)).resolves.toMatchObject({ status: "ready" });
-  });
-
-  it("does not treat encrypted secrets as ready when the credential key is unavailable", async () => {
-    const key = Buffer.alloc(32, 7).toString("base64");
-    const encryptedToken = `enc:${await encryptCredentials("token_123", key)}`;
-    const db = createSmsSettingsDb([
-      { key: "active_provider", value: "bdbulksms" },
-      { key: "bdbulksms_token", value: encryptedToken },
-    ]);
-
-    await expect(getSmsProviderReadiness(db)).resolves.toMatchObject({
-      status: "incomplete",
-      activeProvider: "bdbulksms",
-      issues: [{ code: SMS_READINESS_CODE, message: "BDBulkSMS token is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured." }],
-    });
-    await expect(getSmsProviderReadiness(db, key)).resolves.toEqual({
-      status: "ready",
-      issues: [],
-      activeProvider: "bdbulksms",
-    });
-  });
-
-  it("does not treat encrypted secrets as ready when the credential key is wrong", async () => {
-    const key = Buffer.alloc(32, 8).toString("base64");
-    const wrongKey = Buffer.alloc(32, 9).toString("base64");
-    const db = createSmsSettingsDb([
-      { key: "active_provider", value: "smsnetbd" },
-      { key: "smsnetbd_api_key", value: `enc:${await encryptCredentials("api_key_123", key)}` },
-      { key: "smsnetbd_sender_id", value: "SCALIUS" },
-    ]);
-
-    await expect(getSmsProviderReadiness(db, wrongKey)).resolves.toMatchObject({
-      status: "incomplete",
-      activeProvider: "smsnetbd",
-      issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key could not be decrypted with the configured credential key." }],
-    });
-  });
-
-  it("reads authoritative provider settings for every dispatch", async () => {
-    const db = createSmsSettingsDb([
-      { key: "active_provider", value: "bdbulksms" },
-      { key: "bdbulksms_token", value: "live-token-123" },
-    ]);
-
-    await expect(getActiveSmsProvider(db)).resolves.not.toBeNull();
-    db.sqlite.exec("UPDATE settings SET value = json_set(value, '$.activeProvider', '') WHERE category = 'sms'");
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(getActiveSmsProvider(db)).resolves.toBeNull();
-  });
-});
-
-describe("SMS provider selection", () => {
-  const APP_ID = "acme.texts:texts";
-  const appSend = vi.fn(async () => ({ success: true, providerRef: "app-1" }));
-  const appProvider = { id: APP_ID, label: "Acme Texts", send: appSend };
-
-  function apps(choice: { provider: typeof appProvider; issue: null } | { provider: null; issue: string }): AppProviders & { resolve: ReturnType<typeof vi.fn> } {
-    return { resolve: vi.fn(async () => choice) } as never;
-  }
-
-  it("sends through the app provider the saved choice names", async () => {
-    const db = createSmsSettingsDb([{ key: "active_provider", value: APP_ID }]);
+  it("sends through the app provider the saved choice names, read again for every dispatch", async () => {
+    const db = createSmsSettingsDb({ activeProvider: APP_ID });
     const lookup = apps({ provider: appProvider, issue: null });
 
     const provider = await getActiveSmsProvider(db, undefined, lookup);
     expect(lookup.resolve).toHaveBeenCalledWith("sms", APP_ID);
-    expect(provider?.id).toBe(APP_ID);
     await expect(provider!.send({ to: "+8801700000000", message: "Hi" }, {})).resolves.toEqual({ success: true, providerRef: "app-1" });
     await expect(getSmsProviderReadiness(db, undefined, lookup)).resolves.toEqual({ status: "ready", issues: [], activeProvider: APP_ID });
-    await expect(getSmsSettings(db, undefined, lookup)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: true });
+    await expect(getSmsSettings(db, undefined, lookup)).resolves.toEqual({ activeProvider: APP_ID, activeProviderConfigured: true, activeProviderError: null, revision: 1 });
+
+    db.sqlite.exec("UPDATE settings SET value = json_set(value, '$.activeProvider', '') WHERE category = 'sms'");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(getActiveSmsProvider(db, undefined, lookup)).resolves.toBeNull();
   });
 
   it("fails closed when the chosen app is not ready, or no app can run here", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const db = createSmsSettingsDb([{ key: "active_provider", value: APP_ID }]);
+    const db = createSmsSettingsDb({ activeProvider: APP_ID });
     const notReady = apps({ provider: null, issue: "Acme Texts credentials could not be opened. Save them again in the app's settings." });
 
     await expect(getActiveSmsProvider(db, undefined, notReady)).resolves.toBeNull();
@@ -219,23 +70,31 @@ describe("SMS provider selection", () => {
     await expect(getSmsProviderReadiness(db)).resolves.toMatchObject({ status: "incomplete", activeProvider: APP_ID });
   });
 
-  it("never asks for app providers when a built-in gateway is chosen", async () => {
-    const db = createSmsSettingsDb([
-      { key: "active_provider", value: "bdbulksms" },
-      { key: "bdbulksms_token", value: "live-token-123" },
-    ]);
-    const lookup = apps({ provider: appProvider, issue: null });
+  it("reads a gateway chosen before the move as the Bangladesh pack's, failing closed until the pack is active", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const db = createSmsSettingsDb({ activeProvider: "bdbulksms", bdbulksmsToken: "enc:v1:legacy-ciphertext" });
+    const inactive = apps({ provider: null, issue: "Activate Bangladesh pack in Apps to use it." });
 
-    await expect(getActiveSmsProvider(db, undefined, lookup)).resolves.toMatchObject({ id: "bdbulksms", label: "BDBulkSMS (GreenWeb)" });
-    await getSmsProviderReadiness(db, undefined, lookup);
-    expect(lookup.resolve).not.toHaveBeenCalled();
+    await expect(getActiveSmsProvider(db, undefined, inactive)).resolves.toBeNull();
+    expect(inactive.resolve).toHaveBeenCalledWith("sms", "scalius.bangladesh:bdbulksms");
+    await expect(getSmsSettings(db, undefined, inactive)).resolves.toMatchObject({
+      activeProvider: "scalius.bangladesh:bdbulksms",
+      activeProviderConfigured: false,
+      activeProviderError: "Activate Bangladesh pack in Apps to use it.",
+    });
+    for (const retired of ["smsnetbd", "mimsms", "gennet"]) {
+      db.sqlite.prepare("UPDATE settings SET value = json_set(value, '$.activeProvider', ?) WHERE category = 'sms'").run(retired);
+      await expect(getSmsProviderReadiness(db, undefined, inactive)).resolves.toMatchObject({ status: "incomplete", activeProvider: `scalius.bangladesh:${retired}` });
+    }
   });
 
-  it("saves an app provider id as the choice and refuses anything else", async () => {
-    const db = createSmsSettingsDb([]);
-    await saveSmsSettings(db, { activeProvider: APP_ID });
-    await expect(getSmsSettings(db)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: false });
+  it("saves an app provider id as the choice, refuses anything else, and keeps a not-yet-moved gateway's keys", async () => {
+    const db = createSmsSettingsDb({ activeProvider: "bdbulksms", bdbulksmsToken: "enc:v1:legacy-ciphertext" });
+    await saveSmsSettings(db, { activeProvider: APP_ID }, undefined, { expectedRevision: 1 });
+    await expect(getSmsSettings(db)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: false, revision: 2 });
+    const stored = db.sqlite.prepare("SELECT value FROM settings WHERE category = 'sms'").get() as { value: string };
+    expect(JSON.parse(stored.value)).toEqual({ activeProvider: APP_ID, bdbulksmsToken: "enc:v1:legacy-ciphertext" });
     await expect(saveSmsSettings(db, { activeProvider: "acme.texts" })).rejects.toBeInstanceOf(ValidationError);
-    await expect(saveSmsSettings(db, { activeProvider: "twilio" })).rejects.toBeInstanceOf(ValidationError);
+    await expect(saveSmsSettings(db, { activeProvider: "bdbulksms" })).rejects.toBeInstanceOf(ValidationError);
   });
 });

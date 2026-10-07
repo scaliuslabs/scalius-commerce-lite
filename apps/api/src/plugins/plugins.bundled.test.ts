@@ -4,7 +4,9 @@
 // and KV, its routes, cron job, lifecycle hook and checkout function run, and
 // its log lines land masked in the plugin log.
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { vi, afterEach, beforeEach, describe, expect, it } from "vitest";
+// The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/hello-bundled")).withHelloBundled(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
@@ -35,7 +37,9 @@ describe("scalius.hello through the bundled loader", () => {
   });
   afterEach(() => sqlite.close());
 
-  it("bundles the same version and fingerprint the lockfile records", () => {
+  it("is a sample no store bundles: the tests run the build the first-party catalog records", async () => {
+    const { BUNDLED_PLUGINS: deployed } = await vi.importActual<typeof import("./bundled.gen")>("./bundled.gen");
+    expect(Object.hasOwn(deployed, "scalius.hello")).toBe(false);
     expect(BUNDLED_PLUGINS["scalius.hello"]).toMatchObject({ version: helloModule.manifest.version, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(helloModule.manifest.id).toBe("scalius.hello");
   });

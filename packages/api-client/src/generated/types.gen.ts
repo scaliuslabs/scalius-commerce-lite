@@ -30619,12 +30619,9 @@ export type GetApiV1AdminFraudCheckerResponses = {
             providers: Array<{
                 id: string;
                 name: string;
-                apiUrl: string;
-                apiKey: string;
-                apiSecret?: string;
-                userId?: string;
                 isActive: boolean;
-                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
+                providerType: string;
+                retired: boolean;
             }>;
             pagination: {
                 page: number;
@@ -30639,14 +30636,6 @@ export type GetApiV1AdminFraudCheckerResponse = GetApiV1AdminFraudCheckerRespons
 
 export type PostApiV1AdminFraudCheckerData = {
     body: {
-        name: string;
-        apiUrl: string;
-        apiKey: string;
-        apiSecret?: string;
-        userId?: string;
-        isActive?: boolean;
-        providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
-    } | {
         name: string;
         isActive?: boolean;
         providerType: string;
@@ -30698,12 +30687,9 @@ export type PostApiV1AdminFraudCheckerResponses = {
         data: {
             id: string;
             name: string;
-            apiUrl: string;
-            apiKey: string;
-            apiSecret?: string;
-            userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
+            providerType: string;
+            retired: boolean;
         };
     };
 };
@@ -30712,15 +30698,6 @@ export type PostApiV1AdminFraudCheckerResponse = PostApiV1AdminFraudCheckerRespo
 
 export type PutApiV1AdminFraudCheckerData = {
     body: {
-        id: string;
-        name: string;
-        apiUrl: string;
-        apiKey: string;
-        apiSecret?: string;
-        userId?: string;
-        isActive?: boolean;
-        providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
-    } | {
         name: string;
         isActive?: boolean;
         providerType: string;
@@ -30773,12 +30750,9 @@ export type PutApiV1AdminFraudCheckerResponses = {
         data: {
             id: string;
             name: string;
-            apiUrl: string;
-            apiKey: string;
-            apiSecret?: string;
-            userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
+            providerType: string;
+            retired: boolean;
         };
     };
 };
@@ -30944,6 +30918,10 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
             unsupportedCountry?: {
                 provider: string;
                 countryCode: string | null;
+            };
+            unavailable?: {
+                provider: string;
+                reason: string;
             };
             total_parcels?: number;
             total_delivered?: number;
@@ -37876,15 +37854,6 @@ export type GetApiV1AdminSettingsSmsResponses = {
             activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
-            bdbulksmsToken: string;
-            mimsmsUsername: string;
-            mimsmsApiKey: string;
-            mimsmsSenderName: string;
-            smsnetbdApiKey: string;
-            smsnetbdSenderId: string;
-            gennetApiToken: string;
-            gennetBaseUrl: string;
-            gennetSid: string;
             revision: number;
         };
     };
@@ -37894,16 +37863,7 @@ export type GetApiV1AdminSettingsSmsResponse = GetApiV1AdminSettingsSmsResponses
 
 export type PostApiV1AdminSettingsSmsData = {
     body: {
-        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | string;
-        bdbulksmsToken?: string;
-        mimsmsUsername?: string;
-        mimsmsApiKey?: string;
-        mimsmsSenderName?: string;
-        smsnetbdApiKey?: string;
-        smsnetbdSenderId?: string;
-        gennetApiToken?: string;
-        gennetBaseUrl?: string;
-        gennetSid?: string;
+        activeProvider?: string;
         expectedRevision: number;
     };
     path?: never;
@@ -37958,15 +37918,6 @@ export type PostApiV1AdminSettingsSmsResponses = {
             activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
-            bdbulksmsToken: string;
-            mimsmsUsername: string;
-            mimsmsApiKey: string;
-            mimsmsSenderName: string;
-            smsnetbdApiKey: string;
-            smsnetbdSenderId: string;
-            gennetApiToken: string;
-            gennetBaseUrl: string;
-            gennetSid: string;
             revision: number;
         };
     };

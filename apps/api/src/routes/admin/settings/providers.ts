@@ -84,7 +84,7 @@ app.openapi(listRoute, async (c) => {
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const providers = await Promise.all(appProvidersOf(await listPluginInstallations(c.get("db")), kind)
     .map(async ({ installation, declaration }) => {
-      const settings = await readAppProviderSettings(runtime, installation, kind, encryptionKey);
+      const settings = await readAppProviderSettings(runtime, installation, declaration, encryptionKey);
       const operations = declaredProviderOperations(declaration);
       const configured = settings.missingFields.length === 0 && settings.credentialErrors.length === 0;
       return {
@@ -142,7 +142,7 @@ app.openapi(testRoute, async (c) => {
     throw new ValidationError(`${declaration.name} does not offer a connection test.`);
   }
   const runtime = requestProviderRuntime(c);
-  const settings = await readAppProviderSettings(runtime, installation, declaration.kind, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+  const settings = await readAppProviderSettings(runtime, installation, declaration, getCredentialEncryptionKey(c.env as Record<string, unknown>));
   // Never call an app that could not run its real operations either.
   if (!settings.enabled || settings.missingFields.length > 0 || settings.credentialErrors.length > 0) {
     return ok(c, { ok: false, message: settings.blockedReason ?? `${declaration.name} is not ready.` });

@@ -3,7 +3,9 @@
 // run, the tick is bounded (run cap), a stale lease is failed, an inactive
 // plugin's jobs are skipped, and with no active job a tick reads one index.
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { vi, afterEach, beforeEach, describe, expect, it } from "vitest";
+// The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/hello-bundled")).withHelloBundled(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { deactivatePlugin, listPluginLogs, requirePluginInstallation } from "@scalius/core/modules/plugins";
