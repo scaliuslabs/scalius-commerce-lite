@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChartColumn, FileBarChart, Info, Printer } from "lucide-react";
+import { FileBarChart, Info, Printer } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { analyticsChange, type AnalyticsGranularity } from "@scalius/shared/analytics-period";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -179,7 +179,7 @@ export function AnalyticsOverview({
               previousName={previous ? formatRangeLabel(previous.range) : null}
             />
           ) : (
-            <EmptyState icon={ChartColumn} title={t("chartEmpty")} description={t("chartEmptyBody")} />
+            <EmptyState icon={FileBarChart} title={t("chartEmpty")} description={t("chartEmptyBody")} />
           )}
           <Button variant="link" size="sm" asChild className="print:hidden">
             <Link

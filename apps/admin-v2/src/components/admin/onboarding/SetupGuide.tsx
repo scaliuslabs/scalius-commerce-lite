@@ -3,16 +3,12 @@
 // step is checked from the store's own data (GET /admin/dashboard/setup-guide),
 // never because it was clicked. Dismissing hides the card for this staff
 // member only. Code-split: Home loads it after its first render.
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Circle, MoreHorizontal } from "lucide-react";
 import { postApiV1AdminDashboardSetupGuideDismiss } from "@scalius/api-client/sdk";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion";
 import { Button } from "~/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-import { Progress } from "~/components/ui/progress";
 import { formatNumber, useMessages } from "~/i18n";
 import { setupGuideMessages } from "~/i18n/setup-guide";
 import { apiData, type ApiResult } from "~/lib/api";
@@ -20,6 +16,20 @@ import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import type { getApiV1AdminDashboardSetupGuide } from "@scalius/api-client/sdk";
+
+/**
+ * The card is built from what Home's first download already holds (Button,
+ * Card, the router) and draws its few glyphs here. A new importer of the icon
+ * library or of a Radix package regroups their shared chunks, and the list
+ * screens' first download grows with them (apps/admin-v2/vite.config.ts).
+ */
+function Glyph({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className ?? "size-4"}>
+      {children}
+    </svg>
+  );
+}
 
 export type SetupGuideData = ApiResult<typeof getApiV1AdminDashboardSetupGuide>;
 
@@ -83,16 +93,9 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
             <CardDescription>{complete ? t("allDoneBody") : t("description")}</CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={t("options")}>
-                  <MoreHorizontal aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => dismiss.mutate()}>{t("dismiss")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="ghost" size="sm" loading={dismiss.isPending} onClick={() => dismiss.mutate()}>
+              {t("dismiss")}
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -100,7 +103,7 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
               aria-expanded={expanded}
               onClick={() => setExpanded((current) => !current)}
             >
-              {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+              <Glyph>{expanded ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}</Glyph>
             </Button>
           </div>
         </div>
@@ -108,39 +111,54 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
           <span className="text-body tabular-nums text-muted-foreground">
             {t("progress", { done: formatNumber(done), total: formatNumber(steps.length) })}
           </span>
-          <Progress value={(done / steps.length) * 100} className="h-1.5 flex-1" aria-hidden="true" />
+          <div
+            role="progressbar"
+            aria-label={t("title")}
+            aria-valuemin={0}
+            aria-valuemax={steps.length}
+            aria-valuenow={done}
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary"
+          >
+            <div className="h-full w-(--progress) rounded-full bg-primary" style={{ "--progress": `${(done / steps.length) * 100}%` } as CSSProperties} />
+          </div>
         </div>
       </CardHeader>
       {expanded ? (
-        <div className="border-t px-4">
-          <Accordion type="single" collapsible value={open} onValueChange={setOpen}>
-            {steps.map((step) => (
-              <AccordionItem key={step.key} value={step.key}>
-                <AccordionTrigger>
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-lh shrink-0 items-center">
-                      {step.done ? (
-                        <Check aria-hidden="true" className="size-4 rounded-full bg-success p-0.5 text-success-foreground" />
-                      ) : (
-                        <Circle aria-hidden="true" className="size-4 text-muted-foreground" strokeDasharray="3 3" />
-                      )}
-                    </span>
-                    <span className="sr-only">{step.done ? t("stepDone") : t("stepTodo")}:</span>
-                    <span>{t(step.key)}</span>
+        <ul className="border-t px-4">
+          {steps.map((step) => {
+            const isOpen = open === step.key;
+            return (
+              <li key={step.key} className="border-b last:border-b-0">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={`setup-step-${step.key}`}
+                  onClick={() => setOpen(isOpen ? "" : step.key)}
+                  className="flex min-h-11 w-full items-center gap-3 rounded-lg py-3 text-start text-body font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex h-lh shrink-0 items-center">
+                    {step.done ? (
+                      <Glyph className="size-4 rounded-full bg-success p-0.5 text-success-foreground"><path d="M20 6 9 17l-5-5" /></Glyph>
+                    ) : (
+                      <Glyph className="size-4 text-muted-foreground"><circle cx="12" cy="12" r="10" strokeDasharray="3 3" /></Glyph>
+                    )}
                   </span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="flex flex-col items-start gap-3 ps-7">
-                    <p className="text-muted-foreground">{t(step.body)}</p>
+                  <span className="sr-only">{step.done ? t("stepDone") : t("stepTodo")}:</span>
+                  <span className="flex-1">{t(step.key)}</span>
+                  <Glyph className="size-4 shrink-0 text-muted-foreground">{isOpen ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}</Glyph>
+                </button>
+                {isOpen ? (
+                  <div id={`setup-step-${step.key}`} className="flex flex-col items-start gap-3 pb-4 ps-7">
+                    <p className="text-body text-muted-foreground">{t(step.body)}</p>
                     <Button variant={step.done ? "outline" : "default"} size="sm" asChild>
                       <Link to={step.to} params={step.params as never}>{t(`${step.key}Action`)}</Link>
                     </Button>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </Card>
   );

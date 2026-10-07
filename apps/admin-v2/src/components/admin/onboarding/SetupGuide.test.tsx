@@ -99,9 +99,14 @@ describe("setup guide card", () => {
     expect(container.textContent).toContain(t("progress", { done: 2, total: 7 }));
     expect(container.querySelector("[role=progressbar]")).not.toBeNull();
     // The first unfinished step (theme) is open, with its action.
-    const open = container.querySelector("[data-state=open][data-slot=accordion-item]")!;
+    const open = container.querySelector("button[aria-expanded=true][aria-controls^=setup-step]")!;
     expect(open.textContent).toContain(t("theme"));
-    expect(open.querySelector("a")?.getAttribute("href")).toBe("/admin/online-store/theme");
+    expect(container.querySelectorAll("button[aria-expanded=true][aria-controls^=setup-step]")).toHaveLength(1);
+    expect(container.querySelector(`#${open.getAttribute("aria-controls")} a`)?.getAttribute("href")).toBe("/admin/online-store/theme");
+    // Choosing another step opens it and closes the first.
+    const details = container.querySelector("button[aria-controls=setup-step-details]") as HTMLButtonElement;
+    act(() => details.click());
+    expect(container.querySelector("button[aria-expanded=true][aria-controls^=setup-step]")?.textContent).toContain(t("details"));
   });
 
   it("says the store is ready when every step is done", () => {
@@ -111,10 +116,10 @@ describe("setup guide card", () => {
 
   it("collapses to its header", async () => {
     show(guide());
-    expect(container.querySelector("[data-slot=accordion]")).not.toBeNull();
+    expect(container.querySelector("ul")).not.toBeNull();
     const toggle = container.querySelector(`button[aria-label="${t("collapse")}"]`) as HTMLButtonElement;
     await act(async () => toggle.click());
-    expect(container.querySelector("[data-slot=accordion]")).toBeNull();
+    expect(container.querySelector("ul")).toBeNull();
     expect(container.querySelector(`button[aria-label="${t("expand")}"]`)?.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -122,12 +127,8 @@ describe("setup guide card", () => {
     sdk.postApiV1AdminDashboardSetupGuideDismiss.mockResolvedValue({ data: { success: true, data: { dismissed: true } }, response: { status: 200 } });
     queryClient.setQueryData(queryKeys.dashboard.setupGuide(), guide());
     show(guide());
-    const trigger = container.querySelector(`button[aria-label="${t("options")}"]`) as HTMLButtonElement;
-    await act(async () => {
-      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
-    });
-    const item = [...document.body.querySelectorAll("[role=menuitem]")].find((entry) => entry.textContent === t("dismiss")) as HTMLElement;
-    await act(async () => item.click());
+    const dismiss = [...container.querySelectorAll("button")].find((button) => button.textContent === t("dismiss"))!;
+    await act(async () => dismiss.click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminDashboardSetupGuideDismiss).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(queryClient.getQueryData<SetupGuideData>(queryKeys.dashboard.setupGuide())?.dismissed).toBe(true));
   });
