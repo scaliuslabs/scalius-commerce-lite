@@ -47,7 +47,7 @@ const TWO_DIGIT_CALLING_CODE = /^(?:2[07]|3[0-469]|4[013-9]|5[1-8]|6[0-6]|8[1246
 /**
  * An E.164 number for reading in the dashboard. In its own country (`home`, the
  * store's) a number reads as people there write it: a Bangladesh mobile as
- * "01712-345678", a North American one as "(415) 555-2671". Anywhere else the
+ * "01712-345678". Anywhere else the
  * country code is set apart: "+880 1712 345678", "+44 7700900123". No phone
  * metadata, so lists and cards can show numbers without downloading it.
  */
@@ -57,8 +57,6 @@ export function formatPhoneForDisplay(e164: string, home?: string | null): strin
   if (mobile) return country === "BD" ? formatBdMobile(mobile) : `+880 ${mobile.slice(4, 8)} ${mobile.slice(8)}`;
   const digits = /^\+(\d{7,15})$/.exec(e164.trim())?.[1];
   if (!digits) return e164;
-  const northAmerican = /^1(\d{3})(\d{3})(\d{4})$/.exec(digits);
-  if (northAmerican && (country === "US" || country === "CA")) return `(${northAmerican[1]}) ${northAmerican[2]}-${northAmerican[3]}`;
   const codeLength = /^[17]/.test(digits) ? 1 : TWO_DIGIT_CALLING_CODE.test(digits) ? 2 : 3;
   return `+${digits.slice(0, codeLength)} ${digits.slice(codeLength)}`;
 }

@@ -58,7 +58,7 @@ describe("phone input rules", () => {
   it("writes a number the way its own country does when it is the store's country", () => {
     expect(formatPhoneForDisplay("+8801712345678", "BD")).toBe("01712-345678");
     expect(formatPhoneForDisplay("+8801712345678", "US")).toBe("+880 1712 345678");
-    expect(formatPhoneForDisplay("+14155552671", "US")).toBe("(415) 555-2671");
+    expect(formatPhoneForDisplay("+14155552671", "US")).toBe("+1 4155552671");
     expect(formatPhoneForDisplay("+14155552671", "BD")).toBe("+1 4155552671");
     expect(formatPhoneForDisplay("+447700900123", "BD")).toBe("+44 7700900123");
   });

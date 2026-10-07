@@ -3,7 +3,7 @@ import { formatDateTime, translate } from "~/i18n";
 import { eventTimeMessages } from "~/i18n/event-time";
 import { getStoreTimeZone } from "~/lib/store-time-zone";
 
-type Translate = (key: "justNow" | "minutesAgo" | "todayAt" | "yesterdayAt" | "dateAt" | "dateOnAt", vars?: Record<string, string | number>) => string;
+type Translate = (key: "justNow" | "minutesAgo" | "todayAt" | "yesterdayAt" | "dateAt", vars?: Record<string, string | number>) => string;
 
 /** The store-calendar day (days since 1970) and year of an instant. */
 function storeDay(date: Date, timeZone: string): { day: number; year: string } {
@@ -35,7 +35,7 @@ export function eventTimeLabel(date: Date, now: Date, t: Translate, { withTime =
   if (then.year === today.year) return t("dateAt", { date: formatDateTime(date, { month: "short", day: "numeric" }), time });
   const dated = formatDateTime(date, { month: "short", day: "numeric", year: "numeric" });
   // An event from another year is told by its date; a list shows the time on hover.
-  return withTime ? t("dateOnAt", { date: dated, time }) : dated;
+  return withTime ? t("dateAt", { date: dated, time }) : dated;
 }
 
 /** `eventTimeLabel` for now, in the dashboard language: for text that isn't a list cell. */

@@ -19,7 +19,7 @@ describe("order timestamps", () => {
   it("tells recent events relative to now and older ones by date, never numerically", () => {
     expect(formatOrderTimestamp("2026-10-07T11:19:00Z")).toBe("41 min ago");
     expect(formatOrderTimestamp("2026-10-06T17:42:00Z")).toBe("Yesterday at 11:42 PM");
-    expect(formatOrderTimestamp("2025-10-03T09:42:00Z")).toBe("Oct 3, 2025, 3:42 PM");
+    expect(formatOrderTimestamp("2025-10-03T09:42:00Z")).toBe("Oct 3, 2025 at 3:42 PM");
   });
 
   it("keeps the 12-hour clock in English, in Dhaka time", () => {

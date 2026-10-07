@@ -8,7 +8,6 @@ export const eventTimeMessages = defineMessages({
     todayAt: "Today at {time}",
     yesterdayAt: "Yesterday at {time}",
     dateAt: "{date} at {time}",
-    dateOnAt: "{date}, {time}",
   },
   bn: {
     justNow: "এইমাত্র",
@@ -16,6 +15,5 @@ export const eventTimeMessages = defineMessages({
     todayAt: "আজ {time}",
     yesterdayAt: "গতকাল {time}",
     dateAt: "{date} {time}",
-    dateOnAt: "{date}, {time}",
   },
 });

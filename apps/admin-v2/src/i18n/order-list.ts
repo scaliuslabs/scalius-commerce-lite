@@ -83,7 +83,7 @@ export const orderListMessages = defineMessages({
     items: "Items",
     status: "Status",
     itemsOne: "1 item",
-    itemsOther: "{count, plural, one {# item} other {# items}}",
+    itemsOther: "{count} items",
     itemsLoadFailed: "Couldn't load the items. Try again.",
     unnamedItem: "Unnamed product",
     qtyTimesPrice: "{qty} × {price}",
