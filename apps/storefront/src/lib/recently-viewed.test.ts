@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   RECENTLY_VIEWED_STORAGE_KEY,

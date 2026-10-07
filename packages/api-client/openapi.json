@@ -24144,7 +24144,7 @@
                   },
                   "presence": {
                     "type": "string",
-                    "pattern": "^[a-z]{2}-[a-z]{2}$"
+                    "pattern": "^[a-z]{2}(?:-[a-z]{2})?$"
                   }
                 },
                 "required": [
@@ -57417,7 +57417,7 @@
                   "presence": {
                     "type": "string",
                     "nullable": true,
-                    "pattern": "^[a-z]{2}-[a-z]{2}$",
+                    "pattern": "^[a-z]{2}(?:-[a-z]{2})?$",
                     "description": "The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root."
                   },
                   "giftCards": {
