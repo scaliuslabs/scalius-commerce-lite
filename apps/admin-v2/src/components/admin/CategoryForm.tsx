@@ -17,7 +17,7 @@ import { SaveConflict } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
-import { LazyResourceTranslationsCard } from "@/components/admin/translations/LazyResourceTranslationsCard";
+import { useTranslateMenuItem } from "@/components/admin/translations/TranslateMenuItem";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
@@ -81,6 +81,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
   const canSave = isEdit ? categoryActions.canEdit : categoryActions.canCreate;
+  const translateItem = useTranslateMenuItem("category", isEdit ? defaultValues?.id : undefined);
 
   const form = useForm<CategoryFormInput, unknown, CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -164,7 +165,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("category") : t("addCategory")}
-      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="category" id={defaultValues.id} /> : undefined}
+      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="category" id={defaultValues.id} extraItems={translateItem} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/categories"
       canSave={canSave}
@@ -328,7 +329,6 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             }}
             disabled={!canSave}
           />
-          {isEdit && defaultValues?.id ? <LazyResourceTranslationsCard type="category" id={defaultValues.id} /> : null}
         </div>
 
         <div className="min-w-0 space-y-4">

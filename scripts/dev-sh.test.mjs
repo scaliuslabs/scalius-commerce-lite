@@ -102,6 +102,22 @@ describe("dev.sh startup planning", () => {
     expect(result.stdout).not.toContain("Starting storefront");
   });
 
+  it("applies local migrations to the state directory the API opens, with the local config and no prompt", () => {
+    const defaults = runDevSh(["--filter=@scalius/api"]);
+    expect(defaults.stdout).toContain(
+      "[dry-run] cd apps/api && CI=true",
+    );
+    expect(defaults.stdout).toContain(
+      "d1 migrations apply DB --local --config <local api config> --persist-to ../../.wrangler/state",
+    );
+
+    const custom = runDevSh(["--filter=@scalius/api", "--state", "/tmp/scalius-dev-state"]);
+    expect(custom.stdout).toContain("--persist-to /tmp/scalius-dev-state");
+    expect(custom.stdout.indexOf("Applying local D1 migrations")).toBeLessThan(
+      custom.stdout.indexOf("Starting API worker"),
+    );
+  });
+
   it.each([
     [["--api-port", "abc"], /API port .* must be a TCP port/],
     [["--admin-port", "70000"], /Admin port .* must be a TCP port/],
