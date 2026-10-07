@@ -45,7 +45,7 @@ export function PriceListsList() {
         </Card>
       ) : rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Tag} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
+          <EmptyState icon={Tag} title={t("emptyTitle")} description={t("emptyBody")} action={create} help />
         </Card>
       ) : (
         <Card className="overflow-clip">

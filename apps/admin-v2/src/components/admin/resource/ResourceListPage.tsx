@@ -393,7 +393,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       {nothingYet ? (
         <div className="overflow-clip rounded-xl bg-card shadow-card">
           {tabBar}
-          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} />
+          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} help />
         </div>
       ) : (
       <DataTable
