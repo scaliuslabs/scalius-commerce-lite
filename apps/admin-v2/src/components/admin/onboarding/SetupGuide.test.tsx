@@ -31,7 +31,7 @@ const NOTHING_DONE: SetupGuideData = {
   steps: { product: false, details: false, theme: false, payments: false, shipping: false, domain: false, order: false },
   bangladeshPack: null,
 };
-const guide = (patch: Partial<SetupGuideData> & { steps?: Partial<SetupGuideData["steps"]> } = {}): SetupGuideData => ({
+const guide = (patch: Partial<Omit<SetupGuideData, "steps">> & { steps?: Partial<SetupGuideData["steps"]> } = {}): SetupGuideData => ({
   ...NOTHING_DONE,
   ...patch,
   steps: { ...NOTHING_DONE.steps, ...patch.steps },
