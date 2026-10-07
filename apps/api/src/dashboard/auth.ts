@@ -101,31 +101,38 @@ export interface DashboardSessionState {
     permissions: string[] | null;
   };
   /**
-   * No session, but this browser still holds a signed one that someone else
-   * ended (suspended, removed, or signed out from another device): the
-   * sign-in page says so. Never set by the person's own sign-out, which
-   * clears the cookie, nor by a session that simply expired.
+   * No session, but this browser still holds a signed cookie, so the sign-in
+   * page can say why. "suspended": the session is live but its person is
+   * suspended. "session_ended": the session is gone or ran out (signed out
+   * from another device, ended by the owner, the store's database replaced).
+   * Never set by the person's own sign-out, which clears the cookie, nor for
+   * a forged cookie or none. A revoked role keeps its session, so it never
+   * lands here (the dashboard's no-access page says so).
    */
-  signedOut?: "access_changed";
+  signedOut?: DashboardSignedOutReason;
 }
 
+export type DashboardSignedOutReason = "session_ended" | "suspended";
+
 /**
- * Whether the browser's signed session cookie names a session that was
- * deleted, or whose person was suspended, rather than one that ran out.
- * The cookie's signature proves this browser was signed in; nothing about
- * any other account is revealed.
+ * Why the browser's signed session cookie no longer opens a session, or null
+ * when it carries none. The cookie's signature proves this browser was signed
+ * in; nothing about any other account is revealed.
  */
-async function sessionEndedByAccessChange(db: ReturnType<typeof getDb>, request: Request, env: Env): Promise<boolean> {
+async function signedOutReason(db: ReturnType<typeof getDb>, request: Request, env: Env): Promise<DashboardSignedOutReason | null> {
   const token = await getAdminSessionTokenFromCookieHeader(request.headers.get("cookie") ?? undefined, env.BETTER_AUTH_SECRET);
-  if (!token) return false;
+  if (!token) return null;
   const row = await retryTransientD1(() =>
     db
-      .select({ expiresAt: sessionTable.expiresAt })
+      .select({ expiresAt: sessionTable.expiresAt, banned: userTable.banned, banExpires: userTable.banExpires })
       .from(sessionTable)
+      .leftJoin(userTable, eq(userTable.id, sessionTable.userId))
       .where(eq(sessionTable.token, token))
       .get(),
   );
-  return !row || row.expiresAt.getTime() > Date.now();
+  const now = Date.now();
+  if (!row || row.expiresAt.getTime() <= now) return "session_ended";
+  return row.banned === true && !(row.banExpires && row.banExpires.getTime() <= now) ? "suspended" : "session_ended";
 }
 
 /** Everything the dashboard route guards decide from, in one read. */
@@ -145,12 +152,12 @@ export async function readDashboardSessionState(
     env.BETTER_AUTH_SECRET,
   );
   if (!found) {
-    const [adminExists, accessChanged] = await Promise.all([
+    const [adminExists, signedOut] = await Promise.all([
       // A failed read keeps the sign-in form: never offer setup on a guess.
       retryTransientD1(() => adminPrincipalExists(db)).catch(() => true),
-      sessionEndedByAccessChange(db, request, env).catch(() => false),
+      signedOutReason(db, request, env).catch(() => null),
     ]);
-    return { adminExists, signIn, session: null, ...(accessChanged ? { signedOut: "access_changed" as const } : {}) };
+    return { adminExists, signIn, session: null, ...(signedOut ? { signedOut } : {}) };
   }
 
   const { user, session } = found;

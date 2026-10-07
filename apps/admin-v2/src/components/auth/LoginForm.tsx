@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
+import type { DashboardSignedOut } from "~/lib/auth-guards";
 import { authFailureMessage, emailError, type AuthMessage } from "./auth-error";
 import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
 
@@ -18,11 +19,11 @@ export interface LoginFormSignInFacts {
 
 export function LoginForm({ signIn, signedOut }: {
   signIn?: LoginFormSignInFacts;
-  /** Someone else ended this browser's session: say why, before anything is typed. */
-  signedOut?: "access_changed";
+  /** This browser's session is gone or its person is suspended: say which, before anything is typed. */
+  signedOut?: DashboardSignedOut;
 }) {
   const t = useMessages(authMessages);
-  const notice: AuthMessage | null = signedOut ? { key: "accessChanged" } : null;
+  const notice: AuthMessage | null = signedOut ? { key: signedOut === "suspended" ? "suspended" : "sessionEnded" } : null;
   if (signIn?.localLoginDisabled) {
     // The operator's identity provider opens the dashboard; there is nothing to type here.
     return (

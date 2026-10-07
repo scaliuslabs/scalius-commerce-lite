@@ -20,7 +20,7 @@ export const authMessages = defineMessages({
     passwordRequired: "Enter your password",
     invalidCredentials: "Incorrect email or password.",
     suspended: "Your access to this store is suspended. Contact the store owner.",
-    accessChanged: "You were signed out because your access changed. Contact the store owner.",
+    sessionEnded: "Your session ended. Sign in again.",
     ssoDescription: "Your organization manages sign-in for this store.",
     ssoBody: "Open the dashboard from your organization's sign-in page.",
     // Shared errors
@@ -137,7 +137,7 @@ export const authMessages = defineMessages({
     passwordRequired: "আপনার পাসওয়ার্ড দিন",
     invalidCredentials: "ইমেইল বা পাসওয়ার্ড ভুল।",
     suspended: "এই স্টোরে আপনার অ্যাক্সেস স্থগিত করা হয়েছে। স্টোরের মালিকের সাথে যোগাযোগ করুন।",
-    accessChanged: "আপনার অ্যাক্সেস বদলানো হয়েছে, তাই আপনাকে সাইন আউট করা হয়েছে। স্টোরের মালিকের সাথে যোগাযোগ করুন।",
+    sessionEnded: "আপনার সেশন শেষ হয়ে গেছে। আবার সাইন ইন করুন।",
     ssoDescription: "এই স্টোরের সাইন ইন আপনার প্রতিষ্ঠান পরিচালনা করে।",
     ssoBody: "আপনার প্রতিষ্ঠানের সাইন-ইন পেজ থেকে ড্যাশবোর্ড খুলুন।",
     rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",

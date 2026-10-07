@@ -369,9 +369,14 @@ describe("sign-in error states", () => {
     expect(container.textContent).not.toContain("expired");
   });
 
-  it("tells staff whose access was changed why they were signed out, before they type anything", async () => {
-    await render(<LoginForm signedOut="access_changed" />);
-    expect(alertText()).toBe("You were signed out because your access changed. Contact the store owner.");
+  it("says a session that ended or ran out ended, before they type anything", async () => {
+    await render(<LoginForm signedOut="session_ended" />);
+    expect(alertText()).toBe("Your session ended. Sign in again.");
+  });
+
+  it("says a suspended person is suspended, before they type anything", async () => {
+    await render(<LoginForm signedOut="suspended" />);
+    expect(alertText()).toBe("Your access to this store is suspended. Contact the store owner.");
   });
 
   it("tells a suspended staff member why sign-in stopped", async () => {
