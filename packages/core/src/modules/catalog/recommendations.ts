@@ -42,6 +42,7 @@ import {
   resolveProductCardImages,
 } from "../products";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import {
     buyerState,
@@ -110,6 +111,8 @@ export interface ProductRecommendations {
 export interface ProductRecommendationInput {
     productIds?: readonly string[];
     limit?: number;
+    /** A market-keyed read's market pricing (null at the root). */
+    pricing?: MarketPricing | null;
 }
 
 export function normalizeRecommendationSourceIds(ids: readonly string[] | string | undefined): string[] {
@@ -589,7 +592,12 @@ export async function getStorefrontProductRecommendations(
     if (stored) {
         ({ reason, rows } = stored);
         if (rows.length === 0) return { reason, products: [] };
-        mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
+        const storedRows = rows;
+        // A market's list prices (only when one is live) ride beside the media.
+        [mediaMap, rows] = await Promise.all([
+            loadProductMediaProjections(db, storedRows.map((row) => row.id)),
+            marketPriceContextOf(input.pricing).then((market) => priceProductCards(db, market, storedRows)),
+        ]);
     } else {
         const ranked = await rankProductRecommendations(db, { productIds: sourceIds, limit });
         reason = ranked.reason;
@@ -599,7 +607,7 @@ export async function getStorefrontProductRecommendations(
             loadRecommendationCards(db, ids),
             loadProductMediaProjections(db, ids),
         ]);
-        rows = ids.flatMap((id) => cards.get(id) ?? []);
+        rows = await priceProductCards(db, await marketPriceContextOf(input.pricing), ids.flatMap((id) => cards.get(id) ?? []));
         mediaMap = media;
     }
     if (rows.length === 0) return { reason, products: [] };

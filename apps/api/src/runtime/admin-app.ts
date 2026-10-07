@@ -8,7 +8,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
   if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup"].includes(segment)) {
     return "dashboard";
   }
-  if (["categories", "brands", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {
+  if (["categories", "brands", "price-lists", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {
     return "catalog";
   }
   if (["customers", "discounts", "shipments", "orders", "conversations", "taxes", "gift-cards", "warranty-claims"].includes(segment)) {

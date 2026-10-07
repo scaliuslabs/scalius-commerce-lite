@@ -31,9 +31,11 @@ import {
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import {
+  checkoutPresenceSchema,
   getCustomerSessionTokenFromRequest,
   giftCardHandlesSchema,
   giftCardIssueSchema,
+  lazySessionCustomerId,
   persistedStorefrontVariantIdSchema,
   storefrontShippingMethodSnapshotSchema,
 } from "./shared";
@@ -122,6 +124,7 @@ const cartValidationRoute = createRoute({
             shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** A delivery or pickup rate. A pickup rate needs no city or zone. */
             shippingMethodId: z.string().optional().nullable(),
+            presence: checkoutPresenceSchema,
             giftCards: giftCardHandlesSchema,
           }),
         },
@@ -270,6 +273,13 @@ app.openapi(cartValidationRoute, async (c) => {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
+    // The buyer's country, else the page's presence, prices the cart (MARKETS-DESIGN D5).
+    market: {
+      presence: data.presence,
+      shippingCountryCode: data.shippingCountryCode,
+      customerId: lazySessionCustomerId(c, (token) =>
+        getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
+    },
   });
   const propertiesHashes = await storefrontLinePropertiesHashes(result);
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);

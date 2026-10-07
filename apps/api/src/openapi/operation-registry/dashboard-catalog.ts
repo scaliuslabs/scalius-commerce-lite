@@ -1,4 +1,4 @@
-// Agent operation registry rows for the dashboard product, category, collection and attribute routes.
+// Agent operation registry rows for the dashboard product, price list, category, collection and attribute routes.
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_CATALOG_OPERATIONS = {
@@ -81,6 +81,14 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     revision: "required",
   },
   "dashboard.product_variants.update": { revision: "required" },
+  // Price lists (MARKETS-DESIGN D5): a market's, a segment's or a sale's fixed prices.
+  "dashboard.price_lists.create": {},
+  "dashboard.price_lists.delete": { risk: "destructive", revision: "required" },
+  "dashboard.price_lists.get": {},
+  "dashboard.price_lists.list": {},
+  "dashboard.price_lists.prices_list": {},
+  "dashboard.price_lists.prices_set": { revision: "required", limits: { request: 262_144 } },
+  "dashboard.price_lists.update": { revision: "required" },
   "dashboard.products.bulk_delete": {
     risk: "destructive",
     revision: "required",

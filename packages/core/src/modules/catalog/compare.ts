@@ -19,6 +19,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { loadProductMediaProjections, presentBuyerPricing, resolveProductCardImages } from "../products";
+import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import {
     buyerState,
@@ -193,6 +194,7 @@ export function normalizeCompareIds(raw: string | readonly string[]): string[] {
 export async function getStorefrontProductComparison(
     db: Database,
     requestedIds: readonly string[],
+    pricing: MarketPricing | null = null,
 ): Promise<StorefrontProductComparison> {
     const ids = [...new Set(requestedIds)].slice(0, MAX_COMPARE_PRODUCTS);
     if (ids.length === 0) return { products: [], groups: [] };
@@ -231,7 +233,9 @@ export async function getStorefrontProductComparison(
         loadProductMediaProjections(db, ids),
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(cards[0]?.storeCurrencyCode);
-    const byId = new Map(cards.map((card) => [card.id, card]));
+    // The cards in the page's market (a neutral market leaves them as read).
+    const priced = await priceProductCards(db, await marketPriceContextOf(pricing), cards);
+    const byId = new Map(priced.map((card) => [card.id, card]));
     const shown = ids.filter((id) => byId.has(id));
     // Every requested id (a hidden one shows once public), the cards' images
     // and brands, the stored band, and the spec definitions and groups.

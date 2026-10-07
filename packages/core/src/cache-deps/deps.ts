@@ -126,6 +126,11 @@ export const deps = {
   backupMarketPricing: (): void => declare(cacheDep.backupMarketPricing()),
   /** `mk:selling`: the set of countries the active markets sell to (no market name, handle or presence reaches it). */
   sellingCountries: (): void => declare(cacheDep.sellingCountries()),
+  /** `pl:<id>`: how one market prices (its FX policy and its active public price lists). */
+  marketPricing: (marketId: Id): void => declareOne(cacheDep.marketPricing, marketId),
+  /** `pl:<market>:<product>`: the active public list prices of these products' SKUs in one market. */
+  marketProductPricing: (marketId: string, productIds: Iterable<Id>): void =>
+    declareEach((productId) => cacheDep.marketProductPricing(marketId, productId), productIds),
 
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */

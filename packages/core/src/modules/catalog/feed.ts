@@ -33,6 +33,14 @@ import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
+import {
+    marketListPricesSql,
+    marketPriceContextOf,
+    priceProductSkus,
+    type CatalogDiscountColumns,
+    type MarketPriceContext,
+    type MarketPricing,
+} from "../price-lists";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
@@ -188,6 +196,16 @@ interface StorefrontFeedVariantMap {
     variants: Map<string, StorefrontFeedProductVariant[]>;
     /** Products that also have live service or digital SKUs, left out of the feed. */
     productsWithNonPhysicalSkus: Set<string>;
+    /** In a priced market: each product's own price fields (its card's). */
+    productPrices: Map<string, CatalogDiscountColumns>;
+}
+
+/** How a presence's feed prices its SKUs (MARKETS-DESIGN D5). */
+interface FeedMarketPricing {
+    pricing: MarketPricing;
+    /** Each product's own discount, which its SKUs without one take. */
+    productDiscounts: ReadonlyMap<string, CatalogDiscountColumns>;
+    incrementMinor: number;
 }
 
 async function readStorefrontFeedAttributeMap(
@@ -253,9 +271,10 @@ async function readStorefrontFeedVariantMap(
     decimalPlaces: number,
     mediaMapPromise: Promise<Map<string, ProductMediaProjection[]>> =
         loadProductMediaProjections(db, productIds),
+    marketPricing: FeedMarketPricing | null = null,
 ): Promise<StorefrontFeedVariantMap> {
     if (productIds.length === 0) {
-        return { variants: new Map(), productsWithNonPhysicalSkus: new Set() };
+        return { variants: new Map(), productsWithNonPhysicalSkus: new Set(), productPrices: new Map() };
     }
 
     const rows: StorefrontFeedVariantRow[] = [];
@@ -289,6 +308,8 @@ async function readStorefrontFeedVariantMap(
                 discountAmountMinor: productVariants.discountAmountMinor,
                 deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
                 fulfillmentKind: productVariants.fulfillmentKind,
+                // A presence's market list prices ride on the SKU rows (none at the root).
+                ...(marketPricing ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: marketPricing.pricing.presence }) } : {}),
             })
             .from(productVariants)
             .where(and(
@@ -305,12 +326,14 @@ async function readStorefrontFeedVariantMap(
         productsWithNonPhysicalSkus.add(row.productId);
         return false;
     });
-    const [selectedOptionMap, mediaMap] = await Promise.all([
+    const [selectedOptionMap, mediaMap, market] = await Promise.all([
         loadVariantSelectedOptions(db, physicalRows.map((row) => row.id)),
         mediaMapPromise,
+        marketPriceContextOf(marketPricing?.pricing),
     ]);
+    const { rows: pricedRows, productPrices } = feedRowsInMarket(market, physicalRows, marketPricing);
     const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
-    for (const { fulfillmentKind: _fulfillmentKind, ...row } of physicalRows) {
+    for (const { fulfillmentKind: _fulfillmentKind, ...row } of pricedRows) {
         const resolvedImage = resolveSkuImageRepresentation(
             mediaMap.get(row.productId) ?? [],
             row.imageId,
@@ -327,7 +350,22 @@ async function readStorefrontFeedVariantMap(
         variantMap.set(row.productId, variants);
     }
 
-    return { variants: variantMap, productsWithNonPhysicalSkus };
+    return { variants: variantMap, productsWithNonPhysicalSkus, productPrices };
+}
+
+/** Feed SKU rows in the page's market (`priceProductSkus`); a neutral market keeps them as read. */
+function feedRowsInMarket(
+    market: MarketPriceContext | null,
+    rows: readonly StorefrontFeedVariantRow[],
+    marketPricing: FeedMarketPricing | null,
+): { rows: StorefrontFeedVariantRow[]; productPrices: Map<string, CatalogDiscountColumns> } {
+    const priced = priceProductSkus(
+        marketPricing ? market : null,
+        marketPricing?.productDiscounts ?? new Map(),
+        rows as ReadonlyArray<StorefrontFeedVariantRow & { listPrices?: string | null }>,
+        marketPricing?.incrementMinor ?? 1,
+    );
+    return { rows: priced.skus as StorefrontFeedVariantRow[], productPrices: priced.productPrices };
 }
 
 /**
@@ -338,6 +376,7 @@ async function readStorefrontFeedVariantMap(
 export async function getStorefrontFeedProducts(
     db: Database,
     params: StorefrontFeedProductFilterInput,
+    marketPricing: MarketPricing | null = null,
 ): Promise<StorefrontFeedProductPage> {
     const {
         page = 1,
@@ -368,9 +407,13 @@ export async function getStorefrontFeedProducts(
     }
     // The projection passed here only selects SKU-level price-range filters;
     // the page query itself never joins it (see below).
+    // A price filter in a market prices its bounds in the market first (FX).
+    const boundsMarket = marketPricing && (params.minPrice !== undefined || params.maxPrice !== undefined)
+        ? await marketPricing.context
+        : null;
     conditions.push(...buildStorefrontProductConditions(db, {
         ...params,
-        ...priceFilterBoundsMinor(params),
+        ...priceFilterBoundsMinor(params, boundsMarket),
     }, {
         includeLookupHandles: true,
         includeVariantLookups: true,
@@ -441,7 +484,13 @@ export async function getStorefrontFeedProducts(
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
-        readStorefrontFeedVariantMap(db, productIds, decimalPlaces, mediaMapPromise),
+        readStorefrontFeedVariantMap(db, productIds, decimalPlaces, mediaMapPromise, marketPricing
+            ? {
+                pricing: marketPricing,
+                productDiscounts: new Map(productsList.map((product) => [product.id, product])),
+                incrementMinor: storeCurrencyFromSql(productsList[0]?.storeCurrencyCode, productsList[0]?.storePriceIncrementMinor).priceIncrementMinor,
+            }
+            : null),
         loadProductOptions(db, productIds),
         productIds.length > 0
             ? db.select({
@@ -469,6 +518,8 @@ export async function getStorefrontFeedProducts(
         );
         const product = {
             ...productRow,
+            // In a priced market the product's price is its card's (its SKUs carry their own).
+            ...feedVariants.productPrices.get(productRow.id),
             hasCustomerOptions: pricing?.hasCustomerOptions ?? 0,
             availableForSale: availableForSale ? 1 : 0,
         };

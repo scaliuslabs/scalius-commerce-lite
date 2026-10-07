@@ -53,6 +53,7 @@ import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     getCustomerSessionTokenFromRequest,
     giftCardHandlesSchema,
+    lazySessionCustomerId,
     persistedStorefrontVariantIdSchema,
     scheduleCheckoutSuccessRecoveryHints,
     scheduleCheckoutFailureStatusHint,
@@ -482,6 +483,11 @@ app.openapi(createOrderRoute, async (c) => {
         shippingMethodId: data.shippingMethodId,
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
+        // The order's market prices the lines (MARKETS-DESIGN D5); the
+        // session is read only when a segment price list applies.
+        billingCountryCode: data.billingCountryCode,
+        customerId: lazySessionCustomerId(c, (token) =>
+          getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
       },
       getCredentialEncryptionKey(c.env as Record<string, unknown>),
       // App payment providers join from the registrations the read batch carries.

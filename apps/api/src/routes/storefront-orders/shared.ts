@@ -120,6 +120,34 @@ export function getCustomerSessionTokenFromRequest(c: { req: { header: (name: st
   return getSessionCookie(c.req.header("Cookie") ?? null);
 }
 
+/**
+ * The signed-in buyer's customer id for segment price lists, read only when
+ * awaited (`resolveCheckoutPriceScope` awaits it only when a segment list
+ * prices one of the cart's SKUs), and at most once. A guest, or a session
+ * that cannot be read, is no customer.
+ */
+export function lazySessionCustomerId(
+  c: { req: { header: (name: string) => string | undefined } },
+  read: (token: string) => Promise<{ customerId?: string | null } | null>,
+): PromiseLike<string | null> {
+  let pending: Promise<string | null> | null = null;
+  return {
+    then(onFulfilled, onRejected) {
+      pending ??= (async () => {
+        const token = getCustomerSessionTokenFromRequest(c);
+        if (!token) return null;
+        return (await read(token).catch(() => null))?.customerId ?? null;
+      })();
+      return pending.then(onFulfilled, onRejected);
+    },
+  };
+}
+
+/** A storefront page's subfolder presence in a checkout body (`en-in`); its market prices the cart. */
+export const checkoutPresenceSchema = z.string().regex(/^[a-z]{2}-[a-z]{2}$/).optional().nullable().openapi({
+  description: "The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root.",
+});
+
 // ─── GET /receipt/:id ───────────────────────────────────────────────────────
 
 export const receiptSupportRequestSchema = z.object({

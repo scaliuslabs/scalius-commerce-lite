@@ -13,6 +13,9 @@ import {
   type StorefrontProductFilterInput,
 } from "../products";
 import type { Database } from "@scalius/database/client";
+import { maxBaseForFxPrice, minBaseForFxPrice } from "@scalius/shared/market-pricing";
+import { toMinor } from "@scalius/shared/money";
+import type { MarketPriceContext } from "../price-lists";
 import { reviewsEnabledSql } from "../settings";
 import { publicCategoryConditions } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
@@ -101,10 +104,38 @@ function buildProductLookupCondition(
 
 /** Decimal HTTP price-filter bounds in store minor units. */
 /** Decimal price filters as store minor units, resolved in SQL (no separate currency read). */
-export function priceFilterBoundsMinor(params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">) {
+export function priceFilterBoundsMinor(
+    params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">,
+    market: MarketPriceContext | null = null,
+) {
+    if (market?.fx) return fxPriceFilterBoundsMinor(params, market);
     const bound = (value: number | undefined) =>
         value === undefined || !Number.isFinite(value) ? undefined : storeDecimalToMinorSql(Math.max(0, value));
     return { minPriceMinor: bound(params.minPrice), maxPriceMinor: bound(params.maxPrice) };
+}
+
+/**
+ * A buyer's price bounds in an FX market as base-price bounds: FX-derived
+ * prices never fall as the base rises, so "at most M" in the market is "at
+ * most the largest base whose market price is M or less" (exact, no
+ * rounding error). Fixed list prices do not move the bounds (documented).
+ */
+function fxPriceFilterBoundsMinor(params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">, market: MarketPriceContext) {
+    const conversion = market.fx!;
+    const minor = (value: number | undefined) => {
+        if (value === undefined || !Number.isFinite(value)) return undefined;
+        try {
+            return toMinor(Math.max(0, value), market.decimalPlaces);
+        } catch {
+            return undefined;
+        }
+    };
+    const min = minor(params.minPrice);
+    const max = minor(params.maxPrice);
+    return {
+        minPriceMinor: min === undefined ? undefined : sql<number>`${minBaseForFxPrice(min, conversion)}`,
+        maxPriceMinor: max === undefined ? undefined : sql<number>`${maxBaseForFxPrice(max, conversion)}`,
+    };
 }
 
 export function buildStorefrontProductConditions(

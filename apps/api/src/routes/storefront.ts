@@ -58,7 +58,8 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
-import { marketMatrixSchema } from "../schemas/markets";
+import { marketMatrixSchema, marketPresenceQuerySchema } from "../schemas/markets";
+import { assertOnlyPresenceQuery, publicMarketPricing } from "../utils/public-market";
 import { readMarketMatrix } from "@scalius/core/modules/markets";
 import { publicPageDetailSchema } from "../schemas/custom-fields";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
@@ -365,7 +366,8 @@ const homepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Get the published theme's homepage data (SEO and what its sections show)",
   description:
-    "Takes no parameters: a query string is rejected, so the generation-cached read has exactly one cache entry and callers cannot choose which products it reads.",
+    "Takes only the page's market presence (`presence`, such as `en-in`; none: the root, the backup market), whose market prices the cards: any other query string is rejected, so the cached read has one entry per presence and callers cannot choose which products it reads.",
+  request: { query: marketPresenceQuerySchema },
   responses: {
     200: {
       description: "Homepage data",
@@ -403,9 +405,9 @@ function executionContextOf(c: Context<{ Bindings: Env }>): ExecutionContext {
 }
 
 app.openapi(homepageRoute, async (c) => {
-  if (new URL(c.req.url).search) throw new ValidationError("The homepage read takes no query parameters");
+  assertOnlyPresenceQuery(c.req.url, "The homepage read takes no query parameters");
   const db = c.get("db");
-  const data = await getHomepageData(db, { renderApps: homeAppRenderer(c) }) as unknown as HomepageData;
+  const data = await getHomepageData(db, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) }) as unknown as HomepageData;
   return ok(c, data);
 });
 
@@ -417,7 +419,7 @@ const landingPageRoute = createRoute({
   operationId: "storefront.landing.get",
   tags: ["Storefront"],
   summary: "Get a published landing page: its title, description and its sections' data",
-  request: { params: z.object({ slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100) }) },
+  request: { params: z.object({ slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100) }), query: marketPresenceQuerySchema },
   responses: {
     200: {
       description: "Landing page and its bounded section data",
@@ -437,8 +439,8 @@ const landingPageRoute = createRoute({
   },
 });
 app.openapi(landingPageRoute, async (c) => {
-  if (new URL(c.req.url).search) throw new ValidationError("The landing page read takes no query parameters");
-  const data = await getLandingPageData(c.get("db"), c.req.valid("param").slug, { renderApps: homeAppRenderer(c) });
+  assertOnlyPresenceQuery(c.req.url, "The landing page read takes no query parameters");
+  const data = await getLandingPageData(c.get("db"), c.req.valid("param").slug, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) });
   if (!data) throw new NotFoundError("Landing page not found");
   return ok(c, { title: data.landing.title, description: data.landing.description, sections: data.sections });
 });

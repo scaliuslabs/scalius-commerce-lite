@@ -453,6 +453,7 @@ export async function mutateAgentStorefrontCart(
     const proposedValidation = await validateStorefrontCartItems(db, proposedIdentity, {
       currencyCode: currency.code,
       priceIncrementMinor: currency.priceIncrementMinor,
+      market: agentCartMarket(db, current),
     });
     if (!proposedValidation.valid) {
       throw new ValidationError("The proposed storefront cart is not currently valid.", {
@@ -588,6 +589,30 @@ async function resolveProductIdsForCart(
   }));
 }
 
+/**
+ * The market an agent cart prices in: the order's market, as agent checkout
+ * prices it (MARKETS-DESIGN D5): the context's country ships a physical cart
+ * and bills one with nothing physical. The signed-in buyer (segment price
+ * lists) is read only when a segment list applies.
+ */
+function agentCartMarket(db: Database, row: ContextRow) {
+  let customer: Promise<string | null> | null = null;
+  return {
+    placing: true,
+    shippingCountryCode: row.countryCode,
+    billingCountryCode: row.countryCode,
+    customerId: {
+      then<TResult1 = string | null, TResult2 = never>(
+        onFulfilled?: ((value: string | null) => TResult1 | PromiseLike<TResult1>) | null,
+        onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+      ): PromiseLike<TResult1 | TResult2> {
+        customer ??= getLiveContextCustomerId(db, row);
+        return customer.then(onFulfilled, onRejected);
+      },
+    },
+  };
+}
+
 async function loadAgentStorefrontCart(
   db: Database,
   row: ContextRow,
@@ -598,6 +623,7 @@ async function loadAgentStorefrontCart(
   const validation = await validateStorefrontCartItems(db, identityLines, {
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
+    market: agentCartMarket(db, row),
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a

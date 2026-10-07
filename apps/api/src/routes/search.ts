@@ -9,6 +9,8 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   normalizePublicFtsSearchQuery,
 } from "../utils/public-search-query";
+import { marketPresenceQueryField } from "../schemas/markets";
+import { uncachedMarketPricing } from "../utils/public-market";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -53,6 +55,7 @@ function limitPublicSearchResults(
 
 // Schema for search query validation
 const searchQuerySchema = z.object({
+  presence: marketPresenceQueryField,
   q: z.string().max(120).optional().default("").openapi({ description: "Search query" }),
   categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
@@ -170,6 +173,8 @@ app.openapi(searchRoute, async (c) => {
     searchPages,
     searchCategories,
     correctTypos: true,
+    // The page's market prices the hits (an uncached read: no cache key carries it).
+    pricing: uncachedMarketPricing(c),
   });
 
   // Set timeout for the search operation

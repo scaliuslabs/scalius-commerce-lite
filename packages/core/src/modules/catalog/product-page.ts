@@ -10,6 +10,7 @@ import {
   parseStoredEmiSettings,
   presentCatalogPrice,
   presentProductBundleTier,
+  type CatalogPriceMinor,
   type ProductBundleRow,
   productBundleTiersByProduct,
   productEmiOffer,
@@ -45,6 +46,13 @@ import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability"
 import type { Database } from "@scalius/database/client";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
+import {
+    marketListPricesSql,
+    marketPriceContextOf,
+    priceProductSkus,
+    type MarketPriceContext,
+    type MarketPricing,
+} from "../price-lists";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { productPageReviews, reviewStatsSelection } from "./product-reviews";
@@ -82,7 +90,7 @@ function extractFeatures(description: string | null): string[] {
  * Returns full storefront product details (variants, images, attributes, related products)
  * for a single product identified by slug.
  */
-export async function getStorefrontProductBySlug(db: Database, slug: string) {
+export async function getStorefrontProductBySlug(db: Database, slug: string, pricing: MarketPricing | null = null) {
     const productRow = await db
         .select({
             id: products.id,
@@ -230,6 +238,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         fulfillmentKind: productVariants.fulfillmentKind,
         createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
         deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+        // A presence page's market list prices ride on the SKU rows (none at the root).
+        ...(pricing ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: pricing.presence }) } : {}),
     }).from(productVariants)
         .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
         .orderBy(productVariants.createdAt, productVariants.id)
@@ -323,6 +333,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         getStorefrontProductRecommendations(db, {
             productIds: [product.id],
             limit: DEFAULT_RECOMMENDATION_LIMIT,
+            pricing,
         }).then((data) => ({ type: "recommendations", data })),
     );
 
@@ -354,8 +365,18 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     deps.mediaItems(content.blocks.mediaIds);
     deps.anyAttribute();
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; }
-    const typedVariants = variants as VariantResult[];
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; listPrices?: string | null; }
+    // The page's market: its SKUs, "from" price and EMI line in its prices
+    // (a neutral market and the root keep the rows as read).
+    const marketPage = priceProductPageInMarket(
+        await marketPriceContextOf(pricing),
+        product,
+        variants as VariantResult[],
+        storeCurrency.priceIncrementMinor,
+        buyerFromMinor,
+    );
+    const typedVariants = marketPage.variants;
+    const pricedProduct = marketPage.product;
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
         id: item.id,
@@ -393,7 +414,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
     });
-    const productPrice = presentCatalogPrice(product, decimalPlaces);
+    const productPrice = presentCatalogPrice(pricedProduct, decimalPlaces);
     return {
         product: {
             ...productPrice,
@@ -405,7 +426,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
             options: optionMap.get(product.id) ?? [],
-            discountType: product.discountType || "percentage",
+            discountType: pricedProduct.discountType || "percentage",
             freeDelivery: product.freeDelivery || false,
             features: extractFeatures(product.description),
             isGiftCard: product.isGiftCard === true,
@@ -413,7 +434,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             requiresCustomization: customization.requiresCustomization,
             // A malformed schema is a product error: checkout refuses the product.
             customizationUnavailable: customization.invalid,
-            discountedPrice: catalogDiscountedPrice(product, storeCurrency.code, storeCurrency.priceIncrementMinor),
+            discountedPrice: catalogDiscountedPrice(pricedProduct, storeCurrency.code, storeCurrency.priceIncrementMinor),
             attributes,
             additionalInfo,
             offers,
@@ -442,7 +463,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 : null,
             emi: productEmiOffer({
                 emiEligible: emiEligible === true,
-                priceMinor: buyerFromMinor ?? null,
+                priceMinor: marketPage.fromMinor,
                 settings: parseStoredEmiSettings(storeEmiSettings),
                 priceIncrementMinor: storeCurrency.priceIncrementMinor,
                 decimalPlaces,
@@ -452,5 +473,30 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         media: publicMedia,
         variants: formattedVariants,
         recommendations,
+    };
+}
+
+/**
+ * The product page in its market (MARKETS-DESIGN D5): each SKU's price and
+ * discount become its resolved market price (`priceProductSkus`), and the
+ * product's price and "from" price (the EMI line) are its card's. A neutral
+ * market (and the root) returns the rows exactly as read.
+ */
+function priceProductPageInMarket<
+    TProduct extends CatalogPriceMinor & { id: string },
+    TVariant extends CatalogPriceMinor & { id: string; productId: string; isDefault: boolean; optionCombinationKey: string | null; trackInventory: boolean; stock: number; reservedStock: number; listPrices?: string | null },
+>(
+    market: MarketPriceContext | null,
+    product: TProduct,
+    variants: readonly TVariant[],
+    priceIncrementMinor: number,
+    buyerFromMinor: number | null,
+): { product: TProduct; variants: Array<Omit<TVariant, "listPrices">>; fromMinor: number | null } {
+    const priced = priceProductSkus(market, new Map([[product.id, product]]), variants, priceIncrementMinor);
+    const card = priced.productPrices.get(product.id);
+    return {
+        product: card ? { ...product, ...card } : product,
+        variants: priced.skus,
+        fromMinor: card ? card.priceMinor - Number(card.discountAmountMinor ?? 0) : buyerFromMinor ?? null,
     };
 }

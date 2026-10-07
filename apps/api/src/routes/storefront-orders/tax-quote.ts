@@ -247,6 +247,13 @@ app.openapi(taxQuoteRoute, async (c) => {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
+    // The order's market prices the lines, as the order will (MARKETS-DESIGN D5).
+    market: {
+      placing: true,
+      shippingCountryCode: data.shippingCountryCode,
+      billingCountryCode: data.billingCountryCode,
+      customerId: sessionCustomer?.customerId ?? null,
+    },
   });
   if (!cartValidation.valid) {
     throw new ValidationError("Some items in your cart need attention.", {

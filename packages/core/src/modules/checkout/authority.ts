@@ -52,6 +52,7 @@ import {
   selectDeliveryRateRowsByIds,
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
+import { resolveCheckoutPriceScope } from "../price-lists";
 import { backupPriceIncrementSql, sellingCountriesFromSql, sellingCountriesSql, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
@@ -81,6 +82,10 @@ export interface StorefrontCheckoutAuthorityInput {
     shippingMethodId?: string | null;
     customerEmail?: string | null;
     customerPhone?: string | null;
+    /** The billed country: the order's market when nothing physical ships (MARKETS-DESIGN D5). */
+    billingCountryCode?: string | null;
+    /** The signed-in buyer: segment price lists price their members (awaited only when one applies). */
+    customerId?: string | null | PromiseLike<string | null>;
 }
 
 export interface StorefrontCheckoutSettingsAuthority {
@@ -350,14 +355,32 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 throw new Error("Checkout authority revision is unavailable.");
             }
 
-            return inputs.map((input): StorefrontCheckoutAuthorityResolution => {
+            // Each checkout's market prices its lines (the order's market rule);
+            // segment membership is read only when a segment list applies.
+            const priceScopes = await Promise.all(inputs.map((input) => resolveCheckoutPriceScope(db, {
+                items: input.items,
+                productRows,
+                variantRows,
+                currency: { code: currency.currencyCode, incrementMinor: currency.priceIncrementMinor },
+                signals: {
+                    placing: true,
+                    shippingCountryCode: input.shippingCountryCode,
+                    billingCountryCode: input.billingCountryCode,
+                    customerId: input.customerId,
+                },
+            }).catch((error: unknown) => ({ error }))));
+
+            return inputs.map((input, inputIndex): StorefrontCheckoutAuthorityResolution => {
                 try {
+                    const priceScope = priceScopes[inputIndex];
+                    if (priceScope && "error" in priceScope) throw priceScope.error;
                     const cartValidation = resolveStorefrontCartValidationFromRows(
                         input.items,
                         {
                             inventoryPool: input.inventoryPool,
                             currencyCode: currency.currencyCode,
                             priceIncrementMinor: currency.priceIncrementMinor,
+                            priceScope,
                         },
                         productRows,
                         variantRows,
