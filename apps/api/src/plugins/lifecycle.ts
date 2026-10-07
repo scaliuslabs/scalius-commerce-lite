@@ -19,6 +19,8 @@ import {
   PluginError,
   activatePlugin,
   deactivatePlugin,
+  markPluginFailed,
+  pluginNeedsApproval,
   requirePluginInstallation,
   restorePluginRelease,
   uninstallPlugin,
@@ -62,6 +64,17 @@ export async function activatePluginWithHooks(
     handoffError = `${installation.manifest.name} could not move the keys saved before it. Activate it again, or enter them in its settings.`;
   }
   const host = hostFor(context);
+  // Approving an update that waited for more access: the new code loads and
+  // its data updates run now, and a failure puts back the release it replaced.
+  if (pluginNeedsApproval(before) && before.source !== "bundled") {
+    const failure = await startNewRelease(host, installation);
+    if (failure) {
+      const restored = await rollBackApprovedUpdate(context, installation, failure);
+      if (restored) return { installation: restored, hookError: `The update was undone. ${failure}` };
+      await markPluginFailed(context.db, pluginId, failure);
+      return { installation: await requirePluginInstallation(context.db, pluginId), hookError: failure };
+    }
+  }
   let hookError: string | null = null;
   if (before.activatedAt === null) {
     const install = await host.invokeLifecycle(installation, "install");
@@ -117,14 +130,13 @@ export async function updatePluginToRelease(
     expectedRevision: options.expectedRevision,
     signerKeyId: release.signerKeyId,
   });
-  if (updated.status !== "active") return { installation: updated, rolledBack: false, error: null };
-  const host = hostFor(context);
-  const loads = await host.checkLoads(updated);
-  let failure: string | null = loads.ok ? null : `The new version could not start: ${loads.error ?? "unknown error"}`;
-  if (!failure) {
-    const migrated = await host.runPendingMigrations(updated);
-    if (!migrated.ok) failure = `Data update ${migrated.version} failed: ${migrated.error}`;
+  if (updated.status !== "active") {
+    // It waits for a Super Admin: keep the release it replaced so approval can still roll back.
+    if (pluginNeedsApproval(updated)) await saveRollbackPoint(context.env, current);
+    return { installation: updated, rolledBack: false, error: null };
   }
+  const host = hostFor(context);
+  const failure = await startNewRelease(host, updated);
   if (!failure) return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: null };
   const latest = await requirePluginInstallation(context.db, current.pluginId);
   const restored = await restorePluginRelease(context.db, current, {
@@ -132,6 +144,44 @@ export async function updatePluginToRelease(
     reason: `Update to ${release.manifest.version} was rolled back. ${failure}`,
   });
   return { installation: restored, rolledBack: true, error: failure };
+}
+
+/** Loads a new release without running it, then runs its pending data updates; the failure in plain words, or null. */
+async function startNewRelease(host: PluginHost, installation: PluginInstallation): Promise<string | null> {
+  const loads = await host.checkLoads(installation);
+  if (!loads.ok) return `The new version could not start: ${loads.error ?? "unknown error"}`;
+  const migrated = await host.runPendingMigrations(installation);
+  return migrated.ok ? null : `Data update ${migrated.version} failed: ${migrated.error}`;
+}
+
+/** Where the release a waiting update replaced is kept (R2, private prefix; its bundle stays beside it). */
+export function pluginRollbackKey(pluginId: string): string {
+  return `private/plugins/${pluginId}/rollback.json`;
+}
+
+async function saveRollbackPoint(env: Env, previous: PluginInstallation): Promise<void> {
+  try {
+    await env.BUCKET.put(pluginRollbackKey(previous.pluginId), JSON.stringify(previous), { httpMetadata: { contentType: "application/json" } });
+  } catch {
+    console.warn(`[plugins] ${previous.pluginId} rollback point not saved`);
+  }
+}
+
+/** Puts back the release saved when the update started waiting; null when none matches. */
+async function rollBackApprovedUpdate(context: LifecycleContext, installation: PluginInstallation, failure: string): Promise<PluginInstallation | null> {
+  try {
+    const object = await context.env.BUCKET.get(pluginRollbackKey(installation.pluginId));
+    if (!object || !("arrayBuffer" in object)) return null;
+    const previous = JSON.parse(new TextDecoder().decode(await object.arrayBuffer())) as PluginInstallation;
+    if (previous.pluginId !== installation.pluginId || previous.version === installation.version) return null;
+    const latest = await requirePluginInstallation(context.db, installation.pluginId);
+    return await restorePluginRelease(context.db, previous, {
+      expectedRevision: latest.revision,
+      reason: `Update to ${installation.version} was rolled back. ${failure}`,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function uninstallPluginWithHooks(

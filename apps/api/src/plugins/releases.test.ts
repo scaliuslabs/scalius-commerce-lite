@@ -58,8 +58,8 @@ describe("app releases", () => {
     const objects = new Map<string, Uint8Array>();
     env = pluginTestEnv(binding, {
       BUCKET: {
-        put: vi.fn(async (key: string, value: Uint8Array) => {
-          objects.set(key, value);
+        put: vi.fn(async (key: string, value: Uint8Array | string) => {
+          objects.set(key, typeof value === "string" ? new TextEncoder().encode(value) : value);
         }),
         get: vi.fn(async (key: string) => (objects.has(key) ? { arrayBuffer: async () => objects.get(key)!.buffer } : null)),
       },
@@ -216,6 +216,26 @@ describe("app releases", () => {
       expect(result.rolledBack).toBe(true);
       expect(result.error).toMatch(/could not start/);
       expect(await requirePluginInstallation(db, "acme.points")).toMatchObject({ version: "1.0.0", status: "active" });
+    });
+
+    it("rolls back an update that waited for approval when its data update fails on approval", async () => {
+      const v1 = await installV1();
+      const migrations = [{ version: 1, description: "Break" }];
+      modules["2.0.0"] = definePlugin({
+        manifest: manifest("2.0.0", { migrations, permissions: ["orders.view"] }) as never,
+        migrations: { 1: async () => { throw new Error("no"); } },
+      });
+      const waiting = await update(v1, "2.0.0", { migrations, permissions: ["orders.view"] });
+      expect(waiting.installation).toMatchObject({ version: "2.0.0", status: "installed" });
+      const { activatePluginWithHooks } = await import("./lifecycle");
+      const { pluginGrantKey, pluginGrantRequest } = await import("@scalius/shared/plugins");
+      const approved = await activatePluginWithHooks({ db, env, ctx: pluginTestCtx(), loaderFor }, "acme.points", {
+        actorUserId: "owner",
+        expectedRevision: waiting.installation.revision,
+        expectedGrantKey: pluginGrantKey(pluginGrantRequest(waiting.installation.manifest)),
+      });
+      expect(approved.hookError).toMatch(/The update was undone. Data update 1 failed/);
+      expect(approved.installation).toMatchObject({ version: "1.0.0", status: "active", grant: v1.grant });
     });
 
     it("waits for approval when the update asks for more, without running its code", async () => {
