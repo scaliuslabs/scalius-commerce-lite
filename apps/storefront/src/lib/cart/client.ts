@@ -59,6 +59,7 @@ import {
   matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
+  writeReviewedCheckoutQuote,
 } from "../checkout/session-state";
 import {
   fetchAuthoritativeTaxQuote,
@@ -1147,6 +1148,7 @@ export async function updateTotals() {
     if (expectedQuoteFingerprintInput) {
       expectedQuoteFingerprintInput.value = quote.quoteFingerprint;
     }
+    writeReviewedCheckoutQuote(quote);
     setQuoteRuleErrors([]);
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);

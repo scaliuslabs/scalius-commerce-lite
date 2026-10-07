@@ -19,6 +19,7 @@ import {
   readCheckoutPaymentSelection,
   writeCheckoutPaymentSelection,
   writeHostedPaymentRecoverySession,
+  readReviewedCheckoutQuote,
 } from "./session-state";
 import {
   isDepositPaymentRequired,
@@ -243,51 +244,31 @@ function handlePaymentMethodKeyDown(event: KeyboardEvent): void {
 function appendProviderIdentity(
   parent: HTMLElement,
   presentation: GatewayPresentation,
-  gatewayId: string,
 ): void {
-  // A gift card is the tender itself, not a provider: no badge.
-  if (gatewayId === "gift_card" && !presentation.markSrc) return;
+  // One badge size for every method (Shopify's payment rows): a brand's
+  // wordmark fills it, a plain icon sits in its middle.
+  if (!presentation.markSrc) return;
   const identity = document.createElement("span");
   identity.className =
-    "flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2";
+    "flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5";
   identity.setAttribute("aria-hidden", "true");
-
-  if (presentation.markSrc) {
-    const light = document.createElement("img");
-    light.src = presentation.markSrc;
-    light.alt = "";
-    light.width = presentation.markKind === "wordmark" ? 72 : 20;
-    light.height = 24;
-    light.className = presentation.markKind === "wordmark"
-      ? "h-4 max-w-18 object-contain"
-      : "h-5 w-5 object-contain";
-    if (presentation.darkMarkSrc) light.classList.add("dark:hidden");
-    identity.appendChild(light);
-
-    if (presentation.darkMarkSrc) {
-      const dark = document.createElement("img");
-      dark.src = presentation.darkMarkSrc;
-      dark.alt = "";
-      dark.width = 20;
-      dark.height = 20;
-      dark.className = "hidden h-5 w-5 object-contain dark:block";
-      identity.appendChild(dark);
-    }
-    if (presentation.markKind === "icon" && presentation.providerLabel) {
-      appendTextElement(
-        identity,
-        "span",
-        "text-[11px] font-semibold text-foreground",
-        presentation.providerLabel,
-      );
-    }
-  } else {
-    appendTextElement(
-      identity,
-      "span",
-      "text-[11px] font-bold uppercase tracking-wide text-foreground",
-      gatewayId === "cod" ? "COD" : gatewayId.slice(0, 8),
-    );
+  const wordmark = presentation.markKind === "wordmark";
+  const light = document.createElement("img");
+  light.src = presentation.markSrc;
+  light.alt = "";
+  light.width = wordmark ? 52 : 20;
+  light.height = 20;
+  light.className = wordmark ? "h-5 w-full object-contain" : "h-5 w-5 object-contain";
+  if (presentation.darkMarkSrc) light.classList.add("dark:hidden");
+  identity.appendChild(light);
+  if (presentation.darkMarkSrc) {
+    const dark = document.createElement("img");
+    dark.src = presentation.darkMarkSrc;
+    dark.alt = "";
+    dark.width = 20;
+    dark.height = 20;
+    dark.className = "hidden h-5 w-5 object-contain dark:block";
+    identity.appendChild(dark);
   }
   parent.appendChild(identity);
 }
@@ -312,11 +293,7 @@ function appendPaymentMethodContent(
   }
   control.appendChild(copy);
 
-  appendProviderIdentity(
-    control,
-    presentation,
-    gatewayId,
-  );
+  appendProviderIdentity(control, presentation);
 
   if (showRadio) {
     const check = document.createElement("span");
@@ -819,28 +796,26 @@ export function renderOrderSummaryDetails(
   appendCheckoutReview(details, data, quote);
 }
 
-function renderSummary(): void {
-  if (!checkoutData || !checkoutConfig || !authoritativeTaxQuote) return;
+/**
+ * The summary of the page's quote. Before it arrives, the quote the cart
+ * page showed draws it at once (`provisional`, marked busy); the page's own
+ * quote then redraws it, and only that quote enables payment.
+ */
+function renderSummary(quote: CheckoutTaxQuote | null = authoritativeTaxQuote, provisional = false): void {
+  if (!checkoutData || !checkoutConfig || !quote) return;
   const section = document.getElementById("orderSummary");
   const details = document.getElementById("summaryDetails");
   if (!section || !details) return;
 
-  renderOrderSummaryDetails(
-    details,
-    checkoutData,
-    checkoutConfig,
-    authoritativeTaxQuote,
-  );
+  renderOrderSummaryDetails(details, checkoutData, checkoutConfig, quote);
 
   const mobileTotal = document.getElementById("orderSummaryToggleTotal");
   if (mobileTotal) {
     // With gift cards the collapsed summary shows what is left to pay.
-    mobileTotal.textContent = currencyFmt(
-      quoteAmountDue(authoritativeTaxQuote).amountDue,
-      authoritativeTaxQuote,
-    );
+    mobileTotal.textContent = currencyFmt(quoteAmountDue(quote).amountDue, quote);
   }
 
+  section.setAttribute("aria-busy", String(provisional));
   section.classList.remove("hidden");
 }
 
@@ -1594,6 +1569,8 @@ export async function initCheckoutPage(): Promise<void> {
     window.location.replace(existingRecovery!.href);
     return;
   }
+  // The summary the buyer just reviewed, at once; the page's quote follows.
+  renderSummary(readReviewedCheckoutQuote(checkoutData!.expectedQuoteFingerprint), true);
 
   try {
     const { quote, notice } = await fetchQuoteForCheckout();

@@ -57,8 +57,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
     <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:gap-10">
       <aside
         id="orderSummary"
-        class="order-1 hidden overflow-hidden rounded-xl border border-border bg-card lg:order-2 lg:sticky lg:top-6"
+        class="order-1 overflow-hidden rounded-xl border border-border bg-card lg:order-2 lg:sticky lg:top-6"
         aria-label={copy.orderSummaryText}
+        aria-busy="true"
       >
         <button
           id="orderSummaryToggle"
@@ -77,7 +78,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
         </button>
         <div id="summaryPanel" class="hidden border-t border-border p-4 lg:block lg:border-t-0">
           <h2 class="mb-3 hidden text-sm font-semibold text-foreground lg:block">{copy.orderSummaryText}</h2>
-          <div class="space-y-2 text-sm text-muted-foreground" id="summaryDetails"></div>
+          <div class="space-y-2 text-sm text-muted-foreground" id="summaryDetails">
+            {/* Shown until the script draws the reviewed summary (at once) and then the page's quote. */}
+            <div class="h-12 animate-pulse rounded-lg bg-muted/60" aria-hidden="true"></div>
+            <div class="h-4 animate-pulse rounded bg-muted/60" aria-hidden="true"></div>
+            <div class="h-4 animate-pulse rounded bg-muted/60" aria-hidden="true"></div>
+          </div>
         </div>
       </aside>
 

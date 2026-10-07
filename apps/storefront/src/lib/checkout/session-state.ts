@@ -1,10 +1,15 @@
 import { isPaymentMethodIdShape } from "../payment-method-id";
 import { logicalPathname } from "@/lib/presence-url";
+import type { CheckoutTaxQuote } from "./tax-quote-contract";
+
+/** The quote the cart page last showed: the payment page draws its summary from it at once. */
+const REVIEWED_QUOTE_KEY = "scalius_checkout_quote";
 
 const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
   "scalius_checkout_payment_method",
+  REVIEWED_QUOTE_KEY,
   // Gift-card apply handles (gift-cards.ts GIFT_CARD_STORAGE_KEY): gone with the checkout.
   "scalius_checkout_gift_cards",
 ] as const;
@@ -89,6 +94,32 @@ const LEGACY_ANALYTICS_PII_KEYS = [
 function removeSessionKeys(keys: readonly string[]): void {
   for (const key of keys) {
     sessionStorage.removeItem(key);
+  }
+}
+
+/** Keeps the authoritative quote the cart page shows (it never leaves the browser). */
+export function writeReviewedCheckoutQuote(quote: CheckoutTaxQuote): void {
+  try {
+    sessionStorage.setItem(REVIEWED_QUOTE_KEY, JSON.stringify(quote));
+  } catch {
+    // Storage blocked: the payment page waits for its own quote.
+  }
+}
+
+/**
+ * The quote the cart page showed for this checkout (its fingerprint is the
+ * one the buyer reviewed), else null. Only drawn, never sent: the payment
+ * page prices the order again before any payment action.
+ */
+export function readReviewedCheckoutQuote(expectedFingerprint: unknown): CheckoutTaxQuote | null {
+  if (typeof expectedFingerprint !== "string" || !expectedFingerprint) return null;
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(REVIEWED_QUOTE_KEY) ?? "null") as Partial<CheckoutTaxQuote> | null;
+    if (!parsed || typeof parsed !== "object" || parsed.quoteFingerprint !== expectedFingerprint) return null;
+    if (!Array.isArray(parsed.items) || !Array.isArray(parsed.discounts) || typeof parsed.totalAmount !== "number") return null;
+    return parsed as CheckoutTaxQuote;
+  } catch {
+    return null;
   }
 }
 

@@ -70,6 +70,8 @@ export const manifest = {
     payment: [{
       id: "bkash",
       name: "bKash",
+      // The checkout mark: the logo cropped to its art (the listing icon keeps the padded canvas).
+      icon: "assets/mark.svg",
       checkoutName: "bKash",
       flow: "hosted",
       chargeCurrencies: ["BDT"],
