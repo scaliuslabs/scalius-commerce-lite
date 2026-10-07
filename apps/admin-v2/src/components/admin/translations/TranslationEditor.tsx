@@ -4,10 +4,9 @@
 // a product's options and values, machine translation through an app, save
 // and delete. It loads on demand (the list and resource pages download it
 // only when it is opened).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Languages } from "lucide-react";
-import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { RichContent } from "~/components/ui/rich-content";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -51,6 +50,19 @@ export interface TranslationEditorProps {
   canEdit: boolean;
   /** Inside a resource page's card: no card frame of its own. */
   embedded?: boolean;
+  /**
+   * The rich text editor for HTML fields. A resource page passes its own
+   * (it already loads one); Translate & adapt edits the HTML itself, so the
+   * screen never downloads the rich text editor's toolbar.
+   */
+  richTextEditor?: ComponentType<RichTextEditorProps>;
+}
+
+export interface RichTextEditorProps {
+  content: string;
+  onChange: (content: string) => void;
+  compact?: boolean;
+  ariaLabel?: string;
 }
 
 export function TranslationEditor(props: TranslationEditorProps) {
@@ -83,7 +95,7 @@ function EditorSkeleton({ embedded }: { embedded: boolean }) {
   return embedded ? <div className="space-y-4">{rows}</div> : <Card className="space-y-4 p-4">{rows}</Card>;
 }
 
-function EditorForm({ type, id, locale, marketId, canEdit, embedded, view }: TranslationEditorProps & { view: ResourceTranslationsView }) {
+function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEditor, view }: TranslationEditorProps & { view: ResourceTranslationsView }) {
   const t = useMessages(translationsMessages);
   const uiLocale = useLocale();
   const providers = useQuery(translationProvidersQueryOptions());
@@ -150,6 +162,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, view }: Tra
             disabled={!canEdit}
             sourceName={sourceName}
             targetName={targetName}
+            richTextEditor={richTextEditor}
           />
         ))}
         {view.resource.sourceSlug !== null ? (
@@ -240,7 +253,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, view }: Tra
   );
 }
 
-function FieldRow({ row, first, value, onChange, disabled, sourceName, targetName }: {
+function FieldRow({ row, first, value, onChange, disabled, sourceName, targetName, richTextEditor: RichTextEditor }: {
   row: TranslationRow;
   first: boolean;
   value: string;
@@ -248,6 +261,7 @@ function FieldRow({ row, first, value, onChange, disabled, sourceName, targetNam
   disabled: boolean;
   sourceName: string;
   targetName: string;
+  richTextEditor?: ComponentType<RichTextEditorProps>;
 }) {
   const t = useMessages(translationsMessages);
   const label = t(row.label.key as "field_name", row.label.vars);
@@ -274,7 +288,14 @@ function FieldRow({ row, first, value, onChange, disabled, sourceName, targetNam
           {row.kind === "html" ? (
             disabled
               ? <div className="rounded-lg border px-3 py-2"><RichContent content={value} /></div>
-              : <DeferredTiptapEditor content={value} onChange={onChange} compact ariaLabel={label} />
+              : RichTextEditor
+                ? <RichTextEditor content={value} onChange={onChange} compact ariaLabel={label} />
+                : (
+                  <>
+                    <Textarea id={inputId} value={value} onChange={(event) => onChange(event.target.value)} maxLength={row.max} rows={6} />
+                    <span className="text-body text-muted-foreground">{t("htmlSourceHint")}</span>
+                  </>
+                )
           ) : row.kind === "text" ? (
             <Textarea id={inputId} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={row.max} rows={3} />
           ) : (

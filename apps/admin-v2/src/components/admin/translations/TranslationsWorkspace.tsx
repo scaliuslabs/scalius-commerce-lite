@@ -34,8 +34,9 @@ import { cn } from "@scalius/shared/utils";
 import { STATUS_BADGE, TYPE_LABEL_KEYS, languageName } from "./translation-form";
 import { canEditTranslations } from "./translation-permissions";
 
-// The same download as a resource page's Translations card: one lazy chunk for the editor.
-const TranslationEditor = lazy(() => import("./ResourceTranslationsCard").then((module) => ({ default: module.TranslationEditor })));
+// The editor downloads when the first item opens. It edits HTML fields as
+// HTML here: the rich text editor stays with the resource pages that load it.
+const TranslationEditor = lazy(() => import("./TranslationEditor").then((module) => ({ default: module.TranslationEditor })));
 
 const text = (value: unknown, max: number) => typeof value === "string" && value && value.length <= max ? value : undefined;
 

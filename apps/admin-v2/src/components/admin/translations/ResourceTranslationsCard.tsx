@@ -11,10 +11,8 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useLocale, useMessages } from "~/i18n";
 import { translationsMessages } from "~/i18n/translations";
 import { storeLanguagesQueryOptions, type TranslationEditorType } from "~/lib/api-query-options/translations";
+import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { TranslationEditor } from "./TranslationEditor";
-
-// Translate & adapt loads the editor through this module too (one lazy chunk).
-export { TranslationEditor };
 import { languageName } from "./translation-form";
 import { canEditTranslations } from "./translation-permissions";
 
@@ -55,6 +53,7 @@ export function ResourceTranslationsCard({ type, id }: { type: TranslationEditor
                   marketId={null}
                   canEdit={canEditTranslations(permissions.hasPermission, type)}
                   embedded
+                  richTextEditor={DeferredTiptapEditor}
                 />
               ) : null}
             </TabsContent>
