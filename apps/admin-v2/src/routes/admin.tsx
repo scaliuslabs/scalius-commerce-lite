@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo } from "react";
 import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
@@ -24,6 +24,10 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
+import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
+
+// Asks the API what the store uses once the first page is up.
+const StoreReachProbe = lazy(() => import("~/lib/store-reach-probe"));
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -68,6 +72,10 @@ function AdminLayout() {
   // Active apps' pages join the section their placement names (apps.view only).
   const appPages = useAppNavPages(canOpen("/admin/apps"));
   const nav = useMemo(() => visibleNav(canOpen, appPages), [canOpen, appPages]);
+  // Search finds every page; the sidebar lists the advanced ones (Price lists,
+  // Translate & adapt) once the store uses them.
+  const reach = useStoreReach();
+  const sidebarNav = useMemo(() => withoutUnusedPages(nav, reach), [nav, reach]);
   useWarmEverydayRouteCode(canOpen);
   // The theme editor is a workspace of its own (Shopify's): the frame steps aside.
   // So is the new-store setup step (Shopify's "Tell us about your store").
@@ -103,6 +111,9 @@ function AdminLayout() {
           {t("skipToContent")}
         </a>
         <GlobalSearch nav={nav} canOpen={canOpen} />
+        <Suspense fallback={null}>
+          <StoreReachProbe languages={canOpen("/admin/translations")} priceLists={canOpen("/admin/price-lists")} />
+        </Suspense>
         {/* Shopify's frame: the near-black navigation and top bar, and the
             page on a rounded canvas inset from them (square-cornered edge to
             edge on phones). The frame never scrolls: `main` is the only
@@ -111,7 +122,7 @@ function AdminLayout() {
             can't grow the document (clip, unlike hidden, can't be scrolled by
             focus either). */}
         <div className="flex h-svh overflow-clip bg-sidebar text-sidebar-foreground print:h-auto print:overflow-visible print:bg-transparent">
-          <AppSidebar nav={nav} user={user} showSettings={canOpen(SETTINGS_ITEM.to)} />
+          <AppSidebar nav={sidebarNav} user={user} showSettings={canOpen(SETTINGS_ITEM.to)} />
           <div className="flex min-w-0 flex-1 flex-col">
             <AdminHeader user={user} />
             <div className="relative flex min-h-0 flex-1 flex-col overflow-clip rounded-t-xl bg-background text-foreground md:mb-2 md:ms-2 md:me-2 md:rounded-xl nav:ms-0 print:m-0 print:overflow-visible">

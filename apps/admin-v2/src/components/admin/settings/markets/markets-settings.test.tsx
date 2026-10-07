@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 /**
  * Settings › Markets (docs/MARKETS-DESIGN.md D4): the list, and one market's
- * page saving under its revision. The backup market keeps the root URL and
- * owns the price increment; another market sells at a subfolder and uses
- * the backup market's increment; each country belongs to one market.
+ * page saving under its revision. The primary (backup) market keeps the root
+ * URL and owns the price format; another market sells at a subfolder, behind
+ * "Web address and handle"; each country belongs to one market.
  */
 import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,6 +17,7 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminSettingsMarkets: vi.fn(),
   deleteApiV1AdminSettingsMarketsById: vi.fn(),
   getApiV1AdminSettingsMarketsCurrencies: vi.fn(),
+  getApiV1AdminSettingsLanguages: vi.fn(),
 }));
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -140,6 +141,10 @@ describe("markets settings", () => {
     root = createRoot(container);
     // A one-currency store: only cash on delivery, which charges no other currency.
     sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: ["BDT"], marketCurrencies: [] }));
+    sdk.getApiV1AdminSettingsLanguages.mockImplementation(() => envelope({ items: [
+      { locale: "bn", published: true, isDefault: true, presences: [""], translatedResources: 0 },
+      { locale: "en", published: true, isDefault: false, presences: [], translatedResources: 4 },
+    ] }));
     sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [backup, { ...india, presence: { value: "en-in", locale: "en" } }] }));
     sdk.getApiV1AdminSettingsMarketsById.mockImplementation(({ path: { id } }: { path: { id: string } }) =>
       envelope({ market: id === "mkt_backup" ? backup : india }));
@@ -175,24 +180,38 @@ describe("markets settings", () => {
   const switchNamed = (text: string) =>
     [...container.querySelectorAll("label")].find((label) => label.textContent?.includes(text))!.querySelector<HTMLButtonElement>("button[role=switch]")!;
 
-  it("lists each market with its status, countries, currency and web presence, the backup labelled", async () => {
+  it("lists each market with its status, countries and currency, the primary one labelled", async () => {
     await render(<MarketsList />);
     await vi.waitFor(() => expect(container.querySelectorAll("tbody tr")).toHaveLength(2));
     const [first, second] = [...container.querySelectorAll("tbody tr")].map((row) => row.textContent);
     expect(first).toContain("Bangladesh");
-    expect(first).toContain("Backup");
+    expect(first).toContain("Primary");
     expect(first).toContain("Active");
     expect(first).toContain("BDT");
-    expect(first).toContain("/");
     expect(second).toContain("India, Nepal");
     expect(second).toContain("Draft");
+    // The web address column shows because India has one.
     expect(second).toContain("/en-in");
+    expect(container.textContent).toContain("Add market");
+    expect(container.textContent).not.toContain("Backup");
+  });
+
+  it("shows a store with one market a sentence and one way to sell elsewhere, not a table", async () => {
+    sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [backup] }));
+    await render(<MarketsList />);
+    await vi.waitFor(() => expect(container.textContent).toContain("Your store sells in Bangladesh, in BDT, in Bangla."));
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.textContent).toContain("Primary");
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Sell in another country"]);
+    expect(container.textContent).not.toContain("Web address");
   });
 
   it("saves the backup market's price increment under the revision it loaded", async () => {
     await render(<MarketEditor marketId="mkt_backup" />);
     await vi.waitFor(() => expect(container.textContent).toContain("Prices in whole amounts"));
-    expect(container.textContent).toContain("The backup market is always active");
+    expect(container.textContent).toContain("Your primary market is always active");
+    // The handle and web address are behind one quiet row, closed.
+    expect(container.querySelector("#market-handle")).toBeNull();
     // Another market's countries can't be added here.
     await vi.waitFor(() => expect(container.textContent).toContain("In India"));
     expect([...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("India"))!
@@ -230,10 +249,13 @@ describe("markets settings", () => {
     expect(container.textContent).not.toContain("Exchange rate");
   });
 
-  it("gives another market a subfolder and says it uses the backup market's increment", async () => {
+  it("gives another market a web address, behind Advanced, in one of the store's languages", async () => {
     await render(<MarketEditor marketId="mkt_in" />);
-    await vi.waitFor(() => expect(container.textContent).toContain("Sell at a subfolder"));
-    expect(container.textContent).toContain("This market uses the backup market's price increment: whole amounts.");
+    await vi.waitFor(() => expect(container.textContent).toContain("Web address and handle"));
+    expect(container.textContent).not.toContain("Give this market its own web address");
+    act(() => [...container.querySelectorAll("button")].find((button) => button.textContent === "Web address and handle")!.click());
+    await vi.waitFor(() => expect(container.textContent).toContain("Give this market its own web address"));
+    expect(container.querySelector("#market-handle")).not.toBeNull();
     // A store that can charge only its own currency sees no currency choice, just how to get one.
     await vi.waitFor(() => expect(container.textContent).toContain("This market sells in BDT, like the rest of your store."));
     expect(container.querySelector("#market-currency")).toBeNull();
@@ -241,10 +263,10 @@ describe("markets settings", () => {
     expect(container.textContent).toContain("Delete market");
 
     // Off, the switch says what it gives; it makes no claim about orders.
-    expect(container.textContent).toContain("Without a subfolder, this market has no address of its own.");
+    expect(container.textContent).toContain("Without an address of its own");
     expect(container.textContent).not.toContain("count for this market");
 
-    act(() => switchNamed("Sell at a subfolder").click());
+    act(() => switchNamed("Give this market its own web address").click());
     await vi.waitFor(() => expect(container.querySelector("code")?.textContent).toBe("/en-in"));
     // Language stacks above its select like every other field: its box is a block, not inline beside the label.
     const languageBox = container.querySelector<HTMLElement>('[data-slot="searchable-select"]')!;

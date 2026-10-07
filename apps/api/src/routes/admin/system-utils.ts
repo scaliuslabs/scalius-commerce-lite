@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
+import { containsText } from "@scalius/core/utils/text-match";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
 import { ftsMatch } from "@scalius/core/search";
 import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/checkout";
@@ -57,9 +58,9 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
             const ftsCondition = ftsMatch(db, "abandoned_checkouts_fts", "abandoned_checkouts", search);
 
             if (looksLikePhone && ftsCondition) {
-                whereConditions.push(sql`(${ftsCondition} OR ${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
+                whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
             } else if (looksLikePhone) {
-                whereConditions.push(sql`${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
+                whereConditions.push(containsText(abandonedCheckouts.customerPhone, digitsOnly));
             } else if (ftsCondition) {
                 whereConditions.push(ftsCondition);
             }
@@ -153,9 +154,9 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
             && digitsOnly.length / compactSearch.length > 0.5;
         const ftsCondition = ftsMatch(db, "abandoned_checkouts_fts", "abandoned_checkouts", search);
         if (looksLikePhone && ftsCondition) {
-            whereConditions.push(sql`(${ftsCondition} OR ${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
+            whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
         } else if (looksLikePhone) {
-            whereConditions.push(sql`${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
+            whereConditions.push(containsText(abandonedCheckouts.customerPhone, digitsOnly));
         } else if (ftsCondition) {
             whereConditions.push(ftsCondition);
         }

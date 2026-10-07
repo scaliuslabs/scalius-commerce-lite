@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 
 import {
   TaxCollectionCard,
@@ -7,10 +7,14 @@ import {
   TaxRegionsCard,
 } from "~/components/admin/taxes/TaxesSettings";
 import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
+import { useQuery } from "@tanstack/react-query";
+import { SettingsAdvanced } from "~/components/admin/settings/SettingsAdvanced";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { TaxRegionPage } from "~/components/admin/taxes/TaxRegionPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
+import { useMessages } from "~/i18n";
+import { taxesMessages } from "~/i18n/settings-taxes";
 import {
   firstTaxOverridesQuery,
   taxConfigurationQueryOptions,
@@ -55,7 +59,11 @@ export const Route = createFileRoute("/admin/settings/taxes")({
 
 function TaxesPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
+  const t = useMessages(taxesMessages);
   const { region } = Route.useSearch();
+  // Tax groups beyond one, and any product override, are for stores that already use them.
+  const config = useQuery(taxConfigurationQueryOptions()).data;
+  const hash = useLocation({ select: (location) => location.hash });
   // A fresh page per country: switching countries never carries a draft over.
   if (region) return <TaxRegionPage key={region} regionId={region} />;
   return (
@@ -63,8 +71,14 @@ function TaxesPage() {
       <SettingsPage page="taxes" readOnly={!canEdit}>
         <TaxCollectionCard />
         <TaxRegionsCard />
-        <TaxGroupsCard />
-        <TaxOverridesCard />
+        <SettingsAdvanced
+          label={t("advancedTitle")}
+          defaultOpen={(config?.classes.length ?? 0) > 1}
+          forceOpen={hash === "taxGroups" || hash === "taxOverrides"}
+        >
+          <TaxGroupsCard />
+          <TaxOverridesCard />
+        </SettingsAdvanced>
       </SettingsPage>
     </AppProviderSheetHost>
   );

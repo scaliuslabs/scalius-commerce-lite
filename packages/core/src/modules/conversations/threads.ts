@@ -29,6 +29,7 @@ import {
 } from "@scalius/shared/conversation";
 import { formatOrderNumber, parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import {
   ConflictError,
@@ -891,10 +892,6 @@ export interface StaffInboxFilters {
   cursor?: string | null;
 }
 
-function escapedLike(value: string): string {
-  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
-}
-
 async function staffSummaries(db: Database, rows: Array<{
   thread: ThreadRow;
   orderNumber: number | null;
@@ -965,12 +962,11 @@ export async function listStaffInbox(
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
     const number = parseOrderNumberSearch(q);
-    const like = `%${escapedLike(q)}%`;
     conditions.push(or(
       ...(number ? [eq(orders.orderNumber, number)] : []),
-      sql`${conversations.subject} LIKE ${like} ESCAPE '\\'`,
-      sql`${orders.customerName} LIKE ${like} ESCAPE '\\'`,
-      sql`${customers.name} LIKE ${like} ESCAPE '\\'`,
+      containsText(conversations.subject, q),
+      containsText(orders.customerName, q),
+      containsText(customers.name, q),
     ));
   }
 

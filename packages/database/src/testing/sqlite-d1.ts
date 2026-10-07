@@ -128,9 +128,34 @@ export function createMigratedSqlite(options: MigratedSqliteOptions = {}): Datab
   }
   // Table-rebuild migrations toggle the pragma themselves; set it last.
   sqlite.exec(`PRAGMA foreign_keys = ${options.foreignKeys === false ? "OFF" : "ON"}`);
-  // Cloudflare D1 rejects a compound SELECT with more than five terms; fail here too.
-  (sqlite as unknown as { limits: { compoundSelect: number } }).limits.compoundSelect = 5;
+  applyD1Limits(sqlite);
   return sqlite;
+}
+
+/**
+ * The SQLite limits Cloudflare D1 enforces (https://developers.cloudflare.com/d1/platform/limits/),
+ * each confirmed against D1 and workerd. Local SQLite allows far more, so a
+ * statement over one of them passes here and fails only on D1. `column` also
+ * bounds an index, a GROUP BY/ORDER BY list and an UPDATE's SET terms. (The
+ * documented 32 function arguments is not enforced: D1 runs a 40-argument call.)
+ */
+export const D1_SQLITE_LIMITS = {
+  /** Columns per table and per result set ("too many columns in result set"). */
+  column: 100,
+  /** LIKE/GLOB pattern bytes, bound values included ("LIKE or GLOB pattern too complex"). */
+  likePatternLength: 50,
+  /** SQL statement text bytes ("statement too long"). */
+  sqlLength: 100_000,
+  /** Terms of a compound SELECT ("too many terms in compound SELECT"). */
+  compoundSelect: 5,
+} as const;
+
+/**
+ * Make a node:sqlite database refuse what D1 refuses. Set after the
+ * migrations, which D1 applies through its own statement path.
+ */
+export function applyD1Limits(sqlite: DatabaseSync): void {
+  Object.assign((sqlite as unknown as { limits: Record<string, number> }).limits, D1_SQLITE_LIMITS);
 }
 
 type BindValue = SQLInputValue | boolean;

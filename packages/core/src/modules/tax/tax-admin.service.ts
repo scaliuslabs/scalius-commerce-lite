@@ -20,7 +20,8 @@ import { addressRulesFor } from "@scalius/shared/address-metadata";
 import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
 import { deliveryHierarchyLevel } from "@scalius/shared/places";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { and, asc, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { isCountryTaxRegion, normalizeTaxPostalPrefix } from "./region-match";
@@ -315,8 +316,8 @@ export async function listTaxClasses(db: Database, input: {
     const where = and(
         isNull(taxClasses.deletedAt),
         search ? or(
-            like(taxClasses.name, `%${search}%`),
-            like(taxClasses.description, `%${search}%`),
+            containsText(taxClasses.name, search),
+            containsText(taxClasses.description, search),
         ) : undefined,
     );
     const [items, totalRow] = await Promise.all([
@@ -340,7 +341,7 @@ export async function listTaxRates(db: Database, input: {
     const where = and(
         input.taxClassId ? eq(taxRates.taxClassId, input.taxClassId) : undefined,
         input.taxRegionId ? eq(taxRates.taxRegionId, input.taxRegionId) : undefined,
-        search ? like(taxRates.name, `%${search}%`) : undefined,
+        search ? containsText(taxRates.name, search) : undefined,
     );
     const [items, totalRow] = await Promise.all([
         db.select().from(taxRates).where(where).orderBy(
@@ -367,7 +368,7 @@ export async function listTaxJurisdictions(db: Database, input: {
         isNull(places.deletedAt),
         input.type ? eq(places.level, deliveryHierarchyLevel(input.type)) : undefined,
         input.parentId ? eq(places.parentId, input.parentId) : undefined,
-        search ? like(places.name, `%${search}%`) : undefined,
+        search ? containsText(places.name, search) : undefined,
     );
     const projection = {
         id: places.id,

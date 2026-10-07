@@ -1,5 +1,6 @@
 // Translate & adapt (docs/MARKETS-DESIGN.md D9), Shopify's: pick the language
-// (and, to adapt, one market), the kind of resource, then an item; its
+// (and, once the store has another market, one market to adapt for), the kind
+// of resource, then an item; its
 // fields open beside the list on a computer and in place of it on a phone.
 // The editor downloads when the first item opens. The page's state lives in
 // its URL, so a link (Settings › Languages, a product's Translations card)
@@ -123,6 +124,8 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
     { value: "", label: t("allMarkets") },
     ...(markets.data ?? []).filter((market) => !market.isBackup).map((market) => ({ value: market.id, label: market.name })),
   ];
+  // Adapting for one market only matters once the store has a market besides its primary one.
+  const adaptsMarkets = marketOptions.length > 1 || marketId !== null;
   const items = resources.data?.items ?? [];
   const pages = Math.max(1, Math.ceil((resources.data?.total ?? 0) / (resources.data?.limit ?? 25)));
   const selected = search.id ?? null;
@@ -131,7 +134,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
     <div className="pb-8">
       {header}
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("translateDescription")}</p>
-      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2">
+      <Card className={cn("mb-4 grid gap-3 p-4", adaptsMarkets && "sm:grid-cols-2")}>
         <div className="flex min-w-0 flex-col gap-1">
           <Label>{t("targetLanguage")}</Label>
           <SearchableSelect
@@ -141,16 +144,18 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
             onValueChange={(value) => update({ locale: value, page: undefined })}
           />
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <Label>{t("market")}</Label>
-          <SearchableSelect
-            ariaLabel={t("market")}
-            value={marketId ?? ""}
-            options={marketOptions}
-            onValueChange={(value) => update({ market: value || undefined, page: undefined })}
-          />
-          <p className="text-body text-muted-foreground">{t("marketHelp")}</p>
-        </div>
+        {adaptsMarkets ? (
+          <div className="flex min-w-0 flex-col gap-1">
+            <Label>{t("market")}</Label>
+            <SearchableSelect
+              ariaLabel={t("market")}
+              value={marketId ?? ""}
+              options={marketOptions}
+              onValueChange={(value) => update({ market: value || undefined, page: undefined })}
+            />
+            <p className="text-body text-muted-foreground">{t("marketHelp")}</p>
+          </div>
+        ) : null}
       </Card>
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Card className={cn("overflow-clip", selected && "max-lg:hidden")}>

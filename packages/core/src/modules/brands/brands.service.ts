@@ -10,6 +10,7 @@ import {
     type Database,
 } from "@scalius/database/client";
 import { and, asc, desc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { containsText, handleOrNumberedCopy } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { HANDLE_MAX_LENGTH, nextFreeHandle, toHandle } from "@scalius/shared/handle";
@@ -162,8 +163,7 @@ export async function listBrands(
     const conditions: SQL[] = [options.showTrashed ? isNotNull(brands.deletedAt) : isNull(brands.deletedAt)];
     const search = options.search?.trim().toLowerCase().slice(0, 100);
     if (search) {
-        const pattern = `%${search.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
-        conditions.push(sql`(lower(${brands.name}) LIKE ${pattern} ESCAPE '\\' OR ${brands.slug} LIKE ${pattern} ESCAPE '\\')`);
+        conditions.push(sql`(${containsText(brands.name, search)} OR ${containsText(brands.slug, search)})`);
     }
     if (options.status) conditions.push(eq(brands.status, options.status));
     const where = and(...conditions);
@@ -222,8 +222,7 @@ export async function listBrandOptions(db: Database, options: { search?: string;
     const search = options.search?.trim().toLowerCase().slice(0, 100);
     const conditions: SQL[] = [isNull(brands.deletedAt)];
     if (search) {
-        const pattern = `%${search.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
-        conditions.push(sql`lower(${brands.name}) LIKE ${pattern} ESCAPE '\\'`);
+        conditions.push(containsText(brands.name, search));
     }
     return db
         .select({ id: brands.id, name: brands.name, status: brands.status })
@@ -283,7 +282,7 @@ async function derivedBrandSlugCandidates(db: Database, name: string) {
     const rows = await db
         .select({ slug: brands.slug })
         .from(brands)
-        .where(sql`${brands.slug} = ${base} OR ${brands.slug} LIKE ${`${base}-%`}`)
+        .where(handleOrNumberedCopy(brands.slug, base))
         .limit(SLUG_LOOKUP_LIMIT)
         .all();
     return { base, taken: new Set(rows.map((row) => row.slug)) };

@@ -10,6 +10,7 @@ import {
     sql,
     type SQL,
 } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
@@ -169,10 +170,6 @@ async function assertNoUnacknowledgedDuplicateProvider(
     }
 }
 
-function escapedLike(value: string) {
-    return value.replace(/[\\%_]/g, (character) => `\\${character}`);
-}
-
 export async function listAnalyticsScripts(
     db: Database,
     options: AnalyticsListOptions = {},
@@ -187,7 +184,7 @@ export async function listAnalyticsScripts(
     ];
     if (search) {
         conditions.push(
-            sql`${analytics.name} LIKE ${`%${escapedLike(search)}%`} ESCAPE '\\'`,
+            containsText(analytics.name, search),
         );
     }
     if (options.type) conditions.push(eq(analytics.type, options.type));

@@ -2,7 +2,8 @@
 // (name, contact, phone, email, notes) that purchase orders point at;
 // archived rather than deleted so past purchase orders keep their supplier.
 
-import { and, asc, eq, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, or, sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Database } from "@scalius/database/client";
@@ -96,8 +97,7 @@ export async function listSuppliers(db: Database, query: ListSuppliersQuery = {}
   const conditions: SQL[] = [];
   if (status !== "all") conditions.push(eq(suppliers.status, status));
   if (q) {
-    const term = `%${q}%`;
-    conditions.push(or(like(suppliers.name, term), like(suppliers.contactName, term), like(suppliers.phone, term), like(suppliers.email, term))!);
+    conditions.push(or(containsText(suppliers.name, q), containsText(suppliers.contactName, q), containsText(suppliers.phone, q), containsText(suppliers.email, q))!);
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const [rows, counts] = await db.batch([

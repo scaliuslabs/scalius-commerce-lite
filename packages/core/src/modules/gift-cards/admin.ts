@@ -2,6 +2,7 @@
 // GIFT_CARDS_VIEW, writes GIFT_CARDS_MANAGE (checked by the route map). Staff
 // see `last4` only; the code is shown once, at manual issue.
 import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
@@ -147,12 +148,11 @@ export async function listGiftCardsForStaff(
         if (LAST4_QUERY.test(upper)) {
             conditions.push(eq(giftCards.codeLast4, upper));
         } else {
-            const like = `%${q.replace(/[%_\\]/g, (character) => `\\${character}`)}%`;
             conditions.push(sql`${giftCards.customerId} IN (
                 SELECT ${customers.id} FROM ${customers}
-                WHERE ${customers.name} LIKE ${like} ESCAPE '\\'
-                   OR ${customers.phone} LIKE ${like} ESCAPE '\\'
-                   OR ${customers.email} LIKE ${like} ESCAPE '\\'
+                WHERE ${containsText(customers.name, q)}
+                   OR ${containsText(customers.phone, q)}
+                   OR ${containsText(customers.email, q)}
                 LIMIT 200
             )`);
         }

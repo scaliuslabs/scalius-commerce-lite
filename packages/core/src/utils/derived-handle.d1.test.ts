@@ -93,6 +93,25 @@ describe("handles derived on create", () => {
     expect(slugOf("products", second.id)).toBe("lal-shari-2");
   });
 
+  it("creates a draft product without a category", async () => {
+    const { id } = await product({ name: "Bare item", price: 1, categoryId: null });
+
+    expect(sqlite.prepare("SELECT category_id, is_active FROM products WHERE id = ?").get(id))
+      .toEqual({ category_id: null, is_active: 0 });
+  });
+
+  it("derives handles and SKUs for long names past D1's 50-byte LIKE pattern limit", async () => {
+    const name = "Handwoven Jamdani cotton saree with silver zari border, festival edition";
+    const first = await product({ name });
+    const second = await product({ name });
+    const skuOf = (id: string) =>
+      (sqlite.prepare("SELECT sku FROM product_variants WHERE product_id = ?").get(id) as { sku: string }).sku;
+
+    expect(slugOf("products", second.id)).toBe(`${slugOf("products", first.id)}-2`);
+    expect(skuOf(second.id)).toBe(`${skuOf(first.id)}-2`);
+    expect(skuOf(first.id).length).toBeGreaterThan(50);
+  });
+
   it("refuses a typed product handle that is taken, even by a trashed product", async () => {
     const { id } = await product({ name: "Panjabi" });
     sqlite.prepare("UPDATE products SET deleted_at = unixepoch() WHERE id = ?").run(id);

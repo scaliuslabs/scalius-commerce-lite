@@ -97,6 +97,31 @@ export function useTaxServices() {
 
 // ── Tax collection ──────────────────────────────────────────────────────
 
+/**
+ * A store with no tax group yet: one click makes the Standard group and
+ * chooses it as the default, so the first rate has a group to belong to.
+ */
+function StartGroup({ canEdit, onCreated }: { canEdit: boolean; onCreated: (id: string) => void }) {
+  const t = useMessages(taxesMessages);
+  const refresh = useRefreshTaxes();
+  const create = useMutation({
+    mutationFn: () => apiData(postApiV1AdminTaxesClasses({ body: { name: t("standardGroupName"), isExempt: false } })),
+    onSuccess: async ({ taxClass }) => {
+      await refresh();
+      onCreated(taxClass.id);
+    },
+    onError: () => toast.error(t("startGroupFailed")),
+  });
+  return (
+    <div className="space-y-2">
+      <p className="text-body text-muted-foreground">{t("startGroupHelp")}</p>
+      <Button type="button" variant="outline" size="sm" disabled={!canEdit} loading={create.isPending} onClick={() => create.mutate()}>
+        {t("startGroup")}
+      </Button>
+    </div>
+  );
+}
+
 export function TaxCollectionCard() {
   const t = useMessages(taxesMessages);
   const common = useMessages(settingsMessages);
@@ -147,7 +172,8 @@ export function TaxCollectionCard() {
     errorMessage: common("saveFailed"),
     canEdit,
     // Fail closed: saving waits for the groups and rates the draft is checked against.
-    isValid: (draft) => Boolean(config) && taxSettingsIssue(draft, config!) === null,
+    // (Before the settings load the draft is empty: nothing is valid yet.)
+    isValid: (draft) => Boolean(config) && draft.version !== undefined && taxSettingsIssue(draft, config!) === null,
   });
 
   if (values.version === undefined && !isLoadError) return <SettingsCardLoading />;
@@ -196,6 +222,9 @@ export function TaxCollectionCard() {
         </SettingsField>
       ) : null}
       {appService ? <AppProviderStatus provider={appService} /> : null}
+      {groups.length === 0 ? (
+        <StartGroup canEdit={canEdit} onCreated={(id) => setValue("defaultTaxClassId", id)} />
+      ) : null}
       <SettingsField id="tax-default-group" label={t("defaultGroup")} help={t("defaultGroupHelp")} error={errorFor("default")}>
         <SearchableSelect
           id="tax-default-group"

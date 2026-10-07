@@ -299,6 +299,13 @@ export const policies = [
     sample: 'import { drizzle } from "drizzle-orm/d1";',
   },
   {
+    rule: "SQL matches a value with containsText/startsWithText (@scalius/core/utils/text-match), never a LIKE or GLOB pattern built from it",
+    why: "D1 refuses a LIKE/GLOB pattern over 50 bytes, bound values included: a 17-letter Bangla search or a long derived handle fails only on D1; a fixed literal pattern is fine",
+    paths: ["apps/api/src", "packages/core/src", "plugins"],
+    forbid: [/\b(?:LIKE|GLOB)\s+(?:\$\{|'%'\s*\|\|)/i, /\b(?:not)?(?:[iI]l|l)ike\(\s*[^,()]+,(?!\s*["'][^"'`$]*["']\s*\))/],
+    sample: "conditions.push(like(products.name, `%${search}%`));",
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [

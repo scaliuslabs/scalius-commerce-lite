@@ -1,13 +1,17 @@
-// The Publishing card's body: one checkbox per sales channel. A new product
-// the merchant has not changed is available everywhere (`salesChannelIds`
-// null); unticking a channel turns that into the list of the others. An edit
-// saves the channels with the page's Save, apart from the product's revision.
+// The Publishing card's body. A product on every channel (the usual case,
+// and a new product the merchant has not changed: `salesChannelIds` null) is
+// one line with a Change link. The checkboxes, one per sales channel, open
+// with it, or at once when the product is off a channel; unticking one turns
+// null into the list of the others. An edit saves the channels with the
+// page's Save, apart from the product's revision.
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useWatch, type UseFormReturn } from "react-hook-form";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { salesChannelsMessages } from "~/i18n/sales-channels";
 import { salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import type { ProductFormValues } from "./types";
@@ -19,9 +23,24 @@ export function PublishingChannels({ form, readOnly }: {
   const t = useMessages(salesChannelsMessages);
   const chosen = useWatch({ control: form.control, name: "salesChannelIds" });
   const { data: channels, isError } = useQuery(salesChannelsQueryOptions());
+  // null: open only while the product is off a channel; a choice, once made, stays.
+  const [opened, setOpened] = useState(false);
   if (isError) return <p className="text-body text-muted-foreground">{t("publishingLoadFailed")}</p>;
   if (!channels) return <Skeleton className="h-40 w-full" />;
   const published = new Set(chosen ?? channels.map((channel) => channel.id));
+  const everywhere = channels.every((channel) => published.has(channel.id));
+  if (everywhere && !opened) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-body text-muted-foreground">
+          {t(chosen === null ? "availableEverywhereNew" : "availableEverywhere", { count: formatNumber(channels.length) })}
+        </p>
+        {readOnly ? null : (
+          <Button type="button" variant="outline" size="sm" onClick={() => setOpened(true)}>{t("changeChannels")}</Button>
+        )}
+      </div>
+    );
+  }
 
   const toggle = (id: string, on: boolean) => {
     const next = channels.map((channel) => channel.id)

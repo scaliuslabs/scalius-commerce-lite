@@ -31,6 +31,18 @@ export const salesChannelsQueryOptions = () =>
     staleTime: 60_000,
   });
 
+/**
+ * Whether the store has started to tell channels apart: a channel it turned
+ * off, or channels that publish different numbers of products. Until then
+ * every product is on every channel, and the products list shows no
+ * channel column or filter (Shopify lists them as the store sells in more
+ * than the online store).
+ */
+export function channelsInUse(channels: readonly Pick<SalesChannel, "kind" | "status" | "publishedProducts">[]): boolean {
+  if (channels.some((channel) => channel.kind !== "app" && channel.status !== "active")) return true;
+  return new Set(channels.filter((channel) => channel.kind !== "app").map((channel) => channel.publishedProducts)).size > 1;
+}
+
 /** A channel's name in the dashboard language: built-in channels are translated, an app's keeps its own. */
 export function salesChannelName(channel: Pick<SalesChannel, "id" | "name">): string {
   const key = `channel.${channel.id}` as SalesChannelNamesMessageKey;

@@ -1,7 +1,7 @@
 // One market's editor values and the request they save (docs/MARKETS-DESIGN.md
 // D4). A subfolder is the language and a two-letter country code (`en-in`);
-// the backup market keeps the root URL and edits only its language. Only the
-// backup market sets a price increment; a market in the shop currency uses
+// the primary (backup) market keeps the root URL; its language is the store's
+// default, changed in Languages. Only the primary market sets a price increment; a market in the shop currency uses
 // it, a market in its own currency (step 6) uses that currency's.
 import { queryOptions } from "@tanstack/react-query";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -12,9 +12,6 @@ import { DEFAULT_FX_LOCK_MINUTES, MAX_FX_LOCK_MINUTES, MIN_FX_LOCK_MINUTES } fro
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { fetchMarket, marketKeys, type CreateMarketBody, type Market, type UpdateMarketBody } from "~/lib/api-query-options/markets";
 import type { SettingsMarketsMessageKey } from "~/i18n/settings-markets";
-
-/** The languages the storefront has text in. A market already in another language keeps it. */
-export const MARKET_LANGUAGES = ["en", "bn"] as const;
 
 const SUFFIX_PATTERN = /^[a-z]{2}$/;
 const LOCALE_PATTERN = /^[a-z]{2}$/;

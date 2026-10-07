@@ -5,7 +5,8 @@
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { productVariants, products, taxClasses } from "@scalius/database/schema";
 import { ConflictError } from "@scalius/core/errors";
-import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { assertActiveTaxClass } from "../tax";
 import { variantOptionLabelSql } from "../products";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
@@ -23,7 +24,7 @@ export async function listTaxClassifications(db: Database, input: {
     if (input.kind === "product") {
         const where = and(
             isNull(products.deletedAt),
-            search ? or(like(products.name, `%${search}%`), like(products.slug, `%${search}%`)) : undefined,
+            search ? or(containsText(products.name, search), containsText(products.slug, search)) : undefined,
         );
         const [rows, totalRow] = await Promise.all([
             db.select({
@@ -47,9 +48,9 @@ export async function listTaxClassifications(db: Database, input: {
         isNull(productVariants.deletedAt),
         isNull(products.deletedAt),
         search ? or(
-            like(products.name, `%${search}%`),
-            like(productVariants.sku, `%${search}%`),
-            sql`${variantOptionLabelSql(productVariants.id)} LIKE ${`%${search}%`}`,
+            containsText(products.name, search),
+            containsText(productVariants.sku, search),
+            containsText(variantOptionLabelSql(productVariants.id), search),
         ) : undefined,
     );
     const [rows, totalRow] = await Promise.all([

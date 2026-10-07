@@ -111,6 +111,19 @@ describe("sales channels settings", () => {
     expect(rows[3]).toContain(t("about.app", { app: "acme.tiktok" }));
   });
 
+  it("leaves locations out for a store with one, and gives the online store nothing to manage", async () => {
+    sdk.getApiV1AdminInventoryLocations.mockImplementation(() => ok({ locations: [location("loc_main", "Main warehouse")] }));
+    await render(<SalesChannelsSettings />);
+    await vi.waitFor(() => expect(container.querySelectorAll("li")).toHaveLength(4));
+    await vi.waitFor(() => expect(sdk.getApiV1AdminInventoryLocations).toHaveBeenCalled());
+    const rows = [...container.querySelectorAll("li")];
+    expect(container.textContent).not.toContain(t("allLocations"));
+    expect(rows[0]!.querySelector("button")).toBeNull();
+    act(() => rows[1]!.querySelector("button")!.click());
+    await vi.waitFor(() => expect(document.body.textContent).toContain(t("statusOn")));
+    expect(document.body.textContent).not.toContain(t("locationsHelp"));
+  });
+
   it("saves only what changed, locks the online store on and needs an active location", async () => {
     sdk.patchApiV1AdminSettingsSalesChannelsById.mockImplementation(() => ok({ channel: CHANNELS[1] }));
     await render(<SalesChannelsSettings />);
@@ -147,6 +160,10 @@ describe("publishing card", () => {
   it("shows a new product on every channel and keeps the others when one is unticked", async () => {
     const values: Array<string[] | null> = [];
     await render(<PublishingHarness initial={null} onValue={(value) => values.push(value)} />);
+    // On every channel, the card is one line until Change is pressed.
+    await vi.waitFor(() => expect(container.textContent).toContain(t("availableEverywhereNew", { count: "4" })));
+    expect(container.querySelectorAll("button[role=checkbox]")).toHaveLength(0);
+    act(() => button(t("changeChannels")).click());
     await vi.waitFor(() => expect(container.textContent).toContain(t("publishingNew")));
     const boxes = () => [...container.querySelectorAll<HTMLButtonElement>("button[role=checkbox]")];
     expect(boxes().map((box) => box.getAttribute("data-state"))).toEqual(["checked", "checked", "checked", "checked"]);
