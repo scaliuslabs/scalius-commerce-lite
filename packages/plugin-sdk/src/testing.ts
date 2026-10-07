@@ -18,7 +18,7 @@ import {
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
 import type { EventTopic } from "@scalius/shared/events";
-import type { PluginApiCallInput, PluginApiResult, PluginRouteRequest, PluginStoreInfo } from "./context";
+import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
   invokePluginDefinition,
   type PluginContextSeed,
@@ -39,6 +39,7 @@ export {
   sanitizePluginHead,
 } from "@scalius/shared/plugins";
 export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
+export { fixtures } from "./fixtures";
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
@@ -290,7 +291,27 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         facts,
       },
     }),
+    /** Delivers a whole event (build one with `fixtures.event`). */
+    deliver: (event: PluginEvent) => run({ kind: "event", event }),
     fn: (point: string, input: unknown) => run({ kind: "function", point, input }),
+    /** Runs one declared migration, as the platform does after an install or update; run it twice to prove it is idempotent. */
+    runMigration: (version: number) => run({ kind: "migration", version }),
+    /**
+     * Runs every declared migration in order, like the platform on an install
+     * (after an update, pass `from` to run only the ones newer than the
+     * version already applied). Stops at the first failure, as the platform
+     * does; `results` holds what ran.
+     */
+    runMigrations: async (options: { from?: number } = {}): Promise<{ ok: boolean; results: Array<{ version: number; result: PluginInvocationResult }> }> => {
+      const results: Array<{ version: number; result: PluginInvocationResult }> = [];
+      for (const { version } of manifest.migrations) {
+        if (options.from !== undefined && version <= options.from) continue;
+        const result = await run({ kind: "migration", version });
+        results.push({ version, result });
+        if (!result.ok) return { ok: false, results };
+      }
+      return { ok: true, results };
+    },
     /**
      * Runs one provider operation the way the platform does: the input must
      * match the port (a mismatch throws, as it would be a platform bug), the
