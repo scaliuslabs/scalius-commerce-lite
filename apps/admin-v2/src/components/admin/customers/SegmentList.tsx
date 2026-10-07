@@ -57,7 +57,7 @@ export function SegmentList() {
         </Card>
       ) : rows.length === 0 ? (
         <Card>
-          <EmptyState icon={UsersRound} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
+          <EmptyState icon={UsersRound} title={t("emptyTitle")} description={t("emptyBody")} action={create} help />
         </Card>
       ) : (
         <Card className="overflow-clip">

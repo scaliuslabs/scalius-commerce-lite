@@ -8,7 +8,7 @@
 // turns that destination's default shortcut off.
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { settings as settingsTable } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
@@ -17,6 +17,7 @@ import {
   SETTINGS_DOCUMENT_ROW_KEY,
   type SettingsDocument,
 } from "../../settings-store";
+import { staffSetupGuideDocumentKey } from "./staff-setup-guide";
 
 export const STAFF_SHORTCUTS_MAX_ENTRIES = 80;
 export const STAFF_SHORTCUT_PATH_MAX_LENGTH = 64;
@@ -108,10 +109,10 @@ export async function writeStaffShortcuts(
   return { shortcuts: written.value.shortcuts, revision: written.revision };
 }
 
-/** Drops a staff member's shortcuts; batch it with the removal that ends their access. */
-export function deleteStaffShortcutsStatement(db: Database, userId: string) {
+/** Drops a staff member's own preferences (shortcuts, setup guide); batch it with the removal that ends their access. */
+export function deleteStaffPreferencesStatement(db: Database, userId: string) {
   return db.delete(settingsTable).where(and(
     eq(settingsTable.key, SETTINGS_DOCUMENT_ROW_KEY),
-    eq(settingsTable.category, staffShortcutsDocumentKey(userId)),
+    inArray(settingsTable.category, [staffShortcutsDocumentKey(userId), staffSetupGuideDocumentKey(userId)]),
   ));
 }

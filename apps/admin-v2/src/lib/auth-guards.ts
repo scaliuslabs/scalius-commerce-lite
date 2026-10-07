@@ -29,9 +29,11 @@ export interface DashboardSessionState {
     twoFactorVerified: boolean;
     permissions: string[] | null;
   };
-  /** Someone else ended this browser's session (suspended, removed, signed out elsewhere). */
-  signedOut?: "access_changed";
+  /** Why this browser's signed cookie no longer opens a session: it ended or ran out, or its person is suspended. */
+  signedOut?: DashboardSignedOut;
 }
+
+export type DashboardSignedOut = "session_ended" | "suspended";
 
 export type AdminRouteContext = {
   user: NonNullable<DashboardSessionState["session"]>["user"];

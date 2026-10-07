@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { DataTable } from "~/components/admin/data-table/DataTable";
+import { EmptyState } from "~/components/admin/resource/EmptyState";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
@@ -288,6 +289,8 @@ export function OrderList({
     setTerm("");
     onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchSortUpdates("", term, search.sort), view: undefined });
   };
+  // No order has ever been placed: an empty state, not a table of nothing.
+  const nothingYet = !isLoading && !isError && !filtered && !showArchived && pagination.total === 0 && pageRows.length === 0;
   const cancelOrder = actions.cancelOrder;
   const cancelLoaded = useOpenedOnce(cancelOrder !== null);
   const bulkLoaded = useOpenedOnce(actions.dialog !== null);
@@ -295,6 +298,19 @@ export function OrderList({
 
   return (
     <>
+      {nothingYet ? (
+        <EmptyState
+          icon={ShoppingBag}
+          title={t("emptyTitle")}
+          description={t("emptyBody")}
+          action={orderActions.canCreateOrders ? (
+            <Button asChild>
+              <Link to="/admin/orders/new">{t("createOrder")}</Link>
+            </Button>
+          ) : undefined}
+          help
+        />
+      ) : (
       <DataTable
         variant="bare"
         getRowHref={(order) => `/admin/orders/${order.id}`}
@@ -356,6 +372,7 @@ export function OrderList({
           ) : undefined,
         }}
       />
+      )}
 
       <SelectionSheet count={selectedCount} clearLabel={t("clearSelection")} onClear={clearAll}>
         {bulkButtons}

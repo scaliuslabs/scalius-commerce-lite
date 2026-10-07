@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
+import { EmptyState } from "~/components/admin/resource/EmptyState";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
@@ -178,7 +179,7 @@ export function AnalyticsOverview({
               previousName={previous ? formatRangeLabel(previous.range) : null}
             />
           ) : (
-            <p className="py-10 text-center text-body text-muted-foreground">{t("chartEmpty")}</p>
+            <EmptyState icon={FileBarChart} title={t("chartEmpty")} description={t("chartEmptyBody")} />
           )}
           <Button variant="link" size="sm" asChild className="print:hidden">
             <Link

@@ -210,6 +210,15 @@ describe("sign-in forms keep credentials out of URLs", () => {
     expect(container.querySelector("#setup-password")).not.toBeNull();
   });
 
+  it("says a session that ended while turning on two-step verification ended, not that the password is wrong", async () => {
+    authClient.twoFactor.enable.mockResolvedValueOnce({ data: null, error: { status: 401, code: "UNAUTHORIZED" } } as never);
+    await render(<TwoFactorSetup userEmail="karim@example.com" />);
+    type(container.querySelector("#setup-password"), SECRET);
+    await submit();
+    expect(container.textContent).toContain("Your session ended. Sign in again.");
+    expect(container.textContent).not.toContain("Incorrect password");
+  });
+
   it("hands a reset for a two-step account to the code screen", async () => {
     window.history.replaceState(null, "", "/auth/reset-password#token=proof-proof-proof-1234");
     fetchMock
@@ -369,9 +378,14 @@ describe("sign-in error states", () => {
     expect(container.textContent).not.toContain("expired");
   });
 
-  it("tells staff whose access was changed why they were signed out, before they type anything", async () => {
-    await render(<LoginForm signedOut="access_changed" />);
-    expect(alertText()).toBe("You were signed out because your access changed. Contact the store owner.");
+  it("says a session that ended or ran out ended, before they type anything", async () => {
+    await render(<LoginForm signedOut="session_ended" />);
+    expect(alertText()).toBe("Your session ended. Sign in again.");
+  });
+
+  it("says a suspended person is suspended, before they type anything", async () => {
+    await render(<LoginForm signedOut="suspended" />);
+    expect(alertText()).toBe("Your access to this store is suspended. Contact the store owner.");
   });
 
   it("tells a suspended staff member why sign-in stopped", async () => {

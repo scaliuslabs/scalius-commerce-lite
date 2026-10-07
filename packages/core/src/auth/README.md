@@ -84,7 +84,7 @@ Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits(
 
 ## Dashboard sign-in (`apps/api/src/dashboard/auth.ts`)
 
-- `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same lookup as the admin middleware. `session.permissions` appears only after every gate passes (password set, 2FA enrolled when required, 2FA verified). `signedOut: "access_changed"` means someone else ended the session behind a valid cookie.
+- `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same lookup as the admin middleware. `session.permissions` appears only after every gate passes (password set, 2FA enrolled when required, 2FA verified). `signedOut` (`"session_ended"` or `"suspended"`) appears with no session when the browser still holds a validly signed cookie: the session ended or ran out, or its person is suspended. The sign-in page words each one.
 - `POST reset-session` checks a reset or invite token sent in the body and sets the cookie `__Host-scalius-password-reset` (10 minutes, `HttpOnly`, `SameSite=Strict`). `POST reset-password-session` sets the password and signs the person in. Tokens never travel in URLs. Dead links answer `TOKEN_USED`, `TOKEN_CANCELLED` or `INVALID_TOKEN`.
 - These Better Auth routes return 403 `AUTH_ROUTE_NOT_AVAILABLE`: `/sign-up/email`, `/change-password`, `/reset-password`, `/two-factor/disable`, `/admin/*`. Account creation, password change and 2FA removal go through the admin API.
 - A 2FA verify with `trustDevice: true` returns 400 `TRUSTED_DEVICE_DISABLED`.

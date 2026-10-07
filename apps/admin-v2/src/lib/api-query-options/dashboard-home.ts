@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminDashboardActivity,
   getApiV1AdminDashboardHomeSummary,
+  getApiV1AdminDashboardSetupGuide,
   getApiV1AdminInventoryAlerts,
   getApiV1AdminOrders,
   getApiV1AdminSettingsSms,
@@ -24,6 +25,18 @@ export const dashboardActivityQueryOptions = () =>
     queryKey: queryKeys.dashboard.activity(),
     queryFn: () => apiData(getApiV1AdminDashboardActivity()),
     staleTime: DASHBOARD_STALE_TIME_MS,
+  });
+
+/**
+ * Home's setup guide: which first steps are done (each read from the store's
+ * data) and whether this staff member dismissed it. Read again on each visit
+ * to Home, so a step done elsewhere is checked when they come back.
+ */
+export const setupGuideQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.dashboard.setupGuide(),
+    queryFn: () => apiData(getApiV1AdminDashboardSetupGuide()),
+    staleTime: 0,
   });
 
 /** Home's "orders to fulfil" count: one row, the total is what matters. */

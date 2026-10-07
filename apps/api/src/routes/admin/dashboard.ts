@@ -14,7 +14,17 @@ import {
     getDailyActivityData,
 } from "@scalius/core/modules/analytics";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { BANGLADESH_PACK_ID } from "@scalius/core/integrations/retired-providers";
+import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
+import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
+import { getPluginInstallation, pluginNeedsApproval } from "@scalius/core/modules/plugins";
+import { getPlatformSettings } from "@scalius/core/modules/platform";
+import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed } from "@scalius/core/modules/settings";
 
+import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
+import { PLUGIN_CATALOG } from "../../plugins/catalog.gen";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
@@ -176,6 +186,93 @@ app.openapi(dashboardActivityRoute, async (c) => {
             newCustomers: entry.newCustomers,
         })),
     });
+});
+
+// ── Setup guide ──
+
+const setupGuideSchema = z.object({
+    dismissed: z.boolean().openapi({ description: "This staff member dismissed the guide." }),
+    countryCode: z.string().length(2).openapi({ description: "The store's country; the guide shows country-specific steps for it." }),
+    setupNeeded: z.boolean().openapi({ description: "The new-store setup step (name, country, currency, time zone) still applies." }),
+    steps: z.object({
+        product: z.boolean().openapi({ description: "A product exists outside the trash." }),
+        details: z.boolean().openapi({ description: "The store has a name." }),
+        theme: z.boolean().openapi({ description: "The theme was published from the editor." }),
+        payments: z.boolean().openapi({ description: "Checkout offers a payment method that is ready, in the store's currency and for its country." }),
+        shipping: z.boolean().openapi({ description: "A live delivery rate serves a place, or local pickup is on." }),
+        domain: z.boolean().openapi({ description: "The storefront web address is set." }),
+        order: z.boolean().openapi({ description: "An order exists." }),
+    }),
+    bangladeshPack: z.object({ active: z.boolean() }).nullable().openapi({
+        description: "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.",
+    }),
+});
+
+const setupGuideRoute = createRoute({
+    method: "get",
+    path: "/setup-guide",
+    tags: ["Admin - Dashboard"],
+    summary: "Get Home's setup guide",
+    description: "Which of the store's first steps are done (each read from the store's own data) and whether this staff member dismissed the guide.",
+    operationId: "dashboard.home.setup_guide",
+    responses: {
+        200: { description: "Setup guide", content: { "application/json": { schema: successEnvelope(setupGuideSchema) } } },
+    },
+});
+
+app.openapi(setupGuideRoute, async (c) => {
+    const db = c.get("db");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const [facts, setup, dismissed, platform, currency, providers, pack] = await Promise.all([
+        getSetupGuideFacts(db),
+        getStoreSetupStatus(db),
+        readSetupGuideDismissed(db, c.get("user").id),
+        getPlatformSettings(db),
+        getCurrencySettings(db),
+        requestPaymentProviders(c),
+        getPluginInstallation(db, BANGLADESH_PACK_ID),
+    ]);
+    const countryCode = setup.current.countryCode;
+    const snapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey, providers);
+    const offered = providers
+        .filterForCurrency(snapshot.activePaymentMethods.enabledMethods, currency.currencyCode)
+        .filter((method) => providers.countryIssue(method, countryCode) === null);
+    c.header("Cache-Control", "private, no-store");
+    return ok(c, {
+        dismissed,
+        countryCode,
+        setupNeeded: setup.needed,
+        steps: {
+            product: facts.hasProducts,
+            details: setup.current.storeName.trim() !== "",
+            theme: facts.themePublished,
+            payments: offered.length > 0,
+            shipping: facts.shippingReady,
+            domain: platform.storefrontUrl.trim() !== "",
+            order: facts.hasOrders,
+        },
+        bangladeshPack: countryCode !== "BD" || (!pack && !(BANGLADESH_PACK_ID in BUNDLED_PLUGINS) && !PLUGIN_CATALOG.some((entry) => entry.id === BANGLADESH_PACK_ID))
+            ? null
+            : { active: pack?.status === "active" && !pluginNeedsApproval(pack) },
+    });
+});
+
+const dismissSetupGuideRoute = createRoute({
+    method: "post",
+    path: "/setup-guide/dismiss",
+    tags: ["Admin - Dashboard"],
+    summary: "Dismiss Home's setup guide",
+    description: "Hides the setup guide for the signed-in staff member only. Saying it again changes nothing.",
+    operationId: "dashboard.home.setup_guide_dismiss",
+    responses: {
+        200: { description: "Setup guide dismissed", content: { "application/json": { schema: successEnvelope(z.object({ dismissed: z.literal(true) })) } } },
+    },
+});
+
+app.openapi(dismissSetupGuideRoute, async (c) => {
+    await dismissSetupGuide(c.get("db"), c.get("user").id);
+    c.header("Cache-Control", "private, no-store");
+    return ok(c, { dismissed: true as const });
 });
 
 export { app as adminDashboardRoutes };

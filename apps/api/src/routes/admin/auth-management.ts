@@ -29,7 +29,7 @@ import {
 } from "@scalius/core/auth/admin-setup";
 import { noDeletingMediaReferences } from "@scalius/core/modules/media-references";
 import {
-    deleteStaffShortcutsStatement,
+    deleteStaffPreferencesStatement,
     readStaffShortcuts,
     STAFF_SHORTCUT_PATH_MAX_LENGTH,
     writeStaffShortcuts,
@@ -733,7 +733,7 @@ app.openapi(deleteUserRoute, async (c) => {
                     eq(adminInvitations.id, userToDelete.invitationId),
                     eq(adminInvitations.status, "pending"),
                 )),
-            deleteStaffShortcutsStatement(db, userId),
+            deleteStaffPreferencesStatement(db, userId),
             db.delete(user).where(eq(user.id, userId)),
         ]);
 

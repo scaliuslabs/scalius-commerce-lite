@@ -26,10 +26,11 @@ import { resourceMessages } from "~/i18n/resource";
 import { dataTableMessages } from "~/i18n/data-table";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
-import { EmptyState } from "./EmptyState";
 
 // The trash and delete confirmation loads the first time it is asked for;
 // apps' bulk menu as soon as an app offers this list a bulk action.
+// The first-run card loads only for a list with nothing in it.
+const EmptyState = lazy(() => import("./EmptyState").then((module) => ({ default: module.EmptyState })));
 const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 const loadAppActions = () => import("~/components/admin/apps/ui/AppActions");
 const AppBulkActionsMenu = lazy(() => loadAppActions().then((module) => ({ default: module.AppBulkActionsMenu })));
@@ -393,7 +394,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       {nothingYet ? (
         <div className="overflow-clip rounded-xl bg-card shadow-card">
           {tabBar}
-          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} />
+          <Suspense fallback={null}>
+            <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} help />
+          </Suspense>
         </div>
       ) : (
       <DataTable

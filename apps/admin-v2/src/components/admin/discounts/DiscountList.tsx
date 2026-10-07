@@ -18,11 +18,11 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "~/components/admin/data-table/table-config";
+import { EmptyState } from "~/components/admin/resource/EmptyState";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -270,16 +270,15 @@ export function DiscountList({
       </header>
 
       {discounts.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <TicketPercent aria-hidden className="size-10 text-muted-foreground" />
-            <h2 className="text-heading-md">{t("emptyTitle")}</h2>
-            <p className="max-w-sm text-body text-muted-foreground">{t("emptyBody")}</p>
-            {canCreate ? (
-              <Button type="button" onClick={() => setChooserOpen(true)}>{t("createDiscount")}</Button>
-            ) : null}
-          </CardContent>
-        </Card>
+        <div className="overflow-clip rounded-xl bg-card shadow-card">
+          <EmptyState
+            icon={TicketPercent}
+            title={t("emptyTitle")}
+            description={t("emptyBody")}
+            action={canCreate ? <Button type="button" onClick={() => setChooserOpen(true)}>{t("createDiscount")}</Button> : undefined}
+            help
+          />
+        </div>
       ) : (
         <DataTable
           variant="card"
