@@ -132,6 +132,19 @@ export function LandingPageSettings({ theme, slug, setDraft, onRemove }: {
   );
 }
 
+/** The cart and checkout form: their fields and words follow the checkout settings; the template adds sections around them. */
+export function CartContent() {
+  const t = useMessages(themeEditorMessages);
+  return (
+    <div className="space-y-3">
+      <p className="text-body text-muted-foreground">{t("cartMainHelp")}</p>
+      <Button asChild variant="outline">
+        <Link to="/admin/settings/checkout">{t("editCheckout")}</Link>
+      </Button>
+    </div>
+  );
+}
+
 /** A CMS page's words are a page in Content; the editor shows it in the store's header and footer. */
 export function CmsPageContent({ pageId }: { pageId: string | null }) {
   const t = useMessages(themeEditorMessages);

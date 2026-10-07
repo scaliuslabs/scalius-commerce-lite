@@ -89,7 +89,7 @@ export async function getTemplateSectionsData(kind: StorefrontPageTemplate): Pro
         client: getConfiguredSdkClient(), path: { kind },
       });
       if (!response?.ok) return null;
-      return unwrapEnvelope<{ sections: HomepageSectionData }>(data).sections;
+      return unwrapEnvelope<{ sections: HomepageSectionData }>(data)?.sections ?? null;
     } catch {
       return null;
     }

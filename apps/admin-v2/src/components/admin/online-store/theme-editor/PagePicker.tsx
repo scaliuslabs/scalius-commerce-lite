@@ -1,9 +1,10 @@
 /**
- * Choosing what the editor shows, Shopify's page dropdown: the homepage,
- * product, collection, category and search pages, CMS pages and the
- * theme's landing pages (and making a new one). Product, collection,
- * category and CMS pages preview one of the store's own; the tree says
- * which, with a way to change it.
+ * Choosing what the editor shows, Shopify's page switcher in the centre of
+ * the top bar (research P21): the homepage, the product, collection,
+ * category, cart and CMS page templates, search results and the theme's
+ * landing pages (and making a new one). Product, collection, category and
+ * CMS pages preview one of the store's own; the tree says which ("Previewing
+ * …"), with a way to change it.
  */
 import { useEffect, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -13,6 +14,7 @@ import {
   STOREFRONT_MAX_LANDING_PAGES,
   storefrontLandingSlugSchema,
 } from "@scalius/shared/storefront-theme";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -24,9 +26,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { navigationResourcesQueryOptions, type NavigationResourceOption } from "~/lib/api-query-options/navigation";
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import type { Theme } from "../theme-fields";
-import { samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
-
-const FIXED_PAGES = ["home", "product", "collection", "category", "search", "page"] as const;
+import { STORE_PAGE_KINDS, samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
 
 export function usePageName() {
   const t = useMessages(themeEditorMessages);
@@ -34,12 +34,13 @@ export function usePageName() {
     page.kind === "landing" ? theme.pages.landing[page.slug]?.title ?? page.slug : t(`page_${page.kind}`);
 }
 
-export function PagePicker({ theme, page, onPage, onCreate }: {
+export function PagePicker({ theme, page, onPage, onCreate, className }: {
   theme: Theme;
   page: EditorPage;
   onPage: (page: EditorPage) => void;
   /** Absent for staff who may only view the theme. */
   onCreate?: () => void;
+  className?: string;
 }) {
   const t = useMessages(themeEditorMessages);
   const name = usePageName();
@@ -61,17 +62,22 @@ export function PagePicker({ theme, page, onPage, onCreate }: {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" data-page-picker aria-label={t("pagePicker", { page: name(page, theme) })} className="max-w-full min-w-0 justify-between sm:min-w-48">
+        <button
+          type="button"
+          data-page-picker
+          aria-label={t("pagePicker", { page: name(page, theme) })}
+          className={cn("flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg bg-topbar-subdued px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress", className)}
+        >
           <span className="min-w-0 truncate">{name(page, theme)}</span>
           <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden="true" />
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="center" className="w-80 p-0">
         <Command>
           <CommandInput aria-label={t("findPage")} placeholder={t("findPage")} />
           <CommandList>
             <CommandGroup heading={t("pageGroupStore")}>
-              {FIXED_PAGES.map((kind) => item({ kind } as EditorPage, t(`page_${kind}`), t(`pageHint_${kind}`)))}
+              {STORE_PAGE_KINDS.map((kind) => item({ kind } as EditorPage, t(`page_${kind}`), t(`pageHint_${kind}`)))}
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading={t("landingPages")}>

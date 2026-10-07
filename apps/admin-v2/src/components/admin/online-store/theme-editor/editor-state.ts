@@ -286,7 +286,7 @@ export function blockListSpec(type: StorefrontSectionType, path: string, setting
   for (const key of path.split(".")) {
     if (!spec) return null;
     if (spec.kind === "variants") {
-      const discriminator = (value as Record<string, unknown> | null)?.[spec.key];
+      const discriminator: unknown = (value as Record<string, unknown> | null)?.[spec.key];
       spec = spec.options.find((option) => option.value === discriminator)?.spec;
     }
     if (spec?.kind !== "object") return null;

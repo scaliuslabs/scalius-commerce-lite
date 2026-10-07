@@ -123,6 +123,10 @@ export const aiAccessMessages = defineMessages({
     pairConnected: "Connected. Go back to the tool.",
     pairNotConnected: "Not connected.",
     pairAnother: "Connect another tool",
+    draftingTitle: "Drafting with AI",
+    draftingDescription: "An app with your own AI key adds Draft with AI to the theme editor: it drafts sections you then check and publish. Scalius has no built-in AI and keeps no AI key. A connected AI agent can draft sections too.",
+    draftingEmpty: "No app drafts with AI yet. Install an AI app, or connect an agent above.",
+    draftingBrowse: "Browse apps",
   },
   bn: {
     title: "AI ও অ্যাপ অ্যাক্সেস",
@@ -245,5 +249,9 @@ export const aiAccessMessages = defineMessages({
     pairConnected: "যুক্ত হয়েছে। টুলে ফিরে যান।",
     pairNotConnected: "যুক্ত হয়নি।",
     pairAnother: "আরেকটি টুল যুক্ত করুন",
+    draftingTitle: "এআই দিয়ে খসড়া",
+    draftingDescription: "আপনার নিজের এআই কি দিয়ে চলা একটি অ্যাপ থিম এডিটরে এআই দিয়ে খসড়া যোগ করে: এটি সেকশনের খসড়া করে, আপনি দেখে পাবলিশ করেন। Scalius-এ নিজস্ব এআই নেই এবং কোনো এআই কি রাখে না। যুক্ত করা এআই এজেন্টও সেকশনের খসড়া করতে পারে।",
+    draftingEmpty: "এখনো কোনো অ্যাপ এআই দিয়ে খসড়া করে না। একটি এআই অ্যাপ ইনস্টল করুন, অথবা ওপরে একটি এজেন্ট যুক্ত করুন।",
+    draftingBrowse: "অ্যাপস দেখুন",
   },
 });

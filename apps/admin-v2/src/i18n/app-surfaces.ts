@@ -49,6 +49,7 @@ export const appSurfacesMessages = defineMessages({
     kind_fraud: "Fraud checker",
     kind_tax: "Tax service",
     kind_translation: "Machine translation",
+    kind_ai: "Drafting with AI",
 
     generalSettings: "General",
     providersTitle: "Services",
@@ -107,6 +108,7 @@ export const appSurfacesMessages = defineMessages({
     kind_fraud: "ফ্রড চেকার",
     kind_tax: "ট্যাক্স সার্ভিস",
     kind_translation: "মেশিন অনুবাদ",
+    kind_ai: "এআই দিয়ে খসড়া",
 
     generalSettings: "সাধারণ",
     providersTitle: "সার্ভিস",

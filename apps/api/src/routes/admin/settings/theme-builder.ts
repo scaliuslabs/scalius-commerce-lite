@@ -55,8 +55,8 @@ app.openapi(createRoute({
   path: "/theme/restore-points",
   tags: ["Admin - Settings"],
   summary: "List the theme draft's restore points, newest first",
-  description: `The shared draft as it was just before each restore or discard replaced it (the newest ${THEME_RESTORE_POINT_LIMIT} are kept). Read one with \`document_get\` (\`source=restore-point\`), put it back with \`restore_point_restore\`.`,
-  operationId: "dashboard.theme.restore_points_list",
+  description: `The shared draft as it was just before each restore or discard replaced it (the newest ${THEME_RESTORE_POINT_LIMIT} are kept). Read one with \`document_get\` (\`source=restore-point\`), put it back with \`draft_snapshot_restore\`.`,
+  operationId: "dashboard.theme.draft_snapshots_list",
   responses: {
     200: {
       description: "Restore points",
@@ -82,7 +82,7 @@ app.openapi(createRoute({
   tags: ["Admin - Settings"],
   summary: "Put a restore point back in the draft (it goes live only when the draft is published)",
   description: "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.",
-  operationId: "dashboard.theme.restore_point_restore",
+  operationId: "dashboard.theme.draft_snapshot_restore",
   request: {
     body: {
       required: true,

@@ -1216,7 +1216,7 @@
           "version": {
             "type": "number",
             "enum": [
-              7
+              8
             ]
           },
           "template": {
@@ -3611,12 +3611,37 @@
                 "additionalProperties": {
                   "$ref": "#/components/schemas/StorefrontLandingPage"
                 }
+              },
+              "templates": {
+                "type": "object",
+                "properties": {
+                  "product": {
+                    "$ref": "#/components/schemas/StorefrontPageTemplate"
+                  },
+                  "collection": {
+                    "$ref": "#/components/schemas/StorefrontPageTemplate"
+                  },
+                  "cart": {
+                    "$ref": "#/components/schemas/StorefrontPageTemplate"
+                  },
+                  "page": {
+                    "$ref": "#/components/schemas/StorefrontPageTemplate"
+                  }
+                },
+                "required": [
+                  "product",
+                  "collection",
+                  "cart",
+                  "page"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "home",
               "homeMode",
-              "landing"
+              "landing",
+              "templates"
             ],
             "additionalProperties": false
           }
@@ -3656,6 +3681,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -3748,6 +3779,9 @@
                             "type": "string",
                             "nullable": true,
                             "maxLength": 2048
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -3785,6 +3819,9 @@
                             "nullable": true,
                             "maxLength": 300,
                             "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -3841,6 +3878,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -3890,6 +3933,9 @@
                                   "detail": {
                                     "type": "string",
                                     "maxLength": 80
+                                  },
+                                  "hidden": {
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
@@ -3947,6 +3993,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -4016,6 +4068,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4072,6 +4130,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -4214,6 +4278,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -4363,6 +4433,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4505,6 +4581,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4611,6 +4693,9 @@
                                 "additionalProperties": false
                               }
                             ]
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -4666,6 +4751,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4692,6 +4783,9 @@
                             "type": "string",
                             "maxLength": 300,
                             "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -4741,6 +4835,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -4763,6 +4863,9 @@
                             "nullable": true,
                             "maxLength": 300,
                             "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -4810,6 +4913,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -4962,6 +5071,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5049,6 +5164,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5100,6 +5221,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "oneOf": [
@@ -5193,6 +5320,9 @@
                               "text": {
                                 "type": "string",
                                 "maxLength": 400
+                              },
+                              "hidden": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -5233,6 +5363,9 @@
                               "author": {
                                 "type": "string",
                                 "maxLength": 80
+                              },
+                              "hidden": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -5283,6 +5416,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5304,6 +5443,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 1000
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -5352,6 +5494,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5373,6 +5521,9 @@
                             "type": "string",
                             "maxLength": 300,
                             "pattern": "^(\\/(?!\\/)\\S*|https:\\/\\/\\S+)$"
+                          },
+                          "hidden": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -5420,6 +5571,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -5488,6 +5645,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5537,6 +5700,12 @@
                 "hidden": {
                   "type": "boolean"
                 },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
                 "settings": {
                   "type": "object",
                   "properties": {
@@ -5580,6 +5749,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -5644,6 +5819,12 @@
                 },
                 "hidden": {
                   "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
                 },
                 "settings": {
                   "type": "object",
@@ -5724,6 +5905,24 @@
           "title",
           "description",
           "sections"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontPageTemplate": {
+        "type": "object",
+        "properties": {
+          "sections": {
+            "$ref": "#/components/schemas/StorefrontSectionList"
+          },
+          "main": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          }
+        },
+        "required": [
+          "sections",
+          "main"
         ],
         "additionalProperties": false
       },
@@ -10829,6 +11028,49 @@
           "note"
         ]
       },
+      "ThemeRestorePoint": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "restore",
+              "discard"
+            ]
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 160
+          },
+          "createdByName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "draftRevision",
+          "createdBy",
+          "createdByName",
+          "createdAt"
+        ]
+      },
       "Market": {
         "type": "object",
         "properties": {
@@ -12550,7 +12792,8 @@
               "email",
               "fraud",
               "tax",
-              "translation"
+              "translation",
+              "ai"
             ]
           },
           "name": {
@@ -21928,6 +22171,120 @@
         "security": []
       }
     },
+    "/api/v1/storefront/template/{kind}": {
+      "get": {
+        "operationId": "storefront.template.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Get what a page template's sections show",
+        "description": "The published theme's sections around the fixed part of every product, collection, cart or CMS page: their product lists, images and the rest, like a landing page's. Takes only the page's market presence; a template without sections answers empty sections.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "collection",
+                "cart",
+                "page"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The template's section data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "sections": {
+                          "$ref": "#/components/schemas/StorefrontHomepageSections"
+                        }
+                      },
+                      "required": [
+                        "sections"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/storefront/product-apps/{slug}": {
       "get": {
         "operationId": "storefront.product_apps.get",
@@ -23754,7 +24111,7 @@
           "Storefront"
         ],
         "summary": "Read the homepage section data of a theme preview's draft",
-        "description": "What the draft theme's homepage shows (product lists, images and hero slides, category tiles, collections, brands, deal promotions and a product homepage's product), for the storefront preview behind a live preview cookie. The reads come from the current saved draft, never from the caller, and the answer is private and never cached.",
+        "description": "What a draft page's sections show (product lists, images and hero slides, category tiles, collections, brands, deal promotions and a product homepage's product), for the storefront preview behind a live preview cookie. The reads come from the current saved draft, or from `sections`: the theme editor's unsaved sections of the page, validated with the same section schema. Only a live preview token (a staff preview session) is answered; the answer is private and never cached. `presence` prices the lists in that market.",
         "operationId": "system.storefront_theme_preview.homepage",
         "requestBody": {
           "content": {
@@ -23772,6 +24129,22 @@
                     "type": "string",
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": [
+                      "product",
+                      "collection",
+                      "cart",
+                      "page"
+                    ]
+                  },
+                  "sections": {
+                    "$ref": "#/components/schemas/StorefrontSectionList"
+                  },
+                  "presence": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}-[a-z]{2}$"
                   }
                 },
                 "required": [
@@ -114438,13 +114811,19 @@
                             },
                             "theme": {
                               "$ref": "#/components/schemas/StorefrontThemeDocument"
+                            },
+                            "updatedByName": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 200
                             }
                           },
                           "required": [
                             "revision",
                             "basePublishedRevision",
                             "updatedAt",
-                            "theme"
+                            "theme",
+                            "updatedByName"
                           ]
                         },
                         "draftDiffersFromLive": {
@@ -114520,6 +114899,32 @@
                           "items": {
                             "$ref": "#/components/schemas/ThemeAppSurfaces"
                           }
+                        },
+                        "aiProviders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "appId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "appName",
+                              "appId"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -114529,7 +114934,8 @@
                         "lastPublished",
                         "storeShape",
                         "media",
-                        "apps"
+                        "apps",
+                        "aiProviders"
                       ]
                     }
                   },
@@ -114864,7 +115270,7 @@
         "tags": [
           "Admin - Settings"
         ],
-        "summary": "Read the whole draft, live or one published version's theme document",
+        "summary": "Read the whole draft, live, one published version's or one restore point's theme document",
         "operationId": "dashboard.theme.document_get",
         "parameters": [
           {
@@ -114873,7 +115279,8 @@
               "enum": [
                 "draft",
                 "published",
-                "version"
+                "version",
+                "restore-point"
               ],
               "default": "draft"
             },
@@ -114889,6 +115296,15 @@
             },
             "required": false,
             "name": "revision",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^themerp_[A-Za-z0-9_-]{4,32}$"
+            },
+            "required": false,
+            "name": "id",
             "in": "query"
           }
         ],
@@ -114914,7 +115330,8 @@
                           "enum": [
                             "draft",
                             "published",
-                            "version"
+                            "version",
+                            "restore-point"
                           ]
                         },
                         "revision": {
@@ -118873,6 +119290,1024 @@
           "transport": "json",
           "maximumResponseBytes": 8192,
           "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/restore-points": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "List the theme draft's restore points, newest first",
+        "description": "The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `restore_point_restore`.",
+        "operationId": "dashboard.theme.draft_snapshots_list",
+        "responses": {
+          "200": {
+            "description": "Restore points",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "restorePoints": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ThemeRestorePoint"
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "restorePoints"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/restore-point": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Put a restore point back in the draft (it goes live only when the draft is published)",
+        "description": "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.",
+        "operationId": "dashboard.theme.draft_snapshot_restore",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "basePublishedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^themerp_[A-Za-z0-9_-]{4,32}$"
+                  },
+                  "withoutMissingImages": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "basePublishedRevision",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Theme revisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "published": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "revision"
+                          ]
+                        },
+                        "draft": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "basePublishedRevision": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "basePublishedRevision",
+                            "updatedAt"
+                          ]
+                        },
+                        "draftDiffersFromLive": {
+                          "type": "boolean"
+                        },
+                        "lastPublished": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "publishedBy": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 160
+                            },
+                            "publishedByName": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 200
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "publishedBy",
+                            "publishedByName",
+                            "createdAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "published",
+                        "draft",
+                        "draftDiffersFromLive",
+                        "lastPublished"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/ai-draft": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Draft theme sections from the merchant's words with an app's AI provider",
+        "description": "Scalius has no built-in AI and no model key: an app provides one (`draftSections`). Returns up to 8 sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.",
+        "operationId": "dashboard.theme.ai_draft_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 120
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "page": {
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "landing",
+                      "product",
+                      "collection",
+                      "cart",
+                      "page"
+                    ]
+                  },
+                  "locale": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}$",
+                    "default": "en"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8,
+                    "default": 3
+                  }
+                },
+                "required": [
+                  "providerId",
+                  "prompt",
+                  "page"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Drafted sections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "sections": {
+                          "$ref": "#/components/schemas/StorefrontSectionList"
+                        },
+                        "rejected": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "sections",
+                        "rejected",
+                        "note"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/ai-providers": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "The AI providers of active apps (the theme editor's Draft with AI)",
+        "description": "Scalius has no built-in AI provider: an app provides one. Empty when no active app does; agents connected to the store can draft sections with `draft_sections` instead.",
+        "operationId": "dashboard.theme.ai_providers_list",
+        "responses": {
+          "200": {
+            "description": "Providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "appId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "appName",
+                              "appId"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/theme/draft-sections": {
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Add drafted sections to the shared theme draft (an AI's draft for the merchant to review)",
+        "description": "Adds up to 8 sections to a page of the shared draft: the homepage, a landing page, or a template before or after its fixed part, after `afterId` or at the end. Each is `{ type, settings }` from the section registry (read the draft with `document_get` to see the shapes); invalid ones are left out and counted, app sections are not accepted. The sections are marked as AI drafts until someone opens them in the editor, and the publish summary names them. Nothing goes live until someone publishes.",
+        "operationId": "dashboard.theme.draft_sections",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDraftRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "basePublishedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "scope": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "home"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "landing"
+                            ]
+                          },
+                          "slug": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "slug"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "template"
+                            ]
+                          },
+                          "template": {
+                            "type": "string",
+                            "enum": [
+                              "product",
+                              "collection",
+                              "cart",
+                              "page"
+                            ]
+                          },
+                          "region": {
+                            "type": "string",
+                            "enum": [
+                              "before",
+                              "after"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "template",
+                          "region"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "afterId": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "minItems": 1,
+                    "maxItems": 8
+                  }
+                },
+                "required": [
+                  "expectedDraftRevision",
+                  "basePublishedRevision",
+                  "scope",
+                  "sections"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sections drafted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "basePublishedRevision": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "added": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 8
+                        },
+                        "rejected": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "basePublishedRevision",
+                        "updatedAt",
+                        "added",
+                        "rejected"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 65536,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
         },
@@ -137872,7 +139307,8 @@
                 "email",
                 "fraud",
                 "tax",
-                "translation"
+                "translation",
+                "ai"
               ]
             },
             "required": true,
@@ -137914,7 +139350,8 @@
                                   "email",
                                   "fraud",
                                   "tax",
-                                  "translation"
+                                  "translation",
+                                  "ai"
                                 ]
                               },
                               "pluginId": {
@@ -219252,6 +220689,22 @@
           ]
         },
         {
+          "operationId": "dashboard.theme.ai_draft_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.ai_draft_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.ai_providers_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.ai_providers_list"
+          ]
+        },
+        {
           "operationId": "dashboard.theme.document_get",
           "surface": "dashboard",
           "mode": "curated",
@@ -219277,6 +220730,30 @@
             "dashboard.campaign-content-supported-setup",
             "dashboard.storefront-look",
             "dashboard.theme-publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.draft_sections",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.draft_sections"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.draft_snapshot_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.draft_snapshot_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.draft_snapshots_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.draft_snapshots_list"
           ]
         },
         {
@@ -220118,6 +221595,14 @@
             "dashboard.bangladesh-checkout-supported-setup",
             "dashboard.shipping-method",
             "storefront.checkout-options"
+          ]
+        },
+        {
+          "operationId": "storefront.template.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.template.get"
           ]
         }
       ]
