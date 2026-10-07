@@ -10,6 +10,7 @@ import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import type { ProductListItemDto } from "~/lib/api-query-options/products";
 import { priceRangeText } from "~/lib/price-range";
 
@@ -91,7 +92,20 @@ export const PRODUCT_COLUMN_LAYOUT = {
   inventory: { mobile: "secondary", priority: 70, maxWidth: 160, minWidth: 172 },
   category: { mobile: "secondary", priority: 40, maxWidth: 140, minWidth: 152 },
   price: { mobile: "secondary", numeric: true, priority: 80, minWidth: { en: 220, bn: 228 } },
+  channels: { mobile: "secondary", priority: 30, minWidth: { en: 92, bn: 128 } },
 } as const;
+
+/** "3 of 4" sales channels, each named on hover; "None" when the product is on none (MARKETS-DESIGN D6). */
+function ChannelsText({ product, channels }: { product: ProductListItem; channels: ReadonlyMap<string, string> }) {
+  const count = product.salesChannelIds.length;
+  if (count === 0) return <span className="block truncate text-muted-foreground">{translate(salesChannelNamesMessages, "channelsNone")}</span>;
+  const names = product.salesChannelIds.map((id) => channels.get(id) ?? id).join(", ");
+  return (
+    <span title={names} className="block truncate tabular-nums text-muted-foreground">
+      {translate(salesChannelNamesMessages, "channelsCount", { count, total: Math.max(channels.size, count) })}
+    </span>
+  );
+}
 
 /**
  * Shopify's products columns: Product (thumbnail and title), Status,
@@ -103,6 +117,8 @@ export function getProductColumns(opts: {
   trashed: boolean;
   fmt: (price: number) => string;
   rowTo: (product: ProductListItem) => string | undefined;
+  /** Sales channel names by id: adds the Channels column (Shopify's sales channels count). */
+  channels?: ReadonlyMap<string, string>;
   extra?: ColumnDef<ProductListItem, unknown>[];
 }): ColumnDef<ProductListItem, unknown>[] {
   return [
@@ -156,6 +172,13 @@ export function getProductColumns(opts: {
       meta: { ...PRODUCT_COLUMN_LAYOUT.price, minWidth: localeWidth(PRODUCT_COLUMN_LAYOUT.price.minWidth) },
       cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} />,
     },
+    ...(opts.channels ? [{
+      id: "channels",
+      header: translate(salesChannelNamesMessages, "columnChannels"),
+      meta: { ...PRODUCT_COLUMN_LAYOUT.channels, minWidth: localeWidth(PRODUCT_COLUMN_LAYOUT.channels.minWidth) },
+      cell: ({ row }) => <ChannelsText product={row.original} channels={opts.channels!} />,
+      enableSorting: false,
+    } satisfies ColumnDef<ProductListItem, unknown>] : []),
     ...(opts.extra ?? []),
   ];
 }

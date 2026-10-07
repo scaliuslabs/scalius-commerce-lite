@@ -31,6 +31,7 @@ import { dataTableMessages } from "~/i18n/data-table";
 import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { orderChannelText, orderMessages } from "~/i18n/orders";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import { setStoreTimeZone } from "~/lib/store-time-zone";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import type { ColumnDef, TableRowData } from "./data-table/table-config";
@@ -159,6 +160,11 @@ function productNeeds(locale: Locale): Record<string, number> {
       widest([`${fmt(9_999_999.99)}–${fmt(9_999_999.99)}`, `${fmt(999_999.99)} ${fmt(9_999_999.99)}`, p("saleOnSome"), p("noPrice")], (text) => textWidth(text, body)),
       heading("columnPrice", true),
     ),
+    // Sales channels: "12 of 13" (four built-in channels and an app's three, twice over).
+    channels: Math.max(
+      widest([translate(salesChannelNamesMessages, "channelsCount", { count: 12, total: 13 }), translate(salesChannelNamesMessages, "channelsNone")], (text) => textWidth(text, body)),
+      textWidth(translate(salesChannelNamesMessages, "columnChannels"), caption, { medium: true }),
+    ),
   };
   return Object.fromEntries(Object.entries(needs).map(([key, width]) => [key, Math.ceil(width + CELL_PADDING)]));
 }
@@ -194,7 +200,8 @@ const withEnds = <TData extends TableRowData>(columns: ColumnDef<TData, unknown>
   ...columns,
   { id: "actions", cell: () => null },
 ];
-const productColumns = () => withEnds(getProductColumns({ trashed: false, fmt: money("৳"), rowTo: () => "/", extra: pluginColumns<ProductListItem>() }));
+const productChannels = new Map([["sc_online_store", "Online store"], ["sc_google", "Google"], ["sc_meta", "Facebook and Instagram"], ["sc_agents", "AI agents"]]);
+const productColumns = () => withEnds(getProductColumns({ trashed: false, fmt: money("৳"), rowTo: () => "/", channels: productChannels, extra: pluginColumns<ProductListItem>() }));
 const customerColumns = () => withEnds(getCustomerColumns({
   t: (key, vars) => translate(customersMessages, key, vars),
   fmt: money("৳"),
@@ -363,6 +370,7 @@ const fullProduct = {
   priceRange: { from: 999_999.99, to: 9_999_999.99, compareAt: null },
   hasVariantDiscount: true,
   hasStockHistory: true,
+  salesChannelIds: ["sc_online_store", "sc_google", "sc_meta", "sc_agents"],
 } as unknown as ProductListItem;
 
 const emptyProduct = {
@@ -376,6 +384,7 @@ const emptyProduct = {
   priceRange: null,
   hasVariantDiscount: false,
   hasStockHistory: false,
+  salesChannelIds: [],
 } as unknown as ProductListItem;
 
 const fullCustomer = {
@@ -475,7 +484,7 @@ describe("rendered rows with the most and the least data", () => {
 
   const cases = [
     { name: "orders", columns: () => getOrderColumns({ ...orderHandlers, selectable: false }, pluginColumns<OrderListItem>()), rows: [fullOrder, emptyOrder] },
-    { name: "products", columns: () => getProductColumns({ trashed: true, fmt: money("৳"), rowTo: () => "/", extra: pluginColumns<ProductListItem>() }), rows: [fullProduct, emptyProduct] },
+    { name: "products", columns: () => getProductColumns({ trashed: true, fmt: money("৳"), rowTo: () => "/", channels: productChannels, extra: pluginColumns<ProductListItem>() }), rows: [fullProduct, emptyProduct] },
     { name: "customers", columns: customerColumns, rows: [fullCustomer, emptyCustomer] },
   ] as const;
 

@@ -21,7 +21,7 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   canonicalPath: "searchListing",
   noIndex: "searchListing",
   excludeFromSitemap: "searchListing",
-  excludeFromProductFeed: "searchListing",
+  salesChannelIds: "publishing",
   productCondition: "condition",
   slug: "webAddress",
   media: "media",
@@ -93,7 +93,6 @@ export function formatFormValuesForSubmission(
     canonicalPath: values.canonicalPath,
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
-    excludeFromProductFeed: values.excludeFromProductFeed,
     productCondition: values.productCondition,
     slug: values.slug,
     media: values.media.map((item) => ({

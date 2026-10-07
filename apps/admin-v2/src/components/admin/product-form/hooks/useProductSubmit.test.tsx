@@ -434,7 +434,7 @@ function productValues(): ProductFormValues {
     canonicalPath: null,
     noIndex: false,
     excludeFromSitemap: false,
-    excludeFromProductFeed: false,
+    salesChannelIds: null,
     productCondition: "new",
     slug: "green-tea",
     slugEdited: false,

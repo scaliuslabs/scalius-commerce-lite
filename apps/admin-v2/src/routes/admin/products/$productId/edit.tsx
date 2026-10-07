@@ -79,7 +79,7 @@ function toFormValues(product: ProductDetail): ProductFormValues {
     canonicalPath: product.canonicalPath,
     noIndex: product.noIndex,
     excludeFromSitemap: product.excludeFromSitemap,
-    excludeFromProductFeed: product.excludeFromProductFeed,
+    salesChannelIds: product.salesChannelIds,
     productCondition: product.productCondition ?? DEFAULT_PRODUCT_CONDITION,
     isActive: product.isActive,
     discountType: (product.discountType || "percentage") as "percentage" | "flat",

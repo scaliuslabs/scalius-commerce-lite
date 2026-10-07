@@ -57,6 +57,7 @@ import { StatusCard } from "./product-form/StatusCard";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
+import { PublishingCard } from "./product-form/PublishingCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { ProductSectionsProvider, useProductSections } from "./product-form/merchandising/product-sections";
 import { LoadingFallback } from "./shared/LoadingFallback";
@@ -221,7 +222,7 @@ function ProductEditor({
       metaDescription: null,
       noIndex: false,
       excludeFromSitemap: false,
-      excludeFromProductFeed: false,
+      salesChannelIds: null,
       productCondition: DEFAULT_PRODUCT_CONDITION,
       slug: "",
       media: [],
@@ -491,6 +492,7 @@ function ProductEditor({
               <div className="max-lg:order-first">
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
+              <PublishingCard form={form} readOnly={readOnly} />
               <OrganizationCard form={form} categories={categories} brandName={brandName} />
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-40" />}>

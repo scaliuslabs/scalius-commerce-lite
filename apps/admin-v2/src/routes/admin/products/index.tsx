@@ -21,6 +21,8 @@ import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { productsQueryOptions } from "~/lib/api-query-options/products";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
+import { salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
+import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { useDuplicateProduct } from "~/lib/api-mutations/products";
 import { useCurrency } from "~/hooks/use-currency";
@@ -43,6 +45,7 @@ import { pageHead } from "~/i18n/page-titles";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 
 const STATUSES = ["active", "draft"] as const;
+const CHANNEL_STATES = ["published", "unpublished"] as const;
 const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });
 
 function validateProductSearch(search: SearchValidatorInput) {
@@ -50,6 +53,9 @@ function validateProductSearch(search: SearchValidatorInput) {
     ...validateBase(search),
     category: normalizeOptionalSearchString(search.category),
     status: normalizeOptionalEnumSearchParam(search.status, STATUSES),
+    // Sales channels (MARKETS-DESIGN D6): on (or not on) one channel.
+    channel: normalizeOptionalSearchString(search.channel),
+    channelState: normalizeOptionalEnumSearchParam(search.channelState, CHANNEL_STATES),
   };
 }
 
@@ -67,6 +73,8 @@ function listQuery(search: ProductSearch, term: string) {
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
     status: search.trashed ? undefined : search.status,
+    salesChannel: search.channel || undefined,
+    salesChannelState: search.channel ? search.channelState : undefined,
     view: "compact",
   });
 }
@@ -94,12 +102,20 @@ function ProductsPage() {
   const duplicate = useDuplicateProduct();
   const [importing, setImporting] = useState(false);
   const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
+  const { data: channelData } = useQuery(salesChannelsQueryOptions());
+  const c = useMessages(salesChannelNamesMessages);
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
+  const channelNames = useMemo(
+    () => (channelData ? new Map(channelData.map((channel) => [channel.id, salesChannelName(channel)])) : undefined),
+    // Names follow the dashboard language (c changes with it).
+    [channelData, c],
+  );
 
   const columns = useMemo(
-    () => getProductColumns({ trashed: search.trashed, fmt, rowTo }),
-    [search.trashed, fmt],
+    () => getProductColumns({ trashed: search.trashed, fmt, rowTo, channels: channelNames }),
+    [search.trashed, fmt, channelNames],
   );
+  const channelFilter = search.channel ? `${search.channelState ?? "published"}:${search.channel}` : "all";
 
   return (
     <>
@@ -136,8 +152,9 @@ function ProductsPage() {
         ] }}
         searchPlaceholder={t("searchPlaceholder")}
         countLabel={(count) => t("productsCount", { count })}
-        filterParams={["category"]}
+        filterParams={["category", "channel", "channelState"]}
         filters={
+          <>
           <SearchableSelect
             value={search.category ?? "all"}
             onValueChange={(value) => void navigate({
@@ -154,6 +171,36 @@ function ProductsPage() {
             ariaLabel={t("filterCategory")}
             triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-40"
           />
+          <SearchableSelect
+            value={channelFilter}
+            onValueChange={(value) => {
+              const [state, ...rest] = value.split(":");
+              const channel = value === "all" ? undefined : rest.join(":");
+              void navigate({
+                to: "/admin/products",
+                search: ((prev: Record<string, unknown>) => ({
+                  ...prev,
+                  channel,
+                  channelState: channel && state === "unpublished" ? "unpublished" : undefined,
+                  page: 1,
+                  ...NO_CURSOR,
+                })) as never,
+              });
+            }}
+            options={[
+              { value: "all", label: c("allChannels") },
+              ...(channelData ?? []).flatMap((channel) => [
+                { value: `published:${channel.id}`, label: c("onChannel", { name: salesChannelName(channel) }) },
+                { value: `unpublished:${channel.id}`, label: c("notOnChannel", { name: salesChannelName(channel) }) },
+              ]),
+            ]}
+            placeholder={c("allChannels")}
+            searchPlaceholder={c("filterChannel")}
+            emptyMessage={r("noResults")}
+            ariaLabel={c("filterChannel")}
+            triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-44"
+          />
+          </>
         }
         rowTo={rowTo}
         rowLabel={(row) => row.name}

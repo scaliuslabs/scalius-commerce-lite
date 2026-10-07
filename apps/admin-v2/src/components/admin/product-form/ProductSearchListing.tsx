@@ -6,9 +6,9 @@ import type { ProductFormValues } from "./types";
 
 /** The product's "Search engine listing" card, bound to the product form. */
 export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<ProductFormValues>; disabled?: boolean }) {
-  const [id, name, description, metaTitle, metaDescription, slug, slugEdited, noIndex, excludeFromProductFeed] = useWatch({
+  const [id, name, description, metaTitle, metaDescription, slug, slugEdited, noIndex] = useWatch({
     control: form.control,
-    name: ["id", "name", "description", "metaTitle", "metaDescription", "slug", "slugEdited", "noIndex", "excludeFromProductFeed"],
+    name: ["id", "name", "description", "metaTitle", "metaDescription", "slug", "slugEdited", "noIndex"],
   });
   const { errors } = form.formState;
   // A new product's address is made from its title on the server unless the merchant types one.
@@ -23,7 +23,6 @@ export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<P
       form.setValue("slugEdited", true);
     }
     if (next.hidden !== undefined) form.setValue("noIndex", next.hidden, options);
-    if (next.excludeFromFeed !== undefined) form.setValue("excludeFromProductFeed", next.excludeFromFeed, options);
   };
 
   return (
@@ -34,7 +33,6 @@ export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<P
         description: metaDescription ?? "",
         handle: slug ?? "",
         hidden: Boolean(noIndex),
-        excludeFromFeed: Boolean(excludeFromProductFeed),
       }}
       onChange={onChange}
       fallbackTitle={name ?? ""}

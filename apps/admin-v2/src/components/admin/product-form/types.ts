@@ -62,7 +62,12 @@ export const productFormSchema = z.object({
   canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  excludeFromProductFeed: z.boolean(),
+  /**
+   * The sales channels the product is published to (MARKETS-DESIGN D6). Null
+   * on a new product the merchant has not changed: it is published to every
+   * channel. An edit saves it on its own (it is not part of the revision).
+   */
+  salesChannelIds: z.array(z.string()).nullable(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES),
   /** Empty on a new product: the server makes the address from the title. */
   slug: z
