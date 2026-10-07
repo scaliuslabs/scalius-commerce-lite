@@ -1,11 +1,14 @@
 // One market's editor values and the request they save (docs/MARKETS-DESIGN.md
 // D4). A subfolder is the language and a two-letter country code (`en-in`);
 // the backup market keeps the root URL and edits only its language. Only the
-// backup market has its own price increment; every other market uses it.
+// backup market sets a price increment; a market in the shop currency uses
+// it, a market in its own currency (step 6) uses that currency's.
 import { queryOptions } from "@tanstack/react-query";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fxPriceMinor, marketFxPolicyIssue, type FxConversion } from "@scalius/shared/market-pricing";
 import { MARKET_HANDLE_PATTERN } from "@scalius/shared/markets";
+import { isFxRate } from "@scalius/shared/money-chain";
+import { DEFAULT_FX_LOCK_MINUTES, MAX_FX_LOCK_MINUTES, MIN_FX_LOCK_MINUTES } from "@scalius/shared/presentment";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { fetchMarket, marketKeys, type CreateMarketBody, type Market, type UpdateMarketBody } from "~/lib/api-query-options/markets";
 import type { SettingsMarketsMessageKey } from "~/i18n/settings-markets";
@@ -38,13 +41,19 @@ export interface MarketForm {
   priceRoundingMinor: number | null;
   /** End rounded prices in this amount within the step (minor units); null: none. */
   priceEndingMinor: number | null;
-  /** The exchange rate it saves (1 while every market sells the shop currency). */
+  /** The manual exchange rate (units of its currency per shop unit); 1 in the shop currency. */
   fxRate: string | null;
+  /** The currency buyers pay in: the shop currency, or its own (MARKETS-DESIGN step 6). */
+  currencyCode: string;
+  /** Minutes a placed order keeps its rate; NaN or null while the typed text is refused. */
+  fxLockMinutes: number | null;
   // Facts the editor shows but never saves.
   isBackup: boolean;
   hasRootPresence: boolean;
   hasOrders: boolean;
-  currencyCode: string;
+  shopCurrencyCode: string;
+  /** When the saved rate was set (ISO), or null. */
+  fxRateAsOf: string | null;
 }
 
 export const EMPTY_MARKET_FORM: MarketForm = {
@@ -62,11 +71,19 @@ export const EMPTY_MARKET_FORM: MarketForm = {
   priceRoundingMinor: null,
   priceEndingMinor: null,
   fxRate: null,
+  currencyCode: "BDT",
+  fxLockMinutes: DEFAULT_FX_LOCK_MINUTES,
   isBackup: false,
   hasRootPresence: false,
   hasOrders: false,
-  currencyCode: "BDT",
+  shopCurrencyCode: "BDT",
+  fxRateAsOf: null,
 };
+
+/** True when the market sells in its own currency, not the shop's. */
+export function sellsOwnCurrency(form: Pick<MarketForm, "currencyCode" | "shopCurrencyCode" | "isBackup">): boolean {
+  return !form.isBackup && form.currencyCode !== form.shopCurrencyCode;
+}
 
 /** The editor values of a saved market, with the revision it saves against. */
 export function marketForm(market: Market): MarketForm & { revision: number } {
@@ -87,10 +104,13 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
     priceRoundingMinor: market.priceRounding === null ? null : toMinor(market.priceRounding, getDecimalPlaces(market.currencyCode)),
     priceEndingMinor: market.priceEnding === null ? null : toMinor(market.priceEnding, getDecimalPlaces(market.currencyCode)),
     fxRate: market.fxRate,
+    currencyCode: market.currencyCode,
+    fxLockMinutes: market.fxLockMinutes,
     isBackup: market.isBackup,
     hasRootPresence: market.isBackup && presence?.value === "",
     hasOrders: market.hasOrders,
-    currencyCode: market.currencyCode,
+    shopCurrencyCode: market.shopCurrencyCode,
+    fxRateAsOf: market.fxRateAsOf,
     revision: market.revision,
   };
 }
@@ -115,7 +135,7 @@ export function marketPresencePath(market: Pick<Market, "presence">): string | n
   return market.presence.value ? `/${market.presence.value}` : "/";
 }
 
-export type MarketFormProblems = Partial<Record<"name" | "handle" | "countries" | "suffix" | "adjustment", SettingsMarketsMessageKey>>;
+export type MarketFormProblems = Partial<Record<"name" | "handle" | "countries" | "suffix" | "adjustment" | "rate" | "lock", SettingsMarketsMessageKey>>;
 
 export function marketFormProblems(form: MarketForm): MarketFormProblems {
   const problems: MarketFormProblems = {};
@@ -123,7 +143,12 @@ export function marketFormProblems(form: MarketForm): MarketFormProblems {
   if (!MARKET_HANDLE_PATTERN.test(form.handle.trim())) problems.handle = "handleInvalid";
   if (!form.isBackup && form.countries.length === 0) problems.countries = "countriesRequired";
   if (!form.isBackup && form.subfolder && !SUFFIX_PATTERN.test(form.suffix.trim().toLowerCase())) problems.suffix = "suffixInvalid";
-  if (!form.isBackup && form.priceMode === "fx" && adjustmentBps(form) === null) problems.adjustment = "adjustmentInvalid";
+  const own = sellsOwnCurrency(form);
+  if (!form.isBackup && (own || form.priceMode === "fx") && adjustmentBps(form) === null) problems.adjustment = "adjustmentInvalid";
+  if (own && !(form.fxRate !== null && isFxRate(form.fxRate.trim()))) problems.rate = "exchangeRateInvalid";
+  if (own && (form.fxLockMinutes === null || !Number.isInteger(form.fxLockMinutes) || form.fxLockMinutes < MIN_FX_LOCK_MINUTES || form.fxLockMinutes > MAX_FX_LOCK_MINUTES)) {
+    problems.lock = "rateLockInvalid";
+  }
   return problems;
 }
 
@@ -141,6 +166,7 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
       pricesIncludeTax: form.pricesIncludeTax,
     };
   }
+  const own = sellsOwnCurrency(form);
   return {
     expectedRevision,
     name: form.name.trim(),
@@ -149,7 +175,11 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
     countries: form.countries,
     presence: form.subfolder ? { value: `${locale}-${form.suffix.trim().toLowerCase()}`, locale } : null,
     pricesIncludeTax: form.pricesIncludeTax,
-    priceMode: form.priceMode,
+    // Its own currency converts at its rate (`fx`); the shop currency at 1.
+    currencyCode: own ? form.currencyCode : null,
+    fxRate: own ? form.fxRate?.trim() ?? null : null,
+    ...(own && form.fxLockMinutes !== null ? { fxLockMinutes: form.fxLockMinutes } : {}),
+    priceMode: own ? "fx" : form.priceMode,
     priceAdjustmentPercent: (adjustmentBps(form) ?? 0) / 100,
     priceRounding: form.priceRoundingMinor === null ? null : fromMinor(form.priceRoundingMinor, getDecimalPlaces(form.currencyCode)),
     priceEnding: form.priceEndingMinor === null ? null : fromMinor(form.priceEndingMinor, getDecimalPlaces(form.currencyCode)),
@@ -184,11 +214,17 @@ export function endingChoices(stepMinor: number | null, incrementMinor: number):
 /** The conversion a saved form describes, or null when it does not convert (fixed prices or an invalid entry). */
 export function formConversion(form: MarketForm, incrementMinor: number): FxConversion | null {
   const bps = adjustmentBps(form);
-  if (form.isBackup || form.priceMode !== "fx" || bps === null) return null;
-  const policy = { rate: form.fxRate ?? "1", adjustmentBps: bps, roundingMinor: form.priceRoundingMinor, endingMinor: form.priceEndingMinor };
+  const own = sellsOwnCurrency(form);
+  if (form.isBackup || (!own && form.priceMode !== "fx") || bps === null) return null;
+  const rate = own ? form.fxRate?.trim() ?? "" : "1";
+  const policy = { rate, adjustmentBps: bps, roundingMinor: form.priceRoundingMinor, endingMinor: form.priceEndingMinor };
   if (marketFxPolicyIssue(policy, incrementMinor) !== null) return null;
-  const places = getDecimalPlaces(form.currencyCode);
-  return { policy, fromDecimalPlaces: places, toDecimalPlaces: places, incrementMinor };
+  return {
+    policy,
+    fromDecimalPlaces: getDecimalPlaces(form.shopCurrencyCode),
+    toDecimalPlaces: getDecimalPlaces(form.currencyCode),
+    incrementMinor,
+  };
 }
 
 /** A few product prices and what the market's adjustment makes of them (minor units). */

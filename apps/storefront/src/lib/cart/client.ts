@@ -40,7 +40,7 @@ import {
   readAndClearCartRepairState,
   readAndClearInlineCartRepairState,
 } from "./repair-state";
-import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
+import { reconcileValidatedCartSnapshot, repriceCartForCurrency } from "./validation-reconciliation";
 import {
   renderBulkCartRepairActions,
   selectCartKeysForBulkRepair,
@@ -966,7 +966,16 @@ export async function validateCartSnapshot(
     const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartRuleErrors(), cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
     const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
-    const issues = Array.isArray(rawIssues) ? rawIssues : [];
+    let issues = Array.isArray(rawIssues) ? rawIssues : [];
+    // A cart moved to a market in another currency takes its new prices at once.
+    if (response.ok && json?.success && json.data) {
+      isApplyingCartSnapshot = true;
+      try {
+        issues = repriceCartForCurrency(json.data, issues);
+      } finally {
+        isApplyingCartSnapshot = false;
+      }
+    }
     const summaryMessage =
       issues.length > 0 && preserveCartValidationSummaryOnce
         ? cartValidationSummaryMessage

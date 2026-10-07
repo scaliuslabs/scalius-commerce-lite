@@ -17,6 +17,8 @@ import {
 export interface MarketCountryOption {
   code: string;
   name: string;
+  /** The currency its market sells in (MARKETS-DESIGN step 6). */
+  currencyCode?: string;
 }
 
 /** Whether the store sells at more than one URL: the selector, hreflang and the suggestion appear only then. */
@@ -33,10 +35,11 @@ function regionName(code: string, language: string): string {
 }
 
 /** Every country an active market sells to, by name in the page's language. */
-export function marketCountryOptions(matrix: MarketMatrix, language: string): MarketCountryOption[] {
+export function marketCountryOptions(matrix: MarketMatrix, language: string, shopCurrencyCode?: string): MarketCountryOption[] {
+  const currencyOf = new Map(matrix.markets.flatMap((market) => market.countries.map((code) => [code, market.currencyCode ?? shopCurrencyCode] as const)));
   const codes = new Set(matrix.markets.flatMap((market) => market.countries));
   return [...codes]
-    .map((code) => ({ code, name: regionName(code, language) }))
+    .map((code) => ({ code, name: regionName(code, language), currencyCode: currencyOf.get(code) }))
     .sort((left, right) => left.name.localeCompare(right.name, language));
 }
 

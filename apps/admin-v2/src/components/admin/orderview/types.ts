@@ -231,6 +231,19 @@ export interface Order {
   items: OrderItem[];
   totalAmount: number;
   currencyCode?: string | null;
+  /** Shop-currency amounts of an order paid in a market's own currency (MARKETS-DESIGN D3); null: same-currency. */
+  moneyChain?: {
+    shopCurrencyCode: string;
+    rate: string;
+    source: string;
+    asOf: string | null;
+    lockedUntil: string | null;
+    subtotalShopAmount: number;
+    shippingShopAmount: number;
+    discountShopAmount: number;
+    taxShopAmount: number;
+    totalShopAmount: number;
+  } | null;
   currencyDecimalPlaces?: number | null;
   subtotalAmountMinor?: number | null;
   shippingAmountMinor?: number | null;

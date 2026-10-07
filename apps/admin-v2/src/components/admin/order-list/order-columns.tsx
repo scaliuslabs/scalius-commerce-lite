@@ -168,10 +168,11 @@ function CustomerCell({ order }: { order: OrderListItem }) {
 }
 
 function TotalCell({ order }: { order: OrderListItem }) {
-  const { fmt } = useCurrency();
+  const { fmtIn } = useCurrency();
   return (
     <div data-part="total">
-      <span data-part="value" className="block whitespace-nowrap font-medium tabular-nums">{fmt(order.totalAmount)}</span>
+      {/* In the order's own currency (a market's, MARKETS-DESIGN step 6). */}
+      <span data-part="value" className="block whitespace-nowrap font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
     </div>
   );
 }

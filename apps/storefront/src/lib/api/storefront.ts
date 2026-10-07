@@ -129,6 +129,8 @@ export interface CurrencyData {
   decimalPlaces: number;
   /** The store's price increment in minor units (a BDT store's default: 100, whole taka). */
   priceIncrementMinor?: number;
+  /** The shop currency, when the page's market sells in its own currency (MARKETS-DESIGN step 6). */
+  shopCode?: string;
 }
 
 export interface CategoryNavigationNode {

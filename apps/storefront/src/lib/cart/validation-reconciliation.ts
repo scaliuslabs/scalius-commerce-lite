@@ -5,7 +5,7 @@ import {
   type CartLineItemUpdate,
   type CartLineProperty,
 } from "../../store/cart";
-import type { CartValidationItem, CartValidationResult } from "../api/orders";
+import type { CartValidationIssue, CartValidationItem, CartValidationResult } from "../api/orders";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
 function serverProperties(item: CartValidationItem): CartLineProperty[] | undefined {
@@ -99,4 +99,49 @@ export function reconcileValidatedCartSnapshot(
     rekeyed = rekeyCartLine(key, hash, properties) || rekeyed;
   }
   return updated || rekeyed;
+}
+
+const CART_CURRENCY_KEY = "scalius_cart_currency";
+
+function readCartCurrency(): string | null {
+  try {
+    return localStorage.getItem(CART_CURRENCY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeCartCurrency(code: string): void {
+  try {
+    localStorage.setItem(CART_CURRENCY_KEY, code);
+  } catch {
+    // A cart without storage re-prices with the buyer's repair actions instead.
+  }
+}
+
+/**
+ * A cart moved to a market in another currency re-prices (MARKETS-DESIGN
+ * step 6, Shopify's rule): every line whose price changed only because the
+ * currency did takes the server's price at once, without a "price changed"
+ * warning. Returns the issues left for the buyer. The currency the cart was
+ * last priced in is a per-browser convenience (localStorage); without it the
+ * buyer repairs the lines as usual.
+ */
+export function repriceCartForCurrency(
+  validation: Pick<CartValidationResult, "currencyCode">,
+  issues: readonly CartValidationIssue[],
+): CartValidationIssue[] {
+  const code = validation.currencyCode;
+  if (!code) return [...issues];
+  const previous = readCartCurrency();
+  writeCartCurrency(code);
+  if (!previous || previous === code) return [...issues];
+  const repriced = issues.filter((issue) =>
+    issue.code === "PRICE_CHANGED" && typeof issue.currentPrice === "number" && typeof issue.cartKey === "string" && cartStore.get().items[issue.cartKey]);
+  if (repriced.length === 0) return [...issues];
+  updateCartItemsByKeyAtomically(repriced.map((issue) => ({
+    lineKey: issue.cartKey!,
+    updates: { price: issue.currentPrice! },
+  })));
+  return issues.filter((issue) => !repriced.includes(issue));
 }

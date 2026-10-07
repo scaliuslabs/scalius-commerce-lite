@@ -13,6 +13,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { cn } from "@scalius/shared/utils";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -507,7 +508,17 @@ export function PaymentMethodsCard() {
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <MethodMark row={row} />
         <div className="min-w-0 flex-1">
-          <p className="text-body font-medium">{name}</p>
+          <p className="flex flex-wrap items-center gap-2 text-body font-medium">
+            {name}
+            {/* Which currencies it charges (MARKETS-DESIGN step 6): a market in another currency doesn't offer it. */}
+            <Badge variant="secondary" title={t("chargesCurrenciesHelp")}>
+              {method === "cod"
+                ? t("cashCurrency")
+                : row.chargeCurrencies === "any"
+                  ? t("chargesAny")
+                  : t("chargesCurrencies", { currencies: formatList(row.chargeCurrencies, getLocale(), "conjunction") })}
+            </Badge>
+          </p>
           {row.kind === "app" && row.appName && row.pluginId ? (
             <ProvidedByChip pluginId={row.pluginId} appName={row.appName} />
           ) : row.kind === "app" && row.appName ? (

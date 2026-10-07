@@ -566,7 +566,7 @@ const pageStoreTimeZone = storeTimeZone();
             <MarketSelector
               matrix={marketMatrix}
               presence={marketPresence}
-              currencyCode={currencyCode}
+              currencyCode={layoutData?.currency?.shopCode ?? currencyCode}
               language={pageLanguage}
               returnTo={marketReturnTo}
             />
