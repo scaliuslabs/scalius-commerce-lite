@@ -151,7 +151,7 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+    <form ref={formRef} method="post" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h1 className="text-heading-lg font-semibold">{t("title")}</h1>
         <p className="text-body text-muted-foreground">{t("description")}</p>
