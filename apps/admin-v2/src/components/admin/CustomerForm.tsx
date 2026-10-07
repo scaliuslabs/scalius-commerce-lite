@@ -29,7 +29,7 @@ import { useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
-import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
+import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";

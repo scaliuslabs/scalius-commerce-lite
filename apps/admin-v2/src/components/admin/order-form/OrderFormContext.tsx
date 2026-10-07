@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import type { ManualOrderQuotePayload } from "@/lib/api-query-options/orders";
 import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
-import type { CheckoutRuleError } from "@/lib/admin-api-error";
+import type { CheckoutRuleError } from "@/lib/admin-api-conflicts";
 
 interface OrderFormState {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;

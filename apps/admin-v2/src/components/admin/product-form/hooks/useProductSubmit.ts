@@ -14,13 +14,8 @@ import { apiData } from "~/lib/api";
 import { saveProductChannels, salesChannelKeys } from "~/lib/api-query-options/sales-channels";
 import { getServerFnError } from "~/lib/api-helpers";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
-import {
-  AdminApiResponseError,
-  readProductMediaSkuReferenceConflict,
-  readProductRevisionConflict,
-  type ProductMediaSkuReferenceConflict,
-  type ProductRevisionConflict,
-} from "~/lib/admin-api-error";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { readProductMediaSkuReferenceConflict, readProductRevisionConflict, type ProductMediaSkuReferenceConflict, type ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
 import type { ProductCreateComposition, ProductUpdateComposition } from "../variants/option-matrix-editor-model";
 import type { ProductSectionChanges } from "../merchandising/product-sections";

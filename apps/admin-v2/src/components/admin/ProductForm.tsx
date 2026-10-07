@@ -76,7 +76,7 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { saveBarMessages } from "~/i18n/save-bar";
-import type { ProductRevisionConflict } from "@/lib/admin-api-error";
+import type { ProductRevisionConflict } from "@/lib/admin-api-conflicts";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type {

@@ -42,7 +42,8 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
-import { AdminApiResponseError, readPromotionRevisionConflict } from "~/lib/admin-api-error";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { readPromotionRevisionConflict } from "~/lib/admin-api-conflicts";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { discountQueryOptions, discountsQueryOptions, type DiscountRecord } from "~/lib/api-query-options/discounts";
 import {

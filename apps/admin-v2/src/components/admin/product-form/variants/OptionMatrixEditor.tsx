@@ -18,7 +18,7 @@ import {
 import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
 import { readApiFieldIssues } from "@/lib/api-field-errors";
-import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
+import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-conflicts";
 import { queryKeys } from "@/lib/query-keys";
 import {
   hasSeveralLocations,

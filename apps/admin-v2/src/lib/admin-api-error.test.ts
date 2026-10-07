@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  AdminApiResponseError,
-  classifyAdminError,
-  isAdminApiRetryableReadError,
-  isAdminApiNotFoundError,
-  nullForAdminApiNotFound,
-  readAdminOrderCreateRequestMismatch,
-  readSettingsRevisionConflict,
-  readPromotionRevisionConflict,
-  readProductMediaSkuReferenceConflict,
-  readProductRevisionConflict,
-  readManualOrderDiscountLimitError,
-  readCustomerPhoneConflict,
-} from "./admin-api-error";
+import { AdminApiResponseError, classifyAdminError, isAdminApiNotFoundError, nullForAdminApiNotFound, readSettingsRevisionConflict } from "./admin-api-error";
+import { isAdminApiRetryableReadError, readAdminOrderCreateRequestMismatch, readPromotionRevisionConflict, readProductMediaSkuReferenceConflict, readProductRevisionConflict, readManualOrderDiscountLimitError, readCustomerPhoneConflict } from "./admin-api-conflicts";
 
 describe("admin API detail-loader errors", () => {
   it("recognizes transport and serialized 404 failures", () => {

@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import type { ProductRevisionConflict } from "~/lib/admin-api-error";
+import type { ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 
