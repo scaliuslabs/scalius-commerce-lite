@@ -57,7 +57,9 @@ function understood(text: string, wholeUnitsMessage: string | undefined): number
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, ...props }, ref) => {
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, onFocus, onMouseUp, ...props }, ref) => {
+    // A click that focuses the field keeps the selection the focus made (Safari clears it on mouse up).
+    const focusedByClick = React.useRef(false);
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
@@ -70,6 +72,17 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         autoComplete="off"
         {...props}
         value={text}
+        // Typing replaces what is there ("0" then "25" is 25, never "025").
+        onFocus={(event) => {
+          event.currentTarget.select();
+          focusedByClick.current = true;
+          onFocus?.(event);
+        }}
+        onMouseUp={(event) => {
+          if (focusedByClick.current) event.preventDefault();
+          focusedByClick.current = false;
+          onMouseUp?.(event);
+        }}
         onChange={(event) => {
           const next = event.target.value;
           const input = event.currentTarget;
@@ -89,6 +102,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           if (!sameNumber(number, value ?? null)) onValueChange(number);
         }}
         onBlur={(event) => {
+          focusedByClick.current = false;
           // Show the number as it was understood ("১,২০০" becomes "1200");
           // a fraction in a whole-unit amount stays as typed, still flagged.
           const number = parseLocaleNumber(text);

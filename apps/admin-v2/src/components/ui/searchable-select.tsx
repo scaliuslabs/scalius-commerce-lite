@@ -61,7 +61,16 @@ interface CommonProps {
   onBlur?: React.FocusEventHandler<HTMLButtonElement>;
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Draws the search box. A fixed list shows it only when it is long enough to
+   * need one (`SEARCH_MIN_OPTIONS`); a server-searched list always does. The
+   * list still takes typing and arrow keys without it.
+   */
+  searchable?: boolean;
 }
+
+/** A short list (a status, a yes/no) is read, not searched. */
+export const SEARCH_MIN_OPTIONS = 8;
 
 interface StaticProps extends CommonProps {
   options: readonly SearchableSelectOption[];
@@ -91,7 +100,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
   return props.load ? <AsyncSearchableSelect {...props} /> : <StaticSearchableSelect {...(props as StaticProps)} />;
 }
 
-function StaticSearchableSelect({ options, maxVisibleOptions, ...common }: StaticProps) {
+function StaticSearchableSelect({ options, maxVisibleOptions, searchable, ...common }: StaticProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -122,6 +131,7 @@ function StaticSearchableSelect({ options, maxVisibleOptions, ...common }: Stati
       query={query}
       setQuery={setQuery}
       options={visible}
+      showSearch={searchable ?? options.length >= SEARCH_MIN_OPTIONS}
       selectedOption={options.find((option) => option.value === common.value)}
       state="ready"
       hidden={{ shown: visible.length, total: filtered.length }}
@@ -187,6 +197,8 @@ interface ViewProps extends CommonProps {
   onLoadMore?: () => void;
   onRetry?: () => void;
   hidden?: { shown: number; total: number };
+  /** False hides the search box (a short fixed list); the input stays for keyboard use. */
+  showSearch?: boolean;
 }
 
 function ComboboxView({
@@ -223,6 +235,7 @@ function ComboboxView({
   onLoadMore,
   onRetry,
   hidden,
+  showSearch = true,
 }: ViewProps) {
   const t = useMessages(comboboxMessages);
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -387,7 +400,7 @@ function ComboboxView({
         }}
         className="flex w-(--radix-popover-trigger-width) min-w-60 max-w-(--radix-popover-content-available-width) flex-col overflow-hidden p-0"
       >
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 sm:h-9">
+        <div className={showSearch ? "flex h-11 shrink-0 items-center gap-2 border-b px-3 sm:h-9" : "sr-only"}>
           <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}

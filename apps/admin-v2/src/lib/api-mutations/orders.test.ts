@@ -171,7 +171,8 @@ describe("order mutation failures", () => {
   });
 
   it("words server faults and lost connections the same plain way", () => {
-    expect(orderErrorMessage(new AdminApiResponseError("API error: 502", 502))).toBe(msg("error.network"));
+    expect(orderErrorMessage(new AdminApiResponseError("API error: 502", 502))).toBe(msg("error.server"));
+    expect(orderErrorMessage(new AdminApiResponseError("API error: 500", 500))).not.toBe(msg("error.network"));
     expect(orderErrorMessage(new TypeError("Failed to fetch"))).toBe(msg("error.network"));
     expect(orderErrorMessage(new AdminApiResponseError("Only 2 of that item are left to send.", 409))).toBe("Only 2 of that item are left to send.");
   });

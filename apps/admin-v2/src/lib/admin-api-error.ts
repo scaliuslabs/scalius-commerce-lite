@@ -126,6 +126,31 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 404;
 }
 
+/**
+ * What a failed request says about its cause, so every screen words it the
+ * same way and never blames the connection for an answer it did receive:
+ * - `network`: no answer arrived (offline, timed out, aborted);
+ * - `server`: the server answered with a fault (5xx);
+ * - `notFound` (404) and `forbidden` (401, 403): the server answered no;
+ * - `other`: any other refusal (validation, conflict), which carries its own message.
+ */
+export type AdminErrorClass = "network" | "server" | "notFound" | "forbidden" | "other";
+
+const NETWORK_ERROR_NAMES = new Set(["TypeError", "AbortError", "TimeoutError"]);
+const NETWORK_ERROR_MESSAGE = /failed to fetch|fetch failed|load failed|networkerror|network request failed/i;
+
+export function classifyAdminError(error: unknown): AdminErrorClass {
+  const status = readAdminApiError(error)?.status ?? null;
+  if (status !== null) {
+    if (status >= 500) return "server";
+    if (status === 404) return "notFound";
+    if (status === 401 || status === 403) return "forbidden";
+    return "other";
+  }
+  if (error instanceof Error && (NETWORK_ERROR_NAMES.has(error.name) || NETWORK_ERROR_MESSAGE.test(error.message))) return "network";
+  return "other";
+}
+
 /** The API's error code (e.g. BRAND_REVISION_CONFLICT), or null. */
 export function readAdminApiErrorCode(error: unknown): string | null {
   return readAdminApiError(error)?.code ?? null;

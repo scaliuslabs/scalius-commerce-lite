@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AdminApiResponseError,
+  classifyAdminError,
   isAdminApiRetryableReadError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
@@ -264,5 +265,18 @@ describe("customer phone conflict", () => {
     expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 409, "VALIDATION_ERROR", { customer: other }))).toBeNull();
     expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { fields: [] }))).toBeNull();
     expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { customer: { ...other, kind: "owner" } }))).toBeNull();
+  });
+});
+
+describe("failure classes", () => {
+  it("tells a lost connection from a server fault, a missing record and a refusal", () => {
+    expect(classifyAdminError(new TypeError("Failed to fetch"))).toBe("network");
+    expect(classifyAdminError(Object.assign(new Error("signal timed out"), { name: "TimeoutError" }))).toBe("network");
+    expect(classifyAdminError(new AdminApiResponseError("API error", 500))).toBe("server");
+    expect(classifyAdminError({ cause: { statusCode: 503 } })).toBe("server");
+    expect(classifyAdminError(new AdminApiResponseError("Order not found", 404, "NOT_FOUND"))).toBe("notFound");
+    expect(classifyAdminError(new AdminApiResponseError("No access", 403, "FORBIDDEN"))).toBe("forbidden");
+    expect(classifyAdminError(new AdminApiResponseError("Already used", 409))).toBe("other");
+    expect(classifyAdminError(new Error("Something odd"))).toBe("other");
   });
 });
