@@ -6,6 +6,7 @@ import {
   deleteApiV1AdminCustomersSegmentsBySegmentId,
   postApiV1AdminCustomersByIdAddresses,
   postApiV1AdminCustomersByIdAddressesByAddressIdDefault,
+  postApiV1AdminCustomersByIdAddressesByAddressIdDefaultBilling,
   putApiV1AdminCustomersByIdAddressesByAddressId,
   postApiV1AdminCustomersSegments,
   postApiV1AdminCustomersTagsBulk,
@@ -53,6 +54,10 @@ export const updateCustomerAddress = (id: string, addressId: string, body: Custo
 
 export const setDefaultCustomerAddress = (id: string, addressId: string) =>
   apiData(postApiV1AdminCustomersByIdAddressesByAddressIdDefault({ path: { id, addressId } }));
+
+/** Without a default billing address, the default address bills too. */
+export const setDefaultBillingCustomerAddress = (id: string, addressId: string) =>
+  apiData(postApiV1AdminCustomersByIdAddressesByAddressIdDefaultBilling({ path: { id, addressId } }));
 
 /** When the default goes, the most recently changed other address becomes the default. */
 export const deleteCustomerAddress = (id: string, addressId: string) =>

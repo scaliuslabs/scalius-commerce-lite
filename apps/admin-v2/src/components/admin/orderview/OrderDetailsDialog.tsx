@@ -17,10 +17,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "~/components/ui/input";
 import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "~/components/admin/address/AddressFields";
+import { BillingAddressFields } from "~/components/admin/address/BillingAddressFields";
 import {
   orderAddressDraft,
   orderAddressInput,
+  orderBillingDraft,
+  orderBillingInput,
   readAddressProblems,
+  readBillingAddressProblems,
   usesLocationPicker,
   type AddressDraft,
   type AddressProblem,
@@ -41,7 +45,11 @@ function isPhone(value: string): boolean {
   }
 }
 
-/** Customer and delivery details of an order that hasn't shipped (Shopify's address modal). */
+/**
+ * Customer, delivery and billing details of an order that hasn't shipped
+ * (Shopify's address modal). An order that ships nothing has no delivery
+ * address to edit; its billing address is optional.
+ */
 export function OrderDetailsDialog({ order, open, onOpenChange }: {
   order: Order;
   open: boolean;
@@ -68,6 +76,13 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
   const [problems, setProblems] = useState<AddressProblem[] | null>(null);
   const [skipValidation, setSkipValidation] = useState(false);
   const serverErrors = useAddressErrors(problems, address.countryCode);
+  const ships = order.requiresShipping !== false;
+  // The billing address is sent only once staff change it, so an older order stays without one.
+  const [billing, setBilling] = useState<AddressDraft>(() => orderBillingDraft(order, order.shippingCountryCode ?? undefined));
+  const [billingSame, setBillingSame] = useState(!order.billingCountryCode);
+  const [billingDirty, setBillingDirty] = useState(false);
+  const [billingProblems, setBillingProblems] = useState<AddressProblem[] | null>(null);
+  const billingErrors = useAddressErrors(billingProblems, billing.countryCode);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +90,12 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
     setAddress(orderAddressDraft(order));
     setLocalErrors({});
     setProblems(null);
-    setSkipValidation(Boolean(order.shippingValidationSkipped));
+    setSkipValidation(Boolean(order.shippingValidationSkipped || order.billingValidationSkipped));
+    setBilling(orderBillingDraft(order, order.shippingCountryCode ?? undefined));
+    // Ticked unless the order has a billing address of its own.
+    setBillingSame(!order.billingCountryCode);
+    setBillingDirty(false);
+    setBillingProblems(null);
     mutation.reset();
     // Start from the saved order every time the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,7 +116,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
   };
 
   const submit = form.handleSubmit((data) => {
-    const errors = checkAddress(address);
+    const errors = ships ? checkAddress(address) : {};
     setLocalErrors(errors);
     if (Object.keys(errors).length > 0) return;
     mutation.mutate({
@@ -105,11 +125,15 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
       customerName: data.customerName.trim(),
       customerPhone: data.customerPhone,
       customerEmail: data.customerEmail.trim() || null,
-      ...orderAddressInput(address),
+      ...(ships ? orderAddressInput(address) : {}),
+      ...(billingDirty ? orderBillingInput(billing, ships && billingSame) : {}),
       ...(skipValidation ? { skipAddressValidation: true } : {}),
     }, {
       onSuccess: () => onOpenChange(false),
-      onError: (error) => setProblems(readAddressProblems(error)),
+      onError: (error) => {
+        setProblems(readAddressProblems(error));
+        setBillingProblems(readBillingAddressProblems(error));
+      },
     });
   });
   const addressErrors = { ...serverErrors, ...localErrors };
@@ -123,7 +147,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
         </DialogHeader>
         <Form {...form}>
           <form id="order-details-form" method="post" className="space-y-4" onSubmit={submit} noValidate>
-            {mutation.isError && !problems ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
+            {mutation.isError && !problems && !billingProblems ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
             <FormField
               control={form.control}
               name="customerName"
@@ -159,17 +183,35 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
                 </FormItem>
               )}
             />
-            <AddressFields
-              idPrefix="order-details-address"
-              value={address}
-              onChange={(next) => {
-                setAddress(next);
-                if (Object.keys(localErrors).length > 0) setLocalErrors(checkAddress(next));
+            {ships ? (
+              <AddressFields
+                idPrefix="order-details-address"
+                value={address}
+                onChange={(next) => {
+                  setAddress(next);
+                  if (Object.keys(localErrors).length > 0) setLocalErrors(checkAddress(next));
+                }}
+                errors={addressErrors}
+                disabled={mutation.isPending}
+              />
+            ) : null}
+            <BillingAddressFields
+              idPrefix="order-details-billing"
+              ships={ships}
+              sameAsShipping={billingSame}
+              onSameAsShippingChange={(checked) => {
+                setBillingSame(checked);
+                setBillingDirty(true);
               }}
-              errors={addressErrors}
+              value={billing}
+              onChange={(next) => {
+                setBilling(next);
+                setBillingDirty(true);
+              }}
+              errors={billingErrors}
               disabled={mutation.isPending}
             />
-            {problems ? (
+            {problems || billingProblems ? (
               <SkipAddressValidation
                 id="order-details-skip-validation"
                 checked={skipValidation}

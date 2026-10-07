@@ -1,6 +1,6 @@
 // The customer page's address book (Shopify's customer addresses; MARKETS-
 // DESIGN D7): every saved address, the default first, with add, edit, set
-// as default and delete. Each change saves at once from its dialog; the page
+// as default, set as default billing (0119) and delete. Each change saves at once from its dialog; the page
 // save bar is for the contact fields.
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,6 +44,7 @@ import { resourceMessages } from "~/i18n/resource";
 import {
   createCustomerAddress,
   deleteCustomerAddress,
+  setDefaultBillingCustomerAddress,
   setDefaultCustomerAddress,
   updateCustomerAddress,
 } from "~/lib/api-mutations/customers";
@@ -117,9 +118,10 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
               return (
                 <li key={address.id} className="flex items-start justify-between gap-2 py-3 first:pt-0 last:pb-0">
                   <div className="min-w-0 space-y-0.5 text-body">
-                    {address.isDefault || address.validationSkipped ? (
+                    {address.isDefault || address.isDefaultBilling || address.validationSkipped ? (
                       <div className="flex flex-wrap gap-1.5 pb-1">
                         {address.isDefault ? <Badge variant="secondary">{t("defaultAddress")}</Badge> : null}
+                        {address.isDefaultBilling ? <Badge variant="secondary">{t("defaultBillingAddress")}</Badge> : null}
                         {address.validationSkipped ? <Badge variant="warning" title={a("notCheckedHelp")}>{a("notChecked")}</Badge> : null}
                       </div>
                     ) : null}
@@ -143,6 +145,13 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
                             onSelect={() => void run(() => setDefaultCustomerAddress(customerId, address.id), t("defaultSet"))}
                           >
                             {t("setDefault")}
+                          </DropdownMenuItem>
+                        ) : null}
+                        {!address.isDefaultBilling ? (
+                          <DropdownMenuItem
+                            onSelect={() => void run(() => setDefaultBillingCustomerAddress(customerId, address.id), t("defaultBillingSet"))}
+                          >
+                            {t("setDefaultBilling")}
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuSeparator />

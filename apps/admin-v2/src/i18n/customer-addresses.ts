@@ -22,6 +22,9 @@ export const customerAddressesMessages = defineMessages({
     addressSaved: "Address saved",
     addressDeleted: "Address deleted",
     defaultSet: "Default address set",
+    defaultBillingAddress: "Default billing",
+    setDefaultBilling: "Set as default billing address",
+    defaultBillingSet: "Default billing address set",
     addressInvalid: "Check the address.",
   },
   bn: {
@@ -44,6 +47,9 @@ export const customerAddressesMessages = defineMessages({
     addressSaved: "ঠিকানা সংরক্ষিত",
     addressDeleted: "ঠিকানা মোছা হয়েছে",
     defaultSet: "ডিফল্ট ঠিকানা সেট",
+    defaultBillingAddress: "ডিফল্ট বিলিং",
+    setDefaultBilling: "ডিফল্ট বিলিং ঠিকানা করুন",
+    defaultBillingSet: "ডিফল্ট বিলিং ঠিকানা সেট",
     addressInvalid: "ঠিকানাটি দেখুন।",
   },
 });

@@ -211,6 +211,17 @@ export function CustomerContactCard() {
       {!values.guestCheckoutEnabled && !signInReady ? (
         <p role="alert" className="text-body text-destructive">{t("signInNotReady")}</p>
       ) : null}
+      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
+        <span>
+          <span className="block font-medium">{t("fullBillingAddress")}</span>
+          <span className="block text-muted-foreground">{t("fullBillingAddressHelp")}</span>
+        </span>
+        <Switch
+          checked={values.requireFullBillingAddress === true}
+          disabled={!canEdit}
+          onCheckedChange={(on) => setValue("requireFullBillingAddress", on)}
+        />
+      </label>
       <p className="text-body text-muted-foreground">
         <Link to="/admin/settings/customer-accounts" className="underline underline-offset-2">{t("contactFieldsPointer")}</Link>
       </p>

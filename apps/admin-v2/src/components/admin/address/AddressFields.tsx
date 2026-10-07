@@ -86,6 +86,10 @@ export interface AddressFieldsProps {
   idPrefix: string;
   /** The address book also takes a recipient name and company. */
   showRecipient?: boolean;
+  /** A billing address: Bangladesh too fills its canonical fields (no City → Thana picker). */
+  canonicalOnly?: boolean;
+  /** The name field's label when not the recipient's (a billing name). */
+  nameLabel?: string;
   disabled?: boolean;
   /** Bangladesh's street address and pickers, for keyboard moves from earlier fields. */
   line1Ref?: React.Ref<HTMLTextAreaElement>;
@@ -102,6 +106,8 @@ export function AddressFields({
   errors = {},
   idPrefix,
   showRecipient = false,
+  canonicalOnly = false,
+  nameLabel,
   disabled = false,
   line1Ref,
   locationRefs,
@@ -141,12 +147,12 @@ export function AddressFields({
       {showRecipient ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {RECIPIENT_FIELDS.map((field) => (
-            <TextField key={field} id={id(field)} label={t(field)} value={value[field]} disabled={disabled}
+            <TextField key={field} id={id(field)} label={field === "name" && nameLabel ? nameLabel : t(field)} value={value[field]} disabled={disabled}
               error={error(field)} onChange={(next) => set(field, next)} />
           ))}
         </div>
       ) : null}
-      {usesLocationPicker(value.countryCode) ? (
+      {usesLocationPicker(value.countryCode) && !canonicalOnly ? (
         <>
           <div className="grid gap-2">
             <Label htmlFor={id("line1")}>{t("line1")}</Label>

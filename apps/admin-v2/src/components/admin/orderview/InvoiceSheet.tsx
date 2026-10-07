@@ -17,7 +17,7 @@ import {
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
-import { formatShippingAddress } from "~/lib/location-presentation";
+import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";
 import { countryName } from "~/lib/country-name";
 import { taxLabelText } from "./OrderItemsCard";
 
@@ -59,6 +59,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
   const decimals = saved?.decimalPlaces ?? 2;
+  // The order's own billing address (0119); null when the delivery address bills or there is none.
+  const billingLines = formatBillingAddressLines(order, countryName);
   const amount = (minorAmount: number) => (saved ? minor(minorAmount) : money(minorAmount / 10 ** decimals));
   const discountSummary = summarizeOrderDiscounts({
     discounts: order.discounts ?? [],
@@ -125,12 +127,20 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
         </div>
         <div>
           <h2>{t("invoice.billTo")}</h2>
-          <p className="strong">{order.customerName}</p>
+          <p className="strong">{billingLines ? order.billingName || order.customerName : order.customerName}</p>
+          {billingLines && order.billingCompany ? <p>{order.billingCompany}</p> : null}
           {/* Local format, as the customer writes it: 01712345678. */}
           {order.customerPhone ? <p>{localPhone(order.customerPhone)}</p> : null}
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
-          <p>{formatShippingAddress(order, countryName)}</p>
+          {/* The order's own billing address; else the delivery address bills (or, before 0119, stood here). */}
+          <p>{billingLines ? billingLines.join(", ") : formatShippingAddress(order, countryName)}</p>
         </div>
+        {billingLines && order.shippingAddress ? (
+          <div>
+            <h2>{t("invoice.shipTo")}</h2>
+            <p>{formatShippingAddress(order, countryName)}</p>
+          </div>
+        ) : null}
       </section>
 
       <table>

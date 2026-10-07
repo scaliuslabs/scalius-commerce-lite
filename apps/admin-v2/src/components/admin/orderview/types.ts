@@ -206,6 +206,19 @@ export interface Order {
   shippingPhone?: string | null;
   /** Staff saved it although it breaks its country's rules. */
   shippingValidationSkipped?: boolean;
+  /** The billing snapshot (migration 0119): the shipping address bills when `billingSameAsShipping`. */
+  billingSameAsShipping?: boolean;
+  billingName?: string | null;
+  billingCompany?: string | null;
+  billingAddress?: string | null;
+  billingAddressLine2?: string | null;
+  billingCountryCode?: string | null;
+  billingDependentLocality?: string | null;
+  billingLocality?: string | null;
+  billingAdminArea?: string | null;
+  billingPostalCode?: string | null;
+  billingPhone?: string | null;
+  billingValidationSkipped?: boolean;
   city: string;
   zone: string;
   area: string | null;
