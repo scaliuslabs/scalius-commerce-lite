@@ -599,7 +599,7 @@ interface HandoffEndpointContext<Query, Body> {
       findUserById(id: string): Promise<Record<string, unknown> | null>;
     };
   };
-  json<T>(data: T): T;
+  json(data: Record<string, unknown>): unknown;
   redirect(url: string): unknown;
 }
 
@@ -699,7 +699,7 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
             },
           },
         },
-        async (ctx: HandoffEndpointContext<undefined, { token?: string } | undefined>) => {
+        async (ctx: HandoffEndpointContext<Record<string, unknown> | undefined, { token?: string } | undefined>) => {
           try {
             const claims = await verifyIdentityHandoffToken(ctx.body?.token ?? "", {
               config,

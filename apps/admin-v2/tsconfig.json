@@ -13,11 +13,35 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "~/*": ["./src/*"],
-      "@/*": ["./src/*"],
-      "@scalius/shared/*": ["../../packages/shared/src/*"]
-    }
+      "~/*": [
+        "./src/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
+      "@scalius/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    },
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/admin-v2.tsbuildinfo"
   },
-  "include": ["src/**/*", "src/**/*.d.ts", "vite.config.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src/**/*",
+    "src/**/*.d.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/api-client"
+    }
+  ]
 }

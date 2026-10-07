@@ -1,49 +1,43 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import astroPlugin from "eslint-plugin-astro";
-import reactHooksPlugin from "eslint-plugin-react-hooks";
 import globals from "globals";
 
+/**
+ * ESLint covers only what Oxlint cannot: `.astro` templates (here) and the
+ * dashboard design rules (apps/admin-v2/eslint.config.js). Every TypeScript
+ * and JavaScript rule lives in `.oxlintrc.json` (`pnpm lint:oxlint`).
+ */
+export const ignores = [
+  "node_modules/**",
+  "**/node_modules/**",
+  "dist/**",
+  "**/dist/**",
+  ".astro/**",
+  "**/.astro/**",
+  ".wrangler/**",
+  "**/.wrangler/**",
+  "**/migrations/**",
+  "**/*.gen.ts",
+  "**/*.gen.js",
+];
+
+const ASTRO_FILES = ["**/*.astro", "**/*.astro/*.js", "**/*.astro/*.ts"];
+const onlyAstro = (configs) => configs.map((config) => ({ ...config, files: ASTRO_FILES }));
+
 export default tseslint.config(
-  // Global ignores
-  {
-    ignores: [
-      "node_modules/**",
-      "**/node_modules/**",
-      "dist/**",
-      "**/dist/**",
-      ".astro/**",
-      "**/.astro/**",
-      ".wrangler/**",
-      "**/.wrangler/**",
-      "**/migrations/**",
-      "**/*.gen.ts",
-      "**/*.gen.js",
-    ],
-  },
-
-  // Base recommended rules
-  eslint.configs.recommended,
-
-  // TypeScript recommended (NOT strict — keep noise low for existing codebase)
-  ...tseslint.configs.recommended,
-
-  // Astro flat config
+  { ignores },
+  ...onlyAstro([eslint.configs.recommended, ...tseslint.configs.recommended]),
   ...astroPlugin.configs["flat/recommended"],
-
-  // Global settings
   {
+    files: ASTRO_FILES,
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.node,
       },
     },
-  },
-
-  // TypeScript overrides — lenient for existing codebase
-  {
-    files: ["**/*.ts", "**/*.tsx", "**/*.astro"],
+    // Lenient, as for the rest of the codebase (.oxlintrc.json).
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
@@ -69,31 +63,6 @@ export default tseslint.config(
       "@typescript-eslint/no-empty-object-type": "warn",
       "no-empty-pattern": "warn",
       "no-case-declarations": "warn",
-    },
-  },
-
-  // React hooks rules for TS/TSX files. Several hook helpers live in .ts files.
-  {
-    files: ["**/*.ts", "**/*.tsx"],
-    plugins: {
-      "react-hooks": reactHooksPlugin,
-    },
-    rules: {
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
-    },
-  },
-
-  // Sanitizer helpers intentionally match control characters and bidi ranges.
-  {
-    files: [
-      "packages/shared/src/css-sanitize.ts",
-      "packages/shared/src/css-scope.ts",
-      "packages/shared/src/html-sanitize.ts",
-    ],
-    rules: {
-      "no-control-regex": "off",
-      "no-misleading-character-class": "off",
     },
   },
 );

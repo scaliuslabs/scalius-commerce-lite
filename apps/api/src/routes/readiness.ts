@@ -4,12 +4,14 @@ import {
   getDb,
   resolveDatabaseConfiguration,
 } from "@scalius/database/client";
+import { assertReadsAreUncached } from "@scalius/database/read-freshness";
 import {
   assertDatabaseSchemaCompatible,
   readDatabaseSchemaState,
 } from "@scalius/database/schema-contract";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
+import { isDatabaseMigrationFrozen } from "@scalius/shared/database-migration-freeze";
 import { MASTER_SECRET_NAME, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { EMPTY_PLATFORM_CONFIG, getPlatformConfigReadiness } from "@scalius/shared/platform-config";
 import {
@@ -170,6 +172,16 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
           { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
         )
       : await readDatabaseSchemaState(getDb(env));
+    if (config.provider === "postgres") {
+      // Hyperdrive caches plain reads by default; DVC, idempotency and
+      // checkout authority need every read to see the last commit. The probe
+      // writes one private row, so it waits while a cutover freeze copies data.
+      if (isDatabaseMigrationFrozen(env)) {
+        return `schema ${state.version}/${state.name}; read freshness unchecked during write freeze`;
+      }
+      await assertReadsAreUncached(getDb(env));
+      return `schema ${state.version}/${state.name}; reads uncached`;
+    }
     return `schema ${state.version}/${state.name}`;
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }

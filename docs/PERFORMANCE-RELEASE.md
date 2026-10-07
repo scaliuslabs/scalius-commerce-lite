@@ -18,7 +18,7 @@ A baseline is one measurement at one date on one build. Measure again before you
 | Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`; checkout is `NO_CACHE` | `pnpm release:check` |
 | Every Worker declares `CF_VERSION_METADATA`; the API keeps Workers Cache off | n/a | `pnpm check:env` |
 
-Run the heavy gates one at a time on a 16 GB host. `pnpm typecheck` already runs with `--concurrency=1`.
+Run the heavy gates one at a time on a 16 GB host. `pnpm typecheck` (`scripts/typecheck.mjs`) runs one `tsc --build` with two builders and two checkers (about 4 GB peak), then `astro check`.
 
 Policy (decided 2026-08; no script enforces it):
 

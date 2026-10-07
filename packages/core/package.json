@@ -93,24 +93,24 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
-    "better-auth": "^1.7.2",
+    "better-auth": "^1.7.7",
     "currency.js": "^2.0.4",
-    "drizzle-orm": "^0.45.2",
-    "jose": "^6.2.8",
-    "nanoid": "^6.0.1",
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "nanoid": "^6.0.2",
     "stripe": "^22.6.0",
     "zod": "^4.5.4"
   },
   "scripts": {
-    "lint": "eslint src/",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "lint": "oxlint -c ../../.oxlintrc.json src/",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260831.1",
+    "@cloudflare/workers-types": "^5.20261006.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   },
   "license": "AGPL-3.0-only"
 }

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { parsePhoneNumber, isSupportedCountry, isValidPhoneNumber, type CountryCode } from "libphonenumber-js";
+// "#libphonenumber" (package.json "imports") is the full `max` metadata on the
+// server (Workers, Node, tests): validation checks each country's number
+// patterns, not only lengths. Browser bundles keep the small default metadata,
+// so a browser may accept a number the API refuses; the API is the authority.
+import { parsePhoneNumber, isSupportedCountry, isValidPhoneNumber, type CountryCode } from "#libphonenumber";
 import { BD_MOBILE_REQUIRED_MESSAGE, compactPhone, isBangladeshNumber, normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
@@ -9,7 +13,7 @@ export {
   getCountryCallingCode,
   isValidPhoneNumber,
   parsePhoneNumberFromString,
-} from "libphonenumber-js";
+} from "#libphonenumber";
 
 export type PhoneCountryPolicyMode = "include" | "exclude";
 

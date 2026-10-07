@@ -8,17 +8,17 @@
     "dev": "wrangler dev --config $(node ../../scripts/plugins.mjs wrangler-config --local) --local --name $(node ../../scripts/dev-ports.mjs api-worker-name) --port ${SCALIUS_DEV_API_PORT:-8787} --persist-to ${SCALIUS_WRANGLER_STATE:-../../.wrangler/state} --show-interactive-dev-session=false",
     "build": "node ../../scripts/check-source-policies.mjs && wrangler deploy --dry-run --outdir dist",
     "deploy": "node ../../scripts/deploy.mjs --only api",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
     "db:generate": "cd ../../packages/database && drizzle-kit generate --config drizzle.config.ts",
     "db:migrate:local": "node ../../scripts/deploy.mjs --migrate-only --local",
     "db:migrate:remote": "node ../../scripts/deploy.mjs --migrate-only",
     "test": "vitest run",
-    "lint": "eslint src/"
+    "lint": "oxlint -c ../../.oxlintrc.json src/"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@hono/swagger-ui": "^0.6.1",
-    "@hono/zod-openapi": "^1.6.1",
+    "@hono/zod-openapi": "^1.6.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@paralleldrive/cuid2": "^3.3.0",
     "@scalius/core": "workspace:*",
@@ -26,21 +26,21 @@
     "@scalius/plugin-sdk": "workspace:*",
     "@scalius/shared": "workspace:*",
     "agents": "0.22.0",
-    "better-auth": "^1.7.2",
-    "drizzle-orm": "^0.45.2",
-    "hono": "4.13.5",
+    "better-auth": "^1.7.7",
+    "drizzle-orm": "^0.45.3",
+    "hono": "4.13.13",
     "jsonwebtoken": "^9.0.3",
-    "nanoid": "^6.0.1",
+    "nanoid": "^6.0.2",
     "stripe": "^22.6.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260831.1",
+    "@cloudflare/workers-types": "^5.20261006.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11",
-    "wrangler": "4.128.0"
+    "vitest": "^5.0.3",
+    "wrangler": "4.148.0"
   }
 }

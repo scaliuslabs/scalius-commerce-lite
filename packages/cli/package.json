@@ -38,18 +38,18 @@
   },
   "scripts": {
     "build": "../../node_modules/typescript7/bin/tsc -p tsconfig.build.json && node scripts/set-bin-mode.mjs",
-    "lint": "eslint src/ test/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/ test/",
     "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
   "dependencies": {
     "commander": "15.0.0",
-    "open": "11.0.2"
+    "open": "11.0.4"
   },
   "devDependencies": {
     "@scalius/tsconfig": "workspace:*",
     "@types/node": "^24.13.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   }
 }

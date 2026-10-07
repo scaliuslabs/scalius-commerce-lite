@@ -110,8 +110,8 @@ Run every command from the repository root.
 | `pnpm dev:admin:create`, `dev:admin:reset`, `dev:admin:status` | Manage the local admin |
 | `pnpm db:generate` | Generate Drizzle migrations after a schema change |
 | `pnpm db:migrate:local`, `db:migrate:remote` | Apply pending migrations to local or remote D1 |
-| `pnpm typecheck` | `tsc` for every workspace, one at a time |
-| `pnpm lint` | ESLint for every workspace; the dashboard also enforces its design rules |
+| `pnpm typecheck` | One TypeScript 7 `tsc --build` over every project (project references), then `astro check` for the storefront |
+| `pnpm lint` | Oxlint with type-aware rules over the repository (`.oxlintrc.json`), then ESLint for `.astro` files and the dashboard design rules |
 | `pnpm test` | Vitest for the whole repository ([tests/README.md](tests/README.md)) |
 | `pnpm check:env` | Fail on Wrangler `vars`, bindings outside the allowed set, and a missing `CF_VERSION_METADATA` |
 | `pnpm generate:sdk` | Regenerate the agent operation manifest and `@scalius/api-client`; commit the output |
@@ -167,7 +167,7 @@ Provider and integration settings live in the dashboard under Settings > Payment
 D1 is the default and is bound in the committed Wrangler config. For another provider, install these secrets on the API Worker:
 
 - TursoDB: `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
-- PostgreSQL: `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`.
+- PostgreSQL: `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE` with query caching disabled (`--caching-disabled`).
 - `DATABASE_PROVIDER` (`d1`, `turso`, or `postgres`) pins the provider. It is required when both Turso and PostgreSQL credentials are installed.
 
 Changing the provider of a live store is a freeze, snapshot, import, and verify procedure, not a credential swap: [docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md).

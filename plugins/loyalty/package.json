@@ -9,15 +9,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
   "dependencies": {
     "@scalius/plugin-sdk": "workspace:*"
   },
   "devDependencies": {
     "@scalius/tsconfig": "workspace:*",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   }
 }

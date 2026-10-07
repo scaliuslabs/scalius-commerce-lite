@@ -31,6 +31,8 @@ D1 is the default and needs no provisioning. Provider differences stay in shared
 - Without a pin, complete Turso credentials select Turso and complete PostgreSQL credentials select PostgreSQL. Both sets together are an error: set `DATABASE_PROVIDER`.
 - An incomplete configuration fails closed. A connection string never moves data and never starts a migration.
 - A `*.neon.tech` host without Hyperdrive uses the Neon HTTP transport. Any other PostgreSQL host, and Hyperdrive, uses `pg`. Use Hyperdrive for generic PostgreSQL on a production Worker.
+- A Hyperdrive configuration must have query caching disabled. By default Hyperdrive caches plain reads for 60 s plus 15 s stale-while-revalidate. Cache validation, idempotency rows and checkout authority are plain reads, so a cached read can serve a stale page for up to 75 s or replay a stale checkout decision. Create the configuration with `wrangler hyperdrive create <name> --connection-string <url> --caching-disabled`, or fix an existing one with `wrangler hyperdrive update <id> --caching-disabled`.
+- `GET /api/v1/readyz` proves this for PostgreSQL. It reads a private probe row (`rate_limit`, key `__scalius:readyz:read-freshness`), writes a new random value, and sends the same read again. If the second read returns the old value, `checks.postgres` is `error` and readiness answers 503. During `DATABASE_MIGRATION_FREEZE` the probe does not write, and the detail says that freshness is unchecked (`packages/database/src/read-freshness.ts`).
 - These names are API Worker secrets or bindings, not Wrangler `vars`. The storefront Worker has no database.
 
 ## Release ledger and schema upgrades
@@ -145,8 +147,8 @@ Both sources feed `migrate:sqlite-to-postgres` with one standalone canonical SQL
      --checkpoint <checkpoint.json> --ack-target-host <host>
    ```
    Gate: the migrator copies each table with `COPY` under an advisory lock and records per-table receipts in the `_scalius_migration` schema. It completes only when the per-table and whole-database content fingerprints match and the schema objects and constraints are clean. After a crash, run the same command again: it resumes at the first missing table.
-7. Install `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`, on the API Worker. Then set `DATABASE_PROVIDER=postgres`.
-8. Finish as in steps 9 to 12 of the Turso cutover: deploy with the freeze on, sample readiness (`GET /api/v1/readyz` shows `checks.postgres.status` as `ok`), remove the freeze, run the smoke tests (add an inventory-ledger check and an order cancellation) and keep the frozen source for the rollback window.
+7. Install `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`, on the API Worker. A Hyperdrive configuration must use `--caching-disabled` (see "Runtime contract"). Then set `DATABASE_PROVIDER=postgres`.
+8. Finish as in steps 9 to 12 of the Turso cutover: deploy with the freeze on, sample readiness (`GET /api/v1/readyz` shows `checks.postgres.status` as `ok`), remove the freeze, sample readiness again (the detail must end with `reads uncached`), run the smoke tests (add an inventory-ledger check and an order cancellation) and keep the frozen source for the rollback window.
 
 ## Rollback
 

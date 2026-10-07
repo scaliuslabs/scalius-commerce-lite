@@ -13,9 +13,9 @@ Vite proxies `/api/v1`, `/api/auth` and `/api/scanner-token` to the API Worker, 
 
 | Command | What it does |
 | --- | --- |
-| `pnpm --filter ./apps/admin-v2 lint` | ESLint over `src/`. The shadcn and design rules are errors. |
+| `pnpm --filter ./apps/admin-v2 lint` | ESLint over `src/` for the shadcn and design rules (errors). Generic TypeScript rules run in Oxlint (`pnpm lint:oxlint`). |
 | `pnpm --filter ./apps/admin-v2 build` | `vite build`, then `scripts/check-admin-client-boundaries.mjs`. |
-| `pnpm --filter ./apps/admin-v2 typecheck` | `tsc --noEmit` with TypeScript 7. |
+| `pnpm --filter ./apps/admin-v2 typecheck` | `tsc --build` with TypeScript 7 (also builds the referenced `shared`, `core` and `api-client` declarations). |
 | `pnpm check:admin-perf` | Brotli budget per route (`scripts/admin-perf-check.mjs`). `--runtime` times a running local stack. |
 
 The API build depends on this build (`turbo.json`). Deploy only with the root `pnpm run deploy*` scripts.

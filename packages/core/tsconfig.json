@@ -15,9 +15,22 @@
     "lib": [
       "ES2022",
       "DOM"
-    ]
+    ],
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "../../node_modules/.cache/tsbuild/core",
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/core.tsbuildinfo"
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "scripts/catalog-projection-fill.ts"
+  ],
+  "references": [
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../database"
+    }
   ]
 }
