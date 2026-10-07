@@ -11,6 +11,7 @@ import {
   publicBrandConditions,
 } from "../brands";
 import { deps } from "../../cache-deps";
+import { NAME_FIELDS, translateRows, translationColumns, type TranslationScope } from "../translations";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
 
@@ -27,7 +28,7 @@ export interface HomeBrand {
  * One statement for the brand wall: public brands that have a public
  * product (the buyer-state brand index), in merchant order.
  */
-export function planHomeBrands(db: Database, limit: number): {
+export function planHomeBrands(db: Database, limit: number, translation: TranslationScope | null = null): {
     statements: BatchStatement[];
     resolve(results: readonly unknown[], offset: number): HomeBrand[];
 } {
@@ -41,6 +42,7 @@ export function planHomeBrands(db: Database, limit: number): {
             name: brands.name,
             slug: brands.slug,
             canonicalPath: brands.canonicalPath,
+            ...translationColumns(translation, "brand", brands.id),
             ...brandLogoColumns,
             logoSourceMediaId: sql<string | null>`${brands.logoMediaId}`.as("brand_logo_source_media_id"),
         })
@@ -55,7 +57,12 @@ export function planHomeBrands(db: Database, limit: number): {
     return {
         statements: [statement],
         resolve(results, offset) {
-            const rows = results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow & { logoSourceMediaId: string | null }>;
+            const rows = translateRows(
+                translation,
+                "brand",
+                results[offset] as Array<Omit<HomeBrand, "logo"> & BrandLogoRow & { logoSourceMediaId: string | null }>,
+                NAME_FIELDS,
+            );
             // Depend on the saved reference even when the logo join excludes it.
             deps.mediaItems(rows.map((row) => row.logoSourceMediaId));
             return rows.map((row) => ({

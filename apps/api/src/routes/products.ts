@@ -38,7 +38,9 @@ import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order
 
 import { ok } from "../utils/api-response";
 import { marketPresenceQueryField, marketPresenceQuerySchema } from "../schemas/markets";
-import { publicMarketPricing } from "../utils/public-market";
+import { publicMarketPresence, publicMarketPricing } from "../utils/public-market";
+import { translationScope } from "@scalius/core/modules/translations";
+import { localizedHandleFields } from "../schemas/translations";
 import { productPageMerchandisingFields } from "../schemas/product-merchandising";
 import { productPageReviewFields } from "../schemas/reviews";
 import {
@@ -129,6 +131,7 @@ const productFeedSchema = z.object({
 }).superRefine(validatePriceRange);
 
 const productSitemapSchema = z.object({
+  presence: marketPresenceQueryField,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(5000).optional().default(100).openapi({ description: "Items per page" }),
 });
@@ -411,6 +414,7 @@ const productRecommendationsSchema = z.object({
 
 const productDetailDataSchema = z.object({
   product: z.object({
+    ...localizedHandleFields,
     id: z.string(),
     name: z.string(),
     description: z.string().nullable(),
@@ -721,8 +725,9 @@ const sitemapProductsRoute = createRoute({
 
 app.openapi(sitemapProductsRoute, async (c) => {
   const db = c.get("db");
-  const params = c.req.valid("query");
-  const result = await getStorefrontSitemapProducts(db, params);
+  const { presence: _presence, ...params } = c.req.valid("query");
+  // A presence's sitemap names each product at its handle in the presence's language.
+  const result = await getStorefrontSitemapProducts(db, params, translationScope(publicMarketPresence(c)));
   return ok(c, result);
 });
 

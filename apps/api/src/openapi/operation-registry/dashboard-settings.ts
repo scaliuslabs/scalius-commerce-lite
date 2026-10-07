@@ -87,6 +87,11 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     batch: "forbidden",
     limits: { response: 16_384 },
   },
+  // Languages (MARKETS-DESIGN D9): the store's languages, publishing and the default one.
+  "dashboard.languages.create": {},
+  "dashboard.languages.delete": { risk: "destructive" },
+  "dashboard.languages.list": {},
+  "dashboard.languages.update": {},
   "dashboard.markets.create": {},
   "dashboard.markets.delete": { risk: "destructive", revision: "required" },
   "dashboard.markets.get": {},

@@ -7,7 +7,7 @@
 // in modules/collections.
 
 import { collections, products, categories, productVariants } from "@scalius/database/schema";
-import { sql, and, isNull, eq, inArray, asc, desc, max, type SQL } from "drizzle-orm";
+import { sql, and, isNull, eq, inArray, asc, desc, max, getTableColumns, type SQL } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { categoryScope } from "@scalius/shared/cache-deps";
@@ -43,6 +43,17 @@ import {
     type ResolvedProduct,
 } from "./cards";
 import { declareProductCards, declareRequestedProducts } from "./declare-deps";
+import {
+    translationScopeOf,
+    NAME_FIELDS,
+    translateRow,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+} from "../translations";
+
+/** A collection's translated text (MARKETS-DESIGN D9). */
+const COLLECTION_FIELDS = { name: "name", description: "description", content: "content", metaTitle: "metaTitle", metaDescription: "metaDescription" } as const;
 
 /**
  * What a collection's product set depends on beyond the cards shown: a
@@ -276,10 +287,12 @@ export async function getPublicCollectionCatalog(
 ) {
     // The row (found or not: a collection can be activated or restored).
     if (/^[\x21-\x7e]{1,200}$/.test(id)) deps.collection(id);
+    // A presence page's collection, cards and categories in its language.
+    const translation = translationScopeOf(pricing);
     // The row and its storefront-visible custom fields: one round trip.
     const [collectionRows, customFieldRows] = await db.batch([
         db
-            .select()
+            .select({ ...getTableColumns(collections), ...translationColumns(translation, "collection", collections.id, { slug: false }) })
             .from(collections)
             .where(and(
                 eq(collections.id, id),
@@ -288,8 +301,8 @@ export async function getPublicCollectionCatalog(
             ))
             .limit(1),
         selectStorefrontCustomFieldRows(db, "collection", id),
-    ] as never) as unknown as [Array<typeof collections.$inferSelect>, StorefrontCustomFieldRow[]];
-    const collection = collectionRows[0];
+    ] as never) as unknown as [Array<typeof collections.$inferSelect & { trRows?: string | null }>, StorefrontCustomFieldRow[]];
+    const collection = translateRow(translation, "collection", collectionRows[0], COLLECTION_FIELDS);
     if (!collection) return null;
 
     const config = normalizeCollectionConfig(collection.config);
@@ -302,7 +315,7 @@ export async function getPublicCollectionCatalog(
     const categoryPromise: Promise<Array<{ id: string; name: string; slug: string }>> =
         membership.categoryIds.length > 0
             ? db
-                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .select({ id: categories.id, name: categories.name, slug: categories.slug, ...translationColumns(translation, "category", categories.id) })
                 .from(categories)
                 .where(and(
                     sql`${categories.id} IN (
@@ -311,6 +324,7 @@ export async function getPublicCollectionCatalog(
                     ...publicCategoryConditions(),
                 ))
                 .all()
+                .then((rows) => translateRows(translation, "category", rows, NAME_FIELDS))
             : Promise.resolve([]);
     const catalogPromise = getStorefrontCollectionProducts(db, {
         productIds: membership.productIds,
@@ -318,7 +332,7 @@ export async function getPublicCollectionCatalog(
     }, params, pricing);
     const featuredPromise: Promise<RawProduct[]> = config.featuredProductId
             ? db
-                .select(buildCollectionProductSelect(buyerPricing))
+                .select(buildCollectionProductSelect(buyerPricing, translation))
                 .from(products)
                 .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                 .where(and(
@@ -338,6 +352,7 @@ export async function getPublicCollectionCatalog(
     const featuredProducts = await enrichProductsWithMedia(
         db,
         await priceProductCards(db, await marketPriceContextOf(pricing), featuredRows),
+        translation,
     );
 
     return {
@@ -357,10 +372,11 @@ export async function getPublicCollectionCatalog(
 async function enrichProductsWithMedia(
     db: Database,
     rows: readonly RawProduct[],
+    translation: TranslationScope | null,
 ): Promise<Map<string, ResolvedProduct>> {
     const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
     declareProductCards(rows.map((row) => row.id), mediaByProduct);
-    return resolveProductCards(rows, mediaByProduct);
+    return resolveProductCards(rows, mediaByProduct, undefined, translation);
 }
 
 export interface CollectionProductResult {
@@ -391,6 +407,8 @@ export interface CollectionProductsRequest {
 export function planCollectionProducts(
     db: Database,
     requests: readonly CollectionProductsRequest[],
+    /** A presence read's language: cards and categories folded in its translations (none at the root). */
+    translation: TranslationScope | null = null,
 ): {
     statements: BatchStatement[];
     /** The statements whose rows are cards (`priceCardRowsInResults`). */
@@ -445,7 +463,7 @@ export function planCollectionProducts(
      */
     const productList = (scope: SQL, conditions: SQL[], order?: { limit: number }) => {
         const pricing = pricingFor(scope);
-        const rows = db.select(buildCollectionProductSelect(pricing)).from(products)
+        const rows = db.select(buildCollectionProductSelect(pricing, translation)).from(products)
             .innerJoin(pricing, eq(products.id, pricing.productId))
             .where(and(...conditions));
         const ids = db.select({ id: products.id }).from(products).where(and(...conditions));
@@ -471,7 +489,7 @@ export function planCollectionProducts(
         ? productList(idSetCondition(featuredIdsArr), publicCollectionProductConditions(idSetCondition(featuredIdsArr)))
         : null;
     const categoryMetadataSlot = categoryIdsArr.length > 0
-        ? push(db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(
+        ? push(db.select({ id: categories.id, name: categories.name, slug: categories.slug, ...translationColumns(translation, "category", categories.id) }).from(categories).where(and(
             sql`${categories.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdsArr)})
                 )`,
@@ -496,6 +514,7 @@ export function planCollectionProducts(
                     storeDecimalPlacesFromCode(allRows[0]?.storeCurrencyCode),
                     new Set(allRows.filter((row) => row.freeDelivery).map((row) => row.id)),
                 ),
+                translation,
             );
 
             const specificProductsById = new Map<string, ResolvedProduct>();
@@ -520,7 +539,7 @@ export function planCollectionProducts(
             const categoryMetadataById = new Map<string, { id: string; name: string; slug: string }>();
             const categoryRows = categoryMetadataSlot === null
                 ? []
-                : results[categoryMetadataSlot] as { id: string; name: string; slug: string }[];
+                : translateRows(translation, "category", results[categoryMetadataSlot] as { id: string; name: string; slug: string }[], NAME_FIELDS);
             for (const cat of categoryRows) {
                 if (cat.id) categoryMetadataById.set(cat.id, cat);
             }
@@ -595,9 +614,10 @@ export async function resolveCollectionProductsBatch(
         id: string;
         config: unknown;
     }[],
+    translation: TranslationScope | null = null,
 ): Promise<Map<string, CollectionProductResult>> {
     deps.collections(parsedCollections.map(({ id }) => id));
-    const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })));
+    const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })), translation);
     return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : []);
 }
 
@@ -622,25 +642,27 @@ export interface PublicCollectionDirectoryEntry {
  * and its visible count. Collections nobody can shop (no visible product)
  * are left out.
  */
-export async function listPublicCollectionDirectory(db: Database): Promise<PublicCollectionDirectoryEntry[]> {
+export async function listPublicCollectionDirectory(db: Database, translation: TranslationScope | null = null): Promise<PublicCollectionDirectoryEntry[]> {
     // Which collections are listed, and each one's whole member set (its count).
     deps.anyCollection();
-    const rows = await db
+    const read = await db
         .select({
             id: collections.id,
             name: collections.name,
             config: collections.config,
             canonicalPath: collections.canonicalPath,
+            ...translationColumns(translation, "collection", collections.id, { slug: false }),
         })
         .from(collections)
         .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
         .orderBy(asc(collections.sortOrder), asc(collections.name))
         .limit(COLLECTION_DIRECTORY_LIMIT)
         .all();
+    const rows = translateRows(translation, "collection", read, NAME_FIELDS);
     if (rows.length === 0) return [];
     for (const row of rows) declareCollectionMembership(row.config);
 
-    const plan = planCollectionProducts(db, rows.map((row) => ({ key: row.id, config: row.config, maxProducts: 1 })));
+    const plan = planCollectionProducts(db, rows.map((row) => ({ key: row.id, config: row.config, maxProducts: 1 })), translation);
     const counts = rows.map((row) => storefrontCollectionVisibleCountQuery(
         db,
         collectionMembershipForConfig(normalizeCollectionConfig(row.config)),

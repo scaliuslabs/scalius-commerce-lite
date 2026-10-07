@@ -281,7 +281,7 @@ describe("DVC directed scenarios", () => {
     ["its name", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", INVALID],
     ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
     ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", INVALID],
-    ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_dvc_india'", INVALID],
+    ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-np', locale = 'bn' WHERE id = 'mkp_dvc_india'", INVALID],
     // The checkout config carries the countries every active market sells to (its accepted phone
     // countries, `mk:selling`): another market's country or status reaches it, its rename does not.
     ["another market's country, in the accepted phone countries", "/api/v1/checkout/config", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
@@ -294,6 +294,24 @@ describe("DVC directed scenarios", () => {
     ["a product read", "/api/v1/products/linen-panjabi", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", VALID],
   ])("markets: %s", async (name, path, sql, expected) => {
     const verdict = await staleAfter(`scenario-markets-${name}`, path, (sqlite) => sqlite.exec(sql));
+    expect(verdict).toEqual(expected);
+  }, 120_000);
+
+  // Translations (MARKETS-DESIGN D9): a presence folds its language; the root folds none.
+  it.each([
+    ["a product's text, in its language", "/api/v1/products/linen-panjabi?presence=bn-in", `UPDATE translations SET fields = json_set(fields, '$.name', 'নতুন') WHERE id = 'tr_dvc_linen'`, INVALID],
+    ["an option value, on its product", "/api/v1/products/silk-panjabi?presence=bn-in", `UPDATE translations SET fields = json_set(fields, '$.value', 'সোনা') WHERE id = 'tr_dvc_ov_gold'`, INVALID],
+    ["a market adaptation, in its market", "/api/v1/products/linen-panjabi?presence=en-in", `UPDATE translations SET fields = json_set(fields, '$.name', 'Linen Shirt') WHERE id = 'tr_dvc_linen_in'`, INVALID],
+    ["a draft language's text, at the root", "/api/v1/products/cotton-panjabi", `INSERT INTO translations (id, resource_type, resource_id, locale, fields) VALUES ('tr_dvc_cotton_fr', 'product', 'p_cotton', 'fr', '{"name":"Coton"}')`, VALID],
+    ["a localized handle, in the sitemap", "/api/v1/products/sitemap?presence=bn-in", "INSERT INTO localized_slugs (resource_type, locale, slug, resource_id) VALUES ('product', 'bn', 'cotton-bn', 'p_cotton')", INVALID],
+    ["a localized handle moved to another product", "/api/v1/products/linen-panjabi-bn?presence=bn-in", "UPDATE localized_slugs SET resource_id = 'p_cotton' WHERE slug = 'linen-panjabi-bn'", INVALID],
+    ["a localized handle, in the root page's alternates", "/api/v1/products/cotton-panjabi", "INSERT INTO localized_slugs (resource_type, locale, slug, resource_id) VALUES ('product', 'bn', 'cotton-bn', 'p_cotton')", INVALID],
+    ["a menu link label", "/api/v1/storefront/layout?presence=bn-in", `UPDATE translations SET fields = json_set(fields, '$."item:nav_sale"', 'অফার') WHERE id = 'tr_dvc_menu_main'`, INVALID],
+    ["a delivery rate name", "/api/v1/shipping-methods?presence=bn-in", `UPDATE translations SET fields = json_set(fields, '$.name', 'ঢাকা') WHERE id = 'tr_dvc_ship_dhaka'`, INVALID],
+    ["a payment method name", "/api/v1/checkout/config?presence=bn-in", `UPDATE translations SET fields = json_set(fields, '$.name', 'নগদে') WHERE id = 'tr_dvc_cod'`, INVALID],
+    ["the language's publication", "/api/v1/products/linen-panjabi?presence=bn-in", "UPDATE store_languages SET published = 0 WHERE locale = 'bn'", INVALID],
+  ])("translations: %s", async (name, path, sql, expected) => {
+    const verdict = await staleAfter(`scenario-translations-${name}`, path, (sqlite) => sqlite.exec(sql));
     expect(verdict).toEqual(expected);
   }, 120_000);
 

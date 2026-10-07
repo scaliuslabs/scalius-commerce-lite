@@ -121,6 +121,14 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
   // Theme: commands answer revisions only; whole documents reach agents as a JSON artifact.
+  // Translations (MARKETS-DESIGN D9): a resource's text in a store language
+  // and market; machine translation through an app's provider fills, never saves.
+  "dashboard.translations.delete": { risk: "destructive" },
+  "dashboard.translations.get": {},
+  "dashboard.translations.list": {},
+  "dashboard.translations.machine_translate": { openWorld: true },
+  "dashboard.translations.providers": {},
+  "dashboard.translations.save": {},
   "dashboard.theme.editor_get": {
     exposure: "excluded",
     reason: "The editor's opening bundle (both documents, image previews, app surfaces); agents read workspace_get and document_get.",

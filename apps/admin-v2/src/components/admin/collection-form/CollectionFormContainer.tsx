@@ -15,6 +15,7 @@ import { normalizeCollectionConfig } from "@scalius/core/modules/collections/bro
 import { collectionQueryOptions } from "~/lib/api-query-options/collections";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
+import { LazyResourceTranslationsCard } from "~/components/admin/translations/LazyResourceTranslationsCard";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
@@ -277,6 +278,7 @@ export function CollectionForm({
             moveProduct={moveProduct}
           />
           <CollectionSearchListing form={form} disabled={!canSave} />
+          {isEdit && defaultValues?.id ? <LazyResourceTranslationsCard type="collection" id={defaultValues.id} /> : null}
           {isEdit && defaultValues?.id ? (
             <CustomFieldsCard ownerType="collection" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}

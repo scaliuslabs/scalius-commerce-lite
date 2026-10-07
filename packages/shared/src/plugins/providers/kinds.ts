@@ -2,7 +2,7 @@
 // typed error every port raises (docs/platform/PLUGINS.md, "Providers").
 //
 // A port is one interface per kind (payment, courier, sms, email, fraud,
-// tax). The platform's own adapters (COD, Stripe, the email providers) and
+// tax, translation). The platform's own adapters (COD, Stripe, the email providers) and
 // app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and
 // fraud checkers; bKash; Nagad) implement the same port; core code resolves a provider by id and
 // never asks which kind of implementation it got. Ports are part of the
@@ -11,7 +11,7 @@
 //
 // Kept free of zod: the sandbox wrapper and the SDK root bundle this file.
 
-export const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax"] as const;
+export const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax", "translation"] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
 /**
@@ -32,6 +32,8 @@ export const PROVIDER_OPERATIONS = {
   email: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
   fraud: { required: ["check"], optional: ["testConnection"] },
   tax: { required: ["calculate"], optional: ["commit", "void", "refund", "testConnection"] },
+  // Machine translation (MARKETS-DESIGN D9): no built-in provider, apps only.
+  translation: { required: ["translate"], optional: ["testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 export type ProviderOperationName<K extends ProviderKind> =

@@ -38,6 +38,7 @@ import {
 import type { SettingsDocumentRow } from "../../settings-store";
 import { readPresenceMarketWithDocuments, type PresenceMarket } from "../markets";
 import { NotFoundError } from "../../errors";
+import { applyTranslation, readTranslationChains, translationScope } from "../translations";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -203,6 +204,16 @@ export async function getCheckoutConfig(
             ...(amountLimits ? { amountLimits } : {}),
             ...gateway.publicConfig?.(settings),
         });
+    }
+
+    // A presence's payment method names in its language (MARKETS-DESIGN D9):
+    // one more statement there, none at the root.
+    const translation = translationScope(presence);
+    if (translation) {
+        const chains = await readTranslationChains(db, translation, "payment_method", gateways.map((gateway) => String(gateway.id)));
+        for (const [index, gateway] of gateways.entries()) {
+            gateways[index] = applyTranslation(gateway, chains.get(String(gateway.id)) ?? [], { name: "name" });
+        }
     }
 
     const unavailable = gateways.length === 0;

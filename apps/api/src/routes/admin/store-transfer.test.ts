@@ -122,6 +122,14 @@ describe("store transfer routes", () => {
     expect((await createOnly.post("/products", { mode: "price", items: [product()] })).status).toBe(403);
   });
 
+  /** The export's "Cost per item" cells: a whole-string search would match ids and timestamps. */
+  function costCells(csv: string): string[] {
+    const rows = csv.trim().split(/\r?\n/).map((line) =>
+      [...line.matchAll(/("(?:[^"]|"")*"|[^,]*)(?:,|$)/g)].map((match) => (match[1] ?? "").replace(/^"|"$/g, "").replace(/""/g, '"')));
+    const column = (rows[0] ?? []).indexOf("Cost per item");
+    return rows.slice(1).map((row) => row[column] ?? "");
+  }
+
   it("writes and exports costs per item only for staff with View product costs", async () => {
     const costed = product({ variants: [{ ...product().variants[0], cost: 210 }] });
     const noCosts = createApp(ALL.filter((permission) => permission !== PERMISSIONS.PRODUCTS_VIEW_COSTS));
@@ -131,12 +139,12 @@ describe("store transfer routes", () => {
     noCosts.sqlite.exec("UPDATE product_variants SET cost_minor = 21000");
     const hidden = new TextDecoder().decode(new Uint8Array(await (await noCosts.app.request("/api/v1/admin/export/products?limit=10")).arrayBuffer()));
     expect(hidden).toContain("Cost per item");
-    expect(hidden).not.toContain("210");
+    expect(costCells(hidden)).toEqual([""]);
 
     const withCosts = createApp();
     expect((await withCosts.post("/products", { mode: "upsert", items: [costed] })).status).toBe(200);
     const shown = new TextDecoder().decode(new Uint8Array(await (await withCosts.app.request("/api/v1/admin/export/products?limit=10")).arrayBuffer()));
-    expect(shown).toContain("210");
+    expect(costCells(shown)).toEqual(["210"]);
   });
 
   it("refuses to create categories and brands without categories.create", async () => {

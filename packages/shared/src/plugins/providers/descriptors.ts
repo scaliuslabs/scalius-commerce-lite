@@ -149,6 +149,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   email: plain("email"),
   fraud: fraudProviderDescriptorSchema,
   tax: plain("tax"),
+  translation: plain("translation"),
 } as const satisfies Record<ProviderKind, z.ZodType>;
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;
@@ -161,7 +162,7 @@ export type PluginProviderDeclaration =
   | ({ kind: "payment" } & PaymentProviderDescriptor)
   | ({ kind: "courier" } & CourierProviderDescriptor)
   | ({ kind: "fraud" } & FraudProviderDescriptor)
-  | ({ kind: "sms" | "email" | "tax" } & PlainProviderDescriptor);
+  | ({ kind: "sms" | "email" | "tax" | "translation" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat

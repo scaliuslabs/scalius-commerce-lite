@@ -19,6 +19,7 @@ import DeliveryFacts from "@/components/DeliveryFacts.astro";
 import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
 import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
+import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -329,6 +330,8 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   `/products/${product.slug}`,
   product.canonicalPath,
 );
+// Its URL in each language (MARKETS-DESIGN D9): the hreflang alternates.
+const productPaths = localizedPaths(product, (handle) => `/products/${handle}`);
 
 // Shared product-image representation is first; remaining image associations
 // and video posters are included in structured data without ever treating a
@@ -692,6 +695,7 @@ const productCategoryAnalytics = productCategory
   description={seoDescription || pageDescription}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  localizedPaths={productPaths}
   ogImage={ogImageUrl ?? undefined}
   ogType="product"
   ogPrice={formatMetadataPrice(buyerDisplayedPrice)}

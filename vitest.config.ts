@@ -77,6 +77,8 @@ export default defineConfig({
         test: {
           name: "app",
           exclude: [...configDefaults.exclude, ".claude/**", ...PURE_TESTS],
+          // The migrated D1 image, built once for every test process.
+          globalSetup: ["./packages/database/src/testing/migrated-image-setup.ts"],
         },
       },
     ],

@@ -5,4 +5,6 @@
 export * from "./store-languages.service";
 export * from "./translations.service";
 export * from "./fold";
+export * from "./rows";
+export * from "./checkout-copy";
 export { TABLE_SOURCES, type PaymentMethodSource, type ResourceSource } from "./resources";

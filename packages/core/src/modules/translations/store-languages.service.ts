@@ -72,7 +72,8 @@ export async function readDefaultStoreLanguage(db: Database): Promise<string> {
   return row?.locale ?? "en";
 }
 
-async function getStoreLanguage(db: Database, locale: string): Promise<StoreLanguage> {
+/** One store language; a 404 when the store has none by that code. */
+export async function getStoreLanguage(db: Database, locale: string): Promise<StoreLanguage> {
   const language = (await listStoreLanguages(db)).find((each) => each.locale === locale);
   if (!language) throw new NotFoundError("The store has no such language.");
   return language;
@@ -180,5 +181,21 @@ export function checkoutCopyFollowsDefaultWrites(db: Database, locale: string): 
       .where(sql`${checkoutLanguages.id} = (SELECT chosen_copy.id FROM ${checkoutLanguages} AS chosen_copy
         WHERE chosen_copy.deleted_at IS NULL AND lower(substr(chosen_copy.code, 1, 2)) = ${locale}
         ORDER BY chosen_copy.is_default DESC, chosen_copy.id LIMIT 1)`) as unknown as SQLiteBatchItem,
+  ];
+}
+
+/**
+ * The checkout copy put in use (`is_active`, Settings → Checkout languages)
+ * is the default language's copy, so its language becomes the default
+ * language (published, at the root): the writes that follow it, none for a
+ * code that names no two-letter language.
+ */
+export function defaultLanguageFollowsCopyWrites(db: Database, code: string): SQLiteBatchItem[] {
+  const locale = code.trim().toLowerCase().slice(0, 2);
+  if (!isStoreLocale(locale)) return [];
+  return [
+    ...ensureStoreLanguageWrites(db, [locale], { publish: true }),
+    db.update(marketPresences).set({ locale })
+      .where(and(eq(marketPresences.marketId, BACKUP_MARKET_ID), eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, ""))) as unknown as SQLiteBatchItem,
   ];
 }

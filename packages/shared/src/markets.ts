@@ -247,18 +247,36 @@ export interface HreflangAlternate {
  * versions), one per active presence plus `x-default` (the root), or none
  * while the store has a single presence (today's HTML stays as it is).
  * `path` is the page's path (and query) without its presence; `origin` the
- * store URL.
+ * store URL. `pathForLocale` gives a page with localized handles its path in
+ * a presence's language (MARKETS-DESIGN D9: `/products/<handle>`); a locale it
+ * has no path for uses `path`.
  */
-export function hreflangAlternates(matrix: MarketMatrix, path: string, origin: string): HreflangAlternate[] {
+export function hreflangAlternates(
+  matrix: MarketMatrix,
+  path: string,
+  origin: string,
+  pathForLocale?: (locale: string) => string | null | undefined,
+): HreflangAlternate[] {
   const presences = activePresences(matrix);
   const pathname = path.split(/[?#]/)[0]!;
   if (presences.length < 2 || !isStorefrontPagePath(pathname)) return [];
   const base = origin.replace(/\/$/, "");
+  const query = path.slice(pathname.length);
+  const localPath = (locale: string) => {
+    const localized = pathForLocale?.(locale);
+    return localized ? `${localized}${query}` : path;
+  };
   const alternates = presences.map(({ market, presence }) => ({
     hreflang: presenceHreflang(market, presence),
-    href: `${base}${presencePath(presence.value, path)}`,
+    href: `${base}${presencePath(presence.value, localPath(presence.locale))}`,
   }));
-  return [...alternates, { hreflang: "x-default", href: `${base}${path}` }];
+  const root = presences.find(({ presence }) => presence.value === "");
+  return [...alternates, { hreflang: "x-default", href: `${base}${root ? localPath(root.presence.locale) : path}` }];
+}
+
+/** The store default language: the root presence's locale (null without a root presence). */
+export function defaultLocale(matrix: MarketMatrix): string | null {
+  return activePresences(matrix).find(({ presence }) => presence.value === "")?.presence.locale ?? null;
 }
 
 // ---------------------------------------------------------------------------

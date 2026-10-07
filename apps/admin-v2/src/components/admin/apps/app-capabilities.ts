@@ -6,7 +6,7 @@
 // of the settings pages, so search and the app page link here cheaply.
 import type { SettingsNavKey } from "../settings/settings-nav";
 
-export const APP_PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax"] as const;
+export const APP_PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax", "translation"] as const;
 export type AppProviderKind = (typeof APP_PROVIDER_KINDS)[number];
 
 /** The settings page and card each kind lives on. */
@@ -17,6 +17,7 @@ export const PROVIDER_CAPABILITY: Readonly<Record<AppProviderKind, { page: Setti
   email: { page: "notifications", to: "/admin/settings/notifications", card: "sending" },
   fraud: { page: "integrations", to: "/admin/settings/integrations", card: "fraudCheck" },
   tax: { page: "taxes", to: "/admin/settings/taxes", card: "taxCollection" },
+  translation: { page: "languages", to: "/admin/settings/languages", card: "machineTranslation" },
 };
 
 const PREFIX = "app-provider=";

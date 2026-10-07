@@ -230,7 +230,9 @@ describe("the homepage under markets", () => {
     expect(html).toContain('<link rel="alternate" hreflang="en-IN" href="https://shop.test/en-in">');
     expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.test/">');
     expect(html).toMatch(/<form method="post" action="\/localization"[^>]*data-market-selector/);
-    expect(html).toMatch(/<option value="BD" selected[^>]*>Bangladesh \(BDT\)<\/option><option value="IN"[^>]*>India \(BDT\)<\/option>/);
+    // The root page speaks the store default language (the root presence's, which hreflang names).
+    expect(html).toMatch(/<html lang="bn"/);
+    expect(html).toMatch(/<option value="BD" selected[^>]*>বাংলাদেশ \(BDT\)<\/option><option value="IN"[^>]*>ভারত \(BDT\)<\/option>/);
     expect(html).toContain('name="return_to" value="/"');
     expect(html).toContain("data-market-suggestion");
   });
@@ -244,13 +246,13 @@ describe("the homepage under markets", () => {
     expect(html).toContain('<meta property="og:locale" content="en_IN">');
     expect(html).toContain('"url":"https://shop.test/en-in"');
     expect(html).toContain('"urlTemplate":"https://shop.test/en-in/search?q={search_term_string}"');
-    // Only the market-keyed reads carry the presence (the checkout config and,
-    // since its cards are priced in the market, the homepage): one batch,
-    // invariant parts unchanged.
+    // Only the market-keyed reads carry the presence (the checkout config, the
+    // homepage, whose cards are priced in the market, and the layout, whose
+    // menus are in the presence's language): one batch, invariant parts unchanged.
     const batch = calls.find((call) => call.startsWith("/api/v1/storefront/batch"))!;
     const parts = new URL(batch, "https://api.shop.test").searchParams.getAll("r");
     expect(parts).toContain("/api/v1/checkout/config?presence=en-in");
-    expect(parts).toContain("/api/v1/storefront/layout");
+    expect(parts).toContain("/api/v1/storefront/layout?presence=en-in");
     expect(parts).toContain("/api/v1/storefront/homepage?presence=en-in");
   });
 });

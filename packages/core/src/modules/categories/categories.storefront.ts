@@ -13,9 +13,23 @@ import {
 } from "../custom-fields";
 import {
     publicCategoryTreeContextQueries,
+    publishedCategoryIdBySlug,
     type CategoryBreadcrumbItem,
     type PublicCategoryChild,
 } from "./categories.tree";
+import {
+    NAME_FIELDS,
+    localizedSlugSql,
+    localizedSlugsSql,
+    parseLocalizedSlugs,
+    translateRow,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+} from "../translations";
+
+/** A category's translated text (MARKETS-DESIGN D9). */
+const CATEGORY_FIELDS = { name: "name", description: "description", content: "content", metaTitle: "metaTitle", metaDescription: "metaDescription" } as const;
 
 /** Sub-category links a category page carries (pills, shelves, drill levels). */
 export const STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT = 48;
@@ -33,14 +47,17 @@ export const CATEGORY_SITEMAP_LIMIT = 5000;
  * `excludeFromSitemap`, filtered before the limit (never after a page read).
  * `updatedAt` is the row's own last change, the page's lastmod.
  */
-export async function getPublicCategorySitemapEntries(db: Database) {
+export async function getPublicCategorySitemapEntries(db: Database, translation: TranslationScope | null = null) {
     deps.anyCategory();
     // Sitemap lastmod: a write that changes only updated_at advances the
     // discovery key (cache-deps registry), not a category key.
     deps.discoveryMembership();
+    // A presence's sitemap: each category at its handle in the presence's language.
+    if (translation) deps.localizedSlugs("category", translation.locale);
     const rows = await db
         .select({
             slug: categories.slug,
+            ...(translation ? { trSlug: localizedSlugSql(translation, "category", categories.id) } : {}),
             canonicalPath: categories.canonicalPath,
             updatedAt: sql<number | null>`CAST(COALESCE(${categories.updatedAt}, ${categories.createdAt}) AS INTEGER)`,
         })
@@ -54,7 +71,7 @@ export async function getPublicCategorySitemapEntries(db: Database) {
         .limit(CATEGORY_SITEMAP_LIMIT)
         .all();
     return rows.map((row) => ({
-        slug: row.slug,
+        slug: (row as { trSlug?: string | null }).trSlug || row.slug,
         canonicalPath: row.canonicalPath,
         updatedAt: row.updatedAt ? new Date(Number(row.updatedAt) * 1000).toISOString() : null,
     }));
@@ -64,12 +81,13 @@ export async function getPublicCategorySitemapEntries(db: Database) {
  * Returns all active categories for the storefront (navigation, listing).
  * No pagination — categories are typically <100 rows and cached aggressively.
  */
-export async function getPublicCategories(db: Database) {
+export async function getPublicCategories(db: Database, translation: TranslationScope | null = null) {
     // Category reads list, look up by slug or walk the tree: any category
     // row (and closure) change can change them, and category writes are rare.
     deps.anyCategory();
-    const categoriesList = await db
+    const read = await db
         .select({
+            ...translationColumns(translation, "category", categories.id),
             id: categories.id,
             name: categories.name,
             slug: categories.slug,
@@ -89,6 +107,7 @@ export async function getPublicCategories(db: Database) {
         .where(and(...publicCategoryConditions()))
         .orderBy(categories.name)
         .all();
+    const categoriesList = translateRows(translation, "category", read, { name: "name", description: "description", metaTitle: "metaTitle", metaDescription: "metaDescription" });
 
     return categoriesList.map((c) => ({
         ...c,
@@ -100,7 +119,7 @@ export async function getPublicCategories(db: Database) {
 /** Bounded public discovery rows; rich text is reconstructed through getPublicCategorySection. */
 export async function getPublicCategorySummaries(
     db: Database,
-    options: { page?: number; limit?: number } = {},
+    options: { page?: number; limit?: number; translation?: TranslationScope | null } = {},
 ) {
     const page = Number.isSafeInteger(options.page) && Number(options.page) > 0
         ? Number(options.page)
@@ -121,6 +140,7 @@ export async function getPublicCategorySummaries(
             imageUrl: categories.imageUrl,
             descriptionCharacters: sql<number>`length(coalesce(${categories.description}, ''))`,
             contentCharacters: sql<number>`length(coalesce(${categories.content}, ''))`,
+            ...translationColumns(options.translation ?? null, "category", categories.id),
         })
         .from(categories)
         .where(where)
@@ -131,7 +151,7 @@ export async function getPublicCategorySummaries(
     const [counts, rows] = await db.batch([countQuery, rowsQuery]);
     const total = Number(counts[0]?.count ?? 0);
     return {
-        categories: rows.map((category) => ({
+        categories: translateRows(options.translation ?? null, "category", rows, NAME_FIELDS).map((category) => ({
             ...category,
             descriptionCharacters: Number(category.descriptionCharacters ?? 0),
             contentCharacters: Number(category.contentCharacters ?? 0),
@@ -146,12 +166,18 @@ export async function getPublicCategorySummaries(
  * category). The three reads share one batch, so the tree adds no round trip.
  * Returns null if not found, not published or soft-deleted.
  */
-export async function getPublicCategoryBySlug(db: Database, slug: string) {
+export async function getPublicCategoryBySlug(db: Database, slug: string, translation: TranslationScope | null = null) {
     deps.anyCategory();
-    const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT);
+    // A localized handle can name the category (MARKETS-DESIGN D9).
+    deps.localizedSlugSpace("category");
+    const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT, translation);
+    const categoryId = publishedCategoryIdBySlug(slug, translation);
     const [rows, children, breadcrumb, customFieldRows] = await db.batch([
         db
             .select({
+                // Its handle in every language (hreflang alternates), at the root too.
+                localizedSlugs: localizedSlugsSql("category", categories.id),
+                ...translationColumns(translation, "category", categories.id),
                 id: categories.id,
                 name: categories.name,
                 slug: categories.slug,
@@ -170,26 +196,27 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
                 updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             })
             .from(categories)
-            .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+            .where(and(sql`${categories.id} = ${categoryId}`, ...publicCategoryConditions()))
             .limit(1),
         tree.children,
         tree.breadcrumb,
-        selectStorefrontCustomFieldRows(db, "category", sql`(
-            SELECT ${categories.id} FROM ${categories}
-            WHERE ${and(eq(categories.slug, slug), ...publicCategoryConditions())}
-            LIMIT 1
-        )`),
+        selectStorefrontCustomFieldRows(db, "category", categoryId),
     ]);
-    const category = rows[0];
-    if (!category) return null;
+    const read = rows[0];
+    if (!read) return null;
+    const { localizedSlugs: localizedSlugsText, ...category } = translateRow(translation, "category", read, CATEGORY_FIELDS)!;
+    deps.resourceHandles(translation !== null, "category", category.id);
+    const alternateSlugs = parseLocalizedSlugs(localizedSlugsText);
 
     return {
         ...category,
+        /** The category's handle by language (`localized_slugs`) and its source handle; absent without a localized handle. */
+        ...(Object.keys(alternateSlugs).length > 0 ? { localizedSlugs: alternateSlugs, sourceSlug: read.slug } : {}),
         depth: Number(category.depth),
         /** Storefront-visible custom fields, in the merchant's order. */
         customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]),
-        children: children as PublicCategoryChild[],
-        breadcrumb: (breadcrumb as CategoryBreadcrumbItem[]).map((item) => ({ ...item, depth: Number(item.depth) })),
+        children: translateRows(translation, "category", children as PublicCategoryChild[], NAME_FIELDS),
+        breadcrumb: translateRows(translation, "category", breadcrumb as CategoryBreadcrumbItem[], NAME_FIELDS).map((item) => ({ ...item, depth: Number(item.depth) })),
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
     };
@@ -204,9 +231,11 @@ export async function getPublicCategorySection(
     db: Database,
     slug: string,
     section: StorefrontCategorySection,
-    options: { field?: StorefrontCategoryTextField; offset?: number } = {},
+    options: { field?: StorefrontCategoryTextField; offset?: number; translation?: TranslationScope | null } = {},
 ) {
     deps.anyCategory();
+    deps.localizedSlugSpace("category");
+    const categoryId = publishedCategoryIdBySlug(slug, options.translation ?? null);
     if (section === "summary") {
         const category = await db
             .select({
@@ -225,7 +254,7 @@ export async function getPublicCategorySection(
                 updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             })
             .from(categories)
-            .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+            .where(and(sql`${categories.id} = ${categoryId}`, ...publicCategoryConditions()))
             .get();
         if (!category) return null;
         return {
@@ -250,7 +279,7 @@ export async function getPublicCategorySection(
             isNull: sql<number>`CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END`,
         })
         .from(categories)
-        .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+        .where(and(sql`${categories.id} = ${categoryId}`, ...publicCategoryConditions()))
         .get();
     if (!category) return null;
     const totalCharacters = Number(category.totalCharacters ?? 0);

@@ -27,6 +27,8 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { deps } from "../../cache-deps";
+import { applyTranslation, foldedTranslationChain, translationRowsSql, type TranslationScope } from "../translations";
+import { resolveTranslatedField, type TranslationRow } from "@scalius/shared/translations";
 import {
     AppError,
     ConflictError,
@@ -1454,9 +1456,9 @@ export async function getPublishedNavigationMenuTree(
  * Placement definitions cap the public surface at five menus and 150 items
  * per placement; reused menus are built only once.
  */
-export function planPublishedNavigationPlacements(db: Database) {
+export function planPublishedNavigationPlacements(db: Database, translation: TranslationScope | null = null) {
     deps.anyNavigation();
-    const manifest = selectNavigationPlacementManifest(db);
+    const manifest = selectNavigationPlacementManifest(db, translation);
     const items = db
         .select({
             menuId: navigationMenuPublicationItems.menuId,
@@ -1499,9 +1501,25 @@ export function planPublishedNavigationPlacements(db: Database) {
     return {
         statements: [manifest, items] as const,
         resolve(results: readonly unknown[], offset: number) {
-            const placements = placementManifestFromRows(results[offset] as PlacementManifestRow[]);
+            // A presence's menus in its language (MARKETS-DESIGN D9): each menu's
+            // title and custom link labels (`item:<id>`) through the fallback
+            // chain; links labelled by their resource follow its translation.
+            const menuChains = new Map<string, TranslationRow[]>();
+            const manifestRows = (results[offset] as Array<PlacementManifestRow & { menuTrRows?: string | null }>).map(({ menuTrRows, ...row }) => {
+                if (!translation) return row;
+                const chain = foldedTranslationChain(translation, menuTrRows);
+                menuChains.set(row.menuId, chain);
+                return applyTranslation(row, chain, { menuName: "title" });
+            });
+            if (translation) deps.translations("menu", manifestRows.map((row) => row.menuId));
+            const placements = placementManifestFromRows(manifestRows as PlacementManifestRow[]);
             const rowsByMenu = new Map<string, AuthorityProjectionRow[]>();
-            for (const row of results[offset + 1] as PlacementItemRow[]) {
+            for (const read of results[offset + 1] as PlacementItemRow[]) {
+                const chain = menuChains.get(read.menuId);
+                const label = chain && read.labelMode === "custom"
+                    ? resolveTranslatedField(chain, `item:${read.id}`, read.label)
+                    : read.label;
+                const row = label === read.label ? read : { ...read, label };
                 const menuRows = rowsByMenu.get(row.menuId) ?? [];
                 menuRows.push(row);
                 rowsByMenu.set(row.menuId, menuRows);
@@ -1564,10 +1582,10 @@ export function planPublishedNavigationPlacements(db: Database) {
  * Every storefront placement resolved for buyers: two batches (the placed
  * menus, then the resources their items link to; none when they link none).
  */
-export async function getPublishedNavigationPlacements(db: Database) {
-    const plan = planPublishedNavigationPlacements(db);
+export async function getPublishedNavigationPlacements(db: Database, translation: TranslationScope | null = null) {
+    const plan = planPublishedNavigationPlacements(db, translation);
     const placed = plan.resolve(await safeBatch(db, plan.statements), 0);
-    const resources = planNavigationResourceSnapshots(db, placed.targets);
+    const resources = planNavigationResourceSnapshots(db, placed.targets, translation);
     const results = resources.statements.length > 0 ? await safeBatch(db, resources.statements) : [];
     return placed.publish(resources.resolve(results, 0));
 }
@@ -1807,9 +1825,10 @@ export async function saveNavigationPlacement(
  * Its column names stay unique (the menu id is the placement's `menu_id`,
  * equal by the join): a D1 batch maps result rows by column name.
  */
-function selectNavigationPlacementManifest(db: Database) {
+function selectNavigationPlacementManifest(db: Database, translation: TranslationScope | null = null) {
     return db
         .select({
+            ...(translation ? { menuTrRows: translationRowsSql(translation, "menu", navigationMenus.id) } : {}),
             id: navigationPlacements.id,
             surface: navigationPlacements.surface,
             slot: navigationPlacements.slot,

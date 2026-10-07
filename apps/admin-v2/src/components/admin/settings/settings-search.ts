@@ -30,6 +30,8 @@ export const SETTINGS_CARDS = [
   { page: "locations", card: "inventoryLocations" },
   { page: "markets", card: "markets" },
   { page: "salesChannels", card: "salesChannels" },
+  { page: "languages", card: "languages" },
+  { page: "languages", card: "machineTranslation" },
   { page: "customerAccounts", card: "customerFields" },
   { page: "customerAccounts", card: "customerSignIn" },
   { page: "customerAccounts", card: "marketingConsent" },

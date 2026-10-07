@@ -12,6 +12,7 @@ import { FRAUD_PORT } from "./providers/fraud";
 import { PROVIDER_OPERATIONS, type ProviderKind } from "./providers/kinds";
 import { PAYMENT_PORT } from "./providers/payment";
 import { TAX_PORT } from "./providers/tax";
+import { TRANSLATION_PORT } from "./providers/translation";
 
 export * from "./providers/kinds";
 export * from "./providers/common";
@@ -21,6 +22,7 @@ export * from "./providers/courier";
 export * from "./providers/messaging";
 export * from "./providers/fraud";
 export * from "./providers/tax";
+export * from "./providers/translation";
 export * from "./providers/descriptors";
 
 /** Every port answers whether its saved credentials authenticate. */
@@ -34,6 +36,7 @@ export const PROVIDER_PORTS = {
   email: { ...EMAIL_PORT, testConnection: TEST_CONNECTION },
   fraud: { ...FRAUD_PORT, testConnection: TEST_CONNECTION },
   tax: { ...TAX_PORT, testConnection: TEST_CONNECTION },
+  translation: { ...TRANSLATION_PORT, testConnection: TEST_CONNECTION },
 } as const;
 
 type Ports = typeof PROVIDER_PORTS;

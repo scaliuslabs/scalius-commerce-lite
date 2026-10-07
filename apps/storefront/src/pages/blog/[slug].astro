@@ -1,4 +1,5 @@
 ---
+import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import { getArticleBySlug } from "@/lib/api/articles";
 import { getLayoutData } from "@/lib/api";
@@ -43,11 +44,13 @@ const plainContent = htmlToPlainText(article.content);
 const description =
   article.metaDescription || article.excerpt || plainContent.slice(0, 180);
 const title = article.metaTitle || article.title;
+// The article's own handle (a localized one at a presence), not the URL's.
 const canonicalUrl = buildResourceCanonicalSeoUrl(
   "article",
-  `/blog/${slug}`,
+  `/blog/${article.slug ?? slug}`,
   article.canonicalPath,
 );
+const articlePaths = localizedPaths(article, (handle) => `/blog/${handle}`);
 const featuredImageUrl = article.featuredImage?.url
   ? mediaImageUrl(article.featuredImage.url, 1200)
   : null;
@@ -150,6 +153,7 @@ const breadcrumbJsonLd =
   hideFooter={article.hideFooter}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  localizedPaths={articlePaths}
   ogImage={shareImageUrl ?? undefined}
   ogType="article"
   noindex={article.noIndex === true}

@@ -2105,6 +2105,84 @@ export type InventoryTransfer = {
     }>;
 };
 
+export type TranslatableResource = {
+    type: string;
+    id: string;
+    /**
+     * The resource's source title.
+     */
+    title: string;
+    subtitle: string | null;
+    /**
+     * Source text by field.
+     */
+    source: {
+        [key: string]: string | null;
+    };
+    /**
+     * The source URL handle (types with handles).
+     */
+    sourceSlug: string | null;
+    translation: {
+        locale: string;
+        marketId: string | null;
+        fields: {
+            [key: string]: string;
+        };
+        /**
+         * Translated fields whose source changed since (Outdated).
+         */
+        outdated: Array<string>;
+        updatedAt: string | null;
+    } | null;
+    /**
+     * The localized URL handle in this language, or null.
+     */
+    slug: string | null;
+    status: 'translated' | 'outdated' | 'partial' | 'untranslated';
+};
+
+export type MachineTranslate = {
+    /**
+     * An installed app's translation provider (`<plugin id>:<provider id>`).
+     */
+    providerId: string;
+    locale: string;
+    texts: Array<{
+        key: string;
+        text: string;
+        format?: 'text' | 'html';
+    }>;
+};
+
+export type SaveTranslation = {
+    /**
+     * Translated text by field (`name`, `description`, `metaTitle`; a menu's links as `item:<id>`). Fields left out or empty fall back to the source.
+     */
+    fields: {
+        [key: string]: string;
+    };
+    /**
+     * The localized URL handle; empty or null keeps the source address. Every-market translations only.
+     */
+    slug?: string | null;
+    locale: string;
+    marketId?: string | null;
+    /**
+     * A product's options and option values, saved with it.
+     */
+    parts?: Array<{
+        /**
+         * Translated text by field (`name`, `description`, `metaTitle`; a menu's links as `item:<id>`). Fields left out or empty fall back to the source.
+         */
+        fields: {
+            [key: string]: string;
+        };
+        type: 'product_option' | 'product_option_value' | 'product_variant';
+        id: string;
+    }>;
+};
+
 export type ThemeAppSurfaces = {
     id: string;
     name: string;
@@ -2281,6 +2359,45 @@ export type SalesChannel = {
      * Products published to it (trashed ones included).
      */
     publishedProducts: number;
+};
+
+export type StoreLanguage = {
+    /**
+     * ISO 639-1 language code.
+     */
+    locale: string;
+    /**
+     * Only a published language's market web addresses are served.
+     */
+    published: boolean;
+    /**
+     * The default language: the store's own URL (the backup market's root) and the source text.
+     */
+    isDefault: boolean;
+    /**
+     * Market web addresses in this language (`en-in`; `''` is the store's own URL).
+     */
+    presences: Array<string>;
+    /**
+     * Resources with a translation in this language (any market).
+     */
+    translatedResources: number;
+};
+
+export type CreateStoreLanguage = {
+    locale: string;
+    /**
+     * Publish at once; default false (translate first, then publish).
+     */
+    published?: boolean;
+};
+
+export type UpdateStoreLanguage = {
+    published?: boolean;
+    /**
+     * Make it the default language (the store's own URL); publishes it.
+     */
+    isDefault?: true;
 };
 
 export type WarrantyClaim = {
@@ -2663,7 +2780,7 @@ export type AppProviderEntry = {
      */
     id: string;
     providerId: string;
-    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
     name: string;
     /**
      * Same-origin address of the provider's own mark, else the app's icon.
@@ -4027,6 +4144,16 @@ export type GetApiV1BrandsBySlugResponses = {
                     width: number | null;
                     height: number | null;
                 } | null;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 description: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
@@ -4140,6 +4267,16 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     width: number | null;
                     height: number | null;
                 } | null;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 description: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
@@ -4730,6 +4867,16 @@ export type GetApiV1PagesResponses = {
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
             }>;
             pagination: {
                 page: number;
@@ -4814,6 +4961,16 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
                 /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
+                /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
                 customFields: Array<StorefrontCustomField>;
@@ -4891,6 +5048,16 @@ export type GetApiV1PagesByIdResponses = {
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
                 /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
+                /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
                 customFields: Array<StorefrontCustomField>;
@@ -4965,6 +5132,16 @@ export type GetApiV1ArticlesResponses = {
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
             }>;
             pagination: {
                 page: number;
@@ -5048,6 +5225,16 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
             };
         };
     };
@@ -5524,6 +5711,16 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
@@ -13427,6 +13624,10 @@ export type GetApiV1ProductsSitemapData = {
     path?: never;
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Page number
          */
         page?: number;
@@ -13921,6 +14122,16 @@ export type GetApiV1ProductsBySlugResponses = {
         success: true;
         data: {
             product: {
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 id: string;
                 name: string;
                 description: string | null;
@@ -14462,6 +14673,16 @@ export type GetApiV1CategoriesBySlugResponses = {
                 excludeFromSitemap: boolean;
                 parentId: string | null;
                 depth: number;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 content: string | null;
                 listingTemplate: string | null;
                 /**
@@ -14748,6 +14969,16 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 excludeFromSitemap: boolean;
                 parentId: string | null;
                 depth: number;
+                /**
+                 * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
+                 */
+                localizedSlugs?: {
+                    [key: string]: string;
+                };
+                /**
+                 * The resource's source URL handle (every language without its own), beside `localizedSlugs`.
+                 */
+                sourceSlug?: string;
                 content: string | null;
                 listingTemplate: string | null;
                 /**
@@ -30093,6 +30324,363 @@ export type PutApiV1AdminNavigationPlacementsByPlacementIdResponses = {
 
 export type PutApiV1AdminNavigationPlacementsByPlacementIdResponse = PutApiV1AdminNavigationPlacementsByPlacementIdResponses[keyof PutApiV1AdminNavigationPlacementsByPlacementIdResponses];
 
+export type GetApiV1AdminTranslationsResourcesData = {
+    body?: never;
+    path?: never;
+    query: {
+        locale: string;
+        /**
+         * A market-specific translation (adapt); omit for every market.
+         */
+        marketId?: string;
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
+        search?: string;
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/translations/resources';
+};
+
+export type GetApiV1AdminTranslationsResourcesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminTranslationsResourcesError = GetApiV1AdminTranslationsResourcesErrors[keyof GetApiV1AdminTranslationsResourcesErrors];
+
+export type GetApiV1AdminTranslationsResourcesResponses = {
+    /**
+     * The page
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<TranslatableResource>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminTranslationsResourcesResponse = GetApiV1AdminTranslationsResourcesResponses[keyof GetApiV1AdminTranslationsResourcesResponses];
+
+export type GetApiV1AdminTranslationsProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/translations/providers';
+};
+
+export type GetApiV1AdminTranslationsProvidersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminTranslationsProvidersError = GetApiV1AdminTranslationsProvidersErrors[keyof GetApiV1AdminTranslationsProvidersErrors];
+
+export type GetApiV1AdminTranslationsProvidersResponses = {
+    /**
+     * Providers
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                appName: string;
+            }>;
+            defaultLocale: string;
+        };
+    };
+};
+
+export type GetApiV1AdminTranslationsProvidersResponse = GetApiV1AdminTranslationsProvidersResponses[keyof GetApiV1AdminTranslationsProvidersResponses];
+
+export type PostApiV1AdminTranslationsMachineData = {
+    body: MachineTranslate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/translations/machine';
+};
+
+export type PostApiV1AdminTranslationsMachineErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminTranslationsMachineError = PostApiV1AdminTranslationsMachineErrors[keyof PostApiV1AdminTranslationsMachineErrors];
+
+export type PostApiV1AdminTranslationsMachineResponses = {
+    /**
+     * The translations
+     */
+    200: {
+        success: true;
+        data: {
+            texts: Array<{
+                key: string;
+                text: string;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminTranslationsMachineResponse = PostApiV1AdminTranslationsMachineResponses[keyof PostApiV1AdminTranslationsMachineResponses];
+
+export type DeleteApiV1AdminTranslationsByTypeByIdData = {
+    body?: never;
+    path: {
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
+        id: string;
+    };
+    query: {
+        locale: string;
+        /**
+         * A market-specific translation (adapt); omit for every market.
+         */
+        marketId?: string;
+    };
+    url: '/api/v1/admin/translations/{type}/{id}';
+};
+
+export type DeleteApiV1AdminTranslationsByTypeByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminTranslationsByTypeByIdError = DeleteApiV1AdminTranslationsByTypeByIdErrors[keyof DeleteApiV1AdminTranslationsByTypeByIdErrors];
+
+export type DeleteApiV1AdminTranslationsByTypeByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            type: string;
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminTranslationsByTypeByIdResponse = DeleteApiV1AdminTranslationsByTypeByIdResponses[keyof DeleteApiV1AdminTranslationsByTypeByIdResponses];
+
+export type GetApiV1AdminTranslationsByTypeByIdData = {
+    body?: never;
+    path: {
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
+        id: string;
+    };
+    query: {
+        locale: string;
+        /**
+         * A market-specific translation (adapt); omit for every market.
+         */
+        marketId?: string;
+    };
+    url: '/api/v1/admin/translations/{type}/{id}';
+};
+
+export type GetApiV1AdminTranslationsByTypeByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminTranslationsByTypeByIdError = GetApiV1AdminTranslationsByTypeByIdErrors[keyof GetApiV1AdminTranslationsByTypeByIdErrors];
+
+export type GetApiV1AdminTranslationsByTypeByIdResponses = {
+    /**
+     * The resource
+     */
+    200: {
+        success: true;
+        data: {
+            resource: TranslatableResource;
+            parts: Array<TranslatableResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminTranslationsByTypeByIdResponse = GetApiV1AdminTranslationsByTypeByIdResponses[keyof GetApiV1AdminTranslationsByTypeByIdResponses];
+
+export type PutApiV1AdminTranslationsByTypeByIdData = {
+    body: SaveTranslation;
+    path: {
+        type: 'product' | 'collection' | 'category' | 'brand' | 'page' | 'menu' | 'shipping_method' | 'payment_method';
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/translations/{type}/{id}';
+};
+
+export type PutApiV1AdminTranslationsByTypeByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminTranslationsByTypeByIdError = PutApiV1AdminTranslationsByTypeByIdErrors[keyof PutApiV1AdminTranslationsByTypeByIdErrors];
+
+export type PutApiV1AdminTranslationsByTypeByIdResponses = {
+    /**
+     * The saved resource
+     */
+    200: {
+        success: true;
+        data: {
+            resource: TranslatableResource;
+            parts: Array<TranslatableResource>;
+        };
+    };
+};
+
+export type PutApiV1AdminTranslationsByTypeByIdResponse = PutApiV1AdminTranslationsByTypeByIdResponses[keyof PutApiV1AdminTranslationsByTypeByIdResponses];
+
 export type GetApiV1AdminSearchData = {
     body?: never;
     path?: never;
@@ -36965,6 +37553,222 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponses = {
 
 export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponse = GetApiV1AdminSettingsSalesChannelsByIdProductsResponses[keyof GetApiV1AdminSettingsSalesChannelsByIdProductsResponses];
 
+export type GetApiV1AdminSettingsLanguagesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/languages';
+};
+
+export type GetApiV1AdminSettingsLanguagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsLanguagesError = GetApiV1AdminSettingsLanguagesErrors[keyof GetApiV1AdminSettingsLanguagesErrors];
+
+export type GetApiV1AdminSettingsLanguagesResponses = {
+    /**
+     * Languages
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<StoreLanguage>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsLanguagesResponse = GetApiV1AdminSettingsLanguagesResponses[keyof GetApiV1AdminSettingsLanguagesResponses];
+
+export type PostApiV1AdminSettingsLanguagesData = {
+    body: CreateStoreLanguage;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/languages';
+};
+
+export type PostApiV1AdminSettingsLanguagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsLanguagesError = PostApiV1AdminSettingsLanguagesErrors[keyof PostApiV1AdminSettingsLanguagesErrors];
+
+export type PostApiV1AdminSettingsLanguagesResponses = {
+    /**
+     * The new language
+     */
+    201: {
+        success: true;
+        data: {
+            language: StoreLanguage;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsLanguagesResponse = PostApiV1AdminSettingsLanguagesResponses[keyof PostApiV1AdminSettingsLanguagesResponses];
+
+export type DeleteApiV1AdminSettingsLanguagesByLocaleData = {
+    body?: never;
+    path: {
+        locale: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/languages/{locale}';
+};
+
+export type DeleteApiV1AdminSettingsLanguagesByLocaleErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminSettingsLanguagesByLocaleError = DeleteApiV1AdminSettingsLanguagesByLocaleErrors[keyof DeleteApiV1AdminSettingsLanguagesByLocaleErrors];
+
+export type DeleteApiV1AdminSettingsLanguagesByLocaleResponses = {
+    /**
+     * Removed
+     */
+    200: {
+        success: true;
+        data: {
+            locale: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsLanguagesByLocaleResponse = DeleteApiV1AdminSettingsLanguagesByLocaleResponses[keyof DeleteApiV1AdminSettingsLanguagesByLocaleResponses];
+
+export type PatchApiV1AdminSettingsLanguagesByLocaleData = {
+    body: UpdateStoreLanguage;
+    path: {
+        locale: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/languages/{locale}';
+};
+
+export type PatchApiV1AdminSettingsLanguagesByLocaleErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminSettingsLanguagesByLocaleError = PatchApiV1AdminSettingsLanguagesByLocaleErrors[keyof PatchApiV1AdminSettingsLanguagesByLocaleErrors];
+
+export type PatchApiV1AdminSettingsLanguagesByLocaleResponses = {
+    /**
+     * The language
+     */
+    200: {
+        success: true;
+        data: {
+            language: StoreLanguage;
+        };
+    };
+};
+
+export type PatchApiV1AdminSettingsLanguagesByLocaleResponse = PatchApiV1AdminSettingsLanguagesByLocaleResponses[keyof PatchApiV1AdminSettingsLanguagesByLocaleResponses];
+
 export type GetApiV1AdminSettingsDeliveryProvidersData = {
     body?: never;
     path?: never;
@@ -39326,7 +40130,7 @@ export type GetApiV1AdminSettingsProvidersData = {
     body?: never;
     path?: never;
     query: {
-        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
     };
     url: '/api/v1/admin/settings/providers';
 };
@@ -39369,7 +40173,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
         data: {
             providers: Array<{
                 id: string;
-                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;

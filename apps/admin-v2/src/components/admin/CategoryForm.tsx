@@ -17,6 +17,7 @@ import { SaveConflict } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
+import { LazyResourceTranslationsCard } from "@/components/admin/translations/LazyResourceTranslationsCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
@@ -326,6 +327,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             }}
             disabled={!canSave}
           />
+          {isEdit && defaultValues?.id ? <LazyResourceTranslationsCard type="category" id={defaultValues.id} /> : null}
         </div>
 
         <div className="min-w-0 space-y-4">

@@ -8,6 +8,7 @@ import {
   CATEGORY_NAVIGATION_NODE_LIMIT,
 } from "@scalius/core/modules/navigation";
 import { NotFoundError } from "../utils/api-error";
+import { publicTranslation } from "../utils/public-market";
 
 import { ok } from "../utils/api-response";
 import { conflictResponse, successEnvelope, errorResponses } from "../schemas/responses";
@@ -54,7 +55,7 @@ const getNavigationRoute = createRoute({
 
 app.openapi(getNavigationRoute, async (c) => {
   const { type } = c.req.valid("query");
-  const placements = await getPublishedNavigationPlacements(c.get("db"));
+  const placements = await getPublishedNavigationPlacements(c.get("db"), publicTranslation(c));
   const navigationConfig: Record<string, unknown> = {};
   if (type === "header" || type === "all") {
     navigationConfig.header = placements.find((placement) => (
@@ -102,7 +103,7 @@ const getCategoryNavigationRoute = createRoute({
   },
 });
 
-app.openapi(getCategoryNavigationRoute, async (c) => ok(c, await readCategoryNavigation(c.get("db"))));
+app.openapi(getCategoryNavigationRoute, async (c) => ok(c, await readCategoryNavigation(c.get("db"), publicTranslation(c))));
 
 const getPlacementManifestRoute = createRoute({
   method: "get",

@@ -10,15 +10,11 @@ import {
   analytics,
   themeSettings,
   categories,
-  checkoutLanguages,
   productBuyerState,
   products,
 } from "@scalius/database/schema";
-import { eq, isNull, and, or, sql } from "drizzle-orm";
-import {
-  pickProductPageCopy,
-  resolveCheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
+import { eq, isNull, and, sql } from "drizzle-orm";
+import { pickProductPageCopy } from "@scalius/shared/checkout-language";
 import {
   normalizeCloudflareWebAnalyticsConfig,
   processAnalyticsScript,
@@ -75,6 +71,18 @@ import {
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
 import { deps } from "../../cache-deps";
+import {
+    NAME_FIELDS,
+    localizedSlugSql,
+    pickCheckoutCopy,
+    selectCheckoutCopyRows,
+    translateRows,
+    translationColumns,
+    translationScope,
+    translationScopeOf,
+    type CheckoutCopyRow,
+    type TranslationScope,
+} from "../translations";
 import { marketMatrixFromSql, marketMatrixSql, storeCurrencyOf } from "../markets";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -113,7 +121,7 @@ export interface HomepageCategory {
  * categories, returned in request order. Any of them may be published,
  * renamed or trashed later, so each id is a dependency.
  */
-function planHomeCategories(db: Database, ids: readonly string[]) {
+function planHomeCategories(db: Database, ids: readonly string[], translation: TranslationScope | null) {
   if (ids.length === 0) return { statements: [] as BatchItem[], resolve: (): HomepageCategory[] => [] };
   deps.categories(ids);
   const statement = db
@@ -124,6 +132,7 @@ function planHomeCategories(db: Database, ids: readonly string[]) {
       description: categories.description,
       imageUrl: categories.imageUrl,
       canonicalPath: categories.canonicalPath,
+      ...translationColumns(translation, "category", categories.id),
     })
     .from(categories)
     .where(and(
@@ -133,7 +142,8 @@ function planHomeCategories(db: Database, ids: readonly string[]) {
   return {
     statements: [statement] as BatchItem[],
     resolve(results: readonly unknown[], offset: number): HomepageCategory[] {
-      const byId = new Map((results[offset] as HomepageCategory[]).map((row) => [row.id, row]));
+      const rows = translateRows(translation, "category", results[offset] as HomepageCategory[], { name: "name", description: "description" });
+      const byId = new Map(rows.map((row) => [row.id, row]));
       return ids.flatMap((id) => byId.get(id) ?? []);
     },
   };
@@ -145,10 +155,10 @@ function planHomeCategories(db: Database, ids: readonly string[]) {
  * sections. Planned only for a product home mode, so a sections homepage
  * reads no product row for it.
  */
-function planHomeProduct(db: Database, productId: string | null) {
+function planHomeProduct(db: Database, productId: string | null, translation: TranslationScope | null) {
   deps.product(productId);
   const statement = productId === null ? null : db
-    .select({ id: products.id, slug: products.slug })
+    .select({ id: products.id, slug: products.slug, ...(translation ? { trSlug: localizedSlugSql(translation, "product", products.id) } : {}) })
     .from(products)
     .innerJoin(productBuyerState, and(
       eq(productBuyerState.productId, products.id),
@@ -159,7 +169,11 @@ function planHomeProduct(db: Database, productId: string | null) {
   return {
     statements: (statement ? [statement] : []) as BatchItem[],
     resolve(results: readonly unknown[], offset: number): { id: string; slug: string } | null {
-      return statement ? (results[offset] as Array<{ id: string; slug: string }>)[0] ?? null : null;
+      const row = statement ? (results[offset] as Array<{ id: string; slug: string; trSlug?: string | null }>)[0] ?? null : null;
+      if (!row) return null;
+      // A presence redirects to the product's handle in its language.
+      if (translation !== null) deps.translation("product", row.id);
+      return { id: row.id, slug: row.trSlug || row.slug };
     },
   };
 }
@@ -205,6 +219,8 @@ export async function getHomepageData(
     pricing?: MarketPricing | null;
   } = {},
 ) {
+  // A presence page's sections in its language (MARKETS-DESIGN D9); none at the root.
+  const translation = translationScopeOf(options.pricing);
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO document (homepage title and description)
@@ -219,6 +235,7 @@ export async function getHomepageData(
         config: collections.config,
         sortOrder: collections.sortOrder,
         isActive: collections.isActive,
+        ...translationColumns(translation, "collection", collections.id, { slug: false }),
       })
       .from(collections)
       .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
@@ -266,8 +283,11 @@ export async function getHomepageData(
     : Promise.resolve([]);
 
   // === BATCH 2: every product list, its card media, section images ===
-  const activeCollections = (
-    collectionResults as Record<string, unknown>[]
+  const activeCollections = translateRows(
+    translation,
+    "collection",
+    collectionResults as Array<Record<string, unknown> & { id: string }>,
+    NAME_FIELDS,
   ).map((col) => ({
     id: col.id as string,
     name: col.name as string,
@@ -287,13 +307,13 @@ export async function getHomepageData(
   const collectionPlan = planCollectionProducts(db, [
     ...sectionCollections.map((col) => ({ key: `section:${col.id}`, config: col.parsedConfig })),
     ...collectionLists.map(({ list, collection }) => ({ key: list.key, config: collection.parsedConfig, maxProducts: list.limit })),
-  ]);
-  const listPlan = planHomeProductLists(db, requests.lists.filter((list) => list.source.kind !== "collection"));
+  ], translation);
+  const listPlan = planHomeProductLists(db, requests.lists.filter((list) => list.source.kind !== "collection"), translation);
   const mediaPlan = planHomeMedia(db, requests.mediaIds);
-  const brandPlan = planHomeBrands(db, requests.brandLimit);
+  const brandPlan = planHomeBrands(db, requests.brandLimit, translation);
   const promotionPlan = planHomePromotions(db, requests.promotionIds);
-  const categoryPlan = planHomeCategories(db, requests.categoryIds);
-  const productPlan = planHomeProduct(db, requests.homeProductId);
+  const categoryPlan = planHomeCategories(db, requests.categoryIds, translation);
+  const productPlan = planHomeProduct(db, requests.homeProductId, translation);
   const statements: BatchItem[] = [
     ...collectionPlan.statements,
     ...listPlan.statements,
@@ -386,8 +406,8 @@ export async function getLandingPageData(
 
 // ── CMS page render data ────────────────────────────────────────────────────
 
-export async function getPageRenderData(db: Database, slug: string) {
-  const page = await getPublicPageBySlug(db, slug);
+export async function getPageRenderData(db: Database, slug: string, translation: TranslationScope | null = null) {
+  const page = await getPublicPageBySlug(db, slug, translation);
   if (!page) return null;
 
   return { page };
@@ -450,10 +470,18 @@ async function metaCapiBrowserEventsEnabled(
  */
 export async function getLayoutData(
   db: Database,
-  options: { credentialEncryptionKey?: string } = {},
+  options: {
+    credentialEncryptionKey?: string;
+    /**
+     * The page's presence (MARKETS-DESIGN D9): its menus, category tree,
+     * policies and storefront copy in its language. None at the root.
+     */
+    presence?: string | null;
+  } = {},
 ) {
+  const translation = translationScope(options.presence);
   const brandMedia = planPublishedThemeBrandMedia(db);
-  const navigationPlan = planPublishedNavigationPlacements(db);
+  const navigationPlan = planPublishedNavigationPlacements(db, translation);
   const batchResults = await db.batch([
     // 0. Analytics configurations
     db.select({
@@ -475,21 +503,9 @@ export async function getLayoutData(
       .where(eq(themeSettings.id, "default"))
       .limit(1),
 
-    // 3. Active (else default) checkout language for storefront buyer copy
-    db
-      .select({
-        code: checkoutLanguages.code,
-        languageData: checkoutLanguages.languageData,
-        isActive: checkoutLanguages.isActive,
-      })
-      .from(checkoutLanguages)
-      .where(
-        and(
-          or(eq(checkoutLanguages.isActive, true), eq(checkoutLanguages.isDefault, true)),
-          isNull(checkoutLanguages.deletedAt),
-        ),
-      )
-      .limit(2),
+    // 3. The checkout copy of the page's language (the store default
+    // language at the root) for storefront buyer copy
+    selectCheckoutCopyRows(db, translation?.locale ?? null),
 
     // 4. Store shape counts for the theme fit rules (bounded, one statement),
     // and in the same row the active market matrix with the backup market's
@@ -497,7 +513,7 @@ export async function getLayoutData(
     selectStoreShapeCounts(db, { marketMatrix: marketMatrixSql() }),
 
     // 5. The reachable category tree: automatic departments and /categories (bounded)
-    selectCategoryNavigationRows(db),
+    selectCategoryNavigationRows(db, undefined, translation),
 
     // 6. The published theme's brand images (logo, footer logo, tab icon)
     brandMedia.statement,
@@ -511,7 +527,6 @@ export async function getLayoutData(
 
   deps.analytics();
   deps.theme();
-  deps.checkoutLanguages();
   const [
     analyticsResults,
     documentRows,
@@ -545,8 +560,8 @@ export async function getLayoutData(
 
   // === BATCH 2: policy pages and the menus' linked resources ===
   // Only linked policies whose pages are published.
-  const policyPlan = planPublicStorePolicies(db, policies.value);
-  const resourcePlan = planNavigationResourceSnapshots(db, placedNavigation?.targets ?? []);
+  const policyPlan = planPublicStorePolicies(db, policies.value, translation);
+  const resourcePlan = planNavigationResourceSnapshots(db, placedNavigation?.targets ?? [], translation);
   const secondStatements: BatchItem[] = [...policyPlan.statements, ...resourcePlan.statements];
   const secondResults = secondStatements.length > 0 ? await safeBatch(db, secondStatements) : [];
   const publicPolicies = policyPlan.resolve(secondResults, 0);
@@ -645,7 +660,11 @@ export async function getLayoutData(
     navigation: navigationData,
     // The header menu is \`navigation\`; the theme's navigation source picks
     // either or both (storefront header nav-tree.ts assembles them).
-    categoryTree: trimCategoryNavigation(categoryNavigationFromRows(categoryNavigationRows)),
+    categoryTree: trimCategoryNavigation(categoryNavigationFromRows(
+      categoryNavigationRows as Parameters<typeof categoryNavigationFromRows>[0],
+      undefined,
+      translation,
+    )),
     footerMenus,
     currency: currencyData,
     markets: marketMatrix,
@@ -662,7 +681,7 @@ export async function getLayoutData(
       socialImage: seo.value.socialImage,
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
-    storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
+    storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults as CheckoutCopyRow[], translation?.locale ?? null),
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
     appScripts: activePluginStorefrontScripts(
@@ -673,13 +692,11 @@ export async function getLayoutData(
 
 /**
  * Product-page copy (buy buttons, offers, buyer inputs and fulfilment facts)
- * from the same active checkout language (English preset when none exists),
- * so merchant edits and Bangla stores reach the product page with the layout.
+ * from the checkout copy of the page's language (MARKETS-DESIGN D9: the
+ * store default language at the root; English preset when none exists), so
+ * merchant edits and Bangla stores reach the product page with the layout.
  */
-function resolveStorefrontCopy(
-  rows: { code: string; languageData: string; isActive: boolean }[],
-) {
-  const row = rows.find((candidate) => candidate.isActive) ?? rows[0];
-  const code = row?.code ?? "en";
-  return pickProductPageCopy(code, resolveCheckoutLanguageData(code, row?.languageData));
+function resolveStorefrontCopy(rows: readonly CheckoutCopyRow[], locale: string | null) {
+  const { code, copy } = pickCheckoutCopy(rows, locale);
+  return pickProductPageCopy(code, copy);
 }

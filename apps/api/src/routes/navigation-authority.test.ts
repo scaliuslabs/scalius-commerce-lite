@@ -47,7 +47,7 @@ describe("public normalized navigation routes", () => {
     const response = await app.request("/api/v1/navigation/categories");
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: tree });
-    expect(mocks.readCategoryNavigation).toHaveBeenCalledWith(db);
+    expect(mocks.readCategoryNavigation).toHaveBeenCalledWith(db, null);
   });
 
   it("returns a no-store placement manifest with menu and dependency generations", async () => {

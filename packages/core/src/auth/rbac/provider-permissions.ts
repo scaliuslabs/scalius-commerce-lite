@@ -27,6 +27,8 @@ export const PROVIDER_PORT_PERMISSIONS: Readonly<Record<ProviderKind, ProviderPo
   fraud: { view: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW], manage: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW] },
   // Settings → Taxes: /taxes.
   tax: { view: [PERMISSIONS.TAXES_VIEW], manage: [PERMISSIONS.TAXES_MANAGE] },
+  // Settings → Languages, machine translation: /settings/languages.
+  translation: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
 };
 
 /** Whether these permissions read (`view`) or test (`manage`) a port's providers. */

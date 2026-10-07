@@ -65,6 +65,20 @@ import {
 } from "./recommendations";
 import { declareProductGallery, deps } from "./declare-deps";
 import {
+    applyTranslation,
+    foldedProductChains,
+    foldedTranslationChain,
+    localizedSlugSql,
+    localizedSlugsSql,
+    parseLocalizedSlugs,
+    productTranslationRowsSql,
+    translationRowsSql,
+    translationScopeOf,
+    PRODUCT_PAGE_FIELDS,
+    type TranslationScope,
+} from "../translations";
+import type { TranslationRow } from "@scalius/shared/translations";
+import {
   groupStorefrontCustomFields,
   presentStorefrontCustomFields,
   selectStorefrontCustomFieldRows,
@@ -93,6 +107,10 @@ function extractFeatures(description: string | null): string[] {
  * for a single product identified by slug.
  */
 export async function getStorefrontProductBySlug(db: Database, slug: string, pricing: MarketPricing | null = null) {
+    // A presence page in its language (MARKETS-DESIGN D9): the product, its
+    // options, values and SKUs, its category and brand, folded into this
+    // first statement; nothing at the root but the localized handles.
+    const translation = translationScopeOf(pricing);
     const productRow = await db
         .select({
             id: products.id,
@@ -107,6 +125,16 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             canonicalPath: products.canonicalPath,
             productCondition: products.productCondition,
             noIndex: products.noIndex,
+            // Its handle in every language (hreflang alternates), at the root too.
+            localizedSlugs: localizedSlugsSql("product", products.id),
+            ...(translation ? {
+                trRows: productTranslationRowsSql(translation, products.id),
+                trSlug: localizedSlugSql(translation, "product", products.id),
+                categoryTrRows: translationRowsSql(translation, "category", categories.id),
+                categoryTrSlug: localizedSlugSql(translation, "category", categories.id),
+                brandTrRows: translationRowsSql(translation, "brand", brands.id),
+                brandTrSlug: localizedSlugSql(translation, "brand", brands.id),
+            } : {}),
             discountType: products.discountType,
             discountBps: products.discountBps,
             discountAmountMinor: products.discountAmountMinor,
@@ -170,7 +198,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             isNull(warrantyPolicies.archivedAt),
         ))
         .where(and(
-            eq(products.slug, slug),
+            productBySlugCondition(slug, translation),
             eq(products.isActive, true),
             isNull(products.deletedAt),
             productPublishedToChannelSql(sql`${products.id}`),
@@ -179,9 +207,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         .get();
 
     if (!productRow) {
-        // Any product can take this slug or become public under it.
+        // Any product can take this slug or become public under it, or a
+        // localized handle can name one.
         deps.listMembership("all");
         deps.table("products");
+        deps.localizedSlugSpace("product");
         return null;
     }
     const {
@@ -204,8 +234,32 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         count3,
         count4,
         count5,
-        ...product
-    } = productRow;
+        localizedSlugs: localizedSlugsText,
+        trRows,
+        trSlug,
+        categoryTrRows,
+        categoryTrSlug,
+        brandTrRows,
+        brandTrSlug,
+        ...sourceProduct
+    } = productRow as typeof productRow & {
+        trRows?: string | null;
+        trSlug?: string | null;
+        categoryTrRows?: string | null;
+        categoryTrSlug?: string | null;
+        brandTrRows?: string | null;
+        brandTrSlug?: string | null;
+    };
+    // The product's own text and handle in the presence's language.
+    const productChains = translation ? foldedProductChains(translation, trRows) : new Map<string, TranslationRow[]>();
+    const product = translation
+        ? applyTranslation(sourceProduct, productChains.get(`product:${sourceProduct.id}`) ?? [], PRODUCT_PAGE_FIELDS, trSlug ?? null)
+        : sourceProduct;
+    // Its handle in every language, and the source one: the page's alternates.
+    const alternateSlugs = parseLocalizedSlugs(localizedSlugsText);
+    deps.resourceHandles(translation !== null, "product", product.id);
+    // Found by a localized handle: another product can take that handle in the page's language.
+    if (sourceProduct.slug !== slug) deps.localizedSlugSpace("product");
     // The product (row, SKUs, options, attributes, content, bundles) and the
     // category and brand rows it joins, published or not.
     deps.product(product.id);
@@ -215,6 +269,16 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     else deps.anyCategory();
     if (productBrandId) deps.brand(productBrandId);
     else deps.anyBrand();
+    if (translation) {
+        deps.translation("category", category?.id);
+        deps.translation("brand", brand?.id);
+    }
+    const translatedCategory = translation && category?.id
+        ? applyTranslation(category, foldedTranslationChain(translation, categoryTrRows), CATEGORY_PAGE_FIELDS, categoryTrSlug ?? null)
+        : category;
+    const translatedBrand = translation && brand?.id
+        ? applyTranslation(brand, foldedTranslationChain(translation, brandTrRows), { name: "name" }, brandTrSlug ?? null)
+        : brand;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
     const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
@@ -411,7 +475,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             ...v,
             imageUrl: variantImage?.url ?? null,
             imageMediaId: variantImage?.mediaId ?? null,
-            selectedOptions: selectedOptionMap.get(variant.id) ?? [],
+            selectedOptions: translateSelectedOptions(translation, productChains, selectedOptionMap.get(variant.id) ?? []),
             /** Storefront-visible custom fields of this SKU, in definition order. */
             customFields: content.variantCustomFields.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
@@ -429,7 +493,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             imageAlt: productImage?.altText ?? null,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
-            options: optionMap.get(product.id) ?? [],
+            options: translateOptions(translation, productChains, optionMap.get(product.id) ?? []),
             discountType: pricedProduct.discountType || "percentage",
             freeDelivery: product.freeDelivery || false,
             features: extractFeatures(product.description),
@@ -442,7 +506,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             attributes,
             additionalInfo,
             offers,
-            brand: brand?.id ? brand : null,
+            brand: translatedBrand?.id ? translatedBrand : null,
+            /**
+             * The product's handle by language (`localized_slugs`) and its source
+             * handle, its hreflang alternates; absent without a localized handle.
+             */
+            ...(Object.keys(alternateSlugs).length > 0 ? { localizedSlugs: alternateSlugs, sourceSlug: sourceProduct.slug } : {}),
             /** The product page template id; null is the theme's default. */
             pageTemplate,
             /** Blocks other than the tabs, in placement then page order. */
@@ -473,12 +542,56 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                 decimalPlaces,
             }),
         },
-        category,
+        category: translatedCategory,
         media: publicMedia,
         variants: formattedVariants,
         recommendations,
     };
 }
+
+/** A category named on its product's page (breadcrumb, description, meta). */
+const CATEGORY_PAGE_FIELDS = { name: "name", description: "description", metaTitle: "metaTitle", metaDescription: "metaDescription" } as const;
+
+/**
+ * The product a slug names: its source handle first, else a localized handle
+ * (the page's language first, else any): a buyer who switched language on a
+ * localized URL still reaches the product, whose canonical names its handle.
+ */
+export function productBySlugCondition(slug: string, translation: TranslationScope | null) {
+    const preferred = translation ? sql.raw(`'${translation.locale}'`) : sql`''`;
+    return sql`${products.id} = coalesce(
+        (SELECT source_product.id FROM ${products} AS source_product WHERE source_product.slug = ${slug}),
+        (SELECT handle.resource_id FROM localized_slugs AS handle
+            WHERE handle.resource_type = 'product' AND handle.slug = ${slug}
+            ORDER BY handle.locale = ${preferred} DESC, handle.locale LIMIT 1)
+    )`;
+}
+
+function translateOptions<T extends { id: string; name: string; values: Array<{ id: string; value: string }> }>(
+    translation: TranslationScope | null,
+    chains: ReadonlyMap<string, TranslationRow[]>,
+    options: readonly T[],
+): T[] {
+    if (!translation || chains.size === 0) return options as T[];
+    return options.map((option) => ({
+        ...applyTranslation(option, chains.get(`product_option:${option.id}`) ?? [], { name: "name" }),
+        values: option.values.map((value) => applyTranslation(value, chains.get(`product_option_value:${value.id}`) ?? [], { value: "value" })),
+    }));
+}
+
+function translateSelectedOptions<T extends { optionDefinitionId: string; optionValueId: string; name: string; value: string }>(
+    translation: TranslationScope | null,
+    chains: ReadonlyMap<string, TranslationRow[]>,
+    selected: readonly T[],
+): T[] {
+    if (!translation || chains.size === 0) return selected as T[];
+    return selected.map((option) => applyTranslation(
+        applyTranslation(option, chains.get(`product_option:${option.optionDefinitionId}`) ?? [], { name: "name" }),
+        chains.get(`product_option_value:${option.optionValueId}`) ?? [],
+        { value: "value" },
+    ));
+}
+
 
 /**
  * The product page in its market (MARKETS-DESIGN D5): each SKU's price and

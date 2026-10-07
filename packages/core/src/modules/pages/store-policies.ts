@@ -8,6 +8,7 @@ import { pages } from "@scalius/database/schema";
 import { ValidationError } from "../../errors";
 import { planPublicPagesByIdDeclaration, publicPageVisibilityCondition } from "./pages.service";
 import { policiesDocument, STORE_POLICY_KINDS, type StorePolicies, type StorePolicyKind } from "../settings";
+import { translateRows, translationColumns, type TranslationScope } from "../translations";
 
 /** A policy a buyer can open: its page title and same-store path. */
 export interface PublicStorePolicy {
@@ -56,12 +57,12 @@ type BatchItem = Parameters<typeof safeBatch>[1][number];
  * caller's batch (none when no policy links a page) and how to read them
  * from its results, in policy order.
  */
-export function planPublicStorePolicies(db: Database, policies: StorePolicies) {
+export function planPublicStorePolicies(db: Database, policies: StorePolicies, translation: TranslationScope | null = null) {
   const ids = linkedPageIds(policies);
   const declaration = planPublicPagesByIdDeclaration(db, ids);
   const pagesRead = ids.length > 0
     ? db
-      .select({ id: pages.id, title: pages.title, slug: pages.slug })
+      .select({ id: pages.id, title: pages.title, slug: pages.slug, ...translationColumns(translation, "page", pages.id) })
       .from(pages)
       .where(and(inArray(pages.id, ids), publicPageVisibilityCondition("page")))
     : null;
@@ -71,7 +72,8 @@ export function planPublicStorePolicies(db: Database, policies: StorePolicies) {
     resolve(results: readonly unknown[], offset: number): PublicStorePolicy[] {
       if (!pagesRead) return [];
       declaration.declare(results, offset);
-      const rows = results[offset + declaration.statements.length] as PolicyPageRow[];
+      // A presence's policy titles and handles in its language (MARKETS-DESIGN D9).
+      const rows = translateRows(translation, "page", results[offset + declaration.statements.length] as PolicyPageRow[], { title: "title" });
       const byId = new Map(rows.map((row) => [row.id, row]));
       return STORE_POLICY_KINDS.flatMap((kind) => {
         const page = policies[kind] ? byId.get(policies[kind]!) : undefined;

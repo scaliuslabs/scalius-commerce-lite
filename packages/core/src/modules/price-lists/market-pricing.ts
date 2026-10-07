@@ -35,7 +35,7 @@ import { discountedPriceMinor } from "@scalius/shared/money";
 import { NotFoundError } from "@scalius/core/errors";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import { storePriceIncrementSql } from "../markets";
+import { servedLanguageSql, storePriceIncrementSql } from "../markets";
 import { channelAvailableStockSql, effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../settings";
 
@@ -142,9 +142,13 @@ export async function readMarketPriceContext(
             eq(marketPresences.marketId, markets.id),
             eq(marketPresences.kind, "subfolder"),
             eq(marketPresences.value, presence),
+            // Only a published language's presence is served (MARKETS-DESIGN D9).
+            servedLanguageSql(),
         ))
         .where(eq(markets.status, "active"))
         .get();
+    // Which presences are served: their locales and the published languages.
+    deps.translationLocales();
     if (!row) throw new NotFoundError("Market not found");
     deps.market(row.id);
     deps.marketPricing(row.id);

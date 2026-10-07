@@ -12,7 +12,8 @@ import {
 import { brandSlugSchema } from "@scalius/shared/catalog-brand";
 import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
-import { publicMarketPricing } from "../utils/public-market";
+import { publicMarketPricing, publicTranslation } from "../utils/public-market";
+import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
@@ -84,6 +85,7 @@ const brandSummarySchema = z.object({
 });
 
 const brandDetailSchema = brandSummarySchema.extend({
+  ...localizedHandleFields,
   description: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
@@ -161,7 +163,7 @@ const listBrandsRoute = createRoute({
 });
 
 app.openapi(listBrandsRoute, async (c) => {
-  return ok(c, await listPublicBrands(c.get("db"), c.req.valid("query")));
+  return ok(c, await listPublicBrands(c.get("db"), { ...c.req.valid("query"), translation: publicTranslation(c) }));
 });
 
 // GET /brands/sitemap — brand pages for XML discovery (registered before /{slug})
@@ -188,7 +190,7 @@ const brandSitemapRoute = createRoute({
 });
 
 app.openapi(brandSitemapRoute, async (c) => {
-  return ok(c, { brands: await getPublicBrandSitemapEntries(c.get("db")) });
+  return ok(c, { brands: await getPublicBrandSitemapEntries(c.get("db"), publicTranslation(c)) });
 });
 
 // GET /brands/{slug}
@@ -210,7 +212,7 @@ const getBrandRoute = createRoute({
 });
 
 app.openapi(getBrandRoute, async (c) => {
-  const brand = await getPublicBrandBySlug(c.get("db"), c.req.valid("param").slug);
+  const brand = await getPublicBrandBySlug(c.get("db"), c.req.valid("param").slug, publicTranslation(c));
   if (!brand) throw new NotFoundError("Brand not found");
   return ok(c, { brand });
 });
@@ -248,7 +250,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
   const [brand, attributeFilters] = await Promise.all([
-    getPublicBrandBySlug(db, slug),
+    getPublicBrandBySlug(db, slug, publicTranslation(c)),
     // The brand page is its own brand filter: no `brand` key.
     resolvePublicAttributeFilters(db, readRepeatedPublicQueryValues(c.req.url), Object.keys(params), { brand: false }),
   ]);

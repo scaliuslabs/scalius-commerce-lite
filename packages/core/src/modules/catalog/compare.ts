@@ -7,6 +7,7 @@
 // `loadProductSpecGroups` is the read-side contract for grouped spec tables:
 // the product page (Phase 6) calls it with one product id and renders the
 // same groups and rows.
+import { translationScopeOf, PRODUCT_CARD_FIELDS, translateRows, translationColumns } from "../translations";
 import {
     attributeGroups,
     attributeValues,
@@ -201,12 +202,15 @@ export async function getStorefrontProductComparison(
     if (ids.length === 0) return { products: [], groups: [] };
     const cardSku = buyerStateCardSku();
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
-    const [cards, specs, mediaMap] = await Promise.all([
+    // A presence's product names and handles in its language (MARKETS-DESIGN D9).
+    const translation = translationScopeOf(pricing);
+    const [readCards, specs, mediaMap] = await Promise.all([
         db
             .select({
                 id: products.id,
                 name: products.name,
                 slug: products.slug,
+                ...translationColumns(translation, "product", products.id),
                 ...buyerStatePricingSelection(cardSku),
                 hasCustomerOptions: buyerState.hasCustomerOptions,
                 availableForSale: buyerState.availableForSale,
@@ -233,6 +237,7 @@ export async function getStorefrontProductComparison(
         specValuesQuery(db, ids).all() as Promise<SpecValueRow[]>,
         loadProductMediaProjections(db, ids),
     ]);
+    const cards = translateRows(translation, "product", readCards, PRODUCT_CARD_FIELDS);
     const decimalPlaces = storeDecimalPlacesFromCode(cards[0]?.storeCurrencyCode);
     // The cards in the page's market (a neutral market leaves them as read).
     const priced = await priceProductCards(db, await marketPriceContextOf(pricing), cards);

@@ -7,37 +7,37 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.bangladesh": {
     version: "1.3.0",
-    sha256: "1abe3d6502c123b6c0eacfe94e1b854b37e6c0d75de331ae4efa510dcb61c67c",
+    sha256: "a4f717d5c9dfdc791fbf1c77d084946db707f7594b707eecf72a0f45abcde6f6",
     load: () => import("../../../../plugins/bangladesh/src/index"),
   },
   "scalius.bkash": {
     version: "0.1.2",
-    sha256: "6223d1bd578aaab2717bdc412a74f373db54d192c143b652fa85c957b184a21b",
+    sha256: "243756fc0f8dd68e142e8a6233b275f2334c98485be31b5a6c11f74b6be150ee",
     load: () => import("../../../../plugins/bkash/src/index"),
   },
   "scalius.bulk-discount": {
     version: "0.1.2",
-    sha256: "22af408760c7c87a7918fde5517878ae2736af998c26e1ad7dea0e6a828b46f6",
+    sha256: "eac09567856b21b9713de3621afa97e2ddd16d354af0339a104930c695e3f889",
     load: () => import("../../../../plugins/bulk-discount/src/index"),
   },
   "scalius.loyalty": {
     version: "0.1.2",
-    sha256: "6e0a3b2af173353b5f2b50132df0ac8e18772eaee527b62e6646afe2e544b909",
+    sha256: "823a964808cd736ef057030063a1ffd7fd3553a48fcad70c0fc7e8196e4fc0c4",
     load: () => import("../../../../plugins/loyalty/src/index"),
   },
   "scalius.nagad": {
     version: "0.1.2",
-    sha256: "53c5596088cf8a23c155261b56066510ce811bdad946ee50967e0f9502ac86dc",
+    sha256: "ea3c433a0b3b62cbfb71d6c34266c2fe3b760ec971317df7886c17873db3487e",
     load: () => import("../../../../plugins/nagad/src/index"),
   },
   "scalius.order-tagger": {
     version: "0.1.3",
-    sha256: "2e758bbfcd3b3a781f2b7d47b83451d20dcfb2954e00af2c7f2c8b4e91a460d4",
+    sha256: "76343413a669ed409ba1a9807a05bf15db3b3366293f408a54c938dd201986cc",
     load: () => import("../../../../plugins/order-tagger/src/index"),
   },
   "scalius.wishlist": {
     version: "0.1.2",
-    sha256: "9feda1309590d86fe1f0441144e3e49eb3e88fc0dc0f2d1479e395c2a3757bc5",
+    sha256: "d59dc40e3dcffbdee48274ad07cca40b5ec8a9bd8291f2d70242c57d645e2528",
     load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

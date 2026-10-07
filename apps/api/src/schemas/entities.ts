@@ -4,6 +4,7 @@
 //
 // Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
+import { localizedHandleFields } from "./translations";
 import { z } from "@hono/zod-openapi";
 import { orderBillingAddressShape } from "./billing-address";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
@@ -848,10 +849,10 @@ export const pageSchema = z.object({
 });
 
 /** A public CMS page retains truthful `updatedAt` for sitemap lastmod, but no editor revision. */
-export const publicPageSchema = pageSchema.omit({ revision: true });
+export const publicPageSchema = pageSchema.omit({ revision: true }).extend(localizedHandleFields);
 
 /** An article as buyers get it: no `revision`; `updatedAt` feeds the blog's dateModified. */
-export const publicArticleSchema = pageSchema.omit({ revision: true });
+export const publicArticleSchema = pageSchema.omit({ revision: true }).extend(localizedHandleFields);
 
 // ─────────────────────────────────────────
 // Attributes

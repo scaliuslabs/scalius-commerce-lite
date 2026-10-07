@@ -94,16 +94,21 @@ describe(`${NAME} over a populated 0120 database`, { timeout: 30_000 }, () => {
     ]);
   });
 
-  it("keeps the root language when no checkout copy is active", () => {
-    const database = migrate((seeded) => seeded.exec(`
+  it("takes the fallback copy's language when no copy is active, and keeps the root's without any", () => {
+    const fallback = migrate((seeded) => seeded.exec(`
       INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility)
-        VALUES ('cl_bn', 'Bangla', 'bn', 0, 1, '{}', '{}');
+        VALUES ('cl_bn', 'Bangla', 'bn', 0, 1, '{}', '{}'), ('cl_fr', 'French', 'fr', 0, 0, '{}', '{}');
     `));
-    expect(database.prepare("SELECT locale FROM market_presences WHERE value = ''").get()).toEqual({ locale: "en" });
-    expect(database.prepare("SELECT locale, published FROM store_languages ORDER BY locale").all()).toEqual([
-      { locale: "bn", published: 0 },
+    expect(fallback.prepare("SELECT locale FROM market_presences WHERE value = ''").get()).toEqual({ locale: "bn" });
+    expect(fallback.prepare("SELECT locale, published FROM store_languages ORDER BY locale").all()).toEqual([
+      { locale: "bn", published: 1 },
       { locale: "en", published: 1 },
+      { locale: "fr", published: 0 },
     ]);
+    fallback.close();
+    const none = migrate();
+    expect(none.prepare("SELECT locale FROM market_presences WHERE value = ''").get()).toEqual({ locale: "en" });
+    expect(none.prepare("SELECT locale, published FROM store_languages ORDER BY locale").all()).toEqual([{ locale: "en", published: 1 }]);
   });
 
   it("keeps every presence in a store language and the default language published", () => {

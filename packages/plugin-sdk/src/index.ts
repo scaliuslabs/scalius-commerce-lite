@@ -160,3 +160,5 @@ export const defineFraudProvider = provider("fraud");
  * checkout refuses to place an order while it cannot answer.
  */
 export const defineTaxProvider = provider("tax");
+/** A machine translation provider (`translate`): the translation editor's "Translate with" (MARKETS-DESIGN D9). */
+export const defineTranslationProvider = provider("translation");

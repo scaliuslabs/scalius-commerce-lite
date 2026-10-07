@@ -11,6 +11,7 @@
 // every parent of a kept node.
 import { sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { NAME_FIELDS, translateRows, translationColumns, type TranslationScope } from "../translations";
 
 /** Rows one read considers (top levels first); the `/categories` index lists them all. */
 export const CATEGORY_NAVIGATION_NODE_LIMIT = 1000;
@@ -43,9 +44,10 @@ const published = (alias: string) => sql.raw(`${alias}."status" = 'published' AN
  * row only says the tree was cut). Columns are qualified by hand: drizzle
  * renders a column inside a raw subquery unqualified.
  */
-export function selectCategoryNavigationRows(db: Database, limit = CATEGORY_NAVIGATION_NODE_LIMIT) {
+export function selectCategoryNavigationRows(db: Database, limit = CATEGORY_NAVIGATION_NODE_LIMIT, translation: TranslationScope | null = null) {
   return db
     .select({
+      ...translationColumns(translation, "category", sql`node."id"`),
       id: sql<string>`node."id"`,
       name: sql<string>`node."name"`,
       slug: sql<string>`node."slug"`,
@@ -74,12 +76,16 @@ export function selectCategoryNavigationRows(db: Database, limit = CATEGORY_NAVI
     .limit(limit + 1);
 }
 
-type Row = { id: string; name: string; slug: string; parentId: string | null; canonicalPath: string | null; imageUrl: string | null };
+type Row = { id: string; name: string; slug: string; parentId: string | null; canonicalPath: string | null; imageUrl: string | null; trRows?: string | null; trSlug?: string | null };
 
-/** The tree from the rows (the extra row marks it truncated). */
-export function categoryNavigationFromRows(rows: readonly Row[], limit = CATEGORY_NAVIGATION_NODE_LIMIT): CategoryNavigationTree {
+/** The tree from the rows (the extra row marks it truncated), in a presence's language when read with its `translation`. */
+export function categoryNavigationFromRows(
+  rows: readonly Row[],
+  limit = CATEGORY_NAVIGATION_NODE_LIMIT,
+  translation: TranslationScope | null = null,
+): CategoryNavigationTree {
   return {
-    nodes: rows.slice(0, limit).map((row) => ({
+    nodes: translateRows(translation, "category", rows.slice(0, limit), NAME_FIELDS).map((row) => ({
       id: String(row.id),
       name: String(row.name),
       slug: String(row.slug),
@@ -92,8 +98,8 @@ export function categoryNavigationFromRows(rows: readonly Row[], limit = CATEGOR
 }
 
 /** The whole reachable tree (bounded), for the `/categories` index. */
-export async function readCategoryNavigation(db: Database): Promise<CategoryNavigationTree> {
-  return categoryNavigationFromRows(await selectCategoryNavigationRows(db));
+export async function readCategoryNavigation(db: Database, translation: TranslationScope | null = null): Promise<CategoryNavigationTree> {
+  return categoryNavigationFromRows(await selectCategoryNavigationRows(db, CATEGORY_NAVIGATION_NODE_LIMIT, translation), CATEGORY_NAVIGATION_NODE_LIMIT, translation);
 }
 
 /**

@@ -131,7 +131,7 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 159 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
+The allowlist holds 166 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
 
 ```text
 L11  agent-storefront
@@ -151,9 +151,9 @@ L0   agent-access · attributes · collections · events · fraud-checker
 
 Rules that keep it acyclic:
 
-- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`. Put a fact in a leaf when several domains act on it and none should own the others.
+- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`, `translations`. Put a fact in a leaf when several domains act on it and none should own the others.
 - **`settings` imports only `media-references`.** The document store is infrastructure (`@scalius/core/settings-store`). A domain declares the documents it owns.
-- **`markets` imports only `settings`.** A domain that prices reads the store currency and the price increment from `markets` (`readStoreCurrency()`, `storePriceIncrementSql()`); the code-only money helpers stay in `settings`.
+- **`markets` imports only `settings` and `translations`** (a presence names a store language). A domain that prices reads the store currency and the price increment from `markets` (`readStoreCurrency()`, `storePriceIncrementSql()`); the code-only money helpers stay in `settings`.
 - **`plugins` imports only `events`.**
 - **Orchestrators sit on top.** `checkout`, `fulfilment`, `storefront`, `agent-storefront` and `store-transfer` compose lower domains, and nothing below them imports them. Work that needs two peers goes into the orchestrator or the API route that calls both.
 - **The model sits below its editor.** `products` is below `inventory`. `product-admin` is above `inventory` and `tax`.

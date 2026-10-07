@@ -1,6 +1,7 @@
 ---
 import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // src/pages/categories/[slug].astro
+import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import {
   getProductsByCategory,
@@ -130,11 +131,13 @@ const analyticsProductData = products.map((p) => ({
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Each paginated page is self-canonical; sort, filter and tracking params are stripped.
+// The category's own handle (a localized one at a presence), not the URL's.
 const categoryUrl = buildResourceCanonicalSeoUrl(
   "category",
-  `/categories/${slug}`,
+  `/categories/${category?.slug ?? slug}`,
   category?.canonicalPath,
 );
+const categoryPaths = localizedPaths(category, (handle) => `/categories/${handle}`);
 const canonicalUrl = productListCanonicalUrl(categoryUrl, pagination.page);
 
 // OG image from category image (per OG-02, OG-05)
@@ -199,6 +202,7 @@ const collectionJsonLd =
   description={pageDescription}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  localizedPaths={categoryPaths}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={shouldNoindexCategoryView}

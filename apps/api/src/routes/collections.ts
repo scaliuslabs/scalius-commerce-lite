@@ -6,7 +6,8 @@ import { successEnvelope, errorResponses, listingPaginationSchema, listingPageIn
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
-import { publicMarketPricing } from "../utils/public-market";
+import { publicMarketPricing, publicTranslation } from "../utils/public-market";
+import { NAME_FIELDS, translateRows, translationColumns } from "@scalius/core/modules/translations";
 import { deps } from "@scalius/core/cache-deps";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
@@ -160,10 +161,12 @@ const listCollectionsRoute = createRoute({
 
 app.openapi(listCollectionsRoute, async (c) => {
   const db = c.get("db");
-  // Every active collection row.
+  // Every active collection row, in the page's language (MARKETS-DESIGN D9).
   deps.anyCollection();
-  const activeCollections = await db
+  const translation = publicTranslation(c);
+  const readCollections = await db
     .select({
+      ...translationColumns(translation, "collection", collections.id, { slug: false }),
       id: collections.id,
       name: collections.name,
       presentation: collections.presentation,
@@ -179,6 +182,7 @@ app.openapi(listCollectionsRoute, async (c) => {
     .from(collections)
     .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
     .orderBy(collections.sortOrder);
+  const activeCollections = translateRows(translation, "collection", readCollections, NAME_FIELDS);
 
   const formattedCollections = activeCollections.map((collection) => ({
     ...collection,
@@ -224,7 +228,7 @@ const collectionDirectoryRoute = createRoute({
 });
 
 app.openapi(collectionDirectoryRoute, async (c) =>
-  ok(c, { collections: await listPublicCollectionDirectory(c.get("db")) }));
+  ok(c, { collections: await listPublicCollectionDirectory(c.get("db"), publicTranslation(c)) }));
 
 // GET /collections/:id — get collection by ID
 // GET /collections/sitemap — collection pages for XML discovery (registered before /{id})

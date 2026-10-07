@@ -61,10 +61,11 @@ import {
 } from "@/lib/partytown-config";
 import { partytownLoaderPath } from "virtual:scalius/partytown";
 import { getRuntimePresence } from "@/lib/api/runtime";
-import { hreflangAlternates, marketOfPresence, stripPresencePath } from "@scalius/shared/markets";
+import { defaultLocale, hreflangAlternates, marketOfPresence, stripPresencePath } from "@scalius/shared/markets";
 import { hasSeveralPresences } from "@/lib/market-selector";
 import MarketSelector from "../components/markets/MarketSelector.astro";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
+import type { LocalizedPaths } from "@/lib/localized-paths";
 
 interface Props {
   title: string;
@@ -90,6 +91,12 @@ interface Props {
   noindex?: boolean;
   documentLanguage?: string;
   /**
+   * A page with localized URL handles (MARKETS-DESIGN D9): its path in each
+   * language (`byLocale`) and its source path (`source`, every other
+   * language), so each hreflang alternate names the page's own URL there.
+   */
+  localizedPaths?: LocalizedPaths | null;
+  /**
    * False leaves the store's analytics and pixels off this page: a page
    * opened from a link that carries a token in its URL (the newsletter's
    * confirm and unsubscribe pages), so no third party reads the token.
@@ -112,6 +119,7 @@ const {
   ogCurrency,
   noindex,
   documentLanguage = "en",
+  localizedPaths = null,
   analytics = true,
 } = Astro.props;
 
@@ -195,17 +203,28 @@ const storeSocial = resolveStoreSocialLinks(businessInfo?.socialLinks, storePhon
 const marketPresence = getRuntimePresence();
 const marketMatrix = layoutData?.markets ?? { markets: [] };
 const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPresence) : null;
-const pageLanguage = presenceEntry?.presence.locale ?? documentLanguage;
-// The page's country: the presence's, else the store's (the backup market's).
-// Numbers and dates are written as there; Open Graph names it with the language.
+// Root pages: the store default language once the store sells at more than
+// one URL (hreflang names it); a single-presence store keeps today's rule.
+const pageLanguage = presenceEntry?.presence.locale
+  ?? (hasSeveralPresences(marketMatrix) ? defaultLocale(marketMatrix) : null)
+  ?? documentLanguage;
+// The page's country: the store's (the backup market's). Numbers and dates are
+// written as there; Open Graph names the presence's country, else the store's.
 const pageRegion = storeRegion();
-const ogLocale = `${pageLanguage}_${pageRegion}`;
+const ogLocale = presenceEntry
+  ? `${presenceEntry.presence.locale}_${presenceEntry.presence.value.slice(3).toUpperCase()}`
+  : `${pageLanguage}_${pageRegion}`;
 // hreflang, the market selector and the geo suggestion exist only while the
 // store sells at more than one URL, so a single-presence store's HTML is unchanged.
 const severalPresences = hasSeveralPresences(marketMatrix);
 const canonicalLocation = canonicalUrl ? new URL(canonicalUrl) : null;
 const hreflangLinks = severalPresences && canonicalLocation && storefrontUrl && !noindex && !isThemePreview
-  ? hreflangAlternates(marketMatrix, `${stripPresencePath(canonicalLocation.pathname, marketPresence)}${canonicalLocation.search}`, storefrontUrl)
+  ? hreflangAlternates(
+    marketMatrix,
+    `${stripPresencePath(canonicalLocation.pathname, marketPresence)}${canonicalLocation.search}`,
+    storefrontUrl,
+    localizedPaths ? (locale) => localizedPaths.byLocale[locale] ?? localizedPaths.source : undefined,
+  )
   : [];
 const marketReturnTo = `${stripPresencePath(Astro.url.pathname, marketPresence)}${Astro.url.search}`;
 // The site's own URL in WebSite JSON-LD: the presence's home on a presence page.

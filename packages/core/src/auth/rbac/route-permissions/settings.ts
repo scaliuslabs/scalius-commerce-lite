@@ -48,6 +48,15 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/sales-channels/*/products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
+  // Settings → Languages (MARKETS-DESIGN D9): the store's languages, publishing and the default language.
+  "/api/v1/admin/settings/languages": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/languages/*": {
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/taxes": {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
   },

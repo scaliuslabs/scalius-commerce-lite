@@ -328,6 +328,37 @@ function seedSql(): string {
     ('mkp_dvc_india', 'mkt_dvc_india', 'subfolder', 'en-in', 'en', ${T}),
     ('mkp_dvc_draft', 'mkt_dvc_draft', 'subfolder', 'en-pk', 'en', ${T});
 
+  -- Translations (0121, MARKETS-DESIGN D9): Bangla is published and the India
+  -- market serves it at bn-in; French is a draft language. Each translatable
+  -- type has a Bangla translation, a product has a market-specific English
+  -- one, and the slugged types have Bangla handles, so the generator edits
+  -- each kind and the bn-in reads fold them.
+  INSERT INTO store_languages (locale, published, created_at, updated_at) VALUES ('bn', 1, ${T}, ${T}), ('fr', 0, ${T}, ${T});
+  INSERT INTO market_presences (id, market_id, kind, value, locale, created_at) VALUES
+    ('mkp_dvc_india_bn', 'mkt_dvc_india', 'subfolder', 'bn-in', 'bn', ${T});
+  INSERT INTO translations (id, resource_type, resource_id, locale, market_id, fields, source_digest, updated_at) VALUES
+    ('tr_dvc_linen', 'product', 'p_linen', 'bn', NULL, ${q({ name: "লিনেন পাঞ্জাবি", description: "<p>আরামদায়ক লিনেন।</p>" })}, '{}', ${T}),
+    ('tr_dvc_linen_in', 'product', 'p_linen', 'en', 'mkt_dvc_india', ${q({ name: "Linen Kurta" })}, '{}', ${T}),
+    ('tr_dvc_silk', 'product', 'p_silk', 'bn', NULL, ${q({ name: "সিল্ক পাঞ্জাবি", metaTitle: "সিল্ক" })}, '{}', ${T}),
+    ('tr_dvc_silk_fr', 'product', 'p_silk', 'fr', NULL, ${q({ name: "Panjabi en soie" })}, '{}', ${T}),
+    ('tr_dvc_v_linen_m', 'product_variant', 'v_linen_m', 'bn', NULL, ${q({ preorderMessage: "শীঘ্রই আসছে" })}, '{}', ${T}),
+    ('tr_dvc_opt_color', 'product_option', 'opt_silk_color', 'bn', NULL, ${q({ name: "রং" })}, '{}', ${T}),
+    ('tr_dvc_ov_gold', 'product_option_value', 'ov_silk_gold', 'bn', NULL, ${q({ value: "সোনালি" })}, '{}', ${T}),
+    ('tr_dvc_cat_panjabi', 'category', 'cat_panjabi', 'bn', NULL, ${q({ name: "পাঞ্জাবি", description: "<p>উৎসবের পাঞ্জাবি</p>" })}, '{}', ${T}),
+    ('tr_dvc_brd_aarong', 'brand', 'brd_aarong01', 'bn', NULL, ${q({ name: "আড়ং" })}, '{}', ${T}),
+    ('tr_dvc_col_manual', 'collection', 'col_manual', 'bn', NULL, ${q({ name: "সেরা বিক্রিত" })}, '{}', ${T}),
+    ('tr_dvc_page_about', 'page', 'page_about', 'bn', NULL, ${q({ title: "আমাদের কথা", content: "<p>আমরা বুনি।</p>" })}, '{}', ${T}),
+    ('tr_dvc_art_eid', 'page', 'art_eid', 'bn', NULL, ${q({ title: "ঈদ লুকবুক" })}, '{}', ${T}),
+    ('tr_dvc_menu_main', 'menu', 'menu_main', 'bn', NULL, ${q({ "item:nav_panjabi": "পাঞ্জাবি", "item:nav_sale": "ছাড়" })}, '{}', ${T}),
+    ('tr_dvc_ship_dhaka', 'shipping_method', 'ship_dhaka', 'bn', NULL, ${q({ name: "ঢাকার ভেতরে" })}, '{}', ${T}),
+    ('tr_dvc_cod', 'payment_method', 'cod', 'bn', NULL, ${q({ name: "ক্যাশ অন ডেলিভারি" })}, '{}', ${T});
+  INSERT INTO localized_slugs (resource_type, locale, slug, resource_id, updated_at) VALUES
+    ('product', 'bn', 'linen-panjabi-bn', 'p_linen', ${T}),
+    ('product', 'fr', 'panjabi-soie', 'p_silk', ${T}),
+    ('category', 'bn', 'panjabi-bn', 'cat_panjabi', ${T}),
+    ('brand', 'bn', 'aarong-bn', 'brd_aarong01', ${T}),
+    ('page', 'bn', 'amader-kotha', 'page_about', ${T});
+
   INSERT INTO customers (id, name, phone, created_at, updated_at) VALUES ('cus_1', 'Rahim', '01700000001', ${T}, ${T});
   INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
     ('o_1', 'A', '01700000001', 'Road', 'city', 'zone', 'delivered', ${T - DAY}, ${T - DAY}, 'cus_1'),

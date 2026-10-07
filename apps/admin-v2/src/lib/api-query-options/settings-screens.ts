@@ -222,7 +222,7 @@ export const smsQuery = {
  * check: every courier, SMS gateway and fraud checker is an app's; offered
  * beside the built-in email senders and tax rates (payments: payment-providers.ts).
  */
-export type AppProviderKind = "courier" | "sms" | "email" | "fraud" | "tax";
+export type AppProviderKind = "courier" | "sms" | "email" | "fraud" | "tax" | "translation";
 export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
 export const appProvidersQuery = (kind: AppProviderKind) => ({
   queryKey: queryKeys.settings.appProviders(kind),

@@ -48,6 +48,10 @@ function createTestApp(options: { rateLimited?: boolean } = {}) {
         sqlite.exec("UPDATE checkout_languages SET is_active = 0");
         sqlite.prepare(`INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility)
             VALUES (?, ?, ?, 1, 0, '{}', '{}')`).run(`lang_${code}`, code, code);
+        // Activating a checkout copy makes its language the store's default (MARKETS-DESIGN D9).
+        const locale = code.slice(0, 2).toLowerCase();
+        sqlite.exec(`INSERT INTO store_languages (locale, published) VALUES ('${locale}', 1) ON CONFLICT (locale) DO UPDATE SET published = 1;
+          UPDATE market_presences SET locale = '${locale}' WHERE market_id = 'mkt_backup' AND value = ''`);
     };
     return { request, stored, limit, activateLanguage, sqlite };
 }

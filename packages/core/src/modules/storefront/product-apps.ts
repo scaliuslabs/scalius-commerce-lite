@@ -4,6 +4,7 @@
 // batch. The API asks each app to draw its block (apps/api
 // plugins/storefront-render.ts).
 
+import { productBySlugCondition } from "../catalog";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { productBuyerState, products, themeSettings, type PluginInstallationRow } from "@scalius/database/schema";
 import {
@@ -44,7 +45,8 @@ export async function readProductAppContext(db: Database, slug: string, previewT
     db.select({ id: products.id, slug: products.slug, categoryId: products.categoryId, brandId: products.brandId })
       .from(products)
       .innerJoin(productBuyerState, and(eq(productBuyerState.productId, products.id), eq(productBuyerState.isPublic, true)))
-      .where(eq(products.slug, slug))
+      // A localized handle names its product too (MARKETS-DESIGN D9).
+      .where(productBySlugCondition(slug, null))
       .limit(1),
     // Every active app (`plg:*`): which apps draw is decided per block below.
     selectActivePluginInstallations(db),
@@ -54,6 +56,9 @@ export async function readProductAppContext(db: Database, slug: string, previewT
   const product = (productRows as ProductAppContext["product"][])[0];
   if (!product) return null;
   deps.product(product.id);
+  // Which product a handle names: its localized handles, and the handle space when a localized one named it.
+  deps.localizedHandles("product", product.id);
+  if (product.slug !== slug) deps.localizedSlugSpace("product");
   const theme = previewTheme ?? parseStoredStorefrontThemeDocument((themeRows as Array<{ value?: string }>)[0]?.value) ?? DEFAULT_STOREFRONT_THEME;
   return {
     product,

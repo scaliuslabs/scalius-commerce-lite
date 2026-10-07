@@ -5,8 +5,9 @@
 -- Settings → Languages). It unifies the two lists the store had: the
 -- languages of the market presences (published) and of the checkout copy
 -- (unpublished unless a presence uses it). The default language is the backup
--- market's root presence locale; it takes the active checkout copy's
--- language, the copy buyers read today, so the root keeps its bytes. From
+-- market's root presence locale; it takes the language of the checkout
+-- copy buyers read today (the active copy, else the fallback one), so the
+-- root keeps its bytes. From
 -- now on a presence names a store language (STORE_LANGUAGE_REQUIRED), the
 -- default language stays published (STORE_LANGUAGE_DEFAULT_REQUIRED), a
 -- language a presence uses cannot be removed (STORE_LANGUAGE_IN_USE) and a
@@ -82,22 +83,24 @@ CREATE INDEX `localized_slugs_locale_idx` ON `localized_slugs` (`locale`);
 --> statement-breakpoint
 -- The store's languages: every presence's language is published (a draft
 -- market's presence is still not served), and the default language takes
--- the active checkout copy's language (the copy buyers read at the root).
+-- the language of the checkout copy buyers read at the root today (the
+-- active copy, else the fallback one).
 INSERT INTO `store_languages` (`locale`, `published`)
 SELECT DISTINCT `locale`, 1 FROM `market_presences` WHERE `locale` IS NOT NULL;
 --> statement-breakpoint
 INSERT INTO `store_languages` (`locale`, `published`)
 SELECT lower(substr(`code`, 1, 2)), 1 FROM `checkout_languages`
-WHERE `is_active` = 1 AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
+WHERE (`is_active` = 1 OR `is_default` = 1) AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
+ORDER BY `is_active` DESC, `is_default` DESC, `id` LIMIT 1
 ON CONFLICT (`locale`) DO UPDATE SET `published` = 1;
 --> statement-breakpoint
 UPDATE `market_presences` SET `locale` = (
   SELECT lower(substr(`code`, 1, 2)) FROM `checkout_languages`
-  WHERE `is_active` = 1 AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
-  ORDER BY `is_default` DESC, `id` LIMIT 1
+  WHERE (`is_active` = 1 OR `is_default` = 1) AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
+  ORDER BY `is_active` DESC, `is_default` DESC, `id` LIMIT 1
 )
 WHERE `kind` = 'subfolder' AND `value` = '' AND EXISTS (
-  SELECT 1 FROM `checkout_languages` WHERE `is_active` = 1 AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
+  SELECT 1 FROM `checkout_languages` WHERE (`is_active` = 1 OR `is_default` = 1) AND `deleted_at` IS NULL AND length(`code`) >= 2 AND lower(substr(`code`, 1, 2)) NOT GLOB '*[^a-z]*'
 );
 --> statement-breakpoint
 -- The other checkout copies' languages join the list unpublished.
@@ -527,7 +530,7 @@ END;
 CREATE TRIGGER `cdep_localized_slugs_ins` AFTER INSERT ON `localized_slugs`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:slugs:' || NEW.`resource_type` || ':' || NEW.`locale`, 't:localized_slugs')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:handles:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:slugs:' || NEW.`resource_type` || ':' || NEW.`locale`, 'tr:slugs:' || NEW.`resource_type`, 't:localized_slugs')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -536,7 +539,7 @@ END;
 CREATE TRIGGER `cdep_localized_slugs_del` AFTER DELETE ON `localized_slugs`
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:slugs:' || OLD.`resource_type` || ':' || OLD.`locale`, 't:localized_slugs')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:handles:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:slugs:' || OLD.`resource_type` || ':' || OLD.`locale`, 'tr:slugs:' || OLD.`resource_type`, 't:localized_slugs')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -546,7 +549,7 @@ CREATE TRIGGER `cdep_localized_slugs_upd` AFTER UPDATE ON `localized_slugs`
 WHEN (OLD.`resource_type` IS NOT NEW.`resource_type` OR OLD.`locale` IS NOT NEW.`locale` OR OLD.`slug` IS NOT NEW.`slug` OR OLD.`resource_id` IS NOT NEW.`resource_id`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:slugs:' || NEW.`resource_type` || ':' || NEW.`locale`, 't:localized_slugs')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:handles:' || NEW.`resource_type` || ':' || NEW.`resource_id`, 'tr:slugs:' || NEW.`resource_type` || ':' || NEW.`locale`, 'tr:slugs:' || NEW.`resource_type`, 't:localized_slugs')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
@@ -556,10 +559,10 @@ CREATE TRIGGER `cdep_localized_slugs_upd_old` AFTER UPDATE ON `localized_slugs`
 WHEN (OLD.`resource_type` IS NOT NEW.`resource_type` OR OLD.`resource_id` IS NOT NEW.`resource_id` OR OLD.`locale` IS NOT NEW.`locale`)
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
-  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:slugs:' || OLD.`resource_type` || ':' || OLD.`locale`, 't:localized_slugs')) AS key_list) AS key_rows
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('tr:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:handles:' || OLD.`resource_type` || ':' || OLD.`resource_id`, 'tr:slugs:' || OLD.`resource_type` || ':' || OLD.`locale`, 'tr:slugs:' || OLD.`resource_type`, 't:localized_slugs')) AS key_list) AS key_rows
   WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
   UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (121, '0121_translations', '195a3ba12533fb28cd2855756dcd0306b365d174996e68115e9f26f79967f3fe');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (121, '0121_translations', 'bd4bc6821c6f8787a33e888a51e71ac2a562ea3dc7c4ec57b9192ae00d9ad8b4');

@@ -26,6 +26,13 @@ import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
 import {
+    translationScopeOf,
+    NAME_FIELDS,
+    PRODUCT_CARD_FIELDS,
+    translateRows,
+    translationColumns,
+} from "../translations";
+import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
     declareFacetReadWithoutProducts,
@@ -334,11 +341,14 @@ async function readStorefrontCatalogResults(
     ` : null;
 
     const cardSku = buyerStateCardSku();
+    // A presence page's cards in its language (MARKETS-DESIGN D9); none at the root.
+    const translation = translationScopeOf(pricing);
     let query = db
         .select({
             id: products.id,
             name: products.name,
             productCondition: products.productCondition,
+            ...translationColumns(translation, "product", products.id),
             ...buyerStatePricingSelection(cardSku),
             slug: products.slug,
             freeDelivery: products.freeDelivery,
@@ -489,6 +499,7 @@ async function readStorefrontCatalogResults(
                     id: categories.id,
                     name: categories.name,
                     slug: categories.slug,
+                    ...translationColumns(translation, "category", categories.id),
                     subcategoryId: subtreeParentId
                         ? sql<string | null>`(
                             SELECT child_link.ancestor_id FROM category_closure AS child_link
@@ -530,9 +541,10 @@ async function readStorefrontCatalogResults(
         deps.categories(ancestors ? ancestors.split(",") : []);
     }
     deps.category(scope.fixedCategory?.id);
-    const categoryMap = new Map(categoriesData.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
-    const subcategoryIds = new Map(categoriesData.map((category) => [category.id, category.subcategoryId]));
-    const productsWithImages = productsList.map(({
+    const listedCategories = translateRows(translation, "category", categoriesData, NAME_FIELDS);
+    const categoryMap = new Map(listedCategories.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
+    const subcategoryIds = new Map(listedCategories.map((category) => [category.id, category.subcategoryId]));
+    const productsWithImages = translateRows(translation, "product", productsList, PRODUCT_CARD_FIELDS).map(({
         hasCustomerOptions,
         availableForSale,
         quickAddEligible,

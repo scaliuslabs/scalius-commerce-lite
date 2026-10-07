@@ -1,3 +1,5 @@
+import { translationScopeOf, type TranslationScope } from "../translations";
+import { productBySlugCondition } from "./product-page";
 import {
   catalogDiscountedPrice,
   effectiveLowStockThresholdSql,
@@ -286,7 +288,7 @@ export function projectStorefrontProductSection(
     });
 }
 
-async function readPublicProductIdentity(db: Database, slug: string) {
+async function readPublicProductIdentity(db: Database, slug: string, translation: TranslationScope | null) {
     return db.select({
         id: products.id,
         name: products.name,
@@ -317,7 +319,8 @@ async function readPublicProductIdentity(db: Database, slug: string) {
             ...publicCategoryConditions(),
         ))
         .where(and(
-            eq(products.slug, slug),
+            // A localized handle names its product too (MARKETS-DESIGN D9).
+            productBySlugCondition(slug, translation),
             eq(products.isActive, true),
             isNull(products.deletedAt),
             publicProductHasBuyerResolvableSku(),
@@ -503,14 +506,18 @@ export async function getStorefrontProductSection(
     query: StorefrontProductSectionQuery,
     pricing: MarketPricing | null = null,
 ) {
-    const identity = await readPublicProductIdentity(db, slug);
+    const identity = await readPublicProductIdentity(db, slug, translationScopeOf(pricing));
     if (!identity) {
-        // Any product can take this slug or become public under it.
+        // Any product can take this slug or become public under it, or a localized handle name it.
         deps.listMembership("all");
         deps.table("products");
+        deps.localizedSlugSpace("product");
         return null;
     }
     deps.product(identity.id);
+    // Which product a localized handle names.
+    deps.resourceHandles(pricing !== null, "product", identity.id);
+    if (identity.slug !== slug) deps.localizedSlugSpace("product");
     if (identity.categoryId) deps.category(identity.categoryId);
     else deps.anyCategory();
     // Summary and variant images use the bounded checkout candidates and the

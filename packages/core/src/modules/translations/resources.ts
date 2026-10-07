@@ -135,11 +135,12 @@ export async function pageTableSources(
   return { items: rows.map((row) => toSource(type, source, row)), total: Number(count[0]?.n ?? 0) };
 }
 
-/** A product's parts: its live SKUs (with a pre-order message), options and option values. */
+/**
+ * A product's parts: its options and option values. A SKU shows buyers no
+ * text of its own (its title is its option values), so the editor lists none.
+ */
 export async function readProductParts(db: Database, productId: string): Promise<ResourceSource[]> {
-  const [variants, options, values] = await Promise.all([
-    namedRows<Record<string, unknown>>(db.all(sql`SELECT ${selectColumns(TABLE_SOURCES.product_variant!)} FROM "product_variants"
-      WHERE "product_id" = ${productId} AND deleted_at IS NULL AND "is_default" = 0 ORDER BY "created_at", "id"`), columnNames(TABLE_SOURCES.product_variant!)),
+  const [options, values] = await Promise.all([
     namedRows<Record<string, unknown>>(db.all(sql`SELECT ${selectColumns(TABLE_SOURCES.product_option!)} FROM "product_option_definitions"
       WHERE "product_id" = ${productId} AND deleted_at IS NULL ORDER BY "position", "id"`), columnNames(TABLE_SOURCES.product_option!)),
     namedRows<Record<string, unknown>>(db.all(sql`SELECT option_value."id" AS "id", option_value."value" AS "__title", option_value."option_definition_id" AS "__subtitle",
@@ -152,7 +153,6 @@ export async function readProductParts(db: Database, productId: string): Promise
   return [
     ...options.map((row) => toSource("product_option", TABLE_SOURCES.product_option!, row)),
     ...values.map((row) => toSource("product_option_value", TABLE_SOURCES.product_option_value!, row)),
-    ...variants.map((row) => toSource("product_variant", TABLE_SOURCES.product_variant!, row)),
   ];
 }
 

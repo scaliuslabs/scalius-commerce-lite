@@ -18,6 +18,7 @@
 //   locale). The JSON is built with `json_object` over text and
 //   `group_concat`, which both providers run.
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import {
   isSluggedResourceType,
   parseTranslationFields,
@@ -111,9 +112,19 @@ export function localizedSlugsSql(type: TranslatableResourceType, id: SQLWrapper
     WHERE tr_alt.resource_type = ${typeLiteral(type)} AND tr_alt.resource_id = ${id})`;
 }
 
-/** Declares the `tr:` key of each resource a read resolved. */
+/** Above this many resources a read declares the tables' coarse keys instead of one key each. */
+const TRANSLATED_KEYS_MAX = 128;
+
+/** Declares the `tr:` key of each resource a read resolved (the coarse table keys for a long list). */
 export function declareTranslated(type: TranslatableResourceType, ids: Iterable<string | null | undefined>): void {
-  deps.translations(type, ids);
+  if (!deps.active()) return;
+  const unique = [...new Set([...ids].filter((id): id is string => Boolean(id)))];
+  if (unique.length > TRANSLATED_KEYS_MAX) {
+    deps.table("translations");
+    deps.table("localized_slugs");
+    return;
+  }
+  deps.translations(type, unique);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,4 +237,35 @@ export function parseLocalizedSlugs(value: unknown): Record<string, string> {
 /** Whether a resource type has localized handles (its reads fold alternates). */
 export function hasLocalizedSlugs(type: TranslatableResourceType): boolean {
   return isSluggedResourceType(type);
+}
+
+/**
+ * The chains of a few resources read on their own (delivery rates, payment
+ * methods: rows that come from code or a read this domain cannot fold into),
+ * in one statement at a presence and none at the root. Declares each
+ * resource's key and `tr:locales`.
+ */
+export async function readTranslationChains(
+  db: Database,
+  scope: TranslationScope | null,
+  type: TranslatableResourceType,
+  ids: readonly string[],
+): Promise<Map<string, TranslationRow[]>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!scope || unique.length === 0) return new Map();
+  deps.translationLocales();
+  declareTranslated(type, unique);
+  const rows = await db.all(sql`SELECT tr_row.resource_id AS "id", json_object('l', tr_row.locale, 'm', tr_row.market_id, 'f', tr_row.fields) AS "row"
+    FROM translations AS tr_row
+    WHERE tr_row.resource_type = ${typeLiteral(type)}
+      AND tr_row.resource_id IN (SELECT value FROM json_each(${JSON.stringify(unique)}))
+      AND ${presenceRowsCondition(scope, "tr_row")}`) as unknown[];
+  const byId = new Map<string, TranslationRow[]>();
+  for (const raw of rows) {
+    const [id, value] = Array.isArray(raw) ? raw : [(raw as { id: unknown }).id, (raw as { row: unknown }).row];
+    const row = toRow(typeof value === "string" ? JSON.parse(value) as FoldedRow : value as FoldedRow);
+    if (typeof id !== "string" || !row) continue;
+    byId.set(id, [...(byId.get(id) ?? []), row]);
+  }
+  return new Map([...byId].map(([id, list]) => [id, chainOf(scope, list)]));
 }

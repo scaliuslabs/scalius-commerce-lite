@@ -1,6 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { listDeliveryRatesForDestination } from "@scalius/core/modules/delivery";
+import { applyTranslation, readTranslationChains } from "@scalius/core/modules/translations";
+import { publicTranslation } from "../utils/public-market";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { fromMinor } from "@scalius/shared/money";
 
@@ -73,11 +75,14 @@ app.openapi(listShippingMethodsRoute, async (c) => {
     listDeliveryRatesForDestination(db, destination),
     getCurrencyConfig(db),
   ]);
+  // A presence's rate names in its language (MARKETS-DESIGN D9); one more statement there, none at the root.
+  const translation = publicTranslation(c);
+  const chains = await readTranslationChains(db, translation, "shipping_method", rates.map((rate) => rate.id));
 
   return ok(c, {
     // zoneId and updatedAt are left out: they change without changing what a buyer sees.
     shippingMethods: rates.map(({ zoneId: _zoneId, feeMinor, freeOverMinor, createdAt, updatedAt: _updatedAt, ...rate }) => ({
-      ...rate,
+      ...applyTranslation(rate, chains.get(rate.id) ?? [], { name: "name", description: "description", pickupHours: "pickupHours" }),
       fee: fromMinor(feeMinor, decimalPlaces),
       freeOver: freeOverMinor === null ? null : fromMinor(freeOverMinor, decimalPlaces),
       createdAt: createdAt instanceof Date ? createdAt.toISOString() : null,

@@ -70,6 +70,7 @@ import { Route as AdminSettingsCustomDataRouteImport } from './routes/admin/sett
 import { Route as AdminSettingsCustomerAccountsRouteImport } from './routes/admin/settings/customer-accounts'
 import { Route as AdminSettingsImportExportRouteImport } from './routes/admin/settings/import-export'
 import { Route as AdminSettingsIntegrationsRouteImport } from './routes/admin/settings/integrations'
+import { Route as AdminSettingsLanguagesRouteImport } from './routes/admin/settings/languages'
 import { Route as AdminSettingsLocationsRouteImport } from './routes/admin/settings/locations'
 import { Route as AdminSettingsMarketsRouteImport } from './routes/admin/settings/markets'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
@@ -81,6 +82,7 @@ import { Route as AdminSettingsStoreRouteImport } from './routes/admin/settings/
 import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsUsersRouteImport } from './routes/admin/settings/users'
 import { Route as AdminSettingsWebhooksRouteImport } from './routes/admin/settings/webhooks'
+import { Route as AdminTranslationsIndexRouteImport } from './routes/admin/translations/index'
 import { Route as AdminAnalyticsReportsIndexRouteImport } from './routes/admin/analytics/reports/index'
 import { Route as AdminAnalyticsReportsReportIdRouteImport } from './routes/admin/analytics/reports/$reportId'
 import { Route as AdminArticlesArticleIdEditRouteImport } from './routes/admin/articles/$articleId/edit'
@@ -433,6 +435,11 @@ const AdminSettingsIntegrationsRoute =
     path: '/integrations',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminSettingsLanguagesRoute = AdminSettingsLanguagesRouteImport.update({
+  id: '/languages',
+  path: '/languages',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
 const AdminSettingsLocationsRoute = AdminSettingsLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
@@ -489,6 +496,11 @@ const AdminSettingsWebhooksRoute = AdminSettingsWebhooksRouteImport.update({
   id: '/webhooks',
   path: '/webhooks',
   getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
+const AdminTranslationsIndexRoute = AdminTranslationsIndexRouteImport.update({
+  id: '/translations/',
+  path: '/translations/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAnalyticsReportsIndexRoute =
   AdminAnalyticsReportsIndexRouteImport.update({
@@ -759,6 +771,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
+  '/admin/settings/languages': typeof AdminSettingsLanguagesRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -787,6 +800,7 @@ export interface FileRoutesByFullPath {
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
+  '/admin/translations/': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
@@ -868,6 +882,7 @@ export interface FileRoutesByTo {
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
+  '/admin/settings/languages': typeof AdminSettingsLanguagesRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -896,6 +911,7 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/reviews': typeof AdminReviewsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
+  '/admin/translations': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
@@ -981,6 +997,7 @@ export interface FileRoutesById {
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
+  '/admin/settings/languages': typeof AdminSettingsLanguagesRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
@@ -1009,6 +1026,7 @@ export interface FileRoutesById {
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
+  '/admin/translations/': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
@@ -1095,6 +1113,7 @@ export interface FileRouteTypes {
     | '/admin/settings/customer-accounts'
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
+    | '/admin/settings/languages'
     | '/admin/settings/locations'
     | '/admin/settings/markets'
     | '/admin/settings/notifications'
@@ -1123,6 +1142,7 @@ export interface FileRouteTypes {
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
+    | '/admin/translations/'
     | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
@@ -1204,6 +1224,7 @@ export interface FileRouteTypes {
     | '/admin/settings/customer-accounts'
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
+    | '/admin/settings/languages'
     | '/admin/settings/locations'
     | '/admin/settings/markets'
     | '/admin/settings/notifications'
@@ -1232,6 +1253,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/reviews'
     | '/admin/settings'
+    | '/admin/translations'
     | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
@@ -1316,6 +1338,7 @@ export interface FileRouteTypes {
     | '/admin/settings/customer-accounts'
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
+    | '/admin/settings/languages'
     | '/admin/settings/locations'
     | '/admin/settings/markets'
     | '/admin/settings/notifications'
@@ -1344,6 +1367,7 @@ export interface FileRouteTypes {
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
+    | '/admin/translations/'
     | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
@@ -1823,6 +1847,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsIntegrationsRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/languages': {
+      id: '/admin/settings/languages'
+      path: '/languages'
+      fullPath: '/admin/settings/languages'
+      preLoaderRoute: typeof AdminSettingsLanguagesRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/locations': {
       id: '/admin/settings/locations'
       path: '/locations'
@@ -1899,6 +1930,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/settings/webhooks'
       preLoaderRoute: typeof AdminSettingsWebhooksRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
+    }
+    '/admin/translations/': {
+      id: '/admin/translations/'
+      path: '/translations'
+      fullPath: '/admin/translations/'
+      preLoaderRoute: typeof AdminTranslationsIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/analytics/reports/': {
       id: '/admin/analytics/reports/'
@@ -2176,6 +2214,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsCustomerAccountsRoute: typeof AdminSettingsCustomerAccountsRoute
   AdminSettingsImportExportRoute: typeof AdminSettingsImportExportRoute
   AdminSettingsIntegrationsRoute: typeof AdminSettingsIntegrationsRoute
+  AdminSettingsLanguagesRoute: typeof AdminSettingsLanguagesRoute
   AdminSettingsLocationsRoute: typeof AdminSettingsLocationsRoute
   AdminSettingsMarketsRoute: typeof AdminSettingsMarketsRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
@@ -2205,6 +2244,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsCustomerAccountsRoute: AdminSettingsCustomerAccountsRoute,
   AdminSettingsImportExportRoute: AdminSettingsImportExportRoute,
   AdminSettingsIntegrationsRoute: AdminSettingsIntegrationsRoute,
+  AdminSettingsLanguagesRoute: AdminSettingsLanguagesRoute,
   AdminSettingsLocationsRoute: AdminSettingsLocationsRoute,
   AdminSettingsMarketsRoute: AdminSettingsMarketsRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
@@ -2303,6 +2343,7 @@ interface AdminRouteChildren {
   AdminPriceListsIndexRoute: typeof AdminPriceListsIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
+  AdminTranslationsIndexRoute: typeof AdminTranslationsIndexRoute
   AdminAnalyticsReportsReportIdRoute: typeof AdminAnalyticsReportsReportIdRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
   AdminBrandsBrandIdEditRoute: typeof AdminBrandsBrandIdEditRoute
@@ -2374,6 +2415,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPriceListsIndexRoute: AdminPriceListsIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminReviewsIndexRoute: AdminReviewsIndexRoute,
+  AdminTranslationsIndexRoute: AdminTranslationsIndexRoute,
   AdminAnalyticsReportsReportIdRoute: AdminAnalyticsReportsReportIdRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,
   AdminBrandsBrandIdEditRoute: AdminBrandsBrandIdEditRoute,
