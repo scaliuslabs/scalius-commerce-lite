@@ -5,6 +5,8 @@ import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
+import { marketPresenceQueryField } from "../schemas/markets";
+import { publicMarketPricing } from "../utils/public-market";
 import { deps } from "@scalius/core/cache-deps";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
@@ -104,6 +106,7 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 });
 
 const collectionCatalogQuerySchema = z.object({
+  presence: marketPresenceQueryField,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   ...listingCursorQuerySchema,
@@ -292,11 +295,12 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     readRepeatedPublicQueryValues(c.req.url),
     Object.keys(params),
   );
+  const { presence: _presence, ...filters } = params;
   const result = await getPublicCollectionCatalog(db, id, {
-    ...params,
+    ...filters,
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
-  });
+  }, publicMarketPricing(c));
 
   if (!result) {
     throw new NotFoundError("Collection not found");

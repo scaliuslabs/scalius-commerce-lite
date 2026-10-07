@@ -6,6 +6,7 @@ import {
   type CartValidationRequestItem,
 } from "@/lib/api/orders";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
+import { isMarketSubfolder } from "@scalius/shared/markets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -55,15 +56,19 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
   const city = optionalString(payload, "city");
   const zone = optionalString(payload, "zone");
   const shippingMethodId = optionalString(payload, "shippingMethodId");
+  // The page's presence (`en-in`): its market prices the cart before an address.
+  const presenceValue = optionalString(payload, "presence");
+  const presence = isMarketSubfolder(presenceValue) ? { presence: presenceValue } : {};
   if (city && zone) {
     return {
       city,
       zone,
       area: optionalString(payload, "area"),
       shippingMethodId,
+      ...presence,
     };
   }
-  return shippingMethodId ? { shippingMethodId } : {};
+  return shippingMethodId ? { shippingMethodId, ...presence } : presence;
 }
 
 export const POST: APIRoute = async ({ request }) => {

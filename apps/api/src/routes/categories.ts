@@ -12,6 +12,8 @@ import {
   getPublicCategoryTree,
 } from "@scalius/core/modules/categories";
 import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { marketPresenceQueryField } from "../schemas/markets";
+import { publicMarketPricing } from "../utils/public-market";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
@@ -56,6 +58,7 @@ const listingSortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc
 
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
+  presence: marketPresenceQueryField,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   ...listingCursorQuerySchema,
@@ -170,6 +173,7 @@ const appliedCategoryFiltersSchema = z.object({
 });
 
 const agentCategoryProductFilterSchema = z.object({
+  presence: marketPresenceQueryField,
   includeSubcategories: includeSubcategoriesSchema,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(20).optional().default(20),
@@ -543,7 +547,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     createdAt: category.createdAt,
   };
 
-  const { includeSubcategories, shelfPreview, ...filters } = params;
+  const { includeSubcategories, shelfPreview, presence: _presence, ...filters } = params;
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
     ...filters,
     search,
@@ -553,6 +557,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     includeDescendants: includeSubcategories === "true" && category.children.length > 0,
     shelfPreview: shelfPreview === "true" && category.children.length > 1,
     shelfChildIds: category.children.map((child) => child.id),
+    pricing: publicMarketPricing(c),
   });
 
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
@@ -628,7 +633,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   const category = summary.category;
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const attributeFilters = await resolvePublicAttributeFilters(c.get("db"), queryParams, Object.keys(params));
-  const { includeSubcategories, ...filters } = params;
+  const { includeSubcategories, presence: _presence, ...filters } = params;
   const result = await getStorefrontCategoryProducts(c.get("db"), {
     id: category.id,
     name: category.name,
@@ -647,6 +652,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     attributeFilters,
   }, {
     includeDescendants: includeSubcategories === "true",
+    pricing: publicMarketPricing(c),
   });
   const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: appliedFacetFilters(attributeFilters),

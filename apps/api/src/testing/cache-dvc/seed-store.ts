@@ -7,7 +7,8 @@
  * settings documents, a theme using every section type (with brand images,
  * an announcement, footer words, hero slides, category tiles, collections
  * and a product homepage), shipping,
- * locations, tax, markets (an active subfolder market and a draft one),
+ * locations, tax, markets (an active subfolder market and a draft one) with
+ * FX pricing and price lists of every kind,
  * scheduled promotions, checkout languages, analytics,
  * reviews of a delivered order's lines, warranty policies and custom fields.
  *
@@ -375,6 +376,30 @@ function seedSql(): string {
   INSERT INTO customer_segments (id, name, definition, created_at, updated_at) VALUES
     ('seg_dvc_vip01', 'VIP', ${q({ version: 1, match: "all", conditions: [{ field: "tags", op: "has_any", tags: ["vip"] }] })}, ${T}, ${T});
   INSERT INTO promotion_customer_segments (promotion_id, segment_id, created_at) VALUES ('promo_code', 'seg_dvc_vip01', ${T});
+
+  -- Price lists (0120): the India market derives its prices by FX (+5 %, up to
+  -- 10 taka, ending in 9) and has an active market list (with a quantity
+  -- break), a sale between two scheduled boundaries and a draft, so the
+  -- generator edits each kind and its presence reads are priced. The segment
+  -- list prices the backup market, which is never deleted: a deleted India
+  -- market (its lists cascade) still leaves rows to update and clone.
+  UPDATE markets SET price_mode = 'fx', price_adjustment_bps = 500, price_rounding_minor = 1000, price_ending_minor = 900, fx_rate = '1' WHERE id = 'mkt_dvc_india';
+  UPDATE markets SET fx_rate = '1.25' WHERE id = 'mkt_dvc_draft';
+  INSERT INTO price_lists (id, name, kind, market_id, segment_id, status, starts_at, ends_at, priority, created_at, updated_at) VALUES
+    ('pl_dvc_india', 'India retail', 'market', 'mkt_dvc_india', NULL, 'active', NULL, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_sale', 'India Eid sale', 'sale', 'mkt_dvc_india', NULL, 'active', ${DVC_IDS.promotionBoundaries[0]}, ${DVC_IDS.promotionBoundaries[1]}, 0, ${T}, ${T}),
+    ('pl_dvc_draft', 'Draft prices', 'market', 'mkt_dvc_india', NULL, 'draft', NULL, NULL, 0, ${T}, ${T}),
+    ('pl_dvc_vip', 'VIP wholesale', 'segment', 'mkt_backup', 'seg_dvc_vip01', 'active', NULL, NULL, 0, ${T}, ${T});
+  INSERT INTO price_list_prices (price_list_id, variant_id, currency_code, amount_minor, compare_at_minor, min_quantity, created_at, updated_at) VALUES
+    ('pl_dvc_india', 'v_linen_m', 'BDT', 240000, 260000, 1, ${T}, ${T}),
+    ('pl_dvc_india', 'v_linen_m', 'BDT', 230000, NULL, 5, ${T}, ${T}),
+    ('pl_dvc_india', 'v_cotton', 'BDT', 170000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_india', 'v_bag', 'BDT', 85000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_sale', 'v_silk_m_gold', 'BDT', 480000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_draft', 'v_saree', 'BDT', 800000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_vip', 'v_watch', 'BDT', 700000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_vip', 'v_cotton', 'BDT', 160000, NULL, 1, ${T}, ${T}),
+    ('pl_dvc_vip', 'v_bag', 'BDT', 80000, NULL, 3, ${T}, ${T});
 
   INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility) VALUES
     ('lang_en', 'English', 'en', 1, 1, ${q({ pageTitle: "Checkout", placeOrder: "Place order" })}, ${q({ email: true })}),

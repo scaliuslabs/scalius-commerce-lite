@@ -8647,6 +8647,240 @@
           "closedAt"
         ]
       },
+      "PriceList": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "market",
+              "segment",
+              "sale"
+            ],
+            "description": "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others."
+          },
+          "marketId": {
+            "type": "string"
+          },
+          "marketName": {
+            "type": "string"
+          },
+          "marketIsBackup": {
+            "type": "boolean"
+          },
+          "segmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "segmentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "active",
+              "expired"
+            ],
+            "description": "What the list does now: its status read with its schedule."
+          },
+          "startsAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "priceCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "variantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "priceIncrement": {
+            "type": "number",
+            "description": "Every price is a multiple of this (major units)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind",
+          "marketId",
+          "marketName",
+          "marketIsBackup",
+          "segmentId",
+          "segmentName",
+          "status",
+          "state",
+          "startsAt",
+          "endsAt",
+          "priority",
+          "revision",
+          "priceCount",
+          "variantCount",
+          "currencyCode",
+          "priceIncrement",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PriceListChoices": {
+        "type": "object",
+        "properties": {
+          "markets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "isBackup": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "isBackup"
+              ]
+            }
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "markets",
+          "segments"
+        ]
+      },
+      "PriceListVariant": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "variantLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string"
+          },
+          "basePrice": {
+            "type": "number",
+            "description": "The SKU's own product price (shop currency)."
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currencyCode": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "compareAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "minQuantity": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "currencyCode",
+                "amount",
+                "compareAt",
+                "minQuantity"
+              ]
+            }
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "variantLabel",
+          "sku",
+          "basePrice",
+          "prices"
+        ]
+      },
       "CustomerSegment": {
         "type": "object",
         "properties": {
@@ -10451,6 +10685,33 @@
             "type": "boolean",
             "description": "Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true."
           },
+          "priceMode": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "fx"
+            ],
+            "description": "`fixed`: product prices and the market's fixed price lists. `fx`: product prices converted at its exchange rate, adjusted, rounded up and ending as set. The backup market is always `fixed`."
+          },
+          "fxRate": {
+            "type": "string",
+            "nullable": true,
+            "description": "The manual exchange rate (market currency per shop currency unit); null uses the rate source. A market in the shop currency converts at 1."
+          },
+          "priceAdjustmentPercent": {
+            "type": "number",
+            "description": "Raises (positive) or lowers (negative) FX-derived prices by this percentage."
+          },
+          "priceRounding": {
+            "type": "number",
+            "nullable": true,
+            "description": "FX-derived prices round up to this step (major units, such as 10 for 10 taka); null rounds to the price increment."
+          },
+          "priceEnding": {
+            "type": "number",
+            "nullable": true,
+            "description": "What a rounded price ends in within its step (major units: 9 with a step of 10 ends prices in 9); null for none."
+          },
           "hasOrders": {
             "type": "boolean",
             "description": "A market that took orders cannot be deleted; set it to draft instead."
@@ -10477,6 +10738,11 @@
           "priceIncrementMinor",
           "priceIncrementInherited",
           "pricesIncludeTax",
+          "priceMode",
+          "fxRate",
+          "priceAdjustmentPercent",
+          "priceRounding",
+          "priceEnding",
           "hasOrders",
           "createdAt",
           "updatedAt"
@@ -15562,6 +15828,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 1000,
@@ -16717,6 +16994,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 1000,
@@ -17404,6 +17692,17 @@
         ],
         "summary": "Search across products, categories, and pages",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
           {
             "schema": {
               "type": "string",
@@ -20918,7 +21217,20 @@
           "Storefront"
         ],
         "summary": "Get the published theme's homepage data (SEO and what its sections show)",
-        "description": "Takes no parameters: a query string is rejected, so the generation-cached read has exactly one cache entry and callers cannot choose which products it reads.",
+        "description": "Takes only the page's market presence (`presence`, such as `en-in`; none: the root, the backup market), whose market prices the cards: any other query string is rejected, so the cached read has one entry per presence and callers cannot choose which products it reads.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Homepage data",
@@ -21033,6 +21345,17 @@
             "required": true,
             "name": "slug",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -45530,6 +45853,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Category slug or ID filter"
             },
             "required": false,
@@ -46040,6 +46374,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "default": "",
               "description": "Search query"
             },
@@ -46386,6 +46731,17 @@
         ],
         "summary": "List storefront products for catalog feeds",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
           {
             "schema": {
               "type": "string",
@@ -47100,6 +47456,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "maxLength": 4000,
               "description": "Comma-separated product IDs, such as the cart's products. At most 20 are used."
             },
@@ -47336,6 +47703,17 @@
         "summary": "Compare up to four products side by side",
         "description": "Public products and their specs grouped by attribute group, one value column per product in the requested order. Ids that are not public are left out. At most 4 ids.",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
           {
             "schema": {
               "type": "string",
@@ -47681,6 +48059,17 @@
             },
             "required": false,
             "name": "itemId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
             "in": "query"
           }
         ],
@@ -48762,6 +49151,17 @@
             "required": true,
             "name": "slug",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
           }
         ],
         "responses": {
@@ -51458,6 +51858,17 @@
           },
           {
             "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 1000,
@@ -52393,6 +52804,17 @@
             "required": true,
             "name": "slug",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
           },
           {
             "schema": {
@@ -56071,6 +56493,12 @@
                   "shippingMethodId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "presence": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z]{2}-[a-z]{2}$",
+                    "description": "The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root."
                   },
                   "giftCards": {
                     "type": "array",
@@ -67723,6 +68151,1466 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "categories.permanent_delete"
+        }
+      }
+    },
+    "/api/v1/admin/price-lists": {
+      "get": {
+        "operationId": "dashboard.price_lists.list",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Price lists, by name",
+        "description": "Every price list (a store keeps at most 100) with its market, segment, schedule state and how many SKUs it prices. `marketId` narrows to one market.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "marketId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PriceList"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.price_lists.create",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Create a price list",
+        "description": "A market list prices a non-backup market for every buyer; a sale list does too, between its start and end, and wins over the market list; a segment list prices the signed-in members of one customer segment in a market (the backup market included). A new list is a draft until set active.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "market",
+                      "segment",
+                      "sale"
+                    ],
+                    "description": "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others."
+                  },
+                  "marketId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "segmentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Segment lists only."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ],
+                    "default": "draft"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "startsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it starts pricing (inclusive); null: now."
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it stops (exclusive); null: no end."
+                  }
+                },
+                "required": [
+                  "name",
+                  "kind",
+                  "marketId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceList"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
+    "/api/v1/admin/price-lists/choices": {
+      "get": {
+        "operationId": "dashboard.price_lists.choices",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Markets and customer segments a price list can price",
+        "description": "Every market (the backup first) and every customer segment, by name: the choices for a new price list.",
+        "responses": {
+          "200": {
+            "description": "The choices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PriceListChoices"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/price-lists/{id}": {
+      "get": {
+        "operationId": "dashboard.price_lists.get",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "One price list",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceList"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.price_lists.update",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Edit a price list under the revision the editor loaded",
+        "description": "Fields left out keep their value. Setting `status` to `active` starts pricing (within its schedule); `draft` stops it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "market",
+                      "segment",
+                      "sale"
+                    ],
+                    "description": "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others."
+                  },
+                  "marketId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "segmentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ]
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "startsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it starts pricing (inclusive); null: now."
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it stops (exclusive); null: no end."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceList"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.price_lists.delete",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Delete a price list and its prices",
+        "description": "Orders keep the prices they were placed at; the list's SKUs price by the next rule (another list, FX or the product price).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": true,
+            "name": "expectedRevision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
+    "/api/v1/admin/price-lists/{id}/prices": {
+      "get": {
+        "operationId": "dashboard.price_lists.prices_list",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "One page of a price list's SKUs and their prices",
+        "description": "By product name then SKU. `search` matches the product name or the SKU code.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PriceListVariant"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "limit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.price_lists.prices_set",
+        "tags": [
+          "Admin - Price lists"
+        ],
+        "summary": "Set or remove SKU prices of a price list",
+        "description": "`set` replaces each named SKU's prices (its price for one unit and up to four quantity breaks); `remove` takes SKUs out. At most 100 SKUs per save, at most 5,000 prices per list. Prices are in the market's currency at its price increment.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "set": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "prices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "description": "The price of one unit (major units, at the price increment)."
+                              },
+                              "compareAt": {
+                                "type": "number",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "description": "The struck-through price, above the amount; null for none."
+                              },
+                              "minQuantity": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10000,
+                                "default": 1,
+                                "description": "1 is the list's price; a larger value is a quantity break from that many units."
+                              }
+                            },
+                            "required": [
+                              "amount"
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 5
+                        }
+                      },
+                      "required": [
+                        "variantId",
+                        "prices"
+                      ]
+                    },
+                    "maxItems": 100,
+                    "default": [],
+                    "description": "Each SKU's whole set of prices (it replaces what the SKU had in the list)."
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "maxItems": 100,
+                    "default": [],
+                    "description": "SKUs to take out of the list."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceList"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 262144,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
         }
       }
     },
@@ -123576,7 +125464,7 @@
           "Admin - Markets"
         ],
         "summary": "Edit a market under the revision the editor loaded",
-        "description": "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it.",
+        "description": "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it. Other markets may price by FX: product prices adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5).",
         "parameters": [
           {
             "schema": {
@@ -123657,6 +125545,40 @@
                   "pricesIncludeTax": {
                     "type": "boolean",
                     "description": "Whether its prices include tax (checkout and the order's tax read the order's market)."
+                  },
+                  "priceMode": {
+                    "type": "string",
+                    "enum": [
+                      "fixed",
+                      "fx"
+                    ],
+                    "description": "Non-backup markets: `fixed` or `fx` (product prices converted, adjusted and rounded)."
+                  },
+                  "fxRate": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 25,
+                    "description": "The manual exchange rate; null uses the rate source. While every market sells the shop currency it is 1."
+                  },
+                  "priceAdjustmentPercent": {
+                    "type": "number",
+                    "minimum": -99,
+                    "maximum": 1000,
+                    "description": "Raises or lowers FX-derived prices by this percentage (two decimals)."
+                  },
+                  "priceRounding": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "description": "Round FX-derived prices up to this step (major units); null: the price increment."
+                  },
+                  "priceEnding": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "description": "End rounded prices in this amount within the step (major units); null for none."
                   }
                 },
                 "required": [
@@ -212537,6 +214459,70 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.policies.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.choices",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.choices"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.prices_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.prices_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.prices_set",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.prices_set"
+          ]
+        },
+        {
+          "operationId": "dashboard.price_lists.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.price_lists.update"
           ]
         },
         {

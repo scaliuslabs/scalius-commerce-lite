@@ -101,6 +101,14 @@ export const CACHE_DEP_KINDS = [
    * markets sell to (a rename or a presence change leaves it alone).
    */
   "mk",
+  /**
+   * `pl:<marketId>`: how one market prices (MARKETS-DESIGN D5): its price
+   * mode and FX policy, and its active public price lists (status, kind,
+   * schedule, priority); `pl:<marketId>:<productId>`: the active public list
+   * prices of one product's SKUs in that market. Segment lists are never
+   * public, so they advance nothing.
+   */
+  "pl",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -180,6 +188,10 @@ export const cacheDep = {
   backupMarketPricing: () => "mk:backup",
   /** The set of countries the active markets sell to: only a country or a status change advances it. */
   sellingCountries: () => "mk:selling",
+  /** How one market prices: its FX policy and its active public price lists. */
+  marketPricing: (marketId: string) => `pl:${marketId}`,
+  /** The active public list prices of one product's SKUs in one market. */
+  marketProductPricing: (marketId: string, productId: string) => `pl:${marketId}:${productId}`,
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -352,6 +364,12 @@ export function withOldImageCompanions(rules: readonly CacheDepRule[]): CacheDep
   }
   return expanded;
 }
+
+/** The market columns that say how a market prices (0120). */
+const MARKET_PRICING_COLUMNS = ["price_mode", "fx_rate", "price_adjustment_bps", "price_rounding_minor", "price_ending_minor"] as const;
+
+/** A price list a public read applies: active, and a market or sale list. */
+const PUBLIC_PRICE_LIST = "SELECT 1 WHERE R.kind <> 'segment' AND R.status = 'active'";
 
 /** A country row whose market is active (`R.market_id`): only such a country is one the store sells to. */
 const SELLS_ACTIVE_MARKET = "SELECT 1 FROM markets WHERE markets.id = R.market_id AND markets.status = 'active'";
@@ -766,13 +784,16 @@ const CACHE_DEP_TABLE_RULES = {
 
   // --- Markets (docs/MARKETS-DESIGN.md D4) -----------------------------------------
   markets: {
-    kinds: ["mk"],
+    kinds: ["mk", "pl"],
     // `prices_include_tax` (0116) is output only by the live tax quote and the
     // order, which read it under the checkout fence; no cached read shows it.
-    noise: ["revision", "created_at", "updated_at", "prices_include_tax"],
-    note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue.",
+    // The pricing columns (0120) advance only the market's `pl:` key (rule
+    // `pricing`): the presence matrix and the checkout config never show them.
+    noise: ["revision", "created_at", "updated_at", "prices_include_tax", ...MARKET_PRICING_COLUMNS],
+    note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue. A market's price mode and FX policy advance `pl:<id>`, which its keyed catalogue reads declare.",
     rules: [
       ...everyChange(own("mk")),
+      { name: "pricing", event: "update", image: "new", changed: MARKET_PRICING_COLUMNS, keys: [{ prefix: "pl:", columns: ["id"] }] },
       {
         name: "backup_price", event: "update", image: "new", changed: ["price_increment_minor"],
         where: { equals: { is_backup: 1 } }, keys: [{ dep: "mk:backup" }],
@@ -797,6 +818,23 @@ const CACHE_DEP_TABLE_RULES = {
     kinds: ["mk"],
     noise: ["created_at"],
     rules: everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+  },
+
+  price_lists: {
+    kinds: ["pl"],
+    noise: ["name", "description", "revision", "created_at", "updated_at"],
+    note: "Which public lists price a market (MARKETS-DESIGN D5): an active market or sale list entering, leaving or changing its schedule, priority or kind advances its market's `pl:<id>` (a list moved between markets or deactivated advances the one it left, through the derived companion). Drafts and segment lists are never read by a public route.",
+    rules: everyChange([{ prefix: "pl:", columns: ["market_id"] }])
+      .map((rule): CacheDepRule => ({ ...rule, where: { exists: PUBLIC_PRICE_LIST } })),
+  },
+  price_list_prices: {
+    kinds: ["pl"],
+    noise: ["created_at", "updated_at"],
+    note: "A price of an active public list advances `pl:<market>:<product>` of its SKU's product. Deactivating or deleting the list advances the market's `pl:<id>`, which every keyed read declares too.",
+    rules: everyChange([{
+      prefix: "pl:",
+      rows: `SELECT price_list.market_id || ':' || price_sku.product_id AS ref FROM price_lists AS price_list, product_variants AS price_sku WHERE price_list.id = R.price_list_id AND price_sku.id = R.variant_id AND price_list.kind <> 'segment' AND price_list.status = 'active'`,
+    }]),
   },
 
   orders: {

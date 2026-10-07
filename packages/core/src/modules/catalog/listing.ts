@@ -21,6 +21,7 @@ import {
 } from "../products";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { Database } from "@scalius/database/client";
+import { marketAmountMinor, marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
@@ -48,6 +49,7 @@ import {
 import {
     buyerState,
     buyerStateCardSku,
+    buyerStateCardSkuJoin,
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
@@ -192,12 +194,13 @@ async function readStorefrontCatalogPage(
     db: Database,
     params: StorefrontProductFilterInput,
     scope: StorefrontCatalogScope = {},
+    pricing: MarketPricing | null = null,
 ) {
-    const result = await readStorefrontCatalogResults(db, params, scope);
+    const result = await readStorefrontCatalogResults(db, params, scope, pricing);
     if (!params.search || result.pagination.total > 0) return { ...result, correctedQuery: null };
     const correctedQuery = await suggestSearchCorrection(db, params.search);
     if (!correctedQuery) return { ...result, correctedQuery: null };
-    const corrected = await readStorefrontCatalogResults(db, { ...params, search: correctedQuery }, scope);
+    const corrected = await readStorefrontCatalogResults(db, { ...params, search: correctedQuery }, scope, pricing);
     return corrected.pagination.total > 0
         ? { ...corrected, correctedQuery }
         : { ...result, correctedQuery: null };
@@ -221,6 +224,7 @@ async function readStorefrontCatalogResults(
     db: Database,
     params: StorefrontProductFilterInput,
     scope: StorefrontCatalogScope,
+    pricing: MarketPricing | null,
 ) {
     const {
         page = 1,
@@ -230,7 +234,11 @@ async function readStorefrontCatalogResults(
         cursor,
     } = params;
     const lists = planLimits().lists;
-    const priceBounds = priceFilterBoundsMinor(params);
+    // A price filter in a market prices its bounds in the market first (FX).
+    const boundsMarket = pricing && (params.minPrice !== undefined || params.maxPrice !== undefined)
+        ? await pricing.context
+        : null;
+    const priceBounds = priceFilterBoundsMinor(params, boundsMarket);
     const unscoped = !scope.condition && !params.category && !params.search && !params.ids;
     // Facet counts apply every selection except their own facet's, so they
     // read the scope conditions before the facet filters are applied.
@@ -352,7 +360,7 @@ async function readStorefrontCatalogResults(
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
-        .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
         .where(and(...conditions,
@@ -447,7 +455,9 @@ async function readStorefrontCatalogResults(
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? noFacets : facetReads(),
     ]);
-    const productsList = shelfPreview ? fetchedList : fetchedList.slice(0, limit);
+    const listedRows = shelfPreview ? fetchedList : fetchedList.slice(0, limit);
+    // The page's market: its cards and price range in the market's prices.
+    const market = await marketPriceContextOf(pricing);
     const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
     const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
@@ -457,7 +467,7 @@ async function readStorefrontCatalogResults(
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
     const categoryIds = [...new Set(
-        productsList
+        listedRows
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
@@ -467,10 +477,12 @@ async function readStorefrontCatalogResults(
         ? scope.categoryFacet.parentId
         : null;
     type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
-    const productIds = productsList.map((product) => product.id);
-    // Card media and card facts share one batch (card-facts.ts).
-    const [cardData, categoriesData, facetRows] = await Promise.all([
-        loadCatalogCardData(db, productsList, decimalPlaces),
+    const productIds = listedRows.map((product) => product.id);
+    // Card media and card facts share one batch (card-facts.ts); a market's
+    // list prices (only when one is live) ride beside them.
+    const [productsList, cardData, categoriesData, facetRows] = await Promise.all([
+        priceProductCards(db, market, listedRows),
+        loadCatalogCardData(db, listedRows, decimalPlaces),
         categoryIds.length > 0
             ? db
                 .select({
@@ -571,8 +583,8 @@ async function readStorefrontCatalogResults(
                 : null,
         },
         priceRange: {
-            min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
-            max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
+            min: fromMinor(marketAmountMinor(market, rawPriceRange?.min ?? 0), decimalPlaces),
+            max: fromMinor(marketAmountMinor(market, rawPriceRange?.max ?? 0), decimalPlaces),
         },
         facets: groupCatalogFacets(facetRows, params.attributeFilters),
         ratingFacet: groupCatalogRatingFacet(facetRows, minRating),
@@ -583,8 +595,8 @@ async function readStorefrontCatalogResults(
  * Returns a paginated list of active storefront products with images and categories.
  * This is the unified query backing the Hono GET /api/storefront/products route.
  */
-export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
-    return readStorefrontCatalogPage(db, params);
+export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput, pricing: MarketPricing | null = null) {
+    return readStorefrontCatalogPage(db, params, {}, pricing);
 }
 
 /**
@@ -612,7 +624,7 @@ export async function getStorefrontCategoryProducts(
         // Its sub-categories with their subtree counts; a leaf has none.
         categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
         shelfChildIds: options.shelfPreview && options.includeDescendants ? options.shelfChildIds : undefined,
-    });
+    }, options.pricing ?? null);
 }
 
 // ── Catalogue 1a: category subtrees and brand listings ────────────────────
@@ -629,6 +641,8 @@ export interface StorefrontCategoryListingOptions {
     shelfPreview?: boolean;
     /** Only the children included in the public category detail. */
     shelfChildIds?: readonly string[];
+    /** A market-keyed read's market pricing (null at the root). */
+    pricing?: MarketPricing | null;
 }
 
 /** A brand page's products: the storefront catalogue scoped to one brand. */
@@ -636,6 +650,7 @@ export async function getStorefrontBrandProducts(
     db: Database,
     brand: { id: string },
     params: StorefrontProductFilterInput,
+    pricing: MarketPricing | null = null,
 ) {
     deps.brand(brand.id);
     return readStorefrontCatalogPage(db, params, {
@@ -643,7 +658,7 @@ export async function getStorefrontBrandProducts(
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
         withoutBrandFacet: true,
-    });
+    }, pricing);
 }
 
 // ── End of the catalogue 1a block ─────────────────────────────────────────
@@ -705,6 +720,7 @@ export async function getStorefrontCollectionProducts(
     db: Database,
     membership: StorefrontCollectionMembership,
     params: StorefrontProductFilterInput,
+    pricing: MarketPricing | null = null,
 ) {
     const { productIds, categoryIds, membershipJson, condition } = storefrontCollectionMembership(membership);
     // A dynamic collection lists its categories' public products (each
@@ -722,5 +738,5 @@ export async function getStorefrontCollectionProducts(
                     AND json_extract(curated_membership.value, '$.id') = ${buyerState.productId}
             ), 2147483647), ${getStorefrontProductOrderBy(params.sort ?? "newest")}`
             : undefined,
-    });
+    }, pricing);
 }

@@ -36,6 +36,8 @@ import {
 import { customizationViewSchema, fulfillmentKindSchema } from "../schemas/order-lines";
 
 import { ok } from "../utils/api-response";
+import { marketPresenceQueryField, marketPresenceQuerySchema } from "../schemas/markets";
+import { publicMarketPricing } from "../utils/public-market";
 import { productPageMerchandisingFields } from "../schemas/product-merchandising";
 import { productPageReviewFields } from "../schemas/reviews";
 import {
@@ -81,6 +83,7 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 });
 
 const productFilterSchema = z.object({
+  presence: marketPresenceQueryField,
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
@@ -100,12 +103,14 @@ const productFilterSchema = z.object({
 }).superRefine(validatePriceRange);
 
 const productSearchSchema = z.object({
+  presence: marketPresenceQueryField,
   search: z.string().optional().default("").openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" })
 });
 
 const productFeedSchema = z.object({
+  presence: marketPresenceQueryField,
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
   cursor: z.string().max(512).regex(PRODUCT_FEED_CURSOR_PATTERN).optional().openapi({
@@ -606,7 +611,8 @@ app.openapi(listProductsRoute, async (c) => {
     Object.keys(params),
   );
 
-  const result = await getStorefrontProducts(db, { ...params, search, attributeFilters });
+  const { presence: _presence, ...filters } = params;
+  const result = await getStorefrontProducts(db, { ...filters, search, attributeFilters }, publicMarketPricing(c));
   return ok(c, result);
 });
 
@@ -650,7 +656,7 @@ app.openapi(searchProductsRoute, async (c) => {
   const db = c.get("db");
   const { search, page, limit } = c.req.valid("query");
   const normalizedSearch = normalizePublicListingSearchParam(search) ?? "";
-  const result = await searchStorefrontProducts(db, { search: normalizedSearch, page, limit });
+  const result = await searchStorefrontProducts(db, { search: normalizedSearch, page, limit }, publicMarketPricing(c));
   return ok(c, result);
 });
 
@@ -682,9 +688,9 @@ const feedProductsRoute = createRoute({
 
 app.openapi(feedProductsRoute, async (c) => {
   const db = c.get("db");
-  const params = c.req.valid("query");
+  const { presence: _presence, ...params } = c.req.valid("query");
   const search = normalizePublicListingSearchParam(params.search);
-  const result = await getStorefrontFeedProducts(db, { ...params, search });
+  const result = await getStorefrontFeedProducts(db, { ...params, search }, publicMarketPricing(c));
   return ok(c, result);
 });
 
@@ -728,6 +734,7 @@ const productRecommendationsRoute = createRoute({
     "Ranked buyable products for the given source products (excluding them): bought together first, then same category, collection, attributes and price band, then popular or newest. Without `productIds` it returns popular products, or the newest when there is not enough order history.",
   request: {
     query: z.object({
+      presence: marketPresenceQueryField,
       productIds: z.string().max(4_000).optional().openapi({
         description: `Comma-separated product IDs, such as the cart's products. At most ${MAX_RECOMMENDATION_SOURCE_IDS} are used.`,
       }),
@@ -751,6 +758,7 @@ app.openapi(productRecommendationsRoute, async (c) => {
   const result = await getStorefrontProductRecommendations(c.get("db"), {
     productIds: normalizeRecommendationSourceIds(productIds),
     limit,
+    pricing: publicMarketPricing(c),
   });
   return ok(c, result);
 });
@@ -801,6 +809,7 @@ const compareProductsRoute = createRoute({
     `Public products and their specs grouped by attribute group, one value column per product in the requested order. Ids that are not public are left out. At most ${MAX_COMPARE_PRODUCTS} ids.`,
   request: {
     query: z.object({
+      presence: marketPresenceQueryField,
       ids: z.string().trim().min(1).max(1_000).openapi({ description: "Comma-separated product IDs." }),
     }),
   },
@@ -826,7 +835,7 @@ app.openapi(compareProductsRoute, async (c) => {
   if (ids.length === 0 || ids.length > MAX_COMPARE_PRODUCTS) {
     throw new ValidationError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
   }
-  return ok(c, await getStorefrontProductComparison(c.get("db"), ids));
+  return ok(c, await getStorefrontProductComparison(c.get("db"), ids, publicMarketPricing(c)));
 });
 
 // GET /api/storefront/products/:slug/sections/:section
@@ -841,7 +850,7 @@ const getProductSectionRoute = createRoute({
       slug: z.string().trim().min(1).max(100),
       section: storefrontProductSectionSchema,
     }),
-    query: storefrontProductSectionQuerySchema,
+    query: storefrontProductSectionQuerySchema.extend(marketPresenceQuerySchema.shape),
   },
   responses: {
     200: {
@@ -857,7 +866,8 @@ const getProductSectionRoute = createRoute({
 app.openapi(getProductSectionRoute, async (c) => {
   const db = c.get("db");
   const { slug, section } = c.req.valid("param");
-  const result = await getStorefrontProductSection(db, slug, section, c.req.valid("query"));
+  const { presence: _presence, ...query } = c.req.valid("query");
+  const result = await getStorefrontProductSection(db, slug, section, query, publicMarketPricing(c));
   if (!result) throw new NotFoundError("Product not found");
   return ok(c, result as z.infer<typeof storefrontProductSectionResponseSchema>);
 });
@@ -873,6 +883,7 @@ const getProductBySlugRoute = createRoute({
     params: z.object({
       slug: z.string(),
     }),
+    query: marketPresenceQuerySchema,
   },
   responses: {
     200: {
@@ -887,7 +898,7 @@ const getProductBySlugRoute = createRoute({
 app.openapi(getProductBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-  const result = await getStorefrontProductBySlug(db, slug);
+  const result = await getStorefrontProductBySlug(db, slug, publicMarketPricing(c));
   if (!result) throw new NotFoundError("Product not found");
   return ok(c, result as unknown as ProductDetailData);
 });

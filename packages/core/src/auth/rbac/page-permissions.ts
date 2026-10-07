@@ -75,6 +75,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/products/new": { permission: PERMISSIONS.PRODUCTS_CREATE },
 
+  "/admin/price-lists": { permission: PERMISSIONS.PRODUCTS_VIEW },
   // Reviews and gift cards (Products menu)
   "/admin/reviews": { permission: PERMISSIONS.REVIEWS_VIEW },
   "/admin/gift-cards": { permission: PERMISSIONS.GIFT_CARDS_VIEW },
@@ -214,9 +215,9 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.INVENTORY_VIEW },
   },
 
-  // Products: one detail page; saving still requires products.edit.
+  // Products and price lists: one detail page each; saving still requires products.edit.
   {
-    pattern: /^\/admin\/products\/[^/]+\/edit$/,
+    pattern: /^\/admin\/(?:products\/[^/]+\/edit|price-lists\/[^/]+)$/,
     config: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
 

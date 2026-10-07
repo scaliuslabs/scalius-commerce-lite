@@ -11,6 +11,8 @@ import {
 } from "@scalius/core/modules/brands";
 import { brandSlugSchema } from "@scalius/shared/catalog-brand";
 import { getStorefrontBrandProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
+import { marketPresenceQueryField } from "../schemas/markets";
+import { publicMarketPricing } from "../utils/public-market";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
@@ -43,6 +45,7 @@ const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().op
 const sortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"]);
 
 const brandProductFilterSchema = z.object({
+  presence: marketPresenceQueryField,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   ...listingCursorQuerySchema,
@@ -251,11 +254,12 @@ app.openapi(getBrandProductsRoute, async (c) => {
   ]);
   if (!brand) throw new NotFoundError("Brand not found");
 
+  const { presence: _presence, ...filters } = params;
   const result = await getStorefrontBrandProducts(db, brand, {
-    ...params,
+    ...filters,
     search: normalizePublicListingSearchParam(params.search),
     attributeFilters,
-  });
+  }, publicMarketPricing(c));
   const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters), sort: params.sort };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;

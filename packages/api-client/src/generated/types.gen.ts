@@ -1765,6 +1765,69 @@ export type BuyerWarrantyClaim = {
     closedAt: string | null;
 };
 
+export type PriceList = {
+    id: string;
+    name: string;
+    description: string | null;
+    /**
+     * `market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others.
+     */
+    kind: 'market' | 'segment' | 'sale';
+    marketId: string;
+    marketName: string;
+    marketIsBackup: boolean;
+    segmentId: string | null;
+    segmentName: string | null;
+    status: 'draft' | 'active';
+    /**
+     * What the list does now: its status read with its schedule.
+     */
+    state: 'draft' | 'scheduled' | 'active' | 'expired';
+    startsAt: string | null;
+    endsAt: string | null;
+    priority: number;
+    revision: number;
+    priceCount: number;
+    variantCount: number;
+    currencyCode: string;
+    /**
+     * Every price is a multiple of this (major units).
+     */
+    priceIncrement: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PriceListChoices = {
+    markets: Array<{
+        id: string;
+        name: string;
+        isBackup: boolean;
+    }>;
+    segments: Array<{
+        id: string;
+        name: string;
+    }>;
+};
+
+export type PriceListVariant = {
+    variantId: string;
+    productId: string;
+    productName: string;
+    variantLabel: string | null;
+    sku: string;
+    /**
+     * The SKU's own product price (shop currency).
+     */
+    basePrice: number;
+    prices: Array<{
+        currencyCode: string;
+        amount: number;
+        compareAt: number | null;
+        minQuantity: number;
+    }>;
+};
+
 export type CustomerSegment = {
     id: string;
     name: string;
@@ -2162,6 +2225,26 @@ export type Market = {
      * Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true.
      */
     pricesIncludeTax: boolean;
+    /**
+     * `fixed`: product prices and the market's fixed price lists. `fx`: product prices converted at its exchange rate, adjusted, rounded up and ending as set. The backup market is always `fixed`.
+     */
+    priceMode: 'fixed' | 'fx';
+    /**
+     * The manual exchange rate (market currency per shop currency unit); null uses the rate source. A market in the shop currency converts at 1.
+     */
+    fxRate: string | null;
+    /**
+     * Raises (positive) or lowers (negative) FX-derived prices by this percentage.
+     */
+    priceAdjustmentPercent: number;
+    /**
+     * FX-derived prices round up to this step (major units, such as 10 for 10 taka); null rounds to the price increment.
+     */
+    priceRounding: number | null;
+    /**
+     * What a rounded price ends in within its step (major units: 9 with a step of 10 ends prices in 9); null for none.
+     */
+    priceEnding: number | null;
     /**
      * A market that took orders cannot be deleted; set it to draft instead.
      */
@@ -3598,6 +3681,10 @@ export type GetApiV1CollectionsByIdData = {
         id: string;
     };
     query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
         page?: number;
         limit?: number;
         /**
@@ -3936,6 +4023,10 @@ export type GetApiV1BrandsBySlugProductsData = {
     };
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper
          */
         page?: number;
@@ -4143,6 +4234,10 @@ export type GetApiV1SearchData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
         /**
          * Search query
          */
@@ -5202,7 +5297,12 @@ export type PostApiV1MetaEventsResponse = PostApiV1MetaEventsResponses[keyof Pos
 export type GetApiV1StorefrontHomepageData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+    };
     url: '/api/v1/storefront/homepage';
 };
 
@@ -5242,7 +5342,12 @@ export type GetApiV1StorefrontLandingBySlugData = {
     path: {
         slug: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+    };
     url: '/api/v1/storefront/landing/{slug}';
 };
 
@@ -12865,6 +12970,10 @@ export type GetApiV1ProductsData = {
     path?: never;
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Category slug or ID filter
          */
         category?: string;
@@ -13041,6 +13150,10 @@ export type GetApiV1ProductsSearchData = {
     path?: never;
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Search query
          */
         search?: string;
@@ -13134,6 +13247,10 @@ export type GetApiV1ProductsFeedData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
         /**
          * Category slug or ID filter
          */
@@ -13330,6 +13447,10 @@ export type GetApiV1ProductsRecommendationsData = {
     path?: never;
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Comma-separated product IDs, such as the cart's products. At most 20 are used.
          */
         productIds?: string;
@@ -13409,6 +13530,10 @@ export type GetApiV1ProductsCompareData = {
     body?: never;
     path?: never;
     query: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
         /**
          * Comma-separated product IDs.
          */
@@ -13495,6 +13620,10 @@ export type GetApiV1ProductsBySlugSectionsBySectionData = {
         limit?: number;
         field?: 'description' | 'metaTitle' | 'metaDescription' | 'title' | 'content';
         itemId?: string;
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
     };
     url: '/api/v1/products/{slug}/sections/{section}';
 };
@@ -13729,7 +13858,12 @@ export type GetApiV1ProductsBySlugData = {
     path: {
         slug: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+    };
     url: '/api/v1/products/{slug}';
 };
 
@@ -14484,6 +14618,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
     };
     query?: {
         /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+        /**
          * Page number; empty past the first 1,000 products (10,000 on a Paid deployment): use `cursor` to go deeper
          */
         page?: number;
@@ -14765,6 +14903,10 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         slug: string;
     };
     query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
         /**
          * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
          */
@@ -15818,6 +15960,10 @@ export type PostApiV1OrdersCartValidationData = {
         shippingAdminArea?: string | null;
         shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
+        /**
+         * The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root.
+         */
+        presence?: string | null;
         /**
          * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
          */
@@ -19453,6 +19599,509 @@ export type PostApiV1AdminBrandsDeletePermanentlyResponses = {
 };
 
 export type PostApiV1AdminBrandsDeletePermanentlyResponse = PostApiV1AdminBrandsDeletePermanentlyResponses[keyof PostApiV1AdminBrandsDeletePermanentlyResponses];
+
+export type GetApiV1AdminPriceListsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        marketId?: string;
+    };
+    url: '/api/v1/admin/price-lists';
+};
+
+export type GetApiV1AdminPriceListsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminPriceListsError = GetApiV1AdminPriceListsErrors[keyof GetApiV1AdminPriceListsErrors];
+
+export type GetApiV1AdminPriceListsResponses = {
+    /**
+     * Price lists
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<PriceList>;
+        };
+    };
+};
+
+export type GetApiV1AdminPriceListsResponse = GetApiV1AdminPriceListsResponses[keyof GetApiV1AdminPriceListsResponses];
+
+export type PostApiV1AdminPriceListsData = {
+    body: {
+        name: string;
+        description?: string | null;
+        /**
+         * `market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others.
+         */
+        kind: 'market' | 'segment' | 'sale';
+        marketId: string;
+        /**
+         * Segment lists only.
+         */
+        segmentId?: string | null;
+        status?: 'draft' | 'active';
+        priority?: number;
+        /**
+         * When it starts pricing (inclusive); null: now.
+         */
+        startsAt?: string | null;
+        /**
+         * When it stops (exclusive); null: no end.
+         */
+        endsAt?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/price-lists';
+};
+
+export type PostApiV1AdminPriceListsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminPriceListsError = PostApiV1AdminPriceListsErrors[keyof PostApiV1AdminPriceListsErrors];
+
+export type PostApiV1AdminPriceListsResponses = {
+    /**
+     * The new price list
+     */
+    201: {
+        success: true;
+        data: {
+            priceList: PriceList;
+        };
+    };
+};
+
+export type PostApiV1AdminPriceListsResponse = PostApiV1AdminPriceListsResponses[keyof PostApiV1AdminPriceListsResponses];
+
+export type GetApiV1AdminPriceListsChoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/price-lists/choices';
+};
+
+export type GetApiV1AdminPriceListsChoicesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminPriceListsChoicesError = GetApiV1AdminPriceListsChoicesErrors[keyof GetApiV1AdminPriceListsChoicesErrors];
+
+export type GetApiV1AdminPriceListsChoicesResponses = {
+    /**
+     * The choices
+     */
+    200: {
+        success: true;
+        data: PriceListChoices;
+    };
+};
+
+export type GetApiV1AdminPriceListsChoicesResponse = GetApiV1AdminPriceListsChoicesResponses[keyof GetApiV1AdminPriceListsChoicesResponses];
+
+export type DeleteApiV1AdminPriceListsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/price-lists/{id}';
+};
+
+export type DeleteApiV1AdminPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminPriceListsByIdError = DeleteApiV1AdminPriceListsByIdErrors[keyof DeleteApiV1AdminPriceListsByIdErrors];
+
+export type DeleteApiV1AdminPriceListsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminPriceListsByIdResponse = DeleteApiV1AdminPriceListsByIdResponses[keyof DeleteApiV1AdminPriceListsByIdResponses];
+
+export type GetApiV1AdminPriceListsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/price-lists/{id}';
+};
+
+export type GetApiV1AdminPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminPriceListsByIdError = GetApiV1AdminPriceListsByIdErrors[keyof GetApiV1AdminPriceListsByIdErrors];
+
+export type GetApiV1AdminPriceListsByIdResponses = {
+    /**
+     * The price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceList;
+        };
+    };
+};
+
+export type GetApiV1AdminPriceListsByIdResponse = GetApiV1AdminPriceListsByIdResponses[keyof GetApiV1AdminPriceListsByIdResponses];
+
+export type PatchApiV1AdminPriceListsByIdData = {
+    body: {
+        expectedRevision: number;
+        name?: string;
+        description?: string | null;
+        /**
+         * `market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others.
+         */
+        kind?: 'market' | 'segment' | 'sale';
+        marketId?: string;
+        segmentId?: string | null;
+        status?: 'draft' | 'active';
+        priority?: number;
+        /**
+         * When it starts pricing (inclusive); null: now.
+         */
+        startsAt?: string | null;
+        /**
+         * When it stops (exclusive); null: no end.
+         */
+        endsAt?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/price-lists/{id}';
+};
+
+export type PatchApiV1AdminPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminPriceListsByIdError = PatchApiV1AdminPriceListsByIdErrors[keyof PatchApiV1AdminPriceListsByIdErrors];
+
+export type PatchApiV1AdminPriceListsByIdResponses = {
+    /**
+     * The saved price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceList;
+        };
+    };
+};
+
+export type PatchApiV1AdminPriceListsByIdResponse = PatchApiV1AdminPriceListsByIdResponses[keyof PatchApiV1AdminPriceListsByIdResponses];
+
+export type GetApiV1AdminPriceListsByIdPricesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/admin/price-lists/{id}/prices';
+};
+
+export type GetApiV1AdminPriceListsByIdPricesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminPriceListsByIdPricesError = GetApiV1AdminPriceListsByIdPricesErrors[keyof GetApiV1AdminPriceListsByIdPricesErrors];
+
+export type GetApiV1AdminPriceListsByIdPricesResponses = {
+    /**
+     * The page
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<PriceListVariant>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminPriceListsByIdPricesResponse = GetApiV1AdminPriceListsByIdPricesResponses[keyof GetApiV1AdminPriceListsByIdPricesResponses];
+
+export type PutApiV1AdminPriceListsByIdPricesData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * Each SKU's whole set of prices (it replaces what the SKU had in the list).
+         */
+        set?: Array<{
+            variantId: string;
+            prices: Array<{
+                /**
+                 * The price of one unit (major units, at the price increment).
+                 */
+                amount: number;
+                /**
+                 * The struck-through price, above the amount; null for none.
+                 */
+                compareAt?: number | null;
+                /**
+                 * 1 is the list's price; a larger value is a quantity break from that many units.
+                 */
+                minQuantity?: number;
+            }>;
+        }>;
+        /**
+         * SKUs to take out of the list.
+         */
+        remove?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/price-lists/{id}/prices';
+};
+
+export type PutApiV1AdminPriceListsByIdPricesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminPriceListsByIdPricesError = PutApiV1AdminPriceListsByIdPricesErrors[keyof PutApiV1AdminPriceListsByIdPricesErrors];
+
+export type PutApiV1AdminPriceListsByIdPricesResponses = {
+    /**
+     * The saved price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceList;
+        };
+    };
+};
+
+export type PutApiV1AdminPriceListsByIdPricesResponse = PutApiV1AdminPriceListsByIdPricesResponses[keyof PutApiV1AdminPriceListsByIdPricesResponses];
 
 export type GetApiV1AdminCollectionsFormOptionsData = {
     body?: never;
@@ -35974,6 +36623,26 @@ export type PatchApiV1AdminSettingsMarketsByIdData = {
          * Whether its prices include tax (checkout and the order's tax read the order's market).
          */
         pricesIncludeTax?: boolean;
+        /**
+         * Non-backup markets: `fixed` or `fx` (product prices converted, adjusted and rounded).
+         */
+        priceMode?: 'fixed' | 'fx';
+        /**
+         * The manual exchange rate; null uses the rate source. While every market sells the shop currency it is 1.
+         */
+        fxRate?: string | null;
+        /**
+         * Raises or lowers FX-derived prices by this percentage (two decimals).
+         */
+        priceAdjustmentPercent?: number;
+        /**
+         * Round FX-derived prices up to this step (major units); null: the price increment.
+         */
+        priceRounding?: number | null;
+        /**
+         * End rounded prices in this amount within the step (major units); null for none.
+         */
+        priceEnding?: number | null;
     };
     path: {
         id: string;

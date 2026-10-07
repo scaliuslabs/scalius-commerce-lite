@@ -584,12 +584,14 @@ describe("cart validation preflight", () => {
       expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
         expect.anything(),
         expect.any(Array),
-        {
+        expect.objectContaining({
           inventoryPool: "regular",
           currencyCode,
           // JPY and KWD price in their minor unit by default.
           priceIncrementMinor: 1,
-        },
+          // Lines are priced in the order's market (MARKETS-DESIGN D5).
+          market: expect.any(Object),
+        }),
       );
     },
   );
@@ -1027,7 +1029,7 @@ describe("authoritative tax quote", () => {
       expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
         expect.anything(),
         expect.any(Array),
-        { inventoryPool: "regular", currencyCode, priceIncrementMinor: 1 },
+        expect.objectContaining({ inventoryPool: "regular", currencyCode, priceIncrementMinor: 1, market: expect.any(Object) }),
       );
       expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
         expect.anything(),

@@ -4,6 +4,23 @@ import type { RoutePermissionMap } from "./shared";
 
 export const PRODUCT_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
+  // Price lists (MARKETS-DESIGN D5): product prices per market, customer
+  // segment or sale, so they are product data.
+  // =============================================
+  "/api/v1/admin/price-lists": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/price-lists/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/price-lists/*/prices": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  // =============================================
   // Products API
   // =============================================
   "/api/v1/admin/products": {

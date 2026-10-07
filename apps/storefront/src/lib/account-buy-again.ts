@@ -5,6 +5,7 @@ import type { AddToCartEventDetail } from "@/components/CartFlyout";
 import type { CustomerOrderItem } from "@/lib/api/customer-auth";
 import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
+import { currentPresence } from "@/lib/presence-url";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["PRODUCT_UNAVAILABLE", "VARIANT_REQUIRED", "VARIANT_UNAVAILABLE", "VARIANT_MISMATCH"]);
@@ -32,6 +33,8 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
             ? { properties: item.properties.map(({ key, value }) => ({ key, value })) }
             : {}),
         })),
+        // Today's price in the page's market (MARKETS-DESIGN D5).
+        ...(currentPresence() ? { presence: currentPresence() } : {}),
       }),
     });
     const json = await response.json().catch(() => null) as { success?: boolean; data?: CartValidationResult } | null;

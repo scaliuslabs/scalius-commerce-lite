@@ -49,7 +49,7 @@ import {
   recommendationTitle,
 } from "@/lib/recommendations";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
-import { pagePath } from "@/lib/presence-url";
+import { currentPresence, pagePath } from "@/lib/presence-url";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -155,6 +155,8 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
           })),
+          // The page's market prices the cart (MARKETS-DESIGN D5).
+          ...(currentPresence() ? { presence: currentPresence() } : {}),
         }),
       })
         .then((response) => response.json())

@@ -108,6 +108,7 @@ import {
   isPendingCodeReason,
   renderDiscountPanel,
 } from "./discount-panel";
+import { currentPresence } from "@/lib/presence-url";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -738,6 +739,12 @@ function setTaxStatus(elements: TotalsElements, message: string): void {
   status.append(retry);
 }
 
+/** The page's subfolder presence for a cart check (none at the root). */
+function cartPresencePayload(): { presence?: string } {
+  const presence = currentPresence();
+  return presence ? { presence } : {};
+}
+
 function cartValidationDeliveryPayload() {
   const mode = readCheckoutDeliveryMode();
   const method = window.lastShippingEventDetail;
@@ -939,6 +946,8 @@ export async function validateCartSnapshot(
       body: JSON.stringify({
         items: payloadItems,
         ...cartValidationDeliveryPayload(),
+        // The page's market prices the cart (MARKETS-DESIGN D5).
+        ...cartPresencePayload(),
       }),
     });
     const json = (await response.json().catch(() => null)) as {

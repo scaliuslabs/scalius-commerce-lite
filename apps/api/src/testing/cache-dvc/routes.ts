@@ -108,9 +108,33 @@ function otherParts(): string[] {
   ];
 }
 
+/**
+ * The India presence's priced reads (MARKETS-DESIGN D5): FX-derived prices,
+ * its market list (with a quantity break), its scheduled sale, and the draft
+ * and segment lists no public read applies.
+ */
+function presenceParts(): string[] {
+  const presence = "presence=en-in";
+  // One part per priced code path; the page catalogue adds the presence pages.
+  return [
+    `/api/v1/products?${LIST}&sort=newest&${presence}`,
+    `/api/v1/products?${LIST}&sort=price-asc&${presence}`,
+    `/api/v1/products?${LIST}&minPrice=1000&maxPrice=3000&${presence}`,
+    `/api/v1/products/search?search=linen&${presence}`,
+    `/api/v1/products/feed?${presence}`,
+    `/api/v1/products/recommendations?productIds=p_linen&limit=8&${presence}`,
+    `/api/v1/products/compare?ids=p_linen,p_cotton,p_silk&${presence}`,
+    `/api/v1/products/linen-panjabi/sections/variants?${presence}`,
+    ...["linen-panjabi", "silk-panjabi"].map((slug) => `/api/v1/products/${slug}?${presence}`),
+    `/api/v1/categories/panjabi/products?${LIST}&sort=newest&${presence}`,
+    `/api/v1/collections/col_dynamic?${presence}`,
+    `/api/v1/storefront/homepage?${presence}`,
+  ];
+}
+
 /** Every part the harness caches, in a stable order. */
 export function dvcPartCatalogue(): string[] {
-  const parts = [...productParts(), ...categoryParts(), ...otherParts()];
+  const parts = [...productParts(), ...categoryParts(), ...otherParts(), ...presenceParts()];
   const unique = [...new Set(parts)];
   const notCached = unique.filter((part) => !isPublicApiCacheRoute(new URL(part, "https://api.internal")));
   if (notCached.length > 0) throw new Error(`Not public cached routes: ${notCached.join(", ")}`);
@@ -129,8 +153,11 @@ const COMMERCE = ["/api/v1/shipping-methods", "/api/v1/checkout/config"];
 export function dvcPageCatalogue(): DvcPage[] {
   const pages: DvcPage[] = [
     { name: "home", parts: [...SHELL, "/api/v1/storefront/homepage", ...COMMERCE] },
-    // A presence page: the same reads, the checkout config of its market.
-    { name: "home:en-in", parts: [...SHELL, "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
+    // A presence page: its market's priced homepage and checkout config.
+    { name: "home:en-in", parts: [...SHELL, "/api/v1/storefront/homepage?presence=en-in", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
+    { name: "product:linen-panjabi:en-in", parts: [...SHELL, "/api/v1/products/linen-panjabi?presence=en-in", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
+    { name: "shop-all-price:en-in", parts: [...SHELL, `/api/v1/products?${LIST}&sort=price-asc&presence=en-in`] },
+    { name: "feed:en-in", parts: [`/api/v1/products/feed?presence=en-in`, "/api/v1/seo"] },
     { name: "search", parts: [...SHELL, `/api/v1/products?${LIST}&search=panjabi`] },
     { name: "shop-all-price", parts: [...SHELL, `/api/v1/products?${LIST}&sort=price-asc`] },
     { name: "collection", parts: [...SHELL, "/api/v1/collections/col_manual"] },

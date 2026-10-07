@@ -138,7 +138,7 @@ describe("market-keyed public reads", () => {
 
   it("refuses a market to a market-invariant route", async () => {
     const app = new OpenAPIHono();
-    app.get("/api/v1/products/:slug", async (c) => {
+    app.get("/api/v1/navigation/:menu", async (c) => {
       try {
         publicMarketPresence(c);
         return c.text("read");
@@ -146,6 +146,6 @@ describe("market-keyed public reads", () => {
         return c.text(error instanceof MarketInvariantRouteError ? "refused" : "other");
       }
     });
-    expect(await (await app.request("https://api.internal/api/v1/products/tee?presence=en-in")).text()).toBe("refused");
+    expect(await (await app.request("https://api.internal/api/v1/navigation/main?presence=en-in")).text()).toBe("refused");
   });
 });

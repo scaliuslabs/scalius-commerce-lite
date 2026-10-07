@@ -63,6 +63,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "collections", to: "/admin/collections" },
       { key: "categories", to: "/admin/categories" },
       { key: "brands", to: "/admin/brands" },
+      { key: "priceLists", to: "/admin/price-lists" },
       { key: "inventory", to: "/admin/inventory" },
       { key: "purchaseOrders", to: "/admin/inventory/purchase-orders" },
       { key: "transfers", to: "/admin/inventory/transfers" },

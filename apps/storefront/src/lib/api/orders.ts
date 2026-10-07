@@ -1,6 +1,8 @@
 // src/lib/api/orders.ts
 
 import { apiFetch } from "./transport";
+import { getRuntimePresence } from "./runtime";
+import { isMarketSubfolder } from "@scalius/shared/markets";
 import type { OrderLineProperty, OrderReceipt, CreateOrderPayload } from "./types";
 import type {
   DeliveryMethodKind,
@@ -159,6 +161,8 @@ export type CartValidationOptions = {
   shippingAdminArea?: string | null;
   shippingPostalCode?: string | null;
   shippingMethodId?: string | null;
+  /** The page's subfolder presence (`en-in`): before an address, its market prices the cart. */
+  presence?: string | null;
 };
 
 type OrderStatusData = {
@@ -346,6 +350,12 @@ export async function createOrder(
   }
 }
 
+/** The presence a cart check carries: the caller's, else (on the server) the render's. */
+function cartPresence(presence: string | null | undefined): { presence?: string } {
+  const value = presence ?? (import.meta.env.SSR ? getRuntimePresence() : null);
+  return value && isMarketSubfolder(value) ? { presence: value } : {};
+}
+
 export async function validateCartItems(
   items: CartValidationRequestItem[],
   options: CartValidationOptions = {},
@@ -356,7 +366,8 @@ export async function validateCartItems(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, ...options }),
+        // A presence page's market prices the cart (server renders know their presence).
+        body: JSON.stringify({ items, ...options, ...cartPresence(options.presence) }),
         cache: "no-store",
       },
       { retries: 1, timeout: 8000, auth: false },

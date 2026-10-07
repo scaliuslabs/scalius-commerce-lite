@@ -134,6 +134,8 @@ function onSaleCandidates(window: number): SQL {
  */
 export function planHomeProductLists(db: Database, lists: readonly HomeProductListRequest[]): {
     statements: BatchStatement[];
+    /** The statements whose rows are cards (`priceCardRowsInResults`), relative to the plan. */
+    productRowSlots: number[];
     resolve(results: readonly unknown[], offset: number): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
@@ -227,6 +229,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
 
     return {
         statements,
+        productRowSlots: slots.map((slot) => slot.rows),
         resolve(results, offset) {
             const categoryRows = categorySlot === null
                 ? []

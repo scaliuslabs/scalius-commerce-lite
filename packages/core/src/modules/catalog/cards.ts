@@ -15,6 +15,8 @@ import {
   resolveProductCardImages,
 } from "../products";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import type { Database } from "@scalius/database/client";
+import { isNeutralMarketPricing, priceProductCards, type MarketPriceContext } from "../price-lists";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
 
@@ -115,4 +117,23 @@ export function resolveProductCards(
         row.id,
         enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces, cardFacts(row.id)),
     ]));
+}
+
+/**
+ * The card rows of these batch results priced in the page's market, in
+ * place, before the plans resolve them into cards (MARKETS-DESIGN D5): one
+ * read of the shown products' SKUs when a list is live, none for FX alone,
+ * and nothing at all in a neutral market or at the root.
+ */
+export async function priceCardRowsInResults(
+    db: Database,
+    market: MarketPriceContext | null,
+    results: unknown[],
+    slots: readonly number[],
+): Promise<void> {
+    if (!market || isNeutralMarketPricing(market) || slots.length === 0) return;
+    const unique = new Map<string, RawProduct>();
+    for (const slot of slots) for (const row of results[slot] as RawProduct[]) unique.set(row.id, row);
+    const priced = new Map((await priceProductCards(db, market, [...unique.values()])).map((row) => [row.id, row]));
+    for (const slot of slots) results[slot] = (results[slot] as RawProduct[]).map((row) => priced.get(row.id) ?? row);
 }

@@ -376,6 +376,14 @@ export async function deleteCustomerSegment(db: Database, id: string): Promise<v
     if (current.promotionCount > 0) {
         throw new ConflictError("Discounts are limited to this segment. Remove it from them first.");
     }
+    // A price list for the segment's members (0120) keeps it too.
+    const priced = await db.select({ id: sql<string>`segment_price_list.id` })
+        .from(sql`price_lists AS segment_price_list`)
+        .where(sql`segment_price_list.segment_id = ${id}`)
+        .limit(1);
+    if (priced.length > 0) {
+        throw new ConflictError("A price list prices this segment. Delete that price list first.");
+    }
     await db.update(customerSegments)
         .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(and(
@@ -383,6 +391,7 @@ export async function deleteCustomerSegment(db: Database, id: string): Promise<v
             isNull(customerSegments.deletedAt),
             sql`NOT EXISTS (SELECT 1 FROM ${promotionCustomerSegments} JOIN ${promotions} ON ${promotions.id} = ${promotionCustomerSegments.promotionId}
                 WHERE ${promotionCustomerSegments.segmentId} = ${id} AND ${promotions.deletedAt} IS NULL AND ${promotions.status} <> 'archived')`,
+            sql`NOT EXISTS (SELECT 1 FROM price_lists AS segment_price_list WHERE segment_price_list.segment_id = ${id})`,
         ));
 }
 

@@ -11,10 +11,11 @@ import {
   buyerCatalogHasSkuInPriceRange,
   publicProductBaseConditions,
   quickAddEligibleSql,
-  storeDecimalToMinorSql,
 } from "../products";
 import { publicCategoryConditions } from "../categories";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
+import { priceFilterBoundsMinor } from "./shared";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { suggestSearchCorrection } from "./search-correction";
@@ -130,6 +131,8 @@ function parseSearchImageProjection(
 }
 
 type SearchOptions = {
+  /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
+  pricing?: MarketPricing | null;
   limit?: number;
   categoryId?: string;
   minPrice?: number;
@@ -201,12 +204,13 @@ async function runSearch(
       typeof options?.minPrice === "number" ||
       typeof options?.maxPrice === "number"
     ) {
-      const bound = (value: number | undefined) =>
-        typeof value === "number" && Number.isFinite(value)
-          ? storeDecimalToMinorSql(Math.max(0, value))
-          : undefined;
+      // A market prices its bounds in the market first (FX).
+      const bounds = priceFilterBoundsMinor(
+        { minPrice: options?.minPrice, maxPrice: options?.maxPrice },
+        options?.pricing ? await options.pricing.context : null,
+      );
       productConditions.push(
-        buyerCatalogHasSkuInPriceRange(bound(options?.minPrice), bound(options?.maxPrice)),
+        buyerCatalogHasSkuInPriceRange(bounds.minPriceMinor, bounds.maxPriceMinor),
       );
     }
     // Scoped to the search hits (and category) so the projection ranks only
@@ -302,10 +306,20 @@ async function runSearch(
       categoryQuery,
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(productsResult[0]?.storeCurrencyCode);
+    // The hits in the page's market (as read at the root or in a neutral market).
+    const pricedHits = await priceProductCards(db, await marketPriceContextOf(options?.pricing), productsResult.map((row) => ({
+      ...row,
+      discountType: null,
+      discountBps: 0,
+      discountAmountMinor: 0,
+    })));
 
     // The image/poster projection is part of the indexed product query, so
     // predictive search does not wait on a second D1 round trip.
-    const formattedProducts: ProductSearchResult[] = productsResult.map(({
+    const formattedProducts: ProductSearchResult[] = pricedHits.map(({
+      discountType: _discountType,
+      discountBps: _discountBps,
+      discountAmountMinor: _discountAmountMinor,
       basePriceMinor,
       effectivePriceMinor,
       maxBuyerPriceMinor,

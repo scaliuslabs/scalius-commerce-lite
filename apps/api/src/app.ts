@@ -58,6 +58,7 @@ import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminBrandRoutes } from "./routes/admin/brands";
+import { adminPriceListRoutes } from "./routes/admin/price-lists";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
 import { adminCustomerMarketingRoutes } from "./routes/admin/customer-marketing";
@@ -243,6 +244,7 @@ app.use("/admin/*", adminAuthMiddleware);
 // Register Admin routes
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
+app.route("/admin/price-lists", adminPriceListRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
 // Static customer paths (tags, segments, export) before the /{id} routes.
 app.route("/admin/customers", adminCustomerMarketingRoutes);

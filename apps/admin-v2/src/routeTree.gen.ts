@@ -58,6 +58,8 @@ import { Route as AdminOrdersListRouteImport } from './routes/admin/orders/_list
 import { Route as AdminOrdersNewRouteImport } from './routes/admin/orders/new'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
 import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
+import { Route as AdminPriceListsIndexRouteImport } from './routes/admin/price-lists/index'
+import { Route as AdminPriceListsPriceListIdRouteImport } from './routes/admin/price-lists/$priceListId'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
 import { Route as AdminReviewsIndexRouteImport } from './routes/admin/reviews/index'
@@ -366,6 +368,17 @@ const AdminPagesNewRoute = AdminPagesNewRouteImport.update({
   path: '/pages/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPriceListsIndexRoute = AdminPriceListsIndexRouteImport.update({
+  id: '/price-lists/',
+  path: '/price-lists/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPriceListsPriceListIdRoute =
+  AdminPriceListsPriceListIdRouteImport.update({
+    id: '/price-lists/$priceListId',
+    path: '/price-lists/$priceListId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
@@ -731,6 +744,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders': typeof AdminOrdersListRouteWithChildren
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
+  '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -761,6 +775,7 @@ export interface FileRoutesByFullPath {
   '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
+  '/admin/price-lists/': typeof AdminPriceListsIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
@@ -837,6 +852,7 @@ export interface FileRoutesByTo {
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
+  '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -867,6 +883,7 @@ export interface FileRoutesByTo {
   '/admin/inventory': typeof AdminInventoryIndexRoute
   '/admin/online-store': typeof AdminOnlineStoreIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
+  '/admin/price-lists': typeof AdminPriceListsIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/reviews': typeof AdminReviewsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
@@ -947,6 +964,7 @@ export interface FileRoutesById {
   '/admin/orders/_list': typeof AdminOrdersListRouteWithChildren
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
+  '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -977,6 +995,7 @@ export interface FileRoutesById {
   '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
+  '/admin/price-lists/': typeof AdminPriceListsIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
@@ -1058,6 +1077,7 @@ export interface FileRouteTypes {
     | '/admin/orders'
     | '/admin/orders/new'
     | '/admin/pages/new'
+    | '/admin/price-lists/$priceListId'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1088,6 +1108,7 @@ export interface FileRouteTypes {
     | '/admin/inventory/'
     | '/admin/online-store/'
     | '/admin/pages/'
+    | '/admin/price-lists/'
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
@@ -1164,6 +1185,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/theme'
     | '/admin/orders/new'
     | '/admin/pages/new'
+    | '/admin/price-lists/$priceListId'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1194,6 +1216,7 @@ export interface FileRouteTypes {
     | '/admin/inventory'
     | '/admin/online-store'
     | '/admin/pages'
+    | '/admin/price-lists'
     | '/admin/products'
     | '/admin/reviews'
     | '/admin/settings'
@@ -1273,6 +1296,7 @@ export interface FileRouteTypes {
     | '/admin/orders/_list'
     | '/admin/orders/new'
     | '/admin/pages/new'
+    | '/admin/price-lists/$priceListId'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1303,6 +1327,7 @@ export interface FileRouteTypes {
     | '/admin/inventory/'
     | '/admin/online-store/'
     | '/admin/pages/'
+    | '/admin/price-lists/'
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
@@ -1699,6 +1724,20 @@ declare module '@tanstack/react-router' {
       path: '/pages/new'
       fullPath: '/admin/pages/new'
       preLoaderRoute: typeof AdminPagesNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/price-lists/': {
+      id: '/admin/price-lists/'
+      path: '/price-lists'
+      fullPath: '/admin/price-lists/'
+      preLoaderRoute: typeof AdminPriceListsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/price-lists/$priceListId': {
+      id: '/admin/price-lists/$priceListId'
+      path: '/price-lists/$priceListId'
+      fullPath: '/admin/price-lists/$priceListId'
+      preLoaderRoute: typeof AdminPriceListsPriceListIdRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/products/': {
@@ -2224,6 +2263,7 @@ interface AdminRouteChildren {
   AdminOrdersListRoute: typeof AdminOrdersListRouteWithChildren
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminPagesNewRoute: typeof AdminPagesNewRoute
+  AdminPriceListsPriceListIdRoute: typeof AdminPriceListsPriceListIdRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
   AdminAnalyticsIndexRoute: typeof AdminAnalyticsIndexRoute
   AdminAppsIndexRoute: typeof AdminAppsIndexRoute
@@ -2238,6 +2278,7 @@ interface AdminRouteChildren {
   AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
   AdminOnlineStoreIndexRoute: typeof AdminOnlineStoreIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
+  AdminPriceListsIndexRoute: typeof AdminPriceListsIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
   AdminAnalyticsReportsReportIdRoute: typeof AdminAnalyticsReportsReportIdRoute
@@ -2293,6 +2334,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersListRoute: AdminOrdersListRouteWithChildren,
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminPagesNewRoute: AdminPagesNewRoute,
+  AdminPriceListsPriceListIdRoute: AdminPriceListsPriceListIdRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
   AdminAnalyticsIndexRoute: AdminAnalyticsIndexRoute,
   AdminAppsIndexRoute: AdminAppsIndexRoute,
@@ -2307,6 +2349,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminInventoryIndexRoute: AdminInventoryIndexRoute,
   AdminOnlineStoreIndexRoute: AdminOnlineStoreIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
+  AdminPriceListsIndexRoute: AdminPriceListsIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminReviewsIndexRoute: AdminReviewsIndexRoute,
   AdminAnalyticsReportsReportIdRoute: AdminAnalyticsReportsReportIdRoute,
