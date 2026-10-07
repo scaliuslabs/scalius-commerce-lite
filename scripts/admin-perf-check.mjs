@@ -55,7 +55,9 @@ export const BUNDLE_BUDGETS = {
     // page, and the shared icon and SDK chunks the new catalogue screens regrouped.
     "admin/products/new.tsx": 365,
     "admin/inventory/index.tsx": 255,
-    "admin/customers/index.tsx": 245,
+    // 246 (was 245): billing addresses (0119) shifted shared chunks by 0.1 KiB;
+    // the list UX slice is to win it back.
+    "admin/customers/index.tsx": 246,
     "admin/settings/store.tsx": 291,
   },
 };
