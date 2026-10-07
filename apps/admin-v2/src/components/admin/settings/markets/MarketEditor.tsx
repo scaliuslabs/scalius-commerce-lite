@@ -1,11 +1,14 @@
 // One market (docs/MARKETS-DESIGN.md D4), Shopify's market page: its name
 // and status, Countries, Currency (the shop currency, locked until markets
 // get their own), Web presence (a subfolder and its language), the price
-// increment and Taxes (whether its prices include tax). One save bar saves the page under the revision it loaded; the
-// delete action sits apart at the bottom.
+// increment, Pricing (Shopify's price adjustment: product prices, or adjusted
+// and rounded product prices, with its price lists) and Taxes (whether its
+// prices include tax). One save bar saves the page under the revision it
+// loaded; the delete action sits apart at the bottom.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
   cashOnDeliveryIncrementMinor,
   isWholeUnitIncrement,
@@ -19,12 +22,14 @@ import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
+import { useCurrency } from "~/hooks/use-currency";
 import { useSettingsForm } from "~/hooks/use-settings-form";
-import { getLocale, useMessages } from "~/i18n";
+import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { settingsMarketsMessages } from "~/i18n/settings-markets";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -37,6 +42,9 @@ import { MarketCountryPicker } from "./MarketCountryPicker";
 import {
   EMPTY_MARKET_FORM,
   MARKET_LANGUAGES,
+  adjustedPricePreview,
+  endingChoices,
+  roundingChoices,
   countriesTakenByOthers,
   fetchMarketForm,
   marketEditorQueryOptions,
@@ -75,7 +83,7 @@ export function MarketEditor({ marketId }: { marketId: string }) {
     canEdit,
     errorMessage: common("saveFailed"),
     label: t("detailsTitle"),
-    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix" },
+    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix", priceAdjustmentPercent: "market-adjustment", priceRounding: "market-rounding", priceEnding: "market-ending" },
   });
   const back = { to: "/admin/settings/markets" as const, label: nav("markets") };
 
@@ -165,6 +173,8 @@ export function MarketEditor({ marketId }: { marketId: string }) {
       <WebPresenceCard values={values} canEdit={canEdit} suffixError={problems.suffix ? t(problems.suffix) : null} setValues={setValues} />
 
       <PriceIncrementCard values={values} canEdit={canEdit} onChange={(priceIncrementMinor) => setValue("priceIncrementMinor", priceIncrementMinor)} />
+
+      <PricingCard values={values} canEdit={canEdit} adjustmentError={problems.adjustment ? t(problems.adjustment) : null} setValues={setValues} />
 
       <SettingsCard title={t("taxesTitle")}>
         <label className="flex min-h-11 items-center justify-between gap-4 text-body">
@@ -283,6 +293,116 @@ function PriceIncrementCard({ values, canEdit, onChange }: {
           onCheckedChange={(on) => onChange(on ? choices[choices.length - 1]! : choices[0]!)}
         />
       </label>
+    </SettingsCard>
+  );
+}
+
+/** Product prices in a market's own sample amounts (minor units of a whole-unit price: 499, 1,299 and 2,450). */
+const PREVIEW_UNITS = [499, 1_299, 2_450];
+
+/**
+ * How a market prices (MARKETS-DESIGN D5), Shopify's price adjustment: the
+ * product prices, or the product prices raised or lowered by a percentage,
+ * rounded up to a step and ending in an amount, with a live preview. Price
+ * lists win over both; the card links to them.
+ */
+function PricingCard({ values, canEdit, adjustmentError, setValues }: {
+  values: MarketForm;
+  canEdit: boolean;
+  adjustmentError: string | null;
+  setValues: (update: (draft: MarketForm) => MarketForm) => void;
+}) {
+  const t = useMessages(settingsMarketsMessages);
+  const { fmt } = useCurrency();
+  const listsLink = <Link to="/admin/price-lists" className="text-body text-foreground underline">{t("priceListsLink")}</Link>;
+  if (values.isBackup) {
+    return (
+      <SettingsCard title={t("pricingTitle")} description={t("backupPricing")}>
+        {listsLink}
+      </SettingsCard>
+    );
+  }
+  const increment = resolvePriceIncrementMinor(values.currencyCode, values.priceIncrementMinor);
+  const places = getDecimalPlaces(values.currencyCode);
+  const unit = 10 ** places;
+  const major = (minor: number) => fmt(minor / unit);
+  const steps = roundingChoices(values.currencyCode, increment);
+  const endings = endingChoices(values.priceRoundingMinor, increment);
+  const preview = adjustedPricePreview(values, increment, PREVIEW_UNITS.map((units) => units * unit));
+  return (
+    <SettingsCard title={t("pricingTitle")}>
+      <RadioGroup
+        aria-label={t("pricingTitle")}
+        value={values.priceMode}
+        disabled={!canEdit}
+        onValueChange={(mode) => setValues((draft) => ({ ...draft, priceMode: mode === "fx" ? "fx" : "fixed" }))}
+      >
+        {(["fixed", "fx"] as const).map((mode) => (
+          <label key={mode} className="flex min-h-11 items-start gap-2 py-2 text-body">
+            <span className="flex h-lh items-center"><RadioGroupItem value={mode} /></span>
+            <span>
+              <span className="block font-medium">{t(mode === "fx" ? "pricingAdjusted" : "pricingFixed")}</span>
+              <span className="block text-muted-foreground">{t(mode === "fx" ? "pricingAdjustedHelp" : "pricingFixedHelp")}</span>
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+      {values.priceMode === "fx" ? (
+        <>
+          <p className="text-body text-muted-foreground">{t("sameCurrencyRate", { currency: values.currencyCode })}</p>
+          <SettingsField id="market-adjustment" label={t("adjustment")} help={t("adjustmentHelp")} error={adjustmentError}>
+            <NumberInput
+              id="market-adjustment"
+              className="max-w-32"
+              disabled={!canEdit}
+              value={values.priceAdjustmentPercent}
+              onValueChange={(priceAdjustmentPercent) => setValues((draft) => ({ ...draft, priceAdjustmentPercent }))}
+            />
+          </SettingsField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SettingsField id="market-rounding" label={t("rounding")} help={t("roundingHelp")}>
+              <SearchableSelect
+                id="market-rounding"
+                value={values.priceRoundingMinor === null ? "" : String(values.priceRoundingMinor)}
+                disabled={!canEdit}
+                triggerClassName="block w-full"
+                options={[
+                  { value: "", label: t("roundingIncrement") },
+                  ...steps.map((step) => ({ value: String(step), label: major(step) })),
+                ]}
+                onValueChange={(value) => setValues((draft) => {
+                  const priceRoundingMinor = value ? Number(value) : null;
+                  // An ending must fit inside the new step; otherwise it goes.
+                  const keep = draft.priceEndingMinor !== null && endingChoices(priceRoundingMinor, increment).includes(draft.priceEndingMinor);
+                  return { ...draft, priceRoundingMinor, priceEndingMinor: keep ? draft.priceEndingMinor : null };
+                })}
+              />
+            </SettingsField>
+            <SettingsField id="market-ending" label={t("ending")} help={t("endingHelp")}>
+              <SearchableSelect
+                id="market-ending"
+                value={values.priceEndingMinor === null ? "" : String(values.priceEndingMinor)}
+                disabled={!canEdit || endings.length === 0}
+                triggerClassName="block w-full"
+                options={[
+                  { value: "", label: t("endingNone") },
+                  ...endings.map((ending) => ({ value: String(ending), label: formatNumber(ending / unit, { minimumFractionDigits: places }) })),
+                ]}
+                onValueChange={(value) => setValues((draft) => ({ ...draft, priceEndingMinor: value ? Number(value) : null }))}
+              />
+            </SettingsField>
+          </div>
+          {preview.length > 0 ? (
+            <div className="space-y-1 text-body">
+              <p className="font-medium">{t("previewTitle")}</p>
+              <ul className="text-muted-foreground">
+                {preview.map((row) => <li key={row.base}>{t("previewRow", { base: major(row.base), adjusted: major(row.adjusted) })}</li>)}
+              </ul>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {listsLink}
     </SettingsCard>
   );
 }

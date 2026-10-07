@@ -3,7 +3,10 @@
 // the backup market keeps the root URL and edits only its language. Only the
 // backup market has its own price increment; every other market uses it.
 import { queryOptions } from "@tanstack/react-query";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fxPriceMinor, marketFxPolicyIssue, type FxConversion } from "@scalius/shared/market-pricing";
 import { MARKET_HANDLE_PATTERN } from "@scalius/shared/markets";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { fetchMarket, marketKeys, type CreateMarketBody, type Market, type UpdateMarketBody } from "~/lib/api-query-options/markets";
 import type { SettingsMarketsMessageKey } from "~/i18n/settings-markets";
 
@@ -27,6 +30,16 @@ export interface MarketForm {
   priceIncrementMinor: number;
   /** Whether the market's prices include tax (MARKETS-DESIGN D8). */
   pricesIncludeTax: boolean;
+  /** How a non-backup market prices (MARKETS-DESIGN D5): product prices, or product prices adjusted and rounded. */
+  priceMode: "fixed" | "fx";
+  /** Percent, two decimals; NaN while the typed text is refused. */
+  priceAdjustmentPercent: number | null;
+  /** Round adjusted prices up to this step (minor units); null: the price increment. */
+  priceRoundingMinor: number | null;
+  /** End rounded prices in this amount within the step (minor units); null: none. */
+  priceEndingMinor: number | null;
+  /** The exchange rate it saves (1 while every market sells the shop currency). */
+  fxRate: string | null;
   // Facts the editor shows but never saves.
   isBackup: boolean;
   hasRootPresence: boolean;
@@ -44,6 +57,11 @@ export const EMPTY_MARKET_FORM: MarketForm = {
   suffix: "",
   priceIncrementMinor: 1,
   pricesIncludeTax: false,
+  priceMode: "fixed",
+  priceAdjustmentPercent: 0,
+  priceRoundingMinor: null,
+  priceEndingMinor: null,
+  fxRate: null,
   isBackup: false,
   hasRootPresence: false,
   hasOrders: false,
@@ -64,6 +82,11 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
     suffix: subfolder ? presence!.value.slice(3) : "",
     priceIncrementMinor: market.priceIncrementMinor,
     pricesIncludeTax: market.pricesIncludeTax,
+    priceMode: market.priceMode,
+    priceAdjustmentPercent: market.priceAdjustmentPercent,
+    priceRoundingMinor: market.priceRounding === null ? null : toMinor(market.priceRounding, getDecimalPlaces(market.currencyCode)),
+    priceEndingMinor: market.priceEnding === null ? null : toMinor(market.priceEnding, getDecimalPlaces(market.currencyCode)),
+    fxRate: market.fxRate,
     isBackup: market.isBackup,
     hasRootPresence: market.isBackup && presence?.value === "",
     hasOrders: market.hasOrders,
@@ -92,7 +115,7 @@ export function marketPresencePath(market: Pick<Market, "presence">): string | n
   return market.presence.value ? `/${market.presence.value}` : "/";
 }
 
-export type MarketFormProblems = Partial<Record<"name" | "handle" | "countries" | "suffix", SettingsMarketsMessageKey>>;
+export type MarketFormProblems = Partial<Record<"name" | "handle" | "countries" | "suffix" | "adjustment", SettingsMarketsMessageKey>>;
 
 export function marketFormProblems(form: MarketForm): MarketFormProblems {
   const problems: MarketFormProblems = {};
@@ -100,6 +123,7 @@ export function marketFormProblems(form: MarketForm): MarketFormProblems {
   if (!MARKET_HANDLE_PATTERN.test(form.handle.trim())) problems.handle = "handleInvalid";
   if (!form.isBackup && form.countries.length === 0) problems.countries = "countriesRequired";
   if (!form.isBackup && form.subfolder && !SUFFIX_PATTERN.test(form.suffix.trim().toLowerCase())) problems.suffix = "suffixInvalid";
+  if (!form.isBackup && form.priceMode === "fx" && adjustmentBps(form) === null) problems.adjustment = "adjustmentInvalid";
   return problems;
 }
 
@@ -125,7 +149,53 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
     countries: form.countries,
     presence: form.subfolder ? { value: `${locale}-${form.suffix.trim().toLowerCase()}`, locale } : null,
     pricesIncludeTax: form.pricesIncludeTax,
+    priceMode: form.priceMode,
+    priceAdjustmentPercent: (adjustmentBps(form) ?? 0) / 100,
+    priceRounding: form.priceRoundingMinor === null ? null : fromMinor(form.priceRoundingMinor, getDecimalPlaces(form.currencyCode)),
+    priceEnding: form.priceEndingMinor === null ? null : fromMinor(form.priceEndingMinor, getDecimalPlaces(form.currencyCode)),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Adjusted prices (MARKETS-DESIGN D5): Shopify's price adjustment and rounding
+// ---------------------------------------------------------------------------
+
+/** The adjustment in basis points, or null when it is not a percentage from −99 to 1,000. */
+export function adjustmentBps(form: Pick<MarketForm, "priceAdjustmentPercent">): number | null {
+  const percent = form.priceAdjustmentPercent ?? 0;
+  if (!Number.isFinite(percent) || percent < -99 || percent > 1_000) return null;
+  return Math.round(percent * 100);
+}
+
+/** Rounding steps a merchant picks from: whole units and their usual multiples, at or above the increment. */
+export function roundingChoices(currencyCode: string, incrementMinor: number): number[] {
+  const unit = 10 ** getDecimalPlaces(currencyCode);
+  const steps = [unit / 20, unit / 10, unit, unit * 5, unit * 10, unit * 50, unit * 100];
+  return steps.filter((step) => Number.isInteger(step) && step >= incrementMinor && step % incrementMinor === 0);
+}
+
+/** Endings for a step: one increment below it (৳9 of ৳10, 0.99 of 1.00) and the usual 95 and 90. */
+export function endingChoices(stepMinor: number | null, incrementMinor: number): number[] {
+  if (stepMinor === null) return [];
+  const candidates = [stepMinor - incrementMinor, Math.round(stepMinor * 0.95), Math.round(stepMinor * 0.9)];
+  return [...new Set(candidates)].filter((ending) => ending > 0 && ending < stepMinor && ending % incrementMinor === 0);
+}
+
+/** The conversion a saved form describes, or null when it does not convert (fixed prices or an invalid entry). */
+export function formConversion(form: MarketForm, incrementMinor: number): FxConversion | null {
+  const bps = adjustmentBps(form);
+  if (form.isBackup || form.priceMode !== "fx" || bps === null) return null;
+  const policy = { rate: form.fxRate ?? "1", adjustmentBps: bps, roundingMinor: form.priceRoundingMinor, endingMinor: form.priceEndingMinor };
+  if (marketFxPolicyIssue(policy, incrementMinor) !== null) return null;
+  const places = getDecimalPlaces(form.currencyCode);
+  return { policy, fromDecimalPlaces: places, toDecimalPlaces: places, incrementMinor };
+}
+
+/** A few product prices and what the market's adjustment makes of them (minor units). */
+export function adjustedPricePreview(form: MarketForm, incrementMinor: number, samples: readonly number[]): Array<{ base: number; adjusted: number }> {
+  const conversion = formConversion(form, incrementMinor);
+  if (!conversion) return [];
+  return samples.map((base) => ({ base, adjusted: fxPriceMinor(base, conversion) }));
 }
 
 /** A new market: a draft with its name and countries; the handle comes from the name. */

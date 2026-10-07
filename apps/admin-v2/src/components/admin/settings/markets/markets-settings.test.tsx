@@ -38,6 +38,9 @@ import {
   marketForm,
   marketFormProblems,
   marketUpdateBody,
+  adjustedPricePreview,
+  endingChoices,
+  roundingChoices,
   presencePath,
   withSubfolder,
 } from "./market-form";
@@ -48,7 +51,9 @@ const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data 
 const backup = {
   id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", status: "active" as const, isBackup: true, revision: 3,
   countries: ["BD"], presence: { value: "", locale: "bn" }, currencyCode: "BDT", priceIncrementMinor: 100,
-  priceIncrementInherited: false, pricesIncludeTax: true, hasOrders: true, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
+  priceIncrementInherited: false, pricesIncludeTax: true, hasOrders: true,
+  priceMode: "fixed" as "fixed" | "fx", fxRate: null as string | null, priceAdjustmentPercent: 0, priceRounding: null as number | null, priceEnding: null as number | null,
+  createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
 };
 const india = {
   ...backup, id: "mkt_in", handle: "india", name: "India", status: "draft" as const, isBackup: false, revision: 1,
@@ -72,9 +77,23 @@ describe("market form", () => {
     expect(marketUpdateBody({ ...form, status: "active" }, 1)).toEqual({
       expectedRevision: 1, name: "India", handle: "india", status: "active", countries: ["IN", "NP"],
       presence: { value: "en-in", locale: "en" }, pricesIncludeTax: true,
+      priceMode: "fixed", priceAdjustmentPercent: 0, priceRounding: null, priceEnding: null,
     });
     expect(marketUpdateBody(withSubfolder(form, false), 1).presence).toBeNull();
     expect(marketForm({ ...india, presence: { value: "bn-in", locale: "bn" } })).toMatchObject({ subfolder: true, suffix: "in", locale: "bn" });
+  });
+
+  it("saves adjusted prices and previews them with the shared FX rounding", () => {
+    const form = { ...marketForm({ ...india, priceMode: "fx", priceAdjustmentPercent: 10, priceRounding: 10, priceEnding: 9 }), priceIncrementMinor: 100 };
+    expect(form).toMatchObject({ priceMode: "fx", priceAdjustmentPercent: 10, priceRoundingMinor: 1_000, priceEndingMinor: 900 });
+    expect(marketUpdateBody(form, 1)).toMatchObject({ priceMode: "fx", priceAdjustmentPercent: 10, priceRounding: 10, priceEnding: 9 });
+    // ৳1,299 × 1.10 = ৳1,428.90 → up to ৳1,430 → ending 9: ৳1,429.
+    expect(adjustedPricePreview(form, 100, [129_900])).toEqual([{ base: 129_900, adjusted: 142_900 }]);
+    expect(roundingChoices("BDT", 100)).toEqual([100, 500, 1_000, 5_000, 10_000]);
+    expect(endingChoices(1_000, 100)).toEqual([900]);
+    expect(endingChoices(10_000, 100)).toEqual([9_900, 9_500, 9_000]);
+    expect(marketFormProblems({ ...form, priceAdjustmentPercent: -100 })).toEqual({ adjustment: "adjustmentInvalid" });
+    expect(adjustedPricePreview({ ...form, priceMode: "fixed" }, 100, [129_900])).toEqual([]);
   });
 
   it("names what blocks a save", () => {
