@@ -302,7 +302,8 @@ export function SectionSettingsForm({ section, media, onChange, errors }: {
       value={section.settings as Record<string, unknown>}
       onChange={(settings) => onChange(settings as StorefrontPlatformSection["settings"])}
       errors={errors}
-      visible={(path) => !blocks.has(path)}
+      // A hero's phone height applies to the full-screen layout only.
+      visible={(path, parent) => !blocks.has(path) && (section.type !== "hero" || path !== "phoneHeight" || parent.layout === "full-screen")}
       media={media}
     />
   );

@@ -9,13 +9,23 @@
 // its own schemas before it uses it, and nothing generated is saved until
 // the merchant saves it.
 //
-// Consumers name themselves in `purpose`. The first is `theme.sections`
-// (the theme editor's "Draft with AI"). Product descriptions, SEO fields,
-// alt text, inbox replies and analytics questions are planned on the same
-// port, and the `translation` kind is to fold into it.
+// Consumers call it through `generateStructured` (@scalius/core
+// integrations/ai-generate): one bounded attempt, the answer validated
+// against the consumer's schema, masked failure logs. Consumers name
+// themselves in `purpose`. The first is `theme.sections` (the theme editor's
+// "Draft with AI"). Product descriptions, SEO fields, alt text, inbox
+// replies and analytics questions are planned on the same port, and the
+// `translation` kind is to fold into it. A first-party AI app is a planned
+// paid plugin (later); it implements this port like any app.
 
 import { z } from "zod";
 
+/**
+ * The `generate` contract's version, sent with every call. Within a version
+ * the contract changes only additively (as every port within
+ * PLUGIN_API_VERSION); a breaking change is a new version.
+ */
+export const AI_PORT_VERSION = 1;
 export const AI_GENERATE_PROMPT_MAX = 4_000;
 export const AI_GENERATE_INSTRUCTIONS_MAX = 8_000;
 
@@ -23,6 +33,8 @@ export const AI_GENERATE_INSTRUCTIONS_MAX = 8_000;
 export const aiPurposeSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,30}(\.[a-z][a-z0-9_-]{0,30}){0,3}$/);
 
 export const aiGenerateInputSchema = z.object({
+  /** AI_PORT_VERSION. */
+  version: z.literal(AI_PORT_VERSION),
   /** Which consumer asks (for the provider's routing, limits and logs). */
   purpose: aiPurposeSchema,
   /** What the host asks for and the rules of the answer (host-written, never the merchant's). */

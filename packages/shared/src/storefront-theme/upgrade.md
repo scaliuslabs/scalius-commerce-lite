@@ -24,10 +24,11 @@ A reset migration deleted every stored theme row not at the version it introduce
 | v4 | `0082_theme_document_v4` | The shared navigation and the listing filters become explicit. Sidebar and bar layouts become the grid arrangement. |
 | v5 | `0093_theme_document_v5` | Template-only page chrome becomes stored listing settings. The brand and the home mode are added. Options that never rendered are removed: the questions module, retired sticky modes, deal end times, sub-brand rows and trending queries. |
 | v6 | `0106_theme_document_v6` | Landing pages (`pages.landing`) are added, empty. |
-| v7 | none | The current document. It is the input of the next step. |
+| v7 | none | Page templates (`pages.templates`) are added, empty, with the fixed part first. |
+| v8 | none | The current document. It is the input of the next step. |
 
-## Adding v8
+## Adding v9
 
-1. Add `7: v7to8` to `THEME_UPGRADES`, written against the shape in `v7.json` with its own literals.
+1. Add `8: v8to9` to `THEME_UPGRADES`, written against the shape in `v8.json` with its own literals.
 2. Bump `STOREFRONT_THEME_DOCUMENT_VERSION` and the schema.
-3. Create the v8 golden fixture (a current document) next to the v7 one and add it to `goldenFixtures` in `upgrade.test.ts`. The fixture-count test fails until you do. Earlier steps and fixtures do not change.
+3. Create the v9 golden fixture (a current document) next to the v8 one and add it to `goldenFixtures` in `upgrade.test.ts`. The fixture-count test fails until you do. Earlier steps and fixtures do not change.

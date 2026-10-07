@@ -13,8 +13,6 @@ import {
 } from "@scalius/shared/storefront-theme";
 import {
   AI_GENERATE_PROMPT_MAX,
-  ProviderError,
-  providerErrorOf,
   qualifiedProviderId,
 } from "@scalius/shared/plugins/providers";
 import { ValidationError } from "@scalius/core/errors";
@@ -234,27 +232,29 @@ app.openapi(createRoute({
   const input = c.req.valid("json");
   const choice = await resolveAppProvider(requestAppProviders(c), "ai", input.providerId);
   if (!choice.provider) throw new ValidationError(choice.issue);
-  let output;
+  // Loaded only when someone drafts: a store without an AI app never runs it.
+  const { AiGenerateError, generateStructured } = await import("@scalius/core/integrations/ai-generate");
+  let value: z.output<typeof aiDraftValueSchema>;
   try {
-    output = await choice.provider.generate({
+    value = await generateStructured(choice.provider, {
       purpose: "theme.sections",
       instructions: aiDraftInstructions(input.page, input.limit),
       prompt: input.prompt,
       locale: input.locale,
-      schema: aiDraftSchema(input.limit),
-    }, {});
+      schema: aiDraftValueSchema,
+      jsonSchema: aiDraftSchema(input.limit),
+      signal: c.req.raw.signal,
+    });
   } catch (error) {
-    const providerError = providerErrorOf(error);
-    if (providerError) throw new ValidationError(`${choice.provider.label}: ${providerError.message}`);
-    throw new ValidationError(`${choice.provider.label} could not draft sections. Try again.`, error instanceof ProviderError ? { code: error.code } : undefined);
+    if (error instanceof AiGenerateError) throw new ValidationError(error.message, { code: `ai.${error.reason}` });
+    throw error;
   }
-  const value = aiDraftValueSchema.safeParse(output.value);
-  if (!value.success) throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`);
-  const accepted = acceptDraftedSections(value.data.sections.slice(0, input.limit), []);
+  // Every section is checked against the theme's own schemas; one that fails is left out and counted.
+  const accepted = acceptDraftedSections(value.sections.slice(0, input.limit), []);
   if (accepted.sections.length === 0) {
-    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`);
+    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`, { code: "ai.invalid_output" });
   }
-  return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: value.data.note ?? null });
+  return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: value.note ?? null });
 });
 
 app.openapi(createRoute({

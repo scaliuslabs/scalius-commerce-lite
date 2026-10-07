@@ -213,7 +213,11 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           ) : null}
         </div>
       ) : null}
-      {notice ? <div className="pointer-events-none absolute inset-x-4 top-6 z-10 flex justify-center">{notice}</div> : null}
+      {notice ? (
+        <div className="pointer-events-none absolute inset-x-4 top-6 z-10 flex justify-center">
+          <div className="pointer-events-auto max-w-xl rounded-lg shadow-popover">{notice}</div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -214,8 +214,10 @@ describe("blocks", () => {
     expect(addBlock(full, "items")).toBeNull();
     expect(duplicateBlock(full, "items", 0)).toBeNull();
     // A tab strip keeps two tabs.
-    expect(blockList(tabs, "tabs").length).toBe(2);
-    expect(canRemoveBlock(tabs, "tabs")).toBe(false);
+    expect(canRemoveBlock(tabs, "tabs")).toBe(true);
+    const two = removeBlock(tabs, "tabs", 2);
+    expect(blockList(two, "tabs")).toHaveLength(2);
+    expect(canRemoveBlock(two, "tabs")).toBe(false);
     expect(canRemoveBlock(faq, "items")).toBe(true);
   });
 

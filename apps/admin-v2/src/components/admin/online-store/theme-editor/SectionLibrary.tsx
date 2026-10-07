@@ -176,6 +176,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
         </DialogHeader>
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          {/* eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field */}
           <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("librarySearch")} aria-label={t("librarySearch")} className="ps-9" />
         </div>
         {aiAvailable ? (

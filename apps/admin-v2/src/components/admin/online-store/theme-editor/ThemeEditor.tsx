@@ -15,7 +15,7 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Layers, Plus, SlidersHorizontal } from "lucide-react";
 import {
@@ -52,7 +52,7 @@ import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews } from "../schema-form/resource-fields";
 import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { useOpenThemePreview } from "../theme-preview";
-import { AiDraftDialog, type AiPage } from "./AiDraftDialog";
+import type { AiPage } from "./AiDraftDialog";
 import { AppSectionSettings } from "./AppSectionSettings";
 import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
 import { EditorCanvas, type SelectionActions } from "./EditorCanvas";
@@ -111,6 +111,9 @@ type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
 
 /** Per-browser view choices (research P3: the zoom is remembered). */
+/** Loaded when someone opens Draft with AI: the editor costs nothing for AI it does not use. */
+const AiDraftDialog = lazy(() => import("./AiDraftDialog").then((module) => ({ default: module.AiDraftDialog })));
+
 const VIEW_KEY = "scalius.themeEditor.view";
 interface ViewChoices { zoom: PreviewZoom; desktopWidth: DesktopWidth; sidebar: boolean }
 function readView(): ViewChoices {
@@ -377,7 +380,6 @@ export function ThemeEditor({ workspace, refetch }: {
   // ── Library and AI ───────────────────────────────────────────────────────
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
-  const aiProviders = workspace.aiProviders;
   // Always offered to editors: without an AI app or agent, the dialog says what to turn on.
   const aiAvailable = canEdit;
   const template = pageTemplate(page);
@@ -648,7 +650,7 @@ export function ThemeEditor({ workspace, refetch }: {
   );
 
   const sidebar = (
-    <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")} className="flex h-full min-h-0 flex-col gap-0">
+    <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")} className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-border px-2 py-1.5">
         <TabsList className="w-full">
           <TabsTrigger value="sections" className="flex-1">{t("tabSections")}</TabsTrigger>
@@ -667,7 +669,7 @@ export function ThemeEditor({ workspace, refetch }: {
   // Hover from the tree outlines the part in the preview; the preview's own hover too.
   const outlined = hovered ? selectionMark(hovered) : preview.hovered;
   const conflictNotice = draft.conflict ? (
-    <Alert variant="warning" className="pointer-events-auto max-w-xl shadow-popover">
+    <Alert variant="warning">
       <AlertDescription>
         {draft.conflict.name
           ? t("conflictNamed", { name: draft.conflict.name, time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
@@ -679,14 +681,14 @@ export function ThemeEditor({ workspace, refetch }: {
       </AlertDescription>
     </Alert>
   ) : draft.failureMessage ? (
-    <Alert variant="warning" className="pointer-events-auto max-w-xl shadow-popover">
+    <Alert variant="warning">
       <AlertDescription>
         {t("saveFailed", { reason: draft.failureMessage })}
         <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={() => void draft.save()}>{t("retry")}</Button></span>
       </AlertDescription>
     </Alert>
   ) : previewRevision !== null ? (
-    <Alert variant="info" className="pointer-events-auto max-w-xl shadow-popover">
+    <Alert variant="info">
       <AlertDescription>
         {t(versionLacksPage ? "previewingVersionHome" : "previewingVersion", { revision: previewRevision })}
         <span className="mt-2 flex flex-wrap gap-2">
@@ -698,7 +700,7 @@ export function ThemeEditor({ workspace, refetch }: {
       </AlertDescription>
     </Alert>
   ) : preview.shownPath && path && preview.phase === "ready" && preview.shownPath !== path.split("?")[0] ? (
-    <Alert variant="info" className="pointer-events-auto max-w-xl shadow-popover">
+    <Alert variant="info">
       <AlertDescription>
         {t("viewingPath", { path: preview.shownPath })}
         <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.reload}>{t("backToPage", { page: pageName })}</Button></span>
@@ -867,15 +869,18 @@ export function ThemeEditor({ workspace, refetch }: {
         onAdd={addFromLibrary}
         onDraftWithAi={() => setAiOpen(true)}
       />
-      <AiDraftDialog
-        open={aiOpen}
-        onOpenChange={setAiOpen}
-        providers={aiProviders}
-        page={aiPage}
-        locale={previewLocale ?? "en"}
-        canConnectAgent={canConnectAgent}
-        onDrafted={onDrafted}
-      />
+      {aiOpen ? (
+        <Suspense fallback={null}>
+          <AiDraftDialog
+            open={aiOpen}
+            onOpenChange={setAiOpen}
+            page={aiPage}
+            locale={previewLocale ?? "en"}
+            canConnectAgent={canConnectAgent}
+            onDrafted={onDrafted}
+          />
+        </Suspense>
+      ) : null}
       <PublishDialog
         open={publishOpen}
         onOpenChange={setPublishOpen}

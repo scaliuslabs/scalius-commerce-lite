@@ -80,8 +80,7 @@ import {
   themeStatusSchema,
 } from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
-import { listActiveProviderPlugins, listPluginInstallations } from "@scalius/core/modules/plugins";
-import { qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { listPluginInstallations } from "@scalius/core/modules/plugins";
 import { pluginSurfaceKey } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -298,7 +297,6 @@ const getThemeEditorRoute = createRoute({
             /** Sections and product blocks the store's active apps offer (the editor adds them; the apps draw them). */
             apps: z.array(themeAppSurfacesSchema),
             /** Active apps' AI providers (Draft with AI); empty when no app provides one. */
-            aiProviders: z.array(z.object({ id: z.string(), name: z.string(), appName: z.string(), appId: z.string() })),
           })),
         },
       },
@@ -309,18 +307,14 @@ const getThemeEditorRoute = createRoute({
 
 app.openapi(getThemeEditorRoute, async (c) => {
   const db = c.get("db");
-  const [[workspace, media], storeShape, apps, aiApps] = await Promise.all([
+  const [[workspace, media], storeShape, apps] = await Promise.all([
     getThemeWorkspace(db).then(async (workspace) =>
       [workspace, await readThemeMedia(db, workspace.draft.theme)] as const),
     readStoreShape(db),
     readThemeAppSurfaces(db),
-    listActiveProviderPlugins(db, "ai"),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
   const { updatedBy: _updatedBy, updatedByName, ...draft } = workspace.draft;
-  const aiProviders = aiApps.flatMap((installation) => installation.manifest.providers
-    .filter((provider) => provider.kind === "ai")
-    .map((provider) => ({ id: qualifiedProviderId(installation.pluginId, provider.id), name: provider.name, appName: installation.manifest.name, appId: installation.pluginId })));
   return ok(c, {
     ...workspace,
     draft: { ...draftReceipt(draft), updatedByName: updatedByName?.slice(0, 200) ?? null },
@@ -328,7 +322,6 @@ app.openapi(getThemeEditorRoute, async (c) => {
     storeShape,
     media,
     apps,
-    aiProviders,
   });
 });
 

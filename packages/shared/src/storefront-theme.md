@@ -1,16 +1,16 @@
-# Storefront theme document (version 7)
+# Storefront theme document (version 8)
 
-One JSON document describes how the storefront looks: the template label, tokens, brand, one variant per block with its settings, the homepage sections, up to 20 landing pages and what `/` shows. The dashboard drafts, previews, publishes (atomically) and restores it. An agent can write it through the API, and installed apps add sections and product blocks. The storefront and the dashboard resolve it against the store with the same function. This file is the contract for contributors and coding agents.
+One JSON document describes how the storefront looks: the template label, tokens, brand, one variant per block with its settings, the homepage sections, up to 20 landing pages, the sections of the product, listing, cart and CMS page templates and what `/` shows. The dashboard drafts, previews, publishes (atomically) and restores it. An agent can write it through the API, and installed apps add sections and product blocks. The storefront and the dashboard resolve it against the store with the same function. This file is the contract for contributors and coding agents.
 
 Store identity (name, phone, email, address, social profiles) is not in the theme. The business document (Settings > Store details) owns it, and every buyer surface reads it only from there.
 
-Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema and the read upgrade entry points ([upgrade.md](storefront-theme/upgrade.md)). The registries are `blocks.ts` (block variants) and `sections.ts` (20 section types), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the 19 colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the 10 templates and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts` and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
+Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema and the read upgrade entry points ([upgrade.md](storefront-theme/upgrade.md)). The registries are `blocks.ts` (block variants) and `sections.ts` (20 section types), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the 19 colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the 10 templates and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts`, `preview.ts` (the editor's preview bodies) and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
 
 ## Shape
 
 ```jsonc
 {
-  "version": 7,                        // literal; a new shape means a new version
+  "version": 8,                        // literal; a new shape means a new version
   "template": "department-mall",       // the template it is based on: a label, never read for behaviour
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
@@ -34,9 +34,12 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
     "footer"                           // every variant: { tagline, about, copyright } (+ directory's style)
   },
   "pages": {
-    "home": [{ "id", "type", "version", "settings", "hidden"? }],
+    "home": [{ "id", "type", "version", "settings", "hidden"?, "aiDraft"? }],  // a block item may carry "hidden": true
     "homeMode": { "kind": "sections" }, // or { "kind": "product", "productId" }
-    "landing": { "<slug>": { "title", "description", "sections": [], "noIndex"?, "excludeFromSitemap"? } }
+    "landing": { "<slug>": { "title", "description", "sections": [], "noIndex"?, "excludeFromSitemap"? } },
+    "templates": {                     // product | collection (category, collection, brand) | cart | page (CMS)
+      "<kind>": { "sections": [], "main": 0 }  // main: the fixed part's place among the sections
+    }
   }
 }
 ```
@@ -128,14 +131,16 @@ One listing block serves category, collection, brand and search pages. The edito
 - **Newsletter.** The signup form asks for the phone always and the e-mail as `optional`, `required` or `hidden`. It posts to the storefront's `/api/newsletter/subscribe` and works without JavaScript (`apps/storefront/src/lib/newsletter-server.ts`). It reads no data, so it always renders. The `newsletter-grey` footer carries the same form, left out on a page that already shows one.
 - **Home data.** `homeSectionRequests(home, homeMode)` derives what the page reads, so callers never name reads. The limits are 8 product lists of 36, 40 images, 24 category tiles, 8 collections, 4 deal promotions and 8 app sections. The homepage batch part serves them for the published theme (a fixed read that rejects any query string). A preview reads the saved draft's sections on the private, never-cached, token-verified `POST /api/v1/storefront/theme-preview/homepage`.
 - **Landing pages.** `pages.landing` holds at most 20 pages at `/pages/<slug>`. A handle is one lowercase CMS-style segment that is not a reserved route and not `pages`. A page has a `title` (120), a `description` (320) and its own sections (same registry and 24 cap as home). `noIndex` keeps it public with `noindex,follow` and out of the sitemap, and `excludeFromSitemap` only leaves it out of the sitemap. It renders from the same single batch as home (the layout plus `GET /api/v1/storefront/landing/<slug>`). Its canonical is always the absolute `/pages/<slug>` address. The pages sitemap lists the live theme's landing pages without a lastmod.
-- **No per-page templates.** A product, collection, category, brand or search page has no page entry: its structure is `blocks.product` or `blocks.listing`. A CMS page keeps its own content, framed by the theme.
+- **Page templates.** `pages.templates` gives the product, listing (category, collection, brand), cart and CMS pages their own sections (same registry and 24 cap) around a fixed part: the product information, the listing, the cart or the page content. `main` is the fixed part's place in the list. The fixed part can move but is never removed. Its own structure stays `blocks.product` or `blocks.listing`. These pages read their template's sections in the same batch as a part of its own (`GET /api/v1/storefront/template/<kind>`, market keyed). A template without visible sections draws nothing. Search has no template.
+- **Blocks.** `STOREFRONT_SECTION_BLOCKS` names each section type's block lists (slides, side banners, points, tabs, cards, tiles, columns, quotes, questions, link cards). A block item with `hidden: true` stays saved but buyers do not see it: `storefrontVisibleSection` removes hidden blocks before the resolver and the data planner, so a hidden slide reads no image.
+- **AI drafts.** A section with `aiDraft: true` came from an AI and nobody opened it yet. It renders like any section. The editor removes the mark when someone opens the section, and the publish summary warns about marked sections (it does not block).
 
 ## Draft, preview, publish and versions
 
 The service is `packages/core/src/modules/settings/site-settings.service.ts`. The rows are `theme_settings` (live), `theme_settings_drafts` (the one shared draft) and `theme_settings_versions` (immutable published versions).
 
 - **One shared draft per store.** Every write is one guarded D1 batch on revisions. The draft revision only grows. Save, page edit, restore, discard and publish each carry the revisions they read. A stale revision answers 409.
-- **Restore and discard replace the draft only.** Publish is the one way anything goes live. One batch writes the live row, a version row and the rebased draft, and prunes history to the newest 20 versions.
+- **Restore and discard replace the draft only.** Publish is the one way anything goes live. Each restore and discard first keeps the draft it replaces as a restore point (`theme_restore_points`, the newest 10, in the same batch), so either can be undone. Restoring a restore point keeps one of the draft it replaces too. One batch writes the live row, a version row and the rebased draft, and prunes history to the newest 20 versions.
 - **Version rows.** A row holds `{ meta: { changes, moreChanges, note }, theme }`. `changes` has at most 20 typed entries, `note` at most 500 characters, and a document at most 512 KiB.
 - **Missing images.** A version that names images deleted from Files since is refused with `THEME_VERSION_IMAGES_MISSING` (`details.missingImages`). Restoring it with `withoutMissingImages` leaves out the slides, cards and tiles that showed one and empties single images.
 - **Preview.** `POST /api/v1/admin/settings/theme/preview-session` mints a one-time continuation code (`tpc_`, valid 5 minutes) for the saved draft or one published version. The browser posts it to the storefront `/theme-preview/continue` (`/theme-preview/embed` in the editor frame). The storefront exchanges it for a `tpv_` token in the HttpOnly cookie `stp_theme_preview` (valid 30 minutes). The database stores only the SHA-256 of each token. The session stores no theme: every preview read resolves the saved draft or version as it is then. A pruned version stops previewing. Preview needs a valid HTTPS Storefront URL in the Platform settings (Settings > Store details > Web addresses).
@@ -143,16 +148,43 @@ The service is `packages/core/src/modules/settings/site-settings.service.ts`. Th
 
 ## Editor
 
-Online store > Theme (`/admin/online-store/theme`) shows the current theme, whether its draft has unpublished changes and who published last, with Customize, Preview and Publish, and the template library below. Choosing a template restyles the draft and keeps the merchant's content. Customize opens the editor at `/admin/online-store/theme/editor`.
+Online store > Theme (`/admin/online-store/theme`) shows the current theme, whether its draft has unpublished changes and who published last, with Customize, Preview and Publish, and the template library below. Choosing a template restyles the draft and keeps the merchant's content. Customize opens the editor at `/admin/online-store/theme/editor` (a lazy route; the code is in `apps/admin-v2/src/components/admin/online-store/theme-editor/`).
 
-- **Layout.** The page's tree is on the left, the real storefront in a frame in the middle and the selected part's settings on the right (they replace the tree below 1280 px). Edits autosave to the draft 800 ms after the last one, against the draft revision. A conflict keeps the edits and offers reload or an explicit overwrite.
+- **Layout.** A 48 px top bar: back, the theme's state with one autosave status, the page switcher, the previewed market and language, the device (computer at 1280, 1440 or 1920 px; phone at 390 px), undo, redo, history and Publish. A 320 px sidebar has two tabs: the page's layers and Theme settings. From 1600 px the selection's settings are in a right column that is always there; below, they slide over the sidebar. Below 1024 px the sidebar is a drawer, below 768 px a bottom sheet with a bottom bar. `\` shows or hides the sidebar. The editor opens with nothing selected.
+- **The canvas.** The storefront lays out at the true device width and is scaled to fit (`canvas-geometry.ts`). The frame's box depends only on the canvas size, the device, the width and the zoom. Selecting, hovering, saving or opening a panel never moves it (`layout-shift.test.tsx`). Hover and selection are drawn in an overlay above the frame from rectangles the page reports: a dashed outline with a name, or a solid outline with a toolbar (move, duplicate, hide, remove) and "+" on both edges. A click selects and never scrolls. Shared parts (announcement, header, footer) show in a separate colour.
+- **Layers.** One WAI-ARIA tree per group (shared header parts, the page, shared footer parts). Arrow keys move, Enter opens, Alt+↑/↓ moves a row, and every row also has move buttons. A section opens its blocks below it. A template's fixed part moves with the sections but has no remove action.
+- **Library.** Add section opens the library: search, categories, a sketch of each section in the store's colours, the reason a section cannot be added here, and app sections with an App badge and "Manage app".
+- **Saving.** Edits autosave 800 ms after the last one, against the draft revision. An invalid field holds back only its own part (`saveable-draft.ts`): the rest keeps saving and the status says what is held. Undo and redo (Ctrl/Cmd+Z, Shift+Z) survive autosave. Ctrl/Cmd+S saves now. A conflict keeps the edits and names who saved; reload or overwrite. Ctrl/Cmd+/ lists the shortcuts.
+- **History and publish.** History lists the published versions and the restore points; each can be previewed and restored. Publish shows what goes live by page, marks store-wide settings and warns about unopened AI drafts.
 - **Theme settings.** Six colours (background, text, buttons, button text, highlight, highlight text) each write every token of their role and show the readable-text problems they cause. Typography, brand images, logo width and product cards have their own settings.
-- **Generated forms.** Section and block settings forms come from the registry's zod schemas (`apps/admin-v2/src/components/admin/online-store/schema-form/`). A new setting needs a label in `apps/admin-v2/src/i18n/theme-settings.ts` (English and Bangla) and no form code.
-- **The frame.** The frame is a normal preview session redeemed by `/theme-preview/embed`: the code arrives by `postMessage` and the cookie is `SameSite=None; Partitioned`. Only a page that rendered a valid preview carries the section marks (`data-theme-section-id`), the inline bridge (`apps/storefront/src/lib/theme-preview-bridge.ts`) and a `frame-ancestors` that names the dashboard origin. Both sides check the other's exact origin and window (`@scalius/shared/theme-editor-bridge`). A settings change re-renders its section from the private, never-stored `/theme-preview/section?id=`. A buyer's homepage is byte-identical with or without the editor (`theme-editor-preview.render.test.ts`).
+- **Generated forms.** Section and block settings forms come from the registry's zod schemas (`apps/admin-v2/src/components/admin/online-store/schema-form/`). A block list is edited as rows of the tree, never inside its section's form. A new setting needs a label in `apps/admin-v2/src/i18n/theme-settings.ts` (English and Bangla) and no form code.
+- **Market and language.** The top bar previews the page in any market presence (`/<presence>/...`). Theme text has no translations yet: the Languages notice in the editor says so and links to Settings > Languages.
+
+### Live preview
+
+The editor shows each edit in the frame before it is saved, without a page load:
+
+| Edit | What the frame does |
+|---|---|
+| A colour or other token | Sets the CSS custom properties at once, then repaints from `POST /theme-preview/paint` (fonts, card attributes). |
+| Typing in a text setting | Replaces the text in place, then draws the section again. |
+| Move, hide, add or remove a section | Moves the rendered units in the page at once, then draws the page's regions again. |
+| Any other section setting | Draws that section again from `POST /theme-preview/render`, 250 ms after the last edit. |
+| Header, footer, product modules, card style | Saves at once, then loads the page again in a hidden second frame and swaps it in when ready. |
+
+- **Bridge.** `@scalius/shared/theme-editor-bridge` is the message contract. The storefront side is the inline script in `apps/storefront/src/lib/theme-preview-bridge.ts`, present only on a page that rendered a valid preview. Both sides check the other's exact origin and window.
+- **Preview routes.** `/theme-preview/render` and `/theme-preview/paint` are storefront POST routes (`theme-preview-post.ts`). They accept a same-origin JSON body only with a valid preview cookie, validate it with `storefrontPreviewRenderSchema` or `storefrontPreviewPaintSchema` (an unsaved document, never stored), answer `no-store`, and never enter a cache. Their reads go through the private preview API read, so the buyer DVC caches never see draft data.
+- **Session.** The frame is a normal preview session redeemed by `/theme-preview/embed`: the code arrives by `postMessage` and the cookie is `SameSite=None; Partitioned`. Only a preview page carries the editor marks, the bridge and a `frame-ancestors` that names the dashboard origin. A buyer's page is byte-identical with or without the editor (`theme-editor-preview.render.test.ts`).
+
+### Draft with AI
+
+Scalius has no built-in AI and keeps no model key. The AI port (`@scalius/shared/plugins/providers`, kind `ai`) is the platform's one general AI port: one operation, `generate`, takes host instructions, the merchant's words, a locale and a JSON Schema, and returns one value. The contract is versioned (`AI_PORT_VERSION`). An app provides it with the store's own key. Core calls it only through `generateStructured` (`packages/core/src/integrations/ai-generate.ts`): one attempt (no retries), a 30 s timeout, the caller's cancellation, an answer of at most 256 KB, validation against the caller's schema, and failure logs with masked metadata only (never the prompt or the answer).
+
+The theme editor is the first consumer (`purpose: "theme.sections"`). `POST /theme/ai-draft` sends the section types' settings schemas, then checks every returned section against the theme's own schemas: an invalid one never reaches the draft. Accepted sections arrive as unsaved edits marked `aiDraft`. A failure shows one message in the dialog; the editor stays usable. The dialog's code and the provider list load only when someone opens it. Without an AI app it explains the two ways to get AI: install an AI app, or connect an agent (Settings > Integrations > AI & app access), which drafts with `draft_sections`. Product descriptions, SEO fields, alt text, inbox replies and analytics questions are planned on the same port, and the `translation` kind is to fold into it. A first-party AI app is a planned paid plugin (later).
 
 ## API and agents
 
-The routes are in `apps/api/src/routes/admin/settings/site.ts` under `/api/v1/admin/settings/theme/`. Their operation ids start with `dashboard.theme.`.
+The routes are in `apps/api/src/routes/admin/settings/site.ts` and `theme-builder.ts` under `/api/v1/admin/settings/theme/`. Their operation ids start with `dashboard.theme.`.
 
 | Operation | Route | Notes |
 |---|---|---|
@@ -166,6 +198,11 @@ The routes are in `apps/api/src/routes/admin/settings/site.ts` under `/api/v1/ad
 | `draft_discard` | `POST /discard` | The draft becomes the live theme again. |
 | `publish` | `POST /publish` | The exact saved draft revision, with an optional note. |
 | `preview_session_create` | `POST /preview-session` | A browser continuation for an agent. |
+| `draft_snapshots_list` | `GET /restore-points` | The restore points, newest first. Read one with `document_get` (`source=restore-point&id=`). |
+| `draft_snapshot_restore` | `POST /restore-point` | Puts a restore point back in the draft. |
+| `draft_sections` | `POST /draft-sections` | An agent's drafted sections, validated and marked `aiDraft`, added to one page of the draft. |
+| `ai_draft_create` | `POST /ai-draft` | Sections from an app's AI provider. Saves nothing. Not an agent operation. |
+| `ai_providers_list` | `GET /ai-providers` | The active apps' AI providers. |
 
 The commands answer revision receipts only. The curated workflow `theme.draft-landing-page.v1` drafts one landing page and verifies it through `workspace_get`. It never publishes.
 

@@ -6,11 +6,16 @@
  * draft until it is opened. Without such an app the dialog says, in plain
  * words, the two ways to get one: connect an AI agent (it drafts through
  * the store's agent operations) or install an AI app.
+ *
+ * The editor loads this file only when the dialog opens, and the dialog asks
+ * for the store's AI providers only then: the editor pays nothing for AI it
+ * does not use. A failed draft shows one message here; the editor is untouched.
  */
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Info, Sparkles } from "lucide-react";
-import { postApiV1AdminSettingsThemeAiDraft } from "@scalius/api-client/sdk";
+import { getApiV1AdminSettingsThemeAiProviders, postApiV1AdminSettingsThemeAiDraft } from "@scalius/api-client/sdk";
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -23,20 +28,15 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { apiData } from "~/lib/api";
 import { actionErrorText } from "../shared";
 
-export interface AiProvider {
-  id: string;
-  name: string;
-  appName: string;
-}
-
 export type AiPage = "home" | "landing" | "product" | "collection" | "cart" | "page";
 
 const EXAMPLES = ["aiExampleSale", "aiExampleStory", "aiExampleFaq"] as const;
 
-export function AiDraftDialog({ open, onOpenChange, providers, page, locale, canConnectAgent, onDrafted }: {
+const NO_PROVIDERS: ReadonlyArray<{ id: string; name: string; appName: string }> = [];
+
+export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgent, onDrafted }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  providers: readonly AiProvider[];
   page: AiPage;
   /** The store language the words should be in. */
   locale: string;
@@ -45,6 +45,13 @@ export function AiDraftDialog({ open, onOpenChange, providers, page, locale, can
   onDrafted: (sections: StorefrontSection[], note: string | null, rejected: number) => void;
 }) {
   const t = useMessages(themeEditorMessages);
+  const query = useQuery({
+    queryKey: ["theme-editor", "ai-providers"],
+    queryFn: async () => (await apiData(getApiV1AdminSettingsThemeAiProviders())).items,
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const providers = query.data ?? NO_PROVIDERS;
   const [prompt, setPrompt] = useState("");
   const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
   const [working, setWorking] = useState(false);
@@ -75,9 +82,9 @@ export function AiDraftDialog({ open, onOpenChange, providers, page, locale, can
       <DialogContent data-ai-draft>
         <DialogHeader>
           <DialogTitle>{t("draftWithAi")}</DialogTitle>
-          <DialogDescription>{t(providers.length > 0 ? "aiHelp" : "aiNoProvider")}</DialogDescription>
+          <DialogDescription>{t(query.isPending ? "aiChecking" : providers.length > 0 ? "aiHelp" : "aiNoProvider")}</DialogDescription>
         </DialogHeader>
-        {providers.length > 0 ? (
+        {query.isPending ? null : providers.length > 0 ? (
           <form
             id="ai-draft-form"
             className="space-y-4"
