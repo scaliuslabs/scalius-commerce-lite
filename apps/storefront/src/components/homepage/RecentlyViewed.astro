@@ -3,7 +3,9 @@
 // island. The cached page carries only an empty, hidden section; the inline
 // script right after it fills the row from this browser's own list
 // (lib/recently-viewed.ts) as the parser reaches it, before it paints, so
-// nothing shifts. A first visit, or blocked storage, leaves it hidden.
+// nothing shifts. A first visit, or blocked storage, leaves it hidden. When
+// the browser is idle, one public read drops products that are no longer
+// public (lib/recently-viewed-client.ts).
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
 
@@ -24,3 +26,11 @@ const title = section.settings.title.trim() || "Recently viewed";
   </div>
 </section>
 <script is:inline set:html={recentlyViewedRenderScript(rootId)} />
+
+<script>
+  import { scheduleRecentlyViewedCheck } from "@/lib/recently-viewed-client";
+
+  // After the row has painted, drop products that are no longer public.
+  scheduleRecentlyViewedCheck();
+  document.addEventListener("astro:page-load", scheduleRecentlyViewedCheck);
+</script>

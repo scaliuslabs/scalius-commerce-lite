@@ -4,7 +4,9 @@
 // cached page carries only an empty, hidden module; the inline script after
 // it fills the row from localStorage as the parser reaches it, so nothing
 // shifts. Without JavaScript, on a first visit or with storage blocked, it
-// stays hidden: nothing leaves the browser and no server read is made.
+// stays hidden. The page makes no server read; when the browser is idle one
+// public read of product ids drops products that are no longer public
+// (lib/recently-viewed-client.ts).
 import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
 
 interface Props {
@@ -30,3 +32,11 @@ const headingId = `${rootId}-heading`;
   <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
 </section>
 <script is:inline set:html={recentlyViewedRenderScript(rootId, slug)} />
+
+<script>
+  import { scheduleRecentlyViewedCheck } from "@/lib/recently-viewed-client";
+
+  // After the row has painted, drop products that are no longer public.
+  scheduleRecentlyViewedCheck();
+  document.addEventListener("astro:page-load", scheduleRecentlyViewedCheck);
+</script>
