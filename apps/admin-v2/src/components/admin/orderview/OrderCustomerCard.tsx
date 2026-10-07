@@ -11,6 +11,7 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";
 import { countryName } from "~/lib/country-name";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { customerContactLinks } from "./contact-links";
 import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
 import type { Order, OrderAppRiskCheck, OrderHold } from "./types";
@@ -140,18 +141,18 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               {record.kind !== "guest"
                 ? record.name
                 : record.phone
-                  ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone) })
+                  ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone, getStoreRegion()) })
                   : t("customer.guestRecordEmail", { email: order.customerEmail ?? "" })}
             </Link>
           ) : null}
           {orderedAs ? <p className="text-muted-foreground">{t("customer.orderedAs", { name: order.customerName })}</p> : null}
           {order.customerPhone ? (
-            <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</p>
+            <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone, getStoreRegion())}</p>
           ) : (
             <p className="text-muted-foreground">{t("customer.noPhone")}</p>
           )}
           {order.customerWhatsapp ? (
-            <p className="font-mono text-muted-foreground">{t("contact.whatsapp")}: {formatPhoneForDisplay(order.customerWhatsapp)}</p>
+            <p className="font-mono text-muted-foreground">{t("contact.whatsapp")}: {formatPhoneForDisplay(order.customerWhatsapp, getStoreRegion())}</p>
           ) : null}
           {order.customerEmail ? (
             <a href={`mailto:${order.customerEmail}`} className="flex min-h-11 items-center break-all text-muted-foreground hover:text-foreground sm:min-h-0">
@@ -185,7 +186,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           </div>
           {recipient ? <p>{recipient}</p> : null}
           <p className="text-muted-foreground">{address || t("address.none")}</p>
-          {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.shippingPhone)}</p> : null}
+          {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.shippingPhone, getStoreRegion())}</p> : null}
           {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
         </section>
         {billingLines || order.billingSameAsShipping ? (

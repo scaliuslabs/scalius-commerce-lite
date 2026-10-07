@@ -122,7 +122,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
           <p>
             {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
-            {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus)}` : ""}
+            {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, order.paymentMethod ?? "cod")}` : ""}
           </p>
         </div>
         <div>

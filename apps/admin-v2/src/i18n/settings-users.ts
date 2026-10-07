@@ -55,7 +55,7 @@ export const usersMessages = defineMessages({
     builtIn: "Built-in",
     builtInHelp: "Built-in roles can't be changed.",
     noRolesYet: "No roles yet.",
-    permissionCount: "{count} permissions",
+    permissionCount: "{count, plural, one {# permission} other {# permissions}}",
     permissionCountOne: "1 permission",
     staffCount: "{count} staff",
     deleteRole: "Delete role",

@@ -35,6 +35,7 @@ import {
 } from "./gift-card-drafts";
 import { maskedGiftCard, todayStoreDay } from "./gift-card-format";
 import { useIssueGiftCard } from "./use-gift-card-mutations";
+import { DateInput } from "~/components/ui/date-input";
 
 /** The first API field error the dialog can place on a field (`recipient.phone` → the contact field). */
 function serverFieldIssue(error: unknown): { field: IssueField; message: string } | null {
@@ -200,15 +201,14 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                 />
                 {draft.hasExpiry ? (
                   <GiftCardField id="gift-card-expiry" label={t("expiryDate")} help={t("expiryHelp")} error={error("expiry")}>
-                    <Input
+                    <DateInput
                       id="gift-card-expiry"
-                      type="date"
                       min={todayStoreDay()}
                       value={draft.expiryDay}
                       disabled={busy}
                       aria-invalid={error("expiry") ? true : undefined}
                       aria-describedby={fieldDescribedBy("gift-card-expiry", error("expiry"), true)}
-                      onChange={(event) => update({ expiryDay: event.target.value })}
+                      onValueChange={(expiryDay) => update({ expiryDay })}
                     />
                   </GiftCardField>
                 ) : null}

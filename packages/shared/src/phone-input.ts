@@ -45,13 +45,16 @@ export function isBangladeshNumber(raw: string): boolean {
 const TWO_DIGIT_CALLING_CODE = /^(?:2[07]|3[0-469]|4[013-9]|5[1-8]|6[0-6]|8[1246]|9[0-58])/;
 
 /**
- * An E.164 number for reading in the dashboard: "+880 1712 345678" for a
- * Bangladesh mobile, "+44 7700900123" (code set apart) for anything else. No
- * phone metadata, so lists and cards can show numbers without downloading it.
+ * An E.164 number for reading in the dashboard. In its own country (`home`, the
+ * store's) a number reads as people there write it: a Bangladesh mobile as
+ * "01712-345678". Anywhere else the
+ * country code is set apart: "+880 1712 345678", "+44 7700900123". No phone
+ * metadata, so lists and cards can show numbers without downloading it.
  */
-export function formatPhoneForDisplay(e164: string): string {
+export function formatPhoneForDisplay(e164: string, home?: string | null): string {
+  const country = home?.trim().toUpperCase();
   const mobile = normalizeBdMobile(e164);
-  if (mobile) return `+880 ${mobile.slice(4, 8)} ${mobile.slice(8)}`;
+  if (mobile) return country === "BD" ? formatBdMobile(mobile) : `+880 ${mobile.slice(4, 8)} ${mobile.slice(8)}`;
   const digits = /^\+(\d{7,15})$/.exec(e164.trim())?.[1];
   if (!digits) return e164;
   const codeLength = /^[17]/.test(digits) ? 1 : TWO_DIGIT_CALLING_CODE.test(digits) ? 2 : 3;

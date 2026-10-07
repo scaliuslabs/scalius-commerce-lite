@@ -3,6 +3,7 @@ import { cn } from "@scalius/shared/utils";
 import { DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
+import { mediaPickerMessages } from "~/i18n/media-picker";
 import { MediaWorkspace } from "./MediaWorkspace";
 import { useMediaManager } from "./hooks/useMediaManager";
 import { chooseKey, mediaLimitKey, type MediaManagerProps } from "./types";
@@ -23,6 +24,7 @@ export function MediaManager({
   onOpenChange,
 }: MediaManagerInternalProps) {
   const t = useMessages(mediaMessages);
+  const picker = useMessages(mediaPickerMessages);
   const manager = useMediaManager({
     autoLoad: false,
     capability,
@@ -54,7 +56,7 @@ export function MediaManager({
     // eslint-disable-next-line shadcn/require-static-classes -- callers add layout only (z-index over the fullscreen editor)
     <DialogContent className={cn("flex h-[94svh] max-h-[860px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-6xl", dialogClassName)}>
       <div className="flex flex-col gap-1 border-b py-3 ps-4 pe-14">
-        <DialogTitle>{t(chooseKey(capability, !!onSelectMultiple))}</DialogTitle>
+        <DialogTitle>{picker(chooseKey(capability, !!onSelectMultiple))}</DialogTitle>
         <DialogDescription>{t(mediaLimitKey(capability))}</DialogDescription>
       </div>
       <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined} onClose={() => onOpenChange(false)} />

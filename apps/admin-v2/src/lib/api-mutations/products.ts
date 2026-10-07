@@ -14,7 +14,7 @@ import {
   invalidateProductStatsQueries,
   queryKeys,
 } from "./shared";
-import { readProductRevisionConflict } from "../admin-api-error";
+import { readProductRevisionConflict } from "../admin-api-conflicts";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 

@@ -20,13 +20,14 @@ export const orderMessages = defineMessages({
     "status.returned": "Returned",
     "status.incomplete": "Incomplete",
     "payment.unpaid": "Unpaid",
-    "payment.partial": "Partly paid",
+    "payment.dueOnDelivery": "Due on delivery",
+    "payment.partial": "Partially paid",
     "payment.paid": "Paid",
     "payment.partially_refunded": "Partially refunded",
     "payment.refunded": "Refunded",
     "payment.failed": "Payment failed",
     "fulfillment.pending": "Unfulfilled",
-    "fulfillment.partial": "Partly fulfilled",
+    "fulfillment.partial": "Partially fulfilled",
     "fulfillment.complete": "Fulfilled",
     "method.cod": "Cash on delivery",
     "method.stripe": "Card (Stripe)",
@@ -35,7 +36,6 @@ export const orderMessages = defineMessages({
     "request.return": "Return requested",
     "request.refund": "Refund requested",
     refundOwed: "Refund owed",
-    refundOwedAmount: "Refund owed {amount}",
     archived: "Archived",
     orders: "Orders",
     order: "Order {number}",
@@ -56,21 +56,22 @@ export const orderMessages = defineMessages({
     checkHistoryFor: "Check delivery history for {name}",
   },
   bn: {
-    "status.pending": "পেন্ডিং",
-    "status.processing": "প্রসেসিং",
-    "status.confirmed": "কনফার্মড",
+    "status.pending": "অপেক্ষমাণ",
+    "status.processing": "প্রক্রিয়াধীন",
+    "status.confirmed": "নিশ্চিত",
     "status.shipped": "পাঠানো হয়েছে",
     "status.delivered": "ডেলিভারি হয়েছে",
     "status.completed": "সম্পন্ন",
     "status.cancelled": "বাতিল",
-    "status.refunded": "রিফান্ড হয়েছে",
+    "status.refunded": "টাকা ফেরত হয়েছে",
     "status.returned": "ফেরত এসেছে",
     "status.incomplete": "অসম্পূর্ণ",
-    "payment.unpaid": "পেমেন্ট বাকি",
-    "payment.partial": "আংশিক পেমেন্ট",
-    "payment.paid": "পেমেন্ট হয়েছে",
-    "payment.partially_refunded": "আংশিক ফেরত",
-    "payment.refunded": "রিফান্ড হয়েছে",
+    "payment.unpaid": "অপরিশোধিত",
+    "payment.dueOnDelivery": "ডেলিভারির সময় পরিশোধযোগ্য",
+    "payment.partial": "আংশিক পরিশোধিত",
+    "payment.paid": "পরিশোধিত",
+    "payment.partially_refunded": "আংশিক টাকা ফেরত হয়েছে",
+    "payment.refunded": "টাকা ফেরত হয়েছে",
     "payment.failed": "পেমেন্ট ব্যর্থ",
     "fulfillment.pending": "পাঠানো হয়নি",
     "fulfillment.partial": "আংশিক পাঠানো",
@@ -82,7 +83,6 @@ export const orderMessages = defineMessages({
     "request.return": "ফেরতের অনুরোধ",
     "request.refund": "রিফান্ডের অনুরোধ",
     refundOwed: "রিফান্ড বাকি",
-    refundOwedAmount: "রিফান্ড বাকি {amount}",
     archived: "আর্কাইভ করা",
     orders: "অর্ডার",
     order: "অর্ডার {number}",
@@ -115,8 +115,14 @@ function labelOrRaw(t: Translate, key: string, raw: string): string {
 /** Label for an order, payment or fulfillment status, or a payment method. */
 export const orderStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `status.${status.toLowerCase()}`, status);
-export const paymentStatusLabel = (t: Translate, status: string) =>
-  labelOrRaw(t, `payment.${status.toLowerCase()}`, status);
+/**
+ * An unpaid cash-on-delivery order is not late, it is "Due on delivery" (the
+ * words the storefront's confirmation uses); pass the order's `method` to say so.
+ */
+export const paymentStatusLabel = (t: Translate, status: string, method?: string | null) =>
+  method === "cod" && status.toLowerCase() === "unpaid"
+    ? t("payment.dueOnDelivery")
+    : labelOrRaw(t, `payment.${status.toLowerCase()}`, status);
 export const fulfillmentStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `fulfillment.${status.toLowerCase()}`, status);
 /**

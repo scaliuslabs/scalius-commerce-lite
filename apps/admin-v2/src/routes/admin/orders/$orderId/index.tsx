@@ -4,7 +4,8 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderView } from "~/components/admin/OrderView";
 import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
+import { translate, useMessages } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
@@ -16,7 +17,7 @@ import {
   type OrderShipmentDto,
 } from "~/lib/api-query-options/orders";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
-import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
+import { classifyAdminError } from "~/lib/admin-api-error";
 import { useOrderListReturnHref } from "~/lib/order-list-return";
 import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
@@ -164,18 +165,18 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
   const r = useMessages(resourceMessages);
   const router = useRouter();
   const backTo = useOrderListReturnHref();
-  const notFound = isAdminApiNotFoundError(error);
-  const status = (error as { status?: unknown }).status;
-  const unreachable = !notFound && (typeof status !== "number" || status >= 500);
+  // Say what happened: no answer (connection), our fault (server), no such order, or no access.
+  const kind = classifyAdminError(error);
+  const notFound = kind === "notFound";
+  const [title, help] = kind === "notFound" ? [t("notFound"), t("notFoundHelp")]
+    : kind === "network" ? [t("error.network"), t("error.networkHelp")]
+      : kind === "server" ? [t("loadFailed"), translate(saveBarMessages, "serverError")]
+        : [t("loadFailed"), error.message];
   return (
     <section className="mx-auto max-w-xl space-y-4 rounded-xl bg-card p-6 shadow-card">
       <div className="space-y-1">
-        <h1 className="text-heading-lg font-semibold">
-          {notFound ? t("notFound") : unreachable ? t("error.network") : t("loadFailed")}
-        </h1>
-        <p className="text-body text-muted-foreground">
-          {notFound ? t("notFoundHelp") : unreachable ? t("error.networkHelp") : error.message}
-        </p>
+        <h1 className="text-heading-lg font-semibold">{title}</h1>
+        <p className="text-body text-muted-foreground">{help}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {notFound ? null : (

@@ -5,6 +5,7 @@ import { toast } from "~/lib/toast";
 import { ExternalLink, ShoppingCart, Trash2, X } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,7 +96,7 @@ function CustomerCell({ checkout }: { checkout: AbandonedCheckout }) {
     <div className="min-w-0">
       <p className="line-clamp-2 break-words font-medium">{customerInfo.name || t("noName")}</p>
       <p className={customerInfo.phone ? "whitespace-nowrap font-mono text-body text-muted-foreground" : "text-body text-muted-foreground"}>
-        {customerInfo.phone ? formatPhoneForDisplay(customerInfo.phone) : t("noPhone")}
+        {customerInfo.phone ? formatPhoneForDisplay(customerInfo.phone, getStoreRegion()) : t("noPhone")}
       </p>
     </div>
   );
@@ -209,7 +210,7 @@ function CheckoutSheet({
               ) : null}
               <section className="space-y-1 text-body">
                 <p className={info.phone ? "font-mono" : "text-muted-foreground"}>
-                  {info.phone ? formatPhoneForDisplay(info.phone) : t("noPhone")}
+                  {info.phone ? formatPhoneForDisplay(info.phone, getStoreRegion()) : t("noPhone")}
                 </p>
                 {info.email ? <p className="break-all text-muted-foreground">{info.email}</p> : null}
                 {contact ? (

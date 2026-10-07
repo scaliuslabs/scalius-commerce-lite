@@ -28,11 +28,9 @@ import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
 import { OrderFulfilmentCards, usePickupReadyAction } from "./orderview/OrderFulfilmentCards";
 import { LazyOrderHoldCard } from "./orderview/LazyOrderHoldCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
-import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
-import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
 import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { OrderConversationCard } from "./orderview/OrderConversationCard";
-import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
+import { LazyOrderNotificationsCard, LazyOrderReturnsCard, LazyOrderTimelineCard } from "./orderview/LazyOrderCards";
 import { PaymentCard } from "./orderview/PaymentCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
 import { hasDeliveryCard, hasHoldCard } from "./orderview/card-rules";
@@ -242,10 +240,10 @@ export function OrderView({ order }: { order: Order }) {
               <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>
               {/* As on Shopify, what to hand over and the money come first; the conversation sits above the timeline.
                   Cards that may not apply hide their wrapper too, so the gaps stay even. */}
-              <div className="order-8 empty:hidden lg:order-none"><OrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
+              <div className="order-8 empty:hidden lg:order-none"><LazyOrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
               <div className="order-9 empty:hidden lg:order-none"><OrderConversationCard order={order} request={request} /></div>
-              <div className="order-10 lg:order-none"><OrderNotificationsCard order={order} /></div>
-              <div className="order-11 lg:order-none"><OrderTimelineCard order={order} /></div>
+              <div className="order-10 lg:order-none"><LazyOrderNotificationsCard order={order} /></div>
+              <div className="order-11 lg:order-none"><LazyOrderTimelineCard order={order} /></div>
             </div>
             <div className="contents lg:block lg:space-y-4">
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>

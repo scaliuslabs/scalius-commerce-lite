@@ -35,7 +35,7 @@ export const settingsLocationsMessages = defineMessages({
     phone: "Phone",
     default: "Default",
     archived: "Archived",
-    stock: "{units} units · {skus} SKUs",
+    stock: "{units, plural, one {# unit} other {# units}} · {skus, plural, one {# SKU} other {# SKUs}}",
     noStock: "No stock",
     showArchived: "Show archived locations",
     actionsFor: "Actions for {name}",

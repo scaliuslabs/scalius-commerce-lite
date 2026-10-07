@@ -18,6 +18,7 @@
  * (`formatNumber`, `formatDateTime`, `dashboardNumberLocale`).
  */
 import { useCallback, useSyncExternalStore } from "react";
+import { pluralCategory } from "@scalius/shared/locale-words";
 import {
   dateLocale,
   formatDateTime as formatDateTimeIn,
@@ -92,9 +93,29 @@ export function defineMessages<K extends string>(catalog: MessageCatalog<K>): Me
   return catalog;
 }
 
+/**
+ * `{count, plural, one {# variant} other {# variants}}`: the choice is the
+ * language's plural category of the number (CLDR, `pluralCategory`), `#` is
+ * the number, and a choice may hold `{name}` variables. Bangla needs no
+ * choices ("{count}টি ভ্যারিয়েন্ট").
+ */
+const PLURAL = /\{(\w+), plural, ((?:\w+ \{(?:[^{}]|\{\w+\})*\} ?)+)\}/g;
+const CHOICE = /(\w+) \{((?:[^{}]|\{\w+\})*)\}/g;
+
+function expandPlurals(template: string, vars: Vars): string {
+  return template.replace(PLURAL, (match, name: string, body: string) => {
+    const count = vars[name];
+    if (typeof count !== "number") return match;
+    const choices = new Map(Array.from(body.matchAll(CHOICE), (choice) => [choice[1], choice[2]]));
+    const chosen = choices.get(pluralCategory(count, current)) ?? choices.get("other") ?? "";
+    return chosen.replaceAll("#", `{${name}}`);
+  });
+}
+
 function interpolate(template: string, vars?: Vars): string {
   if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+  const expanded = template.includes(", plural,") ? expandPlurals(template, vars) : template;
+  return expanded.replace(/\{(\w+)\}/g, (match, name: string) =>
     name in vars ? formatNumberForLocale(vars[name]!) : match,
   );
 }

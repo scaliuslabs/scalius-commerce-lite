@@ -30,6 +30,7 @@ vi.mock("../api", () => ({ apiData: (call: unknown) => call }));
 
 import { translate } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { saveBarMessages } from "~/i18n/save-bar";
 import { AdminApiResponseError } from "../admin-api-error";
 import { queryKeys } from "../query-keys";
 import {
@@ -171,7 +172,8 @@ describe("order mutation failures", () => {
   });
 
   it("words server faults and lost connections the same plain way", () => {
-    expect(orderErrorMessage(new AdminApiResponseError("API error: 502", 502))).toBe(msg("error.network"));
+    expect(orderErrorMessage(new AdminApiResponseError("API error: 502", 502))).toBe(translate(saveBarMessages, "serverError"));
+    expect(orderErrorMessage(new AdminApiResponseError("API error: 500", 500))).not.toBe(msg("error.network"));
     expect(orderErrorMessage(new TypeError("Failed to fetch"))).toBe(msg("error.network"));
     expect(orderErrorMessage(new AdminApiResponseError("Only 2 of that item are left to send.", 409))).toBe("Only 2 of that item are left to send.");
   });

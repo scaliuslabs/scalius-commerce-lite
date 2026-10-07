@@ -27,6 +27,7 @@ import {
   type ConditionDraft,
   type ConditionProblem,
 } from "./segment-draft";
+import { DateInput } from "~/components/ui/date-input";
 
 const FULL = "w-full";
 
@@ -133,12 +134,11 @@ export function SegmentConditionRow({
                 </Field>
               ) : (
                 <Field id={`${key}-date`} label={t("date")}>
-                  <Input
+                  <DateInput
                     id={`${key}-date`}
-                    type="date"
                     value={condition.date}
                     disabled={disabled}
-                    onChange={(event) => onChange({ ...condition, date: event.target.value })}
+                    onValueChange={(date) => onChange({ ...condition, date })}
                     {...aria}
                   />
                 </Field>

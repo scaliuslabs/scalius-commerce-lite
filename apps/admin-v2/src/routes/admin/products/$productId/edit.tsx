@@ -21,7 +21,8 @@ import {
 import { draftsFromView, viewFromDrafts } from "~/components/admin/product-form/buyer-inputs";
 import { fulfilmentModeOf } from "~/components/admin/product-form/fulfilment-mode";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { nullForAdminApiNotFound, type ProductRevisionConflict } from "~/lib/admin-api-error";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
+import { type ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { getServerFnError } from "~/lib/api-helpers";
 import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";

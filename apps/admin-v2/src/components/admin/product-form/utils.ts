@@ -15,6 +15,7 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   discountType: "discount",
   discountPercentage: "discount",
   discountAmount: "discount",
+  compareAtProblem: "compareAtLabel",
   freeDelivery: "freeDelivery",
   metaTitle: "searchListing",
   metaDescription: "searchListing",

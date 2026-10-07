@@ -1,4 +1,5 @@
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import type { customersMessages } from "~/i18n/customers";
 
 export type CustomerKind = "account" | "guest" | "merchant";
@@ -16,19 +17,25 @@ export interface CustomerTitleInput {
 }
 
 /**
- * The title every screen shows for a customer record. Checkout files guest
- * orders under a record keyed by phone, and different people can share a
- * phone, so a guest record is named by its phone, never by one buyer: the
- * latest order's name is only secondary text. A guest record without a
- * phone is keyed by its email, and named by it. Accounts and customers the
- * merchant created keep their own name.
+ * The title every screen shows for a customer record, as Shopify's: the name
+ * first, the phone (or email) under it. A guest record is keyed by phone and
+ * has no name of its own, so it is named by the buyer on its latest order;
+ * with no order name left it is titled by its phone (or email) and says
+ * "Guest orders". Accounts and customers the merchant created keep their own
+ * name. `detailIsPhone` says the detail line is a phone number, to set in the
+ * number style.
  */
-export function customerTitle(customer: CustomerTitleInput, t: Translate): { title: string; detail: string | null } {
+export function customerTitle(
+  customer: CustomerTitleInput,
+  t: Translate,
+): { title: string; detail: string | null; detailIsPhone: boolean } {
+  const phone = customer.phone ? formatPhoneForDisplay(customer.phone, getStoreRegion()) : null;
+  const email = customer.email?.trim() || null;
   if (customer.kind === "guest") {
     const latest = customer.latestOrderName?.trim() || null;
-    if (customer.phone) return { title: t("guestTitle", { phone: formatPhoneForDisplay(customer.phone) }), detail: latest };
-    const email = customer.email?.trim();
-    if (email) return { title: t("guestEmailTitle", { email }), detail: latest };
+    const contact = phone ?? email;
+    if (latest) return { title: latest, detail: contact, detailIsPhone: phone !== null };
+    if (contact) return { title: contact, detail: t("guestOrders"), detailIsPhone: false };
   }
-  return { title: customer.name.trim() || t("unnamed"), detail: null };
+  return { title: customer.name.trim() || t("unnamed"), detail: phone ?? email, detailIsPhone: phone !== null };
 }

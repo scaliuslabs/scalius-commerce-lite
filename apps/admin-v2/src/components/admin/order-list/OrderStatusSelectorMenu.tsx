@@ -1,10 +1,13 @@
 import type { ReactNode, SyntheticEvent } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
 import {
@@ -25,6 +28,7 @@ export interface OrderStatusSelectorMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStatusUpdate: (newStatus: string) => void;
+  openOrder?: { orderId: string; label: string };
   trigger: ReactNode;
 }
 
@@ -34,6 +38,7 @@ export function OrderStatusSelectorMenu({
   open,
   onOpenChange,
   onStatusUpdate,
+  openOrder,
   trigger,
 }: OrderStatusSelectorMenuProps) {
   const t = useMessages(orderListMessages);
@@ -75,6 +80,14 @@ export function OrderStatusSelectorMenu({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {openOrder ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/admin/orders/$orderId" params={{ orderId: openOrder.orderId }}>{openOrder.label}</Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

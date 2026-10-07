@@ -22,6 +22,8 @@ interface OrderStatusSelectorProps {
   /** Why the status can't change right now; the badge is read-only when set. */
   lockedReason?: string;
   onStatusUpdate: (newStatus: string) => void;
+  /** Where the order goes next beyond a status (fulfil, collect cash): the menu links to the order. */
+  openOrder?: { orderId: string; label: string };
 }
 
 /**
@@ -35,6 +37,7 @@ export function OrderStatusSelector({
   isLoading,
   lockedReason,
   onStatusUpdate,
+  openOrder,
 }: OrderStatusSelectorProps) {
   const t = useMessages(orderMessages);
   const tl = useMessages(orderListMessages);
@@ -92,6 +95,7 @@ export function OrderStatusSelector({
         open={open}
         onOpenChange={setOpen}
         onStatusUpdate={onStatusUpdate}
+        openOrder={openOrder}
         trigger={trigger}
       />
     </Suspense>

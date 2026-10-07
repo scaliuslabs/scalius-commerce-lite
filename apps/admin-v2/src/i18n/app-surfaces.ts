@@ -54,7 +54,7 @@ export const appSurfacesMessages = defineMessages({
     generalSettings: "General",
     providersTitle: "Services",
     providersDescription: "Each service is set up where it is used. Its keys are kept with this app.",
-    providerFields: "{count} settings",
+    providerFields: "{count, plural, one {# setting} other {# settings}}",
     providerFieldsOne: "1 setting",
     providerSetIn: "Set up in Settings → {page}",
     fieldSet: "Set",

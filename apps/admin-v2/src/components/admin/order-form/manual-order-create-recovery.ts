@@ -1,4 +1,4 @@
-import { readAdminOrderCreateRequestMismatch } from "../../../lib/admin-api-error";
+import { readAdminOrderCreateRequestMismatch } from "../../../lib/admin-api-conflicts";
 
 export type ManualOrderCreateRecoveryPlan =
   | { action: "retry-with-new-key" }

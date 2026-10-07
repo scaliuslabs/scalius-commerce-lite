@@ -461,10 +461,16 @@ export function BusinessCard() {
   );
 }
 
+// The collapsible loads when the section is drawn, not with the page's first download.
+const SettingsAdvanced = lazy(() => import("./SettingsAdvanced").then((module) => ({ default: module.SettingsAdvanced })));
+
 // ── Web addresses (platform origins) ────────────────────────────────────
 
 const URL_KEYS = ["storefrontUrl", "dashboardUrl", "apiUrl", "mediaUrl"] as const;
 type UrlKey = (typeof URL_KEYS)[number];
+/** What every store sets; the other two are a developer's, behind "Advanced". */
+const MAIN_URL_KEYS = ["storefrontUrl", "dashboardUrl"] as const;
+const ADVANCED_URL_KEYS = ["apiUrl", "mediaUrl"] as const;
 
 function urlError(key: UrlKey, raw: string): "urlRequired" | "urlInvalid" | "dashboardUrlInvalid" | null {
   const value = raw.trim();
@@ -501,7 +507,7 @@ function WebAddressFields() {
     isValid: (draft) => URL_KEYS.every((key) => !urlError(key, draft[key] ?? "")),
     fields: (path) => `platform-${path}`,
   });
-  return URL_KEYS.map((key) => {
+  const field = (key: UrlKey) => {
     const [label, help] = URL_LABELS[key];
     const error = urlError(key, values[key] ?? "");
     return (
@@ -517,12 +523,26 @@ function WebAddressFields() {
           value={values[key] ?? ""}
           aria-invalid={Boolean(error)}
           aria-describedby={`platform-${key}-note`}
-         
           onChange={(event) => setValue(key, event.target.value)}
         />
       </SettingsField>
     );
-  });
+  };
+  return (
+    <>
+      {MAIN_URL_KEYS.map(field)}
+      {/* A newcomer never needs these: they stay closed, and open by themselves when one is wrong. */}
+      <Suspense fallback={null}>
+        <SettingsAdvanced
+          label={t("advancedAddresses")}
+          forceOpen={ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
+          defaultOpen={ADVANCED_URL_KEYS.some((key) => Boolean(values[key]))}
+        >
+          {ADVANCED_URL_KEYS.map(field)}
+        </SettingsAdvanced>
+      </Suspense>
+    </>
+  );
 }
 
 export function WebAddressesCard() {
@@ -551,14 +571,28 @@ export function WebAddressesCard() {
         </SettingsDialog>
       }
     >
-      <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
-        {URL_KEYS.map((key) => (
-          <div key={key} className="contents">
-            <dt className="text-muted-foreground">{t(URL_LABELS[key][0])}</dt>
-            <dd className="-mt-2 truncate sm:mt-0">{data[key] || t("notSet")}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="flex flex-col gap-3">
+        <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
+          {MAIN_URL_KEYS.map((key) => (
+            <div key={key} className="contents">
+              <dt className="text-muted-foreground">{t(URL_LABELS[key][0])}</dt>
+              <dd className="-mt-2 truncate sm:mt-0">{data[key] || t("notSet")}</dd>
+            </div>
+          ))}
+        </dl>
+        <Suspense fallback={null}>
+          <SettingsAdvanced label={t("advancedAddresses")}>
+            <dl className="grid gap-3 text-body sm:grid-cols-[10rem_minmax(0,1fr)]">
+              {ADVANCED_URL_KEYS.map((key) => (
+                <div key={key} className="contents">
+                  <dt className="text-muted-foreground">{t(URL_LABELS[key][0])}</dt>
+                  <dd className="-mt-2 truncate sm:mt-0">{data[key] || t("notSet")}</dd>
+                </div>
+              ))}
+            </dl>
+          </SettingsAdvanced>
+        </Suspense>
+      </div>
     </SettingsCard>
   );
 }

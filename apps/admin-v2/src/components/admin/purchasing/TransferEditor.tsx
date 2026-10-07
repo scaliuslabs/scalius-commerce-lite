@@ -46,6 +46,7 @@ import {
   type TransferDraft,
   type TransferDraftLine,
 } from "./transfer-draft";
+import { DateInput } from "~/components/ui/date-input";
 
 type Busy = "save" | "ship" | null;
 /** Per-line on-hand at the origin is read per product; past this many products it isn't shown. */
@@ -449,7 +450,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="transfer-expected">{t("expectedArrival")}</Label>
-                <Input id="transfer-expected" type="date" value={draft.expectedOn} onChange={(event) => update({ expectedOn: event.target.value })} />
+                <DateInput id="transfer-expected" value={draft.expectedOn} onValueChange={(expectedOn) => update({ expectedOn })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="transfer-reference">{t("reference")}</Label>

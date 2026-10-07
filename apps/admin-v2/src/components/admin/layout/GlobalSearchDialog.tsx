@@ -29,6 +29,7 @@ import {
   getApiV1AdminProducts,
 } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -73,7 +74,7 @@ interface Entry {
   hint?: string;
   /** Muted second part of the label: the settings page a card is on, a customer's phone, "Draft". */
   detail?: string;
-  /** A guest record is titled by its phone, so it never goes into the device's recents. */
+  /** A customer titled by its phone (a guest without an order name) never goes into the device's recents. */
   titledByPhone?: boolean;
 }
 
@@ -244,14 +245,13 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       })),
       ...(customers.data?.customers ?? []).map((customer) => {
         const { title, detail } = customerTitle(customer, customerT);
-        const guest = customer.kind === "guest";
         return {
           id: `u:${customer.id}`,
           label: title,
-          detail: guest ? detail ?? undefined : customer.phone ? formatPhoneForDisplay(customer.phone) : customer.email ?? undefined,
+          detail: detail ?? undefined,
           to: `/admin/customers/${customer.id}/edit`,
           icon: UserRound,
-          titledByPhone: guest && customer.phone !== null,
+          titledByPhone: customer.phone !== null && title === formatPhoneForDisplay(customer.phone, getStoreRegion()),
         };
       }),
       ...discountMatches.slice(0, PER_TYPE).map((discount) => ({

@@ -68,11 +68,7 @@ import { orderNeedsAddress } from "./order-form/order-line-properties";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
-import {
-  isAdminApiRetryableReadError,
-  readCheckoutRuleErrors,
-  readManualOrderDiscountLimitError,
-} from "@/lib/admin-api-error";
+import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readManualOrderDiscountLimitError } from "@/lib/admin-api-conflicts";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {

@@ -62,6 +62,15 @@ describe("NumberInput", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
+  it("selects the number on focus, so typing 25 over 0 gives 25 and never 025", () => {
+    act(() => root.render(<Harness initial={0} />));
+    const input = host.querySelector("input")!;
+    const select = vi.spyOn(input, "select");
+    act(() => input.focus());
+    expect(select).toHaveBeenCalledOnce();
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
   it("keeps Bangla digits the merchant typed and shows them as the number on blur", () => {
     act(() => root.render(<Harness initial={null} />));
     const input = host.querySelector("input")!;

@@ -21,7 +21,7 @@ export const translationsMessages = defineMessages({
     unpublished: "Unpublished",
     noWebAddress: "Not used yet",
     rootAddress: "Your store's URL",
-    translatedCount: "{count} items",
+    translatedCount: "{count, plural, one {# item} other {# items}}",
     actionsFor: "Actions for {language}",
     publish: "Publish",
     unpublish: "Unpublish",

@@ -17,7 +17,7 @@ export const webhooksMessages = defineMessages({
     status_disabled: "Disabled",
     status_failing: "Disabled — failing",
     failedOnce: "Last delivery failed",
-    failedStreak: "Last {count} deliveries failed",
+    failedStreak: "Last {count, plural, one {# delivery} other {# deliveries}} failed",
     lastSuccess: "Last delivered {date}",
     neverDelivered: "Nothing delivered yet",
     moreTopics: "+{count}",

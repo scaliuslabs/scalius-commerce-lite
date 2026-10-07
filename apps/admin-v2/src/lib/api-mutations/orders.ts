@@ -38,6 +38,7 @@ import {
   putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
 } from "@scalius/api-client/sdk";
 import { translate } from "~/i18n";
+import { classifyAdminError } from "../admin-api-error";
 import { orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
 import { apiData, type ApiBody } from "../api";
 import { showOrderNotice } from "../order-notice";
@@ -153,11 +154,15 @@ export function isOrderConflict(error: unknown): boolean {
   return errorStatus(error) === 409;
 }
 
-/** Plain words for a failed order action; transport and server faults read "Couldn't reach the server". */
+/**
+ * Plain words for a failed order action: the connection only when no answer
+ * arrived, our side when the server faulted, else what the server said.
+ */
 export function orderErrorMessage(error: unknown): string {
-  const status = errorStatus(error);
-  if (status !== null && status < 500) return getServerFnError(error, msg("error.network"));
-  return msg("error.network");
+  switch (classifyAdminError(error)) {
+    case "network": return msg("error.network");
+    default: return getServerFnError(error);
+  }
 }
 
 /**

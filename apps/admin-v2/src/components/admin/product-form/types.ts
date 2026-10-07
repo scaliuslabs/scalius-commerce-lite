@@ -43,7 +43,7 @@ export interface Category {
 
 export const productFormSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(3, msg("titleMin")).max(100, msg("titleMax")),
+  name: z.string().min(1, msg("titleRequired")).min(3, msg("titleMin")).max(100, msg("titleMax")),
   description: z.string().min(10, msg("descriptionMin")).nullable(),
   /** Empty until the merchant types one; a draft may be saved without it. */
   price: z.number(msg("issueNotANumber"))
@@ -56,6 +56,11 @@ export const productFormSchema = z.object({
   discountType: z.enum(["percentage", "flat"]),
   discountPercentage: z.number(msg("issueNotANumber")).min(0, msg("discountNegative")).nullish(),
   discountAmount: z.number(msg("issueNotANumber")).min(0, msg("discountNegative")).nullish(),
+  /**
+   * Set by the Pricing card while the typed compare-at price can't be stored
+   * (not above the price, or not an amount). Never sent: it only stops a save.
+   */
+  compareAtProblem: z.enum(["notHigher", "invalid"]).nullish(),
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
@@ -140,6 +145,10 @@ export const productFormSchema = z.object({
   if (data.isActive && !data.variantPriced && (data.price ?? 0) <= 0) {
     const key = data.price === null ? "priceRequired" : "priceAboveZero";
     ctx.addIssue({ code: "custom", message: translate(productMessages, key), path: ["price"] });
+  }
+  if (data.compareAtProblem) {
+    const key = data.compareAtProblem === "notHigher" ? "compareAtNotHigher" : "issueNotANumber";
+    ctx.addIssue({ code: "custom", message: translate(productMessages, key), path: ["compareAtProblem"] });
   }
   if (data.discountType === "flat" && (data.discountAmount ?? 0) > (data.price ?? 0)) {
     ctx.addIssue({ code: "custom", message: translate(productMessages, "issueDiscountOverPrice"), path: ["discountAmount"] });

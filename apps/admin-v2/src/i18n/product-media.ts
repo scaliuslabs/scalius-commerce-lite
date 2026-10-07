@@ -1,0 +1,43 @@
+import { defineMessages } from "./index";
+
+/** The product editor's Media card: tile controls name the item and its position. */
+export const productMediaMessages = defineMessages({
+  en: {
+    photoAt: "photo {position} of {count}",
+    videoAt: "video {position} of {count}",
+    named: "{item}, {name}",
+    moveEarlier: "Move earlier",
+    moveLater: "Move later",
+    moveEarlierItem: "Move {item} earlier",
+    moveLaterItem: "Move {item} later",
+    editDescription: "Edit description",
+    editDescriptionItem: "Edit the description of {item}",
+    makeMainPhoto: "Make main photo",
+    makeMainPhotoItem: "Make {item} the main photo",
+    makeMainVideo: "Make main video",
+    makeMainVideoItem: "Make {item} the main video",
+    remove: "Remove",
+    removeItem: "Remove {item}",
+    descriptionFor: "Description for {item}",
+    descriptionHint: "Leave empty to use the description saved in Files.",
+  },
+  bn: {
+    photoAt: "{count}টির মধ্যে {position} নম্বর ছবি",
+    videoAt: "{count}টির মধ্যে {position} নম্বর ভিডিও",
+    named: "{item}, {name}",
+    moveEarlier: "আগে সরান",
+    moveLater: "পরে সরান",
+    moveEarlierItem: "{item} আগে সরান",
+    moveLaterItem: "{item} পরে সরান",
+    editDescription: "বিবরণ এডিট করুন",
+    editDescriptionItem: "বিবরণ এডিট করুন: {item}",
+    makeMainPhoto: "প্রধান ছবি করুন",
+    makeMainPhotoItem: "{item} প্রধান ছবি করুন",
+    makeMainVideo: "প্রধান ভিডিও করুন",
+    makeMainVideoItem: "{item} প্রধান ভিডিও করুন",
+    remove: "সরান",
+    removeItem: "{item} সরান",
+    descriptionFor: "বিবরণ: {item}",
+    descriptionHint: "ফাঁকা রাখলে ফাইল-এ সেভ করা বিবরণ ব্যবহার হবে।",
+  },
+});

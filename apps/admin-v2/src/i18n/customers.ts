@@ -9,13 +9,12 @@ export const customersMessages = defineMessages({
     emptyBody: "Everyone who orders is saved here. You can also add one.",
     customer: "Customer",
     orders: "Orders",
-    orderCount: "{count} orders",
+    orderCount: "{count, plural, one {# order} other {# orders}}",
     orderCountOne: "1 order",
     spent: "Paid",
     lastOrder: "Last order",
     unnamed: "No name",
-    guestTitle: "{phone} · guest orders",
-    guestEmailTitle: "{email} · guest orders",
+    guestOrders: "Guest orders",
 
     // List: views and filters
     subscribers: "Subscribers",
@@ -24,7 +23,7 @@ export const customersMessages = defineMessages({
     anyTag: "Any tag",
     searchTags: "Search tags",
     noTagsFound: "No tags found",
-    tagCustomers: "{count} customers",
+    tagCustomers: "{count, plural, one {# customer} other {# customers}}",
     tagCustomersOne: "1 customer",
     filterSegment: "Filter by segment",
     anySegment: "Any segment",
@@ -35,7 +34,7 @@ export const customersMessages = defineMessages({
     "channel.email": "Email",
     "channel.sms": "SMS",
     "channel.whatsapp": "WhatsApp",
-    customersCount: "{count} customers",
+    customersCount: "{count, plural, one {# customer} other {# customers}}",
     customersCountOne: "1 customer",
     export: "Export",
 
@@ -62,8 +61,7 @@ export const customersMessages = defineMessages({
     spent: "পরিশোধিত",
     lastOrder: "শেষ অর্ডার",
     unnamed: "নাম নেই",
-    guestTitle: "{phone} · অতিথি অর্ডার",
-    guestEmailTitle: "{email} · অতিথি অর্ডার",
+    guestOrders: "অতিথি অর্ডার",
 
     // List: views and filters
     subscribers: "সাবস্ক্রাইবার",

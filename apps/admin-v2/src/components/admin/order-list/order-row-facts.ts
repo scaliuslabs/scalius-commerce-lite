@@ -114,6 +114,28 @@ export function codToCollect(order: Pick<OrderListItem, "status" | "paymentMetho
   return Math.max(0, order.totalAmount - order.paidAmount);
 }
 
+/** What the order needs next, as far as the list can tell. */
+export type OrderNextStep = "confirm" | "fulfil" | "collect" | "deliver";
+
+/**
+ * The one next step of a row, so a merchant always sees where an order goes
+ * from the list (the order page's header offers the same step): confirm a new
+ * order, fulfil a confirmed one, collect the cash of a cash order on its way,
+ * mark a paid shipped order delivered. Nothing for a held, archived or
+ * finished order.
+ */
+export function orderNextStep(
+  order: Pick<OrderListItem, "status" | "fulfillmentStatus" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "archivedAt" | "onHold">,
+): OrderNextStep | null {
+  if (order.archivedAt || order.onHold) return null;
+  const status = order.status.toLowerCase();
+  if (status === "pending" || status === "processing") return "confirm";
+  if (codToCollect(order) > 0 && ["confirmed", "shipped", "delivered"].includes(status)) return "collect";
+  if (status === "confirmed" && order.fulfillmentStatus !== "complete") return "fulfil";
+  if (status === "shipped" && order.paymentMethod !== "cod" && order.fulfillmentStatus === "complete" && order.paymentStatus === "paid") return "deliver";
+  return null;
+}
+
 export const TONE_TEXT: Record<RowTone, string> = {
   critical: "text-destructive",
   warning: "text-warning",

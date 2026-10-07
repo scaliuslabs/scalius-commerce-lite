@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 
 const sdk = vi.hoisted(() => ({ getApiV1AdminCustomersByIdHistory: vi.fn() }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -22,7 +23,7 @@ import { CustomerActivity } from "./CustomerActivity";
 const guestPhone = "+8801712345678";
 const owner = { id: "cust_owner", name: "Owner Rahman", kind: "account", phone: "+8801711111011" };
 const guest = { id: "cust_guest", name: "R3-SB Guest One", kind: "guest", phone: guestPhone };
-const guestTitle = `${formatPhoneForDisplay(guestPhone)} · guest orders`;
+const guestTitle = formatPhoneForDisplay(guestPhone, getStoreRegion());
 const snapshot = (name: string) => ({
   name, email: null, phone: "+8801711111011", address: null, city: null, zone: null, area: null,
   cityName: null, zoneName: null, areaName: null, order: null, relatedCustomer: null, verifiedContact: null, author: null,
@@ -92,7 +93,7 @@ describe("CustomerActivity", () => {
     const [update, movedIn, linked, signedUp] = entries();
     // The update compares with the sign-up snapshot, not with the order events.
     expect(update).toContain("Name: Owner → Owner Rahman");
-    expect(movedIn).toMatch(/^Order #1069 linked by verified email on .+ \(from .+ · guest orders\)$/);
+    expect(movedIn).toMatch(/^Order #1069 linked by verified email on .+ \(from .+\)$/);
     expect(movedIn).not.toContain("R3-SB Guest One");
     expect(linked).toMatch(/^Order #1091 linked by verified phone on .+$/);
     expect(signedUp).toMatch(/^Signed up with a verified email on .+$/);

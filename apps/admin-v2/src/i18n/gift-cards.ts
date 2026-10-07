@@ -9,7 +9,7 @@ export const giftCardsMessages = defineMessages({
     // Outstanding balance
     outstandingTitle: "Outstanding balance",
     outstandingHelp: "What customers can still spend. Disabled and expired cards aren't counted.",
-    outstandingCards: "{count} cards with a balance",
+    outstandingCards: "{count, plural, one {# card} other {# cards}} with a balance",
     outstandingCardsOne: "1 card with a balance",
     outstandingLoadFailed: "Couldn't load the outstanding balance.",
 

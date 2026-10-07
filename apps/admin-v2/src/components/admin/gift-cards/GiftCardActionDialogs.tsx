@@ -35,6 +35,7 @@ import {
   todayStoreDay,
 } from "./gift-card-format";
 import { useAdjustGiftCard, useUpdateGiftCard } from "./use-gift-card-mutations";
+import { DateInput } from "~/components/ui/date-input";
 
 /**
  * What a failed gift-card write says. A 409 is the version check: someone
@@ -280,16 +281,15 @@ export function ExpiryDialog({ card, open, onOpenChange }: {
       </RadioGroup>
       {mode === "date" ? (
         <GiftCardField id="gift-card-expiry-day" label={t("expiryDate")} help={t("expiryHelp")} error={error}>
-          <Input
+          <DateInput
             id="gift-card-expiry-day"
-            type="date"
             min={todayStoreDay()}
             value={day}
             disabled={mutation.isPending}
             aria-invalid={invalid ? true : undefined}
             aria-describedby={fieldDescribedBy("gift-card-expiry-day", error, true)}
-            onChange={(event) => {
-              setDay(event.target.value);
+            onValueChange={(next) => {
+              setDay(next);
               setInvalid(false);
             }}
           />

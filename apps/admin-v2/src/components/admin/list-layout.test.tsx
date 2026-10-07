@@ -32,7 +32,7 @@ import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { orderChannelText, orderMessages } from "~/i18n/orders";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
-import { setStoreTimeZone } from "~/lib/store-time-zone";
+import { getStoreRegion, setStoreTimeZone } from "~/lib/store-time-zone";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import type { ColumnDef, TableRowData } from "./data-table/table-config";
 import { dataColumns, type DataColumnSpec } from "./data-table/data-columns";
@@ -126,7 +126,7 @@ function orderNeeds(locale: Locale): Record<string, number> {
     order: textWidth("#1234567", body, { mono: true }) + 6 + 16,
     date: widest(dateLabels(), (label) => textWidth(label, body)),
     // A long name or the phone, beside the 28px courier history button.
-    customer: capped(Math.max(...LONG_NAMES.map((name) => textWidth(name, body, { medium: true })), textWidth(formatPhoneForDisplay(PHONE), body, { mono: true })) + 4 + 28, layout.customer.maxWidth),
+    customer: capped(Math.max(...LONG_NAMES.map((name) => textWidth(name, body, { medium: true })), textWidth(formatPhoneForDisplay(PHONE, getStoreRegion()), body, { mono: true })) + 4 + 28, layout.customer.maxWidth),
     channel: capped(widest(channels, (text) => textWidth(text, body)), layout.channel.maxWidth),
     total: widest(amounts(), (amount) => textWidth(amount, body, { medium: true })),
     payment,
@@ -260,6 +260,12 @@ describe("list layout with the most and the least data", () => {
       // They show where there is room.
       expect(fitList(list.columns(), 4000).shown.filter((id) => id.startsWith("app."))).toHaveLength(4);
     });
+  });
+
+  it.each(LOCALES)("shows a typical inventory line whole, not cut at 160px (%s)", (locale) => {
+    setLocale(locale);
+    const text = translate(productMessages, "inStockVariants", { count: 497, variants: 20 });
+    expect(textWidth(text, TYPE[locale].body)).toBeLessThanOrEqual(PRODUCT_COLUMN_LAYOUT.inventory.maxWidth);
   });
 
   it.each(LOCALES)("shows the orders list's Total on a 1024px laptop, where the navigation is the menu drawer (%s)", (locale) => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { CircleHelp, Menu, Search } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
@@ -13,6 +13,30 @@ import { useShell } from "./shell";
 const NotificationDropdown = lazy(() =>
   import("@/components/admin/NotificationDropdown").then((module) => ({ default: module.NotificationDropdown })),
 );
+
+const HelpMenu = lazy(() => import("./HelpMenu"));
+
+/** The help button; the menu behind it loads on first use, and opens as soon as it has. */
+function HelpButton({ label, onShortcuts }: { label: string; onShortcuts: () => void }) {
+  const [asked, setAsked] = useState(false);
+  const [open, setOpen] = useState(false);
+  const trigger = (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={asked ? undefined : () => { setAsked(true); setOpen(true); }}
+      className={cn(TOP_BAR_BUTTON, "hidden md:flex")}
+    >
+      <CircleHelp aria-hidden />
+    </button>
+  );
+  if (!asked) return trigger;
+  return (
+    <Suspense fallback={trigger}>
+      <HelpMenu open={open} onOpenChange={setOpen} trigger={trigger} onShortcuts={onShortcuts} />
+    </Suspense>
+  );
+}
 
 /**
  * Shopify's top bar on the near-black frame: Menu on phones, one centred
@@ -61,10 +85,10 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           </span>
         </button>
       </div>
-      <div className="flex min-w-0 items-center justify-end gap-1 md:pe-2">
-        <button type="button" onClick={() => setHelpOpen(true)} aria-label={t("shortcutsTitle")} aria-keyshortcuts="?" className={cn(TOP_BAR_BUTTON, "hidden md:flex")}>
-          <CircleHelp aria-hidden />
-        </button>
+      {/* No min-w-0: the 1fr track never goes under its content (the bell and store menu), so the pill gives way. */}
+      <div className="flex items-center justify-end gap-1 md:pe-2">
+        {/* Help, as Shopify's: its menu loads the first time it is asked for. */}
+        <HelpButton onShortcuts={() => setHelpOpen(true)} label={t("help")} />
         <Suspense fallback={<span className="size-11 shrink-0 md:size-8" />}>
           <NotificationDropdown userId={user.id} />
         </Suspense>
@@ -72,7 +96,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
         <UserMenu user={user} side="bottom">
           <button type="button" aria-label={storeLabel ? undefined : t("accountMenu")} className={cn(TOP_BAR_BUTTON, "min-w-0 gap-2 px-1.5")}>
             <StoreBadge name={store.name} className="size-7 rounded-lg md:size-6 md:rounded-md" />
-            {storeLabel ? <span className="hidden max-w-40 truncate text-nav font-medium lg:inline">{storeLabel}</span> : null}
+            {storeLabel ? <span className="hidden max-w-40 truncate text-nav font-medium xl:inline">{storeLabel}</span> : null}
           </button>
         </UserMenu>
       </div>

@@ -57,7 +57,7 @@ function understood(text: string, wholeUnitsMessage: string | undefined): number
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, ...props }, ref) => {
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, onFocus, onMouseUp, ...props }, ref) => {
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
@@ -70,6 +70,16 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         autoComplete="off"
         {...props}
         value={text}
+        // Typing replaces what is there ("0" then "25" is 25, never "025"); the mouse up that
+        // ends the click must not clear the selection (Safari does).
+        onFocus={(event) => {
+          event.currentTarget.select();
+          onFocus?.(event);
+        }}
+        onMouseUp={(event) => {
+          event.preventDefault();
+          onMouseUp?.(event);
+        }}
         onChange={(event) => {
           const next = event.target.value;
           const input = event.currentTarget;

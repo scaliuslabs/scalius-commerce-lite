@@ -32,6 +32,7 @@ import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { DateInput } from "~/components/ui/date-input";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
@@ -513,14 +514,15 @@ function InputNode({ node }: { node: PluginUiInput }) {
       break;
     case "date-field":
       control = (
-        <Input
-          {...field}
-          type="date"
+        <DateInput
+          id={field.id}
+          disabled={field.disabled}
+          aria-invalid={field["aria-invalid"]}
+          aria-describedby={field["aria-describedby"]}
           min={node.min}
           max={node.max}
           value={typeof value === "string" ? value : ""}
-          onKeyDown={onEnter}
-          onChange={(event) => set(event.target.value === "" ? null : event.target.value)}
+          onValueChange={(next) => set(next === "" ? null : next)}
         />
       );
       break;
