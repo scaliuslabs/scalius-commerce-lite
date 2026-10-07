@@ -1,7 +1,7 @@
 {
   "name": "@scalius/plugin-bangladesh",
-  "version": "1.0.0",
-  "description": "Scalius Bangladesh pack: the Bangladesh SMS gateways, the courier-history fraud checkers and the Bangladesh place directory (City, Thana, Area)",
+  "version": "1.1.0",
+  "description": "Scalius Bangladesh pack: the Pathao and Steadfast couriers, the Bangladesh SMS gateways, the courier-history fraud checkers and the Bangladesh place directory (City, Thana, Area)",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",

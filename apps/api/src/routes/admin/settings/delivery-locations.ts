@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { deliveryProviders, places } from "@scalius/database/schema";
+import { places } from "@scalius/database/schema";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
@@ -11,9 +11,6 @@ import {
     listPlaceCountries,
     parseJsonObject,
     updatePlace,
-    processPathaoImportChunk,
-    resetPathaoImportProgress,
-    getPathaoImportStatus,
 } from "@scalius/core/modules/delivery";
 import { normalizeMarketCountry } from "@scalius/shared/markets";
 import {
@@ -26,8 +23,6 @@ import {
 import { isReady, readinessMessages } from "@scalius/shared/readiness";
 import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/checkout";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
-import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
-import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
@@ -626,34 +621,6 @@ app.openapi(updateLocationRoute, async (c) => {
     }
 });
 
-// ── Reset Pathao Import ──
-
-// Register this static DELETE route before /{id}; Hono resolves same-method
-// routes in registration order, so the generic location route must not consume
-// the reserved import-pathao segment.
-const resetPathaoImportRoute = createRoute({
-    method: "delete",
-    path: "/import-pathao",
-    operationId: "dashboard.delivery_locations.pathao_import_reset",
-    tags: ["Admin - Delivery Locations"],
-    summary: "Reset Pathao location import progress",
-    responses: {
-        200: {
-            description: "Pathao import progress reset",
-            content: { "application/json": { schema: messageResponse } },
-        },
-        ...errorResponses,
-    },
-});
-
-app.openapi(resetPathaoImportRoute, async (c) => {
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-    if (!kv) throw new ValidationError("KV not available");
-
-    await resetPathaoImportProgress(kv);
-    return ok(c, { message: "Import progress reset. You can start a fresh import." });
-});
-
 // ── Delete Location ──
 
 const deleteLocationRoute = createRoute({
@@ -694,119 +661,6 @@ app.openapi(deleteLocationRoute, async (c) => {
     await deletePlaces(db, [id]);
 
     return ok(c, {});
-});
-
-// ── Pathao Location Import ──────────────────────────────────────────────────
-
-const pathaoImportStatsSchema = z.object({
-    citiesCreated: z.number().int().nonnegative(),
-    citiesUpdated: z.number().int().nonnegative(),
-    zonesCreated: z.number().int().nonnegative(),
-    zonesUpdated: z.number().int().nonnegative(),
-    areasCreated: z.number().int().nonnegative(),
-    areasUpdated: z.number().int().nonnegative(),
-});
-
-const pathaoImportResultSchema = z.object({
-    status: z.enum(["importing", "complete", "error"]),
-    phase: z.enum(["cities", "zones", "areas", "done"]),
-    progress: z.object({
-        current: z.number().int().nonnegative(),
-        total: z.number().int().nonnegative(),
-        label: z.string(),
-    }),
-    stats: pathaoImportStatsSchema,
-    error: z.string().optional(),
-});
-
-/**
- * POST /import-pathao — Process one chunk of Pathao location import.
- * Call repeatedly until status === "complete".
- * Admin UI drives the loop with a progress bar.
- */
-const processPathaoImportRoute = createRoute({
-    method: "post",
-    path: "/import-pathao",
-    operationId: "dashboard.delivery_locations.pathao_import_chunk",
-    tags: ["Admin - Delivery Locations"],
-    summary: "Process one bounded Pathao location import chunk",
-    responses: {
-        200: {
-            description: "Current Pathao import progress",
-            content: { "application/json": { schema: successEnvelope(pathaoImportResultSchema) } },
-        },
-        ...errorResponses,
-    },
-});
-
-app.openapi(processPathaoImportRoute, async (c) => {
-    const db = c.get("db");
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-
-    if (!kv) {
-        throw new ValidationError("KV namespace not available");
-    }
-
-    // Find active Pathao provider to get credentials
-    const provider = await db
-        .select()
-        .from(deliveryProviders)
-        .where(and(eq(deliveryProviders.type, "pathao"), eq(deliveryProviders.isActive, true)))
-        .get();
-
-    if (!provider) {
-        throw new ValidationError("No active Pathao provider configured. Add one in Delivery Provider settings first.");
-    }
-
-    let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
-    try {
-        const credentialRead = await readStoredCredentialStrict(
-            provider.credentials,
-            getCredentialEncryptionKey(c.env as Record<string, unknown>),
-            "Delivery provider credentials",
-        );
-        if (credentialRead.error) {
-            throw new Error(credentialRead.error);
-        }
-        const rawCreds = credentialRead.value;
-        creds = JSON.parse(rawCreds);
-    } catch {
-        throw new ValidationError("Invalid Pathao credentials. Check your provider settings.");
-    }
-
-    if (!creds.baseUrl || !creds.clientId || !creds.clientSecret || !creds.username || !creds.password) {
-        throw new ValidationError("Incomplete Pathao credentials. Ensure baseUrl, clientId, clientSecret, username, and password are configured.");
-    }
-
-    const result = await processPathaoImportChunk(db, kv, creds);
-
-    return ok(c, result);
-});
-
-/**
- * GET /import-pathao/status — Check current import progress without processing.
- */
-const getPathaoImportStatusRoute = createRoute({
-    method: "get",
-    path: "/import-pathao/status",
-    operationId: "dashboard.delivery_locations.pathao_import_status",
-    tags: ["Admin - Delivery Locations"],
-    summary: "Get Pathao location import progress",
-    responses: {
-        200: {
-            description: "Current Pathao import progress",
-            content: { "application/json": { schema: successEnvelope(pathaoImportResultSchema) } },
-        },
-        ...errorResponses,
-    },
-});
-
-app.openapi(getPathaoImportStatusRoute, async (c) => {
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-    if (!kv) throw new ValidationError("KV not available");
-
-    const status = await getPathaoImportStatus(kv);
-    return ok(c, status);
 });
 
 export { app as adminLocationRoutes };

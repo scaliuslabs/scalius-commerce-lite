@@ -232,14 +232,25 @@ A hosted provider must declare `verifyReturn` and `queryPayment`. A provider tha
 
 ### Build a courier
 
-Declare `{ id, name, trackingUrl?, operations }` under `providers.courier`. `trackingUrl` is an https template that contains `{trackingId}`, such as `https://track.acme.example/{trackingId}`.
+Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, operations }` under `providers.courier`. The Bangladesh pack's Pathao and Steadfast (`plugins/bangladesh/src/couriers.ts`) are complete examples.
+
+- `trackingUrl` is an https template that contains `{trackingId}`, such as `https://track.acme.example/{trackingId}`. The platform saves the page with each shipment.
+- `locations: { key, required, numeric }`: your courier books by its own location ids, kept on the store's places under `externalIds.<key>` (your app may load them with the place import). The platform refuses a booking whose city, zone or area lacks a `required` id before it writes anything, and passes the ids as `recipient.locationIds`.
+- `icon` is your courier's own mark in the package (SVG or PNG, the app icon's checks). The dashboard shows it beside the courier; without it, the app's icon.
 
 1. **`createShipment(input, ctx)`.** The platform inserts its own shipment row first and passes its id as `input.idempotencyKey`. A retry after a lost answer reuses it, so book at most once per key.
    - `codAmountMinor` is the cash to collect (0 for prepaid), in minor units of `currency`.
    - Return `externalId`, `trackingId`, a normalized `status`, your `rawStatus`, the quoted `chargeMinor`, an optional label (https URL, or a base64 PDF the platform stores privately) and flat `details` for staff.
    - If the call may have reached the courier but you got no answer, raise `retryable` with `uncertain`. With `findShipment` (by order number) the platform then finds the booking instead of booking twice.
 2. **`trackShipment`** maps your courier's status onto `COURIER_SHIPMENT_STATUSES` with an ISO timestamp. The platform moves the order from it.
-3. **`verifyWebhook`** authenticates a tracking push to `POST /api/v1/webhooks/couriers/<plugin id>:<provider id>`, the URL the merchant copies into the courier's settings. Answer `{ status: "update", externalId, tracking, eventId? }`, `"ignored"` or `"invalid"`. The platform applies each push once (by `eventId` when you send one). It accepts a push only when exactly one active delivery provider uses your courier.
+3. **`verifyWebhook`** authenticates a tracking push to `POST /api/v1/webhooks/couriers/<plugin id>:<provider id>`, the URL the merchant copies into the courier's settings. You get every header (with `authorization`) and the exact body. Answer:
+   - `{ status: "update", externalId, tracking, eventId?, orderId? }`: a new state. With `orderId` (the order number the courier echoes) the platform refuses a booking of another order and binds a booking `findShipment` confirmed without its id.
+   - `{ status: "note", externalId, eventId, details, orderId? }`: facts (a tracking message) without a state change.
+   - `"ignored"` (authentic, about no shipment: an integration check) or `"invalid"` (401; with `rejectStatus` 4xx for an authentic but malformed push).
+   - Any accepted answer may carry `reply: { status (2xx), headers?, body? }`, what your courier expects back (Pathao checks a 202 and a secret header). The platform keeps it JSON, uncached and without cookies.
+   - Raise `misconfigured` when your secret is not set: the platform answers 503 and the courier sends again later.
+
+   The platform applies each push once (by `eventId` when you send one). It accepts a push only when exactly one active delivery provider uses your courier.
 
 ### SMS, email and fraud
 

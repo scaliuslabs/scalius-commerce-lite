@@ -113,7 +113,7 @@ export async function bulkShipOrders(
     providerId: string,
     options: ShipmentCreationOptionsInput | undefined,
     encryptionKey?: string,
-    /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+    /** The request's couriers (the active courier apps'); absent: none. */
     couriers?: CourierProvidersSource,
 ) {
     const parsedInput = bulkShipOrderSchema.safeParse({

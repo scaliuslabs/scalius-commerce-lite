@@ -151,6 +151,8 @@ export const PERMISSIONS = {
   // =============================================
   SETTINGS_DELIVERY_LOCATIONS_VIEW: "settings.delivery_locations.view",
   SETTINGS_DELIVERY_LOCATIONS_EDIT: "settings.delivery_locations.edit",
+  /** Add and update places through the place import only (an app's dataset): never delete. */
+  SETTINGS_DELIVERY_LOCATIONS_IMPORT: "settings.delivery_locations.import",
 
   // =============================================
   // Settings - Delivery Providers (2 permissions) - SENSITIVE

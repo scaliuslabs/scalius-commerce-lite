@@ -76,11 +76,11 @@ Callers:
 
 | Caller | How |
 |--------|-----|
-| Dashboard, agents, CLI | `POST /api/v1/admin/settings/delivery-locations/import` (`dashboard.delivery_locations.import`, permission `settings.delivery_locations.edit`). |
-| Plugins | `ctx.api.call("dashboard.delivery_locations.import", { body })` through the plugin bridge. The manifest must request `settings.delivery_locations.edit`. The Bangladesh pack loads its dataset this way on activation and finishes or refreshes it with its hourly job (`plugins/bangladesh/src/places.ts`). Removing the pack keeps every place. |
+| Dashboard, agents, CLI | `POST /api/v1/admin/settings/delivery-locations/import` (`dashboard.delivery_locations.import`, permission `settings.delivery_locations.edit` or `settings.delivery_locations.import`). |
+| Plugins | `ctx.api.call("dashboard.delivery_locations.import", { body })` through the plugin bridge. The manifest requests `settings.delivery_locations.import`: it adds and updates places and reaches nothing that deletes one. The Bangladesh pack loads its dataset this way on activation and finishes or refreshes it with its hourly job (`plugins/bangladesh/src/places.ts`). Removing the pack keeps every place. |
 | Local dev | `pnpm places:import [--dataset plugins/bangladesh/places] [--state .wrangler/state]` opens the local D1 file with Miniflare. `pnpm dev:post-sale:seed` runs it. |
 | Pathao refresh | `pnpm places:pathao-dataset --credentials <file.json>` rewrites `plugins/bangladesh/places`. Review the diff, then commit it. |
-| Dashboard Pathao import | `processPathaoImportChunk()` applies Pathao's live places through `importPlaces()` with source `bd`, without `finish`. |
+| Live Pathao refresh | The Bangladesh pack's places page, "Refresh from Pathao" (`plugins/bangladesh/src/pathao-places.ts`): Pathao's live places through the same import, source `bd`, without `finish`, a few dozen Pathao calls a step; its `pathao-places` job finishes it. |
 
 ## Dashboard
 

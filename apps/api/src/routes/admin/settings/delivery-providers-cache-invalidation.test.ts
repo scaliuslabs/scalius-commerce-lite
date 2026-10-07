@@ -1,14 +1,13 @@
+// The couriers settings routes: every courier is an app's, so a row names
+// `<plugin id>:<provider id>` and never takes keys; a row that still names a
+// retired built-in reads as blocked with the Bangladesh pack's reason.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../../utils/api-response";
-import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
-
   getCredentialEncryptionKey: vi.fn(),
-  requireEncryptionKey: vi.fn(),
-  readStoredCredentialStrict: vi.fn(),
   getDeliveryProviders: vi.fn(),
   getDeliveryProvider: vi.fn(),
   saveDeliveryProvider: vi.fn(),
@@ -18,11 +17,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../../utils/encryption-key", () => ({
   getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
-  requireEncryptionKey: mocks.requireEncryptionKey,
-}));
-
-vi.mock("@scalius/core/utils/credential-encryption", () => ({
-  readStoredCredentialStrict: mocks.readStoredCredentialStrict,
 }));
 
 vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
@@ -33,667 +27,124 @@ vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   testDeliveryProvider: mocks.testDeliveryProvider,
 }));
 
-import { pathaoCourier, steadfastCourier } from "@scalius/core/modules/delivery";
+// No courier app is active in these requests.
+vi.mock("../../../plugins/providers/courier", async () => {
+  const { createCourierProviders } = await import("@scalius/core/modules/delivery");
+  return { requestCourierProviders: () => async () => createCourierProviders() };
+});
+
 import { deliveryProvidersRoutes } from "./delivery-providers";
 
-const providerRecord = {
-  id: "provider_pathao",
-  name: "Pathao",
-  type: "pathao",
-  credentials: JSON.stringify({
-    baseUrl: "https://api-hermes.pathao.com",
-    clientId: "pathao-client-4821",
-    clientSecret: "pathao-secret-4821",
-    username: "merchant-ops-4821",
-    password: "PathaoPass-4821",
-  }),
-  config: JSON.stringify({ storeId: "store_1" }),
-  isActive: true,
+const row = (overrides: Record<string, unknown> = {}) => ({
+  id: "provider_parcel",
+  name: "Parcel",
+  type: "acme.parcel:parcel",
+  credentials: "{}",
+  config: "{}",
+  isActive: false,
+  lastTestAttemptAt: null,
+  lastTestSuccessAt: null,
+  lastTestFailureAt: null,
+  lastTestSuccessFingerprint: null,
   createdAt: 1,
   updatedAt: 1,
-};
-
-function createDb() {
-  return {
-    delete: () => ({
-      where: mocks.deleteWhere,
-    }),
-  };
-}
+  ...overrides,
+});
 
 function createTestApp() {
-  const env = {
-    CACHE: { id: "api-cache-kv" },
-    CREDENTIAL_ENCRYPTION_KEY: "credential-secret",
-  } as unknown as Env;
+  const env = { CACHE: { id: "api-cache-kv" } } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-
   mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
-  mocks.requireEncryptionKey.mockReturnValue("credential-key");
-  mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
-    value,
-    encrypted: false,
-    error: null,
-  }));
-  mocks.getDeliveryProviders.mockResolvedValue([providerRecord]);
-  mocks.getDeliveryProvider.mockResolvedValue(providerRecord);
-  mocks.saveDeliveryProvider.mockResolvedValue(providerRecord);
+  mocks.getDeliveryProviders.mockResolvedValue([row()]);
+  mocks.getDeliveryProvider.mockResolvedValue(row());
+  mocks.saveDeliveryProvider.mockResolvedValue(row());
   mocks.testDeliveryProvider.mockResolvedValue({ success: true, message: "ok" });
   mocks.deleteWhere.mockResolvedValue(undefined);
-
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
   });
   app.use("*", async (c, next) => {
-    c.set("db", createDb() as never);
+    c.set("db", { delete: () => ({ where: mocks.deleteWhere }) } as never);
     await next();
   });
   app.route("/admin/settings/delivery-providers", deliveryProvidersRoutes);
   return { app, env };
 }
 
-describe("delivery provider write behavior", () => {
+const post = (app: OpenAPIHono<{ Bindings: Env }>, env: Env, body: unknown, path = "") =>
+  app.request(`/api/v1/admin/settings/delivery-providers${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, env);
+
+describe("couriers settings routes", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
-  it("returns success after provider creation", async () => {
+  it("adds an app courier by its id and nothing else", async () => {
     const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientId: "pathao-client-4821",
-            clientSecret: "pathao-secret-4821",
-            username: "merchant-ops-4821",
-            password: "PathaoPass-4821",
-          },
-          config: { storeId: "store_1" },
-          isActive: true,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(201);
-
-    expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        credentials: JSON.stringify({
-          baseUrl: "https://api-hermes.pathao.com",
-          clientId: "pathao-client-4821",
-          clientSecret: "pathao-secret-4821",
-          username: "merchant-ops-4821",
-          password: "PathaoPass-4821",
-        }),
-      }),
-      "credential-key",
-      expect.any(Function),
-    );
-  });
-
-  it("creates omitted-active providers as inactive so setup drafts can be saved", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials: { clientSecret: "secret" },
-          config: {},
-        }),
-      },
-      env,
-    );
-
+    const response = await post(app, env, { name: "Parcel", type: "acme.parcel:parcel" });
     expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ isActive: false }),
+      { id: "", name: "Parcel", type: "acme.parcel:parcel", isActive: false },
       "credential-key",
       expect.any(Function),
     );
+    expect(await response.json()).toMatchObject({ data: { type: "acme.parcel:parcel", courierName: "acme.parcel:parcel" } });
   });
 
-  it("rejects active providers with incomplete required setup before saving", async () => {
+  it("refuses keys on the row, built-in types and malformed ids before touching storage", async () => {
     const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientSecret: "pathao-secret-4821",
-            password: "PathaoPass-4821",
-          },
-          config: { storeId: "store_1" },
-          isActive: true,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Delivery provider cannot be activated until required setup is complete.",
-        details: {
-          blockers: [
-            { key: "clientId" },
-            { key: "username" },
-          ],
-        },
-      },
-    });
-    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-
-  });
-
-  it("returns success after provider updates", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: "provider_pathao",
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientId: "pathao-client-4821",
-            clientSecret: "••••••••••••",
-            username: "merchant-ops-4821",
-            password: "••••••••••••",
-          },
-          config: { storeId: "store_2" },
-          isActive: false,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(200);
-
-    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        credentials: JSON.stringify({
-          baseUrl: "https://api-hermes.pathao.com",
-          clientId: "pathao-client-4821",
-          clientSecret: "pathao-secret-4821",
-          username: "merchant-ops-4821",
-          password: "PathaoPass-4821",
-        }),
-      }),
-      "credential-key",
-      expect.any(Function),
-    );
-  });
-
-  it("decrypts encrypted existing credentials before restoring masked update fields", async () => {
-    const { app, env } = createTestApp();
-    mocks.getDeliveryProvider.mockResolvedValueOnce({
-      ...providerRecord,
-      credentials: "encrypted-provider-credentials",
-    });
-    mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
-      value: value === "encrypted-provider-credentials"
-        ? JSON.stringify({
-          clientSecret: "decrypted-secret",
-          clientId: "client-identifier",
-          username: "merchant-identity",
-          password: "decrypted-pass",
-          webhookSecret: "hook-secret",
-        })
-        : value,
-      encrypted: value === "encrypted-provider-credentials",
-      error: null,
-    }));
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: "provider_pathao",
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            clientSecret: "••••••••••••",
-            clientId: "••••••••••••",
-            username: "••••••••••••",
-            password: "••••••••••••",
-            webhookSecret: "••••••••••••",
-          },
-          config: { storeId: "store_2" },
-          isActive: false,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        credentials: JSON.stringify({
-          clientId: "client-identifier",
-          clientSecret: "decrypted-secret",
-          username: "merchant-identity",
-          password: "decrypted-pass",
-          webhookSecret: "hook-secret",
-        }),
-      }),
-      "credential-key",
-      expect.any(Function),
-    );
-  });
-
-  it("masks decrypted provider credentials in list responses", async () => {
-    const { app, env } = createTestApp();
-    mocks.getDeliveryProviders.mockResolvedValueOnce([
-      {
-        ...providerRecord,
-        credentials: "encrypted-provider-credentials",
-      },
-    ]);
-    mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
-      value: value === "encrypted-provider-credentials"
-        ? JSON.stringify({
-          clientSecret: "decrypted-secret",
-          clientId: "client-identifier",
-          username: "merchant-identity",
-          password: "decrypted-pass",
-          webhookSecret: "hook-secret",
-          baseUrl: "https://api-hermes.pathao.com",
-          unexpectedAccessToken: "must-not-leave-the-api",
-        })
-        : value,
-      encrypted: value === "encrypted-provider-credentials",
-      error: null,
-    }));
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      { method: "GET" },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { status: string; lifecycle: string } }> } };
-    expect(JSON.parse(json.data.providers[0]?.credentials ?? "{}")).toEqual({
-      clientSecret: "••••••••••••",
-      clientId: "••••••••••••",
-      username: "••••••••••••",
-      password: "••••••••••••",
-      webhookSecret: "••••••••••••",
-      baseUrl: "https://api-hermes.pathao.com",
-    });
-    expect(json.data.providers[0]?.readiness.status).toBe("incomplete");
-    expect(json.data.providers[0]?.readiness.lifecycle).toBe("blocked");
-    expect(JSON.stringify(json)).not.toContain("must-not-leave-the-api");
-  });
-
-  it("reports stored credentials that cannot be decrypted as unreadable", async () => {
-    const { app, env } = createTestApp();
-    mocks.getDeliveryProviders.mockResolvedValueOnce([{
-      ...providerRecord,
-      credentials: "encrypted-provider-credentials",
-    }]);
-    mocks.readStoredCredentialStrict.mockResolvedValue({
-      value: "",
-      encrypted: true,
-      error: "Delivery provider credentials could not be decrypted with the configured credential key.",
-    });
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      { method: "GET" },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    const json = await response.json() as {
-      data: { providers: Array<{ credentials: string; readiness: {
-        status: string;
-        configured: boolean;
-        issues: Array<{ code: string; message: string }>;
-      } }> };
-    };
-    expect(json.data.providers[0]).toMatchObject({
-      credentials: "{}",
-      readiness: {
-        status: "error",
-        configured: false,
-        issues: [{
-          code: "unreadable",
-          message: expect.stringContaining("cannot be decrypted"),
-        }],
-      },
-    });
-  });
-
-  it("rejects provider objects that exceed the bounded settings shape", async () => {
-    const { app, env } = createTestApp();
-    const credentials = Object.fromEntries(
-      Array.from({ length: 51 }, (_, index) => [`field_${index}`, "value"]),
-    );
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials,
-          config: {},
-          isActive: false,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(400);
+    for (const body of [
+      { name: "Parcel", type: "acme.parcel:parcel", credentials: { apiKey: "x" } },
+      { name: "Pathao", type: "pathao", credentials: {}, config: {} },
+      { name: "Steadfast", type: "steadfast" },
+      { name: "Unknown", type: "unknown" },
+    ]) {
+      expect((await post(app, env, body)).status).toBe(400);
+    }
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
   });
 
-  it("publishes only supported provider types with discoverable typed credentials", () => {
+  it("publishes the app courier id as the only type, with no credential fields", () => {
     const { app } = createTestApp();
-    const document = app.getOpenAPIDocument({
-      openapi: "3.1.0",
-      info: { title: "Delivery provider contract", version: "test" },
-    });
-    const create = document.paths?.["/api/v1/admin/settings/delivery-providers"]?.post;
-    const serialized = JSON.stringify(create?.requestBody);
-
-    expect(serialized).toContain('"pathao"');
-    expect(serialized).toContain('"steadfast"');
-    expect(serialized).toContain('"clientId"');
-    expect(serialized).toContain('"clientSecret"');
-    expect(serialized).toContain('"apiKey"');
-    expect(serialized).toContain('"secretKey"');
-    expect(serialized).toContain("required before activation");
+    const document = app.getOpenAPIDocument({ openapi: "3.1.0", info: { title: "Delivery provider contract", version: "test" } });
+    const serialized = JSON.stringify(document.paths?.["/api/v1/admin/settings/delivery-providers"]?.post?.requestBody);
+    expect(serialized).toContain("<plugin id>:<provider id>");
+    expect(serialized).not.toMatch(/clientSecret|apiKey|"pathao"|"steadfast"/);
+    expect(document.paths?.["/api/v1/admin/settings/delivery-providers/create-test"]).toBeUndefined();
   });
 
-  it("rejects unsupported provider types before touching provider storage", async () => {
+  it("lists a retired courier's row as blocked with the Bangladesh pack's reason, never its keys", async () => {
     const { app, env } = createTestApp();
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Unknown courier",
-          type: "unknown",
-          credentials: {},
-          config: {},
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(400);
-    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-  });
-
-  it("records existing-provider test attempts", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers/provider_pathao",
-      { method: "POST" },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    await expect(response.clone().json()).resolves.toMatchObject({
-      data: { success: true, message: "Connection successful" },
-    });
-    expect(mocks.testDeliveryProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      "provider_pathao",
-      "credential-key",
-      expect.any(Function),
-    );
-
-  });
-
-  it("does not return upstream failure details from credential tests", async () => {
-    const { app, env } = createTestApp();
-    vi.spyOn(pathaoCourier, "testConnection").mockResolvedValueOnce({
-      ok: false,
-      message: "Rejected token secret-provider-token",
-    });
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers/create-test",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientId: "client-4821",
-            clientSecret: "secret-provider-token",
-            username: "merchant@example.test",
-            password: "pathao-password-4821",
-          },
-          config: { storeId: "store-4821" },
-        }),
-      },
-      env,
-    );
-    const body = await response.json();
-
+    mocks.getDeliveryProviders.mockResolvedValue([row({ id: "provider_pathao", name: "Pathao", type: "pathao", isActive: true, credentials: "enc:v1:sealed-old-keys" })]);
+    const response = await app.request("/api/v1/admin/settings/delivery-providers", {}, env);
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      data: { success: false, message: "Connection failed" },
-    });
-    expect(JSON.stringify(body)).not.toContain("secret-provider-token");
-  });
-
-  it("rejects non-public provider URLs before testing credentials", async () => {
-    const { app, env } = createTestApp();
-    const testConnection = vi.spyOn(steadfastCourier, "testConnection");
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers/create-test",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Unsafe Steadfast",
-          type: "steadfast",
-          credentials: {
-            baseUrl: "https://127.0.0.1/api/v1",
-            apiKey: "steadfast-api-4821",
-            secretKey: "steadfast-secret-9417",
-          },
-          config: {},
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(400);
-    expect(testConnection).not.toHaveBeenCalled();
-  });
-
-  it("does not fall back to JWT_SECRET when encrypted credentials cannot be strict-read", async () => {
-    const { app, env } = createTestApp();
-    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
-    (env as Record<string, unknown>).JWT_SECRET = "legacy-jwt-key";
-    mocks.getCredentialEncryptionKey.mockReturnValue(undefined);
-    mocks.getDeliveryProviders.mockResolvedValueOnce([
-      {
-        ...providerRecord,
-        credentials: "encrypted-provider-credentials",
-      },
-    ]);
-    mocks.readStoredCredentialStrict.mockResolvedValue({
-      value: "",
-      encrypted: true,
-      error: "Delivery provider credentials is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
-    });
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      { method: "GET" },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.readStoredCredentialStrict).toHaveBeenCalledWith(
-      "encrypted-provider-credentials",
-      undefined,
-      "Delivery provider credentials",
-    );
-    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { active: boolean } }> } };
-    expect(json.data.providers[0]?.credentials).toBe("{}");
-    expect(json.data.providers[0]?.readiness.active).toBe(false);
-  });
-
-  it("fails closed before provider creation when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {
-    const { app, env } = createTestApp();
-    mocks.requireEncryptionKey.mockImplementationOnce(() => {
-      throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
-    });
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientId: "pathao-client-4821",
-            clientSecret: "pathao-secret-4821",
-            username: "merchant-ops-4821",
-            password: "PathaoPass-4821",
-          },
-          config: { storeId: "store_1" },
-          isActive: true,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
+    const json = await response.json() as { data: { providers: Array<Record<string, unknown>> } };
+    expect(json.data.providers[0]).toMatchObject({
+      type: "pathao",
+      courierName: "Pathao",
+      countries: ["BD"],
+      readiness: {
+        active: false,
+        canCreateShipment: false,
+        issues: [{ code: "unconfigured", message: "Activate Bangladesh pack in Apps to use it." }],
       },
     });
-    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-
+    expect(JSON.stringify(json)).not.toContain("sealed-old-keys");
   });
 
-  it("returns success after update creates a missing provider", async () => {
+  it("tests a saved courier and answers only whether it passed", async () => {
     const { app, env } = createTestApp();
-    mocks.getDeliveryProvider.mockResolvedValueOnce(null);
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: "provider_pathao",
-          name: "Pathao",
-          type: "pathao",
-          credentials: {
-            baseUrl: "https://api-hermes.pathao.com",
-            clientId: "pathao-client-4821",
-            clientSecret: "pathao-secret-4821",
-            username: "merchant-ops-4821",
-            password: "PathaoPass-4821",
-          },
-          config: { storeId: "store_1" },
-          isActive: true,
-        }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(201);
-
-    expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-  });
-
-  it("creates missing providers from update as inactive when isActive is omitted", async () => {
-    const { app, env } = createTestApp();
-    mocks.getDeliveryProvider.mockResolvedValueOnce(null);
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: "provider_pathao",
-          name: "Pathao",
-          type: "pathao",
-          credentials: { clientSecret: "secret" },
-          config: {},
-        }),
-      },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(201);
-    expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ isActive: false }),
-      "credential-key",
-      expect.any(Function),
-    );
-  });
-
-  it("returns success after provider deletion", async () => {
-    const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-providers/provider_pathao",
-      { method: "DELETE" },
-      env,
-    );
-
+    mocks.testDeliveryProvider.mockResolvedValueOnce({ success: false, message: "Upstream said SENSITIVE-DETAIL" });
+    const response = await post(app, env, {}, "/provider_parcel");
     expect(response.status).toBe(200);
-
+    expect(await response.json()).toMatchObject({ data: { success: false, message: "Connection failed" } });
+    expect(mocks.testDeliveryProvider).toHaveBeenCalledWith(expect.anything(), "provider_parcel", "credential-key", expect.any(Function));
   });
 });

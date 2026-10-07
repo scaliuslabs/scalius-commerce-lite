@@ -36180,8 +36180,10 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
                 id: string;
                 name: string;
                 type: string;
-                credentials: string;
-                config: string;
+                courierName: string;
+                courierId: string;
+                requiredLocations: Array<'city' | 'zone' | 'area'>;
+                canFindShipment: boolean;
                 isActive: boolean;
                 countries: 'any' | Array<string>;
                 readiness?: {
@@ -36222,82 +36224,6 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponse = GetApiV1AdminSettin
 
 export type PostApiV1AdminSettingsDeliveryProvidersData = {
     body: {
-        name: string;
-        type: 'pathao';
-        credentials: string | {
-            /**
-             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
-             */
-            baseUrl?: string;
-            /**
-             * Pathao client ID; required before activation.
-             */
-            clientId?: string;
-            /**
-             * Pathao client secret; required before activation.
-             */
-            clientSecret?: string;
-            /**
-             * Pathao account username; required before activation.
-             */
-            username?: string;
-            /**
-             * Pathao account password; required before activation.
-             */
-            password?: string;
-            /**
-             * Optional shared secret used to verify Pathao webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config: string | {
-            /**
-             * Pathao store ID; required before activation.
-             */
-            storeId?: string;
-            /**
-             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
-             */
-            defaultDeliveryType?: 48 | 12;
-            /**
-             * 2 for parcel or 1 for document; defaults to 2.
-             */
-            defaultItemType?: 2 | 1;
-            /**
-             * Default parcel weight in kilograms; defaults to 0.5.
-             */
-            defaultItemWeight?: number;
-        };
-        isActive?: boolean;
-    } | {
-        name: string;
-        type: 'steadfast';
-        credentials: string | {
-            /**
-             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
-             */
-            baseUrl?: string;
-            /**
-             * Steadfast API key; required before activation.
-             */
-            apiKey?: string;
-            /**
-             * Steadfast secret key; required before activation.
-             */
-            secretKey?: string;
-            /**
-             * Optional shared secret used to verify Steadfast webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config: string | {
-            /**
-             * Default cash-on-delivery amount; defaults to 0.
-             */
-            defaultCodAmount?: number;
-        };
-        isActive?: boolean;
-    } | {
         name: string;
         /**
          * An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.
@@ -36353,8 +36279,10 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             id: string;
             name: string;
             type: string;
-            credentials: string;
-            config: string;
+            courierName: string;
+            courierId: string;
+            requiredLocations: Array<'city' | 'zone' | 'area'>;
+            canFindShipment: boolean;
             isActive: boolean;
             countries: 'any' | Array<string>;
             readiness?: {
@@ -36389,84 +36317,6 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponse = PostApiV1AdminSett
 
 export type PutApiV1AdminSettingsDeliveryProvidersData = {
     body: {
-        id: string;
-        name: string;
-        type: 'pathao';
-        credentials?: string | {
-            /**
-             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
-             */
-            baseUrl?: string;
-            /**
-             * Pathao client ID; required before activation.
-             */
-            clientId?: string;
-            /**
-             * Pathao client secret; required before activation.
-             */
-            clientSecret?: string;
-            /**
-             * Pathao account username; required before activation.
-             */
-            username?: string;
-            /**
-             * Pathao account password; required before activation.
-             */
-            password?: string;
-            /**
-             * Optional shared secret used to verify Pathao webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config?: string | {
-            /**
-             * Pathao store ID; required before activation.
-             */
-            storeId?: string;
-            /**
-             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
-             */
-            defaultDeliveryType?: 48 | 12;
-            /**
-             * 2 for parcel or 1 for document; defaults to 2.
-             */
-            defaultItemType?: 2 | 1;
-            /**
-             * Default parcel weight in kilograms; defaults to 0.5.
-             */
-            defaultItemWeight?: number;
-        };
-        isActive?: boolean;
-    } | {
-        id: string;
-        name: string;
-        type: 'steadfast';
-        credentials?: string | {
-            /**
-             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
-             */
-            baseUrl?: string;
-            /**
-             * Steadfast API key; required before activation.
-             */
-            apiKey?: string;
-            /**
-             * Steadfast secret key; required before activation.
-             */
-            secretKey?: string;
-            /**
-             * Optional shared secret used to verify Steadfast webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config?: string | {
-            /**
-             * Default cash-on-delivery amount; defaults to 0.
-             */
-            defaultCodAmount?: number;
-        };
-        isActive?: boolean;
-    } | {
         id: string;
         name: string;
         /**
@@ -36523,8 +36373,10 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             id: string;
             name: string;
             type: string;
-            credentials: string;
-            config: string;
+            courierName: string;
+            courierId: string;
+            requiredLocations: Array<'city' | 'zone' | 'area'>;
+            canFindShipment: boolean;
             isActive: boolean;
             countries: 'any' | Array<string>;
             readiness?: {
@@ -36562,8 +36414,10 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             id: string;
             name: string;
             type: string;
-            credentials: string;
-            config: string;
+            courierName: string;
+            courierId: string;
+            requiredLocations: Array<'city' | 'zone' | 'area'>;
+            canFindShipment: boolean;
             isActive: boolean;
             countries: 'any' | Array<string>;
             readiness?: {
@@ -36595,131 +36449,6 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
 };
 
 export type PutApiV1AdminSettingsDeliveryProvidersResponse = PutApiV1AdminSettingsDeliveryProvidersResponses[keyof PutApiV1AdminSettingsDeliveryProvidersResponses];
-
-export type PostApiV1AdminSettingsDeliveryProvidersCreateTestData = {
-    body: {
-        type: 'pathao';
-        credentials: string | {
-            /**
-             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
-             */
-            baseUrl?: string;
-            /**
-             * Pathao client ID; required before activation.
-             */
-            clientId?: string;
-            /**
-             * Pathao client secret; required before activation.
-             */
-            clientSecret?: string;
-            /**
-             * Pathao account username; required before activation.
-             */
-            username?: string;
-            /**
-             * Pathao account password; required before activation.
-             */
-            password?: string;
-            /**
-             * Optional shared secret used to verify Pathao webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config: string | {
-            /**
-             * Pathao store ID; required before activation.
-             */
-            storeId?: string;
-            /**
-             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
-             */
-            defaultDeliveryType?: 48 | 12;
-            /**
-             * 2 for parcel or 1 for document; defaults to 2.
-             */
-            defaultItemType?: 2 | 1;
-            /**
-             * Default parcel weight in kilograms; defaults to 0.5.
-             */
-            defaultItemWeight?: number;
-        };
-        name?: string;
-    } | {
-        type: 'steadfast';
-        credentials: string | {
-            /**
-             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
-             */
-            baseUrl?: string;
-            /**
-             * Steadfast API key; required before activation.
-             */
-            apiKey?: string;
-            /**
-             * Steadfast secret key; required before activation.
-             */
-            secretKey?: string;
-            /**
-             * Optional shared secret used to verify Steadfast webhooks.
-             */
-            webhookSecret?: string;
-        };
-        config: string | {
-            /**
-             * Default cash-on-delivery amount; defaults to 0.
-             */
-            defaultCodAmount?: number;
-        };
-        name?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/delivery-providers/create-test';
-};
-
-export type PostApiV1AdminSettingsDeliveryProvidersCreateTestErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminSettingsDeliveryProvidersCreateTestError = PostApiV1AdminSettingsDeliveryProvidersCreateTestErrors[keyof PostApiV1AdminSettingsDeliveryProvidersCreateTestErrors];
-
-export type PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses = {
-    /**
-     * Test result
-     */
-    200: {
-        success: true;
-        data: {
-            success: boolean;
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsDeliveryProvidersCreateTestResponse = PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses[keyof PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses];
 
 export type DeleteApiV1AdminSettingsDeliveryProvidersByIdData = {
     body?: never;
@@ -36821,8 +36550,10 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             id: string;
             name: string;
             type: string;
-            credentials: string;
-            config: string;
+            courierName: string;
+            courierId: string;
+            requiredLocations: Array<'city' | 'zone' | 'area'>;
+            canFindShipment: boolean;
             isActive: boolean;
             countries: 'any' | Array<string>;
             readiness?: {
@@ -38807,6 +38538,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;
+                icon: string | null;
                 name: string;
                 operations: Array<string>;
                 canTestConnection: boolean;
@@ -53311,7 +53043,7 @@ export type GetApiV1AdminAppsByIdAssetsByAssetData = {
          */
         id: string;
         /**
-         * icon, or screenshot-1 to screenshot-6.
+         * icon, screenshot-1 to screenshot-6, or provider-<provider id>.
          */
         asset: string;
     };
@@ -58797,186 +58529,6 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
 };
 
 export type PutApiV1AdminSettingsDeliveryLocationsByIdResponse = PutApiV1AdminSettingsDeliveryLocationsByIdResponses[keyof PutApiV1AdminSettingsDeliveryLocationsByIdResponses];
-
-export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao';
-};
-
-export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoError = DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors[keyof DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors];
-
-export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses = {
-    /**
-     * Pathao import progress reset
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponse = DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses[keyof DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses];
-
-export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao';
-};
-
-export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoError = PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors[keyof PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors];
-
-export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses = {
-    /**
-     * Current Pathao import progress
-     */
-    200: {
-        success: true;
-        data: {
-            status: 'importing' | 'complete' | 'error';
-            phase: 'cities' | 'zones' | 'areas' | 'done';
-            progress: {
-                current: number;
-                total: number;
-                label: string;
-            };
-            stats: {
-                citiesCreated: number;
-                citiesUpdated: number;
-                zonesCreated: number;
-                zonesUpdated: number;
-                areasCreated: number;
-                areasUpdated: number;
-            };
-            error?: string;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponse = PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses[keyof PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses];
-
-export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao/status';
-};
-
-export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusError = GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors[keyof GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors];
-
-export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses = {
-    /**
-     * Current Pathao import progress
-     */
-    200: {
-        success: true;
-        data: {
-            status: 'importing' | 'complete' | 'error';
-            phase: 'cities' | 'zones' | 'areas' | 'done';
-            progress: {
-                current: number;
-                total: number;
-                label: string;
-            };
-            stats: {
-                citiesCreated: number;
-                citiesUpdated: number;
-                zonesCreated: number;
-                zonesUpdated: number;
-                areasCreated: number;
-                areasUpdated: number;
-            };
-            error?: string;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponse = GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses[keyof GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses];
 
 export type GetApiV1AdminSettingsCheckoutLanguagesActiveData = {
     body?: never;

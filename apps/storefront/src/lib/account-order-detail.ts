@@ -136,13 +136,9 @@ const trackingText: OrderTrackingText = {
   formatDate: (iso) => formatAccountDate(iso),
 };
 
+/** The courier's page the API gives with the shipment (couriers declare it; the store never guesses one). */
 function trackingUrl(shipment: CustomerOrderShipment): string | null {
-  const explicitUrl = safeTrackingUrl(shipment.trackingUrl, window.location.origin);
-  if (explicitUrl) return explicitUrl;
-  if (!shipment.trackingId) return null;
-  if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
-  if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`;
-  return null;
+  return safeTrackingUrl(shipment.trackingUrl, window.location.origin);
 }
 
 // ---------- payment recovery ----------

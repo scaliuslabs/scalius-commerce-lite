@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,18 +8,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   getApiV1AdminSettingsDeliveryLocations: vi.fn(),
   getApiV1AdminSettingsDeliveryLocationsCountries: vi.fn(),
-  getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus: vi.fn(),
   getApiV1AdminSettingsDeliveryProviders: vi.fn(),
   deleteApiV1AdminSettingsDeliveryLocations: vi.fn(),
   deleteApiV1AdminSettingsDeliveryLocationsAll: vi.fn(),
   deleteApiV1AdminSettingsDeliveryLocationsById: vi.fn(),
-  deleteApiV1AdminSettingsDeliveryLocationsImportPathao: vi.fn(),
   postApiV1AdminSettingsDeliveryLocations: vi.fn(),
-  postApiV1AdminSettingsDeliveryLocationsImportPathao: vi.fn(),
   putApiV1AdminSettingsDeliveryLocationsById: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  Link: ({ children, className }: { children: React.ReactNode; className?: string }) => <a href="/admin/apps/scalius.bangladesh/pages/places" className={className}>{children}</a>,
+}));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { DeliveryAreasManager } from "./DeliveryAreas";
@@ -50,7 +51,6 @@ describe("deleting selected places", () => {
     sdk.getApiV1AdminSettingsDeliveryLocations.mockImplementation(() =>
       ok({ locations: cities, pagination: { page: 1, limit: 20, total: 3, totalPages: 1 } }));
     sdk.getApiV1AdminSettingsDeliveryLocationsCountries.mockImplementation(() => ok({ countries: [{ countryCode: "BD", places: 10 }] }));
-    sdk.getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus.mockImplementation(() => ok({ status: "idle" }));
     sdk.getApiV1AdminSettingsDeliveryProviders.mockImplementation(() => ok({ providers: [] }));
   });
 

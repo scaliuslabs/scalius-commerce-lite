@@ -98,7 +98,7 @@ describe("Bangladesh places", () => {
     const run = async (ctx: Parameters<typeof seedPlaces>[0]) => {
       await seedPlaces(ctx, { budgetMs: options.budgetMs, places: async () => options.places ?? tiny, version: (await ctx.kv.get<string>("test-version")) ?? "v1", ...(options.now ? { now: options.now } : {}) });
     };
-    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { activate: run }, cron: { "places-sync": run } } }, {
+    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { activate: run }, cron: { ...pack.cron, "places-sync": run } } }, {
       api: (_id, input) => {
         calls.push(input as ImportCall);
         return { ok: true, status: 200, data: { created: 1, updated: 0, unchanged: 0, skipped: 0, deactivated: 0, conflicts: [], conflictCount: 0 }, error: null };
@@ -135,6 +135,6 @@ describe("Bangladesh places", () => {
       expect((await store.instance.lifecycle("uninstall", keepData)).ok).toBe(true);
       expect(store.calls).toHaveLength(sent);
     }
-    expect(manifest.permissions).toEqual(["settings.delivery_locations.edit"]);
+    expect(manifest.permissions).toEqual(["settings.delivery_locations.import"]);
   });
 });

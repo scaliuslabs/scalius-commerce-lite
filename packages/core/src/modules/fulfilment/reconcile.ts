@@ -244,7 +244,7 @@ export async function lookupUnknownOrderShipment(
         operationKey: string;
         actorId: string | null;
         encryptionKey?: string;
-        /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+        /** The request's couriers (the active courier apps'); absent: none. */
         couriers?: CourierProvidersSource;
     },
 ): Promise<Extract<UnknownShipmentResolutionResult, { status: "repaired" }>> {
@@ -303,7 +303,7 @@ export async function resolveUnknownOrderShipment(
         shipmentId: string;
         actorId: string | null;
         encryptionKey?: string;
-        /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+        /** The request's couriers (the active courier apps'); absent: none. */
         couriers?: CourierProvidersSource;
     },
 ): Promise<UnknownShipmentResolutionResult> {

@@ -12,6 +12,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
 import { fulfilmentVoidBlockedReason } from "./line-presentation";
+import { RETIRED_COURIER_PROVIDERS, retiredCourierTrackingUrl } from "../../integrations/retired-providers";
 import type {
     AdminOrderFulfilmentView,
     BuyerOrderFulfilmentView,
@@ -82,9 +83,12 @@ function trackingOf(row: {
     if (!row.shipmentId) return null;
     return {
         shipmentId: row.shipmentId,
-        courierName: row.courierName ?? (row.providerType && row.providerType !== "manual" ? row.providerType : null),
+        courierName: row.courierName
+            ?? (row.providerType && Object.hasOwn(RETIRED_COURIER_PROVIDERS, row.providerType) ? RETIRED_COURIER_PROVIDERS[row.providerType]!.label : null)
+            ?? (row.providerType && row.providerType !== "manual" ? row.providerType : null),
         trackingId: row.trackingId,
-        trackingUrl: row.trackingUrl,
+        // A parcel a retired courier booked before it moved into an app keeps its page.
+        trackingUrl: row.trackingUrl ?? retiredCourierTrackingUrl(row.providerType, row.trackingId),
         status: row.shipmentStatus ?? "pending",
     };
 }

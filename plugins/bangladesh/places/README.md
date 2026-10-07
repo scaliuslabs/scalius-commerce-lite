@@ -28,4 +28,5 @@ switches off a merchant's own places. The rules are in
 - Load it into the local store without the pack: `pnpm places:import`.
 - Do not edit a place by hand. Refresh the dataset from Pathao's location API
   (`pnpm places:pathao-dataset --credentials <file.json>`), then review the
-  diff.
+  diff. A store refreshes its own places from Pathao's live list with "Refresh
+  from Pathao" on the pack's places page.

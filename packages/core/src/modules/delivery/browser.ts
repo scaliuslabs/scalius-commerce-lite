@@ -2,5 +2,4 @@
 // SDKs, no domain index). Safe to import from the dashboard and from any domain.
 export * from "./types";
 export * from "./zone-match";
-export * from "./tracking-url";
 export * from "./provider-readiness";

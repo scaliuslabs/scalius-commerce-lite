@@ -171,7 +171,7 @@ Shared composition files are split so that features in different domains never e
 
 ## Provider ports
 
-`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, SSLCommerz, Pathao, Steadfast, the SMS and email senders, the fraud checkers) and app providers implement the same port. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
+`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, SSLCommerz, the email senders) and app providers (the Bangladesh pack's couriers, SMS gateways and fraud checkers, bKash, Nagad) implement the same port. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
 
 - The API builds each request's app providers from `plugin_registrations` rows of kind `provider` (`apps/api/src/plugins/providers/`). Payment and courier providers join their registries (`payments/gateways/registry.ts`, `delivery/couriers/registry.ts`). SMS, email and fraud providers reach core through the `AppProviders` lookup (`packages/core/src/integrations/provider-port.ts`).
 - Core asks for an app provider only when the saved choice names one, so a store on built-in providers reads no plugin table. Without a lookup an app choice fails closed.
@@ -306,7 +306,7 @@ Inventory protection: a status transition writes a deterministic `inventory_move
 ### Notifications and courier webhooks
 
 - **Notifications.** A fact commits a `notification_outbox` row and sends `{ type: "notification", outboxId }` to `JOBS_QUEUE`. The message carries no contact or body. The consumer claims the row, reads the channel rules, fences each recipient with a `notification_delivery_receipts` row and calls the provider. A failure marks the row failed with backoff, and the scheduled `notification_outbox_flush` retries it. Order types are `ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`). Details: [notifications README](../packages/core/src/modules/notifications/README.md).
-- **Courier webhooks.** Pathao, Steadfast and app couriers (`POST /api/v1/webhooks/<provider>` and `/webhooks/couriers/{provider}`) verify the callback, claim a `webhook_events` row, save the shipment status, update the fulfilment ledger and move the order through `updateOrderStatusFromShipment()` (`delivery/tracking.ts`). A refused transition is skipped, and an admin change wins a race. The shipment-to-order table is in the [delivery README](../packages/core/src/modules/delivery/README.md).
+- **Courier webhooks.** Every courier is an app's: `POST /api/v1/webhooks/couriers/{provider}` (and the old `/webhooks/pathao`, `/webhooks/steadfast`, forwarded to the Bangladesh pack's couriers) has the app verify the callback; the route then claims a `webhook_events` row, save the shipment status, update the fulfilment ledger and move the order through `updateOrderStatusFromShipment()` (`delivery/tracking.ts`). A refused transition is skipped, and an admin change wins a race. The shipment-to-order table is in the [delivery README](../packages/core/src/modules/delivery/README.md).
 
 ## Money
 
@@ -391,15 +391,9 @@ Paths are under `packages/core/src/modules/payments/` unless stated.
 
 A third party builds a payment provider as an app: [plugin-sdk README](../packages/plugin-sdk/README.md), "Build a payment provider".
 
-### Add a built-in courier
+### Add a courier
 
-Paths are under `packages/core/src/modules/delivery/` unless stated.
-
-1. Write `couriers/<id>.ts` implementing `Courier` (`couriers/port.ts`).
-2. Add it to `BUILT_IN_COURIERS` in `couriers/registry.ts` and its status table to `status-mapper.ts`. Add its id to `DeliveryProvider` in `packages/database/src/schema/enums.ts`.
-3. Add `apps/api/src/routes/webhooks/<id>.ts` and a verification case in `apps/api/src/middleware/webhook-auth.ts`. Mount the route in `apps/api/src/app.ts` and `apps/api/src/runtime/register-system-routes.ts`, before the generic `/webhooks` payment route.
-
-A third party builds a courier as an app: [plugin-sdk README](../packages/plugin-sdk/README.md), "Build a courier".
+Core has no courier of its own. A courier is an app's courier provider ([plugin-sdk README](../packages/plugin-sdk/README.md), "Build a courier"); a regional one belongs in that country's pack (the Bangladesh pack holds Pathao and Steadfast). Anything the courier needs from the platform goes into the courier port (`packages/shared/src/plugins/providers/courier.ts`), never into a core adapter.
 
 ### Add a built-in SMS provider
 

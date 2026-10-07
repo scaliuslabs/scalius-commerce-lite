@@ -8,7 +8,8 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../../../public/", import.meta.url)
 
 describe("provider mark manifest", () => {
   it("keeps every adopted mark local, traceable, and byte-verified", () => {
-    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(12);
+    // Couriers' marks come from their apps' listings (the Bangladesh pack ships Pathao's and Steadfast's).
+    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(10);
 
     for (const [id, mark] of Object.entries(PROVIDER_MARKS)) {
       expect(mark.firstPartyAssetUrl).toMatch(/^https:\/\//);

@@ -8,8 +8,14 @@
 // - Fraud checks (fraud.ts): FraudBD, FraudGuard, eCourier Fraud Alert and
 //   the custom fraudchecker.link API on the order page (advice, never
 //   blocking), for Bangladesh buyers only.
+// - Couriers (couriers.ts): Pathao and Steadfast as courier providers:
+//   booking, tracking, Steadfast's lookup by order number, and tracking pushes
+//   (the platform's courier webhook route, and the old /webhooks/pathao and
+//   /webhooks/steadfast URLs). Pathao books by its own place ids, which the
+//   platform reads from the places (`locations`).
 // - Places (places.ts): the City/Thana/Area directory, loaded through the
-//   place import on activation and kept current by the hourly `places-sync`.
+//   place import on activation and kept current by the hourly `places-sync`;
+//   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
 // the dashboard shows each one ready or not on its own. The stores that set
@@ -25,32 +31,37 @@ import {
   type PluginManifestInput,
   type PluginRouteRequest,
 } from "@scalius/plugin-sdk";
+import { PATHAO_HOSTS, STEADFAST_HOSTS, courierProviders } from "./couriers";
 import { FRAUD_CHECKERS, fraudProviders } from "./fraud";
+import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPathaoRefresh, type PathaoRefreshState } from "./pathao-places";
 import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
 
 const secret = (key: string, label: string, help?: string) => ({ key, label, type: "secret" as const, ...(help ? { help } : {}) });
 const text = (key: string, label: string, maxLength: number, help?: string) => ({ key, label, type: "text" as const, maxLength, ...(help ? { help } : {}) });
-const url = (key: string, label: string, fallback: string) => ({ key, label, type: "url" as const, default: fallback, help: "Change it only when the service gives you another address." });
+const url = (key: string, label: string, fallback: string, help = "Change it only when the service gives you another address.") =>
+  ({ key, label, type: "url" as const, default: fallback, help });
+const choice = (key: string, label: string, options: Array<[string, string]>, fallback: string) =>
+  ({ key, label, type: "select" as const, options: options.map(([value, text]) => ({ value, label: text })), default: fallback });
 
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "1.0.0",
+  version: "1.1.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "Everything a store in Bangladesh needs in one app: send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
+  description: "Everything a store in Bangladesh needs in one app: book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
   author: { name: "Scalius" },
   icon: "assets/icon.svg",
-  tagline: "Bangladesh pack: SMS, fraud checks, places",
+  tagline: "Bangladesh pack: couriers, SMS, fraud checks, places",
   categories: ["notifications", "orders", "shipping"],
   countries: ["BD"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/bangladesh/README.md",
   changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bangladesh",
   minPlatformVersion: "1.0.0",
-  // The place import (dashboard.delivery_locations.import).
-  permissions: ["settings.delivery_locations.edit"],
-  allowedHosts: [...SMS_HOSTS, ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts))],
+  // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
+  permissions: ["settings.delivery_locations.import"],
+  allowedHosts: [...SMS_HOSTS, ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)), ...PATHAO_HOSTS, ...STEADFAST_HOSTS],
   settings: [
     secret("smsnetbd_api_key", "SMS.net.bd: API key"),
     text("smsnetbd_sender_id", "SMS.net.bd: sender ID", 128, "Only when SMS.net.bd approved a sender ID for you."),
@@ -74,8 +85,44 @@ export const manifest = {
     secret("ecourier_api_key", "eCourier: API key"),
     secret("ecourier_api_secret", "eCourier: API secret"),
     text("ecourier_user_id", "eCourier: user ID", 200),
+    url("pathao_base_url", "Pathao: API address", "https://api-hermes.pathao.com", "Live: https://api-hermes.pathao.com. Test account: https://courier-api-sandbox.pathao.com."),
+    text("pathao_client_id", "Pathao: client ID", 500),
+    secret("pathao_client_secret", "Pathao: client secret"),
+    text("pathao_username", "Pathao: username (email)", 320),
+    secret("pathao_password", "Pathao: password"),
+    text("pathao_store_id", "Pathao: store ID", 100, "The pickup store in your Pathao merchant account."),
+    choice("pathao_delivery_type", "Pathao: delivery type", [["48", "Regular"], ["12", "Express"]], "48"),
+    choice("pathao_item_type", "Pathao: item type", [["2", "Parcel"], ["1", "Document"]], "2"),
+    { key: "pathao_item_weight", label: "Pathao: default weight (kg)", type: "number", default: 0.5, min: 0.1, max: 50, help: "Used when a booking does not give a weight." },
+    secret("pathao_webhook_secret", "Pathao: webhook secret", "A long random text. Enter the same in Pathao's webhook settings, with the URL from Settings → Shipping → Couriers."),
+    url("steadfast_base_url", "Steadfast: API address", "https://portal.packzy.com/api/v1"),
+    secret("steadfast_api_key", "Steadfast: API key"),
+    secret("steadfast_secret_key", "Steadfast: secret key"),
+    secret("steadfast_webhook_secret", "Steadfast: webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
   ],
   providers: {
+    courier: [
+      {
+        id: "pathao",
+        name: "Pathao",
+        icon: "assets/pathao.svg",
+        countries: ["BD"],
+        operations: ["verifyWebhook", "testConnection"],
+        settings: ["pathao_base_url", "pathao_client_id", "pathao_client_secret", "pathao_username", "pathao_password", "pathao_store_id"],
+        trackingUrl: "https://merchant.pathao.com/tracking?consignment_id={trackingId}",
+        // Pathao books by its own city and zone (and area) ids, kept on the places.
+        locations: { key: "pathao", required: ["city", "zone"], numeric: true },
+      },
+      {
+        id: "steadfast",
+        name: "Steadfast",
+        icon: "assets/steadfast.svg",
+        countries: ["BD"],
+        operations: ["findShipment", "verifyWebhook", "testConnection"],
+        settings: ["steadfast_base_url", "steadfast_api_key", "steadfast_secret_key"],
+        trackingUrl: "https://steadfast.com.bd/t/{trackingId}",
+      },
+    ],
     sms: [
       { id: "smsnetbd", name: "SMS.net.bd", settings: ["smsnetbd_api_key"] },
       { id: "bdbulksms", name: "BDBulkSMS (GreenWeb)", settings: ["bdbulksms_token"] },
@@ -93,19 +140,24 @@ export const manifest = {
     admin: [
       { name: "places", methods: ["GET"], description: "Whether the Bangladesh places are loaded." },
       { name: "load-places", methods: ["POST"], description: "Loads the Bangladesh places now." },
+      { name: "refresh-pathao-places", methods: ["POST"], description: "Reads Pathao's live place list into the store's places." },
     ],
   },
   admin: {
     pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places" }],
   },
-  cron: [{ name: "places-sync", schedule: "17 * * * *" }],
+  cron: [
+    { name: "places-sync", schedule: "17 * * * *" },
+    // Continues a Pathao refresh under way (a few dozen Pathao calls a run); otherwise it reads one KV key.
+    { name: "pathao-places", schedule: "*/5 * * * *" },
+  ],
   // Activation loads the places (24 import calls) and a fraud service may take its full 10 s.
   limits: { wallMs: 30_000 },
   translations: {
     bn: {
       name: "বাংলাদেশ প্যাক",
-      tagline: "বাংলাদেশ প্যাক: এসএমএস, ফ্রড চেক, এলাকা",
-      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
+      tagline: "বাংলাদেশ প্যাক: কুরিয়ার, এসএমএস, ফ্রড চেক, এলাকা",
+      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
       pages: { places: "বাংলাদেশের এলাকা" },
     },
   },
@@ -131,7 +183,20 @@ const COPY = {
     loadedToast: "The Bangladesh places are loaded.",
     partialToast: "Some places are loaded. The rest load within the hour.",
     keep: "Removing the app keeps every place: zones, tax regions and addresses use them.",
-    next: "Next: choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Enter their keys in this app's settings.",
+    next: "Next: add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Enter their keys in this app's settings.",
+    pathaoTitle: "Pathao's live places",
+    pathaoDescription: "Reads Pathao's current cities, thanas and areas into your places, a few dozen at a time, and links them for Pathao bookings. It needs Pathao's keys in this app's settings.",
+    pathaoIdle: "Not refreshed",
+    pathaoRunning: "Refreshing",
+    pathaoDone: "Refreshed",
+    pathaoPhase: "Step",
+    phases: { cities: "Cities", zones: "Thanas", areas: "Areas", done: "Done" },
+    pathaoNext: "Read so far",
+    pathaoStarted: "Started",
+    pathaoRefresh: "Refresh from Pathao",
+    pathaoContinue: "Continue now",
+    pathaoToastDone: "Pathao's places are refreshed.",
+    pathaoToastRunning: "Refreshing Pathao's places. It continues every few minutes.",
   },
   bn: {
     title: "বাংলাদেশের এলাকা",
@@ -149,11 +214,43 @@ const COPY = {
     loadedToast: "বাংলাদেশের এলাকা লোড হয়েছে।",
     partialToast: "কিছু এলাকা লোড হয়েছে। বাকিগুলো এক ঘণ্টার মধ্যে লোড হবে।",
     keep: "অ্যাপ সরালেও সব এলাকা থাকে: জোন, ট্যাক্স অঞ্চল আর ঠিকানা এগুলো ব্যবহার করে।",
-    next: "এরপর: Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। তাদের কী এই অ্যাপের সেটিংসে দিন।",
+    next: "এরপর: Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। তাদের কী এই অ্যাপের সেটিংসে দিন।",
+    pathaoTitle: "Pathao-র হালনাগাদ এলাকা",
+    pathaoDescription: "Pathao-র বর্তমান শহর, থানা ও এলাকা অল্প অল্প করে আপনার এলাকায় আনে, আর Pathao বুকিংয়ের জন্য যুক্ত করে। এর জন্য এই অ্যাপের সেটিংসে Pathao-র কী লাগবে।",
+    pathaoIdle: "হালনাগাদ হয়নি",
+    pathaoRunning: "হালনাগাদ হচ্ছে",
+    pathaoDone: "হালনাগাদ হয়েছে",
+    pathaoPhase: "ধাপ",
+    phases: { cities: "শহর", zones: "থানা", areas: "এলাকা", done: "শেষ" },
+    pathaoNext: "এ পর্যন্ত পড়া",
+    pathaoStarted: "শুরু",
+    pathaoRefresh: "Pathao থেকে হালনাগাদ করুন",
+    pathaoContinue: "এখনই চালিয়ে যান",
+    pathaoToastDone: "Pathao-র এলাকা হালনাগাদ হয়েছে।",
+    pathaoToastRunning: "Pathao-র এলাকা হালনাগাদ হচ্ছে। কয়েক মিনিট পরপর চলতে থাকবে।",
   },
 } as const;
 
-function placesPage(request: PluginRouteRequest, state: PlacesState | null) {
+function pathaoCard(request: PluginRouteRequest, refresh: PathaoRefreshState | null) {
+  const t = COPY[adminLocale(request)];
+  const running = pathaoRefreshRunning(refresh);
+  const status = running ? ui.badge(t.pathaoRunning, "warning") : refresh ? ui.badge(t.pathaoDone, "success") : ui.badge(t.pathaoIdle, "neutral");
+  return ui.card(t.pathaoTitle, [
+    ...(refresh?.error ? [ui.banner("warning", refresh.error)] : []),
+    ui.text(t.pathaoDescription, { tone: "neutral", size: "sm" }),
+    status,
+    ...(refresh ? [ui.keyValue([
+      { label: t.pathaoPhase, value: t.phases[refresh.phase] },
+      { label: t.pathaoNext, value: String(refresh.next) },
+      { label: t.created, value: String(refresh.created) },
+      { label: t.updated, value: String(refresh.updated) },
+      { label: t.pathaoStarted, value: refresh.startedAt.slice(0, 16).replace("T", " ") },
+    ])] : []),
+    ui.button(running ? t.pathaoContinue : t.pathaoRefresh, { route: "refresh-pathao-places" }),
+  ]);
+}
+
+function placesPage(request: PluginRouteRequest, state: PlacesState | null, refresh: PathaoRefreshState | null) {
   const t = COPY[adminLocale(request)];
   const current = placesCurrent(state);
   const status = current ? ui.badge(t.loaded, "success") : state && state.version === PLACES_VERSION ? ui.badge(t.loading, "warning") : ui.badge(t.notLoaded, "warning");
@@ -171,6 +268,7 @@ function placesPage(request: PluginRouteRequest, state: PlacesState | null) {
       ]),
       ui.text(t.keep, { tone: "neutral", size: "sm" }),
     ]),
+    pathaoCard(request, refresh),
     ui.text(t.next),
   ], {
     title: t.title,
@@ -183,15 +281,22 @@ const seed = (ctx: PluginContext) => seedPlaces(ctx, { budgetMs: SEED_BUDGET_MS 
 
 export default definePlugin({
   manifest,
-  providers: { ...smsProviders, ...fraudProviders },
+  providers: { ...courierProviders, ...smsProviders, ...fraudProviders },
   routes: {
     admin: {
-      places: async (request, ctx) => ({ body: placesPage(request, await readPlacesState(ctx)) }),
+      places: async (request, ctx) => ({ body: placesPage(request, await readPlacesState(ctx), await readPathaoRefresh(ctx)) }),
       "load-places": async (request, ctx) => {
         const t = COPY[adminLocale(request)];
         const state = await seed(ctx);
         if (state.error) return { body: ui.result({ toast: { message: state.error, tone: "critical" }, refresh: true }) };
         return { body: ui.result({ toast: state.done ? t.loadedToast : t.partialToast, refresh: true }) };
+      },
+      "refresh-pathao-places": async (request, ctx) => {
+        const t = COPY[adminLocale(request)];
+        await startPathaoRefresh(ctx);
+        const state = await continuePathaoRefresh(ctx);
+        if (state?.error) return { body: ui.result({ toast: { message: state.error, tone: "critical" }, refresh: true }) };
+        return { body: ui.result({ toast: pathaoRefreshRunning(state) ? t.pathaoToastRunning : t.pathaoToastDone, refresh: true }) };
       },
     },
   },
@@ -200,6 +305,10 @@ export default definePlugin({
     "places-sync": async (ctx) => {
       if (placesCurrent(await readPlacesState(ctx))) return;
       await seed(ctx);
+    },
+    // Continues a Pathao refresh a merchant started; nothing to do otherwise.
+    "pathao-places": async (ctx) => {
+      if (pathaoRefreshRunning(await readPathaoRefresh(ctx))) await continuePathaoRefresh(ctx);
     },
   },
   lifecycle: {

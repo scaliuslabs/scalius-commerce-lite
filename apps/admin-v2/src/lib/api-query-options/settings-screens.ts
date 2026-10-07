@@ -222,8 +222,8 @@ export const smsQuery = {
 };
 /**
  * The installed apps' providers of one port, with the readiness its callers
- * check: offered beside the built-in couriers, SMS and email senders, fraud
- * checkers and the built-in tax rates (payments: payment-providers.ts).
+ * check: every courier, SMS gateway and fraud checker is an app's; offered
+ * beside the built-in email senders and tax rates (payments: payment-providers.ts).
  */
 export type AppProviderKind = "courier" | "sms" | "email" | "fraud" | "tax";
 export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];

@@ -20,7 +20,8 @@ import { appQueryOptions, appsQueryOptions } from "~/lib/api-query-options/apps"
 import { ActivateAppDialog } from "../apps/AppDialogs";
 import { AppIcon } from "../apps/AppIcon";
 
-export const BANGLADESH_PACK_ID = "scalius.bangladesh";
+export { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
+import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 
 export function BangladeshPackStep({ onDone }: { onDone: () => void }) {
   const t = useMessages(storeSetupMessages);

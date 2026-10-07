@@ -3,8 +3,6 @@ import {
   type ReadinessIssue,
   type ReadinessStatus,
 } from "@scalius/shared/readiness";
-import { ValidationError } from "../../errors";
-import { bytesToHex } from "@scalius/shared/hash";
 
 export type DeliveryProviderActivationRequirement = {
   source: "credentials" | "config";
@@ -23,7 +21,7 @@ export type DeliveryProviderActivationBlocker = DeliveryProviderActivationRequir
 export type DeliveryProviderLifecycle = "draft" | "configured" | "tested" | "active" | "blocked";
 
 export type DeliveryProviderReadinessBlocker = ReadinessIssue & {
-  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable";
+  code: "inactive" | "unconfigured" | "unreadable";
 };
 
 /**
@@ -42,286 +40,20 @@ export type DeliveryProviderReadinessSummary = Readiness & {
   lastTestFailureAt?: Date | number | string | null;
 };
 
-type DeliveryProviderReadinessInput = {
+type DeliveryProviderSummaryInput = {
   type: string;
-  credentials: Record<string, unknown> | string | null | undefined;
-  config: Record<string, unknown> | string | null | undefined;
-};
-
-type DeliveryProviderSummaryInput = DeliveryProviderReadinessInput & {
   credentialsReadable?: boolean;
   /**
-   * The setup's blockers when they are not the row's own credentials and
-   * config: an app courier's setup lives in the app's settings.
+   * What keeps the setup from shipping, from the courier that reads it (an
+   * app courier's setup lives in the app's settings). Absent: the row names
+   * no courier this request can use.
    */
   activationBlockers?: DeliveryProviderActivationBlocker[];
-  /** False when the setup keeps no live-test proof on the row (an app courier is tested through its app). */
-  requiresTestProof?: boolean;
   isActive?: boolean | null;
-  currentFingerprint?: string | null;
   lastTestAttemptAt?: Date | number | string | null;
   lastTestSuccessAt?: Date | number | string | null;
   lastTestFailureAt?: Date | number | string | null;
-  lastTestSuccessFingerprint?: string | null;
 };
-
-const REQUIRED_ACTIVATION_FIELDS: Record<string, DeliveryProviderActivationRequirement[]> = {
-  pathao: [
-    { source: "credentials", key: "baseUrl", label: "Base URL" },
-    { source: "credentials", key: "clientId", label: "Client ID" },
-    { source: "credentials", key: "clientSecret", label: "Client Secret" },
-    { source: "credentials", key: "username", label: "Username" },
-    { source: "credentials", key: "password", label: "Password" },
-    { source: "config", key: "storeId", label: "Store ID" },
-  ],
-  steadfast: [
-    { source: "credentials", key: "baseUrl", label: "Base URL" },
-    { source: "credentials", key: "apiKey", label: "API Key" },
-    { source: "credentials", key: "secretKey", label: "Secret Key" },
-  ],
-};
-
-const OBVIOUS_PLACEHOLDER_VALUES = new Set([
-  "api",
-  "changeme",
-  "changeit",
-  "client",
-  "demo",
-  "dummy",
-  "example",
-  "key",
-  "pass",
-  "password",
-  "placeholder",
-  "sample",
-  "secret",
-  "test",
-  "token",
-  "username",
-]);
-
-function looksLikePlaceholderProviderValue(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
-  if (!normalized) return false;
-  if (OBVIOUS_PLACEHOLDER_VALUES.has(normalized)) return true;
-  if (/^([0-9])\1{3,}$/.test(normalized)) return true;
-  if (/^1234567890?$/.test(normalized)) return true;
-  return /^(your|enter|replace)(api|client|key|password|secret|token|username)/.test(normalized);
-}
-
-function getBaseUrlIssue(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  try {
-    const parsed = new URL(value.trim());
-    if (
-      parsed.protocol !== "https:"
-      || parsed.username
-      || parsed.password
-      || (parsed.port && parsed.port !== "443")
-      || parsed.search
-      || parsed.hash
-    ) {
-      return "Base URL must be an absolute public HTTPS origin/path without credentials, a custom port, query parameters, or a fragment.";
-    }
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      !hostname.includes(".")
-      || hostname === "localhost"
-      || hostname.endsWith(".localhost")
-      || hostname.endsWith(".local")
-      || hostname.endsWith(".internal")
-      || /^\[.*\]$/.test(hostname)
-      || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
-    ) {
-      return "Base URL must use a public HTTPS hostname.";
-    }
-    if (hostname === "example.com" || hostname.endsWith(".example.com")) {
-      return "Base URL looks like a placeholder. Save the real provider URL before activation.";
-    }
-    return null;
-  } catch {
-    return "Base URL must be a valid absolute HTTPS URL.";
-  }
-}
-
-function toRecord(
-  value: DeliveryProviderReadinessInput["credentials"],
-  source: "credentials" | "config",
-): Record<string, unknown> | DeliveryProviderActivationBlocker {
-  if (!value) return {};
-  if (typeof value !== "string") {
-    return typeof value === "object" && !Array.isArray(value)
-      ? value
-      : {
-        source,
-        key: source,
-        label: source === "credentials" ? "Credentials" : "Configuration",
-        message: `${source === "credentials" ? "Credentials" : "Configuration"} must be a JSON object.`,
-      };
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("Expected object");
-    }
-    return parsed as Record<string, unknown>;
-  } catch {
-    return {
-      source,
-      key: source,
-      label: source === "credentials" ? "Credentials" : "Configuration",
-      message: `${source === "credentials" ? "Credentials" : "Configuration"} must be a valid JSON object.`,
-    };
-  }
-}
-
-function hasUsableValue(value: unknown): boolean {
-  if (typeof value === "string") return value.trim().length > 0;
-  if (typeof value === "number") return Number.isFinite(value);
-  return value !== null && value !== undefined;
-}
-
-function stableJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableJson);
-  if (!value || typeof value !== "object") return value;
-
-  return Object.keys(value as Record<string, unknown>)
-    .sort()
-    .reduce<Record<string, unknown>>((acc, key) => {
-      acc[key] = stableJson((value as Record<string, unknown>)[key]);
-      return acc;
-    }, {});
-}
-
-function keyBytes(fingerprintKey: string): ArrayBuffer {
-  let bytes: Uint8Array;
-  try {
-    bytes = Uint8Array.from(atob(fingerprintKey), (char) => char.charCodeAt(0));
-  } catch {
-    bytes = new TextEncoder().encode(fingerprintKey);
-  }
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
-function timestampMs(value: Date | number | string | null | undefined): number | null {
-  if (!value) return null;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") {
-    return value > 10_000_000_000 ? value : value * 1000;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isActivationBlocker(
-  value: Record<string, unknown> | DeliveryProviderActivationBlocker,
-): value is DeliveryProviderActivationBlocker {
-  return typeof (value as DeliveryProviderActivationBlocker).message === "string"
-    && ((value as DeliveryProviderActivationBlocker).source === "credentials"
-      || (value as DeliveryProviderActivationBlocker).source === "config");
-}
-
-export function getDeliveryProviderActivationRequirements(
-  type: string,
-): DeliveryProviderActivationRequirement[] {
-  return REQUIRED_ACTIVATION_FIELDS[type] ?? [];
-}
-
-export function getDeliveryProviderActivationBlockers({
-  type,
-  credentials,
-  config,
-}: DeliveryProviderReadinessInput): DeliveryProviderActivationBlocker[] {
-  const requirements = getDeliveryProviderActivationRequirements(type);
-  if (requirements.length === 0) {
-    return [{
-      source: "config",
-      key: "type",
-      label: "Provider type",
-      message: `Unsupported delivery provider type: ${type}`,
-    }];
-  }
-
-  const parsedCredentials = toRecord(credentials, "credentials");
-  const parsedConfig = toRecord(config, "config");
-  const blockers: DeliveryProviderActivationBlocker[] = [];
-
-  if (isActivationBlocker(parsedCredentials)) blockers.push(parsedCredentials);
-  if (isActivationBlocker(parsedConfig)) blockers.push(parsedConfig);
-  if (blockers.length > 0) return blockers;
-
-  const credentialRecord = parsedCredentials as Record<string, unknown>;
-  const configRecord = parsedConfig as Record<string, unknown>;
-
-  for (const requirement of requirements) {
-    const sourceRecord = requirement.source === "credentials"
-      ? credentialRecord
-      : configRecord;
-    if (!hasUsableValue(sourceRecord[requirement.key])) {
-      blockers.push({
-        ...requirement,
-        message: `${requirement.label} is required before this provider can be active.`,
-      });
-      continue;
-    }
-
-    if (requirement.key === "baseUrl") {
-      const urlIssue = getBaseUrlIssue(sourceRecord[requirement.key]);
-      if (urlIssue) blockers.push({ ...requirement, message: urlIssue });
-      continue;
-    }
-
-    if (looksLikePlaceholderProviderValue(sourceRecord[requirement.key])) {
-      blockers.push({
-        ...requirement,
-        message: `${requirement.label} looks like a placeholder. Save a real provider value before activation.`,
-      });
-    }
-  }
-
-  return blockers;
-}
-
-export function assertDeliveryProviderReadyForActivation(
-  input: DeliveryProviderReadinessInput,
-): void {
-  const blockers = getDeliveryProviderActivationBlockers(input);
-  if (blockers.length === 0) return;
-
-  throw new ValidationError(
-    "Delivery provider cannot be activated until required setup is complete.",
-    { blockers },
-  );
-}
-
-export async function getDeliveryProviderSetupFingerprint(
-  input: DeliveryProviderReadinessInput,
-  fingerprintKey: string,
-): Promise<string> {
-  const parsedCredentials = toRecord(input.credentials, "credentials");
-  const parsedConfig = toRecord(input.config, "config");
-  if (isActivationBlocker(parsedCredentials) || isActivationBlocker(parsedConfig)) {
-    throw new ValidationError("Delivery provider setup could not be fingerprinted until credentials and config are readable.");
-  }
-
-  const material = JSON.stringify(stableJson({
-    type: input.type,
-    credentials: parsedCredentials,
-    config: parsedConfig,
-    connectionTestProofVersion: 2,
-  }));
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyBytes(fingerprintKey),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(material));
-  return `hmac-sha256:${bytesToHex(signature)}`;
-}
 
 export function getDeliveryProviderReadinessSummary(
   input: DeliveryProviderSummaryInput,
@@ -334,17 +66,15 @@ export function getDeliveryProviderReadinessSummary(
         label: "Credentials",
         message: "Stored credentials cannot be decrypted with the configured credential key.",
       }]
-    : input.activationBlockers ?? getDeliveryProviderActivationBlockers(input);
+    : input.activationBlockers ?? [{
+      source: "config" as const,
+      key: "type",
+      label: "Provider type",
+      message: `Unsupported delivery provider type: ${input.type}`,
+    }];
   const configured = activationBlockers.length === 0;
-  const successAt = timestampMs(input.lastTestSuccessAt);
-  const failureAt = timestampMs(input.lastTestFailureAt);
-  const successFingerprintMatches = Boolean(
-    input.currentFingerprint
-      && input.lastTestSuccessFingerprint
-      && input.currentFingerprint === input.lastTestSuccessFingerprint,
-  );
-  const failedAfterSuccess = Boolean(failureAt && (!successAt || failureAt > successAt));
-  const tested = configured && (input.requiresTestProof === false || (successFingerprintMatches && !failedAfterSuccess));
+  // A courier's setup is tested through its app (the app's own connection test): no proof on the row.
+  const tested = configured;
   const active = Boolean(input.isActive) && tested;
 
   const blockers: DeliveryProviderReadinessBlocker[] = [];
@@ -362,14 +92,8 @@ export function getDeliveryProviderReadinessSummary(
         : "unconfigured",
       message: credentialsUnreadable
         ? "Delivery provider credentials cannot be decrypted with the configured credential key. Re-enter and retest the provider credentials."
-        : "Delivery provider setup is incomplete or unreadable.",
-    });
-  } else if (!tested) {
-    blockers.push({
-      code: failedAfterSuccess ? "test_failed" : "untested",
-      message: failedAfterSuccess
-        ? "Delivery provider connection test failed after the last successful test."
-        : "Delivery provider must pass a live connection test for the current setup.",
+        // The courier's own reason ("Activate Bangladesh pack in Apps to use it.").
+        : activationBlockers[0]?.message ?? "Delivery provider setup is incomplete or unreadable.",
     });
   }
 
@@ -382,10 +106,8 @@ export function getDeliveryProviderReadinessSummary(
     lifecycle = activationBlockers.length > 0 && activationBlockers.some((blocker) => blocker.key === "type")
       ? "blocked"
       : "draft";
-  } else if (tested) {
-    lifecycle = "tested";
   } else {
-    lifecycle = "configured";
+    lifecycle = "tested";
   }
 
   // Unreadable credentials are a platform failure, not merchant setup left undone.

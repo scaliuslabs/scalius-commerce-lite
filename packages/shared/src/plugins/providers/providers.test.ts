@@ -114,6 +114,20 @@ describe("provider port contracts", () => {
     expect(courier.verifyWebhook.output.safeParse({ ...push, eventId: "" }).success).toBe(false);
     expect(courier.verifyWebhook.output.safeParse({ ...push, tracking: { ...tracking, status: "lost" } }).success).toBe(false);
 
+    // The courier's expected answer: 2xx, a few safe headers, a small JSON body.
+    const reply = { status: 202, headers: { "x-pathao-merchant-webhook-integration-secret": "s" }, body: { success: true, status: "delivered" } };
+    expect(courier.verifyWebhook.output.safeParse({ ...push, orderId: "ORD1", reply }).success).toBe(true);
+    for (const bad of [{ ...reply, status: 302 }, { ...reply, headers: { "set-cookie": "a=b" } }, { ...reply, headers: { location: "https://evil.test" } }, { ...reply, headers: { "Content-Type": "text/html" } }]) {
+      expect(courier.verifyWebhook.output.safeParse({ ...push, reply: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    expect(courier.verifyWebhook.output.safeParse({ status: "note", eventId: "tracking_update:1", externalId: "CN1", details: { lastTrackingMessage: "At hub" } }).success).toBe(true);
+    expect(courier.verifyWebhook.output.safeParse({ status: "note", externalId: "CN1", details: {} }).success).toBe(false);
+    expect(courier.verifyWebhook.output.safeParse({ status: "invalid", reason: "Missing event", rejectStatus: 400 }).success).toBe(true);
+    expect(courier.verifyWebhook.output.safeParse({ status: "invalid", reason: "x", rejectStatus: 200 }).success).toBe(false);
+    // A courier that books by its own place ids receives them with the recipient.
+    const located = { ...(input as { recipient: object }), recipient: { ...(input as { recipient: object }).recipient, locationIds: { city: "1", zone: "52", area: null } } };
+    expect(courier.createShipment.input.safeParse(located).success).toBe(true);
+
     const options = (itemWeightKg: number) => ({ ...(input as object), options: { deliveryType: 48, itemType: 2, itemWeightKg } });
     expect(courier.createShipment.input.safeParse(options(5_000)).success).toBe(true);
     expect(courier.createShipment.input.safeParse(options(10_001)).success).toBe(false);
@@ -188,6 +202,22 @@ describe("provider declarations", () => {
       { kind: "courier", id: "parcel", name: "Parcel", operations: [], trackingUrl: "https://parcel.test/t/{trackingId}", countries: "any" },
     ]);
     expect(pluginGrantRequest(parsed.manifest).providers).toEqual(["courier", "payment"]);
+  });
+
+  it("lets a courier declare its own place ids and every provider its own mark", () => {
+    const parsed = parsePluginManifest({
+      ...manifest,
+      providers: { courier: [{ id: "pathao", name: "Pathao", icon: "assets/pathao.svg", locations: { key: "pathao", required: ["city", "zone"], numeric: true } }] },
+    });
+    expect(parsed.ok && parsed.manifest.providers[0]).toMatchObject({ icon: "assets/pathao.svg", locations: { key: "pathao", required: ["city", "zone"], numeric: true } });
+    for (const courier of [
+      { id: "pathao", name: "Pathao", icon: "../pathao.svg" },
+      { id: "pathao", name: "Pathao", icon: "assets/pathao.gif" },
+      { id: "pathao", name: "Pathao", locations: { key: "pathao", required: ["city", "city"] } },
+      { id: "pathao", name: "Pathao", locations: { key: "Pathao!", required: [] } },
+    ]) {
+      expect(parsePluginManifest({ ...manifest, providers: { courier: [courier] } }).ok, JSON.stringify(courier)).toBe(false);
+    }
   });
 
   it("lets a payment provider declare the shipping countries it serves (MARKETS-DESIGN step 3b)", () => {

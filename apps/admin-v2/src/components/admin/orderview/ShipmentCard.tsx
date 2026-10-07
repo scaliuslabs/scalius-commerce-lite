@@ -54,18 +54,14 @@ type EvidenceSource = "courier_portal" | "courier_support";
 const OUTCOMES: Outcome[] = ["confirmed_existing", "confirmed_not_created", "confirmed_cancelled"];
 const EVIDENCE_SOURCES: EvidenceSource[] = ["courier_portal", "courier_support"];
 
-function courierName(providerType: string | null | undefined): string {
-  const name = providerType?.trim() || "courier";
-  return name.charAt(0).toUpperCase() + name.slice(1);
+/** The courier's name for a shipment's provider type, from the store's couriers. */
+function courierName(order: Order, providerType: string | null | undefined): string {
+  return order.deliveryProviders?.find((provider) => provider.type === providerType)?.courierName ?? "courier";
 }
 
+/** The courier's page saved with the shipment (the API fills it for parcels booked before their courier moved into an app). */
 function trackingUrlFor(shipment: OrderShipment): string | null {
-  if (!shipment.trackingId) return null;
-  if (shipment.trackingUrl) return shipment.trackingUrl;
-  const id = encodeURIComponent(shipment.trackingId);
-  if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${id}`;
-  if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${id}`;
-  return null;
+  return shipment.trackingId && shipment.trackingUrl ? shipment.trackingUrl : null;
 }
 
 /**
@@ -169,7 +165,7 @@ function CourierCheckDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("courier.checkTitle")}</DialogTitle>
-          <DialogDescription>{t("courier.checkHelp", { courier: courierName(order.shipmentRecovery?.providerType) })}</DialogDescription>
+          <DialogDescription>{t("courier.checkHelp", { courier: courierName(order, order.shipmentRecovery?.providerType) })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -254,6 +250,8 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   const needsCourierCheck = canManage && blocking && recovery.status === "reconcile_required"
     && !recovery.canRepair && recovery.unknownOutcome === true;
   const shipmentId = recovery.shipmentId ?? "";
+  // A courier that finds a booking by the order number can confirm a lost answer itself.
+  const recoveryCourier = order.deliveryProviders?.find((provider) => provider.type === recovery.providerType);
 
   const lookup = () => {
     lookupKey.current ??= crypto.randomUUID();
@@ -269,9 +267,9 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
       <p className="text-muted-foreground">{copy.help}</p>
       {needsCourierCheck || canRepair ? (
         <div className="flex flex-wrap gap-2">
-          {needsCourierCheck && recovery.providerType === "steadfast" ? (
+          {needsCourierCheck && recoveryCourier?.canFindShipment ? (
             <Button type="button" size="sm" variant="outline" loading={lookupMutation.isPending} onClick={lookup}>
-              {t("courier.checkSteadfast")}
+              {t("courier.checkWith", { courier: recoveryCourier.courierName })}
             </Button>
           ) : null}
           {needsCourierCheck ? (
@@ -402,8 +400,9 @@ export function BookCourier({ order, focusRequest, guard }: {
     : noneReady ? getProviderReadinessMessage(resolveProviderReadiness(providers[0]!)) : "";
   const read = order.operationalReads?.deliveryProviders ?? { status: "ready" as const, refreshing: false };
   const locked = Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true;
-  // Pathao books by City → Zone (→ Area); without them the courier rejects the booking.
-  const missingArea = selected?.type === "pathao" && (!order.city || !order.zone);
+  // A courier that books by its own place ids (Pathao: City → Zone) needs them on the address.
+  const required = selected?.requiredLocations ?? [];
+  const missingArea = (required.includes("city") && !order.city) || (required.includes("zone") && !order.zone) || (required.includes("area") && !order.area);
   const notice = (
     <OperationalReadNotice
       read={read}

@@ -110031,6 +110031,7 @@
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
             "settings.delivery_locations.view",
             "settings.delivery_providers.edit",
             "settings.delivery_providers.view",
@@ -113268,6 +113269,7 @@
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
             "settings.delivery_locations.view",
             "settings.delivery_providers.edit",
             "settings.delivery_providers.view",
@@ -114341,6 +114343,7 @@
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
             "settings.delivery_locations.view",
             "settings.delivery_providers.edit",
             "settings.delivery_providers.view",
@@ -120902,6 +120905,7 @@
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
             "settings.delivery_locations.view",
             "settings.delivery_providers.edit",
             "settings.delivery_providers.view",
@@ -124221,13 +124225,28 @@
                                 "type": "string",
                                 "maxLength": 160
                               },
-                              "credentials": {
+                              "courierName": {
                                 "type": "string",
-                                "maxLength": 4096
+                                "maxLength": 100
                               },
-                              "config": {
+                              "courierId": {
                                 "type": "string",
-                                "maxLength": 4096
+                                "maxLength": 160
+                              },
+                              "requiredLocations": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "city",
+                                    "zone",
+                                    "area"
+                                  ]
+                                },
+                                "maxItems": 3
+                              },
+                              "canFindShipment": {
+                                "type": "boolean"
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -124401,8 +124420,10 @@
                               "id",
                               "name",
                               "type",
-                              "credentials",
-                              "config",
+                              "courierName",
+                              "courierId",
+                              "requiredLocations",
+                              "canFindShipment",
                               "isActive",
                               "countries",
                               "createdAt",
@@ -124552,245 +124573,28 @@
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "pathao"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
-                              },
-                              "clientId": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Pathao client ID; required before activation."
-                              },
-                              "clientSecret": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao client secret; required before activation."
-                              },
-                              "username": {
-                                "type": "string",
-                                "maxLength": 320,
-                                "description": "Pathao account username; required before activation."
-                              },
-                              "password": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao account password; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Pathao webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "storeId": {
-                                "type": "string",
-                                "maxLength": 100,
-                                "description": "Pathao store ID; required before activation."
-                              },
-                              "defaultDeliveryType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      48
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      12
-                                    ]
-                                  }
-                                ],
-                                "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
-                              },
-                              "defaultItemType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      2
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      1
-                                    ]
-                                  }
-                                ],
-                                "description": "2 for parcel or 1 for document; defaults to 2."
-                              },
-                              "defaultItemWeight": {
-                                "type": "number",
-                                "minimum": 0.1,
-                                "maximum": 50,
-                                "description": "Default parcel weight in kilograms; defaults to 0.5."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "isActive": {
-                        "type": "boolean",
-                        "default": false
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "type",
-                      "credentials",
-                      "config"
-                    ]
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "steadfast"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
-                              },
-                              "apiKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast API key; required before activation."
-                              },
-                              "secretKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast secret key; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Steadfast webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "defaultCodAmount": {
-                                "type": "number",
-                                "minimum": 0,
-                                "maximum": 1000000000,
-                                "description": "Default cash-on-delivery amount; defaults to 0."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "isActive": {
-                        "type": "boolean",
-                        "default": false
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "type",
-                      "credentials",
-                      "config"
-                    ]
+                  "type": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "maxLength": 160,
-                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
-                      },
-                      "isActive": {
-                        "type": "boolean",
-                        "default": false
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "type"
-                    ],
-                    "additionalProperties": false
+                  "isActive": {
+                    "type": "boolean",
+                    "default": false
                   }
-                ]
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -124825,13 +124629,28 @@
                           "type": "string",
                           "maxLength": 160
                         },
-                        "credentials": {
+                        "courierName": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 100
                         },
-                        "config": {
+                        "courierId": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 160
+                        },
+                        "requiredLocations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "city",
+                              "zone",
+                              "area"
+                            ]
+                          },
+                          "maxItems": 3
+                        },
+                        "canFindShipment": {
+                          "type": "boolean"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -125005,8 +124824,10 @@
                         "id",
                         "name",
                         "type",
-                        "credentials",
-                        "config",
+                        "courierName",
+                        "courierId",
+                        "requiredLocations",
+                        "canFindShipment",
                         "isActive",
                         "countries",
                         "createdAt",
@@ -125133,256 +124954,33 @@
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "pathao"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
-                              },
-                              "clientId": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Pathao client ID; required before activation."
-                              },
-                              "clientSecret": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao client secret; required before activation."
-                              },
-                              "username": {
-                                "type": "string",
-                                "maxLength": 320,
-                                "description": "Pathao account username; required before activation."
-                              },
-                              "password": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao account password; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Pathao webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "storeId": {
-                                "type": "string",
-                                "maxLength": 100,
-                                "description": "Pathao store ID; required before activation."
-                              },
-                              "defaultDeliveryType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      48
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      12
-                                    ]
-                                  }
-                                ],
-                                "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
-                              },
-                              "defaultItemType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      2
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      1
-                                    ]
-                                  }
-                                ],
-                                "description": "2 for parcel or 1 for document; defaults to 2."
-                              },
-                              "defaultItemWeight": {
-                                "type": "number",
-                                "minimum": 0.1,
-                                "maximum": 50,
-                                "description": "Default parcel weight in kilograms; defaults to 0.5."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "isActive": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name",
-                      "type"
-                    ]
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "steadfast"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
-                              },
-                              "apiKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast API key; required before activation."
-                              },
-                              "secretKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast secret key; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Steadfast webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "defaultCodAmount": {
-                                "type": "number",
-                                "minimum": 0,
-                                "maximum": 1000000000,
-                                "description": "Default cash-on-delivery amount; defaults to 0."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "isActive": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name",
-                      "type"
-                    ]
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "name": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 100
-                      },
-                      "type": {
-                        "type": "string",
-                        "maxLength": 160,
-                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
-                      },
-                      "isActive": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name",
-                      "type"
-                    ],
-                    "additionalProperties": false
+                  "type": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
+                  },
+                  "isActive": {
+                    "type": "boolean"
                   }
-                ]
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -125417,13 +125015,28 @@
                           "type": "string",
                           "maxLength": 160
                         },
-                        "credentials": {
+                        "courierName": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 100
                         },
-                        "config": {
+                        "courierId": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 160
+                        },
+                        "requiredLocations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "city",
+                              "zone",
+                              "area"
+                            ]
+                          },
+                          "maxItems": 3
+                        },
+                        "canFindShipment": {
+                          "type": "boolean"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -125597,8 +125210,10 @@
                         "id",
                         "name",
                         "type",
-                        "credentials",
-                        "config",
+                        "courierName",
+                        "courierId",
+                        "requiredLocations",
+                        "canFindShipment",
                         "isActive",
                         "countries",
                         "createdAt",
@@ -125642,13 +125257,28 @@
                           "type": "string",
                           "maxLength": 160
                         },
-                        "credentials": {
+                        "courierName": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 100
                         },
-                        "config": {
+                        "courierId": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 160
+                        },
+                        "requiredLocations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "city",
+                              "zone",
+                              "area"
+                            ]
+                          },
+                          "maxItems": 3
+                        },
+                        "canFindShipment": {
+                          "type": "boolean"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -125822,8 +125452,10 @@
                         "id",
                         "name",
                         "type",
-                        "credentials",
-                        "config",
+                        "courierName",
+                        "courierId",
+                        "requiredLocations",
+                        "canFindShipment",
                         "isActive",
                         "countries",
                         "createdAt",
@@ -125941,357 +125573,6 @@
         }
       }
     },
-    "/api/v1/admin/settings/delivery-providers/create-test": {
-      "post": {
-        "operationId": "dashboard.delivery_providers.test_credentials",
-        "tags": [
-          "Admin - Delivery Providers"
-        ],
-        "summary": "Test a new provider connection before saving",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "pathao"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
-                              },
-                              "clientId": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Pathao client ID; required before activation."
-                              },
-                              "clientSecret": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao client secret; required before activation."
-                              },
-                              "username": {
-                                "type": "string",
-                                "maxLength": 320,
-                                "description": "Pathao account username; required before activation."
-                              },
-                              "password": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Pathao account password; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Pathao webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "storeId": {
-                                "type": "string",
-                                "maxLength": 100,
-                                "description": "Pathao store ID; required before activation."
-                              },
-                              "defaultDeliveryType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      48
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      12
-                                    ]
-                                  }
-                                ],
-                                "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
-                              },
-                              "defaultItemType": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      2
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      1
-                                    ]
-                                  }
-                                ],
-                                "description": "2 for parcel or 1 for document; defaults to 2."
-                              },
-                              "defaultItemWeight": {
-                                "type": "number",
-                                "minimum": 0.1,
-                                "maximum": 50,
-                                "description": "Default parcel weight in kilograms; defaults to 0.5."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "name": {
-                        "type": "string",
-                        "maxLength": 100,
-                        "default": "Test Provider"
-                      }
-                    },
-                    "required": [
-                      "type",
-                      "credentials",
-                      "config"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "steadfast"
-                        ]
-                      },
-                      "credentials": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "baseUrl": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
-                              },
-                              "apiKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast API key; required before activation."
-                              },
-                              "secretKey": {
-                                "type": "string",
-                                "maxLength": 2048,
-                                "description": "Steadfast secret key; required before activation."
-                              },
-                              "webhookSecret": {
-                                "type": "string",
-                                "maxLength": 512,
-                                "description": "Optional shared secret used to verify Steadfast webhooks."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "config": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 32768,
-                            "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "defaultCodAmount": {
-                                "type": "number",
-                                "minimum": 0,
-                                "maximum": 1000000000,
-                                "description": "Default cash-on-delivery amount; defaults to 0."
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        ]
-                      },
-                      "name": {
-                        "type": "string",
-                        "maxLength": 100,
-                        "default": "Test Provider"
-                      }
-                    },
-                    "required": [
-                      "type",
-                      "credentials",
-                      "config"
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Test result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean"
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "security",
-          "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 16384,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.delivery_providers.edit"
-        }
-      }
-    },
     "/api/v1/admin/settings/delivery-providers/{id}": {
       "get": {
         "operationId": "dashboard.delivery_providers.get",
@@ -126338,13 +125619,28 @@
                           "type": "string",
                           "maxLength": 160
                         },
-                        "credentials": {
+                        "courierName": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 100
                         },
-                        "config": {
+                        "courierId": {
                           "type": "string",
-                          "maxLength": 4096
+                          "maxLength": 160
+                        },
+                        "requiredLocations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "city",
+                              "zone",
+                              "area"
+                            ]
+                          },
+                          "maxItems": 3
+                        },
+                        "canFindShipment": {
+                          "type": "boolean"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -126518,8 +125814,10 @@
                         "id",
                         "name",
                         "type",
-                        "credentials",
-                        "config",
+                        "courierName",
+                        "courierId",
+                        "requiredLocations",
+                        "canFindShipment",
                         "isActive",
                         "countries",
                         "createdAt",
@@ -133685,6 +132983,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "icon": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "name": {
                                 "type": "string"
                               },
@@ -133748,6 +133050,7 @@
                               "pluginId",
                               "appName",
                               "appIcon",
+                              "icon",
                               "name",
                               "operations",
                               "canTestConnection",
@@ -184020,7 +183323,7 @@
         "tags": [
           "Admin - Apps"
         ],
-        "summary": "Read an app's icon or one of its screenshots",
+        "summary": "Read an app's icon, one of its screenshots or a provider's icon",
         "description": "The image the listing names, checked again before it is served (an SVG cannot run code or load anything). A `v` equal to the app's current fingerprint is cached for a year.",
         "parameters": [
           {
@@ -184037,11 +183340,11 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^(?:icon|screenshot-[1-6])$",
-              "description": "icon, or screenshot-1 to screenshot-6."
+              "pattern": "^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9-]{0,47})$",
+              "description": "icon, screenshot-1 to screenshot-6, or provider-<provider id>."
             },
             "required": true,
-            "description": "icon, or screenshot-1 to screenshot-6.",
+            "description": "icon, screenshot-1 to screenshot-6, or provider-<provider id>.",
             "name": "asset",
             "in": "path"
           },
@@ -184219,6 +183522,7 @@
             "settings.cache.manage",
             "settings.cache.view",
             "settings.delivery_locations.edit",
+            "settings.delivery_locations.import",
             "settings.delivery_locations.view",
             "settings.delivery_providers.edit",
             "settings.delivery_providers.view",
@@ -200182,8 +199486,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.delivery_locations.edit"
+          "type": "anyOf",
+          "permissions": [
+            "settings.delivery_locations.edit",
+            "settings.delivery_locations.import"
+          ]
         }
       }
     },
@@ -200928,559 +200235,6 @@
           "idempotency": "none",
           "revision": "none",
           "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.delivery_locations.edit"
-        }
-      }
-    },
-    "/api/v1/admin/settings/delivery-locations/import-pathao": {
-      "delete": {
-        "operationId": "dashboard.delivery_locations.pathao_import_reset",
-        "tags": [
-          "Admin - Delivery Locations"
-        ],
-        "summary": "Reset Pathao location import progress",
-        "responses": {
-          "200": {
-            "description": "Pathao import progress reset",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.delivery_locations.edit"
-        }
-      },
-      "post": {
-        "operationId": "dashboard.delivery_locations.pathao_import_chunk",
-        "tags": [
-          "Admin - Delivery Locations"
-        ],
-        "summary": "Process one bounded Pathao location import chunk",
-        "responses": {
-          "200": {
-            "description": "Current Pathao import progress",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "importing",
-                            "complete",
-                            "error"
-                          ]
-                        },
-                        "phase": {
-                          "type": "string",
-                          "enum": [
-                            "cities",
-                            "zones",
-                            "areas",
-                            "done"
-                          ]
-                        },
-                        "progress": {
-                          "type": "object",
-                          "properties": {
-                            "current": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "total": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "label": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "current",
-                            "total",
-                            "label"
-                          ]
-                        },
-                        "stats": {
-                          "type": "object",
-                          "properties": {
-                            "citiesCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "citiesUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "zonesCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "zonesUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "areasCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "areasUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            }
-                          },
-                          "required": [
-                            "citiesCreated",
-                            "citiesUpdated",
-                            "zonesCreated",
-                            "zonesUpdated",
-                            "areasCreated",
-                            "areasUpdated"
-                          ]
-                        },
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "status",
-                        "phase",
-                        "progress",
-                        "stats"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.delivery_locations.edit"
-        }
-      }
-    },
-    "/api/v1/admin/settings/delivery-locations/import-pathao/status": {
-      "get": {
-        "operationId": "dashboard.delivery_locations.pathao_import_status",
-        "tags": [
-          "Admin - Delivery Locations"
-        ],
-        "summary": "Get Pathao location import progress",
-        "responses": {
-          "200": {
-            "description": "Current Pathao import progress",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "importing",
-                            "complete",
-                            "error"
-                          ]
-                        },
-                        "phase": {
-                          "type": "string",
-                          "enum": [
-                            "cities",
-                            "zones",
-                            "areas",
-                            "done"
-                          ]
-                        },
-                        "progress": {
-                          "type": "object",
-                          "properties": {
-                            "current": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "total": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "label": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "current",
-                            "total",
-                            "label"
-                          ]
-                        },
-                        "stats": {
-                          "type": "object",
-                          "properties": {
-                            "citiesCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "citiesUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "zonesCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "zonesUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "areasCreated": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "areasUpdated": {
-                              "type": "integer",
-                              "minimum": 0
-                            }
-                          },
-                          "required": [
-                            "citiesCreated",
-                            "citiesUpdated",
-                            "zonesCreated",
-                            "zonesUpdated",
-                            "areasCreated",
-                            "areasUpdated"
-                          ]
-                        },
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "status",
-                        "phase",
-                        "progress",
-                        "stats"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
           "transport": "json",
           "maximumResponseBytes": 65536,
           "maxRequestBytes": 1048576,
@@ -207130,9 +205884,9 @@
         "surface": "dashboard",
         "kind": "write",
         "title": "Import delivery locations",
-        "summary": "Read Pathao import status and advance the import by one bounded chunk.",
+        "summary": "Import a supplied place dataset in bounded chunks, parents first.",
         "examples": [
-          "Resume the Pathao location import in bounded chunks and report progress until it reaches a terminal state."
+          "Import these cities, thanas and areas from a dataset file in chunks, and report what was created and updated."
         ],
         "tags": [
           "delivery",
@@ -207140,16 +205894,15 @@
           "import"
         ],
         "operationIds": [
-          "dashboard.delivery_locations.pathao_import_status",
-          "dashboard.delivery_locations.pathao_import_chunk"
+          "dashboard.delivery_locations.import"
         ],
-        "requiresFacts": false,
+        "requiresFacts": true,
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Read import status before dispatching a chunk.",
-          "Process only one bounded chunk at a time.",
-          "Stop on terminal or failed state and verify returned progress."
+          "Send at most the import's chunk size per call, parents before children.",
+          "The import only adds and updates places; it never deletes one.",
+          "Stop on a failed chunk and verify the returned counts."
         ]
       },
       {
@@ -207157,17 +205910,17 @@
         "surface": "dashboard",
         "kind": "write",
         "title": "Connect a delivery provider",
-        "summary": "Test supplied credentials, create the provider connection, and test the saved connection.",
+        "summary": "Pick an installed courier app, add it as a delivery provider, and test the saved connection.",
         "examples": [
-          "Test these courier credentials before saving a provider, then verify the saved connection without logging credentials."
+          "Add the Bangladesh pack's Pathao courier as a delivery provider and test it."
         ],
         "tags": [
           "delivery",
           "provider",
-          "credentials"
+          "courier"
         ],
         "operationIds": [
-          "dashboard.delivery_providers.test_credentials",
+          "dashboard.settings_providers.list",
           "dashboard.delivery_providers.create",
           "dashboard.delivery_providers.test"
         ],
@@ -207175,8 +205928,8 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Never log or return raw provider credentials.",
-          "Test credentials before saving the connection.",
+          "Every courier is an app's (<plugin id>:<provider id>); its keys live in the app's settings, never on the provider.",
+          "List the courier apps (kind courier) and use one whose readiness is usable.",
           "Confirm creation, then test the saved provider record."
         ]
       },
@@ -212335,9 +211088,9 @@
         {
           "operationId": "dashboard.delivery_locations.import",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.delivery_locations.import"
+            "dashboard.delivery-location-import"
           ]
         },
         {
@@ -212346,30 +211099,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.delivery_locations.list"
-          ]
-        },
-        {
-          "operationId": "dashboard.delivery_locations.pathao_import_chunk",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.delivery-location-import"
-          ]
-        },
-        {
-          "operationId": "dashboard.delivery_locations.pathao_import_reset",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.delivery_locations.pathao_import_reset"
-          ]
-        },
-        {
-          "operationId": "dashboard.delivery_locations.pathao_import_status",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.delivery-location-import"
           ]
         },
         {
@@ -212422,14 +211151,6 @@
         },
         {
           "operationId": "dashboard.delivery_providers.test",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.delivery-provider"
-          ]
-        },
-        {
-          "operationId": "dashboard.delivery_providers.test_credentials",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
@@ -214399,9 +213120,9 @@
         {
           "operationId": "dashboard.settings_providers.list",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.settings_providers.list"
+            "dashboard.delivery-provider"
           ]
         },
         {

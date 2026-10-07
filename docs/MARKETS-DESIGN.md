@@ -433,8 +433,8 @@ delivery rate (`deliveryRatesServeCountry()` is the seam), and pickup still
 works.
 
 **Couriers and fraud checkers** state their countries in the provider port
-(`countries`: `"any"` or ISO codes). Pathao, Steadfast and the built-in fraud
-checkers state `["BD"]`. The order page offers a courier only for an order
+(`countries`: `"any"` or ISO codes). The Bangladesh pack's couriers (Pathao,
+Steadfast) and fraud checkers state `["BD"]`. The order page offers a courier only for an order
 shipping to its countries and names the others with the reason; a fraud
 check for another country is not sent and says why.
 

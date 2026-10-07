@@ -236,6 +236,30 @@ describe("admin app routes", () => {
     expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/../plugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
   });
 
+  it("serves a provider's own mark beside the app icon, with the same checks and caching", async () => {
+    await call("GET", "/apps");
+    const sha = BUNDLED_PLUGINS["scalius.bangladesh"]!.sha256.slice(0, 16);
+    for (const courier of ["pathao", "steadfast"]) {
+      const image = await app.request(`/api/v1/admin/apps/scalius.bangladesh/assets/provider-${courier}?v=${sha}`, {}, env, pluginTestCtx());
+      expect(image.status, courier).toBe(200);
+      expect(image.headers.get("Content-Type")).toBe("image/svg+xml");
+      expect(image.headers.get("Cache-Control")).toBe("private, max-age=31536000, immutable");
+      expect(image.headers.get("Content-Security-Policy")).toContain("sandbox");
+      expect(await image.text()).toMatch(/^<svg/);
+    }
+    // A provider without its own mark, an unknown provider, and a name outside the pattern.
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/provider-bdbulksms", {}, env, pluginTestCtx())).status).toBe(404);
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/provider-redx", {}, env, pluginTestCtx())).status).toBe(404);
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/provider-..%2Fplugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
+  });
+
+  it("asks for the Bangladesh pack's place import without anything that deletes", async () => {
+    await call("GET", "/apps");
+    const detail = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
+    expect(detail.permissions).toEqual([{ name: "settings.delivery_locations.import", risk: "write", sensitive: false }]);
+    expect(detail.request.providers).toEqual(expect.arrayContaining(["courier", "sms", "fraud"]));
+  });
+
   it("lists what active apps add to the dashboard: pages by placement, cards, actions, widgets and their admin routes", async () => {
     await call("GET", "/apps");
     expect((await call("GET", "/apps/surfaces")).json.data.apps).toEqual([]);

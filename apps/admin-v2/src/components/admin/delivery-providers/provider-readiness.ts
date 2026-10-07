@@ -1,5 +1,5 @@
-// A courier's setup state and whether it can book, apart from ProviderIcon:
-// the order page books couriers by name and never shows their logos.
+// A courier's setup state and whether it can book. Couriers' marks come from
+// their apps' listings (GET /admin/settings/providers), never from here.
 import type { ReadinessStatus } from "@scalius/shared/readiness";
 
 /** Setup lifecycle position. The readiness verdict is the shared `status`. */

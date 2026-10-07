@@ -38,6 +38,7 @@ export type {
   CourierShipmentStatus,
   CourierTracking,
   CourierWebhook,
+  CourierWebhookReply,
   EmailSend,
   EmailSendInput,
   FraudCheck,

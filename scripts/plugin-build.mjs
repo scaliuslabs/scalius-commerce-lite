@@ -150,8 +150,8 @@ export async function bundlePlugin(entry) {
 }
 
 /**
- * The manifest's listing images, read from the plugin package and checked
- * (type, size, safe SVG). Their digests end the packed bundle as a comment,
+ * The manifest's listing images (its icon, screenshots and each provider's
+ * own icon), read from the plugin package and checked (type, size, safe SVG). Their digests end the packed bundle as a comment,
  * so the bundle's SHA-256 (the version's fingerprint in both loaders) also
  * changes when only an image does.
  */
@@ -160,8 +160,10 @@ function readListingAssets(contract, manifest, source) {
   const declared = [
     ...(manifest.icon ? [{ path: manifest.icon, role: "icon" }] : []),
     ...manifest.screenshots.map((path) => ({ path, role: "screenshot" })),
+    ...manifest.providers.flatMap((provider) => (provider.icon ? [{ path: provider.icon, role: "icon" }] : [])),
   ];
-  return declared.map(({ path, role }) => {
+  const seen = new Set();
+  return declared.filter(({ path }) => !seen.has(path) && seen.add(path)).map(({ path, role }) => {
     let bytes;
     try {
       bytes = readFileSync(join(directory, path));
