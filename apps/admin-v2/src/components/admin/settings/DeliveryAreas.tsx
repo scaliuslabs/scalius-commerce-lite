@@ -306,12 +306,13 @@ export function DeliveryAreasManager() {
   const countries = useQuery(placeCountriesQueryOptions()).data;
   const [added, setAdded] = useState<string[]>([]);
   const [chosen, setChosen] = useState<string | null>(null);
-  const listed = [...(countries ?? []).map((entry) => entry.countryCode), ...added.filter((code) => !countries?.some((entry) => entry.countryCode === code))];
   // Bangladesh first when it has places (its addresses pick from them), else the first country.
   const country = chosen
     ?? (countries && countries.length > 0 && !countries.some((entry) => entry.countryCode === PLACE_ADDRESS_COUNTRY)
       ? countries[0]!.countryCode
       : PLACE_ADDRESS_COUNTRY);
+  // The countries with places, the ones added this visit and the one shown.
+  const listed = [...new Set([...(countries ?? []).map((entry) => entry.countryCode), ...added, country])];
   const countryCount = countries?.find((entry) => entry.countryCode === country)?.places ?? 0;
   const bangladesh = country === PLACE_ADDRESS_COUNTRY;
   const levels = placeLevels(country).map((_, index) => index + 1);
