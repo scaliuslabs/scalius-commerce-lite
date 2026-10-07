@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Order } from "./types";
 import { OrderStatusCard } from "./OrderStatusCard";
+import { translate } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 
@@ -128,7 +129,7 @@ describe("OrderStatusCard", () => {
     const cancelled = await openOption(o["status.cancelled"]);
     expect(cancelled?.disabled).toBe(true);
     // The reason follows the greyed-out choice, in the API's words.
-    expect(cancelled?.textContent).toBe(`${o["status.cancelled"]} — ${t["cancel.shippedMany"].replace("{count}", "3")}`);
+    expect(cancelled?.textContent).toBe(`${o["status.cancelled"]} — ${translate(orderDetailMessages, "cancel.shippedMany", { count: 3 })}`);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });

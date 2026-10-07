@@ -14,8 +14,7 @@ export const customersMessages = defineMessages({
     spent: "Paid",
     lastOrder: "Last order",
     unnamed: "No name",
-    guestTitle: "{phone} · guest orders",
-    guestEmailTitle: "{email} · guest orders",
+    guestOrders: "Guest orders",
 
     // List: views and filters
     subscribers: "Subscribers",
@@ -62,8 +61,7 @@ export const customersMessages = defineMessages({
     spent: "পরিশোধিত",
     lastOrder: "শেষ অর্ডার",
     unnamed: "নাম নেই",
-    guestTitle: "{phone} · অতিথি অর্ডার",
-    guestEmailTitle: "{email} · অতিথি অর্ডার",
+    guestOrders: "অতিথি অর্ডার",
 
     // List: views and filters
     subscribers: "সাবস্ক্রাইবার",

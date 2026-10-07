@@ -3,7 +3,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { displayPhone } from "~/lib/phone-display";
 import { setLocale } from "~/i18n";
 import { formatOrderTimestamp } from "./formatters";
 import type { Order, OrderAppRiskCheck, OrderCustomerRecord, OrderHold } from "./types";
@@ -56,7 +56,7 @@ describe("order customer card", () => {
     show(orderWith({ id: "cust_guest", name: "R3-SB Guest One", kind: "guest", phone }));
     expect(container.textContent).toContain("R3-SB Guest Two");
     expect(container.textContent).not.toContain("R3-SB Guest One");
-    expect(recordLink()?.textContent).toBe(`Guest orders for ${formatPhoneForDisplay(phone)}`);
+    expect(recordLink()?.textContent).toBe(`Guest orders for ${displayPhone(phone)}`);
     expect(recordLink()?.getAttribute("href")).toBe("/admin/customers/cust_guest/edit");
     expect(container.textContent).not.toContain("Ordered as");
   });

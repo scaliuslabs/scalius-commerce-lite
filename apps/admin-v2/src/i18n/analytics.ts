@@ -90,7 +90,7 @@ export const analyticsMessages = defineMessages({
     codCard: "Cash on delivery and cancellations",
     ordersCount: "{count, plural, one {# order} other {# orders}}",
     rtsCount: "{returned} returned of {resolved} delivered or returned",
-    otherCurrency: "{count, plural, one {# order is} other {# orders are}} in another currency and not included in these numbers.",
+    otherCurrency: "{count, plural, one {# order} other {# orders}} in another currency {count, plural, one {isn't} other {aren't}} included in these numbers.",
     attribution: "Orders count on the day they were placed (store time). Returns and refunds count against that day too.",
     print: "Print",
     export: "Export",

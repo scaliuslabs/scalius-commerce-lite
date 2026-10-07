@@ -1,33 +1,43 @@
-import { describe, expect, it } from "vitest";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { afterEach, describe, expect, it } from "vitest";
 import { customersMessages } from "~/i18n/customers";
+import { setStoreRegion } from "~/lib/store-time-zone";
 import { customerTitle } from "./customer-title";
 
 const translator = (locale: "en" | "bn") => (key: keyof (typeof customersMessages)["en"], vars?: Record<string, string | number>) =>
   customersMessages[locale][key].replace(/\{(\w+)\}/g, (_, name: string) => String(vars?.[name] ?? ""));
 const en = translator("en");
 const phone = "+8801712345678";
-const shown = formatPhoneForDisplay(phone);
+
+afterEach(() => setStoreRegion("BD"));
 
 describe("customerTitle", () => {
-  it("titles a guest record by its phone, with the latest order's name only as secondary text", () => {
-    expect(customerTitle({ kind: "guest", name: "R3-SB Guest One", phone, latestOrderName: "R3-SB Guest Two" }, en))
-      .toEqual({ title: `${shown} · guest orders`, detail: "R3-SB Guest Two" });
-    expect(customerTitle({ kind: "guest", name: "R3-SB Guest One", phone, latestOrderName: "R3-SB Guest Two" }, translator("bn")).title)
-      .toBe(`${shown} · অতিথি অর্ডার`);
+  it("names a guest by the buyer on the latest order, with the phone under it", () => {
+    expect(customerTitle({ kind: "guest", name: "R3-SB Guest One", phone, latestOrderName: "Rahim Uddin" }, en))
+      .toEqual({ title: "Rahim Uddin", detail: "01712-345678", detailIsPhone: true });
   });
 
-  it("never uses the stored name of a guest record, even with no orders left", () => {
-    const { title, detail } = customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, en);
-    expect(title).not.toContain("Someone");
-    expect(detail).toBeNull();
-    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: "  " }, en).detail).toBeNull();
+  it("uses the phone, or the email, as the title only when there is no name", () => {
+    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, en))
+      .toEqual({ title: "01712-345678", detail: "Guest orders", detailIsPhone: false });
+    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: "  " }, en).title).toBe("01712-345678");
+    expect(customerTitle({ kind: "guest", name: "Someone", phone: null, email: "a@example.com", latestOrderName: null }, en))
+      .toEqual({ title: "a@example.com", detail: "Guest orders", detailIsPhone: false });
+    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, translator("bn")).detail).toBe("অতিথি অর্ডার");
   });
 
-  it("keeps the name of an account or a customer the merchant added", () => {
+  it("never uses the stored name of a guest record", () => {
+    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, en).title).not.toContain("Someone");
+  });
+
+  it("keeps the name of an account or a customer the merchant added, with the phone or email under it", () => {
     expect(customerTitle({ kind: "account", name: "Rahim Uddin", phone, latestOrderName: "Karim" }, en))
-      .toEqual({ title: "Rahim Uddin", detail: null });
-    expect(customerTitle({ kind: "merchant", name: "Nasrin", phone }, en).title).toBe("Nasrin");
+      .toEqual({ title: "Rahim Uddin", detail: "01712-345678", detailIsPhone: true });
+    expect(customerTitle({ kind: "merchant", name: "Nasrin", phone: null, email: "n@example.com" }, en).detail).toBe("n@example.com");
     expect(customerTitle({ kind: "merchant", name: " ", phone }, en).title).toBe("No name");
+  });
+
+  it("writes the phone in the store country's format", () => {
+    setStoreRegion("US");
+    expect(customerTitle({ kind: "merchant", name: "Nasrin", phone }, en).detail).toBe("+880 1712 345678");
   });
 });
