@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { translate } from "~/i18n";
-import { shellMessages } from "~/i18n/shell";
+import { notificationBellMessages } from "~/i18n/notification-bell";
 import { firebaseConfigQueryOptions } from "~/lib/api-query-options/firebase";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { postApiV1AdminFcmToken } from "@scalius/api-client/sdk";
@@ -116,8 +116,8 @@ export function useFirebaseInit(userId: string | undefined) {
       onMessage(messaging, (payload) => {
         // In the dashboard's language; an order is opened by its link, never named by its internal id.
         const title = payload.data?.customerName
-          ? translate(shellMessages, "pushOrderFrom", { name: payload.data.customerName })
-          : payload.notification?.title || translate(shellMessages, "pushNotification");
+          ? translate(notificationBellMessages, "pushOrderFrom", { name: payload.data.customerName })
+          : payload.notification?.title || translate(notificationBellMessages, "pushNotification");
         const body = payload.data?.orderId ? "" : payload.notification?.body || "";
         const link = payload.data?.orderId
           ? `/admin/orders/${payload.data.orderId}`
@@ -165,7 +165,7 @@ function showNotificationToast(
     duration: 8000,
     action: link
       ? {
-          label: translate(shellMessages, "pushView"),
+          label: translate(notificationBellMessages, "pushView"),
           onClick: () => {
             window.location.href = link;
           },

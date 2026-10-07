@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
-import { shellMessages } from "~/i18n/shell";
+import { notificationBellMessages } from "~/i18n/notification-bell";
 import { TOP_BAR_BUTTON } from "./layout/nav-button";
 import { eventTime } from "~/lib/event-time";
 
@@ -47,7 +47,7 @@ function saveNotifications(notifications: AdminNotification[]) {
 }
 
 export function NotificationDropdown({ userId }: { userId: string }) {
-  const t = useMessages(shellMessages);
+  const t = useMessages(notificationBellMessages);
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AdminNotification[]>(loadNotifications);
   const { status: pushStatus, enablePushNotifications } = useFirebaseInit(userId);
