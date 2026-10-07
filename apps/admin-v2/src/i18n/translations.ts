@@ -130,9 +130,6 @@ export const translationsMessages = defineMessages({
     machineDone: "Translated: check and save",
     machineFailed: "Couldn't translate",
     machineHelp: "Fills the empty fields. Nothing is saved until you save.",
-
-    // A resource page's "More actions" item.
-    translateItem: "Translate",
   },
   bn: {
     languagesTitle: "ভাষা",
@@ -256,7 +253,5 @@ export const translationsMessages = defineMessages({
     machineDone: "অনুবাদ হয়েছে: দেখে সেভ করুন",
     machineFailed: "অনুবাদ করা যায়নি",
     machineHelp: "খালি ঘরগুলো পূরণ করে। সেভ না করা পর্যন্ত কিছু সংরক্ষিত হয় না।",
-
-    translateItem: "অনুবাদ করুন",
   },
 });

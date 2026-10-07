@@ -19,6 +19,9 @@ export function isTranslationEditorType(value: unknown): value is TranslationEdi
   return (TRANSLATION_EDITOR_TYPES as readonly unknown[]).includes(value);
 }
 
+/** The store's languages in the query cache, read by pages that must not carry the API call. */
+export const STORE_LANGUAGES_QUERY_KEY = ["settings", "languages"] as const;
+
 /** Translate & adapt's state in its URL. */
 export interface TranslationsSearch {
   type?: TranslationEditorType;

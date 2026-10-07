@@ -922,7 +922,7 @@ status per item and a side-by-side editor with Outdated markers (loaded on
 first use). Product, category and collection pages have no
 Translations card: once the store has a second language, their "More
 actions" menu has a Translate item that opens Translate & adapt on that
-item (`/admin/translations?type=&id=&locale=`). Translate & adapt edits HTML
+item (`/admin/translations?type=&id=`). Translate & adapt edits HTML
 fields as HTML, so its screen does not load the rich text editor. Copy is in English and
 Bangla.
 
