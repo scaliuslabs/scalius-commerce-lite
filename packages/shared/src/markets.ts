@@ -42,12 +42,8 @@ export const MARKET_SUGGESTION_PATH = "/api/market-suggestion";
  */
 export const MARKET_PRESENCE_QUERY_PARAM = "presence";
 
-/**
- * Today every address the storefront collects is in Bangladesh's delivery
- * hierarchy (city, thana, area), so it is every order's shipping country
- * until country-aware addresses (step 3) send one.
- */
-export const DELIVERY_HIERARCHY_COUNTRY = "BD";
+/** The country of the City/Thana/Area address adapter, defined once in `place-fields.ts`. */
+export { DELIVERY_HIERARCHY_COUNTRY } from "./place-fields";
 
 export type MarketStatus = "draft" | "active";
 

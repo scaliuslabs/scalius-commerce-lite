@@ -1,7 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsDeliveryLocations,
-  getApiV1AdminSettingsDeliveryLocationsCountries,
   getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus,
   getApiV1AdminSettingsDeliveryProviders,
 } from "@scalius/api-client/sdk";
@@ -133,13 +132,6 @@ export const allDeliveryLocationsQueryOptions = (params: {
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
-/** The countries that have places, with their place counts. */
-export const placeCountriesQueryOptions = () =>
-  queryOptions({
-    queryKey: [...queryKeys.settings.deliveryLocations(), "countries"],
-    queryFn: async () => (await apiData(getApiV1AdminSettingsDeliveryLocationsCountries())).countries,
-    staleTime: LOOKUP_STALE_TIME_MS,
-  });
 
 export const importPathaoStatusQueryOptions = () =>
   queryOptions({

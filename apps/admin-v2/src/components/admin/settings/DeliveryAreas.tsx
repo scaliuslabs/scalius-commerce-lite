@@ -44,10 +44,10 @@ import {
   deliveryLocationsQueryOptions,
   deliveryProvidersQueryOptions,
   importPathaoStatusQueryOptions,
-  placeCountriesQueryOptions,
   type DeliveryLocation,
   type PathaoImportProgress,
 } from "~/lib/api-query-options/delivery";
+import { placeCountriesQueryOptions } from "~/lib/api-query-options/places";
 import { countryName } from "~/lib/country-name";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useLocale, useMessages } from "~/i18n";
