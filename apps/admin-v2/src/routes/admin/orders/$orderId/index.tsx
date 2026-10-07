@@ -179,7 +179,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
         <p className="text-body text-muted-foreground">{help}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {notFound || kind === "forbidden" ? null : (
+        {notFound ? null : (
           <Button type="button" onClick={() => { reset(); void router.invalidate(); }}>{r("retry")}</Button>
         )}
         <Button asChild variant={notFound ? "default" : "outline"}>
