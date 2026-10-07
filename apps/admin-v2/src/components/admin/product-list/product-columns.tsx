@@ -87,9 +87,10 @@ function PriceText({ product, fmt }: { product: ProductListItem; fmt: (price: nu
  * it); `maxWidth` caps free text, cut there with the whole value on hover.
  */
 export const PRODUCT_COLUMN_LAYOUT = {
-  name: { mobile: "primary", minWidth: 240 },
+  name: { mobile: "primary", minWidth: 216 },
   status: { mobile: "status", priority: 90, minWidth: 72 },
-  inventory: { mobile: "secondary", priority: 70, maxWidth: 160, minWidth: 172 },
+  // "497 in stock for 20 variants" is 182px (195 in Bangla): it shows whole where the window has room.
+  inventory: { mobile: "secondary", priority: 70, maxWidth: 196, minWidth: 208 },
   category: { mobile: "secondary", priority: 40, maxWidth: 140, minWidth: 152 },
   price: { mobile: "secondary", numeric: true, priority: 80, minWidth: { en: 220, bn: 228 } },
   channels: { mobile: "secondary", priority: 30, minWidth: { en: 92, bn: 128 } },

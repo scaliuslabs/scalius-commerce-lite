@@ -5,6 +5,7 @@ export const mediaMessages = defineMessages({
   en: {
     title: "Files",
     chooseImage: "Choose image",
+    pickerLoading: "Loading your files",
     chooseVideo: "Choose video",
     chooseFile: "Choose file",
     chooseImages: "Choose images",
@@ -187,6 +188,7 @@ export const mediaMessages = defineMessages({
   bn: {
     title: "ফাইল",
     chooseImage: "ছবি বাছাই করুন",
+    pickerLoading: "ফাইল লোড হচ্ছে",
     chooseVideo: "ভিডিও বাছাই করুন",
     chooseFile: "ফাইল বাছাই করুন",
     chooseImages: "ছবিগুলো বাছাই করুন",

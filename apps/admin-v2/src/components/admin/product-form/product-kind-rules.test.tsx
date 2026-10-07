@@ -141,14 +141,14 @@ describe("product cards follow the kind rules", () => {
 
   it("shows discount, the fulfilment choice and free delivery (in Shipping) for a regular product", async () => {
     await act(async () => root.render(<Cards isGiftCard={false} />));
-    expect(host.textContent).toContain(p("addDiscount"));
+    expect(host.textContent).toContain(p("compareAtHelp"));
     expect(host.textContent).toContain(p("freeDelivery"));
     expect(host.querySelector("#product-fulfilment")).not.toBeNull();
   });
 
   it("hides discount and free delivery and fixes fulfilment for a gift card", async () => {
     await act(async () => root.render(<Cards isGiftCard />));
-    expect(host.textContent).not.toContain(p("addDiscount"));
+    expect(host.textContent).not.toContain(p("compareAtHelp"));
     expect(host.textContent).not.toContain(p("freeDelivery"));
     expect(host.querySelector("#product-fulfilment")).toBeNull();
     expect(host.textContent).toContain(translate(giftCardProductMessages, "fulfilmentForced"));

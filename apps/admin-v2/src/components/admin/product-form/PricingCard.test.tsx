@@ -2,7 +2,7 @@
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Form } from "@/components/ui/form";
 import { translate } from "~/i18n";
@@ -40,14 +40,18 @@ function costStore(cost: number | null) {
   return store;
 }
 
-function Harness({ variantPrices, price = 2600, discount = 0 }: {
+function Harness({ variantPrices, price = 2600, discount = 0, onForm }: {
   variantPrices: VariantPriceRange | null;
   price?: number | null;
   discount?: number;
+  onForm?: (form: UseFormReturn<ProductFormValues>) => void;
 }) {
   const form = useForm<ProductFormValues>({
     defaultValues: { price, discountType: "percentage", discountPercentage: discount, discountAmount: 0 } as ProductFormValues,
   });
+  onForm?.(form);
+  // Reading it while rendering subscribes the harness to dirty state.
+  void form.formState.isDirty;
   return <Form {...form}><PricingCard form={form} variantPrices={variantPrices} /></Form>;
 }
 
@@ -128,5 +132,51 @@ describe("PricingCard", () => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(store.setCosts).toHaveBeenLastCalledWith(["var_default"], 12.5);
+  });
+
+  const field = (labelKey: "priceLabel" | "compareAtLabel") => {
+    const text = translate(productMessages, labelKey, { symbol: "৳" });
+    const id = Array.from(host.querySelectorAll("label")).find((element) => element.textContent === text)?.getAttribute("for");
+    return document.getElementById(id!) as HTMLInputElement;
+  };
+  const type = (input: HTMLInputElement, value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  it("stores a compare-at price as the base price with a flat discount", async () => {
+    let form!: UseFormReturn<ProductFormValues>;
+    await render(<Harness variantPrices={null} price={null} onForm={(next) => { form = next; }} />);
+    await type(field("priceLabel"), "800");
+    expect(form.getValues("price")).toBe(800);
+    await type(field("compareAtLabel"), "1");
+    // Half-typed: the price stays, nothing is discounted, and the save is held back.
+    expect(form.getValues("price")).toBe(800);
+    expect(form.getValues("compareAtProblem")).toBe("notHigher");
+    await type(field("compareAtLabel"), "1000");
+    expect(form.getValues()).toMatchObject({ price: 1000, discountType: "flat", discountAmount: 200, compareAtProblem: null });
+    expect(field("priceLabel").value).toBe("800");
+    expect(form.formState.isDirty).toBe(true);
+    // Clearing it takes the discount off and keeps the selling price (the mocked currency now reports the sale).
+    currency.sale = 800;
+    await type(field("compareAtLabel"), "");
+    expect(form.getValues()).toMatchObject({ price: 800, discountAmount: 0, compareAtProblem: null });
+  });
+
+  it("shows a discounted product as price and compare-at price, and keeps the saving when the price changes", async () => {
+    currency.sale = 800;
+    let form!: UseFormReturn<ProductFormValues>;
+    await render(<Harness variantPrices={null} price={1000} discount={20} onForm={(next) => { form = next; }} />);
+    expect(field("priceLabel").value).toBe("800");
+    expect(field("compareAtLabel").value).toBe("1000");
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("priceLabel"), "700");
+    expect(form.getValues()).toMatchObject({ price: 1000, discountType: "flat", discountAmount: 300 });
+  });
+
+  it("shows the product discount only for products with options that already have one", async () => {
+    await render(<Harness variantPrices={{ min: 100, max: 200 }} />);
+    expect(host.querySelector('input[name="discountPercentage"]')).toBeNull();
+    expect(host.textContent).not.toContain(translate(productMessages, "compareAtLabel", { symbol: "৳" }));
   });
 });

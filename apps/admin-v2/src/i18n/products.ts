@@ -52,7 +52,9 @@ export const productMessages = defineMessages({
     done: "Done",
     pricing: "Pricing",
     priceLabel: "Price ({symbol})",
-    customerPays: "Customers pay {amount}",
+    compareAtLabel: "Compare-at price ({symbol})",
+    compareAtHelp: "Shown crossed out next to the price, so customers see the saving.",
+    compareAtNotHigher: "Compare-at price must be higher than the price.",
     variantPricesHint: "Each variant has its own price. Change them under Variants.",
     variantDiscountHint: "Applies to every variant without its own discount.",
     addDiscount: "Add discount",
@@ -114,6 +116,7 @@ export const productMessages = defineMessages({
     backToProducts: "Back to products",
 
     // Validation
+    titleRequired: "Title can't be blank.",
     titleMin: "Use at least 3 characters.",
     titleMax: "Use 100 characters or fewer.",
     descriptionMin: "Write at least 10 characters.",
@@ -468,7 +471,9 @@ export const productMessages = defineMessages({
     done: "হয়েছে",
     pricing: "দাম",
     priceLabel: "দাম ({symbol})",
-    customerPays: "কাস্টমার দেবেন {amount}",
+    compareAtLabel: "আগের দাম ({symbol})",
+    compareAtHelp: "বর্তমান দামের পাশে কাটা অবস্থায় দেখানো হয়, তাই কাস্টমার সাশ্রয় দেখতে পান।",
+    compareAtNotHigher: "আগের দাম বর্তমান দামের চেয়ে বেশি হতে হবে।",
     variantPricesHint: "প্রতিটি ভ্যারিয়েন্টের আলাদা দাম। ভ্যারিয়েন্ট অংশে বদলান।",
     variantDiscountHint: "নিজস্ব ছাড় নেই এমন সব ভ্যারিয়েন্টে এই ছাড় বসবে।",
     addDiscount: "ছাড় যোগ করুন",
@@ -530,6 +535,7 @@ export const productMessages = defineMessages({
     backToProducts: "পণ্যে ফিরে যান",
 
     // Validation
+    titleRequired: "টাইটেল খালি রাখা যাবে না।",
     titleMin: "অন্তত ৩টি অক্ষর দিন।",
     titleMax: "১০০ অক্ষরের মধ্যে রাখুন।",
     descriptionMin: "অন্তত ১০টি অক্ষর লিখুন।",

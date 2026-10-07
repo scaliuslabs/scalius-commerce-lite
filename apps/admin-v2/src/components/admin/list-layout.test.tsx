@@ -262,6 +262,12 @@ describe("list layout with the most and the least data", () => {
     });
   });
 
+  it.each(LOCALES)("shows a typical inventory line whole, not cut at 160px (%s)", (locale) => {
+    setLocale(locale);
+    const text = translate(productMessages, "inStockVariants", { count: 497, variants: 20 });
+    expect(textWidth(text, TYPE[locale].body)).toBeLessThanOrEqual(PRODUCT_COLUMN_LAYOUT.inventory.maxWidth);
+  });
+
   it.each(LOCALES)("shows the orders list's Total on a 1024px laptop, where the navigation is the menu drawer (%s)", (locale) => {
     setLocale(locale);
     expect(NAV_PANEL_QUERY).toBe(`(min-width: ${NAV_PANEL_MIN_WIDTH}px)`);

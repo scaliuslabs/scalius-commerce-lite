@@ -421,7 +421,10 @@ function ProductEditor({
           onSubmit={(event) => {
             event.preventDefault();
             // React bubbles submits from forms in portalled dialogs; only this form saves the page.
-            if (event.target === event.currentTarget && scope?.dirty && !scope.busy) void scope.saveAll();
+            if (event.target !== event.currentTarget || scope?.busy) return;
+            if (scope?.dirty) void scope.saveAll();
+            // A new product can be saved before anything is typed: say what it needs, as Shopify does.
+            else if (!isEdit) void form.trigger(undefined, { shouldFocus: true });
           }}
           className="flex flex-col gap-4 pb-6"
         >
@@ -514,7 +517,7 @@ function ProductEditor({
           {readOnly ? null : (
             // Shopify repeats Save at the end of the page, under a divider.
             <div className="flex justify-end border-t pt-4">
-              <Button type="submit" loading={Boolean(scope?.busy)} disabled={!scope?.dirty}>
+              <Button type="submit" loading={Boolean(scope?.busy)} disabled={isEdit && !scope?.dirty}>
                 {s("save")}
               </Button>
             </div>
