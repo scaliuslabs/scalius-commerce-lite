@@ -46,6 +46,18 @@ export const DEFAULT_CUSTOMER_IDENTITY: Readonly<CustomerIdentitySettings> = Obj
   phoneOptionalForDigital: false,
 }) as Readonly<CustomerIdentitySettings>;
 
+// ── Checkout sign-in ───────────────────────────────────────────────────────
+
+/**
+ * Set on a placed order's response when the request carried a customer
+ * session that no longer signs anyone in: the order was placed as a guest's
+ * and the storefront clears its session cookies.
+ */
+export const CUSTOMER_SESSION_ENDED_HEADER = "X-Customer-Session-Ended";
+
+/** What a buyer reads when the store sells only to signed-in customers. */
+export const CUSTOMER_SIGN_IN_REQUIRED_MESSAGE = "Sign in to place your order. This store sells only to signed-in customers.";
+
 // ── Stored phones ──────────────────────────────────────────────────────────
 
 /**

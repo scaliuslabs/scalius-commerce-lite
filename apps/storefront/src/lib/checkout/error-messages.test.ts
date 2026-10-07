@@ -16,7 +16,7 @@ describe("checkout error messages", () => {
   });
 
   it.each<[number, string, string]>([
-    [401, "Order creation failed (401)", "Your sign-in session expired. Please sign in again or continue as a guest."],
+    [401, "Order creation failed (401)", "Sign in to checkout"],
     [409, "Order creation failed (409)", "This checkout was already submitted or changed in another tab. Please review your cart and try again."],
     [429, "Payment failed", "Too many checkout attempts. Please wait a moment and try again."],
     [503, "Order creation failed", "Checkout is temporarily unavailable. Please try again shortly."],

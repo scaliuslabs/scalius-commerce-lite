@@ -12,7 +12,6 @@ vi.mock("../analytics", () => ({
 }));
 
 import {
-  getPaymentResultRecovery,
   initCheckoutPage,
   renderOrderSummaryDetails,
   resumeCheckoutPageFromHistory,
@@ -54,28 +53,6 @@ function installStorageMocks(): void {
   Object.defineProperty(globalThis, "sessionStorage", { value: session, configurable: true });
   Object.defineProperty(window, "sessionStorage", { value: session, configurable: true });
 }
-
-describe("checkout payment recovery", () => {
-  it("turns a cleared stale customer session into an explicit guest continuation", () => {
-    expect(getPaymentResultRecovery({
-      success: false,
-      status: 401,
-      errorCode: "CUSTOMER_SESSION_STALE",
-      error: "Your session expired.",
-    })).toEqual({
-      message: "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
-      buttonText: "Continue as guest",
-    });
-  });
-
-  it("does not relabel unrelated checkout failures", () => {
-    expect(getPaymentResultRecovery({
-      success: false,
-      status: 503,
-      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
-    })).toBeNull();
-  });
-});
 
 function taxQuote(
   overrides: Partial<CheckoutTaxQuote> = {},
@@ -449,6 +426,63 @@ describe("resolveCheckoutPaymentRequest", () => {
 });
 
 describe("initCheckoutPage", () => {
+  it("draws the summary the cart page showed at once, before its own quote returns", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" aria-busy="true"><span id="orderSummaryToggleTotal"></span><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    const reviewed = taxQuote({ totalMinor: 12_300, totalAmount: 123 });
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({ line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 } }),
+      expectedQuoteFingerprint: reviewed.quoteFingerprint,
+      shippingMethodId: "ship_1",
+    }));
+    sessionStorage.setItem("scalius_checkout_quote", JSON.stringify(reviewed));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = baseConfig;
+    let answerQuote: (response: Response) => void = () => undefined;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => String(input) === "/api/checkout/tax-quote"
+      ? new Promise<Response>((resolve) => { answerQuote = resolve; })
+      : Promise.reject(new Error(`Unexpected request: ${String(input)}`))) as typeof fetch);
+
+    const init = initCheckoutPage();
+    await Promise.resolve();
+
+    const summary = document.getElementById("orderSummary")!;
+    expect(summary.getAttribute("aria-busy")).toBe("true");
+    expect(document.getElementById("orderSummaryToggleTotal")?.textContent).toContain("123");
+    expect(document.getElementById("summaryDetails")?.textContent).toContain("Product");
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
+
+    answerQuote(new Response(JSON.stringify({ success: true, data: taxQuote() })));
+    await init;
+    expect(summary.getAttribute("aria-busy")).toBe("false");
+    expect(document.getElementById("orderSummaryToggleTotal")?.textContent).toContain("100");
+  });
+
+  it("never draws a stored quote of another checkout", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><span id="orderSummaryToggleTotal"></span><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({ line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 } }),
+      expectedQuoteFingerprint: "taxq_zzzzzzzzzzzzzzzzzzzzzz",
+    }));
+    sessionStorage.setItem("scalius_checkout_quote", JSON.stringify(taxQuote()));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = baseConfig;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)) as typeof fetch);
+
+    void initCheckoutPage();
+    await Promise.resolve();
+
+    expect(document.getElementById("orderSummary")?.classList.contains("hidden")).toBe(true);
+    expect(document.getElementById("summaryDetails")?.textContent).toBe("");
+  });
+
   it("shows a clear cart recovery message instead of redirecting when checkout transfer data is missing", async () => {
     window.history.replaceState(null, "", "/checkout");
     document.body.innerHTML = `
@@ -903,7 +937,9 @@ describe("initCheckoutPage", () => {
 
     const customMethod = document.querySelector('[data-method="custom"]');
     const customControl = customMethod?.firstElementChild;
-    expect(customMethod?.querySelector("img")).toBeNull();
+    // Only the neutral mark: the name never becomes markup.
+    expect([...customMethod?.querySelectorAll("img") ?? []].map((img) => img.getAttribute("src"))).toEqual(["/payment-marks/wallet.svg"]);
+    expect(customMethod?.querySelector("img[onerror]")).toBeNull();
     expect(customMethod?.textContent).toContain(
       '<img src=x onerror="window.__gatewayPwned=true">Custom pay',
     );

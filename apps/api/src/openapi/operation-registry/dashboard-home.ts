@@ -17,6 +17,15 @@ export const DASHBOARD_HOME_OPERATIONS = {
   },
   "dashboard.home.activity": { limits: { request: 16_384, response: 32_768 } },
   "dashboard.home.summary": { limits: { request: 16_384 } },
+  "dashboard.home.setup_guide": {
+    exposure: "excluded",
+    reason:
+      "The setup guide is the signed-in staff member's own Home card; its dismissal is a personal preference, and the facts it shows are available through the settings, catalog and order operations.",
+  },
+  "dashboard.home.setup_guide_dismiss": {
+    exposure: "excluded",
+    reason: "Dismissing the setup guide is the signed-in staff member's own Home preference.",
+  },
   "dashboard.search_reindex.reindex": {
     exposure: "excluded",
     reason:

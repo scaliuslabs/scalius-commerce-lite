@@ -49,7 +49,7 @@ export function initQuickAddCards(): void {
     try {
       const slug = new URL(link.href).pathname.split("/").pop();
       if (!slug) throw new Error("Missing product handle");
-      const [{ getProductBySlugResult }, { addToCart }] = await Promise.all([
+      const [{ getProductBySlugResult }, { addToCart, cartLineKeyFor }] = await Promise.all([
         import("@/lib/api/products"),
         import("@/store/cart"),
       ]);
@@ -63,7 +63,8 @@ export function initQuickAddCards(): void {
         variant: { id: line.variantId!, price: line.price },
         quantity: 1,
       });
-      document.dispatchEvent(new CustomEvent("open-cart"));
+      const addedLineKey = await cartLineKeyFor({ id: line.id, variantId: line.variantId! }).catch(() => undefined);
+      document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
     } catch {
       window.location.assign(link.href);
     } finally {

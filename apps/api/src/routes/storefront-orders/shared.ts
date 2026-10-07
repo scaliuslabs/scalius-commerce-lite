@@ -6,6 +6,7 @@ import { GIFT_CARD_APPLY_HANDLE_MAX_LENGTH } from "@scalius/core/modules/gift-ca
 import { MAX_GIFT_CARDS_PER_ORDER } from "@scalius/shared/gift-card-tender";
 import { fromMinor } from "@scalius/shared/money";
 import { putKvHint } from "@scalius/shared/kv-hints";
+import { MARKET_SUBFOLDER_PATTERN } from "@scalius/shared/markets";
 import { planLimits } from "@scalius/shared/plan-limits";
 import type { WaitUntilExecutionContext } from "../../utils/execution-context";
 import {
@@ -144,7 +145,7 @@ export function lazySessionCustomerId(
 }
 
 /** A storefront page's subfolder presence in a checkout body (`en-in`); its market prices the cart. */
-export const checkoutPresenceSchema = z.string().regex(/^[a-z]{2}-[a-z]{2}$/).optional().nullable().openapi({
+export const checkoutPresenceSchema = z.string().regex(MARKET_SUBFOLDER_PATTERN).optional().nullable().openapi({
   description: "The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root.",
 });
 

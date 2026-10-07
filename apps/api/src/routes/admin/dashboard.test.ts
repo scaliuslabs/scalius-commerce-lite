@@ -22,10 +22,11 @@ function insertOrder(id: string, customerName: string, totalMinor: number, creat
 }
 
 /** The dashboard routes behind the permission set the admin middleware resolved. */
-function app(permissions: readonly string[]) {
+function app(permissions: readonly string[], userId = "user_1") {
     const api = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     api.use("*", async (c, next) => {
         c.set("db", database.db);
+        c.set("user", { id: userId } as never);
         c.set("adminPermissions", new Set(permissions));
         await next();
     });
@@ -123,4 +124,27 @@ describe("Home sales numbers follow the View sales numbers permission", () => {
             expect(status).toBe(400);
         },
     );
+});
+
+describe("Home setup guide", () => {
+    const guide = async (userId = "user_1") =>
+        (await (await app(HOME, userId).request("/api/v1/admin/dashboard/setup-guide", {}, {})).json()) as { data: Record<string, unknown> };
+
+    it("reads each step from the store and starts undismissed", async () => {
+        const { data } = await guide();
+        expect(data).toMatchObject({
+            dismissed: false,
+            countryCode: "BD",
+            setupNeeded: false,
+            steps: { product: false, details: false, theme: false, payments: true, shipping: false, domain: false, order: true },
+            bangladeshPack: { active: false },
+        });
+    });
+
+    it("dismisses for the signed-in staff member only", async () => {
+        const response = await app(HOME).request("/api/v1/admin/dashboard/setup-guide/dismiss", { method: "POST" }, {});
+        expect(response.status).toBe(200);
+        expect((await guide()).data.dismissed).toBe(true);
+        expect((await guide("user_2")).data.dismissed).toBe(false);
+    });
 });

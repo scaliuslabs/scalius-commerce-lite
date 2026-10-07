@@ -47,6 +47,10 @@ export const DASHBOARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/dashboard/*": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
   },
+  // Dismissing the setup guide: one staff member's own preference.
+  "/api/v1/admin/dashboard/setup-guide/dismiss": {
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
   // =============================================
   // Analytics overview and reports (sales numbers). Reports naming customers
   // also need customers.view, checked by the route.

@@ -154,20 +154,27 @@ describe("dashboard sign-in on the API Worker", () => {
     expect(state.session.permissions.length).toBeGreaterThan(10);
   });
 
-  it("tells a browser whose session someone else ended why it was signed out, and nobody else", async () => {
+  it("tells a browser holding a signed cookie why it has no session, and nobody else", async () => {
     const env = makeEnv();
     const userId = await createSuperAdmin(env);
     const cookie = sessionCookie(await signIn(env));
 
-    // Suspending, removing or "sign out other devices" deletes the session row.
+    // "Sign out other devices", a removal or a replaced database leaves no session row.
     await database.db.delete(sessionTable).where(eq(sessionTable.userId, userId));
-    const revoked = await (await readState(env, cookie)).json() as DashboardSessionState;
-    expect(revoked).toMatchObject({ session: null, signedOut: "access_changed" });
+    const ended = await (await readState(env, cookie)).json() as DashboardSessionState;
+    expect(ended).toMatchObject({ session: null, signedOut: "session_ended" });
 
-    // A session that simply ran out, a forged cookie, or no cookie: plain sign-in.
+    // A session that ran out says the same.
     const expiredCookie = sessionCookie(await signIn(env));
     await database.db.update(sessionTable).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(sessionTable.userId, userId));
-    expect(await (await readState(env, expiredCookie)).json()).not.toHaveProperty("signedOut");
+    expect(await (await readState(env, expiredCookie)).json()).toMatchObject({ session: null, signedOut: "session_ended" });
+
+    // A live session whose person is suspended says so.
+    const suspendedCookie = sessionCookie(await signIn(env));
+    await database.db.update(userTable).set({ banned: true }).where(eq(userTable.id, userId));
+    expect(await (await readState(env, suspendedCookie)).json()).toMatchObject({ session: null, signedOut: "suspended" });
+
+    // A forged cookie, or no cookie: plain sign-in.
     const forged = `${cookie.split("=")[0]}=${encodeURIComponent("made-up-token.c2lnbmF0dXJl")}`;
     expect(await (await readState(env, forged)).json()).not.toHaveProperty("signedOut");
     expect(await (await readState(env)).json()).not.toHaveProperty("signedOut");

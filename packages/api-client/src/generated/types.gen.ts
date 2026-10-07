@@ -31929,6 +31929,95 @@ export type GetApiV1AdminDashboardActivityResponses = {
 
 export type GetApiV1AdminDashboardActivityResponse = GetApiV1AdminDashboardActivityResponses[keyof GetApiV1AdminDashboardActivityResponses];
 
+export type GetApiV1AdminDashboardSetupGuideData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/setup-guide';
+};
+
+export type GetApiV1AdminDashboardSetupGuideResponses = {
+    /**
+     * Setup guide
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * This staff member dismissed the guide.
+             */
+            dismissed: boolean;
+            /**
+             * The store's country; the guide shows country-specific steps for it.
+             */
+            countryCode: string;
+            /**
+             * The new-store setup step (name, country, currency, time zone) still applies.
+             */
+            setupNeeded: boolean;
+            steps: {
+                /**
+                 * A product exists outside the trash.
+                 */
+                product: boolean;
+                /**
+                 * The store has a name.
+                 */
+                details: boolean;
+                /**
+                 * The theme was published from the editor.
+                 */
+                theme: boolean;
+                /**
+                 * Checkout offers a payment method that is ready, in the store's currency and for its country.
+                 */
+                payments: boolean;
+                /**
+                 * A live delivery rate serves a place, or local pickup is on.
+                 */
+                shipping: boolean;
+                /**
+                 * The storefront web address is set.
+                 */
+                domain: boolean;
+                /**
+                 * An order exists.
+                 */
+                order: boolean;
+            };
+            /**
+             * The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.
+             */
+            bangladeshPack: {
+                active: boolean;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardSetupGuideResponse = GetApiV1AdminDashboardSetupGuideResponses[keyof GetApiV1AdminDashboardSetupGuideResponses];
+
+export type PostApiV1AdminDashboardSetupGuideDismissData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/setup-guide/dismiss';
+};
+
+export type PostApiV1AdminDashboardSetupGuideDismissResponses = {
+    /**
+     * Setup guide dismissed
+     */
+    200: {
+        success: true;
+        data: {
+            dismissed: true;
+        };
+    };
+};
+
+export type PostApiV1AdminDashboardSetupGuideDismissResponse = PostApiV1AdminDashboardSetupGuideDismissResponses[keyof PostApiV1AdminDashboardSetupGuideDismissResponses];
+
 export type GetApiV1AdminReportsOverviewData = {
     body?: never;
     path?: never;

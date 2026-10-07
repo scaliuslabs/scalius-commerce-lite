@@ -42,7 +42,11 @@ import { commitTaxDocument } from "@scalius/core/modules/tax";
 import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
-import { AppError, ValidationError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
+import { AppError, ValidationError, RateLimitError } from "../../utils/api-error";
+import {
+  CUSTOMER_SESSION_ENDED_HEADER,
+  CUSTOMER_SIGN_IN_REQUIRED_MESSAGE,
+} from "@scalius/shared/customer-auth-policy";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { getClientIp } from "@scalius/shared/rate-limit";
 import { isWithinRateLimit } from "../../utils/rate-limit";
@@ -69,6 +73,8 @@ type CheckoutSettingsSnapshot = StorefrontCheckoutSettingsSnapshot;
 type CheckoutOrderPolicyResult = {
   customerIdentity: CheckoutCustomerIdentity;
   checkoutSettings: CheckoutSettingsSnapshot;
+  /** The request carried a session that no longer signs anyone in (the storefront clears its cookies). */
+  sessionEnded: boolean;
 };
 
 type CheckoutDiagnosticPhase =
@@ -152,34 +158,27 @@ async function assertCheckoutOrderPolicy(
     );
 
   const sessionToken = getCustomerSessionTokenFromRequest(c);
-  if (!sessionToken) {
-    if (checkoutSettings?.guestCheckoutEnabled ?? true) {
-      return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot };
-    }
-
-    throw new UnauthorizedError("Please sign in before checkout.");
+  const session = sessionToken
+    ? await getCustomerBySession(
+      db,
+      sessionToken,
+      getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+    )
+    : null;
+  if (session?.customerId) {
+    return {
+      customerIdentity: { customerId: session.customerId, source: "authenticated" },
+      checkoutSettings: checkoutSettingsSnapshot,
+      sessionEnded: false,
+    };
   }
-
-  const session = await getCustomerBySession(
-    db,
-    sessionToken,
-    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
-  );
-  if (!session?.customerId) {
-    if (checkoutSettings?.guestCheckoutEnabled ?? true) {
-      throw new AppError(401, "CUSTOMER_SESSION_STALE", "Your session expired. Please sign in again or continue as a guest.");
-    }
-
-    throw new UnauthorizedError("Please sign in before checkout.");
+  // A store that sells to guests takes the order as a guest's, also when the
+  // browser still holds a session that ended (Shopify): an old cookie is no
+  // reason to stop a buyer who never asked to sign in.
+  if (checkoutSettings?.guestCheckoutEnabled ?? true) {
+    return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot, sessionEnded: Boolean(sessionToken) };
   }
-
-  return {
-    customerIdentity: {
-      customerId: session.customerId,
-      source: "authenticated",
-    },
-    checkoutSettings: checkoutSettingsSnapshot,
-  };
+  throw new AppError(401, "CUSTOMER_SIGN_IN_REQUIRED", CUSTOMER_SIGN_IN_REQUIRED_MESSAGE);
 }
 
 /**
@@ -535,6 +534,7 @@ app.openapi(createOrderRoute, async (c) => {
     const {
       customerIdentity: checkoutCustomerIdentity,
       checkoutSettings,
+      sessionEnded,
     } = await assertCheckoutOrderPolicy(
       c,
       data.customerPhone,
@@ -750,6 +750,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     diagnostics?.mark("post_commit");
     diagnostics?.apply(c);
+    if (sessionEnded) c.header(CUSTOMER_SESSION_ENDED_HEADER, "1");
 
     return created(c, responsePayload);
   } catch (error: unknown) {

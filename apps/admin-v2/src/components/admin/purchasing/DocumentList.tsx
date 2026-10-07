@@ -94,7 +94,7 @@ export function DocumentList<T extends { id: string }, Tab extends string>(props
       {nothingYet ? (
         <div className="overflow-clip rounded-xl bg-card shadow-card">
           {tabBar}
-          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action} />
+          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action} help />
         </div>
       ) : (
         <DataTable

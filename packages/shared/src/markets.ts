@@ -6,6 +6,10 @@
  * - The URL decides the page: a subfolder presence (`/en-in/...`) renders its
  *   market; the root renders the backup market. Nothing else changes the
  *   bytes of a URL, so pages stay cacheable and Google-safe.
+ * - Each published store language other than the default is also served
+ *   on the backup market at `/<locale>` (`/bn`, Shopify's language
+ *   subfolders on the primary market). These presences are not stored: the
+ *   published language list is their one source (`marketMatrixSql`).
  * - An explicit buyer choice (the `localization` cookie the market selector
  *   sets) may redirect a top-level navigation to the same path under the
  *   chosen presence. Crawlers and non-navigation requests are never
@@ -14,8 +18,15 @@
  * - At checkout, the shipping country decides the order's market.
  */
 
-/** A subfolder presence: `<locale>-<country>`, lower case (`en-in`). The root is `''`. */
-export const MARKET_SUBFOLDER_PATTERN = /^[a-z]{2}-[a-z]{2}$/;
+/**
+ * A subfolder presence, lower case: a market's `<locale>-<country>` (`en-in`)
+ * or a language of the backup market, `<locale>` (`bn`). The root is `''`.
+ */
+export const MARKET_SUBFOLDER_PATTERN = /^[a-z]{2}(?:-[a-z]{2})?$/;
+/** A market's own subfolder, the only kind a market stores: `<locale>-<country>` (`en-in`). */
+export const MARKET_COUNTRY_SUBFOLDER_PATTERN = /^[a-z]{2}-[a-z]{2}$/;
+/** A store language's subfolder on the backup market (`bn`): derived from the published languages. */
+export const LANGUAGE_SUBFOLDER_PATTERN = /^[a-z]{2}$/;
 /** A market handle: lower-case words joined by dashes. */
 export const MARKET_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const MARKET_HANDLE_MAX_LENGTH = 60;
@@ -48,7 +59,7 @@ export { DELIVERY_HIERARCHY_COUNTRY } from "./place-fields";
 export type MarketStatus = "draft" | "active";
 
 export interface PublicMarketPresence {
-  /** `''` (the root, backup market only) or `<locale>-<country>`. */
+  /** `''` (the root, backup market only), `<locale>` (a language of the backup market) or `<locale>-<country>`. */
   value: string;
   locale: string;
 }
@@ -77,6 +88,16 @@ export interface MarketMatrix {
 
 export function isMarketSubfolder(value: unknown): value is string {
   return typeof value === "string" && MARKET_SUBFOLDER_PATTERN.test(value);
+}
+
+/** A language subfolder of the backup market (`bn`): it prices and delivers as the root. */
+export function isLanguageSubfolder(value: unknown): value is string {
+  return typeof value === "string" && LANGUAGE_SUBFOLDER_PATTERN.test(value);
+}
+
+/** The country a market's subfolder names (`en-in` → `IN`); null for the root and a language subfolder. */
+export function presenceCountry(value: string | null | undefined): string | null {
+  return typeof value === "string" && MARKET_COUNTRY_SUBFOLDER_PATTERN.test(value) ? value.slice(3).toUpperCase() : null;
 }
 
 export function normalizeMarketCountry(value: unknown): string | null {
@@ -236,10 +257,24 @@ export function activePresences(matrix: MarketMatrix): Array<{ market: PublicMar
   return all;
 }
 
-/** The `hreflang` of a presence: `en-IN` for `en-in`; the root's names the backup's one country when it has exactly one. */
+/**
+ * The `hreflang` of a presence: `en-IN` for `en-in`; the root's and a
+ * language subfolder's (`/bn`) name the backup's one country when it has
+ * exactly one (`bn-BD`), else the language alone.
+ */
 export function presenceHreflang(market: PublicMarket, presence: PublicMarketPresence): string {
-  if (presence.value !== "") return `${presence.locale}-${presence.value.slice(3).toUpperCase()}`;
+  const country = presenceCountry(presence.value);
+  if (country) return `${presence.locale}-${country}`;
   return market.countries.length === 1 ? `${presence.locale}-${market.countries[0]}` : presence.locale;
+}
+
+/** The languages a market's pages are in, one presence each (the root first): what a language selector offers. */
+export function marketLanguagePresences(market: PublicMarket): PublicMarketPresence[] {
+  const seen = new Set<string>();
+  const presences = market.isBackup && !market.presences.some((presence) => presence.value === "")
+    ? [{ value: "", locale: "en" }, ...market.presences]
+    : market.presences;
+  return presences.filter((presence) => !seen.has(presence.locale) && Boolean(seen.add(presence.locale)));
 }
 
 export interface HreflangAlternate {
@@ -299,7 +334,7 @@ export function formatMarketSelection(selection: MarketSelection): string {
 }
 
 export function parseMarketSelection(value: string | null | undefined): MarketSelection | null {
-  const match = /^([A-Z]{2}):([a-z]{2}-[a-z]{2})?$/.exec(value?.trim() ?? "");
+  const match = /^([A-Z]{2}):([a-z]{2}(?:-[a-z]{2})?)?$/.exec(value?.trim() ?? "");
   return match ? { country: match[1]!, presence: match[2] ?? "" } : null;
 }
 

@@ -1,0 +1,60 @@
+---
+// The language selector (Shopify's language form, beside the country/region
+// form in the footer): a plain POST to /localization that works without
+// JavaScript. Each choice is one of the page's market's presences (the root
+// and its language subfolders, such as `/bn`); the server sends the buyer to
+// the same page there. Rendered only while that market has two languages.
+import { MARKET_SELECTION_PATH, type PublicMarket } from "@scalius/shared/markets";
+import { languageOptions, marketSelectorCopy } from "@/lib/market-selector";
+
+interface Props {
+  market: PublicMarket;
+  /** The page's presence (null at the root). */
+  presence: string | null;
+  /** The country the page's market is chosen with (the localization cookie keeps it). */
+  country: string;
+  language: string;
+  /** The page's path without its presence, where the choice returns the buyer. */
+  returnTo: string;
+}
+
+const { market, presence, country, language, returnTo } = Astro.props;
+const copy = marketSelectorCopy(language);
+const options = languageOptions(market);
+const selected = market.presences.find((each) => each.value === (presence ?? ""))?.locale ?? options[0]?.locale;
+---
+
+<form method="post" action={MARKET_SELECTION_PATH} class="language-selector" data-language-selector>
+  <label for="language-selector-locale">{copy.languageLabel}</label>
+  <select id="language-selector-locale" name="locale_code">
+    {options.map((option) => (
+      <option value={option.locale} lang={option.locale} selected={option.locale === selected}>{option.name}</option>
+    ))}
+  </select>
+  <input type="hidden" name="country_code" value={country} />
+  <input type="hidden" name="return_to" value={returnTo} />
+  <button type="submit">{copy.submit}</button>
+</form>
+
+<style>
+  .language-selector {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .language-selector select,
+  .language-selector button {
+    min-height: 2.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 0.375rem);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0 0.75rem;
+  }
+</style>

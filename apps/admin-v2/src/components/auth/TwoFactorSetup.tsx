@@ -89,7 +89,8 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
       if (error || data?.method !== "totp") {
         setPassword("");
         return fail(error, (errorCode, status) =>
-          errorCode === "INVALID_PASSWORD" || status === 400 || status === 401 ? "incorrectPassword" : null,
+          // A wrong password is 400 `INVALID_PASSWORD`; a 401 is a session that ended.
+          errorCode === "INVALID_PASSWORD" || status === 400 ? "incorrectPassword" : status === 401 ? "sessionEnded" : null,
         );
       }
       setBackupCodes(data.backupCodes);
@@ -112,7 +113,7 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
       setStep("backup");
     } catch (error) {
       fail(error, (errorCode, status) =>
-        errorCode === "TWO_FACTOR_CODE_EXPIRED" ? "codeExpired" : status === 400 || status === 401 ? "codeInvalid" : null,
+        errorCode === "TWO_FACTOR_CODE_EXPIRED" ? "codeExpired" : status === 400 ? "codeInvalid" : status === 401 ? "sessionEnded" : null,
       );
       setCode("");
       document.getElementById("setup-code")?.focus();

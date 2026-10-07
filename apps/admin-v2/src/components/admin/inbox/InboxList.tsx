@@ -126,6 +126,7 @@ export function InboxList({
             icon={Inbox}
             title={filtered ? t("empty.filtered") : t(`empty.${status}`)}
             description={filtered ? t("empty.filteredBody") : t(`empty.${status}Body`)}
+            help={!filtered && status === "open"}
             action={filtered ? (
               <Button
                 type="button"

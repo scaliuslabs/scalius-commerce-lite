@@ -16,16 +16,14 @@ import {
   isPaymentSessionProcessingPayload,
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
 } from "../../../lib/checkout/payment-session-proxy";
-import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
+import {
+  ENDED_CUSTOMER_SESSION_COOKIES,
+  getCustomerSessionTokenFromCookie,
+} from "../../../lib/customer-session-cookie";
 import {
   createOrderReceiptCookieHeader,
   createOrderReceiptFinalizeCookieHeader,
 } from "../../../lib/order-receipt-cookie";
-
-const CUSTOMER_COOKIE_CLEAR_HEADERS = [
-  "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",
-  "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
-];
 
 type CheckoutCreateOrderPayload = CreateOrderPayload & {
   initialPaymentSession?: unknown;
@@ -103,13 +101,6 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await createOrder(payload, { customerSessionToken });
 
     if (!result.success) {
-      const headers = new Headers({ "Content-Type": "application/json" });
-      if (result.errorCode === "CUSTOMER_SESSION_STALE") {
-        for (const cookie of CUSTOMER_COOKIE_CLEAR_HEADERS) {
-          headers.append("Set-Cookie", cookie);
-        }
-      }
-
       return new Response(JSON.stringify({
         success: false,
         error: getCheckoutErrorMessage(result.error),
@@ -117,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
         details: result.details,
       }), {
         status: result.status && result.status >= 400 ? result.status : 400,
-        headers,
+        headers: { "Content-Type": "application/json" },
       });
     }
 
@@ -154,6 +145,10 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const headers = new Headers({ "Content-Type": "application/json" });
+    // The order was placed as a guest's: the ended session's cookies go.
+    if (result.customerSessionEnded) {
+      for (const cookie of ENDED_CUSTOMER_SESSION_COOKIES) headers.append("Set-Cookie", cookie);
+    }
     const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
     if (receiptCookie) {
       headers.append("Set-Cookie", receiptCookie);

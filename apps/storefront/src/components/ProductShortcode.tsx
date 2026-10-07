@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ProductPageData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { addToCart } from "@/store/cart";
+import { addToCart, cartLineKeyFor } from "@/store/cart";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney, getCurrencyCode, getCurrencySymbol, getDecimalPlaces } from "@/lib/currency";
@@ -120,7 +120,10 @@ export default function ProductShortcode({ productData }: { productData: Product
     });
     showToast("Added to cart successfully!", "success");
     if (redirect) window.setTimeout(() => { window.location.href = pagePath("/cart"); }, 300);
-    else document.dispatchEvent(new CustomEvent("open-cart"));
+    else {
+      const addedLineKey = await cartLineKeyFor({ id: product.id, variantId: matchingVariant.id }).catch(() => undefined);
+      document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
+    }
   };
 
   return (
