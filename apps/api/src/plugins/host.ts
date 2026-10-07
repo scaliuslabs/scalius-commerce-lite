@@ -456,8 +456,9 @@ export class PluginHost {
         return { ok: false, value: null, error, failure: "limited" };
       }
     }
-    // Data updates run before the app's first run of a new version (functions are pure and never wait).
-    if (invocation.kind !== "function" && invocation.kind !== "migration" && invocation.kind !== "check"
+    // Data updates run before the app's first run of a new version. Functions are
+    // pure and never wait; storefront output is read-only and never writes.
+    if (invocation.kind !== "function" && invocation.kind !== "migration" && invocation.kind !== "check" && !mode.render
       && pendingPluginMigrations(installation.manifest, this.migratedVersions.get(installation.pluginId) ?? installation.migratedVersion).length > 0) {
       const migrated = await this.runPendingMigrations(installation);
       if (!migrated.ok) {
