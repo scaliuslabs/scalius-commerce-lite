@@ -9,7 +9,8 @@ import {
   type SQLInputValue,
   type SQLOutputValue,
 } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/d1";
@@ -24,6 +25,8 @@ type SqliteProvider = "d1" | "turso";
 type Row = Record<string, SQLOutputValue>;
 
 const migrationDirectory = join(dirname(fileURLToPath(import.meta.url)), "../../migrations");
+/** Migrated images shared by test processes, keyed by the digest of the script that built them. */
+const imageCacheDirectory = join(dirname(fileURLToPath(import.meta.url)), "../../node_modules/.cache/scalius-migrated-sqlite");
 const compiledMigrations = new Map<string, string>();
 const migratedImages = new Map<string, Uint8Array>();
 
@@ -60,6 +63,40 @@ export function compiledMigrationSql(
   return sql;
 }
 
+/**
+ * Applying every migration takes seconds (each DDL statement re-reads a
+ * schema of thousands of triggers), so test files would each pay it in their
+ * first test. The image is the same for the same script: a process reuses the
+ * image another one built. A changed migration changes the digest.
+ */
+function imageFile(provider: SqliteProvider, beforeMigration: string | undefined): string {
+  const digest = createHash("sha256")
+    .update(`${process.version}\n${compiledMigrationSql(provider, beforeMigration)}`)
+    .digest("hex");
+  return join(imageCacheDirectory, `${digest}.sqlite`);
+}
+
+function readImageFile(provider: SqliteProvider, beforeMigration: string | undefined): Uint8Array | undefined {
+  try {
+    return new Uint8Array(readFileSync(imageFile(provider, beforeMigration)));
+  } catch {
+    return undefined;
+  }
+}
+
+function writeImageFile(provider: SqliteProvider, beforeMigration: string | undefined, image: Uint8Array): void {
+  try {
+    const file = imageFile(provider, beforeMigration);
+    mkdirSync(imageCacheDirectory, { recursive: true });
+    // Write then rename: a process reading at the same time sees the whole image or none.
+    const partial = `${file}.${process.pid}.${Date.now()}.partial`;
+    writeFileSync(partial, image);
+    renameSync(partial, file);
+  } catch {
+    // A read-only checkout still works: each process builds its own image.
+  }
+}
+
 export interface MigratedSqliteOptions {
   provider?: SqliteProvider;
   /** Foreign-key enforcement. Defaults to ON, matching D1 (and node:sqlite's own default). */
@@ -70,18 +107,24 @@ export interface MigratedSqliteOptions {
 
 /**
  * An in-memory SQLite database with the real schema applied. Migrations run
- * once per provider (and cut-off) per process (~300 ms); later databases restore that image.
+ * once per provider (and cut-off) for every test process (the image is shared
+ * through a file); later databases restore that image.
  */
 export function createMigratedSqlite(options: MigratedSqliteOptions = {}): DatabaseSync {
   const provider = options.provider ?? "d1";
   const imageKey = `${provider}:${options.beforeMigration ?? ""}`;
   const sqlite: SerializableSqlite = new DatabaseSync(":memory:");
-  const image = migratedImages.get(imageKey);
+  const image = migratedImages.get(imageKey) ?? (sqlite.deserialize ? readImageFile(provider, options.beforeMigration) : undefined);
   if (image && sqlite.deserialize) {
     sqlite.deserialize(image);
+    migratedImages.set(imageKey, image);
   } else {
     sqlite.exec(compiledMigrationSql(provider, options.beforeMigration));
-    if (sqlite.serialize) migratedImages.set(imageKey, sqlite.serialize());
+    if (sqlite.serialize) {
+      const built = sqlite.serialize();
+      migratedImages.set(imageKey, built);
+      writeImageFile(provider, options.beforeMigration, built);
+    }
   }
   // Table-rebuild migrations toggle the pragma themselves; set it last.
   sqlite.exec(`PRAGMA foreign_keys = ${options.foreignKeys === false ? "OFF" : "ON"}`);
