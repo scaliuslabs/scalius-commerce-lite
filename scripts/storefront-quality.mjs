@@ -146,29 +146,37 @@ function pageChecks({ focus, locale, dir }) {
   // Horizontal overflow: the page scrolls sideways; name the elements past the edge.
   const width = document.documentElement.clientWidth;
   const scrollWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
-  if (scrollWidth > width + 1) {
-    const clipped = (element) => {
-      for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
-        const style = getComputedStyle(parent);
-        if (/(hidden|auto|scroll|clip)/.test(style.overflowX)) {
-          const rect = parent.getBoundingClientRect();
-          if (rect.right <= width + 1 && rect.left >= -1) return true;
-        }
+  // Horizontal overflow. The storefront clips the root (`html, body {
+  // overflow-x: clip }`), so content past the edge is cut off rather than
+  // scrolled: look for it directly, not only at the scroll width.
+  const clipped = (element) => {
+    for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.position === "fixed") return true;
+      if (/(hidden|auto|scroll|clip)/.test(style.overflowX)) {
+        const rect = parent.getBoundingClientRect();
+        if (rect.right <= width + 1 && rect.left >= -1) return true;
       }
-      return false;
-    };
-    const offenders = [...document.body.querySelectorAll("*")].filter((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && (rect.right > width + 1 || rect.left < -1) && getComputedStyle(element).position !== "fixed" && !clipped(element);
-    });
+    }
+    return false;
+  };
+  const offenders = [...document.body.querySelectorAll("*")].filter((element) => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 1 || rect.height <= 1 || (rect.right <= width + 1 && rect.left >= -1)) return false;
+    return getComputedStyle(element).position !== "fixed" && visible(element) && !clipped(element);
+  });
+  if (scrollWidth > width + 1 || offenders.length) {
     // The outermost offenders only.
     const outer = offenders.filter((element) => !offenders.includes(element.parentElement));
     const focused = outer.filter(inFocus);
+    const widest = Math.max(scrollWidth, ...outer.map((element) => Math.ceil(element.getBoundingClientRect().right)));
     findings.push({
       rule: focused.length || outer.length === 0 ? "overflow" : "overflow-outside-focus",
       source: "harness",
       impact: "serious",
-      message: `The page scrolls sideways: ${scrollWidth}px of content in a ${width}px viewport.`,
+      message: scrollWidth > width + 1
+        ? `The page scrolls sideways: ${scrollWidth}px of content in a ${width}px viewport.`
+        : `Content reaches ${widest}px in a ${width}px viewport and is cut off at the edge (the root clips it).`,
       count: Math.max(1, (focused.length ? focused : outer).length),
       nodes: (focused.length ? focused : outer).slice(0, 10).map(describe),
     });
@@ -182,7 +190,8 @@ function pageChecks({ focus, locale, dir }) {
     // A focus target (a skip link's <main tabindex="-1">) is not a control.
     if (!element.matches("a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=radio],[role=switch],[role=option],[role=combobox],[role=slider]")) return false;
     if (element.matches(":disabled,[aria-disabled='true']")) return false;
-    const roving = element.matches("[role=tab],[role=menuitem],[role=option],[role=radio]") && element.parentElement?.querySelector("[tabindex='0']");
+    // A roving tab stop: one sibling takes Tab, arrows move between them.
+    const roving = element.parentElement?.querySelector(":scope > [tabindex='0']");
     if (roving) return false;
     return element.tabIndex < 0;
   });
@@ -381,15 +390,19 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
     fallbacks: entry.fallbacks ?? [], unanswered: [],
   };
   await context.clearCookies();
-  const page = await context.newPage();
   const consoleErrors = [];
-  page.on("console", (message) => {
-    if (message.type() === "error" && !/WebSocket|\[vite\]/.test(message.text())) consoleErrors.push(message.text().slice(0, 200));
-  });
-  page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error.message ?? error).slice(0, 200)}`));
+  let page = null;
   try {
     for (const width of widths) {
       consoleErrors.length = 0;
+      // A fresh page per width: a click on the previous width (an open
+      // drawer) can leave a navigation running.
+      await page?.close().catch(() => {});
+      page = await context.newPage();
+      page.on("console", (message) => {
+        if (message.type() === "error" && !/WebSocket|\[vite\]/.test(message.text())) consoleErrors.push(message.text().slice(0, 200));
+      });
+      page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error.message ?? error).slice(0, 200)}`));
       await page.setViewportSize({ width, height: VIEWPORT_HEIGHT });
       const response = await page.goto(result.url, { waitUntil: "load", timeout: 60_000 });
       if (!response || response.status() >= 400) {
@@ -494,7 +507,7 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
   } catch (error) {
     result.error = String(error?.stack ?? error).slice(0, 2000);
   } finally {
-    await page.close().catch(() => {});
+    await page?.close().catch(() => {});
   }
   result.failing = Boolean(result.error) || Object.values(result.widths).some((width) => width.findings.some((finding) => finding.gating));
   return result;
