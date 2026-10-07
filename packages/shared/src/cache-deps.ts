@@ -474,9 +474,9 @@ const CACHE_DEP_TABLE_RULES = {
       },
       {
         name: "seo", event: "update", image: "new",
-        // exclude_from_product_feed: dropped in 0122 (the feed channels'
-        // publications replace it); deployed 0100's trigger still names it.
-        changed: ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+        // Deployed 0100 also named exclude_from_product_feed, dropped in 0122
+        // (the feed channels' publications replace it): CACHE_DEP_BASELINE_CHANGED.
+        changed: ["no_index", "exclude_from_sitemap"],
         keys: [{ dep: "lm:seo" }],
       },
       { name: "sale_ins", event: "insert", image: "new", where: SALE_PRODUCT, keys: [SALE] },

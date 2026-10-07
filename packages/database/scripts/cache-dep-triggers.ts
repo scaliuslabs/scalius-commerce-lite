@@ -132,6 +132,15 @@ export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
  * and the migration that changed the columns reinstalls the triggers that
  * name them (`CACHE_DEP_LATER_TRIGGERS`).
  */
+/**
+ * Update rules whose `changed` list deployed 0100 rendered with a column a
+ * later migration dropped (`<table>:<rule name>`): 0100 renders this list,
+ * every later render the registry's.
+ */
+export const CACHE_DEP_BASELINE_CHANGED: Readonly<Record<string, readonly string[]>> = {
+  "products:seo": ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+};
+
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   products: [
     "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",
@@ -346,22 +355,14 @@ function assertColumn(table: string, column: string): void {
   }
 }
 
-/**
- * A column deployed 0100 saw that a later migration dropped: a rule may still
- * name it (0100 renders it), and every later render leaves it out.
- */
-function droppedSinceBaseline(table: string, column: string): boolean {
-  return !renderingBaseline
-    && (CACHE_DEP_BASELINE_COLUMNS[table]?.includes(column) ?? false)
-    && !(tableColumns.get(table) ?? []).includes(column);
-}
-
 function changedColumns(table: string, spec: CacheDepTableSpec, rule: CacheDepRule): string[] {
   if (rule.bandChanged) return [];
   if (rule.changed === undefined) return [];
   const columns = rule.changed === "visible"
     ? columnsOf(table).filter((column) => !spec.noise.includes(column))
-    : rule.changed.filter((column) => !droppedSinceBaseline(table, column));
+    : renderingBaseline && CACHE_DEP_BASELINE_CHANGED[`${table}:${rule.name}`]
+      ? [...CACHE_DEP_BASELINE_CHANGED[`${table}:${rule.name}`]!]
+      : [...rule.changed];
   for (const column of columns) assertColumn(table, column);
   return columns;
 }
