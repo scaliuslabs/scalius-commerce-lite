@@ -131,7 +131,7 @@ export async function readAppProviderSettings(
   const runnable = runtime.canRun(installation);
   const environmentValue = settings.values[provider.environmentSetting ?? "environment"];
   const environment = environmentValue === "live" ? "live" : environmentValue === "sandbox" ? "test" : "unknown";
-  const complete = (keys: string[]) => `Complete ${name}'s settings: ${keys.map((key) => (own ? qualified(key) : key)).join(", ")}.`;
+  const complete = (keys: string[]) => `Complete ${name}'s settings: ${keys.map((key) => (own ? qualified(key) : labels.get(key) ?? key)).join(", ")}.`;
   // The provider's own fields, named as its setup sheet names them.
   const setUp = (keys: string[]) => (provider.name
     ? `Set up ${provider.name}: ${keys.map((key) => labels.get(key) ?? key).join(", ")}.`
