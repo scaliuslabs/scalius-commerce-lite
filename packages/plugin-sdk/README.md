@@ -59,6 +59,9 @@ pnpm run deploy                 # compile the app into the API Worker
 
 `pnpm plugin` keeps `scalius.plugins.json` and the generated files in `apps/api/src/plugins/` in step: `bundled.gen.ts`, `sandbox-runtime.gen.ts`, `assets.gen.ts` (the listing images) and `catalog.gen.ts` (the first-party apps in `plugins/` that the lockfile does not list). Do not edit them by hand. Other subcommands:
 
+- `create <vendor.name>` scaffolds an app with an event, a checkout function, a storefront section, an admin page, a data update and a test. `validate [path]` checks the manifest, compatibility, handlers, permissions, images and bundle size, one line each.
+- `keygen <dir>` makes an Ed25519 signing key (keep it out of every repository). `pack <path> [--key <pem>] [--developer <name>]` writes `dist/` and, with a key, `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
+- The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs and admin requests.
 - `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
 - `wrangler-config [--local] [--plan paid]` prints the API Wrangler config path. A generated config is `wrangler.deploy.gen.json` (`wrangler.local.deploy.gen.json` with `--local`); Free without the sandbox uses the committed config.
