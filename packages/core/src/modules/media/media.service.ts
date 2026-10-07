@@ -31,7 +31,8 @@ import {
     validateMediaFileMetadata,
     validateMediaSignature,
 } from "@scalius/shared/media-policy";
-import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, like, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { containsText, startsWithText } from "../../utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import {
@@ -196,7 +197,7 @@ export async function listMediaFiles(db: Database, input: {
         variants: input.variants ?? "all",
     });
 
-    if (search) conditions.push(like(media.filename, `%${search}%`));
+    if (search) conditions.push(containsText(media.filename, search));
     if (input.folderId !== undefined && input.folderId !== "all") {
         conditions.push(
             input.folderId === "" || input.folderId === "root" || input.folderId === "null"
@@ -204,7 +205,7 @@ export async function listMediaFiles(db: Database, input: {
                 : eq(media.folderId, input.folderId),
         );
     }
-    if (mimeType) conditions.push(like(media.mimeType, `${mimeType}%`));
+    if (mimeType) conditions.push(startsWithText(media.mimeType, mimeType));
     if (input.kind) conditions.push(eq(media.kind, input.kind));
     if (input.variants === "missing") {
         conditions.push(

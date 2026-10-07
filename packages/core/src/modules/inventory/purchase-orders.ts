@@ -12,7 +12,8 @@
 // Every write advances `revision` exactly once (one event each); edits and
 // status changes require the revision the merchant saw.
 
-import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -288,16 +289,15 @@ export async function listPurchaseOrders(db: Database, query: ListPurchaseOrders
   if (locationId) conditions.push(eq(purchaseOrders.destinationLocationId, locationId));
   if (q) {
     const number = numberFromQuery(q);
-    const term = `%${q}%`;
     conditions.push(or(
       ...(number !== null ? [eq(purchaseOrders.number, number)] : []),
-      like(purchaseOrders.reference, term),
-      like(suppliers.name, term),
+      containsText(purchaseOrders.reference, q),
+      containsText(suppliers.name, q),
       sql`EXISTS (
         SELECT 1 FROM ${purchaseOrderLines} AS search_line
         JOIN ${productVariants} AS search_sku ON search_sku.id = search_line.variant_id
         WHERE search_line.purchase_order_id = ${OUTER_PO_ID}
-          AND (search_sku.sku LIKE ${term} OR search_sku.barcode LIKE ${term})
+          AND (${containsText(sql`search_sku.sku`, q)} OR ${containsText(sql`search_sku.barcode`, q)})
       )`,
     )!);
   }

@@ -13,6 +13,7 @@ import {
     orders,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
@@ -157,9 +158,9 @@ export async function listCustomers(
         const ftsCondition = ftsMatch(db, "customers_fts", "customers", search);
 
         if (looksLikePhone && ftsCondition) {
-            whereConditions.push(sql`(${ftsCondition} OR ${customers.phone} LIKE ${"%" + digitsOnly + "%"})`);
+            whereConditions.push(sql`(${ftsCondition} OR ${containsText(customers.phone, digitsOnly)})`);
         } else if (looksLikePhone) {
-            whereConditions.push(sql`${customers.phone} LIKE ${"%" + digitsOnly + "%"}`);
+            whereConditions.push(containsText(customers.phone, digitsOnly));
         } else if (ftsCondition) {
             whereConditions.push(ftsCondition);
         }

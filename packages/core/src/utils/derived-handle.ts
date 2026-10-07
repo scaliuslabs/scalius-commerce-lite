@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
+import { handleOrNumberedCopy } from "./text-match";
 import type { Database } from "@scalius/database/client";
 import { handleFromText, nextFreeHandle, type HandleResource } from "@scalius/shared/handle";
 
@@ -34,7 +34,7 @@ export async function insertWithDerivedHandle<T>(
     const rows = await target.db
         .select({ handle: target.column })
         .from(target.table)
-        .where(sql`${target.column} = ${base} OR ${target.column} LIKE ${`${base}-%`}`)
+        .where(handleOrNumberedCopy(target.column, base))
         .limit(TAKEN_HANDLE_LOOKUP_LIMIT);
     const taken = new Set(rows.map((row) => String(row.handle)));
     for (let attempt = 1; ; attempt += 1) {

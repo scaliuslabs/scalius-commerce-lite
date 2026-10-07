@@ -43,6 +43,7 @@ import {
     normalizeBarcodeValue,
     type BarcodeType,
 } from "@scalius/shared/barcode-identity";
+import { handleOrNumberedCopy } from "../../utils/text-match";
 import {
     executeProductAggregateMutationBatch as executeProductAggregateMutationBatchRaw,
     type ProductAggregateRevisionResult,
@@ -129,7 +130,7 @@ export async function readableDefaultSku(db: Database, productName: string): Pro
     const rows = await db
         .select({ sku: productVariants.sku })
         .from(productVariants)
-        .where(sql`lower(trim(${productVariants.sku})) = ${stem.toLowerCase()} OR lower(trim(${productVariants.sku})) LIKE ${`${stem.toLowerCase()}-%`}`);
+        .where(handleOrNumberedCopy(sql`lower(trim(${productVariants.sku}))`, stem.toLowerCase()));
     const used = new Set(rows.map((row) => row.sku.trim().toLowerCase()));
     if (stem !== "SKU" && !used.has(stem.toLowerCase())) return stem;
     for (let suffix = 2; ; suffix += 1) {

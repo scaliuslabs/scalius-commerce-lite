@@ -3,7 +3,8 @@ import { deps } from "@scalius/core/cache-deps";
 
 import { placeAddressFieldSql, places } from "@scalius/database/schema";
 import { PLACE_ADDRESS_COUNTRY, deliveryHierarchyLevel } from "@scalius/shared/places";
-import { eq, and, isNull, asc, like, count } from "drizzle-orm";
+import { eq, and, isNull, asc, count } from "drizzle-orm";
+import { containsText } from "@scalius/core/utils/text-match";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -116,7 +117,7 @@ app.openapi(listCitySummariesRoute, async (c) => {
   const { page, limit, search } = c.req.valid("query");
   const where = and(
     ...ofField("city"),
-    search ? like(places.name, `%${search}%`) : undefined,
+    search ? containsText(places.name, search) : undefined,
   );
   const [counts, rows] = await db.batch([
     db.select({ total: count() }).from(places).where(where),
@@ -187,7 +188,7 @@ app.openapi(listZoneSummariesRoute, async (c) => {
   const { cityId, page, limit, search } = c.req.valid("query");
   const where = and(
     ...ofField("zone", cityId),
-    search ? like(places.name, `%${search}%`) : undefined,
+    search ? containsText(places.name, search) : undefined,
   );
   const [counts, rows] = await db.batch([
     db.select({ total: count() }).from(places).where(where),
@@ -258,7 +259,7 @@ app.openapi(listAreaSummariesRoute, async (c) => {
   const { zoneId, page, limit, search } = c.req.valid("query");
   const where = and(
     ...ofField("area", zoneId),
-    search ? like(places.name, `%${search}%`) : undefined,
+    search ? containsText(places.name, search) : undefined,
   );
   const [counts, rows] = await db.batch([
     db.select({ total: count() }).from(places).where(where),

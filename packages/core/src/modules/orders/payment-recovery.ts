@@ -1,4 +1,5 @@
-import { and, desc, eq, gt, inArray, like, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { startsWithText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
 import {
     orderPaymentRecoveryChallenges,
@@ -220,7 +221,7 @@ export async function consumeLatestOrderOtpChallenge(
         .from(orderPaymentRecoveryChallenges)
         .where(and(
             eq(orderPaymentRecoveryChallenges.orderId, input.orderId),
-            like(orderPaymentRecoveryChallenges.challengeKey, `${input.keyPrefix}%`),
+            startsWithText(orderPaymentRecoveryChallenges.challengeKey, input.keyPrefix),
         ))
         .orderBy(desc(orderPaymentRecoveryChallenges.updatedAt))
         .get();

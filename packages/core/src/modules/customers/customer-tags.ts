@@ -13,6 +13,7 @@ import {
     normalizeCustomerTags,
 } from "@scalius/shared/customer-marketing";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
 /** Customers in one bulk tag request (the dashboard's "select all" cap). */
@@ -128,14 +129,13 @@ export async function listStoreCustomerTags(
 ): Promise<Array<{ tag: string; customers: number }>> {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const query = options.query?.normalize("NFC").trim().toLowerCase();
-    const escaped = query?.replace(/[\\%_]/g, (character) => `\\${character}`);
     const rows = await db.select({
         tag: customerTagLinks.tag,
         customers: sql<number>`CAST(count(*) AS INTEGER)`,
     })
         .from(customerTagLinks)
         .innerJoin(customers, and(eq(customers.id, customerTagLinks.customerId), isNull(customers.deletedAt)))
-        .where(escaped ? sql`${customerTagLinks.tag} LIKE ${`%${escaped}%`} ESCAPE '\\'` : undefined)
+        .where(query ? containsText(customerTagLinks.tag, query) : undefined)
         .groupBy(customerTagLinks.tag)
         .orderBy(sql`count(*) DESC`, asc(customerTagLinks.tag))
         .limit(limit);

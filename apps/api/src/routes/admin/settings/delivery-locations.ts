@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { places } from "@scalius/database/schema";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
+import { containsText, startsWithText } from "@scalius/core/utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
     countPlaceDescendants,
@@ -268,10 +269,9 @@ app.openapi(listRoute, async (c) => {
         if (query.id) conditions.push(eq(places.id, query.id));
         if (query.isActive) conditions.push(eq(places.isActive, query.isActive === "true"));
         const term = search?.trim().toLocaleLowerCase() ?? "";
-        const escaped = term.replace(/[\\%_]/g, (character) => `\\${character}`);
         if (term) {
             // lower() folds ASCII case; Bangla has no case, so it matches as typed.
-            conditions.push(sql`lower(${places.name}) LIKE ${`%${escaped}%`} ESCAPE '\\'`);
+            conditions.push(containsText(places.name, term));
         }
 
         const parent = alias(places, "parent_location");
@@ -284,7 +284,7 @@ app.openapi(listRoute, async (c) => {
             .where(and(...conditions))
             .orderBy(
                 ...(term
-                    ? [sql`CASE WHEN lower(${places.name}) LIKE ${`${escaped}%`} ESCAPE '\\' THEN 0 ELSE 1 END`]
+                    ? [sql`CASE WHEN ${startsWithText(sql`lower(${places.name})`, term)} THEN 0 ELSE 1 END`]
                     : []),
                 asc(places.sortOrder),
                 asc(places.name),

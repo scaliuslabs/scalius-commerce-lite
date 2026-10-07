@@ -6,6 +6,7 @@
 // turns them into merchant-facing errors, keeps the limits and enters every
 // price at the market's price increment.
 import { and, asc, eq, sql } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import {
@@ -231,7 +232,7 @@ export async function listPriceListVariants(
     await getPriceList(db, id);
     const search = options.search?.trim().toLowerCase();
     const matches = search
-        ? sql`AND (lower(${products.name}) LIKE ${`%${search}%`} OR lower(${productVariants.sku}) LIKE ${`%${search}%`})`
+        ? sql`AND (${containsText(products.name, search)} OR ${containsText(productVariants.sku, search)})`
         : sql``;
     const variantsOfList = sql`${productVariants.id} IN (SELECT listed.variant_id FROM price_list_prices AS listed WHERE listed.price_list_id = ${id}) ${matches}`;
     const [variantRows, totalRows] = await Promise.all([

@@ -6,6 +6,7 @@
 // buyer can see.
 import { nanoid } from "nanoid";
 import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
 import {
   conversations,
@@ -201,10 +202,6 @@ function decodeCursor(value: string | null | undefined): { createdAt: number; id
   return null;
 }
 
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
-}
-
 /** The moderation queue, newest first (keyset on `(created_at, id)`). */
 export async function listAdminReviews(db: Database, filters: AdminReviewFilters = {}): Promise<AdminReviewPage> {
   const conditions: SQL[] = [];
@@ -215,12 +212,11 @@ export async function listAdminReviews(db: Database, filters: AdminReviewFilters
   if (filters.productId) conditions.push(eq(productReviews.productId, filters.productId));
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
-    const pattern = `%${escapeLike(q)}%`;
     conditions.push(or(
-      sql`${productReviews.title} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${productReviews.body} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${productReviews.authorDisplayName} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${products.name} LIKE ${pattern} ESCAPE '\\'`,
+      containsText(productReviews.title, q),
+      containsText(productReviews.body, q),
+      containsText(productReviews.authorDisplayName, q),
+      containsText(products.name, q),
     )!);
   }
   const cursor = decodeCursor(filters.cursor);

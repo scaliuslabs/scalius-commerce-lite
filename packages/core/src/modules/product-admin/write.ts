@@ -83,6 +83,7 @@ import {
 } from "../inventory";
 import { type PlannedProductAttributeValue, prepareProductAttributeValueRows } from "../attributes";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
+import { handleOrNumberedCopy } from "../../utils/text-match";
 import { getProductDetails } from "./read";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -1355,7 +1356,7 @@ async function freeCopySkus(db: Database, skus: string[]): Promise<string[]> {
         const rows = await db
             .select({ sku: productVariants.sku })
             .from(productVariants)
-            .where(or(...chunk.map((stem) => sql`lower(trim(${productVariants.sku})) = ${stem.toLowerCase()} OR lower(trim(${productVariants.sku})) LIKE ${`${stem.toLowerCase()}-%`}`)));
+            .where(or(...chunk.map((stem) => handleOrNumberedCopy(sql`lower(trim(${productVariants.sku}))`, stem.toLowerCase()))));
         rows.forEach((row) => taken.add(row.sku.trim().toLowerCase()));
     }
     return stems.map((stem) => {
@@ -1405,7 +1406,7 @@ export async function duplicateProduct(
     const slugRows = await db
         .select({ slug: products.slug })
         .from(products)
-        .where(sql`${products.slug} = ${slug} OR ${products.slug} LIKE ${`${slug}-%`}`);
+        .where(handleOrNumberedCopy(products.slug, slug));
     const slugs = new Set(slugRows.map((row) => row.slug));
     for (let suffix = 2; slugs.has(slug); suffix += 1) slug = `${source.slug.slice(0, 90)}-copy-${suffix}`;
 

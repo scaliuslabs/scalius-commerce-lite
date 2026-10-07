@@ -10,6 +10,7 @@
 // Payment methods are code (built-in gateways and app providers): their
 // source names come from the caller (`PaymentMethodSource`).
 import { sql, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
 import type { TranslatableResourceType, TranslationSource } from "@scalius/shared/translations";
 
@@ -125,7 +126,7 @@ export async function pageTableSources(
   const conditions: SQL[] = [];
   if (source.live) conditions.push(sql.raw(source.live));
   const search = options.search?.trim();
-  if (search) conditions.push(sql`lower(${ident(source.title)}) LIKE ${`%${search.toLowerCase()}%`}`);
+  if (search) conditions.push(containsText(ident(source.title), search));
   const where = conditions.length ? sql` WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
   const [rows, count] = await Promise.all([
     namedRows<Record<string, unknown>>(db.all(sql`SELECT ${selectColumns(source)} FROM ${ident(source.table)}${where}
