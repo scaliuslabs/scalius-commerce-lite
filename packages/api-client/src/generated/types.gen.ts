@@ -33551,12 +33551,6 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
                 height: number | null;
             }>;
             apps: Array<ThemeAppSurfaces>;
-            aiProviders: Array<{
-                id: string;
-                name: string;
-                appName: string;
-                appId: string;
-            }>;
         };
     };
 };

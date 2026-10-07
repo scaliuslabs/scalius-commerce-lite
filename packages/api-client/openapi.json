@@ -114899,32 +114899,6 @@
                           "items": {
                             "$ref": "#/components/schemas/ThemeAppSurfaces"
                           }
-                        },
-                        "aiProviders": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "appName": {
-                                "type": "string"
-                              },
-                              "appId": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "name",
-                              "appName",
-                              "appId"
-                            ]
-                          }
                         }
                       },
                       "required": [
@@ -114934,8 +114908,7 @@
                         "lastPublished",
                         "storeShape",
                         "media",
-                        "apps",
-                        "aiProviders"
+                        "apps"
                       ]
                     }
                   },
@@ -119305,7 +119278,7 @@
           "Admin - Settings"
         ],
         "summary": "List the theme draft's restore points, newest first",
-        "description": "The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `restore_point_restore`.",
+        "description": "The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `draft_snapshot_restore`.",
         "operationId": "dashboard.theme.draft_snapshots_list",
         "responses": {
           "200": {
@@ -119688,7 +119661,7 @@
           "Admin - Settings"
         ],
         "summary": "Draft theme sections from the merchant's words with an app's AI provider",
-        "description": "Scalius has no built-in AI and no model key: an app provides one (`draftSections`). Returns up to 8 sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.",
+        "description": "Scalius has no built-in AI and no model key: an app's AI provider (the general `generate` port) drafts against the section schemas. Returns up to 8 sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.",
         "operationId": "dashboard.theme.ai_draft_create",
         "requestBody": {
           "required": true,
@@ -119705,7 +119678,7 @@
                   "prompt": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 2000
+                    "maxLength": 4000
                   },
                   "page": {
                     "type": "string",

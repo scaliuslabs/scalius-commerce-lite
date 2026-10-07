@@ -3981,7 +3981,7 @@ export const putApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boole
 /**
  * List the theme draft's restore points, newest first
  *
- * The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `restore_point_restore`.
+ * The shared draft as it was just before each restore or discard replaced it (the newest 10 are kept). Read one with `document_get` (`source=restore-point`), put it back with `draft_snapshot_restore`.
  */
 export const getApiV1AdminSettingsThemeRestorePoints = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsThemeRestorePointsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsThemeRestorePointsResponses, GetApiV1AdminSettingsThemeRestorePointsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsThemeRestorePointsResponses, GetApiV1AdminSettingsThemeRestorePointsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/theme/restore-points', ...options });
 
@@ -4002,7 +4002,7 @@ export const postApiV1AdminSettingsThemeRestorePoint = <ThrowOnError extends boo
 /**
  * Draft theme sections from the merchant's words with an app's AI provider
  *
- * Scalius has no built-in AI and no model key: an app provides one (`draftSections`). Returns up to 8 sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.
+ * Scalius has no built-in AI and no model key: an app's AI provider (the general `generate` port) drafts against the section schemas. Returns up to 8 sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.
  */
 export const postApiV1AdminSettingsThemeAiDraft = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeAiDraftData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeAiDraftResponses, PostApiV1AdminSettingsThemeAiDraftErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeAiDraftResponses, PostApiV1AdminSettingsThemeAiDraftErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/theme/ai-draft',
