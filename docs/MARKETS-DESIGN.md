@@ -919,9 +919,11 @@ each type, a market-specific one and localized handles.
 publish, unpublish, make default and remove, and a machine translation card.
 Content → Translate & adapt: language and market, resource type, search, a
 status per item and a side-by-side editor with Outdated markers (loaded on
-first use). Product, category and collection pages have a Translations card
-with the rich text editor; Translate & adapt edits HTML fields as HTML, so
-its screen does not load the rich text editor. Copy is in English and
+first use). Product, category and collection pages have no
+Translations card: once the store has a second language, their "More
+actions" menu has a Translate item that opens Translate & adapt on that
+item (`/admin/translations?type=&id=&locale=`). Translate & adapt edits HTML
+fields as HTML, so its screen does not load the rich text editor. Copy is in English and
 Bangla.
 
 **Machine translation.** The `translation` provider port (`translate`,
@@ -1237,7 +1239,7 @@ an expert reaches every control.
 | Markets | A sentence ("Your store sells in Bangladesh, in BDT, in English") and one action, "Sell in another country". | A second market exists: the table (status, countries, currency; the web address column only if a market has one). |
 | Market page | Name, status, countries, currency, price format, taxes. | "Web address and handle" holds the handle and a non-primary market's own address. A language is asked only when the store has more than one. |
 | Languages | The default language and "Add language". | A second language: status, web address and translated count, then machine translation. |
-| Translate & adapt | Not in the sidebar. Reached from Languages (Translate) and a resource's Translations card. | The sidebar lists it once the store has a second language. The market picker shows once a market besides the primary one exists. |
+| Translate & adapt | Not in the sidebar. Reached from Languages (Translate) and a resource's "More actions" Translate item. | The sidebar lists it once the store has a second language. The market picker shows once a market besides the primary one exists. |
 | Price lists | Not in the sidebar. Reached from a market's Pricing card and the Markets list. A store with one market can only create a customer segment list (market and sale lists cannot price the primary market). | The sidebar lists it once a price list exists. |
 | Sales channels | Four channels, locations hidden while the store has one. | Locations appear with a second location. |
 | Product Publishing | "Available on all 4 sales channels" and Change. | The checkboxes open with Change, or at once when a product is off a channel. |

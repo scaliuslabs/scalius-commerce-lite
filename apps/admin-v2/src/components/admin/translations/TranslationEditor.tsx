@@ -2,9 +2,9 @@
 // side: each field's default-language text beside its translation, an
 // Outdated badge where the source changed since, the translated web address,
 // a product's options and values, machine translation through an app, save
-// and delete. It loads on demand (the list and resource pages download it
-// only when it is opened).
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+// and delete. It loads on demand (Translate & adapt downloads it only when an
+// item opens).
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Languages } from "lucide-react";
 import { RichContent } from "~/components/ui/rich-content";
@@ -48,21 +48,6 @@ export interface TranslationEditorProps {
   locale: string;
   marketId: string | null;
   canEdit: boolean;
-  /** Inside a resource page's card: no card frame of its own. */
-  embedded?: boolean;
-  /**
-   * The rich text editor for HTML fields. A resource page passes its own
-   * (it already loads one); Translate & adapt edits the HTML itself, so the
-   * screen never downloads the rich text editor's toolbar.
-   */
-  richTextEditor?: ComponentType<RichTextEditorProps>;
-}
-
-export interface RichTextEditorProps {
-  content: string;
-  onChange: (content: string) => void;
-  compact?: boolean;
-  ariaLabel?: string;
 }
 
 export function TranslationEditor(props: TranslationEditorProps) {
@@ -70,32 +55,29 @@ export function TranslationEditor(props: TranslationEditorProps) {
   const r = useMessages(resourceMessages);
   const view = useQuery(resourceTranslationsQueryOptions(props.type, props.id, props.locale, props.marketId));
   if (view.isError) {
-    const failed = (
-      <>
+    return (
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <p className="text-body">{t("editorLoadFailed")}</p>
         <Button variant="outline" size="sm" onClick={() => void view.refetch()}>{r("retry")}</Button>
-      </>
+      </Card>
     );
-    return props.embedded
-      ? <div className="flex flex-wrap items-center justify-between gap-3">{failed}</div>
-      : <Card className="flex flex-wrap items-center justify-between gap-3 p-4">{failed}</Card>;
   }
-  if (!view.data) return <EditorSkeleton embedded={props.embedded === true} />;
+  if (!view.data) return <EditorSkeleton />;
   // A fresh draft for each saved state: switching items never carries edits over.
   return <EditorForm key={`${props.type}:${props.id}:${props.locale}:${props.marketId ?? ""}`} {...props} view={view.data} />;
 }
 
-function EditorSkeleton({ embedded }: { embedded: boolean }) {
+function EditorSkeleton() {
   const rows = [0, 1, 2].map((index) => (
     <div key={index} className="grid gap-2 md:grid-cols-2">
       <Skeleton className="h-16 w-full" />
       <Skeleton className="h-16 w-full" />
     </div>
   ));
-  return embedded ? <div className="space-y-4">{rows}</div> : <Card className="space-y-4 p-4">{rows}</Card>;
+  return <Card className="space-y-4 p-4">{rows}</Card>;
 }
 
-function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEditor, view }: TranslationEditorProps & { view: ResourceTranslationsView }) {
+function EditorForm({ type, id, locale, marketId, canEdit, view }: TranslationEditorProps & { view: ResourceTranslationsView }) {
   const t = useMessages(translationsMessages);
   const uiLocale = useLocale();
   const providers = useQuery(translationProvidersQueryOptions());
@@ -162,7 +144,6 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEdi
             disabled={!canEdit}
             sourceName={sourceName}
             targetName={targetName}
-            richTextEditor={richTextEditor}
           />
         ))}
         {view.resource.sourceSlug !== null ? (
@@ -229,16 +210,6 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEdi
     />
   );
 
-  if (embedded) {
-    return (
-      <div className="flex flex-col gap-4">
-        {body}
-        {actions}
-        {confirm}
-      </div>
-    );
-  }
-
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-2">
@@ -253,7 +224,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, embedded, richTextEdi
   );
 }
 
-function FieldRow({ row, first, value, onChange, disabled, sourceName, targetName, richTextEditor: RichTextEditor }: {
+function FieldRow({ row, first, value, onChange, disabled, sourceName, targetName }: {
   row: TranslationRow;
   first: boolean;
   value: string;
@@ -261,7 +232,6 @@ function FieldRow({ row, first, value, onChange, disabled, sourceName, targetNam
   disabled: boolean;
   sourceName: string;
   targetName: string;
-  richTextEditor?: ComponentType<RichTextEditorProps>;
 }) {
   const t = useMessages(translationsMessages);
   const label = t(row.label.key as "field_name", row.label.vars);
@@ -288,14 +258,12 @@ function FieldRow({ row, first, value, onChange, disabled, sourceName, targetNam
           {row.kind === "html" ? (
             disabled
               ? <div className="rounded-lg border px-3 py-2"><RichContent content={value} /></div>
-              : RichTextEditor
-                ? <RichTextEditor content={value} onChange={onChange} compact ariaLabel={label} />
-                : (
-                  <>
-                    <Textarea id={inputId} value={value} onChange={(event) => onChange(event.target.value)} maxLength={row.max} rows={6} />
-                    <span className="text-body text-muted-foreground">{t("htmlSourceHint")}</span>
-                  </>
-                )
+              : (
+                <>
+                  <Textarea id={inputId} value={value} onChange={(event) => onChange(event.target.value)} maxLength={row.max} rows={6} />
+                  <span className="text-body text-muted-foreground">{t("htmlSourceHint")}</span>
+                </>
+              )
           ) : row.kind === "text" ? (
             <Textarea id={inputId} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={row.max} rows={3} />
           ) : (
