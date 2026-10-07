@@ -210,6 +210,15 @@ describe("sign-in forms keep credentials out of URLs", () => {
     expect(container.querySelector("#setup-password")).not.toBeNull();
   });
 
+  it("says a session that ended while turning on two-step verification ended, not that the password is wrong", async () => {
+    authClient.twoFactor.enable.mockResolvedValueOnce({ data: null, error: { status: 401, code: "UNAUTHORIZED" } } as never);
+    await render(<TwoFactorSetup userEmail="karim@example.com" />);
+    type(container.querySelector("#setup-password"), SECRET);
+    await submit();
+    expect(container.textContent).toContain("Your session ended. Sign in again.");
+    expect(container.textContent).not.toContain("Incorrect password");
+  });
+
   it("hands a reset for a two-step account to the code screen", async () => {
     window.history.replaceState(null, "", "/auth/reset-password#token=proof-proof-proof-1234");
     fetchMock
