@@ -95,6 +95,7 @@ describe.runIf(postgresUrl)("0120 price lists PostgreSQL sidecar", () => {
     await client.query("INSERT INTO price_lists (id, name, kind, market_id) VALUES ('pl_india', 'India', 'market', 'mkt_in')");
     await expect(client.query("INSERT INTO price_list_prices (price_list_id, variant_id, currency_code, amount_minor) VALUES ('pl_india', 'v_tee', 'bdt', 1)")).rejects.toThrow(/price_list_prices_currency_shape/);
 
+    await client.query("INSERT INTO checkout_authority (id, revision) VALUES ('default', 1) ON CONFLICT (id) DO NOTHING");
     const revision = async () => Number((await client.query("SELECT revision FROM checkout_authority WHERE id = 'default'")).rows[0].revision);
     const seq = async (key: string) => Number((await client.query("SELECT seq FROM cache_dep WHERE dep = $1", [key])).rows[0]?.seq ?? 0);
     const start = { revision: await revision(), list: await seq("pl:mkt_in"), product: await seq("pl:mkt_in:p_tee") };
