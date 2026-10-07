@@ -22,7 +22,7 @@ import { useMediaPreviews } from "../schema-form/resource-fields";
 import { appBlocksByKey, productAppBlocksInvalid, resolveThemeForStore, themeDraftInvalid } from "../theme-settings";
 import type { SetTheme } from "../theme-fields";
 import { EDITOR_PARTS, moduleId, type EditorPage } from "./editor-pages";
-import { PartSettings } from "./SettingsPanel";
+import { PartSettings } from "./SelectionPanes";
 import { ThemeSettingsPanel } from "./ThemeSettingsPanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

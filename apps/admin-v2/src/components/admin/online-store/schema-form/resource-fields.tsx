@@ -22,38 +22,9 @@ import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
+import { mediaPreview, moveAt, removeAt, type SectionMediaPreview } from "./media-previews";
 
-/** An image the theme forms can preview: the draft's images (the workspace's `media`) plus this session's picks. */
-export interface SectionMediaPreview {
-  id: string;
-  url: string;
-  alt: string;
-}
-
-export const mediaPreview = (file: MediaFile): SectionMediaPreview => ({ id: file.id, url: file.url, alt: file.altText?.trim() ?? "" });
-
-/** Previews by media id: the given images, then any picked from Files in this session. */
-export function useMediaPreviews(media: readonly SectionMediaPreview[]) {
-  const [picked, setPicked] = useState<ReadonlyMap<string, SectionMediaPreview>>(new Map());
-  return {
-    previews: new Map([...media.map((each) => [each.id, each] as const), ...picked]) as ReadonlyMap<string, SectionMediaPreview>,
-    remember: (image: SectionMediaPreview) => setPicked((current) => new Map(current).set(image.id, image)),
-  };
-}
-
-export type MediaPreviews = ReturnType<typeof useMediaPreviews>;
-
-/** The list with the item at `index` moved one place up (-1) or down (+1); unchanged at either end. */
-export const moveAt = <Item,>(items: readonly Item[], index: number, delta: -1 | 1): Item[] => {
-  const next = [...items];
-  const to = index + delta;
-  if (to < 0 || to >= next.length) return next;
-  [next[index], next[to]] = [next[to]!, next[index]!];
-  return next;
-};
-export const removeAt = <Item,>(items: readonly Item[], index: number): Item[] => items.filter((_, at) => at !== index);
-export const replaceAt = <Item,>(items: readonly Item[], index: number, item: Item): Item[] =>
-  items.map((each, at) => (at === index ? item : each));
+export { mediaPreview, moveAt, removeAt, replaceAt, useMediaPreviews, type MediaPreviews, type SectionMediaPreview } from "./media-previews";
 
 /**
  * A link a theme document stores (an announcement, a slide, a card): typed

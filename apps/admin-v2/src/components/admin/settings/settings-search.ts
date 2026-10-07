@@ -44,6 +44,7 @@ export const SETTINGS_CARDS = [
   { page: "integrations", card: "facebook" },
   { page: "integrations", card: "fraudCheck" },
   { page: "integrations", card: "aiAccess" },
+  { page: "integrations", card: "aiDrafting" },
   { page: "integrations", card: "scanner" },
   { page: "advanced", card: "trustedWebsites" },
   { page: "advanced", card: "imageDelivery" },

@@ -1,10 +1,17 @@
 @import "tailwindcss";
+/* Class names live in components and routes: docs (DESIGN.md lists forbidden classes), tests, message catalogs and generated files are not scanned; their words would add unused utilities. */
+@source not "../../*.md";
+@source not "../**/*.test.{ts,tsx}";
+@source not "../i18n";
+@source not "../**/*.gen.ts";
 @import "../components/ui/rich-content.css";
 
 @plugin "tailwindcss-animate";
 
 /* Dark mode follows the `dark` class on <html> (set before paint in index.html). */
 @custom-variant dark (&:where(.dark, .dark *));
+/* Right-to-left follows the `dir` the locale sets on <html> (i18n/index.ts), as the [dir="rtl"] rules below do; Tailwind's default lists every RTL language tag in each rule. */
+@custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
 
 /*
  * Design tokens (see DESIGN.md). Values follow Shopify Polaris: neutral greys,

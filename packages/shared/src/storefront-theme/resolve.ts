@@ -42,7 +42,8 @@ import {
   type StorefrontFitFacts,
   type StorefrontNavigationSource,
 } from "./fit";
-import { STOREFRONT_SECTION_REGISTRY, type StorefrontSection } from "./sections";
+import { STOREFRONT_SECTION_REGISTRY, storefrontVisibleSection, type StorefrontSection } from "./sections";
+import { STOREFRONT_PAGE_TEMPLATES, type StorefrontPageTemplateValue } from "./pages";
 import {
   STOREFRONT_DENSITY_SPECS,
   STOREFRONT_IMAGE_RATIO_VALUES,
@@ -278,7 +279,21 @@ function fittingSections(
     const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[each.type].requires, context);
     if (failed.length > 0) fallbacks.push({ kind: "section", key: each.id, requested: each.type, resolved: null, failed });
     return failed.length === 0;
-  });
+  }).map(storefrontVisibleSection);
+}
+
+/**
+ * A template's sections that fit, with its fixed part moved to keep its
+ * place among them: `main` counts the shown sections before it.
+ */
+function resolveTemplate(
+  template: StorefrontPageTemplateValue,
+  context: FitContext,
+  fallbacks: StorefrontThemeFallback[],
+): StorefrontPageTemplateValue {
+  const before = fittingSections(template.sections.slice(0, template.main), context, fallbacks);
+  const after = fittingSections(template.sections.slice(template.main), context, fallbacks);
+  return { sections: [...before, ...after], main: before.length };
 }
 
 const SURFACE_RENDERERS = { flat: "flat", hairline: "bordered", raised: "elevated" } as const;
@@ -363,6 +378,9 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       landing: Object.fromEntries(Object.entries(document.pages.landing).map(([slug, page]) => [
         slug, { ...page, sections: fittingSections(page.sections, context, fallbacks) },
       ])),
+      templates: Object.fromEntries(STOREFRONT_PAGE_TEMPLATES.map((kind) => [
+        kind, resolveTemplate(document.pages.templates[kind], context, fallbacks),
+      ])) as StorefrontThemePages["templates"],
     },
     fallbacks,
     layout: {

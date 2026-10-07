@@ -68,6 +68,9 @@ const APP_PAGE_D1_BUDGETS = {
   product: { roundTrips: 20, waves: 3 },
 } as const;
 
+/** A page template with sections: its part read after the page's batch (theme and collections, then the sections' data). */
+const TEMPLATE_PART_D1_BUDGET = { roundTrips: 2, waves: 2 } as const;
+
 const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   home: ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
   // The product page's app blocks are a part of their own (theme, product and active apps in one read).
@@ -447,6 +450,30 @@ describe("storefront page render D1 budget", () => {
     expect(result.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].roundTrips);
     expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].waves);
     expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS[page].map(() => "hit"), sameBodies: true });
+  });
+
+  // A page template's own sections cost only the stores that add them: a page whose template has
+  // none never requests the template part (its parts and budgets above are unchanged); one that
+  // has sections reads them after its batch, from the template part alone.
+  it.each(["product", "collection"] as const)("reads the %s template's sections from its own part, only when it has some", async (kind) => {
+    const page = kind === "product" ? "product" : "collection";
+    const result = await renderPage(page, "", {
+      paths: [`/api/v1/storefront/template/${kind}`],
+      editTheme: (theme) => {
+        theme.pages.templates[kind] = {
+          sections: [
+            { ...storefrontSectionDefault("product-rail", "rail"), settings: { ...storefrontSectionDefault("product-rail", "rail").settings, source: { kind: "newest" } } } as StorefrontSection,
+            { ...storefrontSectionDefault("faq", "faq"), settings: { heading: "Questions", items: [{ question: "Delivery?", answer: "Two days." }] } } as StorefrontSection,
+          ],
+          main: 1,
+        };
+      },
+    });
+    expect(result.statuses).toEqual([200]);
+    const sections = (result.bodies[0] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }> } } }).data.sections;
+    expect(sections.lists.find((list) => list.key === "newest")?.products).toHaveLength(2);
+    expect({ roundTrips: result.render.roundTrips, waves: result.render.waves }).toEqual(TEMPLATE_PART_D1_BUDGET);
+    expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: ["hit"], sameBodies: true });
   });
 
   it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {

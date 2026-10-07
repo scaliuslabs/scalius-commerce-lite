@@ -600,6 +600,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 19,
         postgresStatements: 14,
       },
+      {
+        version: 124,
+        name: "0124_theme_restore_points",
+        // The restore point table, its index and the ledger.
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -772,6 +779,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 121, name: "0121_translations" },
           { version: 122, name: "0122_sales_channels" },
           { version: 123, name: "0123_market_currencies" },
+          { version: 124, name: "0124_theme_restore_points" },
         ],
       });
     } finally {

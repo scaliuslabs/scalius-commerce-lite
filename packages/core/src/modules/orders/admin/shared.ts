@@ -481,7 +481,7 @@ export function orderListFactsSelection() {
         returnedValueMinor: sql<number>`COALESCE((
             SELECT SUM(
                 (${orderItems.lineSubtotalMinor} - ${orderItems.discountAmountMinor}
-                  + CASE WHEN ${orders.pricesIncludeTax} THEN 0 ELSE ${orderItems.taxAmountMinor} END)
+                  + CASE WHEN ${orders.pricesIncludeTax} = 1 THEN 0 ELSE ${orderItems.taxAmountMinor} END)
                 * ${orderReturnLines.receivedQuantity} / ${orderItems.quantity}
             )
             FROM ${orderReturnLines}

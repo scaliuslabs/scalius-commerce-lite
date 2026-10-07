@@ -7,6 +7,7 @@
 // compares looks only (`storefrontThemeLook`).
 import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
 import { storefrontVariantSpec } from "./blocks";
+import { emptyStorefrontPageTemplates } from "./pages";
 import type { StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSection, type StorefrontSectionType } from "./sections";
 
@@ -89,6 +90,8 @@ export function storefrontThemeWithContent(
       home,
       homeMode: source ? structuredClone(source.pages.homeMode) : { kind: "sections" },
       landing: source ? structuredClone(source.pages.landing) : {},
+      // The merchant's sections around the fixed parts are content too.
+      templates: source ? structuredClone(source.pages.templates) : emptyStorefrontPageTemplates(),
     },
   };
 }
@@ -142,6 +145,8 @@ export function storefrontThemeMediaReferences(theme: StorefrontThemeDocument): 
     ...theme.pages.home.flatMap((section, index) => sectionMediaReferences(section, `pages.home.${index}`)),
     ...Object.entries(theme.pages.landing).flatMap(([slug, page]) => page.sections.flatMap((section, index) =>
       sectionMediaReferences(section, `pages.landing.${slug}.sections.${index}`))),
+    ...Object.entries(theme.pages.templates).flatMap(([kind, template]) => template.sections.flatMap((section, index) =>
+      sectionMediaReferences(section, `pages.templates.${kind}.sections.${index}`))),
   ];
 }
 
@@ -201,6 +206,8 @@ export function storefrontThemeWithoutMedia(theme: StorefrontThemeDocument, miss
       home: theme.pages.home.map((section) => sectionWithoutMedia(section, missing)),
       landing: Object.fromEntries(Object.entries(theme.pages.landing).map(([slug, page]) =>
         [slug, { ...page, sections: page.sections.map((section) => sectionWithoutMedia(section, missing)) }])),
+      templates: Object.fromEntries(Object.entries(theme.pages.templates).map(([kind, template]) =>
+        [kind, { ...template, sections: template.sections.map((section) => sectionWithoutMedia(section, missing)) }])) as StorefrontThemeDocument["pages"]["templates"],
     },
   };
 }

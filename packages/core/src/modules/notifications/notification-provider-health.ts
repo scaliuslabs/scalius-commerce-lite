@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts, settings } from "@scalius/database/schema";
-import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { startsWithText } from "../../utils/text-match";
 
 export type NotificationProviderHealthChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -90,17 +91,14 @@ export function buildClearNotificationProviderBlocksStatement(
     provider?: string;
   },
 ) {
-    const key = options.provider
-        ? providerHealthKey(options.channel, options.provider)
-        : `${options.channel}:%`;
 
     return db
         .delete(settings)
         .where(and(
             eq(settings.category, PROVIDER_HEALTH_CATEGORY),
             options.provider
-                ? eq(settings.key, key)
-                : like(settings.key, key),
+                ? eq(settings.key, providerHealthKey(options.channel, options.provider))
+                : startsWithText(settings.key, `${options.channel}:`),
         ));
 }
 

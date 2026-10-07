@@ -11,6 +11,7 @@
 import { attributeValues, productAttributeValues, products } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { normalizeAttributeValue } from "@scalius/shared/catalog-attributes";
@@ -136,7 +137,7 @@ export async function listAttributeValueRows(
     const where = and(
         eq(attributeValues.attributeId, attributeId),
         isNull(attributeValues.deletedAt),
-        search ? sql`${attributeValues.normalizedValue} LIKE '%' || lower(${search}) || '%'` : undefined,
+        search ? containsText(attributeValues.normalizedValue, search) : undefined,
     );
     const totalRow = await db.select({ total: count() }).from(attributeValues).where(where).get();
     const total = Number(totalRow?.total ?? 0);

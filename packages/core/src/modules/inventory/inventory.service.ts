@@ -1,5 +1,6 @@
 import { productVariants, products, inventoryLocations, inventoryMovements, inventoryOperations, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
-import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
+import { eq, sql, and, isNull, desc, asc, or } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
@@ -172,10 +173,9 @@ export async function listInventoryMovements(db: Database, params: {
         conditions.push(eq(inventoryMovements.type, params.movementType));
     }
     if (search) {
-        const searchPattern = `%${search}%`;
         conditions.push(or(
-            like(productVariants.sku, searchPattern),
-            like(products.name, searchPattern),
+            containsText(productVariants.sku, search),
+            containsText(products.name, search),
         )!);
     }
     if (orderId) conditions.push(eq(inventoryMovements.orderId, orderId));
@@ -460,9 +460,9 @@ export async function getInventoryOverview(db: Database, params: {
 
         if (search) {
             conditions.push(or(
-                like(productVariants.sku, `%${search}%`),
-                like(productVariants.barcode, `%${search}%`),
-                sql`${products.name} LIKE ${"%" + search + "%"}`
+                containsText(productVariants.sku, search),
+                containsText(productVariants.barcode, search),
+                containsText(products.name, search)
             ));
         }
 
@@ -597,10 +597,9 @@ export async function getInventoryOverview(db: Database, params: {
         else if (aStatus === "resolved") alertConditions.push(sql`(NOT ${needs} AND ${productLowStockAlerts.id} IS NOT NULL)`);
         else alertConditions.push(sql`(${needs} OR ${productLowStockAlerts.id} IS NOT NULL)`);
         if (search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
             alertConditions.push(or(
-                like(productVariants.sku, searchPattern),
-                like(products.name, searchPattern),
+                containsText(productVariants.sku, search.trim()),
+                containsText(products.name, search.trim()),
             )!);
         }
         const alertWhere = and(...alertConditions);

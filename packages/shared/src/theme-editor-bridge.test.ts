@@ -1,40 +1,57 @@
 import { describe, expect, it } from "vitest";
 import {
+  THEME_PREVIEW_BODY_MAX,
   isTrustedThemeEditorEvent,
   readThemeEditorMessage,
   readThemePreviewMessage,
   themeEditorOrigin,
 } from "./theme-editor-bridge";
 
+const preview = (message: Record<string, unknown>) => ({ source: "scalius-theme-preview", ...message });
+const editor = (message: Record<string, unknown>) => ({ source: "scalius-theme-editor", ...message });
+
 describe("theme editor messages", () => {
   it("reads only well-formed preview messages", () => {
-    expect(readThemePreviewMessage({ source: "scalius-theme-preview", type: "select", sectionId: "hero-2" }))
-      .toEqual({ source: "scalius-theme-preview", type: "select", sectionId: "hero-2" });
-    expect(readThemePreviewMessage({ source: "scalius-theme-preview", type: "ready", path: "/", sections: ["hero", "faq"] })).not.toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "select", id: "hero-2" }))).toEqual(preview({ type: "select", id: "hero-2" }));
+    expect(readThemePreviewMessage(preview({ type: "ready", path: "/", marks: ["hero", "faq"] }))).not.toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "layout", rects: { hero: [0, -40, 1280, 600] }, scrollY: 40, height: 3000 })))
+      .toEqual(preview({ type: "layout", rects: { hero: [0, -40, 1280, 600] }, scrollY: 40, height: 3000 }));
+    expect(readThemePreviewMessage(preview({ type: "hover", id: null }))).toEqual(preview({ type: "hover", id: null }));
+    expect(readThemePreviewMessage(preview({ type: "key", key: "z", mod: true, shift: false, alt: false }))).not.toBeNull();
     for (const bad of [
       null,
       "select",
-      { source: "scalius-theme-editor", type: "select", sectionId: "hero" },
-      { source: "scalius-theme-preview", type: "select", sectionId: "<script>" },
-      { source: "scalius-theme-preview", type: "hello", path: "//evil.test" },
-      { source: "scalius-theme-preview", type: "ready", path: "/", sections: ["Hero"] },
-      { source: "scalius-theme-preview", type: "unknown" },
+      editor({ type: "select", id: "hero" }),
+      preview({ type: "select", id: "<script>" }),
+      preview({ type: "hello", path: "//evil.test" }),
+      preview({ type: "ready", path: "/", marks: ["Hero"] }),
+      preview({ type: "layout", rects: { hero: [0, 0, -1, 10] }, scrollY: 0, height: 10 }),
+      preview({ type: "layout", rects: { hero: [0, 0, 1] }, scrollY: 0, height: 10 }),
+      preview({ type: "layout", rects: {}, scrollY: Number.NaN, height: 10 }),
+      preview({ type: "key", key: "q", mod: true, shift: false, alt: false }),
+      preview({ type: "unknown" }),
     ]) {
       expect(readThemePreviewMessage(bad)).toBeNull();
     }
   });
 
   it("reads only well-formed editor messages", () => {
-    expect(readThemeEditorMessage({ source: "scalius-theme-editor", type: "connect", names: { hero: "Banners" }, selected: null }))
-      .toEqual({ source: "scalius-theme-editor", type: "connect", names: { hero: "Banners" }, selected: null });
-    expect(readThemeEditorMessage({ source: "scalius-theme-editor", type: "section-updated", sectionIds: ["faq"] })).not.toBeNull();
-    expect(readThemeEditorMessage({ source: "scalius-theme-editor", type: "go-home" })).toEqual({ source: "scalius-theme-editor", type: "go-home" });
+    expect(readThemeEditorMessage(editor({ type: "connect", inspector: true, scrollY: null })))
+      .toEqual(editor({ type: "connect", inspector: true, scrollY: null }));
+    expect(readThemeEditorMessage(editor({ type: "tokens", vars: { primary: "#112233", "theme-font-heading": "\"Inter\", sans-serif" } }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "text", id: "hero", from: "Eid", to: "Eid sale" }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "arrange", region: "page", order: ["faq", "hero"] }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null }))).not.toBeNull();
     for (const bad of [
-      { source: "scalius-theme-editor", type: "connect", names: { "a b": "x" }, selected: null },
-      { source: "scalius-theme-editor", type: "connect", names: {}, selected: "../x" },
-      { source: "scalius-theme-editor", type: "section-updated", sectionIds: [] },
-      { source: "scalius-theme-editor", type: "scroll-to" },
-      { source: "scalius-theme-preview", type: "reload" },
+      editor({ type: "connect", inspector: "yes", scrollY: null }),
+      editor({ type: "reveal", id: "../x" }),
+      // Token values never carry CSS structure.
+      editor({ type: "tokens", vars: { primary: "red; } body { display: none" } }),
+      editor({ type: "tokens", vars: { "Primary Color": "#fff" } }),
+      editor({ type: "render", body: { big: "x".repeat(THEME_PREVIEW_BODY_MAX) }, after: null }),
+      editor({ type: "render", body: [], after: null }),
+      editor({ type: "paint", theme: "document" }),
+      preview({ type: "reveal", id: "hero" }),
     ]) {
       expect(readThemeEditorMessage(bad)).toBeNull();
     }

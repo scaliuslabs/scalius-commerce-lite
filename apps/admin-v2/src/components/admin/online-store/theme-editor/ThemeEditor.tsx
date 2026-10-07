@@ -1,190 +1,164 @@
 /**
- * The theme editor (Online store → Themes → Customize), Shopify's shape:
+ * The theme editor (Online store → Themes → Customize), built to the rules
+ * in docs/research/BUILDER-UX-RESEARCH.md §4-§5:
  *
- * - a top bar: back, the theme's state (live, or a draft with unpublished
- *   changes, and who published last), the page picker, the preview width,
- *   undo and redo, versions, view in a new tab, Save and Publish;
- * - a left panel with the page's tree (header, the page's sections or
- *   blocks, footer) and a Theme settings tab (colours, fonts, logo, cards);
- * - the real storefront in the middle, rendering the saved draft, where a
- *   click selects a section or block and hovering outlines it;
- * - the selected item's settings beside it (wide screens) or in the left
- *   panel's place (narrower ones).
- *
- * Edits go to the shared draft by themselves (debounced, against the draft
- * revision they started from); a settings change re-renders only its section
- * in the preview, anything else reloads the page. Publishing makes the saved
- * draft live; versions restore to the draft only.
+ * - a 48 px top bar: back, the theme's state and one autosave status, the
+ *   page switcher, the previewed market and language, the device and the
+ *   frame's size, undo, redo, history and Publish;
+ * - a 320 px sidebar with the page's layers and Theme settings; below
+ *   1600 px a selection's settings take the tree's place in the same
+ *   column, from 1600 px they sit in a right column that is always there;
+ *   below 1024 px the sidebar is a drawer, below 768 px a bottom sheet with
+ *   a bottom bar;
+ * - the real storefront at a true device width, scaled to fit, with hover
+ *   and selection drawn above it. Nothing selected, hovered, saved or opened
+ *   ever changes the frame's box, and edits show in it before they are
+ *   saved (use-preview-sync.ts).
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, History, Laptop, Monitor, MoreHorizontal, Redo2, Smartphone, Trash2, Undo2 } from "lucide-react";
-import { toast } from "~/lib/toast";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
 import {
-  postApiV1AdminSettingsThemeDiscard,
-  postApiV1AdminSettingsThemeDraft,
-  postApiV1AdminSettingsThemePublish,
-  postApiV1AdminSettingsThemeRestore,
-} from "@scalius/api-client/sdk";
-import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
-import {
-  STOREFRONT_MAX_SECTIONS,
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_RENDERERS,
   failedFitConditions,
   isStorefrontAppSection,
-  storefrontSectionNeedsContent,
-  storefrontSectionRenderer,
-  storefrontThemeDocumentSchema,
-  type StoreShape,
-  type StorefrontAppSection,
+  storefrontSettingAt,
   type StorefrontPlatformSection,
   type StorefrontSection,
-  type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { presencePath as presencePathOf } from "@scalius/shared/markets";
+import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import { cn } from "@scalius/shared/utils";
+import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
-import { StatusBadge } from "~/components/admin/resource/StatusBadge";
-import { useHasPermission } from "~/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { Button } from "~/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Textarea } from "~/components/ui/textarea";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
-import { matchesShortcut, typingIn } from "~/components/admin/layout/shortcuts";
+import { typingIn } from "~/components/admin/layout/shortcuts";
+import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMediaQuery } from "~/hooks/use-media-query";
-import { formatDateTime, useMessages } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
+import { formatDateTime, getLocale, useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
-import { apiData } from "~/lib/api";
-import { readApiFieldIssues } from "~/lib/api-field-errors";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { NavigationResourceOption } from "~/lib/api-query-options/navigation";
+import { marketsQueryOptions } from "~/lib/api-query-options/markets";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
-import { SectionSettingsForm, useSectionErrors } from "../SectionSettings";
-import { appSettingDefaults, appValuesInvalid } from "../schema-form/app-settings";
-import { useMediaPreviews } from "../schema-form/resource-fields";
-import { actionErrorText } from "../shared";
-import { useFitReason, type SetTheme } from "../theme-fields";
-import { productAppBlocksInvalid, appBlocksByKey, resolveThemeForStore, themeDraftInvalid } from "../theme-settings";
+import { languageName } from "../../translations/translation-form";
+import { appSettingDefaults } from "../schema-form/app-settings";
+import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
+import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { useOpenThemePreview } from "../theme-preview";
-import { AppSectionSettings } from "./AppSectionSettings";
+import type { AiPage } from "./AiDraftDialog";
+import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
+import { EditorCanvas, type SelectionActions } from "./EditorCanvas";
 import {
   EDITOR_PARTS,
-  PRODUCT_MODULES,
   isResourcePage,
   moduleId,
+  pageFixedPart,
+  pageMain,
   pageSections,
+  pageTemplate,
   previewPath,
   samePage,
+  selectedModule,
   withPageSections,
   type EditorPage,
   type ResourcePageKind,
 } from "./editor-pages";
+import { parseBlockId, selectionMark } from "./editor-selection";
 import {
-  addAppSection,
-  addSection,
+  addBlock,
+  addBlockedReason,
   appSectionsByKey,
-  appSectionsInvalid,
-  canAddSectionType,
+  draftedSections,
+  duplicateBlock,
   duplicateSection,
-  editorHistory,
-  moveSectionTo,
-  previewChange,
+  fromPageItems,
+  insertItem,
+  mapSection,
+  moveBlock,
+  moveItem,
+  newAppSection,
+  newSection,
+  pageItems,
+  removeBlock,
   removeSection,
-  restoreSection,
-  setAppSectionValues,
-  startHistory,
-  type AppSectionEntry,
+  toggleBlockHidden,
+  unopenedAiSections,
+  type PageItem,
 } from "./editor-state";
+import { EditorTopBar, MarketSwitcher, TopBarButton } from "./EditorTopBar";
+import { ShortcutsDialog, matchesEditorShortcut } from "./EditorShortcuts";
+import { LayerTree } from "./LayerTree";
 import { CreateLandingDialog, PagePicker, PreviewResource, useDefaultResource, usePageName } from "./PagePicker";
-import { PageTree } from "./PageTree";
-import { PreviewFrame, type PreviewController, type PreviewDevice } from "./PreviewFrame";
-import type { TreeRow } from "./SectionList";
-import { SectionPicker } from "./SectionPicker";
-import { PartSettings, SettingsPanel, usePartTitle } from "./SettingsPanel";
-import { ThemeHistory, themeVersionDocumentQuery, themeVersionsKey } from "./ThemeHistory";
-import { ThemeSettingsPanel } from "./ThemeSettingsPanel";
+import type { LibraryChoice, LibraryOption } from "./SectionLibrary";
+import { SettingsEmpty, SettingsPane, partHasSettings, usePartTitle, type PaneActions } from "./SettingsPanel";
+import { themeVersionDocumentQuery } from "./theme-history-queries";
+import { useBlockName, useEditorTree, useSectionName } from "./use-editor-tree";
+import { usePreview } from "./use-preview";
+import { usePreviewSync } from "./use-preview-sync";
+import { useThemeDraft } from "./use-theme-draft";
 
 type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
-type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
-/** How long the editor waits after the last edit before saving the draft. */
-export const AUTOSAVE_DELAY_MS = 800;
+/**
+ * What the first render does not need loads after it (research P13): the
+ * selection's settings (the editor opens with nothing selected), Theme
+ * settings, the library, publishing, history and Draft with AI. The panes
+ * load on idle right after the first render, so they are there by the first
+ * click; a dialog loads when it first opens.
+ */
+const loadPanes = () => import("./SelectionPanes");
+const lazyNamed = <Props,>(load: () => Promise<ComponentType<Props>>) => lazy(async () => ({ default: await load() }));
+const SectionPane = lazyNamed(() => loadPanes().then((module) => module.SectionPane));
+const BlockPane = lazyNamed(() => loadPanes().then((module) => module.BlockPane));
+const PartSettings = lazyNamed(() => loadPanes().then((module) => module.PartSettings as ComponentType<Parameters<typeof module.PartSettings>[0]>));
+const AppSectionSettings = lazyNamed(() => loadPanes().then((module) => module.AppSectionSettings));
+const ThemeSettingsPanel = lazyNamed(() => loadPanes().then((module) => module.ThemeSettingsPanel));
+const SectionLibrary = lazyNamed(() => import("./SectionLibrary").then((module) => module.SectionLibrary));
+const PublishDialog = lazyNamed(() => import("./PublishDialog").then((module) => module.PublishDialog));
+const ThemeHistory = lazyNamed(() => import("./ThemeHistory").then((module) => module.ThemeHistory));
+const AiDraftDialog = lazyNamed(() => import("./AiDraftDialog").then((module) => module.AiDraftDialog));
 
-const same = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
-
-interface SavedDraft {
-  theme: Theme;
-  revision: number;
-  basePublishedRevision: number;
-}
-
-/** Field issues a rejected save reported, by section id (paths under its settings). */
-type SectionIssues = ReadonlyMap<string, ReadonlyMap<string, string>>;
-
-function sectionIssues(error: unknown, theme: Theme): { sections: SectionIssues; other: string | null } {
-  const issues = readApiFieldIssues(error) ?? [];
-  const sections = new Map<string, Map<string, string>>();
-  let other: string | null = null;
-  for (const issue of issues) {
-    const match = /^(?:theme\.)?pages\.(?:home|landing\.([^.]+)\.sections)\.(\d+)\.settings\.?(.*)$/.exec(issue.path);
-    const list = match?.[1] ? theme.pages.landing[match[1]]?.sections : theme.pages.home;
-    const id = match ? list?.[Number(match[2])]?.id : undefined;
-    if (id) {
-      const map = sections.get(id) ?? new Map<string, string>();
-      map.set(match![3] ?? "", issue.message);
-      sections.set(id, map);
-    } else {
-      other ??= issue.message;
-    }
+/** Per-browser view choices (research P3: the zoom is remembered). */
+const VIEW_KEY = "scalius.themeEditor.view";
+interface ViewChoices { zoom: PreviewZoom; desktopWidth: DesktopWidth; sidebar: boolean }
+function readView(): ViewChoices {
+  try {
+    const value = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null") as Partial<ViewChoices> | null;
+    return {
+      zoom: value?.zoom === "actual" ? "actual" : "fit",
+      desktopWidth: DESKTOP_WIDTHS.includes(value?.desktopWidth as DesktopWidth) ? value!.desktopWidth! : 1280,
+      sidebar: value?.sidebar !== false,
+    };
+  } catch {
+    return { zoom: "fit", desktopWidth: 1280, sidebar: true };
   }
-  // The status line says the first problem; the fields say each one.
-  return { sections, other: other ?? issues[0]?.message ?? actionErrorText(error) };
+}
+function writeView(view: ViewChoices) {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(view));
+  } catch {
+    // A private window keeps the defaults.
+  }
 }
 
-const DEVICES: ReadonlyArray<{ value: PreviewDevice; icon: typeof Monitor }> = [
-  { value: "desktop", icon: Monitor },
-  { value: "tablet", icon: Laptop },
-  { value: "phone", icon: Smartphone },
-];
-
-/** Add-section menu values naming an app's section: `app:<plugin id>/<type>`. */
-const APP_OPTION = "app:";
-
-/** An app section's name: its app's name for it, or its key while the app is not active. */
-function appSectionName(section: StorefrontAppSection, apps: ReadonlyMap<string, AppSectionEntry>): string {
-  return apps.get(section.settings.app)?.section.name ?? section.settings.app;
-}
-
-function useSectionName(apps: ReadonlyMap<string, AppSectionEntry>) {
-  const t = useMessages(onlineStoreMessages);
-  // The merchant's own heading names a section; its type otherwise.
-  return useCallback((section: Section) => {
-    if (isStorefrontAppSection(section)) return appSectionName(section, apps);
-    const settings = section.settings as { title?: unknown; heading?: unknown };
-    const own = [settings.title, settings.heading].find((value): value is string => typeof value === "string" && value.trim() !== "");
-    return own?.trim() || t(`section_${section.type}` as MessageKey);
-  }, [apps, t]);
-}
-
-/** A platform section's generated settings, with its errors (the form's own and a rejected save's). */
-function PlatformSectionSettings({ section, issues, media, onChange }: {
-  section: StorefrontPlatformSection;
-  issues?: ReadonlyMap<string, string>;
-  media: ReturnType<typeof useMediaPreviews>;
-  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
-}) {
-  const own = useSectionErrors(section);
-  const errors = useMemo(() => new Map([...own, ...(issues ?? [])]), [own, issues]);
-  return <SectionSettingsForm section={section} media={media} errors={errors} onChange={onChange} />;
+/** Sections with a setting to fix (what saves meanwhile is their saved value), for their rows. */
+function useHeldSections(held: readonly string[]) {
+  const t = useMessages(themeEditorMessages);
+  return useMemo(() => {
+    const map = new Map<string, string>();
+    for (const part of held) {
+      if (part.startsWith("section:")) map.set(part.slice(part.lastIndexOf(":") + 1), t("sectionNeedsFix"));
+    }
+    return map;
+  }, [held, t]);
 }
 
 export function ThemeEditor({ workspace, refetch }: {
@@ -192,210 +166,80 @@ export function ThemeEditor({ workspace, refetch }: {
   refetch: () => Promise<{ data?: ThemeWorkspaceDocument }>;
 }) {
   const t = useMessages(themeEditorMessages);
-  const store = useMessages(onlineStoreMessages);
-  const queryClient = useQueryClient();
-  const storeShape = workspace.storeShape as StoreShape;
-  const media = useMediaPreviews(workspace.media);
-  const [history, dispatchHistory] = useReducer(editorHistory, workspace.draft.theme as Theme, startHistory);
-  const theme = history.present;
-  const [saved, setSaved] = useState<SavedDraft>({
-    theme: workspace.draft.theme as Theme,
-    revision: workspace.draft.revision,
-    basePublishedRevision: workspace.draft.basePublishedRevision,
-  });
-  const [published, setPublished] = useState({ theme: workspace.published.theme as Theme, revision: workspace.published.revision });
-  const [lastPublished, setLastPublished] = useState(workspace.lastPublished);
-  /** The editor's own version last saved: unsaved means different from this. */
-  const [lastSent, setLastSent] = useState<Theme>(workspace.draft.theme as Theme);
-  const [saving, setSaving] = useState(false);
-  const [conflict, setConflict] = useState(false);
-  const [failure, setFailure] = useState<{ for: Theme; message: string | null; sections: SectionIssues } | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [confirmPublish, setConfirmPublish] = useState(false);
-  const [publishNote, setPublishNote] = useState("");
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [pendingRestore, setPendingRestore] = useState<number | null>(null);
-  /** A version that names images deleted from Files since: how many, before restoring it without them. */
-  const [restoreMissing, setRestoreMissing] = useState<{ revision: number; images: number } | null>(null);
-  const [pendingRemoveLanding, setPendingRemoveLanding] = useState<string | null>(null);
-  const [draftAction, setDraftAction] = useState(false);
-  const [previewRevision, setPreviewRevision] = useState<number | null>(null);
-  const [versionsOpen, setVersionsOpen] = useState(false);
-  const [creatingLanding, setCreatingLanding] = useState(false);
-  const [page, setPageState] = useState<EditorPage>({ kind: "home" });
-  const [resources, setResources] = useState<Partial<Record<ResourcePageKind, NavigationResourceOption>>>({});
-  const [device, setDevice] = useState<PreviewDevice>("desktop");
-  const [pane, setPane] = useState<"panel" | "preview">("panel");
-  const [tab, setTab] = useState<"sections" | "theme">("sections");
-  const [selected, setSelected] = useState<string | null>(null);
-  const wide = useMediaQuery("(min-width: 1280px)");
-  // Staff who may view settings but not edit them browse the theme read-only.
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
-  const preview = useRef<PreviewController>(null);
+  const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
+  const media = useMediaPreviews(workspace.media);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
   const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
+  const draft = useThemeDraft({ workspace, refetch, canEdit, appSections, appBlocks });
+  const theme = draft.working;
+  const storeShape = workspace.storeShape;
+  const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
   const sectionName = useSectionName(appSections);
-  const pageName = usePageName();
+  const blockName = useBlockName();
+  const pageNameOf = usePageName();
   const partTitle = usePartTitle();
-  const resolved = resolveThemeForStore(theme, storeShape);
-  const fitReason = useFitReason(resolved.facts);
-  const openPreview = useOpenThemePreview();
+  const openPreviewTab = useOpenThemePreview();
 
-  const dispatch = useCallback((action: Parameters<typeof dispatchHistory>[0]) => {
-    // Editing returns the preview from a published version to the draft.
-    setPreviewRevision(null);
-    dispatchHistory(action);
-  }, []);
-  const setDraft: SetTheme = useCallback((next) => {
-    if (!canEdit) return;
-    dispatch({ type: "edit", update: (current) => (typeof next === "function" ? next(current) : next), at: Date.now() });
-  }, [dispatch, canEdit]);
+  // ── Layout (research §5) ─────────────────────────────────────────────────
+  const wide = useMediaQuery("(min-width: 1600px)");
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  const phone = !useMediaQuery("(min-width: 768px)");
+  const [view, setViewState] = useState<ViewChoices>(readView);
+  const setView = (next: Partial<ViewChoices>) => setViewState((current) => {
+    const value = { ...current, ...next };
+    writeView(value);
+    return value;
+  });
+  /** The panel slides only after a toggle the merchant made, never on load (P14). */
+  const [animated, setAnimated] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sheet, setSheet] = useState<"half" | "full">("half");
+  const [deviceChoice, setDevice] = useState<PreviewDevice>("desktop");
+  const device: PreviewDevice = phone ? "phone" : deviceChoice;
+  const [inspector, setInspector] = useState(true);
+  const [scale, setScale] = useState(1);
+  const sidebarShown = desktop ? view.sidebar : drawerOpen;
 
+  // ── Page, resource and market ────────────────────────────────────────────
+  const [page, setPageState] = useState<EditorPage>({ kind: "home" });
+  const [resources, setResources] = useState<Partial<Record<ResourcePageKind, NavigationResourceOption>>>({});
+  const resourceKind = isResourcePage(page) ? page.kind : null;
+  const defaults = useDefaultResource(resourceKind);
+  const resource = resourceKind ? resources[resourceKind] ?? defaults.resource : null;
+  const markets = useQuery(marketsQueryOptions());
+  const marketOptions = useMemo(() => (markets.data ?? [])
+    .filter((market) => market.status === "active" && market.presence)
+    .map((market) => {
+      const presence = market.presence!;
+      const country = market.countries[0] ?? "";
+      return {
+        value: presence.value,
+        locale: presence.locale,
+        short: `${country}${country ? " · " : ""}${presence.locale.toUpperCase()}`,
+        label: `${market.name} · ${languageName(presence.locale, getLocale())}`,
+        backup: market.isBackup,
+      };
+    }), [markets.data]);
+  const [presence, setPresence] = useState("");
+  const defaultLocale = marketOptions.find((option) => option.backup)?.locale ?? null;
+  const previewLocale = marketOptions.find((option) => option.value === presence)?.locale ?? defaultLocale;
+  const [previewRevision, setPreviewRevision] = useState<number | null>(null);
+  const versionDocument = useQuery(themeVersionDocumentQuery(page.kind === "landing" ? previewRevision : null));
+  const versionLacksPage = page.kind === "landing" && previewRevision !== null && versionDocument.data !== undefined && !versionDocument.data.pages.landing[page.slug];
+  const basePath = versionLacksPage ? "/" : previewPath(page, resource?.url ?? null);
+  const path = basePath === null ? null : presencePathOf(presence || null, basePath);
+
+  // ── Selection ────────────────────────────────────────────────────────────
+  const [tab, setTab] = useState<"sections" | "theme">("sections");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const sections = pageSections(theme, page);
-  const allSections = useMemo(
-    () => [...theme.pages.home, ...Object.values(theme.pages.landing).flatMap((each) => each.sections)],
-    [theme.pages.home, theme.pages.landing],
-  );
-  const invalid = themeDraftInvalid(theme)
-    || !storefrontThemeDocumentSchema.safeParse(theme).success
-    || appSectionsInvalid(allSections, appSections)
-    || productAppBlocksInvalid(theme, appBlocks);
-  const dirty = !same(theme, lastSent);
-  const failedHere = failure !== null && same(failure.for, theme);
+  const main = pageMain(theme, page);
+  const items = useMemo(() => (sections ? pageItems(sections, main) : []), [sections, main]);
+  const block = parseBlockId(selected);
+  const selectedSection = sections?.find((section) => section.id === (block?.sectionId ?? selected)) ?? null;
 
-  // ── Saving ───────────────────────────────────────────────────────────────
-  const latest = useRef({ theme, saved, saving, conflict, draftAction, page });
-  latest.current = { theme, saved, saving, conflict, draftAction, page };
-
-  const save = useCallback(async () => {
-    const { theme: sending, saved: base, saving: busy, conflict: blocked, draftAction: replacing, page: shown } = latest.current;
-    if (busy || blocked || replacing) return;
-    setSaving(true);
-    try {
-      const result = await apiData(postApiV1AdminSettingsThemeDraft({
-        body: { expectedDraftRevision: base.revision, basePublishedRevision: base.basePublishedRevision, theme: sending },
-      }));
-      setSaved({ theme: sending, revision: result.revision, basePublishedRevision: result.basePublishedRevision });
-      setLastSent(sending);
-      setFailure(null);
-      // The preview follows the saved draft: swap the changed sections, or load the page again.
-      const change = base.revision === 0 ? { kind: "reload" as const } : previewChange(base.theme, sending, shown);
-      if (change.kind === "sections") preview.current?.send({ type: "section-updated", sectionIds: change.ids });
-      else if (change.kind === "reload") preview.current?.send({ type: "reload" });
-    } catch (error) {
-      if (isAdminApiConflictError(error)) setConflict(true);
-      else {
-        const issues = sectionIssues(error, sending);
-        setFailure({ for: sending, message: issues.other, sections: issues.sections });
-      }
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
-  // Edits save themselves a moment after the last one.
-  useEffect(() => {
-    if (!canEdit || !dirty || invalid || saving || conflict || failedHere || draftAction) return;
-    const timer = window.setTimeout(() => void save(), AUTOSAVE_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [theme, canEdit, dirty, invalid, saving, conflict, failedHere, draftAction, save]);
-
-  // A store without a draft gets one, so the preview has a draft to render.
-  useEffect(() => {
-    if (canEdit && saved.revision === 0 && !saving && !conflict && !failure) void save();
-  }, [canEdit, saved.revision, saving, conflict, failure, save]);
-
-  /** The server's workspace again (after a conflict, a restore or a discard); `keepEdits` overwrites it with ours next. */
-  const reload = async (keepEdits = false) => {
-    setDraftAction(true);
-    try {
-      const { data } = await refetch();
-      if (!data) return;
-      const newer: SavedDraft = { theme: data.draft.theme as Theme, revision: data.draft.revision, basePublishedRevision: data.draft.basePublishedRevision };
-      setSaved(newer);
-      setLastSent(newer.theme);
-      setPublished({ theme: data.published.theme as Theme, revision: data.published.revision });
-      setLastPublished(data.lastPublished);
-      if (!keepEdits) dispatchHistory({ type: "replace", theme: newer.theme });
-      setConflict(false);
-      setFailure(null);
-      setPreviewRevision(null);
-      if (page.kind === "landing" && !(data.draft.theme as Theme).pages.landing[page.slug] && !keepEdits) setPageState({ kind: "home" });
-      preview.current?.send({ type: "reload" });
-    } catch (error) {
-      toast.error(actionErrorText(error));
-    } finally {
-      setDraftAction(false);
-    }
-  };
-
-  /**
-   * Restore a published version to the draft, or discard the draft's changes
-   * (no revision). A version naming images deleted from Files since asks
-   * first, then restores without them.
-   */
-  const replaceDraft = async (sourceRevision?: number, withoutMissingImages = false) => {
-    setDraftAction(true);
-    try {
-      const body = { expectedDraftRevision: saved.revision, basePublishedRevision: saved.basePublishedRevision };
-      if (sourceRevision === undefined) await apiData(postApiV1AdminSettingsThemeDiscard({ body }));
-      else await apiData(postApiV1AdminSettingsThemeRestore({ body: { ...body, sourceRevision, ...(withoutMissingImages ? { withoutMissingImages } : {}) } }));
-      setSelected(null);
-      toast.success(t(sourceRevision === undefined ? "discarded" : "restored"));
-    } catch (error) {
-      if (isAdminApiConflictError(error)) setConflict(true);
-      else if (sourceRevision !== undefined && error instanceof AdminApiResponseError && error.code === "THEME_VERSION_IMAGES_MISSING") {
-        const images = (error.details as { missingImages?: unknown } | undefined)?.missingImages;
-        setRestoreMissing({ revision: sourceRevision, images: typeof images === "number" ? images : 1 });
-      } else toast.error(actionErrorText(error));
-      setDraftAction(false);
-      return;
-    }
-    await reload();
-  };
-
-  const publish = async () => {
-    setPublishing(true);
-    try {
-      const result = await apiData(postApiV1AdminSettingsThemePublish({
-        body: { expectedPublishedRevision: published.revision, expectedDraftRevision: saved.revision, ...(publishNote.trim() ? { note: publishNote.trim() } : {}) },
-      }));
-      setPublished({ theme: saved.theme, revision: result.published.revision });
-      // Publishing moves the draft onto the new live revision: later saves start from it.
-      setSaved({ theme: saved.theme, revision: result.draft.revision, basePublishedRevision: result.draft.basePublishedRevision });
-      setLastPublished(result.lastPublished);
-      setPublishNote("");
-      void queryClient.invalidateQueries({ queryKey: themeVersionsKey });
-      void queryClient.invalidateQueries({ queryKey: themeWorkspaceQueryOptions().queryKey });
-      toast.success(store("themePublished"));
-    } catch (error) {
-      if (isAdminApiConflictError(error)) setConflict(true);
-      else toast.error(actionErrorText(error));
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  // ── Undo, redo and save from the keyboard (outside text fields, which keep their own) ──
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (typingIn(event.target)) return;
-      if (matchesShortcut("undo", event)) {
-        event.preventDefault();
-        dispatch({ type: "undo" });
-      } else if (matchesShortcut("redo", event)) {
-        event.preventDefault();
-        dispatch({ type: "redo" });
-      } else if (matchesShortcut("save", event)) {
-        event.preventDefault();
-        if (dirty && !invalid) void save();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dirty, invalid, save, dispatch]);
-
-  // ── Pages and what the preview shows ─────────────────────────────────────
   const setPage = (next: EditorPage) => {
     setPageState(next);
     setSelected(null);
@@ -403,200 +247,384 @@ export function ThemeEditor({ workspace, refetch }: {
   };
   // A landing page undone or restored away: back to the homepage.
   useEffect(() => {
-    if (page.kind === "landing" && !theme.pages.landing[page.slug]) {
-      setPageState({ kind: "home" });
-      setSelected(null);
+    if (page.kind === "landing" && !theme.pages.landing[page.slug]) setPage({ kind: "home" });
+  }, [page, theme.pages.landing]); // eslint-disable-line react-hooks/exhaustive-deps -- setPage is stable in effect
+  // A selection that is gone (undo, a removal elsewhere) is dropped.
+  useEffect(() => {
+    if (!selected) return;
+    const sectionId = block?.sectionId ?? selected;
+    const isSection = sections?.some((section) => section.id === sectionId);
+    const isPart = Object.values(EDITOR_PARTS).includes(selected as never) || selectedModule(selected) !== null;
+    if (!isSection && !isPart) setSelected(null);
+    if (block && selectedSection && block.index >= ((storefrontSettingAt(selectedSection.settings, block.path) as unknown[] | undefined)?.length ?? 0)) setSelected(block.sectionId);
+  }, [theme, selected]); // eslint-disable-line react-hooks/exhaustive-deps -- re-checked per document
+
+  // ── Preview ──────────────────────────────────────────────────────────────
+  const [connectedAt, setConnectedAt] = useState(0);
+  const select = useCallback((id: string | null, from: "tree" | "preview" | "other" = "other") => {
+    setSelected(id);
+    if (!id) return;
+    setTab("sections");
+    const sectionId = parseBlockId(id)?.sectionId ?? id;
+    if (sections?.find((section) => section.id === sectionId)?.aiDraft) draft.dispatch({ type: "opened", id: sectionId });
+    if (!desktop) {
+      setDrawerOpen(true);
+      if (from === "preview") setSheet("half");
     }
-  }, [page, theme.pages.landing]);
-  const resourceKind = isResourcePage(page) ? page.kind : null;
-  const defaults = useDefaultResource(resourceKind);
-  const resource = resourceKind ? resources[resourceKind] ?? defaults.resource : null;
-  // A published version without this landing page previews its homepage.
-  const versionDocument = useQuery(themeVersionDocumentQuery(page.kind === "landing" ? previewRevision : null));
-  const versionLacksPage = page.kind === "landing" && previewRevision !== null && versionDocument.data !== undefined && !versionDocument.data.pages.landing[page.slug];
-  const path = versionLacksPage ? "/" : previewPath(page, resource?.url ?? null);
-
-  // ── Sections of the homepage or a landing page ───────────────────────────
-  const setSections = (update: (sections: Section[]) => Section[]) =>
-    setDraft((current) => withPageSections(current, page, update(pageSections(current, page) ?? [])));
-  const selectedSection = sections?.find((section) => section.id === selected) ?? null;
-
-  /** Why buyers don't see a platform section (an app section's row says it about its app). */
-  const note = (section: Section): string | undefined => {
-    if (section.hidden) return t("hidden");
-    if (isStorefrontAppSection(section)) return undefined;
-    if (storefrontSectionRenderer(section) === null) return store("sectionNotYet");
-    const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
-    if (fallback) return store("sectionHidden", { reason: fitReason(fallback) });
-    const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[section.type].requires, { facts: resolved.facts, blocks: {} });
-    if (failed.length > 0) return store("sectionHidden", { reason: fitReason({ failed }) });
-    if (storefrontSectionNeedsContent(section)) return store("sectionNeedsContent");
-    return undefined;
-  };
-  const appNote = (section: StorefrontAppSection): Pick<TreeRow, "note" | "invalid"> => {
-    const entry = appSections.get(section.settings.app);
-    if (section.hidden) return { note: t("hidden") };
-    if (!entry) return { note: t("appInactive") };
-    if (appValuesInvalid(entry.section.settings, section.settings.values)) return { note: t("appSettingsInvalid"), invalid: true };
-    return { note: t("appFrom", { app: entry.app.name }) };
-  };
-  const rows: TreeRow[] = (sections ?? []).map((section) => {
-    const issues = failedHere ? failure?.sections.get(section.id) : undefined;
-    const base = { id: section.id, name: sectionName(section), hidden: section.hidden === true, canDuplicate: canAddSectionType(sections ?? [], section.type) };
-    if (issues?.size) return { ...base, note: [...issues.values()][0], invalid: true };
-    return isStorefrontAppSection(section) ? { ...base, ...appNote(section) } : { ...base, note: note(section) };
+  }, [sections, draft, desktop]);
+  const preview = usePreview({
+    draftRevision: draft.saved.revision,
+    sourceRevision: previewRevision,
+    path: draft.saved.revision > 0 ? path : null,
+    inspector,
+    onSelect: (id) => select(id, "preview"),
+    onKey: (press) => handleKey(press, null),
+    onConnected: () => setConnectedAt((count) => count + 1),
   });
+  usePreviewSync({
+    send: preview.send,
+    reload: preview.reload,
+    connectedAt,
+    working: theme,
+    sendable: previewRevision === null ? draft.pending : null,
+    savedTheme: draft.saved.theme,
+    page,
+    presence: presence || null,
+    onNeedSave: draft.saveSoon,
+  });
+  // Selecting from the tree brings the part into view only when it is outside it (P8).
+  const mark = selectionMark(selected);
+  useEffect(() => {
+    if (mark) preview.send({ type: "reveal", id: mark });
+  }, [mark]); // eslint-disable-line react-hooks/exhaustive-deps -- once per selection
+
+  // ── Edits ────────────────────────────────────────────────────────────────
+  const { setDraft } = draft;
+  const editItems = useCallback((update: (items: PageItem[]) => PageItem[]) => setDraft((current) => {
+    const now = pageSections(current, page);
+    if (!now) return current;
+    const next = fromPageItems(update(pageItems(now, pageMain(current, page))));
+    return withPageSections(current, page, next.sections, next.main ?? undefined);
+  }), [setDraft, page]);
+  const editSection = (id: string, update: (section: Section) => Section) => editItems((current) => mapSection(current, id, update));
 
   const remove = (id: string) => {
-    const result = removeSection(sections ?? [], id);
+    const result = removeSection(items, id);
     if (!result) return;
-    setSections(() => result.sections);
-    if (selected === id) setSelected(null);
+    editItems(() => result.items);
+    if (selectionMark(selected) === id) setSelected(null);
     toast.success(t("removed"), {
       duration: 10_000,
-      action: { label: t("undoRemove"), onClick: () => setSections((current) => restoreSection(current, result.removed, result.index)) },
+      action: { label: t("undoRemove"), onClick: () => editItems((current) => current.some((item) => item.kind === "section" && item.section.id === id) ? current : insertItem(current, result.removed, result.index)) },
     });
   };
-
-  const platformOptions = STOREFRONT_SECTION_RENDERERS.map((type) => {
-    const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[type].requires, { facts: resolved.facts, blocks: {} });
-    const allowed = canAddSectionType(sections ?? [], type);
-    return {
-      value: type,
-      label: store(`section_${type}` as MessageKey),
-      description: !allowed && (sections ?? []).length < STOREFRONT_MAX_SECTIONS
-        ? t("onePerPage")
-        : failed.length > 0 ? `${t(`sectionDescription_${type}`)} ${fitReason({ failed })}` : t(`sectionDescription_${type}`),
-      disabled: !allowed,
-    };
-  });
-  const appAllowed = canAddSectionType(sections ?? [], "app");
-  const appOptions = workspace.apps.flatMap((app) => app.sections.map((section) => ({
-    value: `${APP_OPTION}${section.key}`,
-    label: section.name,
-    description: !appAllowed && (sections ?? []).length < STOREFRONT_MAX_SECTIONS
-      ? t("appSectionLimit", { count: PLUGIN_HOME_SECTIONS_MAX })
-      : section.description ? `${section.description} ${t("appFrom", { app: app.name })}` : app.name,
-    group: t("addGroupApps"),
-    disabled: !appAllowed,
-  })));
-  const addOptions = appOptions.length > 0
-    ? [...platformOptions.map((option) => ({ ...option, group: t("addGroupSections") })), ...appOptions]
-    : platformOptions;
-  const add = (value: string) => {
-    const current = sections ?? [];
-    if (value.startsWith(APP_OPTION)) {
-      const entry = appSections.get(value.slice(APP_OPTION.length));
-      return entry ? addAppSection(current, value.slice(APP_OPTION.length), appSettingDefaults(entry.section.settings)) : null;
-    }
-    return addSection(current, value as StorefrontSectionType);
+  const duplicate = (id: string) => {
+    const result = duplicateSection(items, id);
+    if (result) {
+      editItems(() => result.items);
+      select(result.id);
+    } else toast.error(t("cannotDuplicate"));
+  };
+  const toggle = (id: string) => editSection(id, (section) => ({ ...section, hidden: !section.hidden }));
+  const moveSelected = (delta: -1 | 1) => {
+    const id = selectionMark(selected);
+    const from = items.findIndex((item) => (item.kind === "section" ? item.section.id : pageFixedPart(page)) === id);
+    if (from >= 0) editItems((current) => moveItem(current, from, from + delta));
   };
 
-  // ── What the preview names (outline labels) and selects ──────────────────
-  const names = useMemo<Record<string, string>>(() => {
-    // Every page's header, announcement bar and footer, then the page's own parts.
-    const frame = { [EDITOR_PARTS.announcement]: t("announcement"), [EDITOR_PARTS.header]: t("headerRow"), [EDITOR_PARTS.footer]: t("footerRow") };
-    if (sections) return { ...frame, ...Object.fromEntries(sections.map((section) => [section.id, sectionName(section)])) };
-    if (page.kind === "product") {
+  const handlers = {
+    toggleSection: toggle,
+    duplicateSection: duplicate,
+    removeSection: remove,
+    addSectionAt: (index: number) => setLibraryAt(index),
+    toggleBlock: (sectionId: string, path: string, index: number) => editSection(sectionId, (section) => toggleBlockHidden(section, path, index)),
+    duplicateBlock: (sectionId: string, path: string, index: number) => editSection(sectionId, (section) => duplicateBlock(section, path, index) ?? section),
+    removeBlock: (sectionId: string, path: string, index: number) => {
+      editSection(sectionId, (section) => removeBlock(section, path, index));
+      setSelected(sectionId);
+    },
+    addBlock: (sectionId: string, path: string) => {
+      const section = sections?.find((each) => each.id === sectionId);
+      if (!section) return;
+      // A hero's slides come from Files: its settings offer that.
+      if (section.type === "hero" && path === "slides") {
+        select(sectionId, "tree");
+        return;
+      }
+      const next = addBlock(section, path);
+      if (!next) return;
+      editSection(sectionId, () => next);
+      select(`${sectionId}/${path}/${(storefrontSettingAt(next.settings, path) as unknown[]).length - 1}`, "tree");
+    },
+    toggleModule: (module: Parameters<typeof toggleProductModule>[1]) => setDraft((current) => ({
+      ...current,
+      blocks: { ...current.blocks, product: { ...current.blocks.product, below: toggleProductModule(current.blocks.product.below, module, !current.blocks.product.below.includes(module)) } },
+    })),
+  };
+  const onTreeMove = (list: string, from: number, to: number) => {
+    if (list === "page") editItems((current) => moveItem(current, from, to));
+    else if (list === "modules") setDraft((current) => ({ ...current, blocks: { ...current.blocks, product: { ...current.blocks.product, below: moveItem(current.blocks.product.below, from, to) } } }));
+    else if (list.startsWith("blocks:")) {
+      const [, sectionId, path] = list.split(":");
+      editSection(sectionId!, (section) => moveBlock(section, path!, from, to));
+    }
+  };
+
+  // ── Library and AI ───────────────────────────────────────────────────────
+  const [libraryAt, setLibraryAt] = useState<number | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  // Always offered to editors: without an AI app or agent, the dialog says what to turn on.
+  const aiAvailable = canEdit;
+  const template = pageTemplate(page);
+  const libraryOptions: LibraryOption[] = useMemo(() => {
+    const current = sections ?? [];
+    const reason = (blocked: ReturnType<typeof addBlockedReason>) => blocked === "limit" ? t("sectionLimit", { count: 24 })
+      : blocked === "one-hero" ? t("onePerPage")
+        : blocked === "app-limit" ? t("appSectionLimit", { count: PLUGIN_HOME_SECTIONS_MAX })
+          : null;
+    return [
+      ...STOREFRONT_SECTION_RENDERERS.map((type) => {
+        const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[type].requires, { facts: resolved.facts, blocks: {} });
+        const deliveryOnly = type === "usp-strip" && (template === "collection" || template === "page");
+        return {
+          choice: { type } as LibraryChoice,
+          blocked: reason(addBlockedReason(current, type)),
+          note: deliveryOnly ? t("deliveryFactsNote") : failed.length > 0 ? t("showsWhenFits") : undefined,
+        };
+      }),
+      ...workspace.apps.flatMap((app) => app.sections.map((section) => ({ choice: { app: section.key } as LibraryChoice, blocked: reason(addBlockedReason(current, "app")) }))),
+    ];
+  }, [sections, resolved.facts, workspace.apps, template, t]);
+  const addFromLibrary = (choice: LibraryChoice) => {
+    const current = sections ?? [];
+    const section = "type" in choice
+      ? newSection(choice.type, current)
+      : newAppSection(choice.app, appSettingDefaults(appSections.get(choice.app)?.section.settings ?? []), current);
+    const at = libraryAt ?? items.length;
+    editItems((now) => insertItem(now, section, at));
+    setLibraryAt(null);
+    select(section.id, "other");
+  };
+  const aiPage: AiPage = page.kind === "category" || page.kind === "search" ? "collection" : page.kind;
+  const onDrafted = (drafted: Section[], note: string | null, rejected: number) => {
+    const added = draftedSections(drafted, sections ?? []);
+    const at = libraryAt ?? items.length;
+    editItems((now) => added.reduce((list, section, offset) => insertItem(list, section, at + offset), now));
+    setAiOpen(false);
+    setLibraryAt(null);
+    toast.success(added.length === 1 ? t("aiDraftedOne") : t("aiDrafted", { count: added.length }), {
+      description: [note, rejected === 1 ? t("aiRejectedOne") : rejected > 1 ? t("aiRejected", { count: rejected }) : null].filter(Boolean).join(" ") || undefined,
+    });
+    if (added[0]) setSelected(null);
+  };
+
+  // ── Dialogs ──────────────────────────────────────────────────────────────
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const libraryMounted = useOpenedOnce(libraryAt !== null);
+  const publishMounted = useOpenedOnce(publishOpen);
+  const historyMounted = useOpenedOnce(historyOpen);
+  // The settings panes load right after the first render (nothing is selected yet).
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((task: () => void) => window.setTimeout(task, 200));
+    idle(() => void loadPanes());
+  }, []);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [creatingLanding, setCreatingLanding] = useState(false);
+  const [removingLanding, setRemovingLanding] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<{ version: number } | { point: string } | null>(null);
+  const [restoreMissing, setRestoreMissing] = useState<{ source: { version: number } | { point: string }; images: number } | null>(null);
+  const restore = async (source: { version: number } | { point: string }, withoutMissing = false) => {
+    setSelected(null);
+    setPreviewRevision(null);
+    const missing = await draft.replaceDraft(source, withoutMissing);
+    if (missing) setRestoreMissing({ source, images: missing.missingImages });
+    else preview.reload();
+  };
+
+  // ── Keyboard (research P18) ──────────────────────────────────────────────
+  const handleKey = (press: { key: string; mod: boolean; shift: boolean; alt: boolean }, event: KeyboardEvent | null) => {
+    const handled = () => event?.preventDefault();
+    if (matchesEditorShortcut("undo", press)) { handled(); draft.dispatch({ type: "undo" }); }
+    else if (matchesEditorShortcut("redo", press)) { handled(); draft.dispatch({ type: "redo" }); }
+    else if (matchesEditorShortcut("save", press)) { handled(); void draft.save(); }
+    else if (matchesEditorShortcut("shortcuts", press)) { handled(); setShortcutsOpen(true); }
+    else if (matchesEditorShortcut("sidebar", press)) { handled(); toggleSidebar(); }
+    else if (matchesEditorShortcut("back", press)) { if (selected) { handled(); setSelected(block ? block.sectionId : null); } }
+    else if (matchesEditorShortcut("previous", press) || matchesEditorShortcut("next", press)) {
+      handled();
+      const ids = items.map((item) => (item.kind === "section" ? item.section.id : pageFixedPart(page)!));
+      const at = ids.indexOf(selectionMark(selected) ?? "");
+      const next = ids[matchesEditorShortcut("previous", press) ? Math.max(0, at - 1) : Math.min(ids.length - 1, at + 1)];
+      if (next) select(next, "tree");
+    } else if (canEdit && selectedSection && block === null) {
+      if (matchesEditorShortcut("duplicate", press)) { handled(); duplicate(selectedSection.id); }
+      else if (matchesEditorShortcut("hide", press)) { handled(); toggle(selectedSection.id); }
+      else if (matchesEditorShortcut("remove", press)) { handled(); remove(selectedSection.id); }
+    }
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (typingIn(event.target)) return;
+      // The tree's own keys stay the tree's.
+      if ((event.target as HTMLElement | null)?.closest?.("[role=tree]") && !event.metaKey && !event.ctrlKey && event.key !== "\\") return;
+      handleKey({ key: event.key, mod: event.metaKey || event.ctrlKey, shift: event.shiftKey, alt: event.altKey }, event);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  function toggleSidebar() {
+    setAnimated(true);
+    if (desktop) setView({ sidebar: !view.sidebar });
+    else setDrawerOpen((open) => !open);
+  }
+
+  // ── The tree, the selection's settings and the canvas' chrome ───────────
+  const pageName = pageNameOf(page, theme);
+  const heldSections = useHeldSections(draft.held);
+  const groups = useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, readOnly: !canEdit, handlers });
+  const expandTo = block ? [block.sectionId] : selectedModule(selected) ? [EDITOR_PARTS.productMain] : selected === EDITOR_PARTS.listingToolbar || selected === EDITOR_PARTS.listingFilters ? [EDITOR_PARTS.listing] : [];
+
+  const names = useMemo(() => {
+    const entries: Record<string, { name: string; shared?: boolean }> = {
+      [EDITOR_PARTS.announcement]: { name: t("announcement"), shared: true },
+      [EDITOR_PARTS.header]: { name: t("headerRow"), shared: true },
+      [EDITOR_PARTS.footer]: { name: t("footerRow"), shared: true },
+    };
+    for (const section of sections ?? []) entries[section.id] = { name: sectionName(section) };
+    const fixed = pageFixedPart(page);
+    if (fixed) entries[fixed] = { name: partTitle(fixed, page) ?? "" };
+    for (const module of theme.blocks.product.below) entries[moduleId(module)] = { name: t(`module_${module}`) };
+    entries[EDITOR_PARTS.productApps] = { name: t("appBlocks") };
+    entries[EDITOR_PARTS.listingFilters] = { name: t("listingFilters") };
+    return entries;
+  }, [sections, page, theme.blocks.product.below, sectionName, partTitle, t]);
+
+  const sectionIndex = items.findIndex((item) => item.kind === "section" && item.section.id === selectionMark(selected));
+  const fixedIndex = items.findIndex((item) => item.kind === "fixed");
+  const canvasActions: SelectionActions | null = (() => {
+    const markId = selectionMark(selected);
+    if (!markId) return null;
+    const shared = markId === EDITOR_PARTS.header || markId === EDITOR_PARTS.footer || markId === EDITOR_PARTS.announcement;
+    const name = names[markId]?.name ?? "";
+    if (!canEdit || previewRevision !== null) return { name, shared };
+    if (sectionIndex >= 0) {
+      const section = (items[sectionIndex] as { section: Section }).section;
       return {
-        ...frame,
-        [EDITOR_PARTS.productMain]: t("productMain"),
-        [EDITOR_PARTS.productApps]: t("appBlocks"),
-        ...Object.fromEntries(PRODUCT_MODULES.filter((module) => theme.blocks.product.below.includes(module)).map((module) => [moduleId(module), t(`module_${module}`)])),
+        name,
+        canMoveUp: sectionIndex > 0,
+        canMoveDown: sectionIndex < items.length - 1,
+        onMoveUp: () => moveSelected(-1),
+        onMoveDown: () => moveSelected(1),
+        onDuplicate: () => duplicate(section.id),
+        hidden: section.hidden === true,
+        onToggleHidden: () => toggle(section.id),
+        onRemove: () => remove(section.id),
+        onAddAbove: () => setLibraryAt(sectionIndex),
+        onAddBelow: () => setLibraryAt(sectionIndex + 1),
       };
     }
-    if (page.kind === "collection" || page.kind === "category" || page.kind === "search") {
-      return { ...frame, [EDITOR_PARTS.listing]: t("listingGrid"), [EDITOR_PARTS.listingFilters]: t("listingFilters") };
+    if (markId === pageFixedPart(page) && fixedIndex >= 0 && items.length > 1) {
+      return { name, canMoveUp: fixedIndex > 0, canMoveDown: fixedIndex < items.length - 1, onMoveUp: () => moveSelected(-1), onMoveDown: () => moveSelected(1) };
     }
-    return frame;
-  }, [sections, sectionName, page.kind, theme.blocks.product.below, t]);
-  const select = (id: string | null) => {
-    setSelected(id);
-    if (id) setTab("sections");
-  };
+    return { name, shared };
+  })();
 
-  // ── Status ───────────────────────────────────────────────────────────────
-  const hasUnpublishedDraft = dirty || (saved.revision > 0 && !same(saved.theme, published.theme));
-  const status = !canEdit ? t("readOnly")
-    : conflict ? t("statusConflict")
-    : saving ? t("statusSaving")
-      : failedHere ? (failure?.message ?? t("statusFailed"))
-        : invalid && dirty ? t("statusInvalid")
-          : dirty ? t("statusUnsaved")
-            : saved.revision > 0 ? t("statusSaved") : "";
-  const statusTone = conflict || failedHere || (invalid && dirty) ? "text-destructive" : "text-muted-foreground";
-  const busy = saving || draftAction || conflict;
-  const previewReady = saved.revision > 0 && path !== null;
-  const homeIsProduct = page.kind === "home" && theme.pages.homeMode.kind === "product";
-
-  // ── The selected item's settings ─────────────────────────────────────────
-  const settingsTitle = selectedSection
-    ? isStorefrontAppSection(selectedSection) ? appSectionName(selectedSection, appSections) : store(`section_${selectedSection.type}` as MessageKey)
-    : selected ? partTitle(selected, page) : null;
-  const sectionSettings = selectedSection ? (
+  const crumbs = [pageName, ...(block && selectedSection ? [sectionName(selectedSection)] : [])];
+  const paneTitle = !selected ? ""
+    : block && selectedSection ? blockName(selectedSection, block.path, block.index, (storefrontSettingAt(selectedSection.settings, block.path) as unknown[] | undefined)?.[block.index])
+      : selectedSection ? sectionName(selectedSection)
+        : partTitle(selected, page) ?? "";
+  const sharedSelected = selected === EDITOR_PARTS.header || selected === EDITOR_PARTS.footer || selected === EDITOR_PARTS.announcement;
+  const translatable = previewLocale !== null && defaultLocale !== null && previewLocale !== defaultLocale && (selectedSection !== null || sharedSelected);
+  const notices: ReactNode = (
     <>
-      {isStorefrontAppSection(selectedSection) ? (
-        <AppSectionSettings
-          key={selectedSection.id}
-          section={selectedSection}
-          entry={appSections.get(selectedSection.settings.app)}
-          issues={failedHere ? failure?.sections.get(selectedSection.id) : undefined}
-          onChange={(values) => setSections((current) => setAppSectionValues(current, selectedSection.id, values))}
-        />
-      ) : (
-        <PlatformSectionSettings
-          key={selectedSection.id}
-          section={selectedSection}
-          issues={failedHere ? failure?.sections.get(selectedSection.id) : undefined}
-          media={media}
-          onChange={(settings) => setSections((current) => current.map((each) => each.id === selectedSection.id ? { ...each, settings } as Section : each))}
-        />
-      )}
-      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={() => setSections((current) => current.map((each) => each.id === selectedSection.id ? { ...each, hidden: !each.hidden } : each))}>
-          {t(selectedSection.hidden ? "showSection" : "hideSection")}
-        </Button>
-        <Button type="button" variant="destructive" size="sm" onClick={() => remove(selectedSection.id)}>
-          <Trash2 aria-hidden="true" />{t("removeSection")}
-        </Button>
-      </div>
+      {sharedSelected ? <Alert variant="info"><AlertDescription>{t("sharedNotice")}</AlertDescription></Alert> : null}
+      {translatable ? (
+        <Alert variant="info">
+          <AlertDescription>
+            {t("translationNotice", { language: languageName(defaultLocale!, getLocale()) })}{" "}
+            <a href="/admin/settings/languages" className="text-link underline">{t("manageLanguages")}</a>
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </>
-  ) : null;
-  const settingsContent = selected === null ? null : sectionSettings ?? (
-    <PartSettings
-      selected={selected}
-      page={page}
-      theme={theme}
-      resolved={resolved}
-      media={media}
-      apps={workspace.apps}
-      cmsPageId={page.kind === "page" ? resource?.id ?? null : null}
-      setDraft={setDraft}
-      onRemoveLanding={setPendingRemoveLanding}
-    />
   );
-  const settingsPanel = settingsContent && settingsTitle ? (
-    <SettingsPanel
-      title={settingsTitle}
-      note={selectedSection && !isStorefrontAppSection(selectedSection) ? note(selectedSection) : undefined}
-      closeLabel={wide ? "close" : "back"}
-      onClose={() => setSelected(null)}
+  let paneContent: ReactNode = null;
+  let paneActions: PaneActions | undefined;
+  if (selectedSection && block && !isStorefrontAppSection(selectedSection)) {
+    const list = (storefrontSettingAt(selectedSection.settings, block.path) as unknown[] | undefined) ?? [];
+    const item = list[block.index] as { hidden?: boolean } | undefined;
+    paneContent = (
+      <BlockPane
+        section={selectedSection}
+        path={block.path}
+        index={block.index}
+        media={media}
+        onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
+      />
+    );
+    paneActions = {
+      hidden: item?.hidden === true,
+      onToggleHidden: () => handlers.toggleBlock(selectedSection.id, block.path, block.index),
+      onDuplicate: () => handlers.duplicateBlock(selectedSection.id, block.path, block.index),
+      onRemove: () => handlers.removeBlock(selectedSection.id, block.path, block.index),
+    };
+  } else if (selectedSection) {
+    paneContent = isStorefrontAppSection(selectedSection) ? (
+      <AppSectionSettings
+        key={selectedSection.id}
+        section={selectedSection}
+        entry={appSections.get(selectedSection.settings.app)}
+        onChange={(values) => editSection(selectedSection.id, (section) => (section.type === "app" ? { ...section, settings: { ...section.settings, values } } : section))}
+      />
+    ) : (
+      <SectionPane
+        section={selectedSection}
+        media={media}
+        canEdit={canEdit}
+        onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
+      />
+    );
+    paneActions = {
+      hidden: selectedSection.hidden === true,
+      onToggleHidden: () => toggle(selectedSection.id),
+      onDuplicate: () => duplicate(selectedSection.id),
+      onRemove: () => remove(selectedSection.id),
+    };
+  } else if (selected && partHasSettings(selected, page)) {
+    paneContent = (
+      <PartSettings
+        selected={selected}
+        page={page}
+        theme={theme}
+        resolved={resolved}
+        media={media}
+        apps={workspace.apps}
+        cmsPageId={page.kind === "page" ? resource?.id ?? null : null}
+        setDraft={setDraft}
+        onRemoveLanding={setRemovingLanding}
+      />
+    );
+  }
+  const pane = selected && paneContent !== null ? (
+    <SettingsPane
+      title={paneTitle}
+      crumbs={crumbs}
+      notices={notices}
+      onBack={wide ? null : () => setSelected(block ? block.sectionId : null)}
+      actions={paneActions}
+      readOnly={!canEdit}
     >
-      <fieldset disabled={!canEdit} className="min-w-0 space-y-4">{settingsContent}</fieldset>
-    </SettingsPanel>
+      <Suspense fallback={null}>{paneContent}</Suspense>
+    </SettingsPane>
   ) : null;
 
   const tree = (
-    <PageTree
-      theme={theme}
-      page={page}
-      pageName={pageName(page, theme)}
-      selected={selected}
-      onSelect={select}
-      onHover={(id) => preview.current?.send({ type: "highlight", sectionId: id })}
-      hasAppBlocks={appBlocks.size > 0 || (theme.blocks.product.apps ?? []).length > 0}
-      setDraft={setDraft}
-      resource={resourceKind ? (
+    <div className="flex h-full min-h-0 flex-col">
+      {resourceKind ? (
         <PreviewResource
           kind={resourceKind}
           resource={resource}
@@ -605,211 +633,296 @@ export function ThemeEditor({ workspace, refetch }: {
           onChange={(next) => setResources((current) => ({ ...current, [resourceKind]: next }))}
         />
       ) : null}
-      readOnly={!canEdit}
-      sections={sections ? {
-        rows,
-        note: homeIsProduct ? t("homeIsProduct") : undefined,
-        onMove: (id, to) => setSections((current) => moveSectionTo(current, current.findIndex((each) => each.id === id), to)),
-        onDuplicate: (id) => {
-          const result = duplicateSection(sections, id);
-          if (result) setSections(() => result.sections);
-        },
-        onRemove: remove,
-        onToggle: (id) => setSections((current) => current.map((each) => each.id === id ? { ...each, hidden: !each.hidden } : each)),
-        footer: (
-          <>
-            <SectionPicker options={addOptions} disabled={sections.length >= STOREFRONT_MAX_SECTIONS} onAdd={(value) => {
-              const result = add(value);
-              if (!result) return;
-              setSections(() => result.sections);
-              setSelected(result.id);
-            }} />
-            {sections.length >= STOREFRONT_MAX_SECTIONS ? (
-              <p className="px-2 pt-2 text-body text-muted-foreground">{store("sectionLimit", { count: STOREFRONT_MAX_SECTIONS })}</p>
-            ) : null}
-          </>
-        ),
-      } : null}
-    />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <LayerTree groups={groups} selected={selected} onSelect={(id) => select(id, "tree")} onHover={(id) => setHovered(id)} onMove={onTreeMove} expandTo={expandTo} />
+      </div>
+      {desktop ? (
+        <p className="shrink-0 border-t border-border px-3 py-2 text-body text-muted-foreground">{t("treeHint")}</p>
+      ) : null}
+    </div>
   );
 
-  return (
-    <div className="flex h-svh flex-col bg-background text-foreground">
-      <header className="flex min-h-14 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-1.5 sm:px-3">
-        <Link
-          to="/admin/online-store/theme"
-          aria-label={t("back")}
-          className="grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:size-9"
-        >
-          <ArrowLeft className="size-5" aria-hidden="true" />
-        </Link>
-        <div className="min-w-0 flex-1 basis-40">
-          <h1 className="flex items-center gap-2 text-heading-sm">
-            <span className="truncate">{t("title")}</span>
-            <StatusBadge status={hasUnpublishedDraft ? "draft" : "active"}>{hasUnpublishedDraft ? t("notPublished") : t("live")}</StatusBadge>
-          </h1>
-          <p role="status" aria-live="polite" className={cn("truncate text-body", statusTone)}>
-            {status}
-            {lastPublished && !conflict && !failedHere ? (
-              <span className="text-muted-foreground">
-                {status ? " · " : ""}
-                {t("lastPublished", {
-                  name: lastPublished.publishedByName ?? t("unknownAuthor"),
-                  time: formatDateTime(new Date(lastPublished.createdAt), { dateStyle: "medium", timeStyle: "short" }),
-                })}
-              </span>
-            ) : null}
-          </p>
-        </div>
-        <div className="order-last flex w-full justify-center md:order-none md:w-auto">
-          <PagePicker theme={theme} page={page} onPage={setPage} onCreate={canEdit ? () => setCreatingLanding(true) : undefined} />
-        </div>
-        <div className="ms-auto flex items-center gap-1">
-          <div role="group" aria-label={t("device")} className="hidden items-center gap-0.5 rounded-lg bg-muted p-0.5 md:flex">
-            {DEVICES.map(({ value, icon: Icon }) => (
-              <Button key={value} type="button" variant="ghost" size="icon-sm" aria-label={t(`device_${value}`)} aria-pressed={device === value} onClick={() => setDevice(value)}>
-                <Icon aria-hidden="true" />
-              </Button>
-            ))}
-          </div>
-          <Button type="button" variant="ghost" size="icon" aria-label={t("undo")} aria-keyshortcuts="Meta+Z Control+Z" disabled={history.past.length === 0} onClick={() => dispatch({ type: "undo" })}>
-            <Undo2 aria-hidden="true" />
-          </Button>
-          <Button type="button" variant="ghost" size="icon" aria-label={t("redo")} aria-keyshortcuts="Meta+Shift+Z Control+Y" disabled={history.future.length === 0} onClick={() => dispatch({ type: "redo" })}>
-            <Redo2 aria-hidden="true" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label={t("moreActions")}>
-                <MoreHorizontal aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
-                <History aria-hidden="true" />{t("versions")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={dirty || saved.revision < 1 || path === null}
-                onSelect={() => { if (path) void openPreview(saved.revision, path, "full", previewRevision ?? undefined); }}
-              >
-                <ExternalLink aria-hidden="true" />{t("preview")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled={!canEdit || busy || !hasUnpublishedDraft} onSelect={() => setConfirmDiscard(true)}>
-                {t("discard")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {canEdit ? (
-            <>
-              <Button type="button" variant="outline" disabled={!dirty || invalid || conflict || draftAction} loading={saving} onClick={() => void save()}>
-                {dirty ? t("save") : t("saved")}
-              </Button>
-              <Button type="button" disabled={dirty || saving || !hasUnpublishedDraft || conflict || draftAction || invalid} loading={publishing} onClick={() => setConfirmPublish(true)}>
-                {t("publish")}
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </header>
-
-      {conflict ? (
-        <div className="border-b border-border bg-card p-3">
-          <Alert variant="warning">
-            <AlertDescription>{t("statusConflict")}</AlertDescription>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" loading={draftAction} onClick={() => void reload()}>{t("reloadDraft")}</Button>
-              <Button type="button" variant="outline" disabled={invalid || draftAction} onClick={() => void reload(true)}>{t("overwriteDraft")}</Button>
-            </div>
-          </Alert>
-        </div>
-      ) : null}
-      <div className="flex border-b border-border bg-card px-2 py-1.5 lg:hidden" role="group" aria-label={t("panePreview")}>
-        {(["panel", "preview"] as const).map((value) => (
-          <Button key={value} type="button" variant="ghost" size="sm" aria-pressed={pane === value} className="flex-1" onClick={() => setPane(value)}>
-            {value === "panel" ? t("paneSettings") : t("panePreview")}
-          </Button>
-        ))}
+  const sidebar = (
+    <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")} className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-border px-2 py-1.5">
+        <TabsList className="w-full">
+          <TabsTrigger value="sections" className="flex-1">{t("tabSections")}</TabsTrigger>
+          <TabsTrigger value="theme" className="flex-1">{t("tabTheme")}</TabsTrigger>
+        </TabsList>
       </div>
+      <TabsContent value="sections" className="mt-0 min-h-0 flex-1">{tree}</TabsContent>
+      <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
+        <fieldset disabled={!canEdit} className="min-w-0">
+          <Suspense fallback={null}>
+            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
+          </Suspense>
+        </fieldset>
+      </TabsContent>
+    </Tabs>
+  );
 
-      <div className="flex min-h-0 flex-1">
-        <aside
-          className={cn(
-            "min-h-0 w-full shrink-0 overflow-y-auto border-e border-border bg-card lg:block lg:w-80 xl:w-72",
-            pane === "panel" ? "block" : "hidden",
-          )}
-          inert={draftAction}
-        >
-          {settingsPanel && !wide ? settingsPanel : (
-            <Tabs value={tab} onValueChange={(value) => setTab(value as "sections" | "theme")}>
-              <div className="sticky top-0 z-10 border-b border-border bg-card px-2 py-1.5">
-                <TabsList className="w-full">
-                  <TabsTrigger value="sections" className="flex-1">{t("tabSections")}</TabsTrigger>
-                  <TabsTrigger value="theme" className="flex-1">{t("tabTheme")}</TabsTrigger>
-                </TabsList>
-              </div>
-              <TabsContent value="sections" className="mt-0">{tree}</TabsContent>
-              <TabsContent value="theme" className="mt-0">
-                <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
-              </TabsContent>
-            </Tabs>
-          )}
-        </aside>
-        <main className={cn("min-h-0 min-w-0 flex-1 flex-col gap-2 bg-muted p-2 sm:p-3 lg:flex", pane === "preview" ? "flex" : "hidden")}>
-          {previewRevision !== null ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-2 shadow-card" data-version-banner>
-              <p className="text-body">{t(versionLacksPage ? "previewingVersionHome" : "previewingVersion", { revision: previewRevision })}</p>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button>
-                {previewRevision !== published.revision ? (
-                  <Button type="button" size="sm" disabled={busy} onClick={() => setPendingRestore(previewRevision)}>{t("restore")}</Button>
-                ) : null}
-              </div>
-            </div>
+  // Hover from the tree outlines the part in the preview; the preview's own hover too.
+  const outlined = hovered ? selectionMark(hovered) : preview.hovered;
+  const conflictNotice = draft.conflict ? (
+    <Alert variant="warning">
+      <AlertDescription>
+        {draft.conflict.name
+          ? t("conflictNamed", { name: draft.conflict.name, time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
+          : t("statusConflict")}
+        <span className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" loading={draft.busy} onClick={() => void draft.reload()}>{t("reloadDraft")}</Button>
+          <Button type="button" variant="outline" size="sm" disabled={draft.busy} onClick={() => void draft.reload(true)}>{t("overwriteDraft")}</Button>
+        </span>
+      </AlertDescription>
+    </Alert>
+  ) : draft.failureMessage ? (
+    <Alert variant="warning">
+      <AlertDescription>
+        {t("saveFailed", { reason: draft.failureMessage })}
+        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={() => void draft.save()}>{t("retry")}</Button></span>
+      </AlertDescription>
+    </Alert>
+  ) : previewRevision !== null ? (
+    <Alert variant="info">
+      <AlertDescription>
+        {t(versionLacksPage ? "previewingVersionHome" : "previewingVersion", { revision: previewRevision })}
+        <span className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button>
+          {previewRevision !== draft.published.revision && canEdit ? (
+            <Button type="button" size="sm" disabled={draft.busy} onClick={() => setPendingRestore({ version: previewRevision })}>{t("restore")}</Button>
           ) : null}
-          {previewReady ? (
-            <PreviewFrame
-              draftRevision={saved.revision}
-              sourceRevision={previewRevision ?? undefined}
-              previewPath={path}
-              device={device}
-              names={names}
-              selectedId={selected}
-              onSelect={(id) => {
-                select(id);
-                setPane("panel");
-              }}
-              controller={preview}
-            />
-          ) : (
-            <p role="status" className="p-6 text-center text-body text-muted-foreground">
-              {resourceKind && !defaults.loading && !resource ? t(defaults.failed ? "resourceFailed" : `resourceNone_${resourceKind}`) : t("previewLoading")}
-            </p>
-          )}
-        </main>
-        {settingsPanel && wide ? (
-          <aside className="min-h-0 w-80 shrink-0 overflow-y-auto border-s border-border bg-card" inert={draftAction}>
-            {settingsPanel}
+        </span>
+      </AlertDescription>
+    </Alert>
+  ) : preview.shownPath && path && preview.phase === "ready" && preview.shownPath !== path.split("?")[0] ? (
+    <Alert variant="info">
+      <AlertDescription>
+        {t("viewingPath", { path: preview.shownPath })}
+        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.reload}>{t("backToPage", { page: pageName })}</Button></span>
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
+  const unopened = useMemo(() => unopenedAiSections(theme), [theme]);
+  const publishable = canEdit && draft.differsFromLive && !draft.conflict && !draft.busy && draft.pending !== null;
+
+  return (
+    <div className="grid h-svh grid-rows-[auto_minmax(0,1fr)_auto] bg-background text-foreground" data-theme-editor>
+      <EditorTopBar
+        status={draft.status}
+        heldCount={Math.max(1, draft.held.length)}
+        onRetry={() => void draft.save()}
+        live={!draft.differsFromLive}
+        canEdit={canEdit}
+        sidebarOpen={sidebarShown}
+        onToggleSidebar={toggleSidebar}
+        pagePicker={(
+          <PagePicker
+            theme={theme}
+            page={page}
+            onPage={setPage}
+            onCreate={canEdit ? () => setCreatingLanding(true) : undefined}
+            className={phone ? "w-full" : "w-44"}
+          />
+        )}
+        market={<MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />}
+        device={device}
+        onDevice={(next) => setDevice(next)}
+        desktopWidth={view.desktopWidth}
+        onDesktopWidth={(desktopWidth) => setView({ desktopWidth })}
+        zoom={view.zoom}
+        onZoom={(zoom) => setView({ zoom })}
+        scale={scale}
+        inspector={inspector}
+        onInspector={setInspector}
+        canUndo={draft.history.past.length > 0}
+        canRedo={draft.history.future.length > 0}
+        onUndo={() => draft.dispatch({ type: "undo" })}
+        onRedo={() => draft.dispatch({ type: "redo" })}
+        onHistory={() => setHistoryOpen(true)}
+        onShortcuts={() => setShortcutsOpen(true)}
+        onDraftWithAi={aiAvailable && sections ? () => setAiOpen(true) : null}
+        onOpenPreview={path && draft.saved.revision > 0 ? () => void openPreviewTab(draft.saved.revision, path, "full", previewRevision ?? undefined) : null}
+        canDiscard={canEdit && draft.differsFromLive && !draft.busy}
+        onDiscard={() => setConfirmDiscard(true)}
+        canPublish={publishable}
+        publishing={draft.publishing}
+        onPublish={() => setPublishOpen(true)}
+        phone={phone}
+      />
+
+      <div
+        className={cn(
+          "relative grid min-h-0 min-w-0",
+          desktop ? (wide ? "grid-cols-[auto_minmax(0,1fr)_320px]" : "grid-cols-[auto_minmax(0,1fr)]") : "grid-cols-1",
+        )}
+      >
+        {desktop ? (
+          <aside
+            aria-label={t("sidebar")}
+            inert={draft.busy || !view.sidebar}
+            className={cn(
+              "relative min-h-0 overflow-hidden border-e border-border bg-card",
+              view.sidebar ? "w-80" : "w-0 border-e-0",
+              animated && "transition-[width] duration-200 motion-reduce:transition-none",
+            )}
+          >
+            <div className="absolute inset-y-0 start-0 w-80">
+              {sidebar}
+              {!wide ? (
+                <div
+                  inert={!pane}
+                  className={cn(
+                    "absolute inset-0 bg-card",
+                    !pane && "invisible translate-x-full rtl:-translate-x-full",
+                    animated && "transition-transform duration-200 motion-reduce:transition-none",
+                  )}
+                >
+                  {pane}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
+
+        <EditorCanvas
+          device={device}
+          desktopWidth={view.desktopWidth}
+          zoom={phone ? "fit" : view.zoom}
+          phase={preview.phase}
+          frames={preview.frames}
+          activeId={preview.activeId}
+          register={preview.register}
+          layout={preview.layout}
+          hovered={inspector ? outlined : null}
+          selected={selectionMark(selected)}
+          names={names}
+          actions={canvasActions}
+          notice={conflictNotice}
+          onRetry={preview.retry}
+          onScaleChange={(box: FrameBox) => setScale(box.scale)}
+        />
+
+        {wide ? (
+          <aside aria-label={t("settingsColumn")} inert={draft.busy} className="min-h-0 border-s border-border bg-card">
+            {pane ?? <SettingsEmpty />}
+          </aside>
+        ) : null}
+
+        {!desktop ? (
+          <aside
+            aria-label={t("sidebar")}
+            inert={!drawerOpen}
+            className={cn(
+              "fixed z-30 flex flex-col bg-card shadow-modal",
+              phone
+                ? cn("inset-x-0 bottom-14 rounded-t-2xl", sheet === "full" ? "top-16" : "h-[48dvh]", !drawerOpen && "invisible translate-y-full")
+                : cn("inset-y-12 start-0 w-80", !drawerOpen && "invisible -translate-x-full rtl:translate-x-full"),
+              "transition-transform duration-200 motion-reduce:transition-none",
+            )}
+          >
+            {phone ? (
+              <button
+                type="button"
+                aria-label={t(sheet === "full" ? "sheetHalf" : "sheetFull")}
+                onClick={() => setSheet((current) => (current === "full" ? "half" : "full"))}
+                className="flex h-5 w-full shrink-0 items-center justify-center rounded-t-2xl"
+              >
+                <span className="h-1 w-9 rounded-full bg-border" aria-hidden="true" />
+              </button>
+            ) : null}
+            <div className="relative min-h-0 flex-1">
+              {pane ?? sidebar}
+            </div>
           </aside>
         ) : null}
       </div>
 
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={false} />
-      <ThemeHistory
-        open={versionsOpen}
-        onOpenChange={setVersionsOpen}
-        draft={theme}
-        liveRevision={published.revision}
-        previewRevision={previewRevision}
-        busy={busy || !canEdit}
-        sectionName={sectionName}
-        onPreview={(revision) => {
-          setPreviewRevision(revision);
-          setVersionsOpen(false);
-          setPane("preview");
-        }}
-        onRestore={setPendingRestore}
-      />
+      {phone ? (
+        <nav aria-label={t("editorBar")} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">
+          {([
+            ["layers", Rows3, () => { setTab("sections"); setSelected(null); setDrawerOpen((open) => !(open && tab === "sections" && !selected)); }],
+            ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
+            ["add", Plus, () => setLibraryAt(items.length)],
+          ] as const).map(([key, Icon, onClick]) => (
+            <TopBarButton key={key} label={t(`bar_${key}`)} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
+              <Icon aria-hidden="true" />
+              <span className="text-caption">{t(`bar_${key}`)}</span>
+            </TopBarButton>
+          ))}
+        </nav>
+      ) : <span />}
+
+      <UnsavedChangesGuard isDirty={draft.unsavedEdits} isSubmitting={false} />
+      {libraryMounted ? (
+        <Suspense fallback={null}>
+          <SectionLibrary
+            open={libraryAt !== null}
+            onOpenChange={(open) => { if (!open) setLibraryAt(null); }}
+            theme={theme}
+            options={libraryOptions}
+            apps={workspace.apps}
+            aiAvailable={aiAvailable}
+            onAdd={addFromLibrary}
+            onDraftWithAi={() => setAiOpen(true)}
+          />
+        </Suspense>
+      ) : null}
+      {aiOpen ? (
+        <Suspense fallback={null}>
+          <AiDraftDialog
+            open={aiOpen}
+            onOpenChange={setAiOpen}
+            page={aiPage}
+            locale={previewLocale ?? "en"}
+            canConnectAgent={canConnectAgent}
+            onDrafted={onDrafted}
+          />
+        </Suspense>
+      ) : null}
+      {publishMounted ? (
+        <Suspense fallback={null}>
+          <PublishDialog
+            open={publishOpen}
+            onOpenChange={setPublishOpen}
+            live={draft.published.theme}
+            draft={draft.pending ?? draft.saved.theme}
+            unopenedAi={unopened}
+            sectionName={sectionName}
+            publishing={draft.publishing}
+            onOpenSection={(id) => {
+              setPublishOpen(false);
+              const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);
+              const where: EditorPage = theme.pages.home.some((section) => section.id === id) ? { kind: "home" }
+                : at ? { kind: "landing", slug: at }
+                  : (["product", "collection", "cart", "page"] as const).map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
+              if (!samePage(where, page)) setPageState(where);
+              select(id);
+            }}
+            onPublish={(note) => void draft.publish(note).then((done) => { if (done) setPublishOpen(false); })}
+          />
+        </Suspense>
+      ) : null}
+      {historyMounted ? (
+        <Suspense fallback={null}>
+          <ThemeHistory
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            draft={theme}
+            liveRevision={draft.published.revision}
+            previewRevision={previewRevision}
+            busy={draft.busy || !canEdit}
+            sectionName={sectionName}
+            onPreview={(revision) => {
+              setPreviewRevision(revision);
+              setHistoryOpen(false);
+            }}
+            onRestore={(revision) => setPendingRestore({ version: revision })}
+            onRestorePoint={(id) => setPendingRestore({ point: id })}
+          />
+        </Suspense>
+      ) : null}
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <CreateLandingDialog
         open={creatingLanding}
         onOpenChange={setCreatingLanding}
@@ -820,66 +933,53 @@ export function ThemeEditor({ workspace, refetch }: {
           setPage({ kind: "landing", slug });
         }}
       />
-      <AlertDialog open={confirmPublish} onOpenChange={setConfirmPublish}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{store("themePublishConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{store("themePublishConfirmBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-1">
-            <Label htmlFor="theme-publish-note">{t("publishNote")}</Label>
-            <Textarea id="theme-publish-note" maxLength={500} value={publishNote} onChange={(event) => setPublishNote(event.target.value)} aria-describedby="theme-publish-note-help" />
-            <p id="theme-publish-note-help" className="text-body text-muted-foreground">{t("publishNoteHelp")}</p>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{store("cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setConfirmPublish(false); void publish(); }}>{store("themePublish")}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <ConfirmDialog
         open={confirmDiscard}
         onOpenChange={setConfirmDiscard}
         title={t("discardTitle")}
         description={t("discardBody")}
         confirmLabel={t("discard")}
-        onConfirm={() => { setConfirmDiscard(false); void replaceDraft(); }}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          setSelected(null);
+          void draft.replaceDraft(null).then(() => preview.reload());
+        }}
       />
       <ConfirmDialog
         open={pendingRestore !== null}
         onOpenChange={(open) => { if (!open) setPendingRestore(null); }}
-        title={t("restoreTitle", { revision: pendingRestore ?? "" })}
+        title={pendingRestore && "version" in pendingRestore ? t("restoreTitle", { revision: pendingRestore.version }) : t("restorePointTitle")}
         description={t("restoreBody")}
         confirmLabel={t("restore")}
         variant="default"
         onConfirm={() => {
-          const revision = pendingRestore;
+          const source = pendingRestore;
           setPendingRestore(null);
-          if (revision !== null) void replaceDraft(revision);
+          if (source) void restore(source);
         }}
       />
       <ConfirmDialog
         open={restoreMissing !== null}
         onOpenChange={(open) => { if (!open) setRestoreMissing(null); }}
-        title={t("restoreMissingTitle", { revision: restoreMissing?.revision ?? "" })}
+        title={t("restoreMissingTitle")}
         description={t("restoreMissingBody", { count: restoreMissing?.images ?? 1 })}
         confirmLabel={t("restoreWithoutImages")}
         variant="default"
         onConfirm={() => {
           const missing = restoreMissing;
           setRestoreMissing(null);
-          if (missing) void replaceDraft(missing.revision, true);
+          if (missing) void restore(missing.source, true);
         }}
       />
       <ConfirmDialog
-        open={pendingRemoveLanding !== null}
-        onOpenChange={(open) => { if (!open) setPendingRemoveLanding(null); }}
-        title={t("removeLandingTitle", { name: pendingRemoveLanding ? theme.pages.landing[pendingRemoveLanding]?.title ?? pendingRemoveLanding : "" })}
+        open={removingLanding !== null}
+        onOpenChange={(open) => { if (!open) setRemovingLanding(null); }}
+        title={t("removeLandingTitle", { name: removingLanding ? theme.pages.landing[removingLanding]?.title ?? removingLanding : "" })}
         description={t("removeLandingBody")}
         confirmLabel={t("removeLanding")}
         onConfirm={() => {
-          const slug = pendingRemoveLanding;
-          setPendingRemoveLanding(null);
+          const slug = removingLanding;
+          setRemovingLanding(null);
           if (!slug) return;
           setDraft((current) => {
             const { [slug]: _removed, ...landing } = current.pages.landing;

@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { storefrontSectionDefault, type StorefrontPlatformSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
-import { SectionSettingsForm, newSectionId, useSectionErrors } from "./SectionSettings";
+import { storefrontSectionDefault, type StorefrontHeroSlide, type StorefrontPlatformSection, type StorefrontSectionType } from "@scalius/shared/storefront-theme";
+import { BlockSettingsForm, HeroAddSlides, SectionSettingsForm, useSectionErrors } from "./SectionSettings";
+import { addBlock } from "./theme-editor/editor-state";
 import { useMediaPreviews } from "./schema-form/resource-fields";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,20 +57,25 @@ afterEach(() => {
 const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontPlatformSection;
 
-function render(initial: StorefrontPlatformSection) {
+/** The section's own form, or one block of it (`slides`, 0) as the editor opens it; with `addSlides`, the hero's "Add slides" too. */
+function render(initial: StorefrontPlatformSection, block?: { path: string; index: number }, addSlides = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Form() {
     const [current, setCurrent] = useState(initial);
     const media = useMediaPreviews([]);
     const errors = useSectionErrors(current);
     seen.section = current;
+    const onChange = (settings: StorefrontPlatformSection["settings"]) => setCurrent((each) => ({ ...each, settings }) as StorefrontPlatformSection);
+    const slides = (current.settings as { slides?: StorefrontHeroSlide[] }).slides ?? [];
     return (
-      <SectionSettingsForm
-        section={current}
-        media={media}
-        errors={errors}
-        onChange={(settings) => setCurrent((each) => ({ ...each, settings }) as StorefrontPlatformSection)}
-      />
+      <>
+        {block
+          ? <BlockSettingsForm section={current} path={block.path} index={block.index} media={media} errors={errors} onChange={onChange} />
+          : <SectionSettingsForm section={current} media={media} errors={errors} onChange={onChange} />}
+        {addSlides ? (
+          <HeroAddSlides slides={slides} media={media} onChange={(next) => onChange({ ...current.settings, slides: next } as StorefrontPlatformSection["settings"])} />
+        ) : null}
+      </>
     );
   }
   act(() => root.render(<QueryClientProvider client={queryClient}><Form /></QueryClientProvider>));
@@ -150,18 +156,27 @@ describe("section settings (generated from the registry)", () => {
     expect(settings()).toEqual({ style: "square", title: "Shop the pantry", categoryIds: ["cat_ghee", "cat_honey"] });
   });
 
-  it("adds hero slides from Files with a phone image, alt text, words and a canonical link", () => {
-    render(section("hero", "hero"));
+  it("adds hero slides from Files several at once, each with its alt text and a centred focus point", () => {
+    render(section("hero", "hero"), undefined, true);
+    // The slides are blocks: the section's own form never lists them.
+    expect(container.textContent).not.toContain("Slide 1");
     files.next = [
       { id: "media_honey", url: "https://cdn.test/honey.jpg", altText: "Honey jars" },
       { id: "media_ghee", url: "https://cdn.test/ghee.jpg", altText: "" },
     ];
     act(() => button("Add slides").click());
-    expect(container.textContent).toContain("Slide 1");
-    expect(container.textContent).toContain("Slide 2");
-    expect(field("theme-section-hero-slides-0-alt").value).toBe("Honey jars");
-    expect(document.querySelector<HTMLImageElement>("#theme-section-hero-slides-0-image img")?.getAttribute("src")).toContain("honey.jpg");
+    expect(settings()).toEqual({
+      layout: "full-bleed",
+      slides: [
+        { image: "media_honey", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: null },
+        { image: "media_ghee", focalPoint: { x: 50, y: 50 }, alt: "", link: null },
+      ],
+    });
+  });
 
+  it("edits one slide as a block: phone image, words and a canonical link", () => {
+    render(section("hero", "hero", { slides: [{ image: "media_honey", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: null }] }), { path: "slides", index: 0 });
+    expect(field("theme-section-hero-slides-0-alt").value).toBe("Honey jars");
     files.next = [{ id: "media_honey_phone", url: "https://cdn.test/honey-phone.jpg" }];
     act(() => [...document.querySelectorAll<HTMLButtonElement>("#theme-section-hero-slides-0-phone-image button")]
       .find((each) => each.textContent === "Select image")!.click());
@@ -173,44 +188,38 @@ describe("section settings (generated from the registry)", () => {
     expect(field("theme-section-hero-slides-0-link").value).toBe("/collections/eid");
     type(field("theme-section-hero-slides-0-button"), "Shop Eid");
     type(field("theme-section-hero-slides-0-heading"), "Eid sale");
-
-    // Text that is no link is marked, and alt text is required.
-    typeAndLeave(field("theme-section-hero-slides-1-link"), "sale page");
-    expect(note("theme-section-hero-slides-1-link")).toBe("Use a store path like /sale or a full https:// link.");
-    expect(note("theme-section-hero-slides-1-alt")).toBe("Fill this in.");
-
-    type(field("theme-section-hero-slides-1-alt"), "Ghee tins");
-    typeAndLeave(field("theme-section-hero-slides-1-link"), "");
-    act(() => button("Move Slide 2 up").click());
     expect(settings()).toEqual({
       layout: "full-bleed",
-      slides: [
-        { image: "media_ghee", focalPoint: { x: 50, y: 50 }, alt: "Ghee tins", link: null },
-        {
-          image: "media_honey",
-          phoneImage: "media_honey_phone",
-          focalPoint: { x: 50, y: 50 },
-          phoneFocalPoint: { x: 50, y: 50 },
-          alt: "Honey jars",
-          heading: "Eid sale",
-          buttonLabel: "Shop Eid",
-          link: "/collections/eid",
-        },
-      ],
+      slides: [{
+        image: "media_honey",
+        phoneImage: "media_honey_phone",
+        focalPoint: { x: 50, y: 50 },
+        phoneFocalPoint: { x: 50, y: 50 },
+        alt: "Honey jars",
+        heading: "Eid sale",
+        buttonLabel: "Shop Eid",
+        link: "/collections/eid",
+      }],
     });
+  });
+
+  it("marks a slide's link that is no link, and missing alt text", () => {
+    render(section("hero", "hero", { slides: [{ image: "media_ghee", focalPoint: { x: 50, y: 50 }, alt: "", link: null }] }), { path: "slides", index: 0 });
+    typeAndLeave(field("theme-section-hero-slides-0-link"), "sale page");
+    expect(note("theme-section-hero-slides-0-link")).toBe("Use a store path like /sale or a full https:// link.");
+    expect(note("theme-section-hero-slides-0-alt")).toBe("Fill this in.");
   });
 
   it("removes a slide's phone image and its focus point", () => {
     const slide = { image: "m-1", phoneImage: "m-2", focalPoint: { x: 50, y: 50 }, phoneFocalPoint: { x: 20, y: 80 }, alt: "Bags", link: null };
-    render(section("hero", "hero", { slides: [slide] }));
+    render(section("hero", "hero", { slides: [slide] }), { path: "slides", index: 0 });
     act(() => [...document.querySelectorAll<HTMLButtonElement>("#theme-section-hero-slides-0-phone-image button")]
       .find((each) => each.textContent === "Remove")!.click());
     expect(settings()).toEqual({ layout: "full-bleed", slides: [{ image: "m-1", focalPoint: { x: 50, y: 50 }, alt: "Bags", link: null }] });
   });
 
-  it("sets the banner layout and its phone placement; side promotions show with the contained layout only", () => {
+  it("sets the banner layout and its phone placement", () => {
     render(section("hero", "hero", { layout: "story-cards" }));
-    expect(container.textContent).not.toContain("Side promotions");
     expect(document.querySelector("#theme-section-hero-phoneHeight")).toBeNull();
     choose(field<HTMLButtonElement>("theme-section-hero-layout"), "Full screen banner");
     // Leaving the phone height unset is the whole first screen.
@@ -219,10 +228,15 @@ describe("section settings (generated from the registry)", () => {
     expect(settings()).toEqual({ layout: "full-screen", slides: [], phonePlacement: "after-categories" });
     choose(field<HTMLButtonElement>("theme-section-hero-phonePlacement"), "Same order as desktop");
     expect(settings()).toEqual({ layout: "full-screen", slides: [] });
-
+    // Side promotions are blocks of the contained layout, never fields of the section's form.
     choose(field<HTMLButtonElement>("theme-section-hero-layout"), "Contained banner with side promos");
+    expect(container.textContent).not.toContain("Add side promotion");
+  });
+
+  it("edits a side promotion as a block", () => {
+    const hero = addBlock(section("hero", "hero", { layout: "contained-banners", sideBanners: [] }), "sideBanners") as StorefrontPlatformSection;
+    render(hero, { path: "sideBanners", index: 0 });
     files.next = [{ id: "m-side", url: "https://cdn.test/side.jpg", altText: "" }];
-    act(() => button("Add side promotion").click());
     act(() => [...document.querySelectorAll<HTMLButtonElement>("#theme-section-hero-sideBanners-0-mediaId button")]
       .find((each) => each.textContent === "Select image")!.click());
     type(field("theme-section-hero-sideBanners-0-alt"), "Fresh honey jars");
@@ -243,42 +257,31 @@ describe("section settings (generated from the registry)", () => {
     choose(field<HTMLButtonElement>("theme-section-feature-layout"), "Text");
     expect(settings()).toEqual({ layout: "rich-text", heading: "Our honey story", body: "Collected in the Sundarbans." });
     choose(field<HTMLButtonElement>("theme-section-feature-layout"), "Columns");
-    act(() => button("Add column").click());
-    type(field("theme-section-feature-columns-0-title"), "Raw honey");
-    type(field<HTMLTextAreaElement>("theme-section-feature-columns-0-text"), "From the forest.");
-    expect(settings()).toEqual({ layout: "multicolumn", heading: "Our honey story", columns: [{ title: "Raw honey", text: "From the forest." }] });
-    choose(field<HTMLButtonElement>("theme-section-feature-layout"), "Customer quotes");
-    act(() => button("Add quote").click());
-    type(field<HTMLTextAreaElement>("theme-section-feature-quotes-0-quote"), "Lovely honey.");
-    expect(settings()).toEqual({ layout: "testimonial", quotes: [{ quote: "Lovely honey.", author: "" }] });
+    expect(settings()).toEqual({ layout: "multicolumn", heading: "Our honey story", columns: [] });
+    // Columns are blocks.
+    expect(container.textContent).not.toContain("Add column");
   });
 
-  it("adds questions and answers", () => {
-    render(section("faq", "faq"));
-    act(() => button("Add question").click());
+  it("edits an editorial column as a block", () => {
+    const base = { ...section("editorial", "feature"), settings: { layout: "multicolumn", heading: "", columns: [] } } as StorefrontPlatformSection;
+    const columns = addBlock(base, "columns") as StorefrontPlatformSection;
+    render(columns, { path: "columns", index: 0 });
+    type(field("theme-section-feature-columns-0-title"), "Raw honey");
+    type(field<HTMLTextAreaElement>("theme-section-feature-columns-0-text"), "From the forest.");
+    expect(settings()).toEqual({ layout: "multicolumn", heading: "", columns: [{ title: "Raw honey", text: "From the forest." }] });
+  });
+
+  it("edits a question and its answer as a block", () => {
+    render(addBlock(section("faq", "faq"), "items") as StorefrontPlatformSection, { path: "items", index: 0 });
     type(field("theme-section-faq-items-0-question"), "Where is it collected?");
     type(field<HTMLTextAreaElement>("theme-section-faq-items-0-answer"), "In the Sundarbans.");
     expect(settings()).toEqual({ heading: "", items: [{ question: "Where is it collected?", answer: "In the Sundarbans." }] });
-    act(() => button("Remove Question 1").click());
-    expect(settings()).toEqual({ heading: "", items: [] });
   });
 
   it("says why a card without a name or with a bad link cannot be saved", () => {
-    render(section("shop-by", "cards"));
-    act(() => button("Add card").click());
+    render(addBlock(section("shop-by", "cards"), "cards") as StorefrontPlatformSection, { path: "cards", index: 0 });
     typeAndLeave(field("theme-section-cards-cards-0-href"), "sale page");
     expect(note("theme-section-cards-cards-0-href")).toBe("Use a store path like /sale or a full https:// link.");
     expect(note("theme-section-cards-cards-0-title")).toBe("Fill this in.");
-  });
-
-  it("keeps a list at its limits: product tabs need two", () => {
-    render(section("product-tabs", "tabs"));
-    act(() => button("Remove Tab 3").click());
-    expect(button("Remove Tab 2").disabled).toBe(true);
-    expect((settings() as { tabs: unknown[] }).tabs).toHaveLength(2);
-  });
-
-  it("names new ids after their type", () => {
-    expect(newSectionId("shop-by", [section("shop-by", "shop-by"), section("shop-by", "shop-by-2")])).toBe("shop-by-3");
   });
 });

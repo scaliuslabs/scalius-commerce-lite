@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 123,
-  name: "0123_market_currencies",
+  version: 124,
+  name: "0124_theme_restore_points",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -396,6 +396,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 123,
     name: "0123_market_currencies",
     sourceSha256: "6c6cf8a662eef18fd8a097c8dd413acb6a85a681d150d355d08e9b5549770977",
+  },
+  {
+    version: 124,
+    name: "0124_theme_restore_points",
+    sourceSha256: "decd435dea4269c949c02ee9ab7e5153b50588a1d755caacfb78cad308e6c346",
   },
 ] as const;
 

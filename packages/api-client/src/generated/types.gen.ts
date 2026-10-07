@@ -339,7 +339,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 7;
+    version: 8;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -793,6 +793,12 @@ export type StorefrontThemeDocument = {
         landing: {
             [key: string]: StorefrontLandingPage;
         };
+        templates: {
+            product: StorefrontPageTemplate;
+            collection: StorefrontPageTemplate;
+            cart: StorefrontPageTemplate;
+            page: StorefrontPageTemplate;
+        };
     };
 };
 
@@ -801,6 +807,7 @@ export type StorefrontSectionList = Array<{
     type: 'hero';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
         slides: Array<{
@@ -819,12 +826,14 @@ export type StorefrontSectionList = Array<{
             text?: string;
             buttonLabel?: string;
             link: string | null;
+            hidden?: boolean;
         }>;
         phonePlacement?: 'after-categories';
         sideBanners?: Array<{
             mediaId: string;
             alt: string;
             href: string | null;
+            hidden?: boolean;
         }>;
         phoneHeight?: 'screen' | 'compact';
     };
@@ -833,6 +842,7 @@ export type StorefrontSectionList = Array<{
     type: 'usp-strip';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         style: 'icons' | 'ticker';
         source: {
@@ -842,6 +852,7 @@ export type StorefrontSectionList = Array<{
             items: Array<{
                 title: string;
                 detail: string;
+                hidden?: boolean;
             }>;
         };
     };
@@ -850,6 +861,7 @@ export type StorefrontSectionList = Array<{
     type: 'category-tiles';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
         title: string;
@@ -860,6 +872,7 @@ export type StorefrontSectionList = Array<{
     type: 'collections';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         carousel: 'large' | 'compact';
         collectionIds: Array<string>;
@@ -869,6 +882,7 @@ export type StorefrontSectionList = Array<{
     type: 'product-rail';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         source: {
@@ -891,6 +905,7 @@ export type StorefrontSectionList = Array<{
     type: 'product-grid';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         source: {
@@ -914,6 +929,7 @@ export type StorefrontSectionList = Array<{
     type: 'deal-block';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         source: {
@@ -936,6 +952,7 @@ export type StorefrontSectionList = Array<{
     type: 'product-tabs';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         tabs: Array<{
@@ -953,6 +970,7 @@ export type StorefrontSectionList = Array<{
                 kind: 'category';
                 categoryId: string;
             };
+            hidden?: boolean;
         }>;
         limit: number;
     };
@@ -961,12 +979,14 @@ export type StorefrontSectionList = Array<{
     type: 'shop-by';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         cards: Array<{
             mediaId: string;
             title: string;
             href: string;
+            hidden?: boolean;
         }>;
     };
 } | {
@@ -974,11 +994,13 @@ export type StorefrontSectionList = Array<{
     type: 'banner-mosaic';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         tiles: Array<{
             mediaId: string;
             alt: string;
             href: string | null;
+            hidden?: boolean;
         }>;
     };
 } | {
@@ -986,6 +1008,7 @@ export type StorefrontSectionList = Array<{
     type: 'lookbook';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         mediaId: string | null;
@@ -1009,6 +1032,7 @@ export type StorefrontSectionList = Array<{
     type: 'banner';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         layout: 'full' | 'two-up' | 'four-up';
         heading: string;
@@ -1024,6 +1048,7 @@ export type StorefrontSectionList = Array<{
     type: 'brand-wall';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         style: 'grid' | 'rail';
@@ -1033,6 +1058,7 @@ export type StorefrontSectionList = Array<{
     type: 'editorial';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         layout: 'rich-text';
         heading: string;
@@ -1049,12 +1075,14 @@ export type StorefrontSectionList = Array<{
         columns: Array<{
             title: string;
             text: string;
+            hidden?: boolean;
         }>;
     } | {
         layout: 'testimonial';
         quotes: Array<{
             quote: string;
             author: string;
+            hidden?: boolean;
         }>;
     };
 } | {
@@ -1062,11 +1090,13 @@ export type StorefrontSectionList = Array<{
     type: 'faq';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         heading: string;
         items: Array<{
             question: string;
             answer: string;
+            hidden?: boolean;
         }>;
     };
 } | {
@@ -1074,11 +1104,13 @@ export type StorefrontSectionList = Array<{
     type: 'utility-cards';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         cards: Array<{
             title: string;
             text: string;
             href: string;
+            hidden?: boolean;
         }>;
     };
 } | {
@@ -1086,6 +1118,7 @@ export type StorefrontSectionList = Array<{
     type: 'endless-grid';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
         pageSize: 12 | 24 | 36;
@@ -1095,6 +1128,7 @@ export type StorefrontSectionList = Array<{
     type: 'seo-text';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         heading: string;
         body: string;
@@ -1104,6 +1138,7 @@ export type StorefrontSectionList = Array<{
     type: 'recently-viewed';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         title: string;
     };
@@ -1112,6 +1147,7 @@ export type StorefrontSectionList = Array<{
     type: 'newsletter';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         heading: string;
         text: string;
@@ -1124,6 +1160,7 @@ export type StorefrontSectionList = Array<{
     type: 'app';
     version: 1;
     hidden?: boolean;
+    aiDraft?: true;
     settings: {
         app: string;
         values: {
@@ -1138,6 +1175,11 @@ export type StorefrontLandingPage = {
     sections: StorefrontSectionList;
     noIndex?: boolean;
     excludeFromSitemap?: boolean;
+};
+
+export type StorefrontPageTemplate = {
+    sections: StorefrontSectionList;
+    main: number;
 };
 
 export type StorefrontStoreShape = {
@@ -2270,6 +2312,15 @@ export type ThemeVersionSummary = {
     note: string | null;
 };
 
+export type ThemeRestorePoint = {
+    id: string;
+    reason: 'restore' | 'discard';
+    draftRevision: number;
+    createdBy: string | null;
+    createdByName: string | null;
+    createdAt: string;
+};
+
 export type Market = {
     id: string;
     handle: string;
@@ -2800,7 +2851,7 @@ export type AppProviderEntry = {
      */
     id: string;
     providerId: string;
-    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai';
     name: string;
     /**
      * Same-origin address of the provider's own mark, else the app's icon.
@@ -5625,6 +5676,47 @@ export type GetApiV1StorefrontLandingBySlugResponses = {
 
 export type GetApiV1StorefrontLandingBySlugResponse = GetApiV1StorefrontLandingBySlugResponses[keyof GetApiV1StorefrontLandingBySlugResponses];
 
+export type GetApiV1StorefrontTemplateByKindData = {
+    body?: never;
+    path: {
+        kind: 'product' | 'collection' | 'cart' | 'page';
+    };
+    query?: {
+        /**
+         * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
+         */
+        presence?: string;
+    };
+    url: '/api/v1/storefront/template/{kind}';
+};
+
+export type GetApiV1StorefrontTemplateByKindErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1StorefrontTemplateByKindError = GetApiV1StorefrontTemplateByKindErrors[keyof GetApiV1StorefrontTemplateByKindErrors];
+
+export type GetApiV1StorefrontTemplateByKindResponses = {
+    /**
+     * The template's section data
+     */
+    200: {
+        success: true;
+        data: {
+            sections: StorefrontHomepageSections;
+        };
+    };
+};
+
+export type GetApiV1StorefrontTemplateByKindResponse = GetApiV1StorefrontTemplateByKindResponses[keyof GetApiV1StorefrontTemplateByKindResponses];
+
 export type GetApiV1StorefrontProductAppsBySlugData = {
     body?: never;
     path: {
@@ -6132,6 +6224,9 @@ export type PostApiV1StorefrontThemePreviewHomepageData = {
     body?: {
         token: string;
         pageSlug?: string;
+        template?: 'product' | 'collection' | 'cart' | 'page';
+        sections?: StorefrontSectionList;
+        presence?: string;
     };
     path?: never;
     query?: never;
@@ -33438,6 +33533,7 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
                 basePublishedRevision: number;
                 updatedAt: string | null;
                 theme: StorefrontThemeDocument;
+                updatedByName: string | null;
             };
             draftDiffersFromLive: boolean;
             lastPublished: {
@@ -33534,8 +33630,9 @@ export type GetApiV1AdminSettingsThemeDocumentData = {
     body?: never;
     path?: never;
     query?: {
-        source?: 'draft' | 'published' | 'version';
+        source?: 'draft' | 'published' | 'version' | 'restore-point';
         revision?: number;
+        id?: string;
     };
     url: '/api/v1/admin/settings/theme/document';
 };
@@ -33576,7 +33673,7 @@ export type GetApiV1AdminSettingsThemeDocumentResponses = {
     200: {
         success: true;
         data: {
-            source: 'draft' | 'published' | 'version';
+            source: 'draft' | 'published' | 'version' | 'restore-point';
             revision: number;
             document: StorefrontThemeDocument;
         };
@@ -34704,6 +34801,317 @@ export type PutApiV1AdminSettingsAllowedCountriesResponses = {
 };
 
 export type PutApiV1AdminSettingsAllowedCountriesResponse = PutApiV1AdminSettingsAllowedCountriesResponses[keyof PutApiV1AdminSettingsAllowedCountriesResponses];
+
+export type GetApiV1AdminSettingsThemeRestorePointsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/restore-points';
+};
+
+export type GetApiV1AdminSettingsThemeRestorePointsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsThemeRestorePointsError = GetApiV1AdminSettingsThemeRestorePointsErrors[keyof GetApiV1AdminSettingsThemeRestorePointsErrors];
+
+export type GetApiV1AdminSettingsThemeRestorePointsResponses = {
+    /**
+     * Restore points
+     */
+    200: {
+        success: true;
+        data: {
+            restorePoints: Array<ThemeRestorePoint>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeRestorePointsResponse = GetApiV1AdminSettingsThemeRestorePointsResponses[keyof GetApiV1AdminSettingsThemeRestorePointsResponses];
+
+export type PostApiV1AdminSettingsThemeRestorePointData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        id: string;
+        withoutMissingImages?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/restore-point';
+};
+
+export type PostApiV1AdminSettingsThemeRestorePointErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeRestorePointError = PostApiV1AdminSettingsThemeRestorePointErrors[keyof PostApiV1AdminSettingsThemeRestorePointErrors];
+
+export type PostApiV1AdminSettingsThemeRestorePointResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt: string | null;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRestorePointResponse = PostApiV1AdminSettingsThemeRestorePointResponses[keyof PostApiV1AdminSettingsThemeRestorePointResponses];
+
+export type PostApiV1AdminSettingsThemeAiDraftData = {
+    body: {
+        providerId: string;
+        prompt: string;
+        page: 'home' | 'landing' | 'product' | 'collection' | 'cart' | 'page';
+        locale?: string;
+        limit?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/ai-draft';
+};
+
+export type PostApiV1AdminSettingsThemeAiDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeAiDraftError = PostApiV1AdminSettingsThemeAiDraftErrors[keyof PostApiV1AdminSettingsThemeAiDraftErrors];
+
+export type PostApiV1AdminSettingsThemeAiDraftResponses = {
+    /**
+     * Drafted sections
+     */
+    200: {
+        success: true;
+        data: {
+            sections: StorefrontSectionList;
+            rejected: number;
+            note: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAiDraftResponse = PostApiV1AdminSettingsThemeAiDraftResponses[keyof PostApiV1AdminSettingsThemeAiDraftResponses];
+
+export type GetApiV1AdminSettingsThemeAiProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/ai-providers';
+};
+
+export type GetApiV1AdminSettingsThemeAiProvidersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsThemeAiProvidersError = GetApiV1AdminSettingsThemeAiProvidersErrors[keyof GetApiV1AdminSettingsThemeAiProvidersErrors];
+
+export type GetApiV1AdminSettingsThemeAiProvidersResponses = {
+    /**
+     * Providers
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                appName: string;
+                appId: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAiProvidersResponse = GetApiV1AdminSettingsThemeAiProvidersResponses[keyof GetApiV1AdminSettingsThemeAiProvidersResponses];
+
+export type PostApiV1AdminSettingsThemeDraftSectionsData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        scope: {
+            kind: 'home';
+        } | {
+            kind: 'landing';
+            slug: string;
+        } | {
+            kind: 'template';
+            template: 'product' | 'collection' | 'cart' | 'page';
+            region: 'before' | 'after';
+        };
+        afterId?: string | null;
+        sections: Array<{
+            [key: string]: unknown;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/draft-sections';
+};
+
+export type PostApiV1AdminSettingsThemeDraftSectionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsThemeDraftSectionsError = PostApiV1AdminSettingsThemeDraftSectionsErrors[keyof PostApiV1AdminSettingsThemeDraftSectionsErrors];
+
+export type PostApiV1AdminSettingsThemeDraftSectionsResponses = {
+    /**
+     * Sections drafted
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+            added: Array<string>;
+            rejected: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftSectionsResponse = PostApiV1AdminSettingsThemeDraftSectionsResponses[keyof PostApiV1AdminSettingsThemeDraftSectionsResponses];
 
 export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdData = {
     body?: never;
@@ -40241,7 +40649,7 @@ export type GetApiV1AdminSettingsProvidersData = {
     body?: never;
     path?: never;
     query: {
-        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai';
     };
     url: '/api/v1/admin/settings/providers';
 };
@@ -40284,7 +40692,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
         data: {
             providers: Array<{
                 id: string;
-                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation';
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai';
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;

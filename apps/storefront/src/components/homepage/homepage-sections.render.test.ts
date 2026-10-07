@@ -806,13 +806,18 @@ describe("app sections", () => {
     expect(none.querySelector("script")).toBeNull();
   });
 
-  it("marks app sections for the theme editor and renders one alone for the section route", async () => {
+  it("marks app sections and their region for the theme editor and renders one alone for the render route", async () => {
     const sections = [section("faq", "faq", { heading: "", items: [{ question: "Q?", answer: "A." }] }), app("greeting")];
     const content = drawn(store("large"), { greeting: "<p>Hello</p>" });
-    const marked = await renderWith(sections, content, { previewMarks: true });
+    const marked = await renderWith(sections, content, { previewMarks: true, region: "after" });
     expect(marked.querySelector('[data-theme-section-id="greeting"][data-home-section="app"]')).not.toBeNull();
-    const layout = JSON.parse(marked.querySelector("[data-theme-preview-layout]")!.getAttribute("data-theme-preview-layout")!);
-    expect(layout.units).toEqual([["faq"], ["greeting"]]);
+    // The list's root names its region; the old layout statement is gone.
+    expect(marked.querySelector('[data-theme-region="after"]')).not.toBeNull();
+    expect(marked.querySelector("[data-theme-preview-layout]")).toBeNull();
+    const units = Array.from(marked.querySelectorAll('[data-theme-region] > [data-home-render-unit]'));
+    expect(units.map((unit) => unit.getAttribute("data-theme-section-id"))).toEqual(["faq", "greeting"]);
+    // A buyer's page carries no region.
+    expect((await renderWith(sections, content, {})).querySelector("[data-theme-region]")).toBeNull();
 
     const only = await renderWith(sections, content, { only: "greeting" });
     expect(Array.from(only.querySelectorAll("[data-theme-section-id]")).map((node) => node.getAttribute("data-theme-section-id"))).toEqual(["greeting"]);

@@ -187,6 +187,30 @@ export const themeSettingsVersions = sqliteTable("theme_settings_versions", {
 ]);
 
 /**
+ * The shared theme draft as it was just before a restore or a discard
+ * replaced it (a restore point), so either can be undone from the history.
+ * Publishing keeps its own immutable versions; the newest restore points
+ * are kept (pruned in the same batch that writes one).
+ */
+export const themeRestorePoints = sqliteTable("theme_restore_points", {
+    id: text("id").primaryKey(),
+    theme: text("theme").notNull(),
+    /** The draft revision the point captured. */
+    draftRevision: integer("draft_revision").notNull(),
+    /** What replaced the draft: a version or point restored (`restore`), or a discard. */
+    reason: text("reason", { enum: ["restore", "discard"] }).notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    index("theme_restore_points_created_at_idx").on(table.createdAt),
+    check("theme_restore_points_id_shape", sql`substr(${table.id}, 1, 8) = 'themerp_' AND length(${table.id}) BETWEEN 12 AND 40`),
+    check("theme_restore_points_reason_check", sql`${table.reason} IN ('restore', 'discard')`),
+    check("theme_restore_points_draft_revision_positive", sql`${table.draftRevision} >= 1`),
+]);
+
+/**
  * Short-lived preview sessions (and their one-time continuations). A session
  * stores no theme: each preview read resolves the shared draft as it is then.
  * Only a SHA-256 token hash is persisted; the bearer token stays in a

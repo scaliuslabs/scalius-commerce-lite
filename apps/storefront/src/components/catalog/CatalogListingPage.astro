@@ -8,6 +8,8 @@
 //
 // The default keeps products near the title band; a merchant can put a
 // clamped short description above them when that helps explain the category.
+// The collection template's own sections (`pages.templates.collection`) sit
+// above and below the whole listing on category, collection and brand pages.
 import type { ComponentProps } from "astro/types";
 import RichContent from "@/components/RichContent.astro";
 import CatalogDescription from "./CatalogDescription.astro";
@@ -16,6 +18,10 @@ import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import TemplateSections from "@/components/homepage/TemplateSections.astro";
+import { getLayoutData } from "@/lib/api";
+import { templateSectionData } from "@/lib/template-sections";
 
 type ListingProps = ComponentProps<typeof CatalogListing>;
 
@@ -43,10 +49,16 @@ interface Props {
   content?: { html: string; label: string } | null;
   /** `data-*` attributes on the page root (analytics reads them). */
   data?: Record<`data-${string}`, string | undefined>;
+  /** Draws the collection template's sections (category, collection and brand pages; not search). */
+  template?: boolean;
 }
 
-const { kind, listing, hero, content, data = {} } = Astro.props;
-const { resolved, preview } = await currentRequestTheme(Astro.locals);
+const { kind, listing, hero, content, data = {}, template } = Astro.props;
+const requestTheme = await currentRequestTheme(Astro.locals);
+const { resolved, preview } = requestTheme;
+const collectionTemplate = template ? resolved.pages.templates.collection : null;
+const templateData = template ? await templateSectionData("collection", requestTheme) : null;
+const currency = template ? (await getLayoutData())?.currency ?? DEFAULT_CURRENCY : DEFAULT_CURRENCY;
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;
 const countLabel = hero.countLabel === undefined
@@ -63,6 +75,9 @@ const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", m
 const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flush: "px-2 lg:px-0" };
 ---
 
+{collectionTemplate && (
+  <TemplateSections template={collectionTemplate} region="before" data={templateData} currencySymbol={currency.symbol} currencyCode={currency.code} preview={preview !== null} />
+)}
 <div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data} data-theme-section-id={preview ? THEME_EDITOR_MARKS.listing : undefined}>
   <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", GUTTER_CLASS[gutter]]}>
     {banner && (
@@ -113,3 +128,6 @@ const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flu
     )}
   </div>
 </div>
+{collectionTemplate && (
+  <TemplateSections template={collectionTemplate} region="after" data={templateData} currencySymbol={currency.symbol} currencyCode={currency.code} preview={preview !== null} />
+)}

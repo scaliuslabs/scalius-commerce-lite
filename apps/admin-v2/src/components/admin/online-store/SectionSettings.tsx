@@ -1,11 +1,11 @@
 /**
- * A homepage section's settings: the form generated from its registry
- * schema, with the hero's slides drawn by their own control (each slide's
- * crop on both screens, its focus points, several slides added from Files
- * at once) and settings that only one layout uses shown with that layout.
+ * A section's settings: the form generated from its registry schema without
+ * its blocks, and each block (a slide, a question) on its own. A hero
+ * slide has its own control: its crop on both screens and its focus points;
+ * slides are added from Files, several at once.
  */
 import type { CSSProperties } from "react";
-import { ArrowDown, ArrowUp, ImageIcon, Plus, Trash2 } from "lucide-react";
+import { ImageIcon, Plus } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { HERO_SLIDE_PRESENTATION, getHeroSlideObjectPosition, type HeroSlideViewport } from "@scalius/shared/hero-slider";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -15,6 +15,9 @@ import {
   STOREFRONT_HERO_SLIDE_TEXT_LIMITS,
   STOREFRONT_SECTION_REGISTRY,
   isStorefrontAppSection,
+  storefrontSectionBlockLists,
+  storefrontSettingAt,
+  storefrontSettingWith,
   type StorefrontFocalPoint,
   type StorefrontHeroSlide,
   type StorefrontPlatformSection,
@@ -36,21 +39,14 @@ import { sectionSettingSpec } from "./schema-form/registry-forms";
 import {
   LinkField,
   mediaPreview,
-  moveAt,
-  removeAt,
   replaceAt,
   type MediaPreviews,
   type SectionMediaPreview,
 } from "./schema-form/resource-fields";
-import { SchemaSettingsForm, type SettingWidgetProps } from "./schema-form/SchemaSettingsForm";
-import { nextFreeId } from "./theme-settings";
+import { SchemaSettingsForm } from "./schema-form/SchemaSettingsForm";
+import { blockListSpec } from "./theme-editor/editor-state";
 
 type Section = StorefrontSection;
-
-/** A new section id: the type (`app` for an app's section), then -2, -3… until it is free. */
-export function newSectionId(type: Section["type"], sections: readonly Section[]): string {
-  return nextFreeId(type, sections);
-}
 
 /** The field ids of a section's settings start with this. */
 export const sectionFieldPrefix = (sectionId: string) => `theme-section-${sectionId}`;
@@ -166,16 +162,77 @@ function SlideText({ id, label, help, value, max, error, onChange }: {
   );
 }
 
-/**
- * The hero's slides, in order: each a computer image and an optional phone
- * image (each with its focus point), the alt text, optional words over the
- * image and a link with its button. Slides are added from Files, several at
- * once.
- */
-function HeroSlides({ id, label, value, onChange, error, media }: SettingWidgetProps) {
-  const t = useMessages(onlineStoreMessages);
+/** One slide's images, words and link: in the hero's list, or alone when the editor opens the slide as a block. */
+export function HeroSlideFields({ id, index, slide, media, error, onChange }: {
+  /** The slides' field id (`theme-section-hero-slides`). */
+  id: string;
+  index: number;
+  slide: StorefrontHeroSlide;
+  media: MediaPreviews;
+  /** The error at a part of this slide (`image`, `alt`). */
+  error: (part: string) => string | undefined;
+  onChange: (slide: StorefrontHeroSlide) => void;
+}) {
   const labels = useMessages(themeSettingMessages);
-  const slides = (value ?? []) as StorefrontHeroSlide[];
+  const name = labels("s.hero.slides.item", { number: index + 1 });
+  const field = (part: string) => `${id}-${index}-${part}`;
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 @md:grid-cols-2">
+        <SlideImage
+          id={field("image")}
+          name={name}
+          label={labels("s.hero.slides.image")}
+          viewport="desktop"
+          mediaId={slide.image || null}
+          previews={media.previews}
+          focalPoint={slide.focalPoint}
+          error={error("image")}
+          onPick={(image) => {
+            media.remember(image);
+            onChange({ ...slide, image: image.id, alt: slide.alt || image.alt.slice(0, STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt) });
+          }}
+          onFocalPoint={(focalPoint) => onChange({ ...slide, focalPoint })}
+        />
+        <SlideImage
+          id={field("phone-image")}
+          name={name}
+          label={labels("s.hero.slides.phoneImage")}
+          help={labels("s.hero.slides.phoneImage.help")}
+          viewport="mobile"
+          mediaId={slide.phoneImage ?? null}
+          previews={media.previews}
+          focalPoint={slide.phoneFocalPoint ?? STOREFRONT_DEFAULT_FOCAL_POINT}
+          error={error("phoneImage")}
+          onPick={(image) => {
+            media.remember(image);
+            onChange({ ...slide, phoneImage: image.id, phoneFocalPoint: slide.phoneFocalPoint ?? { ...STOREFRONT_DEFAULT_FOCAL_POINT } });
+          }}
+          onFocalPoint={(phoneFocalPoint) => onChange({ ...slide, phoneFocalPoint })}
+          onRemove={() => {
+            const { phoneImage: _image, phoneFocalPoint: _focus, ...rest } = slide;
+            onChange(rest);
+          }}
+        />
+      </div>
+      <SlideText id={field("alt")} label={labels("s.hero.slides.alt")} help={labels("s.hero.slides.alt.help")} value={slide.alt} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt} error={error("alt")} onChange={(alt) => onChange({ ...slide, alt })} />
+      <SlideText id={field("heading")} label={labels("s.hero.slides.heading")} help={labels("s.hero.slides.heading.help")} value={slide.heading ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.heading} error={error("heading")} onChange={(heading) => onChange(withSlideText(slide, "heading", heading))} />
+      <SlideText id={field("text")} label={labels("s.hero.slides.text")} value={slide.text ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text} error={error("text")} onChange={(text) => onChange(withSlideText(slide, "text", text))} />
+      <LinkField id={field("link")} label={labels("f.link")} value={slide.link} error={error("link")} onChange={(link) => onChange({ ...slide, link })} />
+      {slide.link ? (
+        <SlideText id={field("button")} label={labels("s.hero.slides.buttonLabel")} help={labels("s.hero.slides.buttonLabel.help")} value={slide.buttonLabel ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel} error={error("buttonLabel")} onChange={(buttonLabel) => onChange(withSlideText(slide, "buttonLabel", buttonLabel))} />
+      ) : null}
+    </div>
+  );
+}
+
+/** New slides from Files, several at once (each with its focus point centred and its alt text). */
+export function HeroAddSlides({ slides, media, onChange }: {
+  slides: readonly StorefrontHeroSlide[];
+  media: MediaPreviews;
+  onChange: (slides: StorefrontHeroSlide[]) => void;
+}) {
+  const t = useMessages(onlineStoreMessages);
   const full = slides.length >= STOREFRONT_HERO_SLIDE_LIMIT;
   const add = (files: MediaFile[]) => {
     const accepted = files.slice(0, Math.max(0, STOREFRONT_HERO_SLIDE_LIMIT - slides.length));
@@ -191,113 +248,25 @@ function HeroSlides({ id, label, value, onChange, error, media }: SettingWidgetP
       })),
     ]);
   };
-  const set = (index: number, slide: StorefrontHeroSlide) => onChange(replaceAt(slides, index, slide));
-  const { desktop, mobile } = HERO_SLIDE_PRESENTATION;
+  if (full) return <p className="text-body text-muted-foreground">{t("slideLimit", { count: STOREFRONT_HERO_SLIDE_LIMIT })}</p>;
   return (
-    <fieldset id={id} className="space-y-3">
-      <legend className="text-body font-medium">{label}</legend>
-      <p className="text-body text-muted-foreground">
-        {t("heroSlidesHelp", {
-          count: STOREFRONT_HERO_SLIDE_LIMIT,
-          desktop: `${desktop.width} × ${desktop.height}`,
-          phone: `${mobile.width} × ${mobile.height}`,
-        })}
-      </p>
-      {slides.map((slide, index) => {
-        const name = labels("s.hero.slides.item", { number: index + 1 });
-        const field = (part: string) => `${id}-${index}-${part}`;
-        const at = (part: string) => error(`${index}.${part}`);
-        return (
-          <div key={index} className="space-y-3 border-t border-border pt-3">
-            <div className="flex items-center gap-1">
-              <p className="min-w-0 flex-1 text-heading-sm">{name}</p>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionUp", { name })} disabled={index === 0} onClick={() => onChange(moveAt(slides, index, -1))}>
-                <ArrowUp aria-hidden="true" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionDown", { name })} disabled={index === slides.length - 1} onClick={() => onChange(moveAt(slides, index, 1))}>
-                <ArrowDown aria-hidden="true" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("removeItem", { name })} onClick={() => onChange(removeAt(slides, index))}>
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </div>
-            <div className="grid gap-3 @md:grid-cols-2">
-              <SlideImage
-                id={field("image")}
-                name={name}
-                label={labels("s.hero.slides.image")}
-                viewport="desktop"
-                mediaId={slide.image}
-                previews={media.previews}
-                focalPoint={slide.focalPoint}
-                error={at("image")}
-                onPick={(image) => {
-                  media.remember(image);
-                  set(index, { ...slide, image: image.id, alt: slide.alt || image.alt.slice(0, STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt) });
-                }}
-                onFocalPoint={(focalPoint) => set(index, { ...slide, focalPoint })}
-              />
-              <SlideImage
-                id={field("phone-image")}
-                name={name}
-                label={labels("s.hero.slides.phoneImage")}
-                help={labels("s.hero.slides.phoneImage.help")}
-                viewport="mobile"
-                mediaId={slide.phoneImage ?? null}
-                previews={media.previews}
-                focalPoint={slide.phoneFocalPoint ?? STOREFRONT_DEFAULT_FOCAL_POINT}
-                error={at("phoneImage")}
-                onPick={(image) => {
-                  media.remember(image);
-                  set(index, { ...slide, phoneImage: image.id, phoneFocalPoint: slide.phoneFocalPoint ?? { ...STOREFRONT_DEFAULT_FOCAL_POINT } });
-                }}
-                onFocalPoint={(phoneFocalPoint) => set(index, { ...slide, phoneFocalPoint })}
-                onRemove={() => {
-                  const { phoneImage: _image, phoneFocalPoint: _focus, ...rest } = slide;
-                  set(index, rest);
-                }}
-              />
-            </div>
-            <SlideText id={field("alt")} label={labels("s.hero.slides.alt")} help={labels("s.hero.slides.alt.help")} value={slide.alt} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt} error={at("alt")} onChange={(alt) => set(index, { ...slide, alt })} />
-            <SlideText id={field("heading")} label={labels("s.hero.slides.heading")} help={labels("s.hero.slides.heading.help")} value={slide.heading ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.heading} error={at("heading")} onChange={(heading) => set(index, withSlideText(slide, "heading", heading))} />
-            <SlideText id={field("text")} label={labels("s.hero.slides.text")} value={slide.text ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text} error={at("text")} onChange={(text) => set(index, withSlideText(slide, "text", text))} />
-            <LinkField id={field("link")} label={labels("f.link")} value={slide.link} error={at("link")} onChange={(link) => set(index, { ...slide, link })} />
-            {slide.link ? (
-              <SlideText id={field("button")} label={labels("s.hero.slides.buttonLabel")} help={labels("s.hero.slides.buttonLabel.help")} value={slide.buttonLabel ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel} error={at("buttonLabel")} onChange={(buttonLabel) => set(index, withSlideText(slide, "buttonLabel", buttonLabel))} />
-            ) : null}
-          </div>
-        );
-      })}
-      {error() ? <p role="alert" className="text-body text-destructive">{error()}</p> : null}
-      {full ? (
-        <p className="text-body text-muted-foreground">{t("slideLimit", { count: STOREFRONT_HERO_SLIDE_LIMIT })}</p>
-      ) : (
-        <MediaManager
-          capability="image"
-          onSelect={(file) => add([file])}
-          onSelectMultiple={add}
-          trigger={
-            <Button type="button" variant="outline" size="sm">
-              <Plus aria-hidden="true" />
-              {t("addSlides")}
-            </Button>
-          }
-        />
-      )}
-    </fieldset>
+    <MediaManager
+      capability="image"
+      onSelect={(file) => add([file])}
+      onSelectMultiple={add}
+      trigger={
+        <Button type="button" variant="outline" size="sm">
+          <Plus aria-hidden="true" />
+          {t("addSlides")}
+        </Button>
+      }
+    />
   );
 }
 
-const HERO_WIDGETS = { slides: HeroSlides };
-
-/** Settings one layout uses, shown with that layout only. */
-function sectionSettingVisible(type: StorefrontSectionType) {
-  if (type !== "hero") return undefined;
-  return (path: string, parent: Record<string, unknown>) => {
-    if (path === "sideBanners") return parent.layout === "contained-banners";
-    if (path === "phoneHeight") return parent.layout === "full-screen";
-    return true;
-  };
+/** The block lists of a section (edited as rows of the editor's tree, never inside the section's own form). */
+function blockPaths(type: StorefrontSectionType): Set<string> {
+  return new Set(storefrontSectionBlockLists(type).map((list) => list.path));
 }
 
 const NO_ERRORS: ReadonlyMap<string, string> = new Map();
@@ -314,13 +283,17 @@ export function useSectionErrors(section: Section): ReadonlyMap<string, string> 
   return new Map([...errors].map(([path, error]) => [path, t(error.key, error.values)]));
 }
 
-/** The generated settings form of one platform section. */
+/**
+ * The generated settings form of one platform section: its own settings,
+ * without its blocks (the editor's tree lists them; each opens on its own).
+ */
 export function SectionSettingsForm({ section, media, onChange, errors }: {
   section: StorefrontPlatformSection;
   media: MediaPreviews;
   onChange: (settings: StorefrontPlatformSection["settings"]) => void;
   errors?: ReadonlyMap<string, string>;
 }) {
+  const blocks = blockPaths(section.type);
   return (
     <SchemaSettingsForm
       idPrefix={sectionFieldPrefix(section.id)}
@@ -329,8 +302,51 @@ export function SectionSettingsForm({ section, media, onChange, errors }: {
       value={section.settings as Record<string, unknown>}
       onChange={(settings) => onChange(settings as StorefrontPlatformSection["settings"])}
       errors={errors}
-      widgets={section.type === "hero" ? HERO_WIDGETS : undefined}
-      visible={sectionSettingVisible(section.type)}
+      // A hero's phone height applies to the full-screen layout only.
+      visible={(path, parent) => !blocks.has(path) && (section.type !== "hero" || path !== "phoneHeight" || parent.layout === "full-screen")}
+      media={media}
+    />
+  );
+}
+
+/** One block of a section (a slide, a question, a card) on its own: its fields, as the section's list draws them. */
+export function BlockSettingsForm({ section, path, index, media, onChange, errors }: {
+  section: StorefrontPlatformSection;
+  path: string;
+  index: number;
+  media: MediaPreviews;
+  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
+  errors?: ReadonlyMap<string, string>;
+}) {
+  const list = storefrontSettingAt(section.settings, path);
+  const items = Array.isArray(list) ? list : [];
+  const item = items[index];
+  const spec = blockListSpec(section.type, path, section.settings);
+  if (item === undefined || !spec) return null;
+  const set = (next: unknown) => onChange(storefrontSettingWith(section.settings, path, replaceAt(items, index, next)));
+  const prefix = sectionFieldPrefix(section.id);
+  if (section.type === "hero" && path === "slides") {
+    return (
+      <HeroSlideFields
+        id={`${prefix}-slides`}
+        index={index}
+        slide={item as StorefrontHeroSlide}
+        media={media}
+        error={(part) => errors?.get(`slides.${index}.${part}`)}
+        onChange={set}
+      />
+    );
+  }
+  return (
+    <SchemaSettingsForm
+      idPrefix={prefix}
+      scope={sectionLabelScope(section.type)}
+      spec={{ ...spec.item, nullable: false, optional: false }}
+      value={item as Record<string, unknown>}
+      rootPath={path}
+      rootDataPath={`${path}.${index}`}
+      onChange={set}
+      errors={errors}
       media={media}
     />
   );

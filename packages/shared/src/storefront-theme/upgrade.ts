@@ -225,8 +225,18 @@ function v6to7(doc: RecordValue): RecordValue {
   return { ...doc, version: 7, pages: { ...object(doc.pages), landing: {} } };
 }
 
+/** v8 added page templates (sections around the product, listing, cart and CMS pages), empty. */
+function v7to8(doc: RecordValue): RecordValue {
+  const empty = () => ({ sections: [], main: 0 });
+  return {
+    ...doc,
+    version: 8,
+    pages: { ...object(doc.pages), templates: { product: empty(), collection: empty(), cart: empty(), page: empty() } },
+  };
+}
+
 const THEME_UPGRADES: Record<number, (document: RecordValue) => RecordValue> = {
-  1: v1to2, 2: v2to3, 3: v3to4, 4: v4to5, 5: v5to6, 6: v6to7,
+  1: v1to2, 2: v2to3, 3: v3to4, 4: v4to5, 5: v5to6, 6: v6to7, 7: v7to8,
 };
 
 const BLOCK_SLOTS = ["topBar", "header", "desktopNav", "mobileNav", "card", "footer"] as const;
@@ -270,6 +280,9 @@ function withCurrentDefaults(doc: RecordValue): RecordValue {
       home: array(pages.home).map(section),
       landing: Object.fromEntries(Object.entries(object(pages.landing)).map(([slug, page]) => [
         slug, { ...object(page), sections: array(object(page).sections).map(section) },
+      ])),
+      templates: Object.fromEntries(Object.entries(object(pages.templates)).map(([kind, template]) => [
+        kind, { ...object(template), sections: array(object(template).sections).map(section) },
       ])),
     },
   };

@@ -12,7 +12,8 @@ import {
     productFacetValues,
     products,
 } from "@scalius/database/schema";
-import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
+import { sql, eq, and, or, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import {
     buildBatchGuard,
@@ -186,8 +187,8 @@ export async function listAttributes(
     if (search) {
         whereConditions.push(
             or(
-                like(productAttributes.name, `%${search}%`),
-                like(productAttributes.slug, `%${search}%`),
+                containsText(productAttributes.name, search),
+                containsText(productAttributes.slug, search),
             ),
         );
     }
@@ -307,8 +308,8 @@ export async function listAttributeAgentSummaries(
     const search = options.search?.trim();
     if (search) {
         conditions.push(or(
-            like(productAttributes.name, `%${search}%`),
-            like(productAttributes.slug, `%${search}%`),
+            containsText(productAttributes.name, search),
+            containsText(productAttributes.slug, search),
         )!);
     }
     if (options.ids !== undefined) {
@@ -859,7 +860,7 @@ export async function listAttributeValues(
         isNull(products.deletedAt),
     ];
     if (search) {
-        whereConditions.push(like(productAttributeValues.value, `%${search}%`));
+        whereConditions.push(containsText(productAttributeValues.value, search));
     }
 
     const combinedWhere = and(...whereConditions);

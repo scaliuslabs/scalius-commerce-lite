@@ -162,3 +162,5 @@ export const defineFraudProvider = provider("fraud");
 export const defineTaxProvider = provider("tax");
 /** A machine translation provider (`translate`): the translation editor's "Translate with" (MARKETS-DESIGN D9). */
 export const defineTranslationProvider = provider("translation");
+/** An AI provider (`generate`): structured generation against a JSON Schema, the platform's one AI port (first used by the theme editor's "Draft with AI"). The store's own model key lives in the app's settings. */
+export const defineAiProvider = provider("ai");

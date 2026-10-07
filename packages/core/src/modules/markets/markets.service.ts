@@ -9,6 +9,7 @@
 // exchange rate and its currency's increment; the dashboard creates subfolder
 // presences only.
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { handleOrNumberedCopy } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import {
@@ -373,7 +374,7 @@ function countryWrites(db: Database, id: string, countries: readonly string[]): 
 async function derivedHandle(db: Database, name: string): Promise<string> {
     const base = (toHandle(name) || "market").slice(0, MARKET_HANDLE_MAX_LENGTH).replace(/-+$/, "") || "market";
     const rows = await db.select({ handle: markets.handle }).from(markets)
-        .where(sql`${markets.handle} = ${base} OR ${markets.handle} LIKE ${`${base}-%`}`);
+        .where(handleOrNumberedCopy(markets.handle, base));
     return nextFreeHandle(base, rows.map((row) => row.handle));
 }
 

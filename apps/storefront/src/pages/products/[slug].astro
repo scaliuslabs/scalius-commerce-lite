@@ -14,6 +14,8 @@ import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
+import TemplateSections from "@/components/homepage/TemplateSections.astro";
+import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
 import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
@@ -157,6 +159,8 @@ const renderedApps = requestTheme.preview && requestTheme.previewToken
   : productApps;
 const appBlocks = renderedApps.blocks;
 if (renderedApps.failed) markRenderUncacheable(Astro.response.headers);
+const productTemplate = requestTheme.resolved.pages.templates.product;
+const templateData = await templateSectionData("product", requestTheme);
 const appHeads = appBlocks.map((block) => block.head);
 
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the
@@ -722,6 +726,17 @@ const productCategoryAnalytics = productCategory
     }
   </Fragment>
 
+  <TemplateSections
+    template={productTemplate}
+    region="before"
+    data={templateData}
+    deliveryFacts={deliveryFacts}
+    currencySymbol={currencySymbol}
+    currencyCode={currencyCode}
+    preview={editorMarks}
+    languageCode={layoutData.storefrontCopy?.languageCode}
+  />
+
   <div
     class="min-h-screen bg-background product-container"
     id="product-container"
@@ -928,6 +943,17 @@ const productCategoryAnalytics = productCategory
       <ProductAppBlocks blocks={appBlocks} placement="below" />
     </ThemeEditorMark>
   </div>
+
+  <TemplateSections
+    template={productTemplate}
+    region="after"
+    data={templateData}
+    deliveryFacts={deliveryFacts}
+    currencySymbol={currencySymbol}
+    currencyCode={currencyCode}
+    preview={editorMarks}
+    languageCode={layoutData.storefrontCopy?.languageCode}
+  />
 
   <RecentlyViewedRecord
     slug={product.slug}

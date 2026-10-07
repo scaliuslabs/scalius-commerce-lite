@@ -9,7 +9,7 @@
 import type { PluginSettingValue } from "../plugins/settings-schema";
 import { PLUGIN_HOME_SECTIONS_MAX, parsePluginSurfaceKey } from "../plugins/storefront";
 import type { StorefrontHomeMode } from "./document";
-import type { StorefrontProductSource, StorefrontSection } from "./sections";
+import { storefrontVisibleSection, type StorefrontProductSource, type StorefrontSection } from "./sections";
 
 /** Most products one source feeds (a 6x6 grid). */
 export const HOME_PRODUCT_LIST_LIMIT = 36;
@@ -148,8 +148,10 @@ export function homeSectionRequests(
   const promotionIds = new Set<string>();
   const apps: HomeAppSectionRequest[] = [];
   let brandLimit = 0;
-  for (const section of sections) {
-    if (section.hidden) continue;
+  for (const shown of sections) {
+    if (shown.hidden) continue;
+    // Hidden blocks read nothing (a hidden slide's image, a hidden tab's products).
+    const section = storefrontVisibleSection(shown);
     if (section.type === "app") {
       const key = parsePluginSurfaceKey(section.settings.app);
       if (key && apps.length < PLUGIN_HOME_SECTIONS_MAX) {

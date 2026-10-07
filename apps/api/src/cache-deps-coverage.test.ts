@@ -89,6 +89,7 @@ const URLS = [
   "/api/v1/storefront/layout",
   "/api/v1/storefront/markets",
   "/api/v1/storefront/landing/eid",
+  "/api/v1/storefront/template/product",
   "/api/v1/storefront/product-apps/linen-panjabi",
   "/api/v1/storefront/pages/slug/about",
   "/api/v1/checkout/config",

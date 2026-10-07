@@ -7,7 +7,8 @@ import {
   type Database,
 } from "@scalius/database/client";
 import { checkoutLanguages } from "@scalius/database/schema";
-import { eq, and, isNull, or, like, asc, desc, ne, sql } from "drizzle-orm";
+import { eq, and, isNull, or, asc, desc, ne, sql } from "drizzle-orm";
+import { containsText } from "@scalius/core/utils/text-match";
 import { nanoid } from "nanoid";
 import {
   CHECKOUT_LANGUAGE_KEYS,
@@ -377,8 +378,8 @@ adminApp.openapi(listRoute, async (c) => {
   if (search) {
     whereConditions.push(
       or(
-        like(checkoutLanguages.name, `%${search}%`),
-        like(checkoutLanguages.code, `%${search}%`),
+        containsText(checkoutLanguages.name, search),
+        containsText(checkoutLanguages.code, search),
       ),
     );
   }

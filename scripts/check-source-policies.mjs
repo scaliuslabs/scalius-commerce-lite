@@ -299,6 +299,13 @@ export const policies = [
     sample: 'import { drizzle } from "drizzle-orm/d1";',
   },
   {
+    rule: "SQL matches a value with containsText/startsWithText (@scalius/core/utils/text-match), never a LIKE or GLOB pattern built from it",
+    why: "D1 refuses a LIKE/GLOB pattern over 50 bytes, bound values included: a 17-letter Bangla search or a long derived handle fails only on D1; a fixed literal pattern is fine",
+    paths: ["apps/api/src", "packages/core/src", "plugins"],
+    forbid: [/\b(?:LIKE|GLOB)\s+(?:\$\{|'%'\s*\|\|)/i, /\b(?:not)?(?:[iI]l|l)ike\(\s*[^,()]+,(?!\s*["'][^"'`$]*["']\s*\))/],
+    sample: "conditions.push(like(products.name, `%${search}%`));",
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [
@@ -366,6 +373,8 @@ export const PHYSICAL_UTILITY_ALLOW = {
   "apps/admin-v2/src/components/admin/online-store/HeroFocalPointEditor.tsx": ["left-1/2", "left-(--focus-x)"],
   "apps/admin-v2/src/components/admin/layout/AppSidebar.tsx": ["left-(--tip-x)"],
   "apps/admin-v2/src/components/admin/analytics/SalesTrendChart.tsx": ["left-(--dot-x)", "left-(--tip-edge)", "right-(--tip-edge)"],
+  // The preview frame and its outlines sit at measured pixels from the canvas' left edge (the frame never mirrors).
+  "apps/admin-v2/src/components/admin/online-store/theme-editor/EditorCanvas.tsx": ["left-(--ox)", "left-0", "left-1/2"],
   "apps/storefront/src/components/header/variants/ClassicHeader.astro": ["left-1/2"],
   "apps/storefront/src/components/sliders/CustomCarousel.astro": ["left-1/2"],
 };

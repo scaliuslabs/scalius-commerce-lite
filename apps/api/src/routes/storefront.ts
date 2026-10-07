@@ -8,6 +8,7 @@ import {
   getHomepageData,
   getLandingPageData,
   getLayoutData,
+  getTemplateSectionsData,
   getPageRenderData,
   readProductAppContext,
   readThemeBrandAssets,
@@ -26,6 +27,7 @@ import {
   HOME_MAX_PRODUCT_LISTS,
   HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
+  STOREFRONT_PAGE_TEMPLATES,
   homeSectionRequests,
   type HomeAppSectionRequest,
   type StorefrontThemeDocument,
@@ -56,11 +58,13 @@ const MAX_BATCH_PART_RENDERS = 4;
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
+import { storeShapeApiSchema, storefrontSectionListApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { marketMatrixSchema, marketPresenceQuerySchema } from "../schemas/markets";
 import { assertOnlyPresenceQuery, publicMarketPresence, publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { readMarketMatrix } from "@scalius/core/modules/markets";
+import { startMarketPricing } from "@scalius/core/modules/price-lists";
+import { MARKET_SUBFOLDER_PATTERN } from "@scalius/shared/markets";
 import { publicPageDetailSchema } from "../schemas/custom-fields";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -445,6 +449,33 @@ app.openapi(landingPageRoute, async (c) => {
   return ok(c, { title: data.landing.title, description: data.landing.description, sections: data.sections });
 });
 
+// GET /storefront/template/:kind — a page template's sections' data (the
+// sections around a product, listing, cart or CMS page's fixed part; the
+// storefront takes the sections from the layout's theme).
+const templateSectionsRoute = createRoute({
+  method: "get",
+  path: "/template/{kind}",
+  operationId: "storefront.template.get",
+  tags: ["Storefront"],
+  summary: "Get what a page template's sections show",
+  description:
+    "The published theme's sections around the fixed part of every product, collection, cart or CMS page: their product lists, images and the rest, like a landing page's. Takes only the page's market presence; a template without sections answers empty sections.",
+  request: { params: z.object({ kind: z.enum(STOREFRONT_PAGE_TEMPLATES) }), query: marketPresenceQuerySchema },
+  responses: {
+    200: {
+      description: "The template's section data",
+      content: { "application/json": { schema: successEnvelope(z.object({ sections: homepageSectionsSchema })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+app.openapi(templateSectionsRoute, async (c) => {
+  assertOnlyPresenceQuery(c.req.url, "The template read takes no query parameters");
+  const sections = await getTemplateSectionsData(c.get("db"), c.req.valid("param").kind, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) });
+  return ok(c, { sections });
+});
+
 // GET /storefront/product-apps/:slug — the product page's app blocks
 const productAppsRoute = createRoute({
   method: "get",
@@ -756,7 +787,7 @@ const themePreviewHomepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read the homepage section data of a theme preview's draft",
   description:
-    "What the draft theme's homepage shows (product lists, images and hero slides, category tiles, collections, brands, deal promotions and a product homepage's product), for the storefront preview behind a live preview cookie. The reads come from the current saved draft, never from the caller, and the answer is private and never cached.",
+    "What a draft page's sections show (product lists, images and hero slides, category tiles, collections, brands, deal promotions and a product homepage's product), for the storefront preview behind a live preview cookie. The reads come from the current saved draft, or from `sections`: the theme editor's unsaved sections of the page, validated with the same section schema. Only a live preview token (a staff preview session) is answered; the answer is private and never cached. `presence` prices the lists in that market.",
   operationId: "system.storefront_theme_preview.homepage",
   request: {
     body: {
@@ -765,6 +796,12 @@ const themePreviewHomepageRoute = createRoute({
           schema: z.object({
             token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/),
             pageSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100).optional(),
+            /** A page template's sections (`pages.templates[template]`) instead of the homepage's. */
+            template: z.enum(STOREFRONT_PAGE_TEMPLATES).optional(),
+            /** The editor's unsaved sections of the page, instead of the saved draft's. */
+            sections: storefrontSectionListApiSchema.optional(),
+            /** The previewed market presence (`en-in`); none: the root. */
+            presence: z.string().regex(MARKET_SUBFOLDER_PATTERN).optional(),
           }).strict(),
         },
       },
@@ -786,14 +823,22 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const db = c.get("db");
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  const { pageSlug } = c.req.valid("json");
+  const { pageSlug, template, sections, presence } = c.req.valid("json");
   const landing = pageSlug ? preview.theme.pages.landing[pageSlug] : null;
-  if (pageSlug && !landing) throw new NotFoundError("Landing page not found");
-  const requests = landing
-    ? homeSectionRequests(landing.sections, { kind: "sections" })
-    : homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
+  if (pageSlug && !landing && !sections) throw new NotFoundError("Landing page not found");
+  const requests = sections
+    ? homeSectionRequests(sections, pageSlug || template ? { kind: "sections" } : preview.theme.pages.homeMode)
+    : template
+      ? homeSectionRequests(preview.theme.pages.templates[template].sections, { kind: "sections" })
+      : landing
+        ? homeSectionRequests(landing.sections, { kind: "sections" })
+        : homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
   // A draft's app sections are drawn live (this answer is never cached).
-  const data = (await getHomepageData(db, { requests, renderApps: homeAppRenderer(c) })).sections;
+  const data = (await getHomepageData(db, {
+    requests,
+    renderApps: homeAppRenderer(c),
+    pricing: presence ? startMarketPricing(db, presence) : null,
+  })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
 });
 

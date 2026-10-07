@@ -16,6 +16,7 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import { sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import { containsText } from "../../../utils/text-match";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -243,7 +244,7 @@ function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
     `;
 
     return sql`(${sql.join(
-        searchTerms.map((term) => sql`${normalizedCustomerPhone} LIKE ${`%${term}%`}`),
+        searchTerms.map((term) => containsText(normalizedCustomerPhone, term)),
         sql` OR `,
     )})`;
 }

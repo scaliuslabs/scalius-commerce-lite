@@ -29,6 +29,8 @@ export const PROVIDER_PORT_PERMISSIONS: Readonly<Record<ProviderKind, ProviderPo
   tax: { view: [PERMISSIONS.TAXES_VIEW], manage: [PERMISSIONS.TAXES_MANAGE] },
   // Settings → Languages, machine translation: /settings/languages.
   translation: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  // Online store → theme editor, Draft with AI: /settings/theme/ai-draft.
+  ai: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
 };
 
 /** Whether these permissions read (`view`) or test (`manage`) a port's providers. */

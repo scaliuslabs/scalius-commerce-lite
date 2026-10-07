@@ -12,7 +12,7 @@ import { APP_FUNCTION_POINTS, type AppDetail, type AppGrant } from "~/lib/api-qu
 import { topicLabel } from "../settings/webhooks/webhook-format";
 import { RISK_VARIANT } from "./app-status";
 
-const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax"] as const;
+const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai"] as const;
 
 function known<T extends string>(list: readonly T[], value: string): value is T {
   return (list as readonly string[]).includes(value);

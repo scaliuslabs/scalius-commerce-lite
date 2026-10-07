@@ -132,6 +132,22 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/theme/preview-session": {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
+  "/api/v1/admin/settings/theme/restore-points": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/theme/restore-point": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  // Drafting changes nothing until the editor saves, but only an editor may ask (it calls the merchant's AI app).
+  "/api/v1/admin/settings/theme/ai-draft": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/ai-providers": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/theme/draft-sections": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/media": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },

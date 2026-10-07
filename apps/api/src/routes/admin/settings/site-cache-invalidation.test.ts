@@ -949,6 +949,28 @@ describe("site settings write behavior", () => {
     });
     expect(body.data).not.toHaveProperty("sectionMedia");
     expect(body.data?.apps).toEqual([]);
+    // The AI providers load when the AI dialog opens, not with the editor; nobody has saved the draft by name.
+    expect(body.data).not.toHaveProperty("aiProviders");
+    expect(body.data?.draft).toMatchObject({ updatedByName: null });
+    expect(body.data?.draft).not.toHaveProperty("updatedBy");
+  });
+
+  it("names who saved the draft without exposing the author id", async () => {
+    const { app, env } = createTestApp();
+    mocks.getThemeWorkspace.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
+      draft: { theme: DEFAULT_STOREFRONT_THEME, revision: 2, basePublishedRevision: 1, updatedAt: new Date(1_000), updatedBy: "user_1", updatedByName: "Rana" },
+      draftDiffersFromLive: false,
+      lastPublished: null,
+    });
+    mocks.readThemeMedia.mockResolvedValueOnce([]);
+
+    const response = await app.request("/api/v1/admin/settings/theme/editor", { method: "GET" }, env);
+    const body = (await response.json()) as { data: { draft: Record<string, unknown> } };
+    expect(response.status).toBe(200);
+    expect(body.data.draft).toMatchObject({ revision: 2, updatedByName: "Rana" });
+    expect(body.data.draft).not.toHaveProperty("updatedBy");
+    expect(body.data).not.toHaveProperty("aiProviders");
   });
 
   it("offers the theme editor the sections and product blocks of active apps approved for the storefront", async () => {

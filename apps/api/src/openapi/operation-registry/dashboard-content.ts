@@ -157,4 +157,11 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     },
   },
   "dashboard.theme.publish": { revision: "required", limits: { response: 4096 } },
+  // Builder: restore points (the draft before a restore or discard) and drafted sections.
+  "dashboard.theme.draft_snapshots_list": { limits: { response: 16_384 } },
+  "dashboard.theme.draft_snapshot_restore": { revision: "required", limits: { response: 4096 } },
+  // An agent drafts sections itself (draft_sections); the merchant's AI app is reachable too.
+  "dashboard.theme.ai_providers_list": {},
+  "dashboard.theme.ai_draft_create": { openWorld: true, limits: { response: 65_536 } },
+  "dashboard.theme.draft_sections": { revision: "required", limits: { request: 65_536, response: 4096 } },
 } satisfies Record<string, OperationRegistryEntry>;

@@ -19,12 +19,12 @@
   // and a render's D1 queries come in several dependent waves: from a far
   // colo each wave costs a full round trip to the database (measured ~200 ms
   // per wave from Europe, 1-5 ms beside it). This database lives in APAC and
-  // is served from Singapore (`wrangler d1 execute ... --remote --json`
-  // reports `served_by_colo`); change the region if the database moves. The
-  // storefront Worker stays unplaced, so cached pages are still served at the
-  // visitor's edge.
+  // is served from Hong Kong (`wrangler d1 execute ... --remote --json`
+  // reports `served_by_colo` HKG); change the region if the database moves.
+  // The storefront Worker stays unplaced, so cached pages are still served at
+  // the visitor's edge.
   "placement": {
-    "region": "aws:ap-southeast-1"
+    "region": "aws:ap-east-1"
   },
   "cache": {
     "enabled": true
@@ -83,8 +83,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "scalius-commerce",
-      "database_id": "2efcad0d-841e-4f8d-b8f6-5b735d881edc",
+      "database_name": "scalius-commerce-v2",
+      "database_id": "83f64596-fee8-4627-9d99-69b099add10c",
       "migrations_dir": "../../packages/database/migrations"
     }
   ],

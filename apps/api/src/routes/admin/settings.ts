@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { siteSettingsRoutes } from "./settings/site";
+import { themeBuilderRoutes } from "./settings/theme-builder";
 import { paymentSettingsRoutes } from "./settings/payments";
 import { systemSettingsRoutes } from "./settings/system";
 import { shippingMethodsSettingsRoutes } from "./settings/shipping";
@@ -26,6 +27,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // Mount the modular settings routes on the root so they match frontend expectations
 // (Frontend expects /api/v1/admin/settings/stripe, not /api/v1/admin/settings/payments/stripe)
 app.route("/", siteSettingsRoutes);
+app.route("/", themeBuilderRoutes);
 app.route("/", feedRowPreviewRoutes);
 app.route("/", businessSettingsRoutes);
 app.route("/", paymentSettingsRoutes);

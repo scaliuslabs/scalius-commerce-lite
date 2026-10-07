@@ -51,6 +51,7 @@ import {
   parseStoredStorefrontThemeDocument,
   type HomeAppSectionRequest,
   type HomeSectionRequests,
+  type StorefrontPageTemplate,
 } from "@scalius/shared/storefront-theme";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { currencySymbol } from "@scalius/shared/money-format";
@@ -213,6 +214,12 @@ export async function getHomepageData(
      */
     pageSlug?: string;
     /**
+     * A page template (`pages.templates[template]`): the sections around a
+     * product, listing, cart or CMS page's fixed part, the same way as a
+     * landing page.
+     */
+    template?: StorefrontPageTemplate;
+    /**
      * Draws the page's app sections (the API's plugin host); runs beside the
      * second batch, so a homepage with app sections adds no wave before its
      * apps' own reads. Without it, app sections draw nothing.
@@ -227,7 +234,7 @@ export async function getHomepageData(
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO document (homepage title and description)
-    ...(options.pageSlug ? [] : [selectSettingsDocuments(db, [seoDocument])]),
+    ...(options.pageSlug || options.template ? [] : [selectSettingsDocuments(db, [seoDocument])]),
 
     // 1. Active collections (metadata only): the ones the sections name.
     db
@@ -255,7 +262,7 @@ export async function getHomepageData(
 
   const collectionResults = batchResults[batchResults.length - 2];
   const themeResults = batchResults[batchResults.length - 1];
-  const seo = options.pageSlug ? null : await seoDocument.fromRows(batchResults[0] as SettingsDocumentRow[]);
+  const seo = options.pageSlug || options.template ? null : await seoDocument.fromRows(batchResults[0] as SettingsDocumentRow[]);
   // Unset copy stays null: the storefront titles the homepage with the
   // store name instead of inventing a platform-branded headline.
   const seoSettings = {
@@ -266,11 +273,12 @@ export async function getHomepageData(
   const theme = parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
     ?? DEFAULT_STOREFRONT_THEME;
   const landing = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
-  const requests = options.requests ?? (options.pageSlug
-    ? homeSectionRequests(landing?.sections ?? [], { kind: "sections" })
+  const pageSections = options.template ? theme.pages.templates[options.template].sections : landing?.sections;
+  const requests = options.requests ?? (options.pageSlug || options.template
+    ? homeSectionRequests(pageSections ?? [], { kind: "sections" })
     : homeSectionRequests(theme.pages.home, theme.pages.homeMode));
-  // A landing page depends on the collections its sections name; the homepage on any.
-  if (options.pageSlug) deps.collections([
+  // A landing page or template depends on the collections its sections name; the homepage on any.
+  if (options.pageSlug || options.template) deps.collections([
     ...requests.collectionIds,
     ...requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
   ]);
@@ -406,6 +414,19 @@ export async function getLandingPageData(
 ) {
   const data = await getHomepageData(db, { ...options, pageSlug: slug });
   return data.landing ? { landing: data.landing, sections: data.sections } : null;
+}
+
+/**
+ * The live theme's page template sections' data (the sections around a
+ * product, listing, cart or CMS page's fixed part). A template without
+ * sections costs the one first batch (the theme row and the collections).
+ */
+export async function getTemplateSectionsData(
+  db: Database,
+  template: StorefrontPageTemplate,
+  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps" | "pricing"> = {},
+) {
+  return (await getHomepageData(db, { ...options, template })).sections;
 }
 
 // ── CMS page render data ────────────────────────────────────────────────────

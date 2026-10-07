@@ -14,6 +14,7 @@ import {
   themeSettings,
   themeSettingsDrafts,
   themeSettingsVersions,
+  themeRestorePoints,
   user,
 } from "@scalius/database/schema";
 import { eq, and, desc, gt, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
@@ -42,8 +43,12 @@ import {
   storefrontThemeMediaIds,
   storefrontThemeMediaReferences,
   storefrontThemeWithoutMedia,
+  storefrontNextSectionId,
+  storefrontSectionSchema,
   themeDocumentChangeSchema,
   type StorefrontLandingPage,
+  type StorefrontPageTemplate,
+  type StorefrontSection,
   type StorefrontThemeDocument,
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
@@ -171,6 +176,9 @@ export interface ThemeDraftDocument {
   revision: number;
   basePublishedRevision: number;
   updatedAt: Date | null;
+  /** Who saved the draft last (the editor's conflict notice names them). */
+  updatedBy?: string | null;
+  updatedByName?: string | null;
 }
 
 /** Who published the live theme, and when. */
@@ -334,11 +342,16 @@ function selectThemeDraftRows(db: Database) {
       revision: themeSettingsDrafts.revision,
       basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
       updatedAt: themeSettingsDrafts.updatedAt,
+      updatedBy: themeSettingsDrafts.updatedBy,
+      updatedByName: user.name,
     })
     .from(themeSettingsDrafts)
+    .leftJoin(user, eq(user.id, themeSettingsDrafts.updatedBy))
     .where(eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))
     .limit(1);
 }
+
+type ThemeDraftRow = { theme: string; revision: number; basePublishedRevision: number; updatedAt: Date; updatedBy: string | null; updatedByName: string | null };
 
 /** Version rows without their documents: metadata comes out of the stored JSON in the database. */
 function selectThemeVersionSummaries(db: Database) {
@@ -387,10 +400,17 @@ export async function getThemeWorkspace(db: Database): Promise<ThemeWorkspaceDoc
   const published = publishedRow
     ? { theme: parseAuthoritativeThemeSettings(publishedRow.colors), revision: publishedRow.revision }
     : unpublishedThemeSettings();
-  const draftRow = (draftRows as Array<{ theme: string; revision: number; basePublishedRevision: number; updatedAt: Date }>)[0];
+  const draftRow = (draftRows as ThemeDraftRow[])[0];
   const draft: ThemeDraftDocument = draftRow
-    ? { theme: parseAuthoritativeThemeSettings(draftRow.theme), revision: draftRow.revision, basePublishedRevision: draftRow.basePublishedRevision, updatedAt: draftRow.updatedAt }
-    : { theme: published.theme, revision: 0, basePublishedRevision: published.revision, updatedAt: null };
+    ? {
+      theme: parseAuthoritativeThemeSettings(draftRow.theme),
+      revision: draftRow.revision,
+      basePublishedRevision: draftRow.basePublishedRevision,
+      updatedAt: draftRow.updatedAt,
+      updatedBy: draftRow.updatedBy ?? null,
+      updatedByName: draftRow.updatedByName ?? null,
+    }
+    : { theme: published.theme, revision: 0, basePublishedRevision: published.revision, updatedAt: null, updatedBy: null, updatedByName: null };
   const latest = (latestRows as ThemeVersionSummaryRow[])[0];
   return {
     published,
@@ -522,20 +542,27 @@ async function writeThemeDraft(
   expectedBasePublishedRevision: number,
   nextBasePublishedRevision: number,
   actorId: string | null,
+  /** Keep the draft being replaced as a restore point (a restore or a discard). */
+  restorePoint?: { previous: StorefrontThemeDocument; reason: ThemeRestorePointReason },
 ): Promise<{ theme: StorefrontThemeDocument; revision: number; updatedAt: Date }> {
   assertNonnegativeRevision(expectedDraftRevision, "draft");
   assertNonnegativeRevision(expectedBasePublishedRevision, "base published");
   const normalized = serializeThemeSettings(theme);
   await assertThemeReferences(db, normalized.theme);
+  // A draft that was never saved has nothing to keep.
+  const keep = restorePoint && expectedDraftRevision >= 1
+    ? restorePointStatements(db, JSON.stringify(restorePoint.previous), expectedDraftRevision, restorePoint.reason, actorId)
+    : [];
   let rows: Array<{ revision: number; updatedAt: Date }>;
   try {
     const results = await safeBatch(db, [
       buildPublishedThemeRevisionGuard(db, nextBasePublishedRevision),
       buildThemeDraftRevisionGuard(db, expectedDraftRevision, expectedBasePublishedRevision),
+      ...keep,
       themeDraftWriteStatement(db, normalized.serialized, expectedDraftRevision, nextBasePublishedRevision, actorId) as never,
       selectThemeDraftRows(db),
     ]);
-    rows = results[3] as Array<{ revision: number; updatedAt: Date }>;
+    rows = results[3 + keep.length] as Array<{ revision: number; updatedAt: Date }>;
   } catch (error) {
     if (isThemeRevisionConflict(error)) throw themeConflict();
     throw error;
@@ -603,7 +630,10 @@ export async function restoreThemeVersion(
     throw new AppError(400, THEME_VERSION_IMAGES_MISSING, `This version uses ${missing.size === 1 ? "an image" : `${missing.size} images`} no longer in Files. Restore it without ${missing.size === 1 ? "it" : "them"}, or add ${missing.size === 1 ? "it" : "them"} back to Files first.`, { missingImages: missing.size });
   }
   const theme = storefrontThemeWithoutMedia(version.theme, missing);
-  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId);
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
+    previous: workspace.draft.theme,
+    reason: "restore",
+  });
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
@@ -620,7 +650,10 @@ export async function discardThemeDraft(
 ): Promise<ThemeStatus> {
   const workspace = await getThemeWorkspace(db);
   if (workspace.published.revision !== basePublishedRevision) throw themeConflict();
-  const saved = await writeThemeDraft(db, workspace.published.theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId);
+  const saved = await writeThemeDraft(db, workspace.published.theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
+    previous: workspace.draft.theme,
+    reason: "discard",
+  });
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
@@ -741,6 +774,215 @@ export async function getThemeVersion(db: Database, revision: number): Promise<T
   const document = (documentRows as Array<{ theme: string }>)[0];
   if (!summary || !document) throw new NotFoundError("That storefront style version is no longer kept.");
   return { ...themeVersionSummary(summary), theme: parseVersionRow(document.theme).theme };
+}
+
+// ─── Restore points ──────────────────────────────────────────────────────────
+//
+// A restore (of a version or of another restore point) and a discard replace
+// the shared draft; the batch that does it first keeps the draft it replaces
+// as a restore point. Publishing keeps its own versions. Restoring a point
+// puts it in the draft, never live.
+
+/** Restore points kept, newest first (pruned in the batch that writes one). */
+export const THEME_RESTORE_POINT_LIMIT = 10;
+export type ThemeRestorePointReason = "restore" | "discard";
+
+export interface ThemeRestorePointSummary {
+  id: string;
+  reason: ThemeRestorePointReason;
+  draftRevision: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+export interface ThemeRestorePointDocument extends ThemeRestorePointSummary {
+  theme: StorefrontThemeDocument;
+}
+
+function restorePointStatements(db: Database, serialized: string, draftRevision: number, reason: ThemeRestorePointReason, actorId: string | null) {
+  return [
+    db.insert(themeRestorePoints).values({
+      id: `themerp_${nanoid()}`,
+      theme: serialized,
+      draftRevision,
+      reason,
+      createdBy: actorId,
+      createdAt: sql`unixepoch()`,
+    }),
+    // The newest points stay: the one just written is among them.
+    db.delete(themeRestorePoints).where(sql`${themeRestorePoints.id} NOT IN (
+      SELECT ${themeRestorePoints.id} FROM ${themeRestorePoints}
+      ORDER BY ${themeRestorePoints.createdAt} DESC, ${themeRestorePoints.id} DESC
+      LIMIT ${sql.raw(String(THEME_RESTORE_POINT_LIMIT))}
+    )`),
+  ];
+}
+
+function selectRestorePointSummaries(db: Database) {
+  return db.select({
+    id: themeRestorePoints.id,
+    reason: themeRestorePoints.reason,
+    draftRevision: themeRestorePoints.draftRevision,
+    createdBy: themeRestorePoints.createdBy,
+    createdByName: user.name,
+    createdAt: themeRestorePoints.createdAt,
+  }).from(themeRestorePoints).leftJoin(user, eq(user.id, themeRestorePoints.createdBy));
+}
+
+/** The restore points, newest first, without their documents. */
+export async function listThemeRestorePoints(db: Database): Promise<ThemeRestorePointSummary[]> {
+  const rows = await selectRestorePointSummaries(db)
+    .orderBy(desc(themeRestorePoints.createdAt), desc(themeRestorePoints.id))
+    .limit(THEME_RESTORE_POINT_LIMIT);
+  return (rows as ThemeRestorePointSummary[]).map((row) => ({ ...row, createdByName: row.createdByName ?? null }));
+}
+
+/** One restore point with its document. */
+export async function getThemeRestorePoint(db: Database, id: string): Promise<ThemeRestorePointDocument> {
+  if (!/^themerp_[A-Za-z0-9_-]{4,32}$/.test(id)) throw new ValidationError("Choose a restore point.");
+  const [summaryRows, documentRows] = await safeBatch(db, [
+    selectRestorePointSummaries(db).where(eq(themeRestorePoints.id, id)).limit(1),
+    db.select({ theme: themeRestorePoints.theme }).from(themeRestorePoints).where(eq(themeRestorePoints.id, id)).limit(1),
+  ]);
+  const summary = (summaryRows as ThemeRestorePointSummary[])[0];
+  const document = (documentRows as Array<{ theme: string }>)[0];
+  if (!summary || !document) throw new NotFoundError("That restore point is no longer kept.");
+  return { ...summary, createdByName: summary.createdByName ?? null, theme: parseAuthoritativeThemeSettings(document.theme) };
+}
+
+/** Puts a restore point in the draft (never live); the draft it replaces becomes a restore point too. */
+export async function restoreThemeRestorePoint(
+  db: Database,
+  id: string,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+  options: { withoutMissingImages?: boolean } = {},
+): Promise<ThemeStatus> {
+  const point = await getThemeRestorePoint(db, id);
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.published.revision !== basePublishedRevision) throw themeConflict();
+  const missing = await readMissingThemeImages(db, point.theme);
+  if (missing.size > 0 && !options.withoutMissingImages) {
+    throw new AppError(400, THEME_VERSION_IMAGES_MISSING, `This restore point uses ${missing.size === 1 ? "an image" : `${missing.size} images`} no longer in Files. Restore it without ${missing.size === 1 ? "it" : "them"}, or add ${missing.size === 1 ? "it" : "them"} back to Files first.`, { missingImages: missing.size });
+  }
+  const theme = storefrontThemeWithoutMedia(point.theme, missing);
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId, {
+    previous: workspace.draft.theme,
+    reason: "restore",
+  });
+  return {
+    ...themeStatus(workspace),
+    draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },
+    draftDiffersFromLive: compareThemeDocuments(workspace.published.theme, saved.theme).length > 0,
+  };
+}
+
+// ─── Drafted sections (agents and AI providers) ────────────────────────────
+
+/** Most sections one drafting call adds. */
+export const THEME_DRAFT_SECTIONS_MAX = 8;
+
+/** Where drafted sections go: a page's sections, or a template's before or after its fixed part. */
+export type ThemeDraftSectionsScope =
+  | { kind: "home" }
+  | { kind: "landing"; slug: string }
+  | { kind: "template"; template: StorefrontPageTemplate; region: "before" | "after" };
+
+/**
+ * Drafted sections as they may enter a document: each validated against the
+ * section registry (an invalid one is left out, never repaired), ids made
+ * unique on the page, and marked as an AI draft until someone opens it in
+ * the editor. App sections are left out: only an app knows its settings.
+ */
+export function acceptDraftedSections(
+  candidates: readonly unknown[],
+  taken: readonly { id: string }[],
+): { sections: StorefrontSection[]; rejected: number } {
+  const sections: StorefrontSection[] = [];
+  let rejected = 0;
+  for (const candidate of candidates.slice(0, THEME_DRAFT_SECTIONS_MAX)) {
+    const shaped = candidate && typeof candidate === "object" && !Array.isArray(candidate)
+      ? { id: "draft", version: 1, ...(candidate as Record<string, unknown>), aiDraft: true }
+      : null;
+    const parsed = shaped ? storefrontSectionSchema.safeParse(shaped) : null;
+    if (!parsed?.success || parsed.data.type === "app") {
+      rejected += 1;
+      continue;
+    }
+    const id = storefrontNextSectionId(parsed.data.type, [...taken, ...sections]);
+    sections.push({ ...parsed.data, id } as StorefrontSection);
+  }
+  rejected += Math.max(0, candidates.length - THEME_DRAFT_SECTIONS_MAX);
+  return { sections, rejected };
+}
+
+/** The document with sections inserted at a scope (after `afterId`, or at the end of the region). */
+export function themeWithDraftedSections(
+  theme: StorefrontThemeDocument,
+  scope: ThemeDraftSectionsScope,
+  sections: readonly StorefrontSection[],
+  afterId: string | null = null,
+): StorefrontThemeDocument {
+  const insert = (list: readonly StorefrontSection[], start = 0, end = list.length) => {
+    const index = afterId ? list.findIndex((each) => each.id === afterId) : -1;
+    const at = index >= start && index < end ? index + 1 : end;
+    return [...list.slice(0, at), ...sections, ...list.slice(at)];
+  };
+  switch (scope.kind) {
+    case "home":
+      return { ...theme, pages: { ...theme.pages, home: insert(theme.pages.home) } };
+    case "landing": {
+      const page = theme.pages.landing[scope.slug];
+      if (!page) throw new NotFoundError("That landing page is not in the draft.");
+      return { ...theme, pages: { ...theme.pages, landing: { ...theme.pages.landing, [scope.slug]: { ...page, sections: insert(page.sections) } } } };
+    }
+    case "template": {
+      const template = theme.pages.templates[scope.template];
+      const before = scope.region === "before";
+      const next = before ? insert(template.sections, 0, template.main) : insert(template.sections, template.main);
+      return {
+        ...theme,
+        pages: {
+          ...theme.pages,
+          templates: { ...theme.pages.templates, [scope.template]: { sections: next, main: before ? template.main + sections.length : template.main } },
+        },
+      };
+    }
+  }
+}
+
+/** The sections of a scope's page (ids are unique per page). */
+function scopeSections(theme: StorefrontThemeDocument, scope: ThemeDraftSectionsScope): readonly StorefrontSection[] {
+  if (scope.kind === "home") return theme.pages.home;
+  if (scope.kind === "landing") return theme.pages.landing[scope.slug]?.sections ?? [];
+  return theme.pages.templates[scope.template].sections;
+}
+
+/**
+ * Adds drafted sections to the shared draft (an agent's draft operation):
+ * validated, marked as AI drafts, saved with the same revision authority as
+ * the editor. Nothing goes live until someone publishes.
+ */
+export async function draftThemeSections(
+  db: Database,
+  input: { scope: ThemeDraftSectionsScope; sections: readonly unknown[]; afterId?: string | null },
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+): Promise<ThemeDraftDocument & { added: string[]; rejected: number }> {
+  const workspace = await getThemeWorkspace(db);
+  if (workspace.draft.revision !== expectedDraftRevision || workspace.draft.basePublishedRevision !== basePublishedRevision) {
+    throw themeConflict();
+  }
+  const accepted = acceptDraftedSections(input.sections, scopeSections(workspace.draft.theme, input.scope));
+  if (accepted.sections.length === 0) {
+    throw new ValidationError("None of the drafted sections is a valid section of this theme.", undefined);
+  }
+  const theme = themeWithDraftedSections(workspace.draft.theme, input.scope, accepted.sections, input.afterId ?? null);
+  const saved = await saveThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, actorId);
+  return { ...saved, added: accepted.sections.map((section) => section.id), rejected: accepted.rejected };
 }
 
 const THEME_PREVIEW_CONTINUATION_TTL_MS = 5 * 60 * 1000;

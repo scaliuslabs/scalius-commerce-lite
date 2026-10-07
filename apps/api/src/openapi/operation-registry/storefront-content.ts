@@ -17,6 +17,7 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   },
   "storefront.homepage.get": { limits: { request: 16_384 } },
   "storefront.landing.get": { limits: { request: 16_384 } },
+  "storefront.template.get": { limits: { request: 16_384 } },
   "storefront.product_apps.get": {
     exposure: "excluded",
     limits: { request: 16_384 },

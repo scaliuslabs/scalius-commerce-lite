@@ -2,7 +2,8 @@
 // All DB queries and business logic for the collections domain.
 
 import { collections, products, categories } from "@scalius/database/schema";
-import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQL } from "drizzle-orm";
+import { sql, and, isNull, isNotNull, eq, inArray, asc, desc, max, type SQL } from "drizzle-orm";
+import { containsText } from "../../utils/text-match";
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -71,7 +72,7 @@ export async function listCollections(
         whereConditions.push(isNull(collections.deletedAt));
     }
     if (search) {
-        whereConditions.push(like(collections.name, `%${search}%`));
+        whereConditions.push(containsText(collections.name, search));
     }
 
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;

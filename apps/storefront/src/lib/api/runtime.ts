@@ -123,6 +123,19 @@ export function getRuntime(): StorefrontRuntime | undefined {
   return requestRuntime.getStore();
 }
 
+/**
+ * Renders the rest of this request for a market presence its URL does not
+ * name: the theme editor's preview-only routes draw for the market the
+ * editor previews. A layout read already made for the root is dropped, so
+ * the next read is the presence's (its currency and language).
+ */
+export function renderForPresence(presence: string): void {
+  const runtime = getRuntime();
+  if (!runtime || runtime.MARKET_PRESENCE === presence) return;
+  runtime.MARKET_PRESENCE = presence;
+  runtime.layout = undefined;
+}
+
 /** Returns the public API URL including /api/v1 from the per-request runtime. */
 export function getRuntimeApiUrl(): string | undefined {
   return getRuntime()?.PUBLIC_API_URL;

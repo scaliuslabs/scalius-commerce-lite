@@ -653,14 +653,17 @@ export interface SchemaSettingsFormProps {
   /** Shows a setting only when its siblings call for it. */
   visible?: (path: string, parent: Values) => boolean;
   media: MediaPreviews;
+  /** Where the value sits in its settings, when it is one item of a list (`slides`, with `slides.2`): labels and errors follow it. */
+  rootPath?: string;
+  rootDataPath?: string;
 }
 
 const NO_ERRORS: ReadonlyMap<string, string> = new Map();
 
-export function SchemaSettingsForm({ idPrefix, scope, spec, value, onChange, errors = NO_ERRORS, widgets = {}, visible, media }: SchemaSettingsFormProps) {
+export function SchemaSettingsForm({ idPrefix, scope, spec, value, onChange, errors = NO_ERRORS, widgets = {}, visible, media, rootPath = "", rootDataPath = "" }: SchemaSettingsFormProps) {
   return (
     <Context.Provider value={{ idPrefix, scope, errors, widgets, visible, media }}>
-      <SettingValue spec={spec} path="" dataPath="" value={value} onChange={(next) => onChange(next as Values)} />
+      <SettingValue spec={spec} path={rootPath} dataPath={rootDataPath} value={value} onChange={(next) => onChange(next as Values)} />
     </Context.Provider>
   );
 }

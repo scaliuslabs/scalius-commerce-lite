@@ -6,11 +6,11 @@
 // (a leading hero is also preloaded by pages/index.astro).
 //
 // A theme editor preview (never a buyer's page) marks each section root
-// with `data-theme-section-id` and states the page's layout (units, phone
-// order, lead) in `data-theme-preview-layout`; `only` renders the one unit
-// holding a section, which the preview-only section route returns so the
-// editor can swap it in place. App sections (`type: "app"`) are units like
-// any other: what their app drew, marked the same way, never the lead.
+// with `data-theme-section-id` and the list's root with its region
+// (`data-theme-region`), so the editor's bridge moves, hides and swaps
+// units in place; `only` renders the one unit holding a section, which the
+// preview-only render route returns. App sections (`type: "app"`) are units
+// like any other: what their app drew, marked the same way, never the lead.
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
@@ -61,13 +61,15 @@ interface Props {
   currencyCode: string;
   /** A theme editor preview: mark sections for the editor's bridge. */
   previewMarks?: boolean;
+  /** The preview region this list is (`page`, or a template's `before` and `after`). */
+  region?: "page" | "before" | "after";
   /** Render only the unit holding this section (the preview section route). */
   only?: string;
   /** The store's language (the layout's `storefrontCopy.languageCode`) for the storefront's own words. */
   languageCode?: string | null;
 }
 
-const { sections, content, leadSectionId, currencySymbol, currencyCode, previewMarks = false, only, languageCode } = Astro.props;
+const { sections, content, leadSectionId, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
 const language = newsletterLanguage(languageCode);
 const units = homepageRenderUnits(sections, content);
 const phoneSections = homepagePhoneSections(sections, content);
@@ -80,20 +82,11 @@ const phoneUnits = [...units].sort((left, right) => {
 const phoneOrder = new Map(phoneUnits.map((unit, index) => [unit, index]));
 const money = { currencySymbol, currencyCode };
 const unitIds = (unit: (typeof units)[number]) => unit.kind === "banners" ? unit.sections.map((section) => section.id) : [unit.section.id];
-// What a swapped section must leave unchanged, or the editor loads the page again.
-const previewLayout = previewMarks || only
-  ? JSON.stringify({
-      units: units.map(unitIds),
-      phone: phoneUnits.map((unit) => unitIds(unit)[0]),
-      phoneReorder: phoneHeroAfterCategories,
-      lead: leadSectionId,
-    })
-  : undefined;
 const shown = only ? units.filter((unit) => unitIds(unit).includes(only)) : units;
 const marks = previewMarks || Boolean(only);
 const root = only
-  ? { "data-theme-preview-unit": "", "data-theme-preview-layout": previewLayout }
-  : { class: "flex flex-col", "data-home-phone-reorder": phoneHeroAfterCategories ? "" : undefined, "data-theme-preview-layout": previewLayout };
+  ? { "data-theme-preview-unit": "" }
+  : { class: "flex flex-col", "data-home-phone-reorder": phoneHeroAfterCategories ? "" : undefined, "data-theme-region": previewMarks ? region : undefined };
 ---
 
 <div {...root}>
