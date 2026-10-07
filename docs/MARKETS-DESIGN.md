@@ -844,6 +844,98 @@ Segment lists in staff orders. Buyer-input surcharges and delivery charges
 are not converted. A rate provider app through `FxRateSource`. A second
 currency (step 6).
 
+## Step 4b implemented
+
+A store with one language behaves as before: the same bytes for every root
+read, the same D1 calls and statements in every free-plan budget scenario
+and render budget.
+
+**Schema.** Migration `0121_translations` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 121, Drizzle snapshot):
+
+- `store_languages` (locale, published): the one list of the store's
+  languages. It replaces the two lists the store had, the presence locales
+  and the checkout copy languages. The migration adds each presence locale
+  published and each other checkout copy language unpublished, and sets the
+  root presence locale to the language of the checkout copy in use.
+- `translations`: one row per resource, locale and market (NULL: every
+  market), with `fields` and a per-field `source_digest`.
+- `localized_slugs`: one handle per type, locale and resource; unique per
+  type, locale and handle.
+
+Triggers keep the rules. A presence names a store language
+(`STORE_LANGUAGE_REQUIRED`). The default language is always published. A
+language that a presence uses cannot be removed. A localized handle cannot
+be another resource's source handle, and a source handle cannot take a
+localized one (`LOCALIZED_SLUG_TAKEN`). A deleted resource deletes its
+translations and handles.
+
+**The default language.** The default language is the backup market's root
+presence locale. The checkout copy is per-language text: a page shows the
+copy of its language, else the built-in copy (English, Bangla), else the
+copy in use. To activate a checkout copy makes its language the default; to
+change the default moves the copy in use. Emails use the default language.
+
+**The rule.** `translationChain()` and `resolveTranslatedRecord()` in
+`@scalius/shared/translations` are the one fallback: the page locale in its
+market, the page locale, the default locale in the market, the default
+locale, then the source value. An empty field falls through. A changed
+source marks a field Outdated; the text is still served (Shopify).
+
+**Resources.** Products, SKUs (pre-order message), options and option
+values; collections, categories and brands; pages and articles; menus (the
+title and each custom link label); delivery rate and payment method names.
+Policies are pages, so they are translated as pages.
+
+**Reads.** A root read folds no translation. A presence read folds the
+translations of its language into a statement it already runs. Delivery
+rates and the checkout payment methods read their translations in one more
+statement, at a presence only. Navigation, pages, articles, the CMS page,
+delivery rates, the checkout language and the layout are market-keyed now.
+A handle lookup tries the source handle, then a localized handle (the page
+language first, else any), so a buyer who changes the language on a
+localized URL still gets the page. Only a published language's presences
+are served: the matrix and the priced reads skip the others.
+
+**Storefront.** A presence page shows its language: text, localized
+handles in links, canonical, Open Graph, JSON-LD and breadcrumbs. hreflang
+comes from `hreflangAlternates()` and names each language's own URL of the
+page. A root page of a store with more than one presence uses the default
+language. Sitemaps and feeds of a presence list its localized handles and
+text.
+
+**DVC.** New kind `tr`: `tr:<type>:<id>` (a product's SKUs, options and
+values advance their product's key), `tr:slugs:<type>:<locale>` (a
+sitemap's handles), `tr:slugs:<type>` (every handle lookup) and
+`tr:locales` (presence locales, the default and published languages). A
+read of more than 128 resources declares `t:translations` and
+`t:localized_slugs`. The property and race gate reports zero findings; its
+seed store has a Bangla presence, a draft French language, a translation of
+each type, a market-specific one and localized handles.
+
+**Dashboard.** Settings → Languages (Shopify's Languages): the list with
+publish, unpublish, make default and remove, and a machine translation card.
+Content → Translate & adapt: language and market, resource type, search, a
+status per item and a side-by-side editor with Outdated markers (loaded on
+first use). Product, category and collection pages have a Translations card.
+Copy is in English and Bangla.
+
+**Machine translation.** The `translation` provider port (`translate`,
+optional `testConnection`) lets an app translate a resource's fields. The
+platform has no built-in provider.
+
+**Agents and MCP.** Registry rows `dashboard.languages.list`, `create`,
+`update`, `delete` and `dashboard.translations.list`, `providers`,
+`machine_translate`, `get`, `save`, `delete`. RBAC: languages need the
+settings permissions; a translation needs the view or edit permission of
+its resource type. The SDK is regenerated.
+
+**Left for later.** Search matches and sorts by source text. Attribute
+names and values, theme text, the SEO document, email, SMS and invoice
+templates, and agent product sections show source text. Per-menu navigation
+reads and footer placement labels are not translated. RTL (step 6
+locale basics).
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through
