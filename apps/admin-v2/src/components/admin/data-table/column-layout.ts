@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { getLocale } from "~/i18n";
 import type { Column, Table, TableRowData } from "./table-config";
 
 /**
  * Which columns a list shows, in which order: the merchant's choice (saved
  * per list in this browser, like Shopify's column menu) and then what fits.
  * When the table is narrower than the visible columns need, the lowest
- * priority columns step aside until it fits; the checkbox, the title column
- * and the actions column always stay.
+ * priority columns step aside until it fits; the checkbox, the title column,
+ * the actions column and `meta.keep` columns always stay. A stand-in column
+ * (`meta.combines`) takes the place of the columns it combines when they no
+ * longer fit side by side.
  */
+
+/** A width that differs by dashboard language (Bangla sets the type a size up). */
+export type LocaleWidth = number | { readonly en: number; readonly bn: number };
+
+/** `width` in the dashboard's language now: build columns again when it changes. */
+export const localeWidth = (width: LocaleWidth): number => (typeof width === "number" ? width : width[getLocale()]);
 
 /** Column ids the kit adds around a list's own columns. */
 export const SELECT_COLUMN = "select";
@@ -20,8 +29,13 @@ export interface LayoutColumn {
   priority: number;
   /** Narrowest width (px) the column reads well at. */
   minWidth: number;
-  /** Never hidden: the checkbox, the title column and the actions. */
+  /** Never hidden: the checkbox, the title column, the actions and `meta.keep`. */
   locked: boolean;
+}
+
+/** A stand-in's layout and the ids of the columns it shows together. */
+export interface StandInColumn extends LayoutColumn {
+  combines: readonly string[];
 }
 
 export interface SavedLayout {
@@ -98,6 +112,41 @@ export function fitColumns(columns: readonly LayoutColumn[], width: number, extr
   return hidden;
 }
 
+/**
+ * `fitColumns` with stand-ins: when a column a stand-in combines has to step
+ * aside, the stand-in replaces all of them (at the first one's place) if that
+ * keeps more of them shown. Returns the columns in their final order and the
+ * ones to hide.
+ */
+export function fitWithStandIns(
+  columns: readonly LayoutColumn[],
+  standIns: readonly StandInColumn[],
+  width: number,
+  extra = 0,
+): { columns: LayoutColumn[]; hidden: Set<string> } {
+  let current = [...columns];
+  let hidden = fitColumns(current, width, extra);
+  for (const standIn of standIns) {
+    const parts = standIn.combines;
+    if (!parts.every((id) => current.some((column) => column.id === id))) continue;
+    if (!parts.some((id) => hidden.has(id))) continue;
+    const at = current.findIndex((column) => parts.includes(column.id));
+    const merged = current.filter((column) => !parts.includes(column.id));
+    merged.splice(at, 0, standIn);
+    const mergedHidden = fitColumns(merged, width, extra);
+    // A stand-in that has to step aside too is worse than one part shown on its own.
+    if (mergedHidden.has(standIn.id) && parts.some((id) => !hidden.has(id))) continue;
+    current = merged;
+    hidden = mergedHidden;
+  }
+  return { columns: current, hidden };
+}
+
+/** A stand-in column (`meta.combines`): never in the menu, shown only for its columns. */
+export function isStandIn<TData extends TableRowData>(column: Column<TData, unknown>): boolean {
+  return Boolean(column.columnDef.meta?.combines?.length);
+}
+
 /** The title column (`meta.primary`, or the phone card's title line). */
 export function isPrimaryColumn<TData extends TableRowData>(column: Column<TData, unknown>): boolean {
   const meta = column.columnDef.meta;
@@ -107,18 +156,19 @@ export function isPrimaryColumn<TData extends TableRowData>(column: Column<TData
 /** A column's layout facts; defaults suit a plain text column. */
 export function layoutColumnOf<TData extends TableRowData>(column: Column<TData, unknown>): LayoutColumn {
   const meta = column.columnDef.meta;
-  const locked = column.id === SELECT_COLUMN || column.id === ACTIONS_COLUMN || isPrimaryColumn(column);
+  const locked = column.id === SELECT_COLUMN || column.id === ACTIONS_COLUMN || isPrimaryColumn(column) || Boolean(meta?.keep);
   return {
     id: column.id,
     priority: locked ? Number.POSITIVE_INFINITY : meta?.priority ?? 50,
-    minWidth: meta?.minWidth ?? (column.id === SELECT_COLUMN ? 40 : column.id === ACTIONS_COLUMN ? 56 : isPrimaryColumn(column) ? 200 : 120),
+    // The row menu is a 28px button with the cell's 6px and the table's 12px edge.
+    minWidth: meta?.minWidth ?? (column.id === SELECT_COLUMN ? 40 : column.id === ACTIONS_COLUMN ? 48 : isPrimaryColumn(column) ? 200 : 120),
     locked,
   };
 }
 
 /** Whether the merchant may move or hide this column in the column menu. */
 export function isConfigurable<TData extends TableRowData>(column: Column<TData, unknown>): boolean {
-  return column.id !== SELECT_COLUMN && column.id !== ACTIONS_COLUMN;
+  return column.id !== SELECT_COLUMN && column.id !== ACTIONS_COLUMN && !isStandIn(column);
 }
 
 /** The width of an element, kept current with a ResizeObserver (0 until measured). */
@@ -173,6 +223,7 @@ export function useColumnLayout<TData extends TableRowData>(
 
   const all = table.getAllLeafColumns().filter((column) => column.getIsVisible());
   const configurable = all.filter(isConfigurable);
+  const standIns = all.filter(isStandIn);
   const byId = new Map(all.map((column) => [column.id, column]));
   const primaryId = configurable.find(isPrimaryColumn)?.id;
   const order = resolveOrder(configurable.map((column) => column.id), saved?.order, primaryId);
@@ -185,14 +236,20 @@ export function useColumnLayout<TData extends TableRowData>(
     ...arrangeable.filter((column) => !hiddenByChoice.has(column.id)),
     ...all.filter((column) => column.id === ACTIONS_COLUMN),
   ];
-  const layoutKey = shown.map((column) => column.id).join("|");
-  const autoHidden = useMemo(
-    () => fitColumns(shown.map(layoutColumnOf), width, extra),
+  const layoutKey = [...shown, ...standIns].map((column) => column.id).join("|");
+  const fitted = useMemo(
+    () => fitWithStandIns(
+      shown.map(layoutColumnOf),
+      standIns.map((column) => ({ ...layoutColumnOf(column), combines: column.columnDef.meta!.combines! })),
+      width,
+      extra,
+    ),
     // `shown` is rebuilt each render; its ids and the width are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [layoutKey, width, extra],
   );
-  const hideable = shown.filter((column) => !layoutColumnOf(column).locked).length;
+  const autoHidden = fitted.hidden;
+  const hideable = fitted.columns.filter((column) => !column.locked).length;
 
   const save = useCallback(
     (next: SavedLayout | null) => {
@@ -203,7 +260,7 @@ export function useColumnLayout<TData extends TableRowData>(
   );
 
   return {
-    visible: shown.filter((column) => !autoHidden.has(column.id)),
+    visible: fitted.columns.flatMap((column) => (autoHidden.has(column.id) ? [] : [byId.get(column.id)!])),
     arrangeable,
     isHiddenByChoice: (id) => hiddenByChoice.has(id),
     autoHidden,

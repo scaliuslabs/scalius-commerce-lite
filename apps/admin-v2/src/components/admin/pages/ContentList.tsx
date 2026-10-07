@@ -19,7 +19,8 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
-import { DateText, sortHeader } from "~/components/admin/resource/columns";
+import { sortHeader } from "~/components/admin/resource/columns";
+import { ListDate } from "~/components/admin/data-table/ListDate";
 import { formatDateTime, useMessages } from "~/i18n";
 import { contentMessages } from "~/i18n/content";
 import { contentListName, type ContentType, type validatePageSearch } from "./page-list-state";
@@ -75,7 +76,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
         return getPagePublicationMode(row.original) === "scheduled" && publishAt ? (
           <span className="whitespace-nowrap text-muted-foreground">{t("publishesOn", { date: formatDateTime(publishAt, { dateStyle: "medium", timeStyle: "short" }) })}</span>
         ) : (
-          <DateText value={row.original.updatedAt} />
+          <ListDate value={row.original.updatedAt} />
         );
       },
     },

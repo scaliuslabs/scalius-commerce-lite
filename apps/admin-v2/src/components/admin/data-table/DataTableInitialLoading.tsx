@@ -41,7 +41,8 @@ export function DataTableInitialRows({
       {Array.from({ length: safeColumnCount }, (_, columnIndex) => (
         <TableCell
           key={`initial-loading-cell-${rowIndex}-${columnIndex}`}
-          className={includeDragColumn && columnIndex === 0 ? "w-[40px] px-2" : undefined}
+          // INDEX_CELL's padding, written out for the class checker.
+          className={includeDragColumn && columnIndex === 0 ? "w-[40px] px-2" : "px-1.5 first:pl-3 last:pr-3"}
         >
           <CellSkeleton columnIndex={columnIndex} columnCount={safeColumnCount} />
         </TableCell>

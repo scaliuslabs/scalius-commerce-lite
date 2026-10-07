@@ -13,7 +13,7 @@ import { fetchCustomerHistory } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, useMessages } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { customerPageMessages } from "~/i18n/customer-page";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { resourceMessages } from "~/i18n/resource";
 
@@ -49,7 +49,7 @@ function snapshot(change: { name: string | null; phone: string | null; email: st
 type HistoryPage = Awaited<ReturnType<typeof fetchCustomerHistory>>;
 type HistoryEntry = HistoryPage["history"][number];
 type CustomerFacts = HistoryPage["customer"];
-type CustomerMessage = keyof (typeof customersMessages)["en"];
+type CustomerMessage = keyof (typeof customerPageMessages)["en"];
 
 const CHANGE_LABEL: Partial<Record<string, CustomerMessage>> = {
   created: "changeCreated",
@@ -92,7 +92,7 @@ const linkClass = "text-link hover:underline";
 
 /** A link to another customer record, titled the same way as everywhere else. */
 function CustomerLink({ customer }: { customer: CustomerTitleInput & { id: string } }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   return (
     <Link to="/admin/customers/$customerId/edit" params={{ customerId: customer.id }} className={linkClass}>
       {customerTitle(customer, t).title}
@@ -105,7 +105,7 @@ function CustomerLink({ customer }: { customer: CustomerTitleInput & { id: strin
  * never a merge or claim.
  */
 function SamePhone({ customer }: { customer: CustomerFacts }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   if (customer.samePhone.length === 0) return null;
   const names = customer.samePhone.map((other, index) => (
     <Fragment key={other.id}>
@@ -118,7 +118,7 @@ function SamePhone({ customer }: { customer: CustomerFacts }) {
 
 /** " · by Nasrin", " · by the buyer", " · automatic"; nothing for older entries without an author. */
 function Author({ author }: { author: HistoryEntry["author"] }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   if (!author) return null;
   const text = author.kind === "buyer"
     ? t("byBuyer")
@@ -130,7 +130,7 @@ function Author({ author }: { author: HistoryEntry["author"] }) {
 
 /** One line for a sign-up, or an order linked to, moved into or moved out of this record. */
 function LinkEvent({ entry }: { entry: HistoryEntry }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   const order = entry.order ? (
     <Link to="/admin/orders/$orderId" params={{ orderId: entry.order.id }} className={linkClass}>
       {formatOrderNumber(entry.order.orderNumber, entry.order.id)}
@@ -163,7 +163,7 @@ function changedFields(current: Snapshot, previous: Snapshot | undefined) {
 
 /** Orders and the change log for one customer (Shopify's customer timeline). */
 export function CustomerActivity({ customerId }: { customerId: string }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerPageMessages);
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
   const { fmt } = useCurrency();

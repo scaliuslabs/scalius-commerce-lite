@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { toast } from "~/lib/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { patchApiV1AdminInventoryAlerts, putApiV1AdminInventoryDefaultAlertLevel } from "@scalius/api-client/sdk";
@@ -17,7 +18,7 @@ import { apiData } from "~/lib/api";
 import { inventoryQueryOptions, type InventoryAlert, type InventoryOverview } from "~/lib/api-query-options/inventory";
 import { createDataSelector } from "~/lib/list-helpers";
 import { queryKeys } from "~/lib/query-keys";
-import { formatDateTime, formatNumber, useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { VariantName } from "./VariantsTab";
@@ -206,16 +207,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
       ),
     },
     { id: "status", header: r("status"), meta: { priority: 90, minWidth: 110 }, cell: ({ row }) => statusBadge(row.original) },
-    {
-      id: "updated",
-      header: r("updated"),
-      meta: { priority: 30, minWidth: 120 },
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-body text-muted-foreground">
-          {formatDateTime(toDate(row.original.updatedAt), { dateStyle: "medium" })}
-        </span>
-      ),
-    },
+    createDateColumn("updatedAt", r("updated"), { id: "updated", sortable: false, priority: 30 }),
     { id: "actions", cell: ({ row }) => actions(row.original) },
   ];
 

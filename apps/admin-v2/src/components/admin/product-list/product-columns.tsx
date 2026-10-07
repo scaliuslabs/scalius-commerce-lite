@@ -4,6 +4,7 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { ProductStatusBadge } from "./ProductStatusBadge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { localeWidth } from "~/components/admin/data-table/column-layout";
 import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { sortHeader } from "~/components/admin/resource/columns";
@@ -53,13 +54,13 @@ export function ProductThumb({ src }: { src: string | null }) {
   );
 }
 
-/** "15 in stock", "62 in stock for 6 variants", or "Not tracked". */
+/** "15 in stock", "62 in stock for 6 variants", or "Not tracked": one line, whole on hover when cut. */
 function InventoryText({ product }: { product: ProductListItem }) {
-  if (product.onHand === null) return <span className="text-muted-foreground">{t("notTracked")}</span>;
+  if (product.onHand === null) return <span className="block truncate text-muted-foreground">{t("notTracked")}</span>;
   const text = product.variantCount > 1
     ? t("inStockVariants", { count: product.onHand, variants: product.variantCount })
     : t("inStock", { count: product.onHand });
-  return <span className={cn("whitespace-nowrap tabular-nums", product.onHand === 0 ? "text-destructive" : "text-muted-foreground")}>{text}</span>;
+  return <span title={text} className={cn("block truncate tabular-nums", product.onHand === 0 ? "text-destructive" : "text-muted-foreground")}>{text}</span>;
 }
 
 /** Price customers pay, with the regular price struck through while a product discount runs. */
@@ -67,9 +68,9 @@ function PriceText({ product, fmt }: { product: ProductListItem; fmt: (price: nu
   const range = product.priceRange;
   const text = priceRangeText(range, fmt);
   // A draft without a price says so instead of looking free.
-  if (!range || !text) return <div className="text-muted-foreground">{t("noPrice")}</div>;
+  if (!range || !text) return <div className="whitespace-nowrap text-muted-foreground">{t("noPrice")}</div>;
   return (
-    <div className="tabular-nums">
+    <div className="whitespace-nowrap tabular-nums">
       {text}
       {range.compareAt !== null && range.from === range.to ? (
         <> <s className="text-muted-foreground">{fmt(range.compareAt)}</s></>
@@ -79,42 +80,63 @@ function PriceText({ product, fmt }: { product: ProductListItem; fmt: (price: nu
   );
 }
 
+/**
+ * Each column's layout: `minWidth` is the widest its content gets in the
+ * dashboard's language plus the cell's 6px each side (`list-layout.test.tsx` measures
+ * it); `maxWidth` caps free text, cut there with the whole value on hover.
+ */
+export const PRODUCT_COLUMN_LAYOUT = {
+  name: { mobile: "primary", minWidth: 240 },
+  status: { mobile: "status", priority: 90, minWidth: 72 },
+  inventory: { mobile: "secondary", priority: 70, maxWidth: 160, minWidth: 172 },
+  category: { mobile: "secondary", priority: 40, maxWidth: 140, minWidth: 152 },
+  price: { mobile: "secondary", numeric: true, priority: 80, minWidth: { en: 220, bn: 228 } },
+} as const;
+
+/**
+ * Shopify's products columns: Product (thumbnail and title), Status,
+ * Inventory, Category and Price, then any data-backed columns `extra` (apps'
+ * fields). Every row is two lines tall: a title takes up to two, or one above
+ * a note; the other cells take one, the price two at most.
+ */
 export function getProductColumns(opts: {
   trashed: boolean;
   fmt: (price: number) => string;
   rowTo: (product: ProductListItem) => string | undefined;
+  extra?: ColumnDef<ProductListItem, unknown>[];
 }): ColumnDef<ProductListItem, unknown>[] {
   return [
     {
       accessorKey: "name",
       header: sortHeader(t("columnProduct")),
-      meta: { mobile: "primary", minWidth: 240 },
-      cell: ({ row }) => (
-        <div className="flex min-w-0 items-center gap-3">
-          <ProductThumb src={row.original.primaryImage} />
-          <div className="min-w-0">
-            <ResourceRowLink to={opts.trashed ? undefined : opts.rowTo(row.original)}>
-              {row.original.name || t("untitled")}
-            </ResourceRowLink>
-            {/* Trash explains why "Delete permanently" isn't offered for this one. */}
-            {opts.trashed && row.original.hasStockHistory ? (
-              <span className="block text-muted-foreground">{t("keptForHistory")}</span>
-            ) : null}
+      meta: PRODUCT_COLUMN_LAYOUT.name,
+      cell: ({ row }) => {
+        // Trash explains why "Delete permanently" isn't offered for this one.
+        const note = opts.trashed && row.original.hasStockHistory;
+        return (
+          <div className="flex min-w-0 items-center gap-3">
+            <ProductThumb src={row.original.primaryImage} />
+            <div className="min-h-[2lh] min-w-0">
+              <ResourceRowLink to={opts.trashed ? undefined : opts.rowTo(row.original)} lines={note ? 1 : 2}>
+                {row.original.name || t("untitled")}
+              </ResourceRowLink>
+              {note ? <span title={t("keptForHistory")} className="block truncate text-muted-foreground">{t("keptForHistory")}</span> : null}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       id: "status",
       header: t("columnStatus"),
-      meta: { mobile: "status", priority: 90, minWidth: 90 },
+      meta: PRODUCT_COLUMN_LAYOUT.status,
       cell: ({ row }) => <ProductStatusBadge isActive={row.original.isActive} />,
       enableSorting: false,
     },
     {
       id: "inventory",
       header: t("columnInventory"),
-      meta: { mobile: "secondary", priority: 70, minWidth: 150 },
+      meta: PRODUCT_COLUMN_LAYOUT.inventory,
       cell: ({ row }) => <InventoryText product={row.original} />,
       enableSorting: false,
     },
@@ -122,19 +144,18 @@ export function getProductColumns(opts: {
       id: "category",
       accessorFn: (row) => row.category.name,
       header: sortHeader(t("columnCategory")),
-      meta: { mobile: "secondary", priority: 40, minWidth: 130 },
-      // At most two lines; the whole name on hover.
-      cell: ({ row }) => (
-        <span title={row.original.category.name || undefined} className="line-clamp-2 break-words text-muted-foreground">
-          {row.original.category.name || t("uncategorized")}
-        </span>
-      ),
+      meta: PRODUCT_COLUMN_LAYOUT.category,
+      cell: ({ row }) => {
+        const name = row.original.category.name || t("uncategorized");
+        return <span title={name} className="block truncate text-muted-foreground">{name}</span>;
+      },
     },
     {
       accessorKey: "price",
       header: sortHeader(t("columnPrice")),
-      meta: { mobile: "secondary", numeric: true, priority: 80, minWidth: 110 },
+      meta: { ...PRODUCT_COLUMN_LAYOUT.price, minWidth: localeWidth(PRODUCT_COLUMN_LAYOUT.price.minWidth) },
       cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} />,
     },
+    ...(opts.extra ?? []),
   ];
 }

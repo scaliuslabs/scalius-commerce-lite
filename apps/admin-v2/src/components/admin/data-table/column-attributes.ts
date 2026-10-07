@@ -3,12 +3,19 @@ import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn } from "./column-layout"
 import type { Column, TableRowData } from "./table-config";
 
 type ColumnAttributes = {
+  className: string;
   "data-numeric"?: "";
   "data-pin"?: "select" | "primary" | "actions";
   "data-after-select"?: "";
   "data-capped"?: "";
   style?: CSSProperties;
 };
+
+/**
+ * Polaris IndexTable spacing: 6px each side of a cell, 12px at the table's
+ * edges (the checkbox column keeps its own width).
+ */
+export const INDEX_CELL = "px-1.5 first:pl-3 last:pr-3";
 
 /**
  * A column's layout, as data attributes the table cells style themselves by
@@ -25,6 +32,7 @@ export function columnAttributes<TData extends TableRowData>(
     column.id === SELECT_COLUMN ? "select" : column.id === ACTIONS_COLUMN ? "actions" : isPrimaryColumn(column) ? "primary" : undefined;
   const maxWidth = column.columnDef.meta?.maxWidth;
   return {
+    className: INDEX_CELL,
     ...(column.columnDef.meta?.numeric ? { "data-numeric": "" as const } : {}),
     ...(pin ? { "data-pin": pin } : {}),
     ...(pin === "primary" && hasSelect ? { "data-after-select": "" as const } : {}),

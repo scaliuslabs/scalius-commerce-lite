@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serverTableFeatures, useTable, type ColumnDef, type SortingState } from "./table-config";
 import { useColumnLayout } from "./column-layout";
 import { DataTableColumnMenu } from "./DataTableColumnMenu";
+import { dataColumns } from "./data-columns";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,6 +45,36 @@ function Harness({ width }: { width: number }) {
       <DataTableColumnMenu table={table} layout={layout} />
       <p data-testid="columns">{layout.visible.map((column) => column.id).join(",")}</p>
       <p data-testid="sorting">{sorting.map((sort) => `${sort.id}:${sort.desc ? "desc" : "asc"}`).join(",")}</p>
+    </div>
+  );
+}
+
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (amount: number) => `৳${amount}` }) }));
+
+/** A list with apps' data-backed columns and a stand-in for two of its own. */
+function AppColumnsHarness({ width }: { width: number }) {
+  const columns = useMemo<ColumnDef<Variant, unknown>[]>(() => [
+    { accessorKey: "name", header: "Product", meta: { primary: true, minWidth: 200 } },
+    { accessorKey: "sku", header: "SKU", meta: { priority: 92, minWidth: 140 }, enableSorting: false },
+    { accessorKey: "vendor", header: "Vendor", meta: { priority: 90, minWidth: 140 }, enableSorting: false },
+    { id: "skuVendor", header: "SKU · Vendor", meta: { priority: 92, minWidth: 150, combines: ["sku", "vendor"] }, cell: () => "…", enableSorting: false },
+    ...dataColumns<Variant>([
+      { id: "app.loyalty.points", label: "Points", kind: "number", value: () => 1200 },
+      { id: "app.wallet.balance", label: "Wallet balance", kind: "money", priority: 30, value: () => 500 },
+    ]),
+  ], []);
+  const table = useTable({
+    features: serverTableFeatures,
+    data,
+    columns,
+    getRowId: (row) => row.id,
+    state: { pagination: { pageIndex: 0, pageSize: 20 } },
+  });
+  const layout = useColumnLayout(table, "apps", width);
+  return (
+    <div>
+      <DataTableColumnMenu table={table} layout={layout} />
+      <p data-testid="columns">{layout.visible.map((column) => column.id).join(",")}</p>
     </div>
   );
 }
@@ -189,5 +220,37 @@ describe("column menu and width-aware columns", () => {
     const panel = document.querySelector<HTMLElement>("[data-slot=column-menu-body]")!.parentElement!;
     expect(panel.className).toContain("max-h-(--radix-popover-content-available-height)");
     expect(panel.className).not.toContain("24rem");
+  });
+
+  it("shows, hides and moves apps' data-backed columns like the list's own", async () => {
+    await act(async () => root.render(<AppColumnsHarness width={2000} />));
+    expect(shown()).toBe("name,sku,vendor,app.loyalty.points,app.wallet.balance");
+    await openMenu();
+    // The stand-in is not a menu row: it follows the columns it combines.
+    expect(document.querySelector('[data-column-handle="skuVendor"]')).toBeNull();
+    expect(button("Show Points")!.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => button("Show Points")!.click());
+    expect(shown()).toBe("name,sku,vendor,app.wallet.balance");
+    // Up past the hidden Points, then past Vendor.
+    for (let step = 0; step < 2; step += 1) {
+      await act(async () => {
+        document.querySelector<HTMLElement>('[data-column-handle="app.wallet.balance"]')!
+          .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      });
+    }
+    expect(shown()).toBe("name,sku,app.wallet.balance,vendor");
+  });
+
+  it("steps apps' columns aside first, then folds two columns into their stand-in", async () => {
+    // 200 + 140 + 140 + 92 + 132 = 704px with everything.
+    await act(async () => root.render(<AppColumnsHarness width={600} />));
+    expect(shown()).toBe("name,sku,vendor");
+    await act(async () => root.render(<AppColumnsHarness width={420} />));
+    expect(shown()).toBe("name,skuVendor");
+    await openMenu();
+    // Folded, SKU and Vendor are still shown: neither says it was hidden to fit.
+    expect(button("Show SKU")!.closest("div")!.textContent).not.toContain("Hidden to fit");
+    expect(button("Show Vendor")!.closest("div")!.textContent).not.toContain("Hidden to fit");
+    expect(button("Show Points")!.closest("div")!.textContent).toContain("Hidden to fit");
   });
 });

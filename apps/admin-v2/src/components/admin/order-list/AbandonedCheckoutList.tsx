@@ -52,7 +52,7 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
 import { buildOrderPrefill, checkoutReference, writeOrderPrefill } from "./abandoned-checkout-prefill";
 import { abandonedStage } from "./abandoned-stage";
-import { ListDate } from "./ListDate";
+import { ListDate } from "~/components/admin/data-table/ListDate";
 
 const selectCheckouts = createDataSelector<AbandonedCheckout>("checkouts");
 const SORTS = ["updatedAt:desc", "updatedAt:asc", "customerPhone:asc", "checkoutId:asc"] as const;

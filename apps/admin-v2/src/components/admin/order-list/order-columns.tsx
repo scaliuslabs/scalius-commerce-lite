@@ -8,6 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
+import { localeWidth } from "~/components/admin/data-table/column-layout";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
@@ -29,7 +30,7 @@ import { canRefreshShipment } from "~/lib/shipment-action-policy";
 import { orderSkipReason } from "./order-bulk-actions";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
-import { ListDate } from "./ListDate";
+import { LIST_DATE_WIDTH, ListDate } from "~/components/admin/data-table/ListDate";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import { ShipmentRefreshButton } from "./ShipmentRefreshButton";
 import {
@@ -149,7 +150,8 @@ function OrderCell({ order }: { order: OrderListItem }) {
 function CustomerCell({ order }: { order: OrderListItem }) {
   return (
     <div data-part="customer" className="flex items-center gap-1">
-      <div className="min-w-0 flex-1">
+      {/* Two lines on every row, even without a name or a phone. */}
+      <div className="min-h-[2lh] min-w-0 flex-1">
         <Line text={order.customerName} className="font-medium" />
         {order.customerPhone ? (
           <Line text={formatPhoneForDisplay(order.customerPhone)} className="font-mono text-muted-foreground" />
@@ -276,7 +278,7 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
       : null,
   ].filter((action) => action !== null);
   // A row without actions keeps the menu's place, so every row is the same width.
-  if (actions.length === 0) return <span data-part="actions" className="block size-9" aria-hidden="true" />;
+  if (actions.length === 0) return <span data-part="actions" className="block size-7" aria-hidden="true" />;
   return (
     <span data-part="actions" className="block">
       <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />
@@ -285,96 +287,76 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
 }
 
 /**
+ * Each column's layout. `minWidth` is the widest its content gets in the
+ * dashboard's language (longest badge, date, a capped name) plus the cell's
+ * 6px each side, so fitting by it never overflows; `list-layout.test.tsx`
+ * measures the content against these. `maxWidth` caps free text, which is
+ * cut with an ellipsis there, the whole value on hover.
+ */
+export const ORDER_COLUMN_LAYOUT = {
+  order: { primary: true, minWidth: { en: 104, bn: 108 } },
+  // When the order came in identifies it with its number: never stepped aside.
+  date: { keep: true, minWidth: LIST_DATE_WIDTH },
+  customer: { priority: 96, maxWidth: 176, minWidth: 188 },
+  channel: { priority: 40, maxWidth: 140, minWidth: 152 },
+  total: { priority: 94, minWidth: 120, numeric: true },
+  payment: { priority: 92, minWidth: { en: 136, bn: 124 } },
+  fulfillment: { priority: 90, minWidth: { en: 132, bn: 156 } },
+  // Payment over fulfilment in one cell, where the two don't fit side by side.
+  paymentFulfillment: { priority: 92, minWidth: { en: 136, bn: 156 }, combines: ["payment", "fulfillment"] },
+  items: { priority: 30, minWidth: { en: 100, bn: 108 }, numeric: true },
+  deliveryStatus: { priority: 70, maxWidth: 176, minWidth: 188 },
+  deliveryMethod: { priority: 20, maxWidth: 128, minWidth: 140 },
+  status: { priority: 95, minWidth: { en: 112, bn: 140 } },
+} as const;
+
+type OrderColumnKey = keyof typeof ORDER_COLUMN_LAYOUT;
+
+/**
  * Shopify's orders columns, one line per cell on every row whatever the
  * order's state: Order, Date, Customer (name over phone, the only two-line
  * cell, on every row), Channel, Total, Payment, Fulfillment, Items, Delivery
- * status, Delivery method and Status. Badges are the same size everywhere;
- * an empty cell reads "—". Narrow screens drop the lowest priority first.
+ * status, Delivery method and Status, then any data-backed columns `extra`
+ * (apps' fields). Badges are the same size everywhere; an empty cell reads
+ * "—". Narrow screens drop the lowest priority first; Order and Date stay.
  */
-export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
-  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; maxWidth?: number; numeric?: boolean; primary?: boolean }) => ({
-    label: handlers.label?.(key),
-    ...layout,
+export function getOrderColumns(handlers: OrderRowHandlers, extra: ColumnDef<OrderListItem, unknown>[] = []): ColumnDef<OrderListItem, unknown>[] {
+  const column = (
+    id: OrderColumnKey,
+    cell: ColumnDef<OrderListItem, unknown>["cell"],
+  ): ColumnDef<OrderListItem, unknown> => ({
+    id,
+    meta: { label: handlers.label?.(id), ...ORDER_COLUMN_LAYOUT[id], minWidth: localeWidth(ORDER_COLUMN_LAYOUT[id].minWidth) },
+    header: () => <Title k={id} />,
+    cell,
   });
   const columns: ColumnDef<OrderListItem, unknown>[] = [
-    {
-      id: "order",
-      meta: meta("order", { primary: true, minWidth: 110 }),
-      header: () => <Title k="order" />,
-      cell: ({ row }) => <OrderCell order={row.original} />,
-    },
-    {
-      id: "date",
-      meta: meta("date", { priority: 80, minWidth: 120 }),
-      header: () => <Title k="date" />,
-      cell: ({ row }) => (
-        <div data-part="date">
-          <span data-part="value" className="block truncate text-muted-foreground">
-            <ListDate value={row.original[handlers.dateField]} />
-          </span>
-        </div>
-      ),
-    },
-    {
-      id: "customer",
-      // A long name truncates (the whole name on hover) instead of pushing Total,
-      // Payment and Fulfillment out of the table.
-      meta: meta("customer", { priority: 96, minWidth: 180, maxWidth: 240 }),
-      header: () => <Title k="customer" />,
-      cell: ({ row }) => <CustomerCell order={row.original} />,
-    },
-    {
-      id: "channel",
-      meta: meta("channel", { priority: 40, minWidth: 130 }),
-      header: () => <Title k="channel" />,
-      cell: ({ row }) => <ChannelCell order={row.original} />,
-    },
-    {
-      id: "total",
-      meta: meta("total", { priority: 94, minWidth: 120, numeric: true }),
-      header: () => <Title k="total" />,
-      cell: ({ row }) => <TotalCell order={row.original} />,
-    },
-    {
-      id: "payment",
-      meta: meta("payment", { priority: 92, minWidth: 170 }),
-      header: () => <Title k="payment" />,
-      cell: ({ row }) => <div data-part="payment"><PaymentCell order={row.original} /></div>,
-    },
-    {
-      id: "fulfillment",
-      meta: meta("fulfillment", { priority: 90, minWidth: 170 }),
-      header: () => <Title k="fulfillment" />,
-      cell: ({ row }) => <div data-part="fulfillment"><FulfilmentCell order={row.original} /></div>,
-    },
-    {
-      id: "items",
-      meta: meta("items", { priority: 30, minWidth: 100, numeric: true }),
-      header: () => <Title k="items" />,
-      cell: ({ row }) => (
-        <div data-part="items" className="flex justify-end tabular-nums">
-          <LazyOrderItemsPopover orderId={row.original.id} itemCount={row.original.itemCount} />
-        </div>
-      ),
-    },
-    {
-      id: "deliveryStatus",
-      meta: meta("deliveryStatus", { priority: 70, minWidth: 170 }),
-      header: () => <Title k="deliveryStatus" />,
-      cell: ({ row }) => <DeliveryStatusCell order={row.original} handlers={handlers} />,
-    },
-    {
-      id: "deliveryMethod",
-      meta: meta("deliveryMethod", { priority: 20, minWidth: 130 }),
-      header: () => <Title k="deliveryMethod" />,
-      cell: ({ row }) => <DeliveryMethodCell order={row.original} />,
-    },
-    {
-      id: "status",
-      meta: meta("status", { priority: 95, minWidth: 170 }),
-      header: () => <Title k="status" />,
-      cell: ({ row }) => <StatusCell order={row.original} handlers={handlers} />,
-    },
+    column("order", ({ row }) => <OrderCell order={row.original} />),
+    column("date", ({ row }) => (
+      <div data-part="date">
+        <ListDate value={row.original[handlers.dateField]} className="block" />
+      </div>
+    )),
+    column("customer", ({ row }) => <CustomerCell order={row.original} />),
+    column("channel", ({ row }) => <ChannelCell order={row.original} />),
+    column("total", ({ row }) => <TotalCell order={row.original} />),
+    column("payment", ({ row }) => <div data-part="payment"><PaymentCell order={row.original} /></div>),
+    column("fulfillment", ({ row }) => <div data-part="fulfillment"><FulfilmentCell order={row.original} /></div>),
+    column("paymentFulfillment", ({ row }) => (
+      <div data-part="payment-fulfillment" className="flex flex-col items-start gap-0.5">
+        <PaymentCell order={row.original} />
+        <FulfilmentCell order={row.original} />
+      </div>
+    )),
+    column("items", ({ row }) => (
+      <div data-part="items" className="flex justify-end tabular-nums">
+        <LazyOrderItemsPopover orderId={row.original.id} itemCount={row.original.itemCount} />
+      </div>
+    )),
+    column("deliveryStatus", ({ row }) => <DeliveryStatusCell order={row.original} handlers={handlers} />),
+    column("deliveryMethod", ({ row }) => <DeliveryMethodCell order={row.original} />),
+    column("status", ({ row }) => <StatusCell order={row.original} handlers={handlers} />),
+    ...extra,
     {
       id: "actions",
       header: () => null,

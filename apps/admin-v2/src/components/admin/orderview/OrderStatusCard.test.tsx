@@ -66,6 +66,11 @@ describe("OrderStatusCard", () => {
     const option = (await openOptions()).find((element) => element.textContent === label);
     expect(option).toBeDefined();
     await act(async () => option!.click());
+    // The cancel confirmation loads the first time it is asked for.
+    if (label !== o["status.cancelled"]) return;
+    for (let attempt = 0; attempt < 50 && !document.querySelector('[role="alertdialog"]'); attempt += 1) {
+      await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
   }
 
   it.each([

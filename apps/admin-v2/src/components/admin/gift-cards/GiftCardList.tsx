@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Gift } from "lucide-react";
@@ -9,7 +10,6 @@ import { NameText } from "~/components/admin/data-table/cells";
 import { serverTableFeatures, useTable, type ColumnDef } from "~/components/admin/data-table/table-config";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
-import { DateText } from "~/components/admin/resource/columns";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -152,13 +152,7 @@ export function GiftCardList({ tab, onTabChange }: {
         </span>
       ),
     },
-    {
-      id: "created",
-      header: t("columnCreated"),
-      enableSorting: false,
-      meta: { priority: 40, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.createdAt} />,
-    },
+    createDateColumn("createdAt", t("columnCreated"), { id: "created", sortable: false }),
   ], [t]);
 
   const table = useTable({

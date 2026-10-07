@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fitColumns, readSavedLayout, resolveOrder, writeSavedLayout, type LayoutColumn } from "./column-layout";
+import { fitColumns, fitWithStandIns, readSavedLayout, resolveOrder, writeSavedLayout, type LayoutColumn } from "./column-layout";
 
 const column = (id: string, priority: number, minWidth: number, locked = false): LayoutColumn => ({ id, priority, minWidth, locked });
 
@@ -34,6 +34,37 @@ describe("column layout", () => {
     expect([...fitColumns(columns, 1000, 1)]).toEqual(["vendor"]);
     expect([...fitColumns(columns, 1000, 2)]).toEqual(["vendor", "sku"]);
     expect([...fitColumns(columns, 1000, 9)]).toEqual(["vendor", "sku", "stock"]);
+  });
+
+  it("folds two columns into their stand-in when they no longer fit side by side, and only then", () => {
+    const columns = [
+      column("order", Infinity, 100, true),
+      column("date", Infinity, 160, true),
+      column("payment", 92, 130),
+      column("fulfillment", 90, 130),
+      column("status", 95, 110),
+    ];
+    const both = { ...column("both", 92, 140), combines: ["payment", "fulfillment"] };
+    const ids = (width: number) => {
+      const { columns: placed, hidden } = fitWithStandIns(columns, [both], width);
+      return placed.filter((entry) => !hidden.has(entry.id)).map((entry) => entry.id);
+    };
+    // 630px side by side.
+    expect(ids(630)).toEqual(["order", "date", "payment", "fulfillment", "status"]);
+    // The stand-in takes the first one's place.
+    expect(ids(600)).toEqual(["order", "date", "both", "status"]);
+    expect(ids(510)).toEqual(["order", "date", "both", "status"]);
+    // Narrower still, it steps aside like any column; the parts never come back alone.
+    expect(ids(400)).toEqual(["order", "date", "status"]);
+    // A list where the merchant hid one part has no stand-in.
+    expect(fitWithStandIns(columns.filter((entry) => entry.id !== "fulfillment"), [both], 400).columns.map((entry) => entry.id)).not.toContain("both");
+  });
+
+  it("keeps one part shown on its own rather than a stand-in that has to step aside", () => {
+    const columns = [column("order", Infinity, 100, true), column("payment", 92, 100), column("fulfillment", 90, 100)];
+    const wide = { ...column("both", 92, 150), combines: ["payment", "fulfillment"] };
+    const { columns: placed, hidden } = fitWithStandIns(columns, [wide], 210);
+    expect(placed.filter((entry) => !hidden.has(entry.id)).map((entry) => entry.id)).toEqual(["order", "payment"]);
   });
 
   it("drops the later column first when priorities tie", () => {

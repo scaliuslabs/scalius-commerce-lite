@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
+import { cn } from "@scalius/shared/utils";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { DataTable } from "~/components/admin/data-table/DataTable";
@@ -487,13 +488,20 @@ export function useResourceMutation<V>(fn: (variables: V) => Promise<unknown>, i
   });
 }
 
-/** Link for the primary cell of a resource row (name/title): at most two lines. */
-export function ResourceRowLink({ to, children }: { to?: string; children: ReactNode }) {
+/** Link for the primary cell of a resource row (name/title): at most two lines (one above a note). */
+export function ResourceRowLink({ to, lines = 2, title, children }: {
+  to?: string;
+  lines?: 1 | 2;
+  /** The whole name on hover, where it may be cut. */
+  title?: string;
+  children: ReactNode;
+}) {
+  const clamp = lines === 1 ? "line-clamp-1" : "line-clamp-2";
   return to ? (
-    <Link to={to} className="line-clamp-2 break-words font-medium text-foreground hover:underline">
+    <Link to={to} title={title} className={cn("break-words font-medium text-foreground hover:underline", clamp)}>
       {children}
     </Link>
   ) : (
-    <span className="line-clamp-2 break-words font-medium">{children}</span>
+    <span title={title} className={cn("break-words font-medium", clamp)}>{children}</span>
   );
 }

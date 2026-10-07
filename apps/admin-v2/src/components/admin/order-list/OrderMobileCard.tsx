@@ -14,7 +14,7 @@ import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import { resourceMessages } from "~/i18n/resource";
 import { AttentionMarker, FulfilmentCell, orderName, PaymentCell } from "./order-columns";
 import { codToCollect, deliveryMethod, deliveryStatus, orderAttention, TONE_TEXT } from "./order-row-facts";
-import { ListDate } from "./ListDate";
+import { ListDate } from "~/components/admin/data-table/ListDate";
 
 export { codToCollect } from "./order-row-facts";
 

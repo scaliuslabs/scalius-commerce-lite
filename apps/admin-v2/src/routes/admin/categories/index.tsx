@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FolderTree } from "lucide-react";
@@ -31,7 +32,7 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
-import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
+import { Thumb, sortHeader } from "~/components/admin/resource/columns";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { pageHead } from "~/i18n/page-titles";
@@ -129,12 +130,7 @@ function CategoriesPage() {
         );
       },
     },
-    {
-      accessorKey: "updatedAt",
-      header: sortHeader(t("updated")),
-      meta: { priority: 40, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
-    },
+    createDateColumn("updatedAt", t("updated")),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit, byId]);
 

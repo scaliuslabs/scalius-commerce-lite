@@ -17,7 +17,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useResolveOrderSupportRequest } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, getRemainingReturnableQuantities, type OrderReturnDto } from "~/lib/order-return-workflow";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./order-returns/shared";
-import { restockedUnits, shippedCancelReason } from "./OrderStatusCard";
+import { restockedUnits, shippedCancelReason } from "./cancel-order";
 import type { Order, OrderSupportRequest } from "./types";
 import { resolutionsFor, type Resolution } from "./request-resolutions";
 import { inboxKeys } from "~/lib/api-query-options/inbox";

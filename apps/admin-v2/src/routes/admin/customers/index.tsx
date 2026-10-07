@@ -16,14 +16,12 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
-import { customersQueryOptions, type CustomersListPayload } from "~/lib/api-query-options/customers";
+import { customersQueryOptions } from "~/lib/api-query-options/customers";
 import { useCurrency } from "~/hooks/use-currency";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
-import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
-import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 import { resourceMessages } from "~/i18n/resource";
@@ -35,10 +33,10 @@ import {
 } from "~/components/admin/customers/customer-list-search";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
-import { CustomerCell } from "~/components/admin/CustomerCell";
+import { getCustomerColumns, type CustomerListItem } from "~/components/admin/customers/customer-columns";
 import { pageHead } from "~/i18n/page-titles";
 
-type Customer = CustomersListPayload["customers"][number];
+type Customer = CustomerListItem;
 
 /** The list's own search key per tab ("customers", "customers.subscribers", "customers.trash"). */
 const searchKey = (search: CustomerListSearch) => listSearchKey("customers", search, "view");
@@ -95,35 +93,11 @@ function CustomersPage() {
   // Same query as the table (shared cache): the export dialog names how many match.
   const { data: listed } = useQuery(listQuery(search, term));
 
-  const columns = useMemo<ColumnDef<Customer, unknown>[]>(() => [
-    {
-      accessorKey: "name",
-      header: sortHeader(t("customer")),
-      meta: { mobile: "primary", minWidth: 200 },
-      cell: ({ row }) => <CustomerCell customer={row.original} to={search.trashed ? undefined : openTo(row.original)} />,
-    },
-    {
-      accessorKey: "totalOrders",
-      header: sortHeader(t("orders")),
-      meta: { mobile: "secondary", numeric: true, priority: 60, minWidth: 100 },
-      cell: ({ row }) => {
-        const count = row.original.totalOrders;
-        return <span className="text-muted-foreground">{count === 1 ? t("orderCountOne") : t("orderCount", { count })}</span>;
-      },
-    },
-    {
-      accessorKey: "totalSpent",
-      header: sortHeader(t("spent")),
-      meta: { mobile: "secondary", numeric: true, priority: 80, minWidth: 110 },
-      cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.totalSpent)}</span>,
-    },
-    {
-      accessorKey: "lastOrderAt",
-      header: sortHeader(t("lastOrder")),
-      meta: { priority: 40, minWidth: 120 },
-      cell: ({ row }) => <DateText value={row.original.lastOrderAt} />,
-    },
-  ], [t, fmt, search.trashed]);
+  const columns = useMemo(
+    () => getCustomerColumns({ t, fmt, rowTo: (row) => (search.trashed ? undefined : openTo(row)) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `openTo` only builds a path from the row.
+    [t, fmt, search.trashed],
+  );
 
   return (
     <>

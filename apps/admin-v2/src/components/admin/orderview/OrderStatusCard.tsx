@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { CancelOrderDialog } from "~/components/admin/order-list/CancelOrderDialog";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderChannelText, orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { useUpdateOrderStatus, type UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
+import { useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import {
   getAdminOrderStatusOptions,
@@ -18,32 +18,8 @@ import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { formatOrderTimestamp } from "./formatters";
-import { fulfilledUnits } from "./fulfilment-groups";
+import { restockedUnits, shippedCancelReason, unitsWithCourier } from "./cancel-order";
 import type { Order } from "./types";
-
-type CancelReason = NonNullable<UpdateOrderStatusInput["reason"]>;
-export const CANCEL_REASONS: CancelReason[] = ["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"];
-
-/** Units that go back on sale when the order is cancelled: not handed over, stock-tracked items only. */
-export function restockedUnits(order: Pick<Order, "items">): number {
-  return order.items
-    .filter((item) => item.inventoryTracked !== false)
-    .reduce((sum, item) => sum + Math.max(0, item.quantity - fulfilledUnits(item)), 0);
-}
-
-/** Units handed over (with a courier, picked up, performed): the order can't be cancelled then. */
-export function unitsWithCourier(order: Pick<Order, "items">): number {
-  return order.items.reduce((sum, item) => sum + fulfilledUnits(item), 0);
-}
-
-/** Why Cancelled isn't offered, in the merchant's words; null when it can be. */
-export function shippedCancelReason(
-  order: Pick<Order, "items">,
-  t: (key: "cancel.shippedOne" | "cancel.shippedMany", vars: { count: number }) => string,
-): string | null {
-  const count = unitsWithCourier(order);
-  return count === 0 ? null : t(count === 1 ? "cancel.shippedOne" : "cancel.shippedMany", { count });
-}
 
 /** Why a status can't be chosen, in the same words the server uses. */
 export function statusBlockText(
@@ -67,6 +43,9 @@ export function statusBlockText(
  * The action that settles the parcel still with the courier, so the order
  * can be cancelled: its card and button name (R3-ORD-04).
  */
+// The cancel confirmation (its reason picker) loads when first asked for.
+const CancelOrderDialog = lazy(() => import("~/components/admin/order-list/CancelOrderDialog").then((module) => ({ default: module.CancelOrderDialog })));
+
 export function courierNextStep(order: Pick<Order, "status" | "paymentMethod">): { href: string; label: OrderDetailMessageKey } {
   const status = order.status.toLowerCase();
   // A part-sent order's parcel comes back from its fulfilment card's menu.
@@ -84,6 +63,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const statusMutation = useUpdateOrderStatus();
   const cancelRequest = useCancelRequestGuard(order);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelLoaded = useOpenedOnce(confirmCancel);
   const status = order.status.toLowerCase();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
@@ -157,15 +137,19 @@ export function OrderStatusCard({ order }: { order: Order }) {
           </p>
         ) : null}
       </CardContent>
-      <CancelOrderDialog
-        open={confirmCancel}
-        onOpenChange={setConfirmCancel}
-        orderName={formatOrderNumber(order.orderNumber, order.id)}
-        restock={restockedUnits(order)}
-        notify={Boolean(order.customerEmail)}
-        pending={statusMutation.isPending}
-        onConfirm={(reason) => statusMutation.mutate({ orderId: order.id, status: "cancelled", ...(reason ? { reason } : {}) })}
-      />
+      {cancelLoaded ? (
+        <Suspense fallback={null}>
+          <CancelOrderDialog
+            open={confirmCancel}
+            onOpenChange={setConfirmCancel}
+            orderName={formatOrderNumber(order.orderNumber, order.id)}
+            restock={restockedUnits(order)}
+            notify={Boolean(order.customerEmail)}
+            pending={statusMutation.isPending}
+            onConfirm={(reason) => statusMutation.mutate({ orderId: order.id, status: "cancelled", ...(reason ? { reason } : {}) })}
+          />
+        </Suspense>
+      ) : null}
       {cancelRequest.dialog}
     </Card>
   );
