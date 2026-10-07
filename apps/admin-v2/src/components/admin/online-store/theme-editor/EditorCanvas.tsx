@@ -115,14 +115,10 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
   const hoverRect = hovered && hovered !== selected ? layout.rects[hovered] : undefined;
   const selectedRect = selected ? layout.rects[selected] : undefined;
   const ready = phase === "ready";
-  const frameStyle = {
-    "--fw": `${box.width}px`,
-    "--fh": `${box.height}px`,
-    "--fs": String(box.scale),
-    "--fx": `${box.offsetX}px`,
-    "--sw": `${box.screenWidth}px`,
-    "--sh": `${box.screenHeight}px`,
-  } as CSSProperties;
+  // Every box here is placed by the same four custom properties (one set of CSS rules).
+  const boxStyle = { "--ox": `${box.offsetX}px`, "--ow": `${box.screenWidth}px`, "--oh": `${box.screenHeight}px` } as CSSProperties;
+  const frameStyle = { "--ow": `${box.width}px`, "--oh": `${box.height}px`, "--fs": String(box.scale) } as CSSProperties;
+  const overlayStyle = { "--oh": `${box.screenHeight}px` } as CSSProperties;
   return (
     <main
       ref={stage}
@@ -130,11 +126,11 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
       data-editor-canvas
       // The frame keeps its true width; at 100% wider than the canvas, the canvas scrolls sideways.
       className="relative min-h-0 min-w-0 overflow-x-auto overflow-y-hidden bg-muted"
-      style={frameStyle}
     >
       <div
         data-preview-box
-        className="absolute left-(--fx) top-4 h-(--sh) w-(--sw) overflow-clip rounded-lg bg-card shadow-card"
+        style={boxStyle}
+        className="absolute left-(--ox) top-4 h-(--oh) w-(--ow) overflow-clip rounded-lg bg-card shadow-card"
       >
         {frames.map((frame) => (
           <iframe
@@ -145,10 +141,11 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
             referrerPolicy="no-referrer"
             sandbox="allow-scripts allow-same-origin allow-forms"
             data-preview-frame={frame.id === activeId ? "shown" : "loading"}
+            style={frameStyle}
             aria-hidden={frame.id === activeId ? undefined : true}
             tabIndex={frame.id === activeId ? undefined : -1}
             className={cn(
-              "absolute left-0 top-0 h-(--fh) w-(--fw) origin-top-left scale-(--fs) border-0 bg-card",
+              "absolute left-0 top-0 h-(--oh) w-(--ow) origin-top-left scale-(--fs) border-0 bg-card",
               frame.id !== activeId && "invisible",
             )}
           />
@@ -170,7 +167,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
         ) : null}
       </div>
       {ready ? (
-        <div data-preview-overlay aria-hidden={actions ? undefined : true} className="pointer-events-none absolute inset-x-0 top-4 h-(--sh) overflow-clip">
+        <div data-preview-overlay aria-hidden={actions ? undefined : true} style={overlayStyle} className="pointer-events-none absolute inset-x-0 top-4 h-(--oh) overflow-clip">
           {hoverRect ? (
             <Outline box={box} rect={hoverRect} tone={names[hovered!]?.shared ? "shared" : "selection"} dashed label={names[hovered!]?.name ?? ""} />
           ) : null}

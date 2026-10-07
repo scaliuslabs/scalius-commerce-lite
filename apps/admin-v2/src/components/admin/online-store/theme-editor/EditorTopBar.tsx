@@ -20,7 +20,7 @@ import {
   Monitor,
   MoreHorizontal,
   MousePointer2,
-  PanelLeft,
+  PanelLeftClose,
   Redo2,
   Smartphone,
   Sparkles,
@@ -139,7 +139,7 @@ export function EditorTopBar({
         </Link>
         {phone ? null : (
           <TopBarButton label={t("toggleSidebar")} pressed={!sidebarOpen} onClick={onToggleSidebar} aria-keyshortcuts="\">
-            <PanelLeft aria-hidden="true" />
+            <PanelLeftClose aria-hidden="true" />
           </TopBarButton>
         )}
         {phone ? null : (

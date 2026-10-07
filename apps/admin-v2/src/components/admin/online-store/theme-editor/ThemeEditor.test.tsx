@@ -208,7 +208,10 @@ const row = (id: string) => container.querySelector<HTMLElement>(`[data-tree-row
 const pageRows = () => [...container.querySelectorAll<HTMLElement>("[data-tree-group='page'] [role=treeitem][aria-level='1']")].map((each) => each.dataset.treeRow);
 const status = () => container.querySelector("[data-save-status]")?.getAttribute("data-save-status");
 const field = <Element extends HTMLElement = HTMLInputElement>(id: string) => document.querySelector<Element>(`#${CSS.escape(id)}`)!;
-const frameStyle = () => container.querySelector<HTMLElement>("[data-editor-canvas]")!.getAttribute("style");
+/** The frame's box: where the scaled frame sits, and the storefront's own viewport and scale. */
+const frameStyle = () => `${container.querySelector("[data-preview-box]")!.getAttribute("style")} ${container.querySelector("[data-preview-frame]")!.getAttribute("style")}`;
+/** Panes and dialogs load after the first render: wait for one to be there. */
+const ready = (selector: string) => vi.waitFor(() => expect(document.querySelector(selector)).toBeTruthy());
 const key = (target: Element, init: KeyboardEventInit) => act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init })); });
 
 function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -268,6 +271,7 @@ describe("theme editor: live preview and saving", () => {
   it("shows typed words in the frame at once, draws the section again, then autosaves", async () => {
     render();
     act(() => row("rail").click());
+    await ready("#theme-section-rail-title");
     type(field("theme-section-rail-title"), "Fresh honey");
     expect(frame.send).toHaveBeenCalledWith({ type: "text", id: "rail", from: "New honey", to: "Fresh honey" });
     await vi.waitFor(() => expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({
@@ -282,8 +286,10 @@ describe("theme editor: live preview and saving", () => {
   it("holds back only the section with an invalid field; the rest keeps saving", async () => {
     render();
     act(() => row("faq").click());
+    await ready("#theme-section-faq-heading");
     type(field("theme-section-faq-heading"), "x".repeat(200));
     act(() => row("story").click());
+    await ready("#theme-section-story-heading");
     type(field("theme-section-story-heading"), "Our honey story");
     await autosaved();
     const saved = lastSaved().theme.pages.home;
@@ -337,6 +343,7 @@ describe("theme editor: sections and blocks", () => {
   it("adds a section from the library, saying why a second hero cannot be added", async () => {
     render(themeWith([section("hero", "hero"), ...HOME]));
     act(() => row("add-section").click());
+    await ready("[data-section-library]");
     const library = document.querySelector("[data-section-library]")!;
     expect(library).toBeTruthy();
     const hero = library.querySelector<HTMLButtonElement>("[data-library-item='hero']")!;
@@ -357,7 +364,9 @@ describe("theme editor: sections and blocks", () => {
     expect(row("faq/items/0")).toBeTruthy();
     act(() => row("faq/items/add").click());
     expect(row("faq/items/1").getAttribute("aria-selected")).toBe("true");
+    await ready("#theme-section-faq-items-1-question");
     type(field("theme-section-faq-items-1-question"), "Do you deliver?");
+    await ready("#theme-section-faq-items-1-answer");
     type(field<HTMLTextAreaElement>("theme-section-faq-items-1-answer"), "Yes, everywhere.");
     act(() => row("faq/items/0").querySelector<HTMLButtonElement>("button[aria-label^=Hide]")!.click());
     await autosaved();
@@ -403,6 +412,7 @@ describe("theme editor: AI drafts and publishing", () => {
   it("explains how to get AI when the store has none, without a dead control", async () => {
     render();
     act(() => row("add-section").click());
+    await ready("[data-section-library]");
     const ai = [...document.querySelectorAll<HTMLButtonElement>("[data-section-library] button")].find((each) => each.textContent?.startsWith("Draft with AI"))!;
     await act(async () => ai.click());
     await vi.waitFor(() => expect(document.querySelector("[data-ai-draft]")?.textContent).toContain("Install an AI app"));
@@ -416,9 +426,11 @@ describe("theme editor: AI drafts and publishing", () => {
     api.publish.mockResolvedValue({ published: { revision: 2 }, draft: { revision: 9, basePublishedRevision: 2 }, lastPublished: null });
     render();
     act(() => row("add-section").click());
+    await ready("[data-section-library]");
     const ai = [...document.querySelectorAll<HTMLButtonElement>("[data-section-library] button")].find((each) => each.textContent?.startsWith("Draft with AI"))!;
     await act(async () => ai.click());
     await vi.waitFor(() => expect(field<HTMLTextAreaElement>("ai-draft-prompt")).toBeTruthy());
+    await ready("#ai-draft-prompt");
     type(field<HTMLTextAreaElement>("ai-draft-prompt"), "Questions about delivery");
     await act(async () => button("Create draft").click());
     await vi.waitFor(() => expect(pageRows()).toContain("faq-2"));
@@ -427,6 +439,7 @@ describe("theme editor: AI drafts and publishing", () => {
     expect(toasts.success).toHaveBeenCalledWith("Section drafted", { description: "A drafted section didn't fit this theme and was left out." });
 
     act(() => button("Publish").click());
+    await ready("[data-publish-dialog]");
     const dialog = document.querySelector("[data-publish-dialog]")!;
     expect(dialog.textContent).toContain("Questions");
     expect(dialog.querySelector("[role=alert]")?.textContent ?? dialog.textContent).toMatch(/AI/);
@@ -443,8 +456,10 @@ describe("theme editor: AI drafts and publishing", () => {
     key(row("rail"), { key: "ArrowDown", altKey: true });
     await autosaved();
     act(() => button("Publish").click());
+    await ready("[data-publish-dialog]");
     const dialog = document.querySelector("[data-publish-dialog]")!;
     expect(dialog.textContent).toContain("On your pages");
+    await ready("#theme-publish-note");
     type(field<HTMLTextAreaElement>("theme-publish-note"), "Eid layout");
     await act(async () => [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent === "Publish")!.click());
     await vi.waitFor(() => expect(api.publish).toHaveBeenCalledTimes(1));
@@ -488,7 +503,7 @@ describe("theme editor: the frame never moves", () => {
       frame.rects = { rail: [0, 0, 1280, 400], faq: [0, 400, 1280, 300] };
       await settle();
       const before = frameStyle();
-      expect(before).toContain("--fw:");
+      expect(before).toContain("--ow:");
 
       // Select from the tree (desktop) or the frame (phone), and hover a row.
       if (width >= 1024) act(() => row("faq").click());
@@ -498,6 +513,7 @@ describe("theme editor: the frame never moves", () => {
       expect(frameStyle()).toBe(before);
 
       // Edit and save.
+      await ready("#theme-section-faq-heading");
       const heading = field("theme-section-faq-heading");
       type(heading, "Common questions");
       await autosaved();

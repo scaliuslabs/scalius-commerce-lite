@@ -27,20 +27,11 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { apiData, type ApiResult } from "~/lib/api";
+import { themeVersionDocumentQuery, themeVersionsKey } from "./theme-history-queries";
 
 type ThemeVersionSummary = ApiResult<typeof getApiV1AdminSettingsThemeVersions>["versions"][number];
 type RestorePoint = ApiResult<typeof getApiV1AdminSettingsThemeRestorePoints>["restorePoints"][number];
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
-
-export const themeVersionsKey = ["theme-versions"] as const;
-
-/** One published version's document, cached by revision (preview and compare share it). */
-export const themeVersionDocumentQuery = (revision: number | null) => ({
-  queryKey: [...themeVersionsKey, "document", revision] as const,
-  queryFn: async () => (await apiData(getApiV1AdminSettingsThemeDocument({ query: { source: "version", revision: revision! } }))).document as StorefrontThemeDocument,
-  enabled: revision !== null,
-  staleTime: Infinity,
-});
 
 const restorePointDocumentQuery = (id: string | null) => ({
   queryKey: [...themeVersionsKey, "restore-point", id] as const,

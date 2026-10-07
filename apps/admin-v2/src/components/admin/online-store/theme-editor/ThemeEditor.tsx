@@ -15,9 +15,9 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Layers, Plus, SlidersHorizontal } from "lucide-react";
+import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
 import {
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_RENDERERS,
@@ -40,6 +40,7 @@ import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGua
 import { typingIn } from "~/components/admin/layout/shortcuts";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMediaQuery } from "~/hooks/use-media-query";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatDateTime, getLocale, useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -47,13 +48,11 @@ import type { NavigationResourceOption } from "~/lib/api-query-options/navigatio
 import { marketsQueryOptions } from "~/lib/api-query-options/markets";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { languageName } from "../../translations/translation-form";
-import { BlockSettingsForm, HeroAddSlides, SectionSettingsForm, useSectionErrors } from "../SectionSettings";
 import { appSettingDefaults } from "../schema-form/app-settings";
-import { useMediaPreviews } from "../schema-form/resource-fields";
+import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
-import { AppSectionSettings } from "./AppSectionSettings";
 import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
 import { EditorCanvas, type SelectionActions } from "./EditorCanvas";
 import {
@@ -97,11 +96,9 @@ import { EditorTopBar, MarketSwitcher, TopBarButton } from "./EditorTopBar";
 import { ShortcutsDialog, matchesEditorShortcut } from "./EditorShortcuts";
 import { LayerTree } from "./LayerTree";
 import { CreateLandingDialog, PagePicker, PreviewResource, useDefaultResource, usePageName } from "./PagePicker";
-import { PublishDialog } from "./PublishDialog";
-import { SectionLibrary, type LibraryChoice, type LibraryOption } from "./SectionLibrary";
-import { PartSettings, SettingsEmpty, SettingsPane, usePartTitle, type PaneActions } from "./SettingsPanel";
-import { ThemeHistory, themeVersionDocumentQuery } from "./ThemeHistory";
-import { ThemeSettingsPanel } from "./ThemeSettingsPanel";
+import type { LibraryChoice, LibraryOption } from "./SectionLibrary";
+import { SettingsEmpty, SettingsPane, partHasSettings, usePartTitle, type PaneActions } from "./SettingsPanel";
+import { themeVersionDocumentQuery } from "./theme-history-queries";
 import { useBlockName, useEditorTree, useSectionName } from "./use-editor-tree";
 import { usePreview } from "./use-preview";
 import { usePreviewSync } from "./use-preview-sync";
@@ -110,10 +107,26 @@ import { useThemeDraft } from "./use-theme-draft";
 type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
 
-/** Per-browser view choices (research P3: the zoom is remembered). */
-/** Loaded when someone opens Draft with AI: the editor costs nothing for AI it does not use. */
-const AiDraftDialog = lazy(() => import("./AiDraftDialog").then((module) => ({ default: module.AiDraftDialog })));
+/**
+ * What the first render does not need loads after it (research P13): the
+ * selection's settings (the editor opens with nothing selected), Theme
+ * settings, the library, publishing, history and Draft with AI. The panes
+ * load on idle right after the first render, so they are there by the first
+ * click; a dialog loads when it first opens.
+ */
+const loadPanes = () => import("./SelectionPanes");
+const lazyNamed = <Props,>(load: () => Promise<ComponentType<Props>>) => lazy(async () => ({ default: await load() }));
+const SectionPane = lazyNamed(() => loadPanes().then((module) => module.SectionPane));
+const BlockPane = lazyNamed(() => loadPanes().then((module) => module.BlockPane));
+const PartSettings = lazyNamed(() => loadPanes().then((module) => module.PartSettings as ComponentType<Parameters<typeof module.PartSettings>[0]>));
+const AppSectionSettings = lazyNamed(() => loadPanes().then((module) => module.AppSectionSettings));
+const ThemeSettingsPanel = lazyNamed(() => loadPanes().then((module) => module.ThemeSettingsPanel));
+const SectionLibrary = lazyNamed(() => import("./SectionLibrary").then((module) => module.SectionLibrary));
+const PublishDialog = lazyNamed(() => import("./PublishDialog").then((module) => module.PublishDialog));
+const ThemeHistory = lazyNamed(() => import("./ThemeHistory").then((module) => module.ThemeHistory));
+const AiDraftDialog = lazyNamed(() => import("./AiDraftDialog").then((module) => module.AiDraftDialog));
 
+/** Per-browser view choices (research P3: the zoom is remembered). */
 const VIEW_KEY = "scalius.themeEditor.view";
 interface ViewChoices { zoom: PreviewZoom; desktopWidth: DesktopWidth; sidebar: boolean }
 function readView(): ViewChoices {
@@ -146,26 +159,6 @@ function useHeldSections(held: readonly string[]) {
     }
     return map;
   }, [held, t]);
-}
-
-function PlatformSectionPane({ section, media, onChange }: {
-  section: StorefrontPlatformSection;
-  media: ReturnType<typeof useMediaPreviews>;
-  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
-}) {
-  const errors = useSectionErrors(section);
-  return <SectionSettingsForm key={section.id} section={section} media={media} errors={errors} onChange={onChange} />;
-}
-
-function PlatformBlockPane({ section, path, index, media, onChange }: {
-  section: StorefrontPlatformSection;
-  path: string;
-  index: number;
-  media: ReturnType<typeof useMediaPreviews>;
-  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
-}) {
-  const errors = useSectionErrors(section);
-  return <BlockSettingsForm key={`${section.id}/${path}/${index}`} section={section} path={path} index={index} media={media} errors={errors} onChange={onChange} />;
 }
 
 export function ThemeEditor({ workspace, refetch }: {
@@ -428,6 +421,14 @@ export function ThemeEditor({ workspace, refetch }: {
   // ── Dialogs ──────────────────────────────────────────────────────────────
   const [publishOpen, setPublishOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const libraryMounted = useOpenedOnce(libraryAt !== null);
+  const publishMounted = useOpenedOnce(publishOpen);
+  const historyMounted = useOpenedOnce(historyOpen);
+  // The settings panes load right after the first render (nothing is selected yet).
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((task: () => void) => window.setTimeout(task, 200));
+    idle(() => void loadPanes());
+  }, []);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [creatingLanding, setCreatingLanding] = useState(false);
   const [removingLanding, setRemovingLanding] = useState<string | null>(null);
@@ -557,7 +558,7 @@ export function ThemeEditor({ workspace, refetch }: {
     const list = (storefrontSettingAt(selectedSection.settings, block.path) as unknown[] | undefined) ?? [];
     const item = list[block.index] as { hidden?: boolean } | undefined;
     paneContent = (
-      <PlatformBlockPane
+      <BlockPane
         section={selectedSection}
         path={block.path}
         index={block.index}
@@ -580,20 +581,12 @@ export function ThemeEditor({ workspace, refetch }: {
         onChange={(values) => editSection(selectedSection.id, (section) => (section.type === "app" ? { ...section, settings: { ...section.settings, values } } : section))}
       />
     ) : (
-      <>
-        <PlatformSectionPane
-          section={selectedSection}
-          media={media}
-          onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
-        />
-        {selectedSection.type === "hero" && canEdit ? (
-          <HeroAddSlides
-            slides={selectedSection.settings.slides}
-            media={media}
-            onChange={(slides) => editSection(selectedSection.id, (section) => (section.type === "hero" ? { ...section, settings: { ...section.settings, slides } } : section))}
-          />
-        ) : null}
-      </>
+      <SectionPane
+        section={selectedSection}
+        media={media}
+        canEdit={canEdit}
+        onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
+      />
     );
     paneActions = {
       hidden: selectedSection.hidden === true,
@@ -601,7 +594,7 @@ export function ThemeEditor({ workspace, refetch }: {
       onDuplicate: () => duplicate(selectedSection.id),
       onRemove: () => remove(selectedSection.id),
     };
-  } else if (selected) {
+  } else if (selected && partHasSettings(selected, page)) {
     paneContent = (
       <PartSettings
         selected={selected}
@@ -625,7 +618,7 @@ export function ThemeEditor({ workspace, refetch }: {
       actions={paneActions}
       readOnly={!canEdit}
     >
-      {paneContent}
+      <Suspense fallback={null}>{paneContent}</Suspense>
     </SettingsPane>
   ) : null;
 
@@ -660,7 +653,9 @@ export function ThemeEditor({ workspace, refetch }: {
       <TabsContent value="sections" className="mt-0 min-h-0 flex-1">{tree}</TabsContent>
       <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
         <fieldset disabled={!canEdit} className="min-w-0">
-          <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
+          <Suspense fallback={null}>
+            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
+          </Suspense>
         </fieldset>
       </TabsContent>
     </Tabs>
@@ -846,7 +841,7 @@ export function ThemeEditor({ workspace, refetch }: {
       {phone ? (
         <nav aria-label={t("editorBar")} className="z-40 flex h-14 items-stretch gap-1 border-t border-border bg-card px-2">
           {([
-            ["layers", Layers, () => { setTab("sections"); setSelected(null); setDrawerOpen((open) => !(open && tab === "sections" && !selected)); }],
+            ["layers", Rows3, () => { setTab("sections"); setSelected(null); setDrawerOpen((open) => !(open && tab === "sections" && !selected)); }],
             ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
             ["add", Plus, () => setLibraryAt(items.length)],
           ] as const).map(([key, Icon, onClick]) => (
@@ -859,16 +854,20 @@ export function ThemeEditor({ workspace, refetch }: {
       ) : <span />}
 
       <UnsavedChangesGuard isDirty={draft.unsavedEdits} isSubmitting={false} />
-      <SectionLibrary
-        open={libraryAt !== null}
-        onOpenChange={(open) => { if (!open) setLibraryAt(null); }}
-        theme={theme}
-        options={libraryOptions}
-        apps={workspace.apps}
-        aiAvailable={aiAvailable}
-        onAdd={addFromLibrary}
-        onDraftWithAi={() => setAiOpen(true)}
-      />
+      {libraryMounted ? (
+        <Suspense fallback={null}>
+          <SectionLibrary
+            open={libraryAt !== null}
+            onOpenChange={(open) => { if (!open) setLibraryAt(null); }}
+            theme={theme}
+            options={libraryOptions}
+            apps={workspace.apps}
+            aiAvailable={aiAvailable}
+            onAdd={addFromLibrary}
+            onDraftWithAi={() => setAiOpen(true)}
+          />
+        </Suspense>
+      ) : null}
       {aiOpen ? (
         <Suspense fallback={null}>
           <AiDraftDialog
@@ -881,40 +880,48 @@ export function ThemeEditor({ workspace, refetch }: {
           />
         </Suspense>
       ) : null}
-      <PublishDialog
-        open={publishOpen}
-        onOpenChange={setPublishOpen}
-        live={draft.published.theme}
-        draft={draft.pending ?? draft.saved.theme}
-        unopenedAi={unopened}
-        sectionName={sectionName}
-        publishing={draft.publishing}
-        onOpenSection={(id) => {
-          setPublishOpen(false);
-          const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);
-          const where: EditorPage = theme.pages.home.some((section) => section.id === id) ? { kind: "home" }
-            : at ? { kind: "landing", slug: at }
-              : (["product", "collection", "cart", "page"] as const).map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
-          if (!samePage(where, page)) setPageState(where);
-          select(id);
-        }}
-        onPublish={(note) => void draft.publish(note).then((done) => { if (done) setPublishOpen(false); })}
-      />
-      <ThemeHistory
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        draft={theme}
-        liveRevision={draft.published.revision}
-        previewRevision={previewRevision}
-        busy={draft.busy || !canEdit}
-        sectionName={sectionName}
-        onPreview={(revision) => {
-          setPreviewRevision(revision);
-          setHistoryOpen(false);
-        }}
-        onRestore={(revision) => setPendingRestore({ version: revision })}
-        onRestorePoint={(id) => setPendingRestore({ point: id })}
-      />
+      {publishMounted ? (
+        <Suspense fallback={null}>
+          <PublishDialog
+            open={publishOpen}
+            onOpenChange={setPublishOpen}
+            live={draft.published.theme}
+            draft={draft.pending ?? draft.saved.theme}
+            unopenedAi={unopened}
+            sectionName={sectionName}
+            publishing={draft.publishing}
+            onOpenSection={(id) => {
+              setPublishOpen(false);
+              const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);
+              const where: EditorPage = theme.pages.home.some((section) => section.id === id) ? { kind: "home" }
+                : at ? { kind: "landing", slug: at }
+                  : (["product", "collection", "cart", "page"] as const).map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
+              if (!samePage(where, page)) setPageState(where);
+              select(id);
+            }}
+            onPublish={(note) => void draft.publish(note).then((done) => { if (done) setPublishOpen(false); })}
+          />
+        </Suspense>
+      ) : null}
+      {historyMounted ? (
+        <Suspense fallback={null}>
+          <ThemeHistory
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            draft={theme}
+            liveRevision={draft.published.revision}
+            previewRevision={previewRevision}
+            busy={draft.busy || !canEdit}
+            sectionName={sectionName}
+            onPreview={(revision) => {
+              setPreviewRevision(revision);
+              setHistoryOpen(false);
+            }}
+            onRestore={(revision) => setPendingRestore({ version: revision })}
+            onRestorePoint={(id) => setPendingRestore({ point: id })}
+          />
+        </Suspense>
+      ) : null}
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <CreateLandingDialog
         open={creatingLanding}

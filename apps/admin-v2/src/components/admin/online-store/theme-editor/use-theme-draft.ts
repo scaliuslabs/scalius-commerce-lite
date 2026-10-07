@@ -27,7 +27,7 @@ import type { AppBlockEntry } from "../theme-settings";
 import { editorHistory, startHistory, type AppSectionEntry, type EditorAction } from "./editor-state";
 import type { SaveStatus } from "./EditorTopBar";
 import { saveableDraft } from "./saveable-draft";
-import { themeVersionsKey } from "./ThemeHistory";
+import { themeVersionsKey } from "./theme-history-queries";
 
 type Theme = StorefrontThemeDocument;
 

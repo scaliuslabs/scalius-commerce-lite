@@ -7,19 +7,10 @@
  */
 import type { ReactNode } from "react";
 import { ArrowLeft, Copy, Eye, EyeOff, MousePointerClick, Trash2 } from "lucide-react";
-import type { ResolvedStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import type { ThemeApp } from "~/lib/api-query-options/online-store";
-import type { MediaPreviews } from "../schema-form/resource-fields";
-import type { SetTheme, Theme } from "../theme-fields";
 import { EDITOR_PARTS, selectedModule, type EditorPage } from "./editor-pages";
-import { ListingFilterSettings, ListingGridSettings, ListingToolbarSettings } from "./ListingPanels";
-import { CartContent, CmsPageContent, HomePageSettings, LandingPageSettings } from "./PagePanels";
-import { ProductAppBlocksSettings } from "./ProductAppBlocks";
-import { ProductMainSettings, ProductModuleSettings } from "./ProductPanels";
-import { AnnouncementSettings, FooterSettings, HeaderSettings } from "./ThemeSettingsPanel";
 
 export interface PaneActions {
   hidden?: boolean;
@@ -128,37 +119,9 @@ export function usePartTitle() {
   };
 }
 
-/** The settings of a selected part that is not a section, or null when it is a section. */
-export function PartSettings({ selected, page, theme, resolved, media, apps, cmsPageId, setDraft, onRemoveLanding }: {
-  selected: string;
-  page: EditorPage;
-  theme: Theme;
-  resolved: ResolvedStorefrontTheme;
-  media: MediaPreviews;
-  apps: readonly ThemeApp[];
-  /** The CMS page the preview shows, for its edit link. */
-  cmsPageId: string | null;
-  setDraft: SetTheme;
-  onRemoveLanding: (slug: string) => void;
-}): ReactNode {
-  const shared = { theme, resolved, media, setDraft };
-  const module = selectedModule(selected);
-  if (module) return <ProductModuleSettings theme={theme} module={module} setDraft={setDraft} />;
-  switch (selected) {
-    case EDITOR_PARTS.announcement: return <AnnouncementSettings {...shared} />;
-    case EDITOR_PARTS.header: return <HeaderSettings {...shared} />;
-    case EDITOR_PARTS.footer: return <FooterSettings {...shared} />;
-    case EDITOR_PARTS.page:
-      if (page.kind === "home") return <HomePageSettings theme={theme} setDraft={setDraft} />;
-      if (page.kind === "landing") return <LandingPageSettings theme={theme} slug={page.slug} setDraft={setDraft} onRemove={() => onRemoveLanding(page.slug)} />;
-      return null;
-    case EDITOR_PARTS.pageContent: return <CmsPageContent pageId={cmsPageId} />;
-    case EDITOR_PARTS.cart: return <CartContent />;
-    case EDITOR_PARTS.productMain: return <ProductMainSettings {...shared} />;
-    case EDITOR_PARTS.productApps: return <ProductAppBlocksSettings theme={theme} apps={apps} setDraft={setDraft} />;
-    case EDITOR_PARTS.listing: return <ListingGridSettings theme={theme} setDraft={setDraft} media={media} search={page.kind === "search"} />;
-    case EDITOR_PARTS.listingToolbar: return <ListingToolbarSettings theme={theme} setDraft={setDraft} />;
-    case EDITOR_PARTS.listingFilters: return <ListingFilterSettings theme={theme} setDraft={setDraft} search={page.kind === "search"} />;
-    default: return null;
-  }
+/** Whether a selected part has settings to show (the forms themselves load with SelectionPanes). */
+export function partHasSettings(selected: string, page: EditorPage): boolean {
+  if (selectedModule(selected)) return true;
+  if (selected === EDITOR_PARTS.page) return page.kind === "home" || page.kind === "landing";
+  return (Object.values(EDITOR_PARTS) as string[]).includes(selected);
 }
