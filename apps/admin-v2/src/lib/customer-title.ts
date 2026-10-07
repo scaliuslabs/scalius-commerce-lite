@@ -1,4 +1,5 @@
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import type { customersMessages } from "~/i18n/customers";
 
 export type CustomerKind = "account" | "guest" | "merchant";
@@ -28,7 +29,7 @@ export function customerTitle(
   customer: CustomerTitleInput,
   t: Translate,
 ): { title: string; detail: string | null; detailIsPhone: boolean } {
-  const phone = customer.phone ? displayPhone(customer.phone) : null;
+  const phone = customer.phone ? formatPhoneForDisplay(customer.phone, getStoreRegion()) : null;
   const email = customer.email?.trim() || null;
   if (customer.kind === "guest") {
     const latest = customer.latestOrderName?.trim() || null;

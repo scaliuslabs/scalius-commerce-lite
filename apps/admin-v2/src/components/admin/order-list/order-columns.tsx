@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, CircleAlert, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
@@ -157,7 +158,7 @@ function CustomerCell({ order }: { order: OrderListItem }) {
       <div className="min-h-[2lh] min-w-0 flex-1">
         <Line text={order.customerName} className="font-medium" />
         {order.customerPhone ? (
-          <Line text={displayPhone(order.customerPhone)} className="font-mono text-muted-foreground" />
+          <Line text={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="font-mono text-muted-foreground" />
         ) : (
           <Line text={order.customerEmail ?? ""} className="text-muted-foreground" />
         )}

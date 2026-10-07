@@ -24,7 +24,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { FULFILLMENT_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@scalius/shared/order-state";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatNumber, setLocale, translate } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -32,7 +32,7 @@ import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { orderChannelText, orderMessages } from "~/i18n/orders";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
-import { setStoreTimeZone } from "~/lib/store-time-zone";
+import { getStoreRegion, setStoreTimeZone } from "~/lib/store-time-zone";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import type { ColumnDef, TableRowData } from "./data-table/table-config";
 import { dataColumns, type DataColumnSpec } from "./data-table/data-columns";
@@ -126,7 +126,7 @@ function orderNeeds(locale: Locale): Record<string, number> {
     order: textWidth("#1234567", body, { mono: true }) + 6 + 16,
     date: widest(dateLabels(), (label) => textWidth(label, body)),
     // A long name or the phone, beside the 28px courier history button.
-    customer: capped(Math.max(...LONG_NAMES.map((name) => textWidth(name, body, { medium: true })), textWidth(displayPhone(PHONE), body, { mono: true })) + 4 + 28, layout.customer.maxWidth),
+    customer: capped(Math.max(...LONG_NAMES.map((name) => textWidth(name, body, { medium: true })), textWidth(formatPhoneForDisplay(PHONE, getStoreRegion()), body, { mono: true })) + 4 + 28, layout.customer.maxWidth),
     channel: capped(widest(channels, (text) => textWidth(text, body)), layout.channel.maxWidth),
     total: widest(amounts(), (amount) => textWidth(amount, body, { medium: true })),
     payment,

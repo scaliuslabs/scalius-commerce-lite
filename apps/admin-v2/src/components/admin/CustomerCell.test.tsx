@@ -3,7 +3,8 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => <a href={to} {...props}>{children}</a>,
@@ -36,21 +37,21 @@ describe("customer list row", () => {
   it("names a checkout guest record by the latest order's buyer, with the phone beneath", () => {
     show({ kind: "guest", name: "R3-SB Guest One", phone, latestOrderName: "R3-SB Guest Two" });
     expect(container.querySelector("a")?.textContent).toBe("R3-SB Guest Two");
-    expect(container.textContent).toContain(displayPhone(phone));
+    expect(container.textContent).toContain(formatPhoneForDisplay(phone, getStoreRegion()));
     expect(container.textContent).not.toContain("R3-SB Guest One");
     expect(container.textContent).not.toContain("not yet claimed");
   });
 
   it("falls back to the phone, saying guest orders, only when the guest has no name", () => {
     show({ kind: "guest", name: "R3-SB Guest One", phone, latestOrderName: null });
-    expect(container.querySelector("a")?.textContent).toBe(displayPhone(phone));
+    expect(container.querySelector("a")?.textContent).toBe(formatPhoneForDisplay(phone, getStoreRegion()));
     expect(container.textContent).toContain("Guest orders");
   });
 
   it("titles an account by its name with the phone beneath", () => {
     show({ kind: "account", name: "Rahim Uddin", phone, latestOrderName: "Karim" });
     expect(container.querySelector("a")?.textContent).toBe("Rahim Uddin");
-    expect(container.textContent).toContain(displayPhone(phone));
+    expect(container.textContent).toContain(formatPhoneForDisplay(phone, getStoreRegion()));
     expect(container.textContent).not.toContain("Karim");
   });
 });

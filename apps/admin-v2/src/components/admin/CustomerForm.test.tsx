@@ -3,7 +3,8 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: ReactNode }) => (
@@ -36,7 +37,7 @@ describe("duplicate phone", () => {
   it("links the guest record that already uses the phone, by its phone when it has no name", () => {
     act(() => root.render(<PhoneUsedBy customer={{ id: "cust_guest", name: "R3-SB Guest One", phone, kind: "guest" }} />));
     const link = container.querySelector("a");
-    expect(container.textContent).toBe(`Used by ${displayPhone(phone)}`);
+    expect(container.textContent).toBe(`Used by ${formatPhoneForDisplay(phone, getStoreRegion())}`);
     expect(link?.getAttribute("href")).toBe("/admin/customers/cust_guest/edit");
   });
 

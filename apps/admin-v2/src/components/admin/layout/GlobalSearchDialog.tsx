@@ -28,7 +28,8 @@ import {
   getApiV1AdminPages,
   getApiV1AdminProducts,
 } from "@scalius/api-client/sdk";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -250,7 +251,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           detail: detail ?? undefined,
           to: `/admin/customers/${customer.id}/edit`,
           icon: UserRound,
-          titledByPhone: customer.phone !== null && title === displayPhone(customer.phone),
+          titledByPhone: customer.phone !== null && title === formatPhoneForDisplay(customer.phone, getStoreRegion()),
         };
       }),
       ...discountMatches.slice(0, PER_TYPE).map((discount) => ({
