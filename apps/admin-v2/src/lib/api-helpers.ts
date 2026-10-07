@@ -13,12 +13,8 @@ export function getServerFnError(error: unknown, fallback = translate(saveBarMes
   const kind = classifyAdminError(error);
   if (kind === "server") return translate(saveBarMessages, "serverError");
   if (error instanceof AdminApiResponseError) {
-    // A refusal without words of its own is told by its class, never as "our side".
-    if (!error.message || error.message.startsWith("API error")) {
-      return kind === "forbidden" ? translate(saveBarMessages, "forbidden")
-        : kind === "notFound" ? translate(saveBarMessages, "notFound")
-          : fallback;
-    }
+    // A refusal without words of its own is never told as "our side".
+    if (!error.message || error.message.startsWith("API error")) return fallback;
     const issues = readApiFieldIssues(error);
     if (issues && error.message.trim().startsWith("[")) return issues[0]!.message;
     return error.message.trim().startsWith("[") ? fallback : error.message;

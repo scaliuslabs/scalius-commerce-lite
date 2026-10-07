@@ -1,8 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { CircleHelp, Menu, Search } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 import { TOP_BAR_BUTTON } from "./nav-button";
@@ -15,11 +14,31 @@ const NotificationDropdown = lazy(() =>
   import("@/components/admin/NotificationDropdown").then((module) => ({ default: module.NotificationDropdown })),
 );
 
-/** Where help lives (the README's own links): questions go to the community, problems to the issue tracker. */
-const HELP_LINKS = {
-  questions: "https://scalius.com/discord",
-  problem: "https://github.com/scaliuslabs/scalius-commerce-lite/issues",
-} as const;
+const HelpMenu = lazy(() => import("./HelpMenu"));
+
+/** The help button; the menu behind it loads on first use, and opens as soon as it has. */
+function HelpButton({ label, onShortcuts }: { label: string; onShortcuts: () => void }) {
+  const [asked, setAsked] = useState(false);
+  const [open, setOpen] = useState(false);
+  const trigger = (
+    <button
+      type="button"
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={asked ? undefined : () => { setAsked(true); setOpen(true); }}
+      className={cn(TOP_BAR_BUTTON, "hidden md:flex")}
+    >
+      <CircleHelp aria-hidden />
+    </button>
+  );
+  if (!asked) return trigger;
+  return (
+    <Suspense fallback={trigger}>
+      <HelpMenu open={open} onOpenChange={setOpen} trigger={trigger} onShortcuts={onShortcuts} />
+    </Suspense>
+  );
+}
 
 /**
  * Shopify's top bar on the near-black frame: Menu on phones, one centred
@@ -70,29 +89,8 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
       </div>
       {/* No min-w-0: the 1fr track never goes under its content (the bell and store menu), so the pill gives way. */}
       <div className="flex items-center justify-end gap-1 md:pe-2">
-        {/* Help, as Shopify's: where to ask and report, then the shortcuts. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" aria-label={t("help")} className={cn(TOP_BAR_BUTTON, "hidden md:flex")}>
-              <CircleHelp aria-hidden />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <a href={HELP_LINKS.questions} target="_blank" rel="noopener noreferrer">
-                {t("helpQuestions")}
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href={HELP_LINKS.problem} target="_blank" rel="noopener noreferrer">
-                {t("helpProblem")}
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setHelpOpen(true)} aria-keyshortcuts="?">
-              {t("shortcutsTitle")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Help, as Shopify's: its menu loads the first time it is asked for. */}
+        <HelpButton onShortcuts={() => setHelpOpen(true)} label={t("help")} />
         <Suspense fallback={<span className="size-11 shrink-0 md:size-8" />}>
           <NotificationDropdown userId={user.id} />
         </Suspense>

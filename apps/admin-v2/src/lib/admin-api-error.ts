@@ -137,7 +137,6 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
 export type AdminErrorClass = "network" | "server" | "notFound" | "forbidden" | "other";
 
 const NETWORK_ERROR_NAMES = new Set(["TypeError", "AbortError", "TimeoutError"]);
-const NETWORK_ERROR_MESSAGE = /failed to fetch|fetch failed|load failed|networkerror|network request failed/i;
 
 export function classifyAdminError(error: unknown): AdminErrorClass {
   const status = readAdminApiError(error)?.status ?? null;
@@ -147,7 +146,7 @@ export function classifyAdminError(error: unknown): AdminErrorClass {
     if (status === 401 || status === 403) return "forbidden";
     return "other";
   }
-  if (error instanceof Error && (NETWORK_ERROR_NAMES.has(error.name) || NETWORK_ERROR_MESSAGE.test(error.message))) return "network";
+  if (error instanceof Error && NETWORK_ERROR_NAMES.has(error.name)) return "network";
   return "other";
 }
 
