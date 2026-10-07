@@ -3,6 +3,7 @@ import { abandonedCheckoutsRoutes } from "../routes/abandoned-checkouts";
 import { checkoutLanguageRoutes } from "../routes/checkout-languages";
 import { adminNavigationRoutes } from "../routes/admin/navigation";
 import { adminPageRoutes } from "../routes/admin/pages";
+import { adminTranslationRoutes } from "../routes/admin/translations";
 import { customFieldDefinitionRoutes, customFieldValueRoutes } from "../routes/admin/custom-fields";
 import { adminSettingsRoutes } from "../routes/admin/settings";
 import { adminLocationRoutes } from "../routes/admin/settings/delivery-locations";
@@ -10,6 +11,7 @@ import { adminLocationRoutes } from "../routes/admin/settings/delivery-locations
 const app = createAdminRuntimeApiApp();
 app.route("/admin/pages", adminPageRoutes);
 app.route("/admin/navigation", adminNavigationRoutes);
+app.route("/admin/translations", adminTranslationRoutes);
 app.route("/admin/custom-field-definitions", customFieldDefinitionRoutes);
 app.route("/admin/custom-fields", customFieldValueRoutes);
 app.route("/admin/settings", adminSettingsRoutes);

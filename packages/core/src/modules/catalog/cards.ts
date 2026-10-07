@@ -19,12 +19,23 @@ import type { Database } from "@scalius/database/client";
 import { isNeutralMarketPricing, priceProductCards, type MarketPriceContext } from "../price-lists";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
+import {
+    PRODUCT_CARD_FIELDS,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+    type TranslatedRowColumns,
+} from "../translations";
 
-/** The card columns of a product row joined to a buyer pricing projection. */
-export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
+/**
+ * The card columns of a product row joined to a buyer pricing projection,
+ * with a presence's translation of its name and handle (none at the root).
+ */
+export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection, translation: TranslationScope | null = null) => ({
     id: products.id,
     name: products.name,
     slug: products.slug,
+    ...translationColumns(translation, "product", products.id),
     ...buyerPricingSelection(buyerPricing),
     availableForSale: buyerPricing.availableForSale,
     quickAddEligible: quickAddEligibleSql(buyerPricing).as("collection_quick_add_eligible"),
@@ -42,7 +53,7 @@ export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingPr
     )`.as("card_review_count"),
 });
 
-export type RawProduct = BuyerPricingMinor & {
+export type RawProduct = BuyerPricingMinor & TranslatedRowColumns & {
     id: string;
     name: string;
     slug: string;
@@ -105,15 +116,17 @@ function enrichProduct(
 
 /**
  * Buyer cards for product rows, with the card images from their gallery rows
- * and, when the plan read them, their card facts.
+ * and, when the plan read them, their card facts, in the presence's language
+ * when the rows were read with its `translation` (a no-op at the root).
  */
 export function resolveProductCards(
     rows: readonly RawProduct[],
     mediaByProductId: ReadonlyMap<string, ProductMediaProjection[]>,
     cardFacts: (productId: string) => ProductCardFacts = () => EMPTY_PRODUCT_CARD_FACTS,
+    translation: TranslationScope | null = null,
 ): Map<string, ResolvedProduct> {
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
-    return new Map(rows.map((row) => [
+    return new Map(translateRows(translation, "product", rows, PRODUCT_CARD_FIELDS).map((row) => [
         row.id,
         enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces, cardFacts(row.id)),
     ]));

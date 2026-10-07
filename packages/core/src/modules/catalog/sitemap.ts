@@ -8,6 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { getPagination } from "./shared";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { deps } from "./declare-deps";
+import { localizedSlugSql, type TranslationScope } from "../translations";
 
 /** Sitemap rows declared one `p:` key each; above it the page declares `t:products`. */
 const SITEMAP_ROW_KEYS_MAX = 200;
@@ -15,6 +16,7 @@ const SITEMAP_ROW_KEYS_MAX = 200;
 type StorefrontSitemapProductRow = {
     id: string;
     slug: string;
+    trSlug?: string | null;
     canonicalPath: string | null;
     updatedAt: number;
 };
@@ -22,6 +24,8 @@ type StorefrontSitemapProductRow = {
 export async function getStorefrontSitemapProducts(
     db: Database,
     params: Pick<StorefrontProductFilterInput, "page" | "limit">,
+    /** A presence's sitemap names each product at its handle in the presence's language. */
+    translation: TranslationScope | null = null,
 ) {
     const {
         page = 1,
@@ -41,6 +45,7 @@ export async function getStorefrontSitemapProducts(
                 slug: products.slug,
                 canonicalPath: products.canonicalPath,
                 updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
+                ...(translation ? { trSlug: localizedSlugSql(translation, "product", products.id) } : {}),
             })
             .from(buyerState)
             .innerJoin(products, eq(products.id, buyerState.productId))
@@ -65,10 +70,12 @@ export async function getStorefrontSitemapProducts(
     // there the products table's own key is the exact, smaller choice.
     if (productsList.length <= SITEMAP_ROW_KEYS_MAX) deps.products(productsList.map((product) => product.id));
     else deps.table("products");
+    // A presence's rows: any product handle in its language (one key for the page).
+    if (translation) deps.localizedSlugs("product", translation.locale);
 
     return {
         products: productsList.map((product) => ({
-            slug: product.slug,
+            slug: product.trSlug || product.slug,
             canonicalPath: product.canonicalPath,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
         })),

@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages";
 import { NotFoundError } from "../utils/api-error";
+import { publicTranslation } from "../utils/public-market";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
@@ -64,7 +65,7 @@ const listPagesRoute = createRoute({
 app.openapi(listPagesRoute, async (c) => {
   const db = c.get("db");
   const { limit, page, sort } = c.req.valid("query");
-  const result = await getPublicPages(db, { page, limit, sort });
+  const result = await getPublicPages(db, { page, limit, sort, translation: publicTranslation(c) });
   return ok(c, result);
 });
 
@@ -96,7 +97,7 @@ const getPageBySlugRoute = createRoute({
 app.openapi(getPageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-  const page = await getPublicPageBySlug(db, slug);
+  const page = await getPublicPageBySlug(db, slug, publicTranslation(c));
   if (!page) throw new NotFoundError("Page not found");
   return ok(c, { page });
 });
@@ -128,7 +129,7 @@ const getPageByIdRoute = createRoute({
 app.openapi(getPageByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const page = await getPublicPageById(db, id);
+  const page = await getPublicPageById(db, id, publicTranslation(c));
   if (!page) throw new NotFoundError("Page not found");
   return ok(c, { page });
 });

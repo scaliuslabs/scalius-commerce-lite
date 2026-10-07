@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { checkoutLanguageRoutes, publicCheckoutLanguageRoutes } from "./checkout-languages";
@@ -81,6 +82,24 @@ function createTestApp(options: {
   return { app, env, batch, insertReturning, updateReturning, updateSet, deleteReturning };
 }
 
+/** The routes over a migrated database: the reads and the batches as the store runs them. */
+function createStoreApp(seed = "") {
+  const { sqlite, db } = createSqliteD1Database();
+  // No checkout copy yet: each test saves the ones it needs.
+  sqlite.exec(`DELETE FROM checkout_languages; ${seed}`);
+  const env = { CACHE: { id: "api-cache-kv" } } as unknown as Env;
+  const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+  app.onError((error, c) => c.json({ message: error.message }, (error as { status?: number }).status === 409 ? 409 : 500));
+  app.use("*", async (c, next) => {
+    c.set("db", db);
+    await next();
+  });
+  app.route("/checkout-languages", publicCheckoutLanguageRoutes);
+  app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
+  const one = <T>(query: string) => sqlite.prepare(query).get() as T;
+  return { app, env, sqlite, one };
+}
+
 describe("checkout language route boundaries", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -129,7 +148,7 @@ describe("checkout language route boundaries", () => {
   });
 
   it("keeps the active checkout language public read available", async () => {
-    const { app } = createTestApp();
+    const { app } = createStoreApp();
 
     const response = await app.request("/api/v1/checkout-languages/active");
     const body = await response.json() as {
@@ -143,18 +162,18 @@ describe("checkout language route boundaries", () => {
   });
 
   it("upgrades untouched English defaults for an active Bangla locale", async () => {
-    const banglaRecord = {
-      ...languageRecord,
-      name: "Bangla",
-      code: "bn",
-      languageData: JSON.stringify({
-        pageTitle: "Cart & Checkout",
-        paymentStepText: "Payment",
-        checkoutSectionTitle: "Checkout Information",
-        customerNameLabel: "ক্রেতার নাম",
-      }),
-    };
-    const { app } = createTestApp({ selectedRows: [banglaRecord] });
+    const banglaData = JSON.stringify({
+      pageTitle: "Cart & Checkout",
+      paymentStepText: "Payment",
+      checkoutSectionTitle: "Checkout Information",
+      customerNameLabel: "ক্রেতার নাম",
+    });
+    const { app } = createStoreApp(`
+      INSERT INTO checkout_languages (id, name, code, language_data, field_visibility, is_active, is_default)
+        VALUES ('cl_bn', 'Bangla', 'bn', '${banglaData}', '{}', 1, 1);
+      INSERT INTO store_languages (locale, published) VALUES ('bn', 1);
+      UPDATE market_presences SET locale = 'bn' WHERE market_id = 'mkt_backup';
+    `);
 
     const response = await app.request("/api/v1/checkout-languages/active");
     const body = await response.json() as {
@@ -229,7 +248,7 @@ describe("checkout language route boundaries", () => {
   });
 
   it("returns success after admin checkout-language saves", async () => {
-    const { app, env, batch } = createTestApp();
+    const { app, env, one } = createStoreApp();
 
     const response = await app.request(
       "/api/v1/admin/settings/checkout-languages",
@@ -249,18 +268,18 @@ describe("checkout language route boundaries", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(batch).toHaveBeenCalledTimes(1);
-    expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
-
+    expect(one<{ active: number }>("SELECT count(*) AS active FROM checkout_languages WHERE is_active = 1 AND is_default = 1 AND code = 'en'").active).toBe(1);
   });
 
-  it("promotes an updated active/default language in one atomic batch", async () => {
-    const { app, env, batch } = createTestApp({
-      selectedRows: [languageRecord],
-    });
+  it("promotes an updated active/default language in one atomic batch, and its language becomes the default", async () => {
+    const { app, env, one } = createStoreApp(`
+      INSERT INTO checkout_languages (id, name, code, language_data, field_visibility, is_active, is_default, revision) VALUES
+        ('cl_en', 'English', 'en', '{}', '{}', 1, 1, 0),
+        ('cl_bn', 'Bangla', 'bn', '{}', '{}', 0, 0, 0);
+    `);
 
     const response = await app.request(
-      "/api/v1/admin/settings/checkout-languages/cl_1",
+      "/api/v1/admin/settings/checkout-languages/cl_bn",
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -270,8 +289,11 @@ describe("checkout language route boundaries", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(batch).toHaveBeenCalledTimes(1);
-    expect(batch.mock.calls[0]?.[0]).toHaveLength(3);
+    expect(one<{ id: string }>("SELECT group_concat(id) AS id FROM checkout_languages WHERE is_active = 1").id).toBe("cl_bn");
+    expect(one<{ id: string }>("SELECT group_concat(id) AS id FROM checkout_languages WHERE is_default = 1").id).toBe("cl_bn");
+    // The copy in use is the default language's (MARKETS-DESIGN D9).
+    expect(one<{ locale: string }>("SELECT locale FROM market_presences WHERE market_id = 'mkt_backup'").locale).toBe("bn");
+    expect(one<{ published: number }>("SELECT published FROM store_languages WHERE locale = 'bn'").published).toBe(1);
   });
 
   it("does not reset another winner when an update only turns flags off", async () => {
@@ -335,11 +357,13 @@ describe("checkout language route boundaries", () => {
   });
 
   it("returns a conflict when a concurrent promotion reaches the unique fence", async () => {
-    const { app, env } = createTestApp({
-      batchError: new Error(
-        "UNIQUE constraint failed: checkout_languages.is_active",
-      ),
-    });
+    const { app, env, sqlite } = createStoreApp(`
+      INSERT INTO checkout_languages (id, name, code, language_data, field_visibility, is_active, is_default)
+        VALUES ('cl_en', 'English', 'en', '{}', '{}', 1, 1);
+    `);
+    // Another save promotes its copy between this save's reset and its insert.
+    sqlite.exec(`CREATE TRIGGER concurrent_promotion AFTER INSERT ON checkout_languages WHEN NEW.code = 'bn'
+      BEGIN UPDATE checkout_languages SET is_active = 1 WHERE id = 'cl_en'; END`);
 
     const response = await app.request(
       "/api/v1/admin/settings/checkout-languages",
@@ -359,6 +383,5 @@ describe("checkout language route boundaries", () => {
     expect(await response.json()).toEqual({
       message: "Another checkout language selection was saved at the same time. Reload and try again.",
     });
-
   });
 });

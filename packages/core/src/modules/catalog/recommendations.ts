@@ -29,6 +29,14 @@
 // Freshness: stored lists declare rec:<source>; live fallback declares the
 // recommendation-signals key and the next included order's ranking-window
 // exit. No arbitrary age limit applies to a quiet store's recommendations.
+import {
+    translationScopeOf,
+    PRODUCT_CARD_FIELDS,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+    type TranslatedRowColumns,
+} from "../translations";
 import { contactPhoneSql, productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
@@ -443,6 +451,7 @@ export async function rankRecommendationRows(
 async function loadRecommendationCards(
     db: Database,
     ids: readonly string[],
+    translation: TranslationScope | null,
 ): Promise<Map<string, RecommendationCardRow>> {
     if (ids.length === 0) return new Map();
     const cardSku = buyerStateCardSku();
@@ -451,6 +460,7 @@ async function loadRecommendationCards(
             id: products.id,
             name: products.name,
             slug: products.slug,
+            ...translationColumns(translation, "product", products.id),
             ...buyerStatePricingSelection(cardSku),
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
@@ -526,6 +536,7 @@ async function readStoredRecommendations(
     db: Database,
     productId: string,
     limit: number,
+    translation: TranslationScope | null,
 ): Promise<{ reason: ProductRecommendationReason; rows: RecommendationCardRow[] } | null> {
     deps.recommendations(productId);
     const cardSku = buyerStateCardSku();
@@ -534,6 +545,7 @@ async function readStoredRecommendations(
             id: products.id,
             name: products.name,
             slug: products.slug,
+            ...translationColumns(translation, "product", products.id),
             ...buyerStatePricingSelection(cardSku),
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
@@ -584,8 +596,10 @@ export async function getStorefrontProductRecommendations(
 ): Promise<ProductRecommendations> {
     const sourceIds = normalizeRecommendationSourceIds(input.productIds);
     const limit = normalizeLimit(input.limit);
+    // A presence page's cards in its language (MARKETS-DESIGN D9).
+    const translation = translationScopeOf(input.pricing);
     const stored = sourceIds.length === 1
-        ? await readStoredRecommendations(db, sourceIds[0]!, limit)
+        ? await readStoredRecommendations(db, sourceIds[0]!, limit, translation)
         : null;
     let reason: ProductRecommendationReason;
     let rows: RecommendationCardRow[];
@@ -605,7 +619,7 @@ export async function getStorefrontProductRecommendations(
         if (ranked.rows.length === 0) return { reason, products: [] };
         const ids = ranked.rows.map((row) => row.id);
         const [cards, media] = await Promise.all([
-            loadRecommendationCards(db, ids),
+            loadRecommendationCards(db, ids, translation),
             loadProductMediaProjections(db, ids),
         ]);
         rows = await priceProductCards(db, await marketPriceContextOf(input.pricing), ids.flatMap((id) => cards.get(id) ?? []));
@@ -616,7 +630,7 @@ export async function getStorefrontProductRecommendations(
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return {
         reason,
-        products: rows.map(({
+        products: translateRows(translation, "product", rows as Array<RecommendationCardRow & TranslatedRowColumns>, PRODUCT_CARD_FIELDS).map(({
             hasCustomerOptions,
             availableForSale,
             quickAddEligible,

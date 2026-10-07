@@ -245,6 +245,7 @@ export class RowMutator {
     const table = this.model.get(tableName);
     if (!table || !writableByGenerator(tableName)) return null;
     if (tableName === "product_reviews") return this.insertReview();
+    if (tableName === "store_languages") return this.insertStoreLanguage();
     const rows = this.rows(tableName);
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -320,6 +321,25 @@ export class RowMutator {
     } catch (error) {
       this.sqlite.exec("ROLLBACK TO dvc_review; RELEASE dvc_review");
       this.coverage.refused("product_reviews", errorText(error));
+      return null;
+    }
+  }
+
+  /** A store language's key is a two-letter code: a clone's suffixed code never passes its CHECK. */
+  private insertStoreLanguage(): Mutation | null {
+    const taken = new Set((this.sqlite.prepare("SELECT locale FROM store_languages").all() as Array<{ locale: string }>).map((row) => row.locale));
+    const free = ["de", "es", "fr", "hi", "ja", "ne", "ur", "zh"].filter((code) => !taken.has(code));
+    if (free.length === 0) return null;
+    const locale = this.rng.pick(free);
+    const published = this.rng.chance(0.5) ? 1 : 0;
+    try {
+      this.run("INSERT INTO store_languages (locale, published) VALUES (?, ?)", [locale, published]);
+      const mutation: Mutation = { kind: "insert", table: "store_languages", columns: ["locale", "published"], description: `INSERT INTO store_languages ${locale}` };
+      this.coverage.record(mutation);
+      this.idPool = null;
+      return mutation;
+    } catch (error) {
+      this.coverage.refused("store_languages", errorText(error));
       return null;
     }
   }

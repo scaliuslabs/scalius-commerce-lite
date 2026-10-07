@@ -10144,6 +10144,220 @@
           "activity"
         ]
       },
+      "TranslatableResource": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "The resource's source title."
+          },
+          "subtitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": "Source text by field."
+          },
+          "sourceSlug": {
+            "type": "string",
+            "nullable": true,
+            "description": "The source URL handle (types with handles)."
+          },
+          "translation": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "locale": {
+                "type": "string"
+              },
+              "marketId": {
+                "type": "string",
+                "nullable": true
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "outdated": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Translated fields whose source changed since (Outdated)."
+              },
+              "updatedAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "locale",
+              "marketId",
+              "fields",
+              "outdated",
+              "updatedAt"
+            ]
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "description": "The localized URL handle in this language, or null."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "translated",
+              "outdated",
+              "partial",
+              "untranslated"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "title",
+          "subtitle",
+          "source",
+          "sourceSlug",
+          "translation",
+          "slug",
+          "status"
+        ]
+      },
+      "MachineTranslate": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120,
+            "description": "An installed app's translation provider (`<plugin id>:<provider id>`)."
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$"
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 200000
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "html"
+                  ],
+                  "default": "text"
+                }
+              },
+              "required": [
+                "key",
+                "text"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "providerId",
+          "locale",
+          "texts"
+        ]
+      },
+      "SaveTranslation": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200000
+            },
+            "description": "Translated text by field (`name`, `description`, `metaTitle`; a menu's links as `item:<id>`). Fields left out or empty fall back to the source."
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "description": "The localized URL handle; empty or null keeps the source address. Every-market translations only."
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$"
+          },
+          "marketId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fields": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 200000
+                  },
+                  "description": "Translated text by field (`name`, `description`, `metaTitle`; a menu's links as `item:<id>`). Fields left out or empty fall back to the source."
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "product_option",
+                    "product_option_value",
+                    "product_variant"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "fields",
+                "type",
+                "id"
+              ]
+            },
+            "maxItems": 199,
+            "description": "A product's options and option values, saved with it."
+          }
+        },
+        "required": [
+          "fields",
+          "locale"
+        ]
+      },
       "ThemeAppSurfaces": {
         "type": "object",
         "properties": {
@@ -10747,6 +10961,75 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "StoreLanguage": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "description": "ISO 639-1 language code."
+          },
+          "published": {
+            "type": "boolean",
+            "description": "Only a published language's market web addresses are served."
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "The default language: the store's own URL (the backup market's root) and the source text."
+          },
+          "presences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Market web addresses in this language (`en-in`; `''` is the store's own URL)."
+          },
+          "translatedResources": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Resources with a translation in this language (any market)."
+          }
+        },
+        "required": [
+          "locale",
+          "published",
+          "isDefault",
+          "presences",
+          "translatedResources"
+        ]
+      },
+      "CreateStoreLanguage": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$"
+          },
+          "published": {
+            "type": "boolean",
+            "description": "Publish at once; default false (translate first, then publish)."
+          }
+        },
+        "required": [
+          "locale"
+        ]
+      },
+      "UpdateStoreLanguage": {
+        "type": "object",
+        "properties": {
+          "published": {
+            "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Make it the default language (the store's own URL); publishes it."
+          }
+        }
       },
       "WarrantyClaim": {
         "type": "object",
@@ -12173,7 +12456,8 @@
               "sms",
               "email",
               "fraud",
-              "tax"
+              "tax",
+              "translation"
             ]
           },
           "name": {
@@ -16859,6 +17143,19 @@
                                 "height"
                               ]
                             },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
+                            },
                             "description": {
                               "type": "string",
                               "nullable": true
@@ -17211,6 +17508,19 @@
                                 "width",
                                 "height"
                               ]
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             },
                             "description": {
                               "type": "string",
@@ -19139,6 +19449,19 @@
                               },
                               "deletedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "localizedSlugs": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                              },
+                              "sourceSlug": {
+                                "type": "string",
+                                "maxLength": 200,
+                                "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                               }
                             },
                             "required": [
@@ -19417,6 +19740,19 @@
                             },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             },
                             "customFields": {
                               "type": "array",
@@ -19698,6 +20034,19 @@
                             },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             },
                             "customFields": {
                               "type": "array",
@@ -19994,6 +20343,19 @@
                               },
                               "deletedAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "localizedSlugs": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                              },
+                              "sourceSlug": {
+                                "type": "string",
+                                "maxLength": 200,
+                                "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                               }
                             },
                             "required": [
@@ -20273,6 +20635,19 @@
                             },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             }
                           },
                           "required": [
@@ -21774,6 +22149,19 @@
                             },
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             },
                             "customFields": {
                               "type": "array",
@@ -47294,6 +47682,17 @@
         "parameters": [
           {
             "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404."
+            },
+            "required": false,
+            "description": "The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.",
+            "name": "presence",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 1000,
@@ -49184,6 +49583,19 @@
                         "product": {
                           "type": "object",
                           "properties": {
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
+                            },
                             "id": {
                               "type": "string"
                             },
@@ -51142,6 +51554,19 @@
                               "minimum": 0,
                               "maximum": 3
                             },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
+                            },
                             "content": {
                               "type": "string",
                               "nullable": true
@@ -52108,6 +52533,19 @@
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 3
+                            },
+                            "localizedSlugs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "description": "The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle."
+                            },
+                            "sourceSlug": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "The resource's source URL handle (every language without its own), beside `localizedSlugs`."
                             },
                             "content": {
                               "type": "string",
@@ -103245,6 +103683,1179 @@
         }
       }
     },
+    "/api/v1/admin/translations/resources": {
+      "get": {
+        "operationId": "dashboard.translations.list",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "One page of a resource type with its translation status in a language",
+        "description": "Products, collections, categories, brands, pages (and articles), menus, delivery rates or payment methods, by title, with each one's status in the language (and market): translated, outdated (its source changed since), partial or untranslated.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "required": true,
+            "name": "locale",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "A market-specific translation (adapt); omit for every market."
+            },
+            "required": false,
+            "description": "A market-specific translation (adapt); omit for every market.",
+            "name": "marketId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "collection",
+                "category",
+                "brand",
+                "page",
+                "menu",
+                "shipping_method",
+                "payment_method"
+              ]
+            },
+            "required": true,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TranslatableResource"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "limit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.view",
+            "collections.view",
+            "pages.view",
+            "products.view",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.shipping_methods.view"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/translations/providers": {
+      "get": {
+        "operationId": "dashboard.translations.providers",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "The machine translation providers of active apps",
+        "description": "Scalius has no built-in translation provider: an app provides one (`translate`). Empty when no active app does.",
+        "responses": {
+          "200": {
+            "description": "Providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "appName"
+                            ]
+                          }
+                        },
+                        "defaultLocale": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "defaultLocale"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.edit",
+            "collections.edit",
+            "pages.edit",
+            "products.edit",
+            "settings.general.edit",
+            "settings.header.edit",
+            "settings.shipping_methods.edit"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/translations/machine": {
+      "post": {
+        "operationId": "dashboard.translations.machine_translate",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "Translate text with an app's translation provider",
+        "description": "Sends up to 100 texts in the store default language to the provider and returns its translations into `locale`. Nothing is saved: the editor fills the fields for the merchant to review and save.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineTranslate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The translations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "texts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "text"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "texts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.edit",
+            "collections.edit",
+            "pages.edit",
+            "products.edit",
+            "settings.general.edit",
+            "settings.header.edit",
+            "settings.shipping_methods.edit"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/translations/{type}/{id}": {
+      "get": {
+        "operationId": "dashboard.translations.get",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "A resource's source text and its translation in a language",
+        "description": "With the Outdated fields and the localized web address; a product with its options and option values (`parts`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "collection",
+                "category",
+                "brand",
+                "page",
+                "menu",
+                "shipping_method",
+                "payment_method"
+              ]
+            },
+            "required": true,
+            "name": "type",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "required": true,
+            "name": "locale",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "A market-specific translation (adapt); omit for every market."
+            },
+            "required": false,
+            "description": "A market-specific translation (adapt); omit for every market.",
+            "name": "marketId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "resource": {
+                          "$ref": "#/components/schemas/TranslatableResource"
+                        },
+                        "parts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TranslatableResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "resource",
+                        "parts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.view",
+            "collections.view",
+            "pages.view",
+            "products.view",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.shipping_methods.view"
+          ]
+        }
+      },
+      "put": {
+        "operationId": "dashboard.translations.save",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "Save a resource's translation in a language",
+        "description": "Replaces the translation of the resource (and a product's options and option values in `parts`) in the language and market: fields left out or empty fall back to the source. Each field records the source it was translated from, so a later source edit marks it Outdated. `slug` sets the localized web address (every-market translations only); a handle another page of the type uses is refused (409).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "collection",
+                "category",
+                "brand",
+                "page",
+                "menu",
+                "shipping_method",
+                "payment_method"
+              ]
+            },
+            "required": true,
+            "name": "type",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTranslation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "resource": {
+                          "$ref": "#/components/schemas/TranslatableResource"
+                        },
+                        "parts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TranslatableResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "resource",
+                        "parts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.edit",
+            "collections.edit",
+            "pages.edit",
+            "products.edit",
+            "settings.general.edit",
+            "settings.header.edit",
+            "settings.shipping_methods.edit"
+          ]
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.translations.delete",
+        "tags": [
+          "Admin - Translations"
+        ],
+        "summary": "Delete a resource's translation in a language",
+        "description": "Buyers then read the source text in that language (and market). An every-market deletion also removes the localized web address.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "collection",
+                "category",
+                "brand",
+                "page",
+                "menu",
+                "shipping_method",
+                "payment_method"
+              ]
+            },
+            "required": true,
+            "name": "type",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "required": true,
+            "name": "locale",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "A market-specific translation (adapt); omit for every market."
+            },
+            "required": false,
+            "description": "A market-specific translation (adapt); omit for every market.",
+            "name": "marketId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "categories.edit",
+            "collections.edit",
+            "pages.edit",
+            "products.edit",
+            "settings.general.edit",
+            "settings.header.edit",
+            "settings.shipping_methods.edit"
+          ]
+        }
+      }
+    },
     "/api/v1/admin/search": {
       "get": {
         "operationId": "dashboard.search.get_search",
@@ -125889,6 +127500,613 @@
         }
       }
     },
+    "/api/v1/admin/settings/languages": {
+      "get": {
+        "operationId": "dashboard.languages.list",
+        "tags": [
+          "Admin - Languages"
+        ],
+        "summary": "The store's languages: the default first",
+        "description": "Each language with whether it is published, whether it is the default (the store's own URL and the source text), the market web addresses in it and how many resources have a translation in it.",
+        "responses": {
+          "200": {
+            "description": "Languages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StoreLanguage"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.languages.create",
+        "tags": [
+          "Admin - Languages"
+        ],
+        "summary": "Add a language",
+        "description": "A new language is unpublished unless `published` is true: translate the store first, then publish it and give a market a web address in it (Settings → Markets). At most 20 published languages.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStoreLanguage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "language": {
+                          "$ref": "#/components/schemas/StoreLanguage"
+                        }
+                      },
+                      "required": [
+                        "language"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/languages/{locale}": {
+      "patch": {
+        "operationId": "dashboard.languages.update",
+        "tags": [
+          "Admin - Languages"
+        ],
+        "summary": "Publish, unpublish or make a language the default",
+        "description": "`published: false` takes the language's market web addresses offline (the default language is always published). `isDefault: true` makes it the language of the store's own URL and publishes it; the checkout copy in use follows it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "required": true,
+            "name": "locale",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStoreLanguage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "language": {
+                          "$ref": "#/components/schemas/StoreLanguage"
+                        }
+                      },
+                      "required": [
+                        "language"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.languages.delete",
+        "tags": [
+          "Admin - Languages"
+        ],
+        "summary": "Remove a language with its translations",
+        "description": "Deletes the language, every translation and localized web address in it. Refused while a market's web address uses it (409).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "required": true,
+            "name": "locale",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "locale": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "locale"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/delivery-providers": {
       "get": {
         "operationId": "dashboard.delivery_providers.list",
@@ -134657,7 +136875,8 @@
                 "sms",
                 "email",
                 "fraud",
-                "tax"
+                "tax",
+                "translation"
               ]
             },
             "required": true,
@@ -134698,7 +136917,8 @@
                                   "sms",
                                   "email",
                                   "fraud",
-                                  "tax"
+                                  "tax",
+                                  "translation"
                                 ]
                               },
                               "pluginId": {
@@ -213478,6 +215698,38 @@
           ]
         },
         {
+          "operationId": "dashboard.languages.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.languages.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.languages.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.languages.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.languages.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.languages.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.languages.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.languages.update"
+          ]
+        },
+        {
           "operationId": "dashboard.markets.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -215504,6 +217756,54 @@
             "dashboard.theme-history",
             "dashboard.theme-publish",
             "theme.draft-landing-page.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.machine_translate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.machine_translate"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.providers",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.providers"
+          ]
+        },
+        {
+          "operationId": "dashboard.translations.save",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.translations.save"
           ]
         },
         {

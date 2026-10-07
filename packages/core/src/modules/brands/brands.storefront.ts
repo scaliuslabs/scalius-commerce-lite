@@ -3,6 +3,16 @@
 // a draft or trashed brand shows nowhere, and products that point at it
 // simply show no brand (never a placeholder).
 
+import {
+    NAME_FIELDS,
+    localizedSlugSql,
+    localizedSlugsSql,
+    parseLocalizedSlugs,
+    translateRow,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+} from "../translations";
 import { brands, media } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, eq, isNull, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
@@ -88,10 +98,30 @@ function toIso(value: number | null | undefined): string | null {
     return value ? new Date(Number(value) * 1000).toISOString() : null;
 }
 
+/**
+ * The published brand a handle names: its source handle first, else a
+ * localized handle (the page's language first, else any).
+ */
+function publicBrandIdBySlug(slug: string, translation: TranslationScope | null) {
+    return sql`coalesce(
+        (SELECT source_brand.id FROM ${brands} AS source_brand WHERE source_brand.slug = ${slug}),
+        (SELECT brand_handle.resource_id FROM localized_slugs AS brand_handle
+         WHERE brand_handle.resource_type = 'brand' AND brand_handle.slug = ${slug}
+         ORDER BY brand_handle.locale = ${sql.raw(`'${translation?.locale ?? ""}'`)} DESC, brand_handle.locale LIMIT 1)
+    )`;
+}
+
+/** A brand's translated text (MARKETS-DESIGN D9). */
+const BRAND_FIELDS = { name: "name", description: "description", metaTitle: "metaTitle", metaDescription: "metaDescription" } as const;
+
 /** The brand page's record: published, live, with its logo and storefront-visible custom fields (one round trip). */
-export async function getPublicBrandBySlug(db: Database, slug: string) {
+export async function getPublicBrandBySlug(db: Database, slug: string, translation: TranslationScope | null = null) {
+    const brandId = publicBrandIdBySlug(slug, translation);
     const [rows, customFieldRows] = await db.batch([db
         .select({
+            // Its handle in every language (hreflang alternates), at the root too.
+            localizedSlugs: localizedSlugsSql("brand", brands.id),
+            ...translationColumns(translation, "brand", brands.id),
             id: brands.id,
             name: brands.name,
             slug: brands.slug,
@@ -109,26 +139,34 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
         })
         .from(brands)
         .leftJoin(media, brandLogoJoinCondition())
-        .where(and(eq(brands.slug, slug), ...publicBrandConditions()))
+        .where(and(sql`${brands.id} = ${brandId}`, ...publicBrandConditions()))
         .limit(1),
     selectStorefrontCustomFieldRows(db, "brand", sql`(
-        SELECT ${brands.id} FROM ${brands} WHERE ${and(eq(brands.slug, slug), ...publicBrandConditions())} LIMIT 1
+        SELECT ${brands.id} FROM ${brands} WHERE ${and(sql`${brands.id} = ${brandId}`, ...publicBrandConditions())} LIMIT 1
     )`),
     ]);
-    const row = rows[0];
-    if (!row) {
-        // Any brand can take this slug or be published under it.
+    const read = rows[0];
+    if (!read) {
+        // Any brand can take this slug or be published under it, or a localized handle name it.
         deps.anyBrand();
+        deps.localizedSlugSpace("brand");
         return null;
     }
+    const row = translateRow(translation, "brand", read, BRAND_FIELDS)!;
     const {
         logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight,
-        logoSourceMediaId, createdAt, updatedAt, ...brand
+        logoSourceMediaId, createdAt, updatedAt, localizedSlugs: localizedSlugsText, ...brand
     } = row;
     deps.brand(brand.id);
+    deps.resourceHandles(translation !== null, "brand", brand.id);
+    // Found by a localized handle: another brand can take that handle in the page's language.
+    if (read.slug !== slug) deps.localizedSlugSpace("brand");
     deps.media(logoSourceMediaId);
+    const alternateSlugs = parseLocalizedSlugs(localizedSlugsText);
     return {
         ...brand,
+        /** The brand's handle by language (`localized_slugs`) and its source handle; absent without a localized handle. */
+        ...(Object.keys(alternateSlugs).length > 0 ? { localizedSlugs: alternateSlugs, sourceSlug: read.slug } : {}),
         logo: presentBrandLogo({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight }, brand.name),
         /** Storefront-visible custom fields, in the merchant's order. */
         customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]),
@@ -140,8 +178,9 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
 /** One page of public brands in merchant order (sort order, then name): the brand wall and agents. */
 export async function listPublicBrands(
     db: Database,
-    options: { page?: number; limit?: number } = {},
+    options: { page?: number; limit?: number; translation?: TranslationScope | null } = {},
 ) {
+    const translation = options.translation ?? null;
     const page = Number.isSafeInteger(options.page) && Number(options.page) > 0 ? Number(options.page) : 1;
     const limit = Number.isSafeInteger(options.limit)
         ? Math.min(Math.max(Number(options.limit), 1), PUBLIC_BRAND_PAGE_LIMIT)
@@ -155,6 +194,7 @@ export async function listPublicBrands(
                 name: brands.name,
                 slug: brands.slug,
                 canonicalPath: brands.canonicalPath,
+                ...translationColumns(translation, "brand", brands.id),
                 ...brandLogoColumns,
                 logoSourceMediaId: brandLogoSourceColumn,
             })
@@ -170,7 +210,7 @@ export async function listPublicBrands(
     deps.anyBrand();
     deps.mediaItems(rows.map((row) => row.logoSourceMediaId));
     return {
-        brands: rows.map(({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight, logoSourceMediaId: _logoSource, ...brand }) => ({
+        brands: translateRows(translation, "brand", rows, NAME_FIELDS).map(({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight, logoSourceMediaId: _logoSource, ...brand }) => ({
             ...brand,
             logo: presentBrandLogo({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight }, brand.name),
         })),
@@ -182,11 +222,14 @@ export async function listPublicBrands(
  * Brand pages for XML discovery: published, live, not `noIndex` and not
  * `excludeFromSitemap`, filtered before the limit (never after a page read).
  */
-export async function getPublicBrandSitemapEntries(db: Database) {
+export async function getPublicBrandSitemapEntries(db: Database, translation: TranslationScope | null = null) {
     deps.anyBrand();
+    // A presence's sitemap: each brand at its handle in the presence's language.
+    if (translation) deps.localizedSlugs("brand", translation.locale);
     const rows = await db
         .select({
             slug: brands.slug,
+            ...(translation ? { trSlug: localizedSlugSql(translation, "brand", brands.id) } : {}),
             canonicalPath: brands.canonicalPath,
             updatedAt: sql<number>`CAST(${brands.updatedAt} AS INTEGER)`,
         })
@@ -199,5 +242,5 @@ export async function getPublicBrandSitemapEntries(db: Database) {
         .orderBy(asc(brands.sortOrder), asc(brands.name), asc(brands.id))
         .limit(BRAND_SITEMAP_LIMIT)
         .all();
-    return rows.map((row) => ({ ...row, updatedAt: toIso(row.updatedAt) }));
+    return rows.map(({ trSlug, ...row }: typeof rows[number] & { trSlug?: string | null }) => ({ ...row, slug: trSlug || row.slug, updatedAt: toIso(row.updatedAt) }));
 }

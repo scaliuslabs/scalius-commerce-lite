@@ -17,6 +17,9 @@ import {
 } from "@scalius/shared/checkout-language";
 import { SettingsRevisionConflictError } from "@scalius/core/settings-store";
 import { deps } from "@scalius/core/cache-deps";
+import { defaultLanguageFollowsCopyWrites, pageLocaleSql } from "@scalius/core/modules/translations";
+import { presenceLocale } from "@scalius/shared/translations";
+import { publicMarketPresence } from "../utils/public-market";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
@@ -240,69 +243,89 @@ const adminGetActiveRoute = createRoute({
   responses: publicGetActiveRoute.responses,
 });
 
-async function getActiveCheckoutLanguage(db: Database) {
+/**
+ * The checkout copy of a page's language (MARKETS-DESIGN D9): a presence's
+ * locale, else the store default language (the root presence's). The chain
+ * is the translations' one: the merchant's copy of that language, else its
+ * built-in copy (English, Bangla), else the copy in use (the default
+ * language's), else English. Field visibility is the form's, from the copy
+ * in use.
+ */
+async function getActiveCheckoutLanguage(db: Database, presence: string | null = null) {
   deps.checkoutLanguages();
-  let language = await db
-      .select()
-      .from(checkoutLanguages)
-      .where(
-        and(
-          eq(checkoutLanguages.isActive, true),
-          isNull(checkoutLanguages.deletedAt),
-        ),
-      )
-      .get();
-
-  if (!language) {
-    language = await db
-        .select()
-        .from(checkoutLanguages)
-        .where(
-          and(
-            eq(checkoutLanguages.isDefault, true),
-            isNull(checkoutLanguages.deletedAt),
-          ),
-        )
-        .get();
-  }
-
-  if (!language) {
-    const fallbackFieldVisibility = {
-      showOrderNotesField: true,
-      showAreaField: true
+  const locale = presenceLocale(presence);
+  const pageLocale = pageLocaleSql(locale);
+  const ownLanguage = sql`lower(substr(${checkoutLanguages.code}, 1, 2)) = ${pageLocale}`;
+  if (locale === null) deps.translationLocales();
+  const rows = await db
+    .select({
+      id: checkoutLanguages.id,
+      name: checkoutLanguages.name,
+      code: checkoutLanguages.code,
+      languageData: checkoutLanguages.languageData,
+      fieldVisibility: checkoutLanguages.fieldVisibility,
+      isActive: checkoutLanguages.isActive,
+      isDefault: checkoutLanguages.isDefault,
+      ownLanguage: sql<number>`${ownLanguage}`.as("own_language"),
+    })
+    .from(checkoutLanguages)
+    .where(and(
+      isNull(checkoutLanguages.deletedAt),
+      or(ownLanguage, eq(checkoutLanguages.isActive, true), eq(checkoutLanguages.isDefault, true)),
+    ))
+    .orderBy(sql`${ownLanguage} DESC`, desc(checkoutLanguages.isActive), desc(checkoutLanguages.isDefault), asc(checkoutLanguages.id))
+    .limit(3);
+  const own = rows.find((row) => Boolean(Number(row.ownLanguage)));
+  const inUse = rows.find((row) => !Number(row.ownLanguage)) ?? rows[0];
+  if (!own && locale && hasBuiltInCheckoutCopy(locale)) {
+    // A presence's language without a merchant copy: its built-in copy, with
+    // the form of the copy in use.
+    return {
+      language: {
+        id: `builtin:${locale}`,
+        name: locale,
+        code: locale,
+        isActive: false,
+        isDefault: false,
+        ...publicCheckoutLanguageProjection(locale, null, inUse?.fieldVisibility ?? null),
+      },
     };
-
+  }
+  const language = own ?? inUse;
+  if (!language) {
+    // No copy at all: English (the platform's own copy), as before languages existed.
     return {
       language: {
         id: "fallback",
         name: "English (Fallback)",
         code: "en",
         languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA,
-        fieldVisibility: fallbackFieldVisibility,
+        fieldVisibility: { showOrderNotesField: true, showAreaField: true },
         isActive: true,
-        isDefault: true
-      }
+        isDefault: true,
+      },
     };
   }
 
-  const parsedLanguage = {
-    id: language.id,
-    name: language.name,
-    code: language.code,
-    isActive: language.isActive,
-    isDefault: language.isDefault,
-    ...publicCheckoutLanguageProjection(
-      language.code,
-      language.languageData,
-      language.fieldVisibility,
-    ),
+  return {
+    language: {
+      id: language.id,
+      name: language.name,
+      code: language.code,
+      isActive: language.isActive,
+      isDefault: language.isDefault,
+      ...publicCheckoutLanguageProjection(language.code, language.languageData, language.fieldVisibility),
+    },
   };
+}
 
-  return { language: parsedLanguage };
+/** The built-in copies (`CHECKOUT_LANGUAGE_PRESETS`). */
+function hasBuiltInCheckoutCopy(locale: string): boolean {
+  return locale === "en" || locale === "bn";
 }
 
 publicApp.openapi(publicGetActiveRoute, async (c) =>
-  ok(c, await getActiveCheckoutLanguage(c.get("db"))));
+  ok(c, await getActiveCheckoutLanguage(c.get("db"), publicMarketPresence(c) || null)));
 adminApp.openapi(adminGetActiveRoute, async (c) =>
   ok(c, await getActiveCheckoutLanguage(c.get("db"))));
 
@@ -463,6 +486,8 @@ adminApp.openapi(createRoute2, async (c) => {
           .set(resetValues)
           .where(or(...resetConditions)),
         insertStatement,
+        // The copy in use is the default language's: its language becomes the default (MARKETS-DESIGN D9).
+        ...(data.isActive ? defaultLanguageFollowsCopyWrites(db, data.code) : []),
       ] as const);
       insertedLanguage = insertedRows[0];
     } else {
@@ -614,6 +639,8 @@ adminApp.openapi(updateRoute, async (c) => {
             or(...resetConditions),
           )),
         updateStatement,
+        // The copy in use is the default language's: its language becomes the default (MARKETS-DESIGN D9).
+        ...(data.isActive ? defaultLanguageFollowsCopyWrites(db, data.code ?? existing.code) : []),
       ] as const);
       updated = updatedRows[0];
     } else {

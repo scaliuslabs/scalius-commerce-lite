@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { publicTranslation } from "../utils/public-market";
 import { getPublicArticleBySlug, getPublicArticles } from "@scalius/core/modules/pages";
 import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
@@ -45,7 +46,7 @@ const listArticlesRoute = createRoute({
 app.openapi(listArticlesRoute, async (c) => {
   const db = c.get("db");
   const query = c.req.valid("query");
-  return ok(c, await getPublicArticles(db, query));
+  return ok(c, await getPublicArticles(db, { ...query, translation: publicTranslation(c) }));
 });
 
 const getArticleRoute = createRoute({
@@ -78,6 +79,7 @@ app.openapi(getArticleRoute, async (c) => {
   const article = await getPublicArticleBySlug(
     c.get("db"),
     c.req.valid("param").slug,
+    publicTranslation(c),
   );
   if (!article) throw new NotFoundError("Article not found");
   return ok(c, { article });

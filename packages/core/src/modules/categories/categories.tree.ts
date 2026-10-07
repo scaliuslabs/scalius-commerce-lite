@@ -6,6 +6,7 @@
 // move, and every tree read. Reads are bounded and index-driven: children by
 // `categories_parent_idx`, breadcrumbs and subtrees by the closure keys.
 
+import { NAME_FIELDS, translateRows, translationColumns, type TranslationScope } from "../translations";
 import { categories, categoryClosure } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, desc, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
@@ -301,7 +302,7 @@ export async function getCategoryAncestors(db: Database, categoryId: string): Pr
     return ancestorsQuery(db, sql`${categoryId}`, false).all() as Promise<CategoryBreadcrumbItem[]>;
 }
 
-function ancestorsQuery(db: Database, descendantId: SQLWrapper, publicOnly: boolean) {
+function ancestorsQuery(db: Database, descendantId: SQLWrapper, publicOnly: boolean, translation: TranslationScope | null = null) {
     return db
         .select({
             id: categories.id,
@@ -309,6 +310,7 @@ function ancestorsQuery(db: Database, descendantId: SQLWrapper, publicOnly: bool
             slug: categories.slug,
             canonicalPath: categories.canonicalPath,
             depth: categories.depth,
+            ...translationColumns(translation, "category", categories.id),
         })
         .from(categoryClosure)
         .innerJoin(categories, eq(categories.id, categoryClosure.ancestorId))
@@ -369,12 +371,12 @@ export type PublicCategoryTreeNode = {
  * node's parent is always present when the node is; deeper levels live on
  * their category pages.
  */
-export async function getPublicCategoryTree(db: Database): Promise<{
+export async function getPublicCategoryTree(db: Database, translation: TranslationScope | null = null): Promise<{
     nodes: PublicCategoryTreeNode[];
     truncated: boolean;
 }> {
     deps.anyCategory();
-    const rows = await db
+    const read = await db
         .select({
             id: categories.id,
             name: categories.name,
@@ -383,12 +385,14 @@ export async function getPublicCategoryTree(db: Database): Promise<{
             imageUrl: categories.imageUrl,
             parentId: categories.parentId,
             depth: categories.depth,
+            ...translationColumns(translation, "category", categories.id),
         })
         .from(categories)
         .where(and(...publicCategoryConditions(), everyAncestorPublicCondition()))
         .orderBy(asc(categories.depth), asc(categories.name), asc(categories.id))
         .limit(CATEGORY_TREE_LINK_LIMIT + 1)
         .all();
+    const rows = translateRows(translation, "category", read, NAME_FIELDS);
     return {
         nodes: rows.slice(0, CATEGORY_TREE_LINK_LIMIT).map((row) => ({ ...row, depth: Number(row.depth) })),
         truncated: rows.length > CATEGORY_TREE_LINK_LIMIT,
@@ -403,7 +407,7 @@ export type PublicCategoryChild = {
     imageUrl: string | null;
 };
 
-function publicChildrenQuery(db: Database, parentId: SQLWrapper, limit: number) {
+function publicChildrenQuery(db: Database, parentId: SQLWrapper, limit: number, translation: TranslationScope | null = null) {
     return db
         .select({
             id: categories.id,
@@ -411,6 +415,7 @@ function publicChildrenQuery(db: Database, parentId: SQLWrapper, limit: number) 
             slug: categories.slug,
             canonicalPath: categories.canonicalPath,
             imageUrl: categories.imageUrl,
+            ...translationColumns(translation, "category", categories.id),
         })
         .from(categories)
         .where(and(sql`${categories.parentId} = ${parentId}`, ...publicCategoryConditions()))
@@ -418,39 +423,59 @@ function publicChildrenQuery(db: Database, parentId: SQLWrapper, limit: number) 
         .limit(limit);
 }
 
-const publishedIdBySlug = (slug: string) => sql`(
-    SELECT tree_self.id FROM categories AS tree_self
-    WHERE tree_self.slug = ${slug} AND tree_self.status = 'published' AND tree_self.deleted_at IS NULL
+/**
+ * The published category a handle names: its source handle first, else a
+ * localized handle (the page's language first, else any), so a buyer who
+ * switched language on a localized URL still reaches the category.
+ */
+export const publishedCategoryIdBySlug = (slug: string, translation: TranslationScope | null = null) => sql`coalesce(
+    (SELECT tree_self.id FROM categories AS tree_self
+     WHERE tree_self.slug = ${slug} AND tree_self.status = 'published' AND tree_self.deleted_at IS NULL),
+    (SELECT tree_handle.resource_id FROM localized_slugs AS tree_handle
+     INNER JOIN categories AS tree_named ON tree_named.id = tree_handle.resource_id
+        AND tree_named.status = 'published' AND tree_named.deleted_at IS NULL
+     WHERE tree_handle.resource_type = 'category' AND tree_handle.slug = ${slug}
+     ORDER BY tree_handle.locale = ${sql.raw(`'${translation?.locale ?? ""}'`)} DESC, tree_handle.locale LIMIT 1)
 )`;
+const publishedIdBySlug = publishedCategoryIdBySlug;
 
 /** Published children of a published category (by slug), in name order. */
 export async function getPublicCategoryChildren(
     db: Database,
     slug: string,
-    options: { limit?: number } = {},
+    options: { limit?: number; translation?: TranslationScope | null } = {},
 ): Promise<PublicCategoryChild[]> {
     const limit = Math.min(Math.max(Math.trunc(options.limit ?? CATEGORY_CHILDREN_LIMIT), 1), CATEGORY_CHILDREN_LIMIT);
+    const translation = options.translation ?? null;
     deps.anyCategory();
-    return publicChildrenQuery(db, publishedIdBySlug(slug), limit).all() as Promise<PublicCategoryChild[]>;
+    deps.localizedSlugSpace("category");
+    const rows = await publicChildrenQuery(db, publishedIdBySlug(slug, translation), limit, translation).all() as PublicCategoryChild[];
+    return translateRows(translation, "category", rows, NAME_FIELDS);
 }
 
 /**
  * The public breadcrumb of a published category (by slug): its published
  * ancestors root first, ending with the category. One closure read, ≤ 4 rows.
  */
-export async function getPublicCategoryBreadcrumb(db: Database, slug: string): Promise<CategoryBreadcrumbItem[]> {
+export async function getPublicCategoryBreadcrumb(db: Database, slug: string, translation: TranslationScope | null = null): Promise<CategoryBreadcrumbItem[]> {
     deps.anyCategory();
-    const rows = await ancestorsQuery(db, publishedIdBySlug(slug), true).all() as CategoryBreadcrumbItem[];
-    return rows.map((row) => ({ ...row, depth: Number(row.depth) }));
+    deps.localizedSlugSpace("category");
+    const rows = await ancestorsQuery(db, publishedIdBySlug(slug, translation), true, translation).all() as CategoryBreadcrumbItem[];
+    return translateRows(translation, "category", rows, NAME_FIELDS).map((row) => ({ ...row, depth: Number(row.depth) }));
 }
 
 /**
  * The two tree reads a category page needs beside its own row, as batch
  * items keyed by the category's slug (so they share the page's round trip).
  */
-export function publicCategoryTreeContextQueries(db: Database, slug: string, childLimit = CATEGORY_CHILDREN_LIMIT) {
+export function publicCategoryTreeContextQueries(
+    db: Database,
+    slug: string,
+    childLimit = CATEGORY_CHILDREN_LIMIT,
+    translation: TranslationScope | null = null,
+) {
     return {
-        children: publicChildrenQuery(db, publishedIdBySlug(slug), childLimit),
-        breadcrumb: ancestorsQuery(db, publishedIdBySlug(slug), true),
+        children: publicChildrenQuery(db, publishedIdBySlug(slug, translation), childLimit, translation),
+        breadcrumb: ancestorsQuery(db, publishedIdBySlug(slug, translation), true, translation),
     } as const;
 }

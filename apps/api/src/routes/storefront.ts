@@ -59,7 +59,7 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { marketMatrixSchema, marketPresenceQuerySchema } from "../schemas/markets";
-import { assertOnlyPresenceQuery, publicMarketPricing } from "../utils/public-market";
+import { assertOnlyPresenceQuery, publicMarketPresence, publicMarketPricing, publicTranslation } from "../utils/public-market";
 import { readMarketMatrix } from "@scalius/core/modules/markets";
 import { publicPageDetailSchema } from "../schemas/custom-fields";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
@@ -538,7 +538,7 @@ const pageBySlugRoute = createRoute({
 app.openapi(pageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-  const data = await getPageRenderData(db, slug);
+  const data = await getPageRenderData(db, slug, publicTranslation(c));
   if (!data) throw new NotFoundError("Page not found");
   return ok(c, data);
 });
@@ -563,6 +563,8 @@ app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
   const layout = await getLayoutData(db, {
     credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
+    // A presence's menus, category tree, policies and copy in its language (MARKETS-DESIGN D9).
+    presence: publicMarketPresence(c) || null,
   });
   const platform = c.env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG;
   return ok(c, {

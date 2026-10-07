@@ -2,7 +2,45 @@
 import { PERMISSIONS } from "../permissions";
 import type { RoutePermissionMap } from "./shared";
 
+/** Viewing or editing any translatable resource; the handler checks the resource type's own permission. */
+const TRANSLATION_VIEW = [
+  PERMISSIONS.PRODUCTS_VIEW,
+  PERMISSIONS.COLLECTIONS_VIEW,
+  PERMISSIONS.CATEGORIES_VIEW,
+  PERMISSIONS.PAGES_VIEW,
+  PERMISSIONS.SETTINGS_HEADER_EDIT,
+  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+];
+const TRANSLATION_EDIT = [
+  PERMISSIONS.PRODUCTS_EDIT,
+  PERMISSIONS.COLLECTIONS_EDIT,
+  PERMISSIONS.CATEGORIES_EDIT,
+  PERMISSIONS.PAGES_EDIT,
+  PERMISSIONS.SETTINGS_HEADER_EDIT,
+  PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT,
+  PERMISSIONS.SETTINGS_GENERAL_EDIT,
+];
+
 export const CONTENT_ROUTE_PERMISSIONS: RoutePermissionMap = {
+  // =============================================
+  // Translations (MARKETS-DESIGN D9): each resource type's own permission,
+  // checked again by the handler for the type it names.
+  // =============================================
+  "/api/v1/admin/translations/resources": {
+    GET: { anyOf: TRANSLATION_VIEW },
+  },
+  "/api/v1/admin/translations/providers": {
+    GET: { anyOf: TRANSLATION_EDIT },
+  },
+  "/api/v1/admin/translations/machine": {
+    POST: { anyOf: TRANSLATION_EDIT },
+  },
+  "/api/v1/admin/translations/*/*": {
+    GET: { anyOf: TRANSLATION_VIEW },
+    PUT: { anyOf: TRANSLATION_EDIT },
+    DELETE: { anyOf: TRANSLATION_EDIT },
+  },
   // =============================================
   // Pages API
   // =============================================

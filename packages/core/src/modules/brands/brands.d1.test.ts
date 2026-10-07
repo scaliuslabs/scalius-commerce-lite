@@ -229,10 +229,12 @@ describe("brand read plans", () => {
                 .map((step) => String(step.detail)).join("\n");
             expect(plan, query.sql).not.toMatch(/SCAN products\b/);
         }
-        const bySlug = queries.find((query) => /"brands"\."slug" = \?/.test(query.sql));
+        // The source handle first, else a localized one (MARKETS-DESIGN D9): both through an index.
+        const bySlug = queries.find((query) => /source_brand\.slug = \?/.test(query.sql));
         expect(bySlug).toBeDefined();
         const slugPlan = sqlite!.prepare(`EXPLAIN QUERY PLAN ${bySlug!.sql}`).all(...bySlug!.params)
             .map((step) => String(step.detail)).join("\n");
         expect(slugPlan).toMatch(/brands_slug_unique/);
+        expect(slugPlan).not.toMatch(/SCAN brand_handle\b/);
     });
 });

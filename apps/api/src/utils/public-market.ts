@@ -10,6 +10,7 @@ import { MARKET_PRESENCE_QUERY_PARAM, isMarketSubfolder } from "@scalius/shared/
 import { isMarketKeyedPublicRead } from "@scalius/shared/public-api-cache-routes";
 import type { Database } from "@scalius/database/client";
 import { startMarketPricing, type MarketPricing } from "@scalius/core/modules/price-lists";
+import { translationScope, type TranslationScope } from "@scalius/core/modules/translations";
 import { NotFoundError, ValidationError } from "./api-error";
 
 export class MarketInvariantRouteError extends Error {
@@ -40,6 +41,15 @@ export function publicMarketPresence(c: Context): string {
  */
 export function publicMarketPricing(c: Context): MarketPricing | null {
   return startMarketPricing(c.get("db") as Database, publicMarketPresence(c));
+}
+
+/**
+ * A market-keyed read's language (MARKETS-DESIGN D9): the page's presence
+ * as a translation scope, folded into the statements the read runs. Null at
+ * the root: the read is today's, byte for byte.
+ */
+export function publicTranslation(c: Context): TranslationScope | null {
+  return translationScope(publicMarketPresence(c));
 }
 
 /**

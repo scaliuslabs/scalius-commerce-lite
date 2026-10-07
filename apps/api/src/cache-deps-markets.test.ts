@@ -105,9 +105,12 @@ describe("market-keyed public reads", () => {
     expect((india.body?.data?.market as { name: string }).name).toBe("India store");
     expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
     expect((await read("/api/v1/checkout/config")).cache).toBe("hit");
-    // The catalogue never depends on a market's identity, countries or presences.
+    // The root catalogue never depends on a market's identity, countries or presences.
     sqlite.exec("UPDATE market_presences SET locale = 'bn' WHERE id = 'mkp_backup_root'");
     expect((await read("/api/v1/products/tee")).cache).toBe("hit");
+    // The root's locale is the default language, the last step of every
+    // presence's fallback (its payment method names): another presence reads again.
+    expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).not.toBe("hit");
     expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
     // The root's presence is the backup market's.
     const root = await read("/api/v1/checkout/config");
@@ -139,7 +142,7 @@ describe("market-keyed public reads", () => {
 
   it("refuses a market to a market-invariant route", async () => {
     const app = new OpenAPIHono();
-    app.get("/api/v1/navigation/:menu", async (c) => {
+    app.get("/api/v1/attributes/search-filters", async (c) => {
       try {
         publicMarketPresence(c);
         return c.text("read");
@@ -147,6 +150,6 @@ describe("market-keyed public reads", () => {
         return c.text(error instanceof MarketInvariantRouteError ? "refused" : "other");
       }
     });
-    expect(await (await app.request("https://api.internal/api/v1/navigation/main?presence=en-in")).text()).toBe("refused");
+    expect(await (await app.request("https://api.internal/api/v1/attributes/search-filters?presence=en-in")).text()).toBe("refused");
   });
 });

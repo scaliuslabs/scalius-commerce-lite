@@ -45,6 +45,19 @@ import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
 import { deps } from "./declare-deps";
+import {
+    applyTranslation,
+    foldedProductChains,
+    foldedTranslationChain,
+    localizedSlugSql,
+    productTranslationRowsSql,
+    translationRowsSql,
+    translationScopeOf,
+    NAME_FIELDS,
+    translateRows,
+    translationColumns,
+} from "../translations";
+import type { TranslationRow } from "@scalius/shared/translations";
 
 /**
  * What one feed page depends on. Beyond the public set, the feed filters
@@ -421,6 +434,9 @@ export async function getStorefrontFeedProducts(
     conditions.push(eq(products.excludeFromProductFeed, false));
     conditions.push(feedSellsPhysicalGoods());
     conditions.push(publicProductHasPrimaryDiscoveryImage());
+    // A presence's feed in its language (MARKETS-DESIGN D9): titles,
+    // descriptions, handles, option labels, categories and brands.
+    const translation = translationScopeOf(marketPricing);
 
     const query = db
         .select({
@@ -447,6 +463,11 @@ export async function getStorefrontFeedProducts(
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
             storePriceIncrementMinor: storePriceIncrementSql(),
+            ...(translation ? {
+                trRows: productTranslationRowsSql(translation, products.id),
+                trSlug: localizedSlugSql(translation, "product", products.id),
+                brandTrRows: translationRowsSql(translation, "brand", brands.id),
+            } : {}),
         })
         .from(products)
         .leftJoin(brands, publicBrandJoinCondition(products.brandId))
@@ -473,7 +494,7 @@ export async function getStorefrontFeedProducts(
         mediaMapPromise,
         categoryIds.length > 0
             ? db
-                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .select({ id: categories.id, name: categories.name, slug: categories.slug, ...translationColumns(translation, "category", categories.id) })
                 .from(categories)
                 .where(and(
                     // One JSON parameter: a 100-card page can name 100 categories,
@@ -481,7 +502,8 @@ export async function getStorefrontFeedProducts(
                     sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
-                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
+                .all()
+                .then((rows) => translateRows(translation, "category", rows, NAME_FIELDS)) as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
         readStorefrontFeedVariantMap(db, productIds, decimalPlaces, mediaMapPromise, marketPricing
@@ -507,7 +529,21 @@ export async function getStorefrontFeedProducts(
 
     const variantMap = feedVariants.variants;
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, storePriceIncrementMinor, customizationSchema, brandId, brandName, brandSlug, ...productRow }) => {
+    if (translation) {
+        deps.translations("product", productIds);
+        deps.translations("brand", productsList.map((product) => product.brandId));
+    }
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, storePriceIncrementMinor, customizationSchema, brandId, brandName: sourceBrandName, brandSlug, ...readRow }) => {
+        const { trRows, trSlug, brandTrRows, ...sourceRow } = readRow as typeof readRow & { trRows?: string | null; trSlug?: string | null; brandTrRows?: string | null };
+        const chains = translation ? foldedProductChains(translation, trRows) : new Map<string, TranslationRow[]>();
+        const productRow = translation
+            ? applyTranslation(sourceRow, chains.get(`product:${sourceRow.id}`) ?? [], { name: "name", description: "description" }, trSlug ?? null)
+            : sourceRow;
+        const brandName = translation && sourceBrandName
+            ? applyTranslation({ name: sourceBrandName }, foldedTranslationChain(translation, brandTrRows), NAME_FIELDS).name
+            : sourceBrandName;
+        const translateOption = <T extends { id: string; name: string }>(option: T): T =>
+            applyTranslation(option, chains.get(`product_option:${option.id}`) ?? [], NAME_FIELDS);
         const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
         const pricing = pricingByProduct.get(productRow.id);
         // The buyer projection counts every SKU. When a product also sells a
@@ -531,7 +567,7 @@ export async function getStorefrontFeedProducts(
             name: product.name,
             slug: product.slug,
             canonicalPath: product.canonicalPath,
-            options: (optionMap.get(product.id) ?? []).map(({ values: _values, ...option }) => option),
+            options: (optionMap.get(product.id) ?? []).map(({ values: _values, ...option }) => translateOption(option)),
             description: product.description,
             price: price.price,
             discountType: product.discountType,
@@ -553,7 +589,16 @@ export async function getStorefrontFeedProducts(
             category,
             brand: brandId && brandName && brandSlug ? { id: brandId, name: brandName, slug: brandSlug } : null,
             attributes: attributeMap.get(product.id) ?? [],
-            variants: variantMap.get(product.id) ?? [],
+            variants: translation
+                ? (variantMap.get(product.id) ?? []).map((variant) => ({
+                    ...variant,
+                    selectedOptions: variant.selectedOptions.map((option) => applyTranslation(
+                        applyTranslation(option, chains.get(`product_option:${option.optionDefinitionId}`) ?? [], NAME_FIELDS),
+                        chains.get(`product_option_value:${option.optionValueId}`) ?? [],
+                        { value: "value" },
+                    )),
+                }))
+                : variantMap.get(product.id) ?? [],
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
         };
     });

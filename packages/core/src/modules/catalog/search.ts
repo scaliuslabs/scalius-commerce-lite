@@ -1,4 +1,5 @@
 // Storefront product search.
+import { translationScopeOf, PRODUCT_CARD_FIELDS, translateRows, translationColumns } from "../translations";
 import {
   effectiveLowStockThresholdSql,
   loadProductMediaProjections,
@@ -145,13 +146,16 @@ export async function searchStorefrontProducts(
         conditions.push(searchCondition ?? sql`0 = 1`);
     }
 
-    const [results, countResults] = await Promise.all([
+    // A presence's product names and handles in its language (MARKETS-DESIGN D9).
+    const translation = translationScopeOf(pricing);
+    const [rawResults, countResults] = await Promise.all([
         db
             .select({
                 id: products.id,
                 name: products.name,
                 priceMinor: products.priceMinor,
                 slug: products.slug,
+                ...translationColumns(translation, "product", products.id),
                 discountType: products.discountType,
                 discountBps: products.discountBps,
                 discountAmountMinor: products.discountAmountMinor,
@@ -169,6 +173,7 @@ export async function searchStorefrontProducts(
             .where(and(...conditions)),
     ]);
 
+    const results = translateRows(translation, "product", rawResults, PRODUCT_CARD_FIELDS);
     const productIds = results.map((p) => p.id);
     const count = Number(countResults[0]?.count ?? 0);
     const totalPages = Math.ceil(count / limit);

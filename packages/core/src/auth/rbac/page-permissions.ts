@@ -160,6 +160,20 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   },
   // Markets: countries, web presences and the price increment (store settings).
   "/admin/settings/markets": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  // Languages: the store's languages and the default one (MARKETS-DESIGN D9).
+  "/admin/settings/languages": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  // Translate & adapt: any translatable resource a staff member may see (each type checks its own).
+  "/admin/translations": {
+    anyOf: [
+      PERMISSIONS.PRODUCTS_VIEW,
+      PERMISSIONS.COLLECTIONS_VIEW,
+      PERMISSIONS.CATEGORIES_VIEW,
+      PERMISSIONS.PAGES_VIEW,
+      PERMISSIONS.SETTINGS_HEADER_EDIT,
+      PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+      PERMISSIONS.SETTINGS_GENERAL_VIEW,
+    ],
+  },
   "/admin/settings/notifications": {
     anyOf: [
       PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,

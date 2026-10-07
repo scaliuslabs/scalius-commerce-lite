@@ -4,7 +4,7 @@
  * store), and the storefront pages composed from them the way the storefront
  * batch composes a render.
  */
-import { isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
+import { isPublicApiCacheRoute, withMarketPresence } from "@scalius/shared/public-api-cache-routes";
 import { DVC_IDS } from "./seed-store";
 
 const LIST = "page=1&limit=20";
@@ -129,12 +129,51 @@ function presenceParts(): string[] {
     `/api/v1/categories/panjabi/products?${LIST}&sort=newest&${presence}`,
     `/api/v1/collections/col_dynamic?${presence}`,
     `/api/v1/storefront/homepage?${presence}`,
+    `/api/v1/storefront/layout?${presence}`,
+    `/api/v1/shipping-methods?${presence}`,
+  ];
+}
+
+/**
+ * The Bangla presence of the India market (MARKETS-DESIGN D9): every read
+ * that folds a translation or resolves a localized handle, in its language.
+ */
+function languageParts(): string[] {
+  const presence = "presence=bn-in";
+  return [
+    `/api/v1/products?${LIST}&sort=newest&${presence}`,
+    `/api/v1/products?ids=p_linen,p_silk,p_bag&${presence}`,
+    `/api/v1/products/search?search=linen&${presence}`,
+    `/api/v1/products/feed?${presence}`,
+    `/api/v1/products/sitemap?${presence}`,
+    // The localized handle of a product.
+    `/api/v1/products/linen-panjabi-bn?${presence}`,
+    `/api/v1/products/silk-panjabi?${presence}`,
+    // A French handle: another language's handle still reaches the product.
+    `/api/v1/products/panjabi-soie?${presence}`,
+    `/api/v1/products/silk-panjabi/sections/options?${presence}`,
+    `/api/v1/categories/tree?${presence}`,
+    `/api/v1/categories/panjabi-bn?${presence}`,
+    `/api/v1/categories/festive-panjabi/breadcrumb?${presence}`,
+    `/api/v1/categories/panjabi-bn/products?${LIST}&sort=newest&${presence}`,
+    `/api/v1/brands/sitemap?${presence}`,
+    `/api/v1/brands/aarong-bn?${presence}`,
+    `/api/v1/collections/col_manual?${presence}`,
+    `/api/v1/storefront/homepage?${presence}`,
+    `/api/v1/storefront/layout?${presence}`,
+    `/api/v1/storefront/pages/slug/amader-kotha?${presence}`,
+    `/api/v1/pages/slug/amader-kotha?${presence}`,
+    `/api/v1/articles/slug/eid-lookbook?${presence}`,
+    `/api/v1/navigation?${presence}`,
+    `/api/v1/shipping-methods?${presence}`,
+    `/api/v1/checkout/config?${presence}`,
+    `/api/v1/checkout-languages/active?${presence}`,
   ];
 }
 
 /** Every part the harness caches, in a stable order. */
 export function dvcPartCatalogue(): string[] {
-  const parts = [...productParts(), ...categoryParts(), ...otherParts(), ...presenceParts()];
+  const parts = [...productParts(), ...categoryParts(), ...otherParts(), ...presenceParts(), ...languageParts()];
   const unique = [...new Set(parts)];
   const notCached = unique.filter((part) => !isPublicApiCacheRoute(new URL(part, "https://api.internal")));
   if (notCached.length > 0) throw new Error(`Not public cached routes: ${notCached.join(", ")}`);
@@ -149,14 +188,30 @@ export interface DvcPage {
 const SHELL = ["/api/v1/storefront/layout"];
 const COMMERCE = ["/api/v1/shipping-methods", "/api/v1/checkout/config"];
 
+/** A presence page's reads: the layout and its own, the market-keyed ones with the presence. */
+function presenceShell(presence: string, ...parts: string[]): string[] {
+  return [...SHELL, ...parts].map((part) => {
+    const url = withMarketPresence(new URL(part, "https://api.internal"), presence);
+    return `${url.pathname}${url.search}`;
+  });
+}
+
 /** Storefront pages as the batch composes them (layout plus the page's reads). */
 export function dvcPageCatalogue(): DvcPage[] {
   const pages: DvcPage[] = [
     { name: "home", parts: [...SHELL, "/api/v1/storefront/homepage", ...COMMERCE] },
-    // A presence page: its market's priced homepage and checkout config.
-    { name: "home:en-in", parts: [...SHELL, "/api/v1/storefront/homepage?presence=en-in", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
-    { name: "product:linen-panjabi:en-in", parts: [...SHELL, "/api/v1/products/linen-panjabi?presence=en-in", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
-    { name: "shop-all-price:en-in", parts: [...SHELL, `/api/v1/products?${LIST}&sort=price-asc&presence=en-in`] },
+    // A presence page: every market-keyed read carries the presence.
+    { name: "home:en-in", parts: presenceShell("en-in", "/api/v1/storefront/homepage", ...COMMERCE) },
+    { name: "product:linen-panjabi:en-in", parts: presenceShell("en-in", "/api/v1/products/linen-panjabi", ...COMMERCE) },
+    { name: "shop-all-price:en-in", parts: presenceShell("en-in", `/api/v1/products?${LIST}&sort=price-asc`) },
+    // The Bangla presence: translated text and localized handles.
+    { name: "home:bn-in", parts: presenceShell("bn-in", "/api/v1/storefront/homepage", ...COMMERCE) },
+    { name: "product:linen-panjabi-bn:bn-in", parts: presenceShell("bn-in", "/api/v1/products/linen-panjabi-bn", ...COMMERCE) },
+    { name: "category:panjabi-bn:bn-in", parts: presenceShell("bn-in", "/api/v1/categories/panjabi-bn", `/api/v1/categories/panjabi-bn/products?${LIST}&sort=newest`) },
+    { name: "cms:amader-kotha:bn-in", parts: presenceShell("bn-in", "/api/v1/storefront/pages/slug/amader-kotha") },
+    { name: "cart-shell:bn-in", parts: presenceShell("bn-in", ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities") },
+    { name: "sitemap-products:bn-in", parts: ["/api/v1/products/sitemap?presence=bn-in"] },
+    { name: "feed:bn-in", parts: ["/api/v1/products/feed?presence=bn-in", "/api/v1/seo"] },
     { name: "feed:en-in", parts: [`/api/v1/products/feed?presence=en-in`, "/api/v1/seo"] },
     { name: "search", parts: [...SHELL, `/api/v1/products?${LIST}&search=panjabi`] },
     { name: "shop-all-price", parts: [...SHELL, `/api/v1/products?${LIST}&sort=price-asc`] },

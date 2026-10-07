@@ -4,6 +4,7 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // A brand's page: the published brand record and its products, laid out by
 // the same listing as category and collection pages (CatalogListingPage).
 // Draft, trashed and unknown brands are 404s.
+import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
@@ -71,6 +72,7 @@ const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Each paginated page is self-canonical; sort, filter and tracking params are stripped.
 const brandUrl = buildResourceCanonicalSeoUrl("brand", brandPath, brand.canonicalPath);
 const canonicalUrl = productListCanonicalUrl(brandUrl, pagination.page);
+const brandPaths = localizedPaths(brand, (handle) => `/brands/${encodeURIComponent(handle)}`);
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const activeFilterCount = countActiveProductListFilters(currentFilters);
@@ -113,6 +115,7 @@ const collectionJsonLd =
   description={description}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  localizedPaths={brandPaths}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={shouldNoindex}

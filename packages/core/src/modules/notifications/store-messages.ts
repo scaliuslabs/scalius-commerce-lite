@@ -1,11 +1,11 @@
 // Store identity for buyer and staff messages (name, logo, language) and the
 // one-time-code message built from it.
 import { safeBatch, type Database } from "@scalius/database/client";
-import { checkoutLanguages, media, themeSettings } from "@scalius/database/schema";
+import { marketPresences, media, themeSettings } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { businessDocument, type BusinessInfo, storeDisplayName } from "../settings";
 import { platformDocument } from "../platform";
@@ -14,7 +14,7 @@ import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 
 export interface StoreIdentity extends EmailStore {
-  /** Bangla when the active checkout language is Bangla, else English. */
+  /** Bangla when the store default language is Bangla, else English. */
   language: MessageLanguage;
   business: BusinessInfo;
   /** True when no business name is set and `name` is the Store URL's host. */
@@ -32,12 +32,12 @@ export async function readStoreName(db: Database): Promise<string | null> {
   }
 }
 
-/** Bangla when the active checkout language is Bangla, else English. */
+/** Bangla when the store default language (the root presence's, MARKETS-DESIGN D9) is Bangla, else English. */
 export async function readStoreLanguage(db: Database): Promise<MessageLanguage> {
-  const [activeLanguage] = await db.select({ code: checkoutLanguages.code }).from(checkoutLanguages)
-    .where(and(eq(checkoutLanguages.isActive, true), isNull(checkoutLanguages.deletedAt)))
+  const [root] = await db.select({ locale: marketPresences.locale }).from(marketPresences)
+    .where(and(eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, "")))
     .limit(1);
-  return checkoutLanguageBaseCode(activeLanguage?.code) === "bn" ? "bn" : "en";
+  return checkoutLanguageBaseCode(root?.locale) === "bn" ? "bn" : "en";
 }
 
 /**

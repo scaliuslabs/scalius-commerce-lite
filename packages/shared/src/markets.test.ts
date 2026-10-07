@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatMarketSelection,
   hreflangAlternates,
+  defaultLocale,
   isCrawlerUserAgent,
   isPresenceServedPath,
   isStorefrontPagePath,
@@ -125,6 +126,24 @@ describe("hreflang", () => {
       "https://shop.example/categories/bags?page=2", "https://shop.example/en-in/categories/bags?page=2",
       "https://shop.example/hi-in/categories/bags?page=2", "https://shop.example/categories/bags?page=2",
     ]);
+  });
+
+  it("names each language's own URL of a page with localized handles (MARKETS-DESIGN D9)", () => {
+    const paths: Record<string, string> = { hi: "/products/kurta-hi" };
+    const hrefs = hreflangAlternates(MATRIX, "/products/kurta?variant=v1", "https://shop.example", (locale) => paths[locale] ?? "/products/kurta")
+      .map((each) => each.href);
+    expect(hrefs).toEqual([
+      "https://shop.example/products/kurta?variant=v1",
+      "https://shop.example/en-in/products/kurta?variant=v1",
+      "https://shop.example/hi-in/products/kurta-hi?variant=v1",
+      "https://shop.example/products/kurta?variant=v1",
+    ]);
+  });
+});
+
+describe("defaultLocale", () => {
+  it("is the root presence's locale", () => {
+    expect(defaultLocale(MATRIX)).toBe("bn");
   });
 });
 

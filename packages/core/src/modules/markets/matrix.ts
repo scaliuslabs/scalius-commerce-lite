@@ -123,6 +123,14 @@ export interface PresenceMarket {
 }
 
 /**
+ * The joined presence is served: its language is published (MARKETS-DESIGN
+ * D9). The default language is always published, so the root always is.
+ */
+export function servedLanguageSql(): SQL {
+    return sql`EXISTS (SELECT 1 FROM store_languages AS served_language WHERE served_language.locale = ${marketPresences.locale} AND served_language.published = 1)`;
+}
+
+/**
  * The active market a market-keyed public read renders for (the one holding
  * the subfolder `value`, or the backup market for the root `''`) and the
  * settings documents the read needs, in ONE statement: the market row joined
@@ -154,12 +162,16 @@ export async function readPresenceMarketWithDocuments(
             eq(marketPresences.marketId, markets.id),
             eq(marketPresences.kind, "subfolder"),
             eq(marketPresences.value, value),
+            // Only a published language's presence is served (MARKETS-DESIGN D9).
+            servedLanguageSql(),
         ))
         .leftJoin(settings, settingsDocumentsJoin(documents))
         .where(and(
             eq(markets.status, "active"),
             value === "" ? eq(markets.isBackup, true) : sql`${marketPresences.value} IS NOT NULL`,
         ));
+    // Which presences are served: their locales and the published languages.
+    if (value !== "") deps.translationLocales();
     const row = rows[0];
     if (!row) return { market: null, documentRows: [], sellingCountries: [] };
     deps.market(row.id);

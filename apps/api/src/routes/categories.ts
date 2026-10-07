@@ -13,7 +13,8 @@ import {
 } from "@scalius/core/modules/categories";
 import { getStorefrontCategoryProducts, resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { marketPresenceQueryField } from "../schemas/markets";
-import { publicMarketPricing } from "../utils/public-market";
+import { publicMarketPricing, publicTranslation } from "../utils/public-market";
+import { localizedHandleFields } from "../schemas/translations";
 import { appliedFacetFilterSchema, appliedFacetFilters, productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema, errorResponses } from "../schemas/responses";
@@ -122,6 +123,7 @@ const categoryBreadcrumbItemSchema = categoryLinkSchema.extend({
 });
 
 const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
+  ...localizedHandleFields,
   content: z.string().nullable(),
   listingTemplate: z.string().nullable(),
   customFields: storefrontCustomFieldsSchema,
@@ -222,7 +224,7 @@ const listCategoriesRoute = createRoute({
 
 app.openapi(listCategoriesRoute, async (c) => {
   const db = c.get("db");
-  const categoriesList = await getPublicCategories(db);
+  const categoriesList = await getPublicCategories(db, publicTranslation(c));
   return ok(c, { categories: categoriesList });
 });
 
@@ -259,7 +261,7 @@ const listCategorySummariesRoute = createRoute({
 
 app.openapi(listCategorySummariesRoute, async (c) => {
   const query = c.req.valid("query");
-  return ok(c, await getPublicCategorySummaries(c.get("db"), query));
+  return ok(c, await getPublicCategorySummaries(c.get("db"), { ...query, translation: publicTranslation(c) }));
 });
 
 // GET /categories/sitemap — category pages for XML discovery (registered before /{slug})
@@ -286,7 +288,7 @@ const categorySitemapRoute = createRoute({
 });
 
 app.openapi(categorySitemapRoute, async (c) => {
-  return ok(c, { categories: await getPublicCategorySitemapEntries(c.get("db")) });
+  return ok(c, { categories: await getPublicCategorySitemapEntries(c.get("db"), publicTranslation(c)) });
 });
 
 // GET /categories/tree — the published tree for automatic menus
@@ -314,7 +316,7 @@ const getCategoryTreeRoute = createRoute({
 });
 
 app.openapi(getCategoryTreeRoute, async (c) => {
-  return ok(c, await getPublicCategoryTree(c.get("db")));
+  return ok(c, await getPublicCategoryTree(c.get("db"), publicTranslation(c)));
 });
 
 // GET /categories/:slug — get category by slug
@@ -344,7 +346,7 @@ const getCategoryBySlugRoute = createRoute({
 app.openapi(getCategoryBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-  const category = await getPublicCategoryBySlug(db, slug);
+  const category = await getPublicCategoryBySlug(db, slug, publicTranslation(c));
   if (!category) throw new NotFoundError("Category not found");
   return ok(c, { category });
 });
@@ -377,9 +379,10 @@ app.openapi(getCategoryChildrenRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const { limit } = c.req.valid("query");
   const db = c.get("db");
+  const translation = publicTranslation(c);
   const [breadcrumb, children] = await Promise.all([
-    getPublicCategoryBreadcrumb(db, slug),
-    getPublicCategoryChildren(db, slug, { limit }),
+    getPublicCategoryBreadcrumb(db, slug, translation),
+    getPublicCategoryChildren(db, slug, { limit, translation }),
   ]);
   if (breadcrumb.length === 0) throw new NotFoundError("Category not found");
   return ok(c, { children });
@@ -406,7 +409,7 @@ const getCategoryBreadcrumbRoute = createRoute({
 
 app.openapi(getCategoryBreadcrumbRoute, async (c) => {
   const { slug } = c.req.valid("param");
-  const breadcrumb = await getPublicCategoryBreadcrumb(c.get("db"), slug);
+  const breadcrumb = await getPublicCategoryBreadcrumb(c.get("db"), slug, publicTranslation(c));
   if (breadcrumb.length === 0) throw new NotFoundError("Category not found");
   return ok(c, { breadcrumb });
 });
@@ -468,7 +471,7 @@ const getCategorySectionRoute = createRoute({
 app.openapi(getCategorySectionRoute, async (c) => {
   const { slug, section } = c.req.valid("param");
   const query = c.req.valid("query");
-  const result = await getPublicCategorySection(c.get("db"), slug, section, query);
+  const result = await getPublicCategorySection(c.get("db"), slug, section, { ...query, translation: publicTranslation(c) });
   if (!result) throw new NotFoundError("Category not found");
   return ok(c, result);
 });
@@ -516,7 +519,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const params = c.req.valid("query");
   const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const [category, attributeFilters] = await Promise.all([
-    getPublicCategoryBySlug(db, slug),
+    getPublicCategoryBySlug(db, slug, publicTranslation(c)),
     resolvePublicAttributeFilters(db, queryParams, Object.keys(params)),
   ]);
 
@@ -628,7 +631,7 @@ const getCategoryProductSummariesRoute = createRoute({
 app.openapi(getCategoryProductSummariesRoute, async (c) => {
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
-  const summary = await getPublicCategorySection(c.get("db"), slug, "summary");
+  const summary = await getPublicCategorySection(c.get("db"), slug, "summary", { translation: publicTranslation(c) });
   if (!summary || summary.section !== "summary") throw new NotFoundError("Category not found");
   const category = summary.category;
   const queryParams = readRepeatedPublicQueryValues(c.req.url);

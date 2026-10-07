@@ -1,3 +1,17 @@
+import {
+    applyTranslation,
+    foldedTranslationChain,
+    localizedSlugSql,
+    translationRowsSql,
+    translationScopeOf,
+    NAME_FIELDS,
+    PRODUCT_CARD_FIELDS,
+    translateRows,
+    translationColumns,
+    type TranslationScope,
+    type TranslatedRowColumns,
+} from "../translations";
+import { deps } from "../../cache-deps";
 import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, or, type SQL } from "drizzle-orm";
@@ -181,6 +195,8 @@ async function runSearch(
     return { products: [], pages: [], categories: [] };
   }
 
+  // A presence's hits in its language (MARKETS-DESIGN D9); matching reads the source text.
+  const translation = translationScopeOf(options?.pricing);
   try {
     // Build Product Query
     // Set conditions (search hits, category) also scope the pricing projection.
@@ -236,6 +252,11 @@ async function runSearch(
         slug: sql<string>`${products.slug}`.as("search_product_slug"),
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
         categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
+        ...(translation ? {
+          trRows: translationRowsSql(translation, "product", products.id),
+          trSlug: localizedSlugSql(translation, "product", products.id),
+          categoryTrRows: translationRowsSql(translation, "category", categories.id),
+        } : {}),
         imageProjection: buildSearchImageProjection(),
         storeCurrencyCode: storeCurrencyCodeSql().as("search_store_currency_code"),
       })
@@ -265,6 +286,7 @@ async function runSearch(
           id: pages.id,
           title: pages.title,
           slug: pages.slug,
+          ...translationColumns(translation, "page", pages.id),
         })
         .from(pages)
         .where(and(...pageConditions))
@@ -288,6 +310,7 @@ async function runSearch(
           id: categories.id,
           name: categories.name,
           slug: categories.slug,
+          ...translationColumns(translation, "category", categories.id),
         })
         .from(categories)
         .where(and(...categoryConditions))
@@ -307,7 +330,7 @@ async function runSearch(
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(productsResult[0]?.storeCurrencyCode);
     // The hits in the page's market (as read at the root or in a neutral market).
-    const pricedHits = await priceProductCards(db, await marketPriceContextOf(options?.pricing), productsResult.map((row) => ({
+    const pricedHits = await priceProductCards(db, await marketPriceContextOf(options?.pricing), translateSearchProducts(translation, productsResult).map((row) => ({
       ...row,
       discountType: null,
       discountBps: 0,
@@ -347,17 +370,17 @@ async function runSearch(
     });
 
     // Format pages
-    const formattedPages = (searchPages ? pagesResult : []).filter(
+    const formattedPages = translateRows(translation, "page", (searchPages ? pagesResult : []).filter(
       (p) => p.id !== null
-    ).map((page) => ({
+    ) as Array<{ id: string; title: string; slug: string }>, { title: "title" }).map((page) => ({
       ...page,
       type: "page" as const,
     })) as PageSearchResult[];
 
     // Format categories
-    const formattedCategories = (searchCategories ? categoriesResult : []).filter(
+    const formattedCategories = translateRows(translation, "category", (searchCategories ? categoriesResult : []).filter(
       (c) => c.id !== null
-    ).map((category) => ({
+    ) as Array<{ id: string; name: string; slug: string }>, NAME_FIELDS).map((category) => ({
       ...category,
       type: "category" as const,
     })) as CategorySearchResult[];
@@ -371,4 +394,19 @@ async function runSearch(
     console.error("Search error:", error);
     throw error;
   }
+}
+
+/** Product hits in the presence's language: the name, the handle and the category name. */
+function translateSearchProducts<T extends { id: string; name: string; slug: string; categoryId: string | null; categoryName: string | null }>(
+  translation: TranslationScope | null,
+  rows: readonly T[],
+): T[] {
+  if (!translation) return rows as T[];
+  deps.translations("category", rows.map((row) => row.categoryId));
+  return translateRows(translation, "product", rows as Array<T & TranslatedRowColumns>, PRODUCT_CARD_FIELDS).map((row) => {
+    const { categoryTrRows, ...hit } = row as typeof row & { categoryTrRows?: string | null };
+    return hit.categoryId
+      ? applyTranslation(hit, foldedTranslationChain(translation, categoryTrRows), { categoryName: "name" })
+      : hit;
+  }) as unknown as T[];
 }

@@ -2,6 +2,7 @@
 // src/pages/[slug].astro
 // Dynamic route for CMS pages
 
+import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "../layouts/Layout.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
@@ -129,11 +130,13 @@ const featuredImageAlt =
   featuredImage?.altText || featuredImage?.filename || page.title;
 
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
+// The page's own handle (a localized one at a presence), not the URL's.
 const canonicalUrl = buildResourceCanonicalSeoUrl(
   "page",
-  `/${slug}`,
+  `/${page.slug ?? slug}`,
   page.canonicalPath,
 );
+const pagePaths = localizedPaths(page, (handle) => `/${handle}`);
 const richContentClasses =
   "prose prose-lg mx-auto w-full max-w-3xl dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
 ---
@@ -145,6 +148,7 @@ const richContentClasses =
   hideFooter={page.hideFooter}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  localizedPaths={pagePaths}
   ogImage={
     (featuredImage?.url ? mediaImageUrl(featuredImage.url, MEDIA_DISCOVERY_IMAGE_WIDTH) : null) ||
     firstRichContentImageUrl(sanitizedPageContent, MEDIA_DISCOVERY_IMAGE_WIDTH) ||

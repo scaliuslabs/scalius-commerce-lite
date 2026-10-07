@@ -14,6 +14,7 @@ import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { contentEntryPath } from "../pages";
 import { deps } from "../../cache-deps";
+import { translateRows, translationColumns, type TranslationScope } from "../translations";
 
 export const NAVIGATION_RESOURCE_READ_CHUNK_SIZE = 90;
 
@@ -79,7 +80,7 @@ interface ResourceReader {
     snapshots(rows: unknown): NavigationResourceSnapshot[];
 }
 
-function pageReader(db: Database, ids: string[]): ResourceReader {
+function pageReader(db: Database, ids: string[], translation: TranslationScope | null): ResourceReader {
     const statement = db.select({
         id: pages.id,
         title: pages.title,
@@ -88,10 +89,11 @@ function pageReader(db: Database, ids: string[]): ResourceReader {
         canonicalPath: pages.canonicalPath,
         isPublished: pages.isPublished,
         deletedAt: pages.deletedAt,
+        ...translationColumns(translation, "page", pages.id),
     }).from(pages).where(inArray(pages.id, ids));
     return {
         statement,
-        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+        snapshots: (rows) => translateRows(translation, "page", rows as Awaited<typeof statement>, { title: "title" }).map((row) => ({
             id: row.id,
             resourceType: "page",
             title: row.title,
@@ -108,7 +110,7 @@ function pageReader(db: Database, ids: string[]): ResourceReader {
     };
 }
 
-function categoryReader(db: Database, ids: string[]): ResourceReader {
+function categoryReader(db: Database, ids: string[], translation: TranslationScope | null): ResourceReader {
     const statement = db.select({
         id: categories.id,
         name: categories.name,
@@ -117,10 +119,11 @@ function categoryReader(db: Database, ids: string[]): ResourceReader {
         imageUrl: categories.imageUrl,
         status: categories.status,
         deletedAt: categories.deletedAt,
+        ...translationColumns(translation, "category", categories.id),
     }).from(categories).where(inArray(categories.id, ids));
     return {
         statement,
-        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => {
+        snapshots: (rows) => translateRows(translation, "category", rows as Awaited<typeof statement>, { name: "name" }).map((row) => {
             const imageUrl = row.imageUrl?.trim();
             return {
                 id: row.id,
@@ -139,17 +142,18 @@ function categoryReader(db: Database, ids: string[]): ResourceReader {
     };
 }
 
-function collectionReader(db: Database, ids: string[]): ResourceReader {
+function collectionReader(db: Database, ids: string[], translation: TranslationScope | null): ResourceReader {
     const statement = db.select({
         id: collections.id,
         name: collections.name,
         canonicalPath: collections.canonicalPath,
         isActive: collections.isActive,
         deletedAt: collections.deletedAt,
+        ...translationColumns(translation, "collection", collections.id, { slug: false }),
     }).from(collections).where(inArray(collections.id, ids));
     return {
         statement,
-        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+        snapshots: (rows) => translateRows(translation, "collection", rows as Awaited<typeof statement>, { name: "name" }).map((row) => ({
             id: row.id,
             resourceType: "collection",
             title: row.name,
@@ -164,7 +168,7 @@ function collectionReader(db: Database, ids: string[]): ResourceReader {
     };
 }
 
-function productReader(db: Database, ids: string[]): ResourceReader {
+function productReader(db: Database, ids: string[], translation: TranslationScope | null): ResourceReader {
     const statement = db.select({
         id: products.id,
         name: products.name,
@@ -172,10 +176,11 @@ function productReader(db: Database, ids: string[]): ResourceReader {
         canonicalPath: products.canonicalPath,
         isActive: products.isActive,
         deletedAt: products.deletedAt,
+        ...translationColumns(translation, "product", products.id),
     }).from(products).where(inArray(products.id, ids));
     return {
         statement,
-        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+        snapshots: (rows) => translateRows(translation, "product", rows as Awaited<typeof statement>, { name: "name" }).map((row) => ({
             id: row.id,
             resourceType: "product",
             title: row.name,
@@ -190,7 +195,7 @@ function productReader(db: Database, ids: string[]): ResourceReader {
     };
 }
 
-const RESOURCE_READERS: Record<NavigationResourceType, (db: Database, ids: string[]) => ResourceReader> = {
+const RESOURCE_READERS: Record<NavigationResourceType, (db: Database, ids: string[], translation: TranslationScope | null) => ResourceReader> = {
     page: pageReader,
     category: categoryReader,
     collection: collectionReader,
@@ -206,6 +211,8 @@ const RESOURCE_READERS: Record<NavigationResourceType, (db: Database, ids: strin
 export function planNavigationResourceSnapshots(
     db: Database,
     items: readonly NavigationTargetItem[],
+    /** A presence read's language: titles and handles in its translations (MARKETS-DESIGN D9). */
+    translation: TranslationScope | null = null,
 ): {
     statements: BatchItem[];
     resolve(results: readonly unknown[], offset: number): Map<string, NavigationResourceSnapshot>;
@@ -225,7 +232,7 @@ export function planNavigationResourceSnapshots(
     deps.products(idsByType.get("product") ?? []);
 
     const readers = [...idsByType].flatMap(([resourceType, ids]) => (
-        chunkNavigationResourceIds([...ids]).map((chunk) => RESOURCE_READERS[resourceType](db, chunk))
+        chunkNavigationResourceIds([...ids]).map((chunk) => RESOURCE_READERS[resourceType](db, chunk, translation))
     ));
     return {
         statements: readers.map((reader) => reader.statement),

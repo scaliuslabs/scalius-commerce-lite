@@ -14,6 +14,7 @@ import {
   gt,
   eq,
   ne,
+  getTableColumns,
   type SQL,
 } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
@@ -59,6 +60,51 @@ import {
   noDeletingMediaReferences,
 } from "../media-references";
 import { deps } from "../../cache-deps";
+import {
+  localizedSlugsSql,
+  parseLocalizedSlugs,
+  translateRow,
+  translateRows,
+  translationColumns,
+  type TranslationScope,
+} from "../translations";
+
+/** A page's or an article's translated text (MARKETS-DESIGN D9). */
+const PAGE_FIELDS = { title: "title", content: "content", excerpt: "excerpt", metaTitle: "metaTitle", metaDescription: "metaDescription" } as const;
+
+/**
+ * The page or article a handle names: its source handle first, else a
+ * localized handle (the page's language first, else any), so a buyer who
+ * switched language on a localized URL still reaches it.
+ */
+function pageIdBySlug(slug: string, translation: TranslationScope | null): SQL {
+  return sql`${pages.id} = coalesce(
+    (SELECT source_page.id FROM ${pages} AS source_page WHERE source_page.slug = ${slug}),
+    (SELECT page_handle.resource_id FROM localized_slugs AS page_handle
+     WHERE page_handle.resource_type = 'page' AND page_handle.slug = ${slug}
+     ORDER BY page_handle.locale = ${sql.raw(`'${translation?.locale ?? ""}'`)} DESC, page_handle.locale LIMIT 1)
+  )`;
+}
+
+/** The fold columns of a public page read: its handles in every language and, at a presence, its translation. */
+function publicPageColumns(translation: TranslationScope | null) {
+  return {
+    ...getTableColumns(pages),
+    localizedSlugs: localizedSlugsSql("page", pages.id),
+    ...translationColumns(translation, "page", pages.id),
+  };
+}
+
+/** A page row in the presence's language, with its handles by language when it has any. */
+function presentTranslatedPage<T extends { id: string; slug: string; localizedSlugs?: string | null; trRows?: string | null; trSlug?: string | null }>(
+  translation: TranslationScope | null,
+  row: T,
+) {
+  const { localizedSlugs: localizedSlugsText, ...page } = translateRow(translation, "page", row, PAGE_FIELDS)!;
+  deps.resourceHandles(translation !== null, "page", page.id);
+  const alternateSlugs = parseLocalizedSlugs(localizedSlugsText);
+  return Object.keys(alternateSlugs).length > 0 ? { ...page, localizedSlugs: alternateSlugs, sourceSlug: row.slug } : page;
+}
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 export {
@@ -294,12 +340,13 @@ export async function getPageBySlug(
  *  then `if (!page) throw new NotFoundError("Page not found");` + `return ok(c, { page });`
  *  This also eliminates unused imports: pages, isNull, eq, and, SQL from drizzle-orm. */
 /** A public page and its storefront-visible custom fields, in one round trip. */
-async function readPublicPage(db: Database, where: SQL) {
+async function readPublicPage(db: Database, where: SQL, translation: TranslationScope | null = null) {
   const [rows, customFieldRows] = await db.batch([
-    db.select().from(pages).where(where).limit(1),
+    db.select(publicPageColumns(translation)).from(pages).where(where).limit(1),
     selectStorefrontCustomFieldRows(db, "page", sql`(SELECT ${pages.id} FROM ${pages} WHERE ${where} LIMIT 1)`),
   ]);
-  const page = rows[0];
+  const read = rows[0];
+  const page = read ? presentTranslatedPage(translation, read) : null;
   return page ? { page, customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]) } : null;
 }
 
@@ -307,8 +354,8 @@ function toPublicPageWithFields(read: NonNullable<Awaited<ReturnType<typeof read
   return { ...toPublicPage(sanitizePageRecord(read.page)), customFields: read.customFields };
 }
 
-export async function getPublicPageById(db: Database, id: string) {
-  const read = await readPublicPage(db, and(eq(pages.id, id), publicPageVisibilityCondition("page"))!);
+export async function getPublicPageById(db: Database, id: string, translation: TranslationScope | null = null) {
+  const read = await readPublicPage(db, and(eq(pages.id, id), publicPageVisibilityCondition("page"))!, translation);
 
   // A page's id never moves to another row: its own key covers every answer.
   deps.page(id);
@@ -316,17 +363,21 @@ export async function getPublicPageById(db: Database, id: string) {
   return read ? toPublicPageWithFields(read) : null;
 }
 
-export async function getPublicPageBySlug(db: Database, slug: string) {
-  const read = await readPublicPage(db, and(eq(pages.slug, slug), publicPageVisibilityCondition("page"))!);
+export async function getPublicPageBySlug(db: Database, slug: string, translation: TranslationScope | null = null) {
+  const read = await readPublicPage(db, and(pageIdBySlug(slug, translation), publicPageVisibilityCondition("page"))!, translation);
   const page = read?.page ?? null;
 
   if (page) {
     // Slugs are unique: another page can take this one only after this row's
     // slug, status or existence changes, which advances its own key.
     deps.page(page.id);
+    // Found by a localized handle: another page can take that handle in the page's language.
+    if ("sourceSlug" in page && page.sourceSlug !== slug) deps.localizedSlugSpace("page");
   } else {
-    // Any page may be renamed to, created with or scheduled into this slug.
+    // Any page may be renamed to, created with or scheduled into this slug,
+    // or a localized handle may name one.
     deps.anyPage();
+    deps.localizedSlugSpace("page");
     await declareNextPagePublication(db, and(eq(pages.slug, slug), eq(pages.contentType, "page")));
   }
   return read ? toPublicPageWithFields(read) : null;
@@ -338,9 +389,11 @@ export async function getPublicPages(
     page?: number;
     limit?: number;
     sort?: "title" | "createdAt" | "-title" | "-createdAt";
+    translation?: TranslationScope | null;
   } = {},
 ) {
   const { page = 1, limit = 10, sort = "title" } = options;
+  const translation = options.translation ?? null;
 
   const whereClause = publicPageVisibilityCondition("page");
 
@@ -360,7 +413,7 @@ export async function getPublicPages(
 
   const offset = (page - 1) * limit;
   const results = await db
-    .select()
+    .select({ ...getTableColumns(pages), ...translationColumns(translation, "page", pages.id) })
     .from(pages)
     .where(whereClause)
     .orderBy(orderBy)
@@ -370,7 +423,7 @@ export async function getPublicPages(
   deps.anyPage();
   await declareNextPagePublication(db, eq(pages.contentType, "page"));
   return {
-    pages: results.map((row) => toPublicPage(sanitizePageRecord(row))),
+    pages: translateRows(translation, "page", results, PAGE_FIELDS).map((row) => toPublicPage(sanitizePageRecord(row))),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 }
@@ -435,20 +488,23 @@ export function planPublicPagesByIdDeclaration(db: Database, ids: readonly strin
   };
 }
 
-export async function getPublicArticleBySlug(db: Database, slug: string) {
-  const article =
+export async function getPublicArticleBySlug(db: Database, slug: string, translation: TranslationScope | null = null) {
+  const read =
     (await db
-      .select()
+      .select(publicPageColumns(translation))
       .from(pages)
       .where(
-        and(eq(pages.slug, slug), publicPageVisibilityCondition("article")),
+        and(pageIdBySlug(slug, translation), publicPageVisibilityCondition("article")),
       )
       .get()) ?? null;
+  const article = read ? presentTranslatedPage(translation, read) : null;
 
   if (article) {
     deps.page(article.id);
+    if (read!.slug !== slug) deps.localizedSlugSpace("page");
   } else {
     deps.anyPage();
+    deps.localizedSlugSpace("page");
     await declareNextPagePublication(db, and(eq(pages.slug, slug), eq(pages.contentType, "article")));
   }
   return article ? toPublicPage(sanitizePageRecord(article)) : null;
@@ -460,9 +516,11 @@ export async function getPublicArticles(
     page?: number;
     limit?: number;
     tag?: string;
+    translation?: TranslationScope | null;
   } = {},
 ) {
   const { page = 1, limit = 12, tag } = options;
+  const translation = options.translation ?? null;
   const normalizedTag = tag?.trim().toLocaleLowerCase("en-US") || null;
   const tagCondition = normalizedTag
     ? sql`EXISTS (
@@ -484,7 +542,7 @@ export async function getPublicArticles(
         .get()
     )?.count || 0;
   const results = await db
-    .select()
+    .select({ ...getTableColumns(pages), ...translationColumns(translation, "page", pages.id) })
     .from(pages)
     .where(whereClause)
     .orderBy(desc(pages.publishedAt), desc(pages.createdAt), desc(pages.id))
@@ -494,7 +552,7 @@ export async function getPublicArticles(
   deps.anyPage();
   await declareNextPagePublication(db, and(eq(pages.contentType, "article"), tagCondition));
   return {
-    articles: results.map((row) => toPublicPage(sanitizePageRecord(row))),
+    articles: translateRows(translation, "page", results, PAGE_FIELDS).map((row) => toPublicPage(sanitizePageRecord(row))),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 }

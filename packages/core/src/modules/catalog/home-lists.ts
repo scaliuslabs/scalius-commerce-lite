@@ -5,6 +5,7 @@
 // projection never ranks the whole catalogue) and carries a media statement
 // for exactly the same rows, so cards need no third round trip. The lists
 // come from `homeSectionRequests` (@scalius/shared/storefront-theme).
+import { NAME_FIELDS, translateRows, translationColumns, type TranslationScope } from "../translations";
 import {
     ON_SALE_DISCOUNT_SQL,
     ON_SALE_SKU_ROW_SQL,
@@ -132,7 +133,12 @@ function onSaleCandidates(window: number): SQL {
  * Statements for the product lists (not collections: those go through the
  * collection plan) and how to read them from the batch results.
  */
-export function planHomeProductLists(db: Database, lists: readonly HomeProductListRequest[]): {
+export function planHomeProductLists(
+    db: Database,
+    lists: readonly HomeProductListRequest[],
+    /** A presence read's language: cards and categories folded in its translations (none at the root). */
+    translation: TranslationScope | null = null,
+): {
     statements: BatchStatement[];
     /** The statements whose rows are cards (`priceCardRowsInResults`), relative to the plan. */
     productRowSlots: number[];
@@ -172,7 +178,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
             const ids = db.select({ id: productBuyerState.productId }).from(productBuyerState).where(and(...conditions))
                 .orderBy(desc(productBuyerState.productCreatedAt), asc(productBuyerState.productId)).limit(limit);
             const pricing = buildBuyerCatalogPricingProjection(db, { productScope: inArray(products.id, ids) });
-            add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
+            add(list.key, db.select(buildCollectionProductSelect(pricing, translation)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .where(inArray(products.id, ids))
                 .orderBy(...newestFirst()), ids, ids);
@@ -186,7 +192,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
             const ids = db.select({ id: products.id }).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .where(onSale).orderBy(...newestFirst()).limit(limit);
-            add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
+            add(list.key, db.select(buildCollectionProductSelect(pricing, translation)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .where(onSale).orderBy(...newestFirst()).limit(limit), ids,
             // The candidate window itself, shown or not: what the list depends on.
@@ -207,7 +213,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 .orderBy(desc(productSalesStats.sold30d), asc(productSalesStats.productId))
                 .limit(limit);
             const pricing = buildBuyerCatalogPricingProjection(db, { productScope: inArray(products.id, ids) });
-            add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
+            add(list.key, db.select(buildCollectionProductSelect(pricing, translation)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .innerJoin(productSalesStats, eq(productSalesStats.productId, products.id))
                 .where(inArray(products.id, ids))
@@ -221,6 +227,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
             name: categories.name,
             slug: categories.slug,
             canonicalPath: categories.canonicalPath,
+            ...translationColumns(translation, "category", categories.id),
         }).from(categories).where(and(
             sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
             ...publicCategoryConditions(),
@@ -233,7 +240,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
         resolve(results, offset) {
             const categoryRows = categorySlot === null
                 ? []
-                : results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[];
+                : translateRows(translation, "category", results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[], NAME_FIELDS);
             const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
             return slots.map(({ key, rows, media, facts, members }) => {
                 const productRows = results[offset + rows] as RawProduct[];
@@ -246,6 +253,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                         storeDecimalPlacesFromCode(productRows[0]?.storeCurrencyCode),
                         new Set(productRows.filter((row) => row.freeDelivery).map((row) => row.id)),
                     ),
+                    translation,
                 );
                 const source = lists.find((list) => list.key === key)!.source;
                 const memberIds = (results[offset + members] as Array<{ id: string }>).map((row) => row.id);
