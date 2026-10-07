@@ -276,7 +276,6 @@ function appendProviderIdentity(
 function appendPaymentMethodContent(
   control: HTMLElement,
   presentation: GatewayPresentation,
-  gatewayId: string,
   label: string,
   showRadio: boolean,
 ): void {
@@ -984,7 +983,6 @@ async function renderGateways(): Promise<void> {
     appendPaymentMethodContent(
       control,
       presentation,
-      gw.id,
       presentation.buyerLabel,
       !singleMethod,
     );
