@@ -24,12 +24,12 @@ export function createTiptapExtensions(placeholder: string): Extensions {
       underline: {},
       bulletList: {
         HTMLAttributes: {
-          class: "list-disc pl-5",
+          class: "list-disc ps-5",
         },
       },
       orderedList: {
         HTMLAttributes: {
-          class: "list-decimal pl-5",
+          class: "list-decimal ps-5",
         },
       },
       listItem: {},

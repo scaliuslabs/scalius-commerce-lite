@@ -111,7 +111,7 @@ function RulesTable({
     <table className="w-full text-body">
       <thead>
         <tr className="border-b border-border align-bottom text-muted-foreground">
-          <th className="py-2 pr-2 text-left text-caption font-medium">{t("event")}</th>
+          <th className="py-2 pe-2 text-start text-caption font-medium">{t("event")}</th>
           {columns.map((column) => (
             <th key={column.key} className="whitespace-nowrap px-1.5 py-2 text-center text-caption font-medium sm:w-24">{column.label}</th>
           ))}
@@ -120,13 +120,13 @@ function RulesTable({
       {groups.map((group) => (
         <tbody key={group.key}>
           <tr>
-            <th colSpan={columns.length + 1} className="pb-1 pt-4 text-left font-semibold">
+            <th colSpan={columns.length + 1} className="pb-1 pt-4 text-start font-semibold">
               {events(group.key)}
             </th>
           </tr>
           {group.events.map((event) => (
             <tr key={event} className="border-t border-border">
-              <td className="py-1.5 pr-2">
+              <td className="py-1.5 pe-2">
                 {linkEvents && isTemplatedNotificationType(event) ? (
                   <Link
                     to="/admin/settings/notifications/$event"

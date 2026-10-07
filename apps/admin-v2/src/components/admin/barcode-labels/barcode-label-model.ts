@@ -1,7 +1,6 @@
 import type { InventoryLabelVariant } from "~/lib/api-query-options/inventory";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 
-export const MAX_LABEL_SKUS = 150;
 export const MAX_LABEL_COPIES = 1_000;
 
 export type BarcodeRenderFormat = "CODE128" | "EAN13" | "UPC" | "EAN8" | "ITF14";

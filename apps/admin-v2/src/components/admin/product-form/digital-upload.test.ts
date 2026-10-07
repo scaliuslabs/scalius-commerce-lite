@@ -12,7 +12,8 @@ vi.mock("@scalius/api-client/sdk", () => ({
 }));
 vi.mock("~/lib/api", () => ({ apiData: (value: unknown) => Promise.resolve(value) }));
 
-import { formatBytes, partRange, resumeOrRestart, sendDigitalFile } from "./digital-upload";
+import { formatFileSize as formatBytes } from "../media-manager/utils/formatters";
+import { partRange, resumeOrRestart, sendDigitalFile } from "./digital-upload";
 
 const session = (uploadedParts: number[] = []) => ({ id: "upl_1", assetId: "dga_1", partSize: 4, partCount: 3, sizeBytes: 10, uploadedParts });
 const ok = () => new Response(JSON.stringify({ success: true, data: { partNumber: 1, size: 4 } }), { status: 200 });

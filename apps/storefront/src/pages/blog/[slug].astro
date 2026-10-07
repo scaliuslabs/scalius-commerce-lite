@@ -19,7 +19,7 @@ import {
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
-import { storeTimeZone } from "@/lib/store-time-zone";
+import { formatStoreDateTime } from "@/lib/store-time-zone";
 
 const { slug } = Astro.params;
 if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
@@ -92,10 +92,7 @@ function asDate(value: number | null): Date | null {
 const publishedDate = asDate(article.publishedAt);
 const updatedDate = asDate(article.updatedAt ?? null);
 const displayDate = publishedDate
-  ? new Intl.DateTimeFormat("en", {
-      dateStyle: "long",
-      timeZone: storeTimeZone(),
-    }).format(publishedDate)
+  ? formatStoreDateTime(publishedDate, "en", { dateStyle: "long" })
   : null;
 const readingMinutes = Math.max(
   1,

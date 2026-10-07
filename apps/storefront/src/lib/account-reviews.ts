@@ -657,7 +657,7 @@ export function writtenReviewListMarkup(reviews: readonly BuyerReview[], options
       ? formatCheckoutLanguageText(copy.reviewsReplyText, { store: storeName })
       : copy.reviewsReplyFallbackText;
     const reply = review.reply
-      ? `<div class="mt-3 rounded-r-lg border-l-4 border-primary bg-muted/50 px-3 py-2"><p class="text-xs font-semibold text-foreground">${escapeHtml(replyTitle)}</p>`
+      ? `<div class="mt-3 rounded-e-lg border-s-4 border-primary bg-muted/50 px-3 py-2"><p class="text-xs font-semibold text-foreground">${escapeHtml(replyTitle)}</p>`
         + `<p class="mt-1 whitespace-pre-line text-sm text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.reply.body)}</p></div>`
       : "";
     const edit = review.canEdit

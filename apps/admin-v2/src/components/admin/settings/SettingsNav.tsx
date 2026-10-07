@@ -120,7 +120,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
       <Search
         className={cn(
           "pointer-events-none absolute top-1/2 -translate-y-1/2",
-          sidebar ? "left-2.5 size-4 text-sidebar-muted-foreground" : "left-3.5 size-4 text-muted-foreground",
+          sidebar ? "inset-s-2.5 size-4 text-sidebar-muted-foreground" : "inset-s-3.5 size-4 text-muted-foreground",
         )}
         aria-hidden="true"
       />
@@ -128,14 +128,14 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
         <input
           type="search"
           {...field}
-          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover pl-8 pr-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-8"
+          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover ps-8 pe-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-8"
         />
       ) : (
         <Input
           type="search"
           {...field}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-          className="pl-9"
+          className="ps-9"
         />
       )}
     </div>

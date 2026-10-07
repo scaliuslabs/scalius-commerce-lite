@@ -368,7 +368,7 @@ function ProductEditor({
       <DropdownMenuTrigger asChild>
         <Button variant="outline" loading={appActions.pending !== null}>
           {r("moreActions")}
-          <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+          <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

@@ -6,7 +6,10 @@
  * and contact details, and for the shipping policy its saved shipping zones
  * and charges, fill the text so it matches what checkout does.
  */
+import { numberLocale } from "@scalius/shared/locale-format";
+import { formatAmount } from "@scalius/shared/money-format";
 import type { DeliveryZones } from "~/lib/api-query-options/settings-screens";
+import { getStoreRegion } from "~/lib/store-time-zone";
 
 export type PolicyKind = "refund" | "privacy" | "terms" | "shipping" | "contact";
 
@@ -70,10 +73,9 @@ function storeName(store: PolicyStore): string {
   }
 }
 
-/** ৳60, ৳1,500.50: lakh grouping, whole amounts without decimals. */
+/** ৳60, ৳1,500.50: the store country's grouping (lakhs in Bangladesh), whole amounts without decimals. */
 function money(amount: number, symbol: string): string {
-  const digits = Number.isInteger(amount) ? 0 : 2;
-  return `${symbol}${new Intl.NumberFormat("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: 2 }).format(amount)}`;
+  return `${symbol}${formatAmount(amount, numberLocale("en", getStoreRegion()), 2, true)}`;
 }
 
 function listPlaces(names: readonly string[]): string {

@@ -7,7 +7,6 @@ import {
   commerceDayStart,
   commerceMonthBounds,
   commerceWallTimeToEpoch,
-  formatCommerceCalendarDate,
   isValidTimeZone,
   normalizeTimeZone,
   shiftCommerceCalendarDateKey,
@@ -93,9 +92,7 @@ describe("commerce calendar time", () => {
     expect(normalizeTimeZone(" UTC ")).toBe("UTC");
   });
 
-  it("shifts and formats date-only keys without viewer-timezone drift", () => {
+  it("shifts date-only keys without viewer-timezone drift", () => {
     expect(shiftCommerceCalendarDateKey("2026-01-01", -1)).toBe("2025-12-31");
-    expect(formatCommerceCalendarDate("2026-08-14")).toBe("Aug 14, 2026");
-    expect(formatCommerceCalendarDate("not-a-date")).toBe("not-a-date");
   });
 });

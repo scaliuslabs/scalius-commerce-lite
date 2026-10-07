@@ -309,7 +309,7 @@ const secondaryButtonClass =
       <div class="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">
         {errorMessage}
         {ruleMessages.length > 0 && (
-          <ul class="mt-1 list-disc space-y-0.5 pl-5 font-normal">
+          <ul class="mt-1 list-disc space-y-0.5 ps-5 font-normal">
             {ruleMessages.map((message) => <li>{message}</li>)}
           </ul>
         )}
@@ -328,12 +328,12 @@ const secondaryButtonClass =
           <h2 id="quickContactHeading" class="text-base font-semibold text-foreground">{copy.contactHeadingText}</h2>
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
-              <label for="customerName" class={labelClass}>{copy.customerNameLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+              <label for="customerName" class={labelClass}>{copy.customerNameLabel}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span></label>
               <input id="customerName" name="customerName" type="text" autocomplete="name" maxlength="100" required value={form.customerName} placeholder={copy.customerNamePlaceholder} aria-invalid={errorFor("customerName") ? "true" : undefined} aria-describedby="customerName-error" class={fieldClass} />
               {errorFor("customerName") && <p id="customerName-error" class={errorClass}>{errorFor("customerName")}</p>}
             </div>
             <div>
-              <label for="customerPhone" class={labelClass}>{copy.customerPhoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+              <label for="customerPhone" class={labelClass}>{copy.customerPhoneLabel}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span></label>
               <input id="customerPhone" name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value={form.customerPhone} placeholder={phoneWords.placeholder} aria-invalid={errorFor("customerPhone") ? "true" : undefined} aria-describedby="customerPhone-help customerPhone-error" class={fieldClass} />
               <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{phoneWords.hints[mode]}</p>
               {errorFor("customerPhone") && <p id="customerPhone-error" class={errorClass}>{errorFor("customerPhone")}</p>}
@@ -342,7 +342,7 @@ const secondaryButtonClass =
               <div class="sm:col-span-2">
                 <label for="customerEmail" class={labelClass}>
                   {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
-                  {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
+                  {contactFields.email === "required" && <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>}
                 </label>
                 <input id="customerEmail" name="customerEmail" type="email" autocomplete="email" maxlength="254" required={contactFields.email === "required"} value={form.customerEmail} placeholder={copy.customerEmailPlaceholder} aria-invalid={errorFor("customerEmail") || errorFor("customerEmailRequired") ? "true" : undefined} class={fieldClass} />
                 {(errorFor("customerEmail") || errorFor("customerEmailRequired")) && <p class={errorClass}>{errorFor("customerEmail") || errorFor("customerEmailRequired")}</p>}
@@ -391,7 +391,7 @@ const secondaryButtonClass =
                   fieldClass={fieldClass}
                 />
                 <div>
-                  <label for="shippingAddress" class={labelClass}>{copy.shippingAddressLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
+                  <label for="shippingAddress" class={labelClass}>{copy.shippingAddressLabel}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span></label>
                   <textarea id="shippingAddress" name="shippingAddress" rows={2} maxlength="500" autocomplete="street-address" required placeholder={copy.shippingAddressPlaceholder} aria-invalid={errorFor("shippingAddress") ? "true" : undefined} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.shippingAddress}</textarea>
                   {errorFor("shippingAddress") && <p class={errorClass}>{errorFor("shippingAddress")}</p>}
                 </div>
@@ -565,7 +565,7 @@ const secondaryButtonClass =
                 {quote.shippingMethod && (
                   <div class="flex justify-between gap-3 text-muted-foreground">
                     <span>{copy.shippingText}</span>
-                    <span class="text-right font-medium tabular-nums text-foreground">
+                    <span class="text-end font-medium tabular-nums text-foreground">
                       {deliveryCharged === 0 ? copy.freeText : formatMoney(deliveryCharged)}
                       {deliveryDiscounts.length > 0 && ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})`}
                     </span>

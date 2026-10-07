@@ -56,7 +56,7 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
       <button
         type="button"
         disabled={unavailable}
-        className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="block w-full text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={selectionMode ? onToggle : onActivate}
         aria-pressed={selectionMode && !unavailable ? selected : undefined}
         aria-keyshortcuts={selectionMode && !unavailable ? "Shift+Enter" : undefined}
@@ -79,18 +79,18 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
             <ImageOff className="size-6" aria-label={t("noPreview")} />
           )}
           {file.kind === "video" ? (
-            <Badge className="absolute bottom-2 left-2">
+            <Badge className="absolute bottom-2 inset-s-2">
               <Play aria-hidden="true" />
               {t("video")}
             </Badge>
           ) : null}
           {selectionMode && unavailable ? (
-            <Badge className="absolute left-2 top-2">{t("added")}</Badge>
+            <Badge className="absolute inset-s-2 top-2">{t("added")}</Badge>
           ) : selectionMode ? (
             <span
               aria-hidden="true"
               className={cn(
-                "absolute left-2 top-2 flex size-5 items-center justify-center rounded-md border border-input bg-card",
+                "absolute inset-s-2 top-2 flex size-5 items-center justify-center rounded-md border border-input bg-card",
                 selected && "border-primary bg-primary text-primary-foreground",
               )}
             >
@@ -108,7 +108,7 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
       </button>
 
       {!selectionMode ? (
-        <div className="absolute right-1.5 top-1.5 flex gap-1">
+        <div className="absolute inset-e-1.5 top-1.5 flex gap-1">
           <Button type="button" variant="outline" size="icon-sm" onClick={onPreview} aria-label={t("previewFile", { name: file.filename })}>
             <Eye aria-hidden="true" />
           </Button>

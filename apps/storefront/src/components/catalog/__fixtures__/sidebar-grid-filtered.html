@@ -44,12 +44,12 @@
       <path d="M8 12H3">
     <span>
       "Filters"
-    <span class="-right-1 -top-1 absolute bg-primary flex h-5 items-center justify-center min-w-5 px-1 rounded-full text-primary-foreground text-xs">
+    <span class="-inset-e-1 -top-1 absolute bg-primary flex h-5 items-center justify-center min-w-5 px-1 rounded-full text-primary-foreground text-xs">
       "4"
   <label class="block relative">
     <span class="sr-only">
       "Sort products"
-    <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary font-semibold min-h-11 pl-3 pr-8 py-2.5 rounded-lg shadow-sm text-foreground text-sm w-full" data-catalog-sort="true" data-current-filters="{"page":"2","sortBy":"price-asc","minPrice":"600","size":["M"],"fabric":["Fabric 11"],"hasDiscount":"true"}" data-default-sort="newest" data-list-pathname="/categories/sarees" id="sortByMobile" name="sortBy">
+    <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary font-semibold min-h-11 pe-8 ps-3 py-2.5 rounded-lg shadow-sm text-foreground text-sm w-full" data-catalog-sort="true" data-current-filters="{"page":"2","sortBy":"price-asc","minPrice":"600","size":["M"],"fabric":["Fabric 11"],"hasDiscount":"true"}" data-default-sort="newest" data-list-pathname="/categories/sarees" id="sortByMobile" name="sortBy">
       <option value="newest">
         "Latest"
       <option selected="" value="price-asc">
@@ -232,13 +232,13 @@
                 <div class="min-w-0 relative">
                   <label class="sr-only" for="catalog-minPrice">
                     "Min price"
-                  <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
+                  <span aria-hidden="true" class="-translate-y-1/2 absolute inset-s-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
                     "৳"
                   <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="600">
                 <div class="min-w-0 relative">
                   <label class="sr-only" for="catalog-maxPrice">
                     "Max price"
-                  <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
+                  <span aria-hidden="true" class="-translate-y-1/2 absolute inset-s-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
                     "৳"
                   <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
                 <button class="catalog-filter-go" type="submit">
@@ -560,7 +560,7 @@
     <nav aria-label="Pagination" class="flex items-center justify-center lg:mb-8 mb-20 mt-8">
       <div class="bg-background border border-border flex items-center p-2 rounded-lg shadow-sm space-x-1">
         <a aria-label="Previous page" class="border border-border h-9 hover:bg-muted inline-flex items-center justify-center rounded-md text-foreground transition-colors w-9" href="/categories/sarees?fabric=Fabric+11&hasDiscount=true&minPrice=600&size=M&sortBy=price-asc">
-          <svg aria-hidden="true" class="h-4 w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24">
+          <svg aria-hidden="true" class="h-4 w-4" data-dir-icon="" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24">
             <path d="m15 18-6-6 6-6">
         <a aria-label="Page 1" class="border border-border font-medium h-9 hover:bg-muted inline-flex items-center justify-center max-[389px]:hidden min-w-9 rounded-md text-foreground text-sm transition-colors" href="/categories/sarees?fabric=Fabric+11&hasDiscount=true&minPrice=600&size=M&sortBy=price-asc">
           "1"
@@ -571,5 +571,5 @@
         <span class="hidden items-center max-[389px]:inline-flex px-1 text-muted-foreground text-sm">
           "of 3"
         <a aria-label="Next page" class="border border-border h-9 hover:bg-muted inline-flex items-center justify-center rounded-md text-foreground transition-colors w-9" href="/categories/sarees?fabric=Fabric+11&hasDiscount=true&minPrice=600&page=3&size=M&sortBy=price-asc">
-          <svg aria-hidden="true" class="h-4 w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24">
+          <svg aria-hidden="true" class="h-4 w-4" data-dir-icon="" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24">
             <path d="m9 18 6-6-6-6">

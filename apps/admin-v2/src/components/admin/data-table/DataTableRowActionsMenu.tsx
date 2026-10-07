@@ -46,13 +46,13 @@ export function DataTableRowActionsMenu({
         {children}
         {onView && (
           <DropdownMenuItem onClick={onView}>
-            <Eye className="mr-2 h-3.5 w-3.5" />
+            <Eye className="me-2 h-3.5 w-3.5" />
             {t("view")}
           </DropdownMenuItem>
         )}
         {onEdit && !showTrashed && (
           <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-3.5 w-3.5" />
+            <Pencil className="me-2 h-3.5 w-3.5" />
             {t("edit")}
           </DropdownMenuItem>
         )}
@@ -62,7 +62,7 @@ export function DataTableRowActionsMenu({
             onClick={() => action.onClick()}
             variant={action.destructive ? "destructive" : "default"}
           >
-            {action.icon && <action.icon className="mr-2 h-3.5 w-3.5" />}
+            {action.icon && <action.icon className="me-2 h-3.5 w-3.5" />}
             {action.label}
           </DropdownMenuItem>
         ))}
@@ -73,13 +73,13 @@ export function DataTableRowActionsMenu({
           <>
             {onRestore && (
               <DropdownMenuItem onClick={onRestore}>
-                <Undo className="mr-2 h-3.5 w-3.5" />
+                <Undo className="me-2 h-3.5 w-3.5" />
                 {t("restore")}
               </DropdownMenuItem>
             )}
             {onPermanentDelete && (
               <DropdownMenuItem onClick={onPermanentDelete} variant="destructive">
-                <AlertTriangle className="mr-2 h-3.5 w-3.5" />
+                <AlertTriangle className="me-2 h-3.5 w-3.5" />
                 {t("deletePermanently")}
               </DropdownMenuItem>
             )}
@@ -87,7 +87,7 @@ export function DataTableRowActionsMenu({
         ) : (
           onDelete && (
             <DropdownMenuItem onClick={onDelete} variant="destructive">
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              <Trash2 className="me-2 h-3.5 w-3.5" />
               {t("moveToTrash")}
             </DropdownMenuItem>
           )

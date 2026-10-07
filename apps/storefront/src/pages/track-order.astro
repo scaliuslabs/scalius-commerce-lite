@@ -151,7 +151,7 @@ const fieldClass =
 const primaryButton =
   "inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90";
 const secondaryButton =
-  "inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted";
+  "inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-start text-sm font-medium text-foreground transition-colors hover:bg-muted";
 const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[field]
   ? { "aria-invalid": "true" as const, "aria-describedby": errorId }
   : {};
@@ -201,7 +201,7 @@ const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[fi
               {timeline.length > 0 && (
                 <>
                   <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">{copy.orderTrackingUpdatesText}</h2>
-                  <ol class="space-y-3 border-l border-border pl-4" set:html={orderTimelineMarkup(timeline, trackingText)} />
+                  <ol class="space-y-3 border-s border-border ps-4" set:html={orderTimelineMarkup(timeline, trackingText)} />
                 </>
               )}
             </section>

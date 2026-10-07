@@ -276,7 +276,7 @@ export default function OrderSuccessButtons({
           className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
         >
           <svg
-            className="w-5 h-5 mr-2"
+            className="w-5 h-5 me-2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -297,7 +297,7 @@ export default function OrderSuccessButtons({
           onClick={handlePrintOrder}
         >
           <svg
-            className="w-5 h-5 mr-2"
+            className="w-5 h-5 me-2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -315,7 +315,7 @@ export default function OrderSuccessButtons({
       </div>
 
       {accountCard !== "checking" && accountCard !== "hidden" && !(statusView && accountCard === "sign_in") && (
-        <div className="flex w-full max-w-xl flex-col gap-3 rounded-xl border border-border p-4 text-left sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex w-full max-w-xl flex-col gap-3 rounded-xl border border-border p-4 text-start sm:flex-row sm:items-center sm:justify-between">
           {accountCard === "saved" ? (
             <p className="text-sm text-foreground">
               {copy.orderReceiptAccountSavedText} ·{" "}
@@ -356,7 +356,7 @@ export default function OrderSuccessButtons({
         </div>
       )}
 
-      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
+      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-start">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}

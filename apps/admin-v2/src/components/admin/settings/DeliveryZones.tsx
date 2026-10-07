@@ -296,7 +296,7 @@ function PlaceRow({
 }) {
   const t = useMessages(shippingMessages);
   return (
-    <li className={cn("flex min-h-11 items-center gap-2 pr-3", depth === 0 ? "pl-2" : depth === 1 ? "pl-8" : "pl-14")}>
+    <li className={cn("flex min-h-11 items-center gap-2 pe-3", depth === 0 ? "ps-2" : depth === 1 ? "ps-8" : "ps-14")}>
       {onExpand ? (
         <Button
           type="button"
@@ -421,7 +421,7 @@ function PlacePicker({
         {selected.length ? (
           <ul className="flex flex-wrap gap-2" aria-label={t("placeCount", { count: selected.length })}>
             {selected.map((item) => (
-              <li key={item.id} className="flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 text-body">
+              <li key={item.id} className="flex items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 text-body">
                 {item.parentName ? `${item.name}, ${item.parentName}` : item.name}
                 <Button
                   type="button"

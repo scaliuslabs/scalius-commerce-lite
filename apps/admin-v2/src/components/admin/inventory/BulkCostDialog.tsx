@@ -203,7 +203,7 @@ export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: B
                       />
                     </div>
                   </div>
-                  {problem ? <p className="text-right text-body text-destructive">{problem}</p> : null}
+                  {problem ? <p className="text-end text-body text-destructive">{problem}</p> : null}
                 </li>
               );
             })}

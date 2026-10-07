@@ -399,7 +399,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     help={t("codeHelp")}
                     error={codeError}
                     action={(
-                      <Button type="button" variant="link" size="sm" className="-my-2 -mr-2.5" onClick={() => update({ code: generateDiscountCode() })}>
+                      <Button type="button" variant="link" size="sm" className="-my-2 -me-2.5" onClick={() => update({ code: generateDiscountCode() })}>
                         {t("generateCode")}
                       </Button>
                     )}
@@ -654,7 +654,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     {t(draft.method === "code" ? "methodCodeTab" : "methodAutomaticTab")} · {t(`type_${draft.type}`)}
                   </p>
                 </div>
-                <ul className="list-disc space-y-1 pl-5 text-body">
+                <ul className="list-disc space-y-1 ps-5 text-body">
                   {summary.map((line) => <li key={line.key}>{t(line.key, line.vars)}</li>)}
                 </ul>
                 {preview.length > 0 ? (

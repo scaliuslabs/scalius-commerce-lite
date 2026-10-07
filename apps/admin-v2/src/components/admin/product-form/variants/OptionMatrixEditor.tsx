@@ -284,6 +284,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     blockedCommittedStock,
     allowSavedImageRemovalConfirmation: !dirty,
     requirePositivePrice,
+    weightUnit,
   });
   // A product without options sells one hidden SKU; edit its inventory directly.
   const simpleMode = options.length === 0 && savedOptions.length === 0 && (!productId || Boolean(defaultSku));
@@ -333,7 +334,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
   const draftIssue = locationIssue ?? (!simpleMode
     ? matrixIssue
-    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null) ?? costIssue;
+    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId), weightUnit) : null) ?? costIssue;
   const lineFor = (issue: DraftIssue) => {
     const variant = issue.variantId ? variants.find((row) => row.id === issue.variantId) : undefined;
     if (variant) return `${nameOf(variant)}: ${issue.message}`;
@@ -822,7 +823,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 values: [],
               }])}
             >
-              <Plus className="mr-1 h-3.5 w-3.5" /> {t(options.length ? "addAnotherOption" : "addOptions")}
+              <Plus className="me-1 h-3.5 w-3.5" /> {t(options.length ? "addAnotherOption" : "addOptions")}
             </Button>
           ) : null}
           {/* Limits show as the merchant nears them (from three quarters), never only at save. */}
@@ -961,7 +962,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
             ]}
           />
         </label>
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <div className="ms-auto flex shrink-0 items-center gap-0.5">
           <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
             <ArrowUp className="h-4 w-4" /><span className="sr-only">{t("moveOptionUp")}</span>
           </Button>

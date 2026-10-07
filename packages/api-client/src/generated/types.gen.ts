@@ -36280,6 +36280,10 @@ export type GetApiV1AdminSettingsStoreDefaultsResponses = {
              */
             weightUnit: 'g' | 'kg' | 'oz' | 'lb';
             revision: number;
+            /**
+             * The store's country (the backup market's, ISO 3166-1 alpha-2): numbers and dates are written, and weeks start, as there (CLDR). Null before the store has a market country.
+             */
+            countryCode: string | null;
         };
     };
 };

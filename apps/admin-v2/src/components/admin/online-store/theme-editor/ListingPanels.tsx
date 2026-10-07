@@ -74,7 +74,7 @@ function ListingFilterSketch({ filterStyle, theme }: { filterStyle: StorefrontLi
           {(filterStyle === "drawer" ? [0] : [0, 1, 2]).map((item) => <span key={item} className="w-1/4 rounded-full bg-(--sk-soft)" />)}
         </span>}
         <span className="flex min-h-0 flex-1 gap-1">
-          {sidebar && <span className="flex w-1/3 flex-col gap-1 border-r border-(--sk-edge) pr-1">
+          {sidebar && <span className="flex w-1/3 flex-col gap-1 border-e border-(--sk-edge) pe-1">
             {[0, 1, 2, 3].map((item) => <span key={item} className="h-1 rounded-full bg-(--sk-line)" />)}
           </span>}
           <span className="grid min-w-0 flex-1 grid-cols-3 gap-1">

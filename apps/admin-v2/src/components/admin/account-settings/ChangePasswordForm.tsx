@@ -116,7 +116,7 @@ export function ChangePasswordForm() {
           {field("next", t("newPassword"), "new-password", t("passwordMinHelp"))}
           {field("confirm", t("confirmPassword"), "new-password")}
           <div>
-            <Button type="button" variant="link" size="sm" className="-ml-3 sm:-ml-2.5" disabled={!isHydrated || saving} aria-pressed={shown} onClick={() => setShown((value) => !value)}>
+            <Button type="button" variant="link" size="sm" className="-ms-3 sm:-ms-2.5" disabled={!isHydrated || saving} aria-pressed={shown} onClick={() => setShown((value) => !value)}>
               {shown ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
               {t(shown ? "hidePasswords" : "showPasswords")}
             </Button>

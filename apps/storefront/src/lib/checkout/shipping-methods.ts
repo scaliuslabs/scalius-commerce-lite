@@ -291,7 +291,7 @@ export function enhanceShippingMethods(
     if (retry) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "ml-1 font-medium underline underline-offset-2";
+      button.className = "ms-1 font-medium underline underline-offset-2";
       button.textContent = copy.retryText;
       button.addEventListener("click", () => void load(true), { signal: options.signal });
       note.append(" ", button);

@@ -4158,7 +4158,7 @@ export const putApiV1AdminSettingsPlatform = <ThrowOnError extends boolean = fal
 /**
  * Get store defaults
  *
- * The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults).
+ * The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults), and its country.
  */
 export const getApiV1AdminSettingsStoreDefaults = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsStoreDefaultsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsStoreDefaultsResponses, GetApiV1AdminSettingsStoreDefaultsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsStoreDefaultsResponses, GetApiV1AdminSettingsStoreDefaultsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/store-defaults', ...options });
 

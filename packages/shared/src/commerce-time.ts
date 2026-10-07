@@ -5,6 +5,8 @@
 // keeps fixed 24-hour days. Pure and host-timezone independent: the host's own
 // zone is never consulted.
 
+import { dateTimeFormatter } from "./locale-format";
+
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DAY_SECONDS = 24 * 60 * 60;
 const DAY_MS = DAY_SECONDS * 1000;
@@ -13,28 +15,18 @@ const DAY_MS = DAY_SECONDS * 1000;
 // the platform settings read them without this module.
 export { DEFAULT_STORE_TIME_ZONE, TIME_ZONE_MAX_LENGTH, isValidTimeZone, normalizeTimeZone } from "./store-defaults";
 
-// One formatter per zone: building an Intl formatter is the expensive part.
-// A pure memo of immutable formatters, never merchant state; bounded.
-const FORMATTERS = /* @__PURE__ */ new Map<string, Intl.DateTimeFormat>();
-const FORMATTER_CACHE_LIMIT = 64;
-
+/** A zone's wall-clock parts (the formatting layer keeps one formatter per zone). */
 function partsFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = FORMATTERS.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hourCycle: "h23",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    if (FORMATTERS.size >= FORMATTER_CACHE_LIMIT) FORMATTERS.clear();
-    FORMATTERS.set(timeZone, formatter);
-  }
-  return formatter;
+  return dateTimeFormatter("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 /** The zone's offset from UTC in seconds at an instant (east positive: Dhaka +21600). */
@@ -193,20 +185,4 @@ export function zoneOffsetSchedule(timeZone: string, start: number, end: number)
     if (probe >= end) break;
   }
   return { initialOffset, changes };
-}
-
-/** Format a date-only merchant key without shifting it through any zone. */
-export function formatCommerceCalendarDate(
-  value: string,
-  options: Intl.DateTimeFormatOptions = {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  },
-  locale = "en-US",
-): string {
-  const parts = parseDateKey(value);
-  if (!parts) return value;
-  return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" })
-    .format(new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12)));
 }

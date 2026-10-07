@@ -5,7 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { TIME_ZONE_MAX_LENGTH } from "@scalius/shared/commerce-time";
 import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
-import { getStoreDefaults, saveStoreDefaults } from "@scalius/core/modules/platform";
+import { getStoreFormatting, saveStoreDefaults } from "@scalius/core/modules/platform";
 import {
   STORE_NAME_MAX_LENGTH,
   applyStoreSetup,
@@ -33,6 +33,12 @@ const storeDefaultsSchema = z.object({
   revision: z.number().int().nonnegative(),
 });
 
+const storeDefaultsReadSchema = storeDefaultsSchema.extend({
+  countryCode: z.string().length(2).nullable().openapi({
+    description: "The store's country (the backup market's, ISO 3166-1 alpha-2): numbers and dates are written, and weeks start, as there (CLDR). Null before the store has a market country.",
+  }),
+});
+
 // ─────────────────────────────────────────
 // Store defaults
 // ─────────────────────────────────────────
@@ -42,17 +48,17 @@ const getStoreDefaultsRoute = createRoute({
   path: "/store-defaults",
   tags: ["Admin - Settings"],
   summary: "Get store defaults",
-  description: "The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults).",
+  description: "The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults), and its country.",
   operationId: "dashboard.settings.store_defaults_get",
   responses: {
-    200: { description: "Store defaults", content: { "application/json": { schema: successEnvelope(storeDefaultsSchema) } } },
+    200: { description: "Store defaults", content: { "application/json": { schema: successEnvelope(storeDefaultsReadSchema) } } },
     ...errorResponses,
   },
 });
 
 app.openapi(getStoreDefaultsRoute, async (c) => {
   c.header("Cache-Control", "private, no-store");
-  return ok(c, await getStoreDefaults(c.get("db")));
+  return ok(c, await getStoreFormatting(c.get("db")));
 });
 
 const saveStoreDefaultsRoute = createRoute({

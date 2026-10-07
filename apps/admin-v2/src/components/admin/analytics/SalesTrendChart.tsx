@@ -111,7 +111,7 @@ export function SalesTrendChart({
       ) : null}
       <div className="flex gap-2">
         {/* One axis: three clean ticks, in text tokens. */}
-        <div className="flex h-48 shrink-0 flex-col justify-between py-0 text-right text-caption text-muted-foreground tabular-nums" aria-hidden>
+        <div className="flex h-48 shrink-0 flex-col justify-between py-0 text-end text-caption text-muted-foreground tabular-nums" aria-hidden>
           {ticks.map((tick) => <span key={tick} className="-my-2">{format(tick)}</span>)}
         </div>
         <div
@@ -221,7 +221,7 @@ export function SalesTrendChart({
           ) : null}
         </div>
       </div>
-      <div className="ml-14 flex justify-between text-caption text-muted-foreground" aria-hidden>
+      <div className="ms-14 flex justify-between text-caption text-muted-foreground" aria-hidden>
         <span>{points[0]?.label}</span>
         {points.length > 2 ? <span>{points[Math.floor(last / 2)]?.label}</span> : null}
         <span>{points.length > 1 ? points[last]?.label : null}</span>

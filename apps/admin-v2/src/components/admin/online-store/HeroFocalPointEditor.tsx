@@ -104,7 +104,7 @@ export function HeroFocalPointEditor({
               onChange={(event) => onChange({ ...focalPoint, x: clampPercent(event.target.valueAsNumber) })}
               className="h-4 min-w-0 flex-1 accent-primary"
             />
-            <span className="w-10 shrink-0 text-right text-body tabular-nums text-muted-foreground">{focalPoint.x}%</span>
+            <span className="w-10 shrink-0 text-end text-body tabular-nums text-muted-foreground">{focalPoint.x}%</span>
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor={`hero-focus-y-${id}`} className="w-24 shrink-0">{t("vertical")}</Label>
@@ -118,7 +118,7 @@ export function HeroFocalPointEditor({
               onChange={(event) => onChange({ ...focalPoint, y: clampPercent(event.target.valueAsNumber) })}
               className="h-4 min-w-0 flex-1 accent-primary"
             />
-            <span className="w-10 shrink-0 text-right text-body tabular-nums text-muted-foreground">{focalPoint.y}%</span>
+            <span className="w-10 shrink-0 text-end text-body tabular-nums text-muted-foreground">{focalPoint.y}%</span>
           </div>
         </div>
 

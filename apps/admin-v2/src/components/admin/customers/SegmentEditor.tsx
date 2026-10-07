@@ -236,7 +236,7 @@ function SegmentEditorPage({ segment }: { segment: CustomerSegment | null }) {
                         className="flex flex-wrap"
                       >
                         {(["all", "any"] as const).map((match) => (
-                          <label key={match} className="mr-2 flex min-h-11 items-center gap-2 text-body md:min-h-9">
+                          <label key={match} className="me-2 flex min-h-11 items-center gap-2 text-body md:min-h-9">
                             <RadioGroupItem value={match} />
                             {t(match === "all" ? "matchAll" : "matchAny")}
                           </label>

@@ -7,7 +7,7 @@ const MOBILE_SKELETON_CARDS = 4;
 /** Placeholder widths vary by column so the skeleton reads like real rows. */
 function CellSkeleton({ columnIndex, columnCount }: { columnIndex: number; columnCount: number }) {
   if (columnIndex === 0) return <Skeleton className="size-4" />;
-  if (columnIndex === columnCount - 1) return <Skeleton className="ml-auto size-8" />;
+  if (columnIndex === columnCount - 1) return <Skeleton className="ms-auto size-8" />;
   switch (columnIndex % 5) {
     case 1:
       return <Skeleton className="h-4 w-40 max-w-full" />;
@@ -42,7 +42,7 @@ export function DataTableInitialRows({
         <TableCell
           key={`initial-loading-cell-${rowIndex}-${columnIndex}`}
           // INDEX_CELL's padding, written out for the class checker.
-          className={includeDragColumn && columnIndex === 0 ? "w-[40px] px-2" : "px-1.5 first:pl-3 last:pr-3"}
+          className={includeDragColumn && columnIndex === 0 ? "w-[40px] px-2" : "px-1.5 first:ps-3 last:pe-3"}
         >
           <CellSkeleton columnIndex={columnIndex} columnCount={safeColumnCount} />
         </TableCell>

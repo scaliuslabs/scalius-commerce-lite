@@ -15,7 +15,7 @@ export function CharacterCounter({ current, recommended, max, className, label =
     <div
       aria-live="polite"
       className={cn(
-        "text-right text-body tabular-nums text-muted-foreground",
+        "text-end text-body tabular-nums text-muted-foreground",
         current > recommended && "text-warning",
         max && current >= max && "text-destructive",
         className,

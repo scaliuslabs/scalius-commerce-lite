@@ -86,7 +86,7 @@ function TransactionsCard({ card, transactions }: { card: GiftCardDetailRecord; 
                 </p>
                 {transaction.reason ? <p className="break-words text-body">“{transaction.reason}”</p> : null}
               </div>
-              <div className="shrink-0 space-y-0.5 sm:text-right">
+              <div className="shrink-0 space-y-0.5 sm:text-end">
                 <p className="text-body font-medium tabular-nums">
                   {transaction.amountMinor > 0 ? "+" : ""}{formatGiftCardMoney(transaction.amountMinor, card.currencyCode)}
                 </p>

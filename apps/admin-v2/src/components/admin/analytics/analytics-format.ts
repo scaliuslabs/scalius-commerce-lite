@@ -8,13 +8,9 @@ import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
 
 type Translate = (key: AnalyticsMessageKey, vars?: Record<string, string | number>) => string;
 
-/** A merchant date key as UTC noon: formatted in UTC it is that day in any store zone. */
-function utcNoon(dateKey: string): Date {
-  return new Date(`${dateKey}T12:00:00Z`);
-}
-
+/** A merchant day ("2026-08-05") as UTC noon written in UTC: that day in any store zone. */
 export function formatDayLabel(dateKey: string, options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }): string {
-  return formatDateTime(utcNoon(dateKey), { ...options, timeZone: "UTC" });
+  return formatDateTime(new Date(`${dateKey}T12:00:00Z`), { ...options, timeZone: "UTC" });
 }
 
 /** A bucket's label: "5 Aug", "Week of 2 Aug", "Aug 2026". */

@@ -42,7 +42,7 @@ function remainingAt(end: string, now: number): string {
     <div class="rounded-xl border border-border bg-card p-3 md:p-5">
       <SectionHeader id={headingId} title={title} href={href} hrefLabel="Shop all">
         <Fragment slot="aside">{endsAt && (
-          <p class="invisible mr-auto flex shrink-0 items-center gap-2 text-sm text-muted-foreground" data-deal-countdown data-ends-at={endsAt}>
+          <p class="invisible me-auto flex shrink-0 items-center gap-2 text-sm text-muted-foreground" data-deal-countdown data-ends-at={endsAt}>
             <span>Ends in</span>
             <time datetime={endsAt} class="rounded-md bg-primary px-2 py-0.5 font-semibold tabular-nums text-primary-foreground" data-deal-remaining>{remainingAt(endsAt, Date.now())}</time>
           </p>

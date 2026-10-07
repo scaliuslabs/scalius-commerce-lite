@@ -311,7 +311,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                     disabled={busy}
                     onChange={(notify) => update({ notify })}
                   />
-                  {errors.notify ? <p className="pl-7 text-body text-destructive">{error("notify")}</p> : null}
+                  {errors.notify ? <p className="ps-7 text-body text-destructive">{error("notify")}</p> : null}
                 </div>
               </div>
             </form>

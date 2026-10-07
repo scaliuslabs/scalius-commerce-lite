@@ -109,7 +109,7 @@ export function NavigationResourcePicker({
             <span className="min-w-0 truncate">
               {selected?.name || fallbackLabel || t(`choose_${type}`)}
             </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         )}
       </PopoverTrigger>
@@ -136,13 +136,13 @@ export function NavigationResourcePicker({
             {selected && !selected.available ? (
               <div className="border-b px-3 py-2 text-body" role="status">
                 <span className="font-medium">{selected.name}</span>
-                <span className="ml-2 text-destructive">{t("unavailable")}</span>
+                <span className="ms-2 text-destructive">{t("unavailable")}</span>
               </div>
             ) : null}
 
             {isInitialLoading ? (
               <div className="flex items-center justify-center py-7" role="status">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 <span className="text-body text-muted-foreground">{t("searching")}</span>
               </div>
             ) : isInitialError ? (
@@ -201,7 +201,7 @@ export function NavigationResourcePicker({
                 >
                   {resourceQuery.isFetchingNextPage ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       {t("loading")}
                     </>
                   ) : resourceQuery.isFetchNextPageError ? (

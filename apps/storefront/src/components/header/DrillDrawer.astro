@@ -212,8 +212,8 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
   .drill-node[open] > .drill-next {
     position: fixed;
     top: 0;
-    left: 0;
-    right: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
     z-index: calc(var(--drill-depth) * 2 + 1);
     border-bottom: 1px solid var(--border);
     border-radius: 0;

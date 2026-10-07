@@ -16,6 +16,7 @@ import {
   type SmsTemplate,
 } from "./notification-templates";
 import { readStoreLanguage } from "./store-messages";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 /**
  * The templates in effect: the merchant's changes over the defaults of the
@@ -46,7 +47,7 @@ function checkText(
     return;
   }
   if (value.length > max) {
-    issues.push({ path, message: `Use ${max.toLocaleString("en-US")} characters or fewer.` });
+    issues.push({ path, message: `Use ${formatNumber(max, "en")} characters or fewer.` });
     return;
   }
   const unknown = findUnknownVariables(value, event);

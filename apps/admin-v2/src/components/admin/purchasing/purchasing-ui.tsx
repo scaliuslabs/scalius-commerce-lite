@@ -15,14 +15,14 @@ export const CostInput = forwardRef<HTMLInputElement, Omit<ComponentProps<typeof
     const { symbol } = useCurrency();
     return (
       <div className={cn("relative", className)}>
-        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-body text-muted-foreground">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 inset-s-3 flex items-center text-body text-muted-foreground">
           {symbol}
         </span>
         <NumberInput
           ref={ref}
           {...props}
           // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
-          className="pl-7"
+          className="ps-7"
         />
       </div>
     );

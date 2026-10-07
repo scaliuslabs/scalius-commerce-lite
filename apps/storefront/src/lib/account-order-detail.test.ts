@@ -114,14 +114,14 @@ describe("account order detail", () => {
     renderOrderDetail(detail(), null);
     expect(text("orderTitle")).toBe("Order #1001");
     expect(text("orderStatus")).toBe("Confirmed");
-    expect(text("orderSubtitle")).toBe("Placed 24 Sep 2026, 5:46 AM");
+    expect(text("orderSubtitle")).toBe("Placed Sep 24, 2026, 5:46 AM");
     const steps = [...document.querySelectorAll("#orderProgress li")];
     expect(steps.map((step) => step.textContent?.replace(/\s+/g, " ").trim())).toEqual([
       "Order placed (done)", "Confirmed", "On its way", "Delivered",
     ]);
     expect(steps[1]?.getAttribute("aria-current")).toBe("step");
     expect(text("orderExpectedDelivery")).toBe("Expected delivery: 1-2 days");
-    expect(text("orderTimeline")).toBe("Confirmed The store confirmed your order. 24 Sep 2026, 8:00 AM Order placed We received your order. 24 Sep 2026, 5:46 AM");
+    expect(text("orderTimeline")).toBe("Confirmed The store confirmed your order. Sep 24, 2026, 8:00 AM Order placed We received your order. Sep 24, 2026, 5:46 AM");
     expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Total ৳1,080");
     expect(document.querySelector("#orderItems a")?.getAttribute("href")).toBe("/products/bb-tee");
     expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 ৳1,000");
@@ -206,7 +206,7 @@ describe("account order detail", () => {
     };
     renderOrderDetail(detail({}, { shipments: [shipment, { ...shipment, id: "s2", trackingUrl: "https://courier.example/t/TRK-9" }] }), null);
     const cards = document.querySelectorAll("#orderShipments article");
-    expect(cards[0]?.textContent?.replace(/\s+/g, " ").trim()).toBe("On its way · Pathao Tracking ID TRK-9 Updated 24 Sep 2026, 9:00 AM");
+    expect(cards[0]?.textContent?.replace(/\s+/g, " ").trim()).toBe("On its way · Pathao Tracking ID TRK-9 Updated Sep 24, 2026, 9:00 AM");
     expect(cards[0]?.querySelector("a")).toBeNull();
     expect(cards[1]?.querySelector("a")?.getAttribute("href")).toBe("https://courier.example/t/TRK-9");
   });
@@ -310,7 +310,7 @@ describe("account order detail", () => {
     collected.items = [{ ...order.items[0]!, fulfilledQuantity: 2 }];
     renderOrderDetail(collected, null);
     expect(text("orderStatus")).toBe("Picked up");
-    expect(text("orderTimeline")).toBe("Picked up 24 Sep 2026, 12:00 PM");
+    expect(text("orderTimeline")).toBe("Picked up Sep 24, 2026, 12:00 PM");
     expect(text("orderAddress")).not.toContain("We'll let you know");
     expect(document.body.textContent).not.toMatch(/Delivered/);
   });
@@ -337,7 +337,7 @@ describe("account order detail", () => {
     renderOrderDetail(detail({ status: "cancelled", statusLabel: "Cancelled" }, {
       progress: { steps: detail().progress!.steps, outcome: { key: "cancelled", label: "Cancelled", happenedAt: "2026-09-24T03:00:00.000Z" } },
     }), null);
-    expect(text("orderProgress")).toBe("Cancelled 24 Sep 2026, 9:00 AM");
+    expect(text("orderProgress")).toBe("Cancelled Sep 24, 2026, 9:00 AM");
     expect(document.querySelector("#orderProgress ol")).toBeNull();
     expect(text("orderPayment")).toBe("Cash on delivery No payment due");
   });

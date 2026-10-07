@@ -144,12 +144,13 @@ async function selectRows(ctx: AnalyticsContext, relation: SQL, fieldNames: read
 }
 
 function bucketRows<T extends Record<string, ReportCell>>(
+  ctx: AnalyticsContext,
   range: AnalyticsRange,
   granularity: AnalyticsGranularity,
   found: Map<string, T>,
   empty: () => T,
 ): ReportRow[] {
-  return analyticsBuckets(range, granularity).map((bucket) => ({
+  return analyticsBuckets(range, granularity, ctx.weekStart).map((bucket) => ({
     id: bucket.key,
     values: { period: bucket.key, ...(found.get(bucket.key) ?? empty()) },
   }));
@@ -183,7 +184,7 @@ const salesOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const bucket = bucketStartSql(rangeDaySql(ctx, range, "om.created_at"), granularity, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "om.created_at"), granularity, range, ctx.weekStart);
     const rows = await selectRows(ctx, sql`with ${salesCtes(ctx, range)}
       select ${bucket} as bucket, ${orderMeasuresSql("om")}
       from om group by ${bucket}`, ["bucket", ...ORDER_MEASURE_FIELDS]);
@@ -197,7 +198,7 @@ const salesOverTime: ReportImplementation = {
       values.average_order_value = 0;
       return values;
     };
-    return { rows: bucketRows(range, granularity, found, empty) };
+    return { rows: bucketRows(ctx, range, granularity, found, empty) };
   },
   finishTotals: finishOrderTotals,
 };
@@ -418,7 +419,7 @@ const customersOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const bucket = bucketStartSql(rangeDaySql(ctx, range, "cf.created_at"), granularity, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "cf.created_at"), granularity, range, ctx.weekStart);
     const fields = ["bucket", "customers", "new_customers", "orders", "new_customer_sales"] as const;
     const rows = await selectRows(ctx, sql`with ${salesCtes(ctx, range)},
       cf as (
@@ -442,7 +443,7 @@ const customersOverTime: ReportImplementation = {
       } as Record<string, ReportCell>];
     }));
     const empty = () => ({ customers: 0, new_customers: 0, returning_customers: 0, orders: 0, new_customer_sales: 0 });
-    return { rows: bucketRows(range, granularity, found, empty) };
+    return { rows: bucketRows(ctx, range, granularity, found, empty) };
   },
 };
 
@@ -839,7 +840,7 @@ const abandonedCheckouts: ReportImplementation = {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
     const { start, endExclusive } = rangeInstants(ctx, range);
-    const bucket = bucketStartSql(rangeDaySql(ctx, range, "ac.created_at"), granularity, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "ac.created_at"), granularity, range, ctx.weekStart);
     const window = ABANDONED_RECOVERY_WINDOW_DAYS * DAY_SECONDS;
     const fields = ["bucket", "abandoned", "reachable", "recovered", "recovered_sales"] as const;
     const rows = await selectRows(ctx, sql`with ac as (
@@ -873,7 +874,7 @@ const abandonedCheckouts: ReportImplementation = {
     const empty = () => ({ abandoned_checkouts: 0, reachable: 0, recovered: 0, recovery_rate: null, recovered_sales: 0 });
     const oldest = Math.floor(ctx.now.getTime() / 1000) - ABANDONED_RETENTION_DAYS * DAY_SECONDS;
     return {
-      rows: bucketRows(range, granularity, found, empty),
+      rows: bucketRows(ctx, range, granularity, found, empty),
       notes: start < oldest ? ["abandoned_retention"] : [],
     };
   },

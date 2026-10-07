@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectSourcePolicyViolations, policies, policyViolations } from "./check-source-policies.mjs";
+import { collectSourcePolicyViolations, physicalUtilityViolations, policies, policyViolations } from "./check-source-policies.mjs";
 import {
   browserClosureViolations,
   coreExportsViolations,
@@ -15,6 +15,22 @@ describe("source policies", () => {
 
   it.each(policies)("catches a sample violation: $rule", (policy) => {
     expect(policyViolations(policy, [{ name: "sample", text: policy.sample }])).not.toEqual([]);
+  });
+
+  it("catches physical side utilities, but not logical ones, rtl/ltr pairs or allowed positions", () => {
+    const text = [
+      '<div className={cn("ml-2 md:pr-4 ms-2 pe-4 inset-s-0 text-start", open && "border-l")}>left and right</div>',
+      'const corner = "rounded-tl-lg rtl:left-0 ltr:right-0";',
+      '<span class="sm:left-1/2 -translate-x-1/2 left-(--tip-x)">',
+      "// A comment may say ml-2.",
+    ].join("\n");
+    expect(physicalUtilityViolations([{ name: "a.tsx", text }], { "a.tsx": ["left-1/2"] })).toEqual([
+      "a.tsx:1: ml-2",
+      "a.tsx:1: md:pr-4",
+      "a.tsx:1: border-l",
+      "a.tsx:2: rounded-tl-lg",
+      "a.tsx:3: left-(--tip-x)",
+    ]);
   });
 
   describe("core domain boundaries", () => {

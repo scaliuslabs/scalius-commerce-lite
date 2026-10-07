@@ -139,7 +139,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
                       aria-expanded={open}
                       aria-controls={open ? detailsId : undefined}
                       aria-label={t("detailsFor", { time: formatWhen(delivery.createdAt) ?? "" })}
-                      className="-mx-1 flex min-h-8 items-center gap-1 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                      className="-mx-1 flex min-h-8 items-center gap-1 rounded-md px-1 text-start outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={() => setExpanded(open ? null : delivery.id)}
                     >
                       <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-90")} aria-hidden="true" />
@@ -187,7 +187,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
           </SheetDescription>
         </SheetHeader>
         <SheetClose asChild>
-          <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={t("close")}>
+          <Button type="button" variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")}>
             <X className="size-4" aria-hidden="true" />
           </Button>
         </SheetClose>

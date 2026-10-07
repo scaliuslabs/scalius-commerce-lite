@@ -28,12 +28,12 @@ export function OnlineStorePage({
           <Link
             to={back.to}
             aria-label={back.label}
-            className="-ml-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:size-9"
+            className="-ms-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:size-9"
           >
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
         ) : null}
-        <h1 className="mr-auto min-w-0 text-heading-lg">{title}</h1>
+        <h1 className="me-auto min-w-0 text-heading-lg">{title}</h1>
         {actions}
       </div>
       <SaveErrorBanner />

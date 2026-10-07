@@ -1,14 +1,14 @@
 import * as React from "react";
+import { NAV_PANEL_QUERY } from "./nav-button";
 import { matchesShortcut, typingIn } from "./shortcuts";
 
 const STORAGE_KEY = "scalius.nav.collapsed";
-const DESKTOP = "(min-width: 768px)";
 
 interface Shell {
-  /** Desktop: the navigation is the icon rail only (saved per browser). */
+  /** Wide windows: the navigation is the icon rail only (saved per browser). */
   collapsed: boolean;
   toggleCollapsed: () => void;
-  /** Phones: the navigation drawer. */
+  /** Narrow windows: the navigation drawer. */
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
   searchOpen: boolean;
@@ -60,7 +60,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!matchesShortcut("navigation", event) || typingIn(event.target)) return;
       event.preventDefault();
-      if (window.matchMedia(DESKTOP).matches) toggleCollapsed();
+      if (window.matchMedia(NAV_PANEL_QUERY).matches) toggleCollapsed();
       else setDrawerOpen((open) => !open);
     };
     window.addEventListener("keydown", onKeyDown);

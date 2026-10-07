@@ -5,6 +5,7 @@ import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
+import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 
 export const MAX_PRINTABLE_INVOICE_BYTES = 65_536;
 
@@ -26,10 +27,7 @@ function formatMoney(
   const code = currencyCode?.trim().toUpperCase() || "BDT";
   const decimals = decimalPlaces == null ? 2 : Math.min(3, Math.max(0, decimalPlaces));
   const major = minor ? amount / (10 ** decimals) : amount;
-  return `${html(code)} ${major.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}`;
+  return `${html(code)} ${formatAmount(major, moneyLocale(code), decimals)}`;
 }
 
 function itemTotal(item: InvoiceOrderItemSnapshot, decimalPlaces: number): number {

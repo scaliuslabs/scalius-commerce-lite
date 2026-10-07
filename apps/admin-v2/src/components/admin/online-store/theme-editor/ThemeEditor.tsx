@@ -664,7 +664,7 @@ export function ThemeEditor({ workspace, refetch }: {
         <div className="order-last flex w-full justify-center md:order-none md:w-auto">
           <PagePicker theme={theme} page={page} onPage={setPage} onCreate={canEdit ? () => setCreatingLanding(true) : undefined} />
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ms-auto flex items-center gap-1">
           <div role="group" aria-label={t("device")} className="hidden items-center gap-0.5 rounded-lg bg-muted p-0.5 md:flex">
             {DEVICES.map(({ value, icon: Icon }) => (
               <Button key={value} type="button" variant="ghost" size="icon-sm" aria-label={t(`device_${value}`)} aria-pressed={device === value} onClick={() => setDevice(value)}>
@@ -735,7 +735,7 @@ export function ThemeEditor({ workspace, refetch }: {
       <div className="flex min-h-0 flex-1">
         <aside
           className={cn(
-            "min-h-0 w-full shrink-0 overflow-y-auto border-r border-border bg-card lg:block lg:w-80 xl:w-72",
+            "min-h-0 w-full shrink-0 overflow-y-auto border-e border-border bg-card lg:block lg:w-80 xl:w-72",
             pane === "panel" ? "block" : "hidden",
           )}
           inert={draftAction}
@@ -788,7 +788,7 @@ export function ThemeEditor({ workspace, refetch }: {
           )}
         </main>
         {settingsPanel && wide ? (
-          <aside className="min-h-0 w-80 shrink-0 overflow-y-auto border-l border-border bg-card" inert={draftAction}>
+          <aside className="min-h-0 w-80 shrink-0 overflow-y-auto border-s border-border bg-card" inert={draftAction}>
             {settingsPanel}
           </aside>
         ) : null}

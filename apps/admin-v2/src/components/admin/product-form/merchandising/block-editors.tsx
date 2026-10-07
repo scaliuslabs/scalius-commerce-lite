@@ -318,7 +318,7 @@ export function BlockSettingsEditor({ type, settings, onChange, media, onMediaCh
                       type="button"
                       variant="secondary"
                       size="icon"
-                      className="absolute right-1 top-1 size-7"
+                      className="absolute inset-e-1 top-1 size-7"
                       aria-label={t("removeImage")}
                       onClick={() => set({ mediaIds: ids.filter((other) => other !== id) })}
                     >

@@ -93,7 +93,7 @@ export function AnalyticsToolbar({
           triggerClassName="h-8 w-auto min-w-28"
         />
       ) : null}
-      {actions ? <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="ms-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

@@ -179,15 +179,15 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
   .hsearch-leading-icon {
     align-self: center;
     flex-shrink: 0;
-    margin-left: 1rem;
+    margin-inline-start: 1rem;
     color: var(--muted-foreground);
   }
 
   .hsearch--scoped-right .hsearch-scope {
     order: 1;
     max-width: 10rem;
-    border-left: 1px solid var(--border);
-    border-right: 0;
+    border-inline-start: 1px solid var(--border);
+    border-inline-end: 0;
     background: var(--card);
   }
 
@@ -226,7 +226,7 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     max-width: 9rem;
     padding-inline: 0.75rem 0.5rem;
     border: 0;
-    border-right: 1px solid var(--border);
+    border-inline-end: 1px solid var(--border);
     background: var(--muted);
     color: var(--foreground);
     font-size: 0.8125rem;

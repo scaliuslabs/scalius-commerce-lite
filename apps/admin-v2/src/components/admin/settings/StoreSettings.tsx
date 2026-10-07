@@ -19,6 +19,7 @@ import {
 } from "@scalius/shared/currency";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { currencySymbol } from "@scalius/shared/money-format";
 import {
   normalizeDashboardUrl,
   normalizeMediaBaseUrl,
@@ -572,16 +573,6 @@ function currencyName(code: string): string {
   }
 }
 
-function currencySymbol(code: string): string {
-  try {
-    return new Intl.NumberFormat("en", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
-      .formatToParts(0)
-      .find((part) => part.type === "currency")?.value ?? code;
-  } catch {
-    return code;
-  }
-}
-
 function CurrencyFields() {
   const t = useMessages(storeSettingsMessages);
   const common = useMessages(settingsMessages);
@@ -653,7 +644,7 @@ function CurrencyFields() {
 // ── Time zone and units ─────────────────────────────────────────────────
 
 const storeDefaultsQuery = storeDefaultsQueryOptions();
-const STORE_DEFAULTS_FALLBACK: StoreDefaultsPayload = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0 };
+const STORE_DEFAULTS_FALLBACK: StoreDefaultsPayload = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0, countryCode: "BD" };
 
 function useStoreDefaultsForm() {
   const common = useMessages(settingsMessages);
@@ -665,7 +656,8 @@ function useStoreDefaultsForm() {
         body: { expectedRevision, timeZone: draft.timeZone, unitSystem: draft.unitSystem, weightUnit: draft.weightUnit },
       }));
       setStoreTimeZone(saved.timeZone);
-      return saved;
+      // The country is Settings → Markets'; this card leaves it as read.
+      return { ...saved, countryCode: draft.countryCode };
     },
     defaultValues: STORE_DEFAULTS_FALLBACK,
     // The platform document holds them: the web addresses card reloads its revision.
@@ -797,7 +789,7 @@ function CountryFields() {
       {selected.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {selected.map((code) => (
-            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 pr-0.5 text-body text-secondary-foreground">
+            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 pe-0.5 text-body text-secondary-foreground">
               {countryName(code)}
               <button
                 type="button"
@@ -812,14 +804,14 @@ function CountryFields() {
         </div>
       ) : null}
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Search className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
           type="search"
           value={search}
           placeholder={t("countrySearch")}
           aria-label={t("countrySearch")}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-          className="pl-9"
+          className="ps-9"
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>

@@ -67,12 +67,12 @@ const {
     class="relative flex h-14 w-14 items-center justify-center rounded-full bg-black/65 text-white shadow-md transition-transform duration-200 group-hover/video:scale-105 motion-reduce:transition-none"
     aria-hidden="true"
   >
-    <Icon name="play" class="ml-0.5 h-6 w-6 fill-current" />
+    <Icon name="play" class="ms-0.5 h-6 w-6 fill-current" />
   </span>
   <span
     data-video-duration
     hidden={!duration}
-    class="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-none text-white"
+    class="absolute bottom-2 inset-s-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-none text-white"
   >{duration ?? ""}</span>
 </a>
 

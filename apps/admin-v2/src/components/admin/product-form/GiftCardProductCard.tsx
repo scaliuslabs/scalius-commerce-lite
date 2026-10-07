@@ -78,7 +78,7 @@ export function GiftCardProductCard({ form, readOnly }: {
         </div>
         {isGiftCard ? (
           <div className="space-y-2 border-t pt-3">
-            <ul className="list-disc space-y-1 pl-5 text-body text-muted-foreground">
+            <ul className="list-disc space-y-1 ps-5 text-body text-muted-foreground">
               {RULES.map((rule) => <li key={rule}>{t(rule)}</li>)}
             </ul>
             {switchedOn ? <p role="status" className="text-body">{t("productSwitchedOn")}</p> : null}

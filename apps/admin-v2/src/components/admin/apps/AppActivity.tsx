@@ -112,7 +112,7 @@ function Deliveries({ appId, canManage }: { appId: string; canManage: boolean })
                       aria-expanded={open}
                       aria-controls={open ? detailsId : undefined}
                       aria-label={t("detailsFor", { time: formatWhen(delivery.createdAt) ?? "" })}
-                      className="-mx-1 flex min-h-8 items-center gap-1 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                      className="-mx-1 flex min-h-8 items-center gap-1 rounded-md px-1 text-start outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={() => setExpanded(open ? null : delivery.id)}
                     >
                       <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-90")} aria-hidden="true" />
@@ -213,7 +213,7 @@ function LogLine({ line }: { line: AppLogLine }) {
           type="button"
           aria-expanded={open}
           aria-controls={open ? fieldsId : undefined}
-          className="flex w-full items-start gap-1 rounded-md text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-start gap-1 rounded-md text-start outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setOpen(!open)}
         >
           <span className="flex h-lh items-center">
@@ -222,7 +222,7 @@ function LogLine({ line }: { line: AppLogLine }) {
           <span className="min-w-0 flex-1 space-y-0.5">{summary}</span>
         </button>
       ) : (
-        <div className="space-y-0.5 pl-5">{summary}</div>
+        <div className="space-y-0.5 ps-5">{summary}</div>
       )}
       {open ? (
         <pre id={fieldsId} className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted px-3 py-2 font-mono text-body">

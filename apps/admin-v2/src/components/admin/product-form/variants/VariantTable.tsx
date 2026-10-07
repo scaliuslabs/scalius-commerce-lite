@@ -353,11 +353,11 @@ export function VariantTable(props: VariantTableProps) {
             ))}
           </div>
         ) : null}
-        <label className="relative ml-auto">
+        <label className="relative ms-auto">
           <span className="sr-only">{t("findVariant")}</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search aria-hidden="true" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           {/* eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon, as in the list toolbar */}
-          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("findVariant")} className="w-44 pl-8" />
+          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("findVariant")} className="w-44 ps-8" />
         </label>
       </div>
 
@@ -545,7 +545,7 @@ const VariantRow = React.memo(function VariantRow({
         label={t("photoFor", { name })}
         onChange={(imageId) => change({ imageId: imageId ?? null })}
       />
-      <div className={cn("min-w-0", depth === 1 && "pl-3")}>
+      <div className={cn("min-w-0", depth === 1 && "ps-3")}>
         {/* Only the name is the button, so its focus ring hugs the text. */}
         <button
           type="button"
@@ -553,7 +553,7 @@ const VariantRow = React.memo(function VariantRow({
           aria-expanded={expanded}
           aria-label={t("moreFieldsFor", { name })}
           title={name}
-          className="inline-flex max-w-full items-center gap-1 rounded-sm text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex max-w-full items-center gap-1 rounded-sm text-start font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate">{label}</span>
           {expanded ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" /> : null}
@@ -585,7 +585,7 @@ const VariantRow = React.memo(function VariantRow({
           />
           {priceError ? <p className="text-body text-destructive">{priceError}</p> : margin ? (
             <p
-              className={cn("text-right text-body tabular-nums", margin.margin !== null && margin.margin < 0 ? "text-destructive" : "text-muted-foreground")}
+              className={cn("text-end text-body tabular-nums", margin.margin !== null && margin.margin < 0 ? "text-destructive" : "text-muted-foreground")}
               title={t("profitAndMargin", { profit: money.fmt(margin.profit), margin: formatMargin(margin.margin) })}
             >
               {t("marginShort", { margin: formatMargin(margin.margin) })}
@@ -707,7 +707,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
         type="button"
         onClick={() => onToggle(group.valueId)}
         aria-expanded={open}
-        className="inline-flex max-w-full items-center gap-1 justify-self-start rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex max-w-full items-center gap-1 justify-self-start rounded-sm text-start font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {open ? <ChevronDown aria-hidden="true" className="size-4 shrink-0" /> : <ChevronRight aria-hidden="true" className="size-4 shrink-0" />}
         <span className="truncate">{group.label}</span>
@@ -813,7 +813,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="sm">
             {r("moreActions")}
-            <ChevronDown aria-hidden="true" className="ml-1 size-4" />
+            <ChevronDown aria-hidden="true" className="ms-1 size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">

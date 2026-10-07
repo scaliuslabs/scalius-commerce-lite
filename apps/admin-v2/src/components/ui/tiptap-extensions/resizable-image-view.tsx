@@ -126,8 +126,8 @@ export function ResizableImageView({
     textAlign === "center"
       ? "mx-auto"
       : textAlign === "right"
-        ? "ml-auto"
-        : "mr-auto";
+        ? "ms-auto"
+        : "me-auto";
 
   const presetWidths = ["25%", "50%", "75%", "100%"];
   const sizeValue = presetWidths.includes(width)

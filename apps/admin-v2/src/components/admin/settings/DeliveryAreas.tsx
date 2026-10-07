@@ -45,7 +45,8 @@ import {
 import { placeCountriesQueryOptions } from "~/lib/api-query-options/places";
 import { countryName } from "~/lib/country-name";
 import { queryKeys } from "~/lib/query-keys";
-import { formatNumber, useLocale, useMessages } from "~/i18n";
+import { formatList } from "@scalius/shared/locale-words";
+import { formatNumber, getLocale, useLocale, useMessages } from "~/i18n";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
@@ -72,7 +73,6 @@ function useLevelNames(country: string) {
 /** "1 thana and 3 areas", or null when nothing is under the places being deleted. */
 function usePlacesUnder(country: string) {
   const t = useMessages(shippingMessages);
-  const locale = useLocale();
   const names = useLevelNames(country);
   return (descendants: Descendants): string | null => {
     const parts = Object.entries(descendants)
@@ -80,7 +80,7 @@ function usePlacesUnder(country: string) {
       .sort(([left], [right]) => Number(left) - Number(right))
       .map(([level, count]) => t("levelCount", { count: formatNumber(count), name: names.word(Number(level), count) }));
     if (parts.length === 0) return null;
-    return new Intl.ListFormat(locale === "bn" ? "bn" : "en", { type: "conjunction" }).format(parts);
+    return formatList(parts, getLocale());
   };
 }
 
@@ -338,7 +338,7 @@ export function DeliveryAreasManager() {
     <>
       <SettingsCard
         header={
-          <Tabs value={String(level)} onValueChange={(value) => changeLevel(Number(value))} className="mr-auto">
+          <Tabs value={String(level)} onValueChange={(value) => changeLevel(Number(value))} className="me-auto">
             <TabsList>
               {levels.map((value) => (
                 <TabsTrigger key={value} value={String(value)}>{names.many(value)}</TabsTrigger>
@@ -404,11 +404,11 @@ export function DeliveryAreasManager() {
             </div>
             <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row">
               <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Search className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   type="search"
                   // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-                  className="pl-9"
+                  className="ps-9"
                   value={search}
                   placeholder={t("search")}
                   aria-label={t("search")}
@@ -482,7 +482,7 @@ export function DeliveryAreasManager() {
                     <SettingsDialog
                       title={t("editLocation", { name: location.name })}
                       trigger={
-                        <button type="button" disabled={!canEdit} className="min-h-11 min-w-0 flex-1 text-left">
+                        <button type="button" disabled={!canEdit} className="min-h-11 min-w-0 flex-1 text-start">
                           <span className="block truncate text-body font-medium">{location.name}</span>
                           <span className="block truncate text-body text-muted-foreground">
                             {[

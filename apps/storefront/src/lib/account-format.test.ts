@@ -3,10 +3,10 @@ import { accountMoney, formatAccountDate, formatDeliveryArea, openRequestLabel }
 
 describe("account display rules", () => {
   it("formats every account date in Bangladesh time with an AM/PM marker", () => {
-    expect(formatAccountDate("2026-09-23T23:46:00.000Z")).toBe("24 Sep 2026, 5:46 AM");
-    expect(formatAccountDate("2026-09-24T06:00:00.000Z")).toBe("24 Sep 2026, 12:00 PM");
-    expect(formatAccountDate("2026-09-24T18:05:00.000Z")).toBe("25 Sep 2026, 12:05 AM");
-    expect(formatAccountDate("2026-09-23T23:46:00.000Z", { time: false })).toBe("24 Sep 2026");
+    expect(formatAccountDate("2026-09-23T23:46:00.000Z")).toBe("Sep 24, 2026, 5:46 AM");
+    expect(formatAccountDate("2026-09-24T06:00:00.000Z")).toBe("Sep 24, 2026, 12:00 PM");
+    expect(formatAccountDate("2026-09-24T18:05:00.000Z")).toBe("Sep 25, 2026, 12:05 AM");
+    expect(formatAccountDate("2026-09-23T23:46:00.000Z", { time: false })).toBe("Sep 24, 2026");
     expect(formatAccountDate(null)).toBe("");
     expect(formatAccountDate("not a date")).toBe("");
   });

@@ -1,5 +1,5 @@
-import { formatDate } from "@scalius/shared/timestamps";
-import { getStoreTimeZone } from "~/lib/store-time-zone";
+import { unixToDate } from "@scalius/shared/timestamps";
+import { formatDateTime } from "~/i18n";
 import { cn } from "@scalius/shared/utils";
 
 interface ShipmentMetadataDisplayProps {
@@ -85,20 +85,20 @@ export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadat
   }
 
   // Show last webhook time if available
-  const lastWebhookAt = parsed.lastWebhookAt as string | number | undefined;
+  const lastWebhookAt = unixToDate((parsed.lastWebhookAt as string | number | undefined) ?? null);
 
   return (
     <dl className={cn("space-y-1 text-body", className)}>
       {unique.map(({ label, value }) => (
         <div key={label} className="flex justify-between gap-4">
           <dt className="text-muted-foreground">{label}</dt>
-          <dd className="text-right font-medium">{value}</dd>
+          <dd className="text-end font-medium">{value}</dd>
         </div>
       ))}
-      {lastWebhookAt && (
+      {lastWebhookAt && Number.isFinite(lastWebhookAt.getTime()) && (
         <div className="flex justify-between gap-4 border-t pt-1">
           <dt className="text-muted-foreground">Last update</dt>
-          <dd className="text-muted-foreground">{formatDate(lastWebhookAt, getStoreTimeZone())}</dd>
+          <dd className="text-muted-foreground">{formatDateTime(lastWebhookAt, { dateStyle: "medium", timeStyle: "short" })}</dd>
         </div>
       )}
     </dl>

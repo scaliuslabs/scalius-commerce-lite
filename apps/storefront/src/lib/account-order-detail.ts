@@ -265,7 +265,7 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   if (methods) {
     methods.innerHTML = gateways.map((gateway) => {
       const selected = gateway === selectedGateway;
-      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${gatewayMarkup(gateway)}</button>`;
+      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${gatewayMarkup(gateway)}</button>`;
     }).join("");
   }
   container.classList.remove("hidden");
@@ -439,7 +439,7 @@ function renderSupport(detail: AccountOrderDetail): void {
   if (actions) {
     actions.hidden = !canRequest;
     actions.innerHTML = detail.supportRequestActions.map((action) => `
-      <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
+      <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-start text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
         <span class="font-medium">${escapeHtml(action.label)}</span>
         <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? supportActionDescription(action, detail.order, copy) : action.disabledReason ?? supportActionDescription(action, detail.order, copy))}</span>
       </button>`).join("");
@@ -548,7 +548,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
-      </div>${extras ? `<div class="text-sm sm:pl-[4.75rem]">${extras}</div>` : ""}</li>`;
+      </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
     };
     const groups = groupOrderLines(detail.items, order, copy);
     items.innerHTML = showsOrderLineGroupHeadings(groups)
@@ -569,7 +569,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   if (summary) {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
     const row = (label: string, valueHtml: string, total = false) =>
-      `<div class="flex justify-between gap-4 ${total ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"><dt>${escapeHtml(label)}</dt><dd class="text-right tabular-nums">${valueHtml}</dd></div>`;
+      `<div class="flex justify-between gap-4 ${total ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"><dt>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
@@ -592,7 +592,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       !showsDeliveryRow ? "" : row(
         deliveryRow.label,
         [
-          deliveryRow.struck ? `<s class="mr-1.5">${escapeHtml(deliveryRow.struck)}</s>` : "",
+          deliveryRow.struck ? `<s class="me-1.5">${escapeHtml(deliveryRow.struck)}</s>` : "",
           cell(deliveryRow.value, "text-foreground"),
           deliveryRow.codes ? ` ${cell(`(${deliveryRow.codes})`)}` : "",
         ].join(""),

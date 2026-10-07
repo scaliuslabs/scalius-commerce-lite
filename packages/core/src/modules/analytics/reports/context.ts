@@ -1,9 +1,11 @@
-// One analytics request's context: the store currency, read once per request, and the store's time zone
-// (resolved at Worker entry with the platform settings, so it costs no read). Nothing here outlives the
+// One analytics request's context: the store currency and country, read once per request, and the store's
+// time zone (resolved at Worker entry with the platform settings, so it costs no read). Nothing here outlives the
 // request (no module state): a Worker isolate serves many stores' requests.
 import type { Database } from "@scalius/database/client";
 import { type StoreCurrency } from "../../settings";
 import { readStoreCurrency } from "../../markets";
+import { weekStartDay, type WeekDay } from "@scalius/shared/week-start";
+import { readStoreCountry } from "../../../utils/store-country";
 import { retryTransientD1 } from "../../../utils/transient-d1";
 
 export interface AnalyticsContext {
@@ -12,6 +14,8 @@ export interface AnalyticsContext {
   currency: StoreCurrency;
   /** The store's IANA zone: every merchant day, week and month is a day in it. */
   timeZone: string;
+  /** The first day of a "week" bucket: the store country's (CLDR), Sunday in Bangladesh. */
+  weekStart: WeekDay;
   now: Date;
   /**
    * A payment method's name from its provider (the request's gateways: an
@@ -22,7 +26,8 @@ export interface AnalyticsContext {
 }
 
 export async function createAnalyticsContext(db: Database, timeZone: string, now: Date = new Date()): Promise<AnalyticsContext> {
-  return { db, currency: await readStoreCurrency(db), timeZone, now };
+  const [currency, country] = await Promise.all([readStoreCurrency(db), readStoreCountry(db)]);
+  return { db, currency, timeZone, weekStart: weekStartDay(country), now };
 }
 
 const ANALYTICS_RETRY_DELAYS_MS = [150, 350] as const;

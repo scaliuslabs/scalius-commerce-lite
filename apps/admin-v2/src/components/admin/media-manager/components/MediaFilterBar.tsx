@@ -72,14 +72,14 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
     <div className="border-b">
       <div className="flex flex-wrap items-center gap-2 p-2">
         <div className="relative min-w-48 flex-1 basis-56">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             type="search"
             aria-label={t("searchFiles")}
             placeholder={t("searchFiles")}
             value={search}
             // eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon
-            className="pl-8"
+            className="ps-8"
             onChange={(event) => {
               setSearch(event.target.value);
               props.onSearch(event.target.value);
@@ -133,7 +133,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           aria-busy={props.isMutating || undefined}
           className="flex flex-wrap items-center gap-2 border-t bg-muted px-3 py-1.5"
         >
-          <span className="mr-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
+          <span className="me-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
             {r("selected", { count: props.selectedCount })}
           </span>
           {props.selectableCount > 0 && props.selectedCount < props.selectableCount ? (

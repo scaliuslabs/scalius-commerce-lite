@@ -123984,7 +123984,7 @@
           "Admin - Settings"
         ],
         "summary": "Get store defaults",
-        "description": "The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults).",
+        "description": "The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults), and its country.",
         "operationId": "dashboard.settings.store_defaults_get",
         "responses": {
           "200": {
@@ -124028,13 +124028,21 @@
                         "revision": {
                           "type": "integer",
                           "minimum": 0
+                        },
+                        "countryCode": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 2,
+                          "maxLength": 2,
+                          "description": "The store's country (the backup market's, ISO 3166-1 alpha-2): numbers and dates are written, and weeks start, as there (CLDR). Null before the store has a market country."
                         }
                       },
                       "required": [
                         "timeZone",
                         "unitSystem",
                         "weightUnit",
-                        "revision"
+                        "revision",
+                        "countryCode"
                       ]
                     }
                   },

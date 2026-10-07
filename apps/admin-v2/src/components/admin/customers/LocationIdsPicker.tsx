@@ -19,7 +19,7 @@ function PlaceChip({ id, name, disabled, onRemove }: { id: string; name?: string
   const lookup = useQuery({ ...deliveryLocationByIdQueryOptions(id), enabled: !name });
   const label = name ?? lookup.data?.name ?? id;
   return (
-    <li className="flex min-w-0 items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 text-body">
+    <li className="flex min-w-0 items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 text-body">
       <span className="min-w-0 break-words">{label}</span>
       <Button type="button" variant="ghost" size="icon-sm" disabled={disabled} aria-label={t("removePlace", { name: label })} onClick={onRemove}>
         <X aria-hidden="true" />

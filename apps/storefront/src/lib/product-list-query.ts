@@ -4,6 +4,7 @@ import {
   buildCanonicalQueryString,
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit", "showAll"] as const;
 
@@ -220,9 +221,9 @@ function normalizeSort(
   return { sortBy: defaultSort, changed: true };
 }
 
-/** Bangla digits typed into price inputs become Latin digits. */
+/** Bangla and Arabic digits typed into price inputs become Latin digits. */
 function latinDigits(value: string | null): string | null {
-  return value?.replace(/[\u09e6-\u09ef]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6)) ?? null;
+  return value === null ? null : toLatinDigits(value);
 }
 
 function getLastParam(params: URLSearchParams, key: string): string | null {

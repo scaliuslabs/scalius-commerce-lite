@@ -149,7 +149,7 @@ function PluginLink({ to, className, children }: { to: PluginUiTarget; className
     return (
       <a href={location.href} target="_blank" rel="noopener noreferrer" className={className}>
         {children}
-        <ExternalLink aria-hidden="true" className="ml-1 inline size-3.5" />
+        <ExternalLink aria-hidden="true" className="ms-1 inline size-3.5" />
         <span className="sr-only"> {t("opensInNewTab")}</span>
       </a>
     );

@@ -38,13 +38,13 @@ export function PriceListPrices({ list, canEdit, onEdit }: { list: PriceList; ca
       <CardContent className="space-y-3">
         {list.variantCount > PRICE_LIST_PAGE_SIZE || search ? (
           <div className="relative">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search aria-hidden="true" className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
               aria-label={t("searchPrices")}
               placeholder={t("searchPrices")}
               // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-              className="pl-9"
+              className="ps-9"
               value={typed}
               onChange={(event) => {
                 setTyped(event.target.value);

@@ -454,7 +454,7 @@ function TrackingCardBody() {
                   <EditScript id={script.id} scripts={scripts} />
                 </SettingsDialog>
                 <Switch
-                  className="mr-6"
+                  className="me-6"
                   checked={isOn(script)}
                   disabled={!canToggle || (!script.isActive && Boolean(script.configIssue))}
                   aria-label={t("switchLabel", { name: script.name })}

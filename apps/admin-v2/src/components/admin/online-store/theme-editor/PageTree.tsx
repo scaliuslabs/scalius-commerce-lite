@@ -57,7 +57,7 @@ export function PartRow({ id, icon: Icon, name, note, selected, onSelect, onHove
       onFocus={() => onHover(id)}
       onBlur={() => onHover(null)}
       className={cn(
-        "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-start hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected && "bg-accent",
       )}
     >

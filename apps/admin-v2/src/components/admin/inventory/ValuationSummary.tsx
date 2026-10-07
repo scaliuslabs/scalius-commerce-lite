@@ -57,7 +57,7 @@ export function ValuationSummary() {
                     <dt className="min-w-0 truncate text-body">
                       {location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name}
                     </dt>
-                    <dd className="shrink-0 text-right text-body tabular-nums">
+                    <dd className="shrink-0 text-end text-body tabular-nums">
                       <span className="text-muted-foreground">{t("valueLocationUnits", { count: location.units })}</span>
                       {" · "}
                       {fmt(location.value)}

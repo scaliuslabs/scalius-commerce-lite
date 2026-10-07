@@ -77,7 +77,7 @@ export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/admin/account">
-            <UserRound className="mr-2 h-4 w-4" />
+            <UserRound className="me-2 h-4 w-4" />
             {t("myAccount")}
           </Link>
         </DropdownMenuItem>
@@ -112,7 +112,7 @@ export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "
             void signOut();
           }}
         >
-          <LogOut className="mr-2 h-4 w-4" />
+          <LogOut className="me-2 h-4 w-4" />
           {t("signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>

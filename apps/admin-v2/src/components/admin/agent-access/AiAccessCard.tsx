@@ -226,7 +226,7 @@ function ConnectionRow({
             {details.map(([label, value]) => (
               <div key={label} className="flex min-h-11 items-center justify-between gap-4 py-2 text-body">
                 <dt className="text-muted-foreground">{label}</dt>
-                <dd className="text-right">{value}</dd>
+                <dd className="text-end">{value}</dd>
               </div>
             ))}
           </dl>

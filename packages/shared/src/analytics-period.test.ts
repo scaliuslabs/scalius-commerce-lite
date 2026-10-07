@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   analyticsBuckets,
+  analyticsWeekStartEpochDay,
   analyticsChange,
   analyticsComparisonRange,
   analyticsGranularities,
@@ -13,6 +14,7 @@ import {
   resolveAnalyticsGranularity,
   validateAnalyticsRange,
 } from "./analytics-period";
+import { weekStartDay } from "./week-start";
 import { ANALYTICS_ENUM_VALUES, ANALYTICS_REPORTS, isAnalyticsReportId } from "./analytics-reports";
 
 describe("analytics periods on the merchant calendar", () => {
@@ -70,6 +72,26 @@ describe("analytics periods on the merchant calendar", () => {
     expect(analyticsBuckets({ from: "2026-07-30", to: "2026-08-02" }, "month").map((bucket) => bucket.key))
       .toEqual(["2026-07-01", "2026-08-01"]);
     expect(analyticsBuckets(range, "day")).toHaveLength(12);
+  });
+
+  it("starts weeks on the store country's first day (CLDR), Sunday by default", () => {
+    const range = { from: "2026-08-01", to: "2026-08-12" };
+    expect(analyticsBuckets(range, "week", weekStartDay("BD"))).toEqual(analyticsBuckets(range, "week"));
+    // Monday weeks (Germany): 2026-08-03 and 2026-08-10 are Mondays.
+    expect(analyticsBuckets(range, "week", weekStartDay("DE")).map((bucket) => bucket.key))
+      .toEqual(["2026-07-27", "2026-08-03", "2026-08-10"]);
+    // Saturday weeks (Egypt): 2026-08-01 and 2026-08-08 are Saturdays.
+    expect(analyticsBuckets(range, "week", weekStartDay("EG")).map((bucket) => bucket.key))
+      .toEqual(["2026-08-01", "2026-08-08"]);
+    for (const weekStart of [0, 1, 5, 6] as const) {
+      for (let day = 20_000; day < 20_014; day += 1) {
+        const start = analyticsWeekStartEpochDay(day, weekStart);
+        expect(day - start).toBeGreaterThanOrEqual(0);
+        expect(day - start).toBeLessThan(7);
+        // 1970-01-01 (epoch day 0) was a Thursday (4).
+        expect((start + 4) % 7).toBe(weekStart);
+      }
+    }
   });
 
   it("keeps day buckets to three months and picks a sensible default", () => {

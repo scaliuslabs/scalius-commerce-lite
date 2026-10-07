@@ -9,6 +9,9 @@ import { LUCIDE_ICONS, type LucideIconName } from "./lucide-icons";
 type Props = astroHTML.JSX.SVGAttributes & { name: LucideIconName };
 
 const { name, ...rest } = Astro.props;
+// Arrows and chevrons that point along the line mirror on a right-to-left
+// page (global.css), as Material and Polaris icons do.
+const directional = name === "chevron-left" || name === "chevron-right" || name === "arrow-right";
 const labelled = Object.keys(rest).some((key) => key.startsWith("aria-") || key === "role" || key === "title");
 const body = LUCIDE_ICONS[name]
   .map(([tag, attributes]) => `<${tag} ${Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(" ")}></${tag}>`)
@@ -25,6 +28,7 @@ const body = LUCIDE_ICONS[name]
   stroke-linecap="round"
   stroke-linejoin="round"
   aria-hidden={labelled ? undefined : "true"}
+  data-dir-icon={directional ? "" : undefined}
   {...rest}
   set:html={body}
 />

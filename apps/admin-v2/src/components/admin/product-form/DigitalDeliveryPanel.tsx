@@ -37,11 +37,11 @@ import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
 import { productQueryOptions, type ProductVariant } from "@/lib/api-query-options/products";
 import { useMessages } from "~/i18n";
+import { formatFileSize as formatBytes } from "../media-manager/utils/formatters";
 import { digitalMessages, type DigitalMessageKey } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
 import {
   fileInput,
-  formatBytes,
   resumeOrRestart,
   sendDigitalFile,
   startDigitalUpload,

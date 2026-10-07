@@ -98,7 +98,7 @@ export function LinePropertyFields({ schema, values, onChange, error, surcharge 
               />
             )}
             {field.type === "select" ? null : (
-              <p className="text-right text-body text-muted-foreground tabular-nums" aria-live="polite">
+              <p className="text-end text-body text-muted-foreground tabular-nums" aria-live="polite">
                 {t("characterCount", { count: [...value].length, max: field.maxLength })}
               </p>
             )}

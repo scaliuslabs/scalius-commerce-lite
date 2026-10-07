@@ -1,10 +1,10 @@
+import { toLatinDigits } from "@scalius/shared/phone-input";
+
 const PHONE_DIGIT_MIN_LENGTH = 4;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Bangla digits (০–৯) typed by the merchant read as Latin digits (R2-ORD-14). */
-export function toLatinDigits(input: string): string {
-    return input.replace(/[০-৯]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6));
-}
+/** Bangla (০–৯) and Arabic digits typed by the merchant read as Latin digits (R2-ORD-14). */
+export { toLatinDigits };
 
 /** A whole email address: matched exactly, never as a prefix of a longer one. */
 export function isEmailSearch(input: string): boolean {

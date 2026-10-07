@@ -8,6 +8,7 @@ import type { SocialLink } from "./api/types";
 import { mediaImageUrl } from "./media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import type { StorefrontBusinessInfo } from "./commerce-structured-data";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 export function resolveStoreName(
   business: StorefrontBusinessInfo | null | undefined,
@@ -77,13 +78,9 @@ export function buildDocumentTitle(
     : `${pageTitle} | ${storeName}`;
 }
 
-const BANGLA_DIGITS = /[০-৯]/g;
-
 /** International digits for wa.me/tel: a local `01XXXXXXXXX` becomes `8801XXXXXXXXX`. */
 export function internationalPhoneDigits(phone: string | null | undefined): string | null {
-  const digits = (phone ?? "")
-    .replace(BANGLA_DIGITS, (digit) => String(digit.charCodeAt(0) - 0x09e6))
-    .replace(/\D/g, "");
+  const digits = toLatinDigits(phone ?? "").replace(/\D/g, "");
   if (digits.length < 6) return null;
   return /^01\d{9}$/.test(digits) ? `88${digits}` : digits;
 }

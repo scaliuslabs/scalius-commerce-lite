@@ -194,8 +194,8 @@ export default function ProductShortcode({ productData }: { productData: Product
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 pt-2">
-              <Button variant="outline" size="lg" disabled={!canAdd || adding} onClick={() => void add(false)}><ShoppingCart className="mr-2 h-4 w-4" />Add to Cart</Button>
-              <Button size="lg" disabled={isUnavailable || adding} onClick={() => void add(true)}><Check className="mr-2 h-4 w-4" />Buy Now</Button>
+              <Button variant="outline" size="lg" disabled={!canAdd || adding} onClick={() => void add(false)}><ShoppingCart className="me-2 h-4 w-4" />Add to Cart</Button>
+              <Button size="lg" disabled={isUnavailable || adding} onClick={() => void add(true)}><Check className="me-2 h-4 w-4" />Buy Now</Button>
             </div>
           )}
           {toast ? <div className={cn("rounded-md p-3 text-sm", toast.type === "success" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{toast.msg}</div> : null}

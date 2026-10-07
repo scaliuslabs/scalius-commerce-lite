@@ -61,7 +61,7 @@ export function BreakdownCard({
                   </span>
                   <span className="shrink-0 tabular-nums">
                     {format(row.value)}
-                    <span className="ml-2 text-muted-foreground">{formatPercent((row.value / total) * 100, 0)}</span>
+                    <span className="ms-2 text-muted-foreground">{formatPercent((row.value / total) * 100, 0)}</span>
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted" aria-hidden>

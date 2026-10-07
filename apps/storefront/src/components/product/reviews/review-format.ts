@@ -5,7 +5,7 @@
 // URL, a log line or analytics.
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import { storeTimeZone } from "@/lib/store-time-zone";
+import { formatCount, formatStoreDateTime, storeTimeZone } from "@/lib/store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ProductReviews, ProductReviewSummary, PublicProductReview } from "@/lib/api/types";
 
@@ -162,11 +162,11 @@ export function reviewStarFill(average: number): string {
   return `${halves * 10}%`;
 }
 
-/** "128 reviews" / "1 review" (Latin digits, grouped the South Asian way). */
+/** "128 reviews" / "1 review" (Latin digits, grouped as the store's country groups them). */
 export function reviewCountText(copy: Pick<ReviewCopy, "reviewsCountOneText" | "reviewsCountText">, total: number): string {
   return total === 1
     ? copy.reviewsCountOneText
-    : formatCheckoutLanguageText(copy.reviewsCountText, { count: total.toLocaleString("en-IN") });
+    : formatCheckoutLanguageText(copy.reviewsCountText, { count: formatCount(total) });
 }
 
 export interface ReviewHistogramRow {
@@ -187,14 +187,8 @@ export function reviewHistogram(summary: ProductReviewSummary): ReviewHistogramR
 export function formatReviewDate(iso: string, language: string, timeZone: string = storeTimeZone()): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "";
-  try {
-    // The store's calendar day, not the server's (UTC) or the buyer's device.
-    return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-GB", {
-      day: "numeric", month: "long", year: "numeric", timeZone,
-    }).format(date);
-  } catch {
-    return date.toISOString().slice(0, 10);
-  }
+  // The store's calendar day, not the server's (UTC) or the buyer's device.
+  return formatStoreDateTime(date, language, { day: "numeric", month: "long", year: "numeric" }, timeZone);
 }
 
 // ─── URLs (no review text ever goes into one) ───────────────────────────

@@ -6,6 +6,7 @@ import type { Database } from "@scalius/database/client";
 import { AppError, ConflictError } from "../../errors";
 import { type WarrantyDurationUnit, type WarrantyProvider } from "@scalius/shared/warranty";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
+import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
 
 export type BatchStatements = Parameters<Database["batch"]>[0];
 export type BatchStatement = BatchStatements[number];
@@ -73,10 +74,9 @@ export function staleClaim(): ConflictError {
   return new ConflictError("Someone else changed this claim. Refresh and try again.");
 }
 
-/** "12 Sep 2027" in the store's time zone (the request's, set by the API). */
+/** "Sep 12, 2027" in the store's time zone (the request's, set by the API). */
 export function formatClaimDate(epochSeconds: number, timeZone: string = currentStoreTimeZone()): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone })
-    .format(new Date(epochSeconds * 1000));
+  return formatDateTime(epochSeconds * 1000, dateLocale("en"), { dateStyle: "medium", timeZone });
 }
 
 export interface ClaimLineFacts {

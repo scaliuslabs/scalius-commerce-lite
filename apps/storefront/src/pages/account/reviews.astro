@@ -70,7 +70,7 @@ const shellState = reviews.ok ? "ok" : reviews.reason === "signed_out" ? "signed
         <section aria-labelledby="to-review-heading" id="to-review">
           <h2 id="to-review-heading" class="mb-3 text-lg font-semibold text-foreground">
             {copy.reviewsToReviewTitleText}
-            {data.toReview.length > 0 && <span class="ml-1 text-muted-foreground">({data.toReview.length})</span>}
+            {data.toReview.length > 0 && <span class="ms-1 text-muted-foreground">({data.toReview.length})</span>}
           </h2>
           {data.toReview.length > 0 ? (
             <ul class="space-y-4" set:html={toReviewMarkup} />

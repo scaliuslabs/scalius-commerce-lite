@@ -18,7 +18,7 @@ import { canAccessAdminPath } from "~/lib/admin-access";
 import { homeSmsQueryOptions } from "~/lib/api-query-options/dashboard-home";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { getStoreTimeZone } from "~/lib/store-time-zone";
+import { adminCalendarDateKey } from "~/lib/admin-time";
 import {
   HOME_FEED_STALE_TIME_MS,
   dashboardActivityQueryOptions,
@@ -77,8 +77,6 @@ function HomeAnalyticsSkeleton() {
 }
 
 
-/** Today's date in store time as YYYY-MM-DD, matching the activity feed. */
-const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: getStoreTimeZone() }).format(new Date());
 
 function HomePage() {
   const t = useMessages(homeMessages);
@@ -125,7 +123,7 @@ function HomePage() {
   // "View analytics" sees order counts only, and the API sends it no money.
   const sales = canOpen("/admin/analytics");
   const canSeeOrders = canOpen("/admin/orders");
-  const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === storeToday());
+  const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === adminCalendarDateKey());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);

@@ -588,7 +588,7 @@ export const TiptapMenuBar = ({
 
       {/* Fullscreen toggle */}
       {!isFullscreen ? (
-        <div className="shrink-0 border-l pl-1" data-rich-text-fullscreen-toggle>
+        <div className="shrink-0 border-s ps-1" data-rich-text-fullscreen-toggle>
           <ToolbarButton
             onClick={toggleModal}
             tooltip={t("fullscreen")}

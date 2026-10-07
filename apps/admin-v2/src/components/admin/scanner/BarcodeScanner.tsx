@@ -220,7 +220,7 @@ export function BarcodeScanner({
 
         {cameraReady && isActive ? (
           <>
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+            <div className="absolute bottom-3 inset-s-3 inset-e-3 flex items-center justify-between">
               {showTorchButton && torchSupported ? (
                 <button
                   type="button"
@@ -243,7 +243,7 @@ export function BarcodeScanner({
                 <span>{t("typeCode")}</span>
               </button>
             </div>
-            <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-background/60 px-3 py-1 backdrop-blur-sm">
+            <div className="absolute inset-e-3 top-3 flex items-center gap-2 rounded-full bg-background/60 px-3 py-1 backdrop-blur-sm">
               <span className="size-2 animate-pulse rounded-full bg-primary" />
               <span className="text-body font-medium">{t("scanning")}</span>
             </div>

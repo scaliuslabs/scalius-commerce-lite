@@ -26,7 +26,7 @@ export function segmentMembersLabel(t: Translate, count: { count: number; capped
 export function SegmentMemberCount({ segmentId }: { segmentId: string }) {
   const t = useMessages(customerSegmentMessages);
   const count = useQuery(customerSegmentCountQueryOptions(segmentId));
-  if (count.isPending) return <Skeleton className="ml-auto h-4 w-20" />;
+  if (count.isPending) return <Skeleton className="ms-auto h-4 w-20" />;
   if (count.isError) return <span className="text-muted-foreground">{t("countFailed")}</span>;
   return <span className="tabular-nums">{segmentMembersLabel(t, count.data)}</span>;
 }

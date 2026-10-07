@@ -39,7 +39,7 @@ export function OrderItemsPopover({ orderId, trigger }: { orderId: string; trigg
                     <p className="truncate text-body text-muted-foreground">{item.variantLabel}</p>
                   ) : null}
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="shrink-0 text-end">
                   <p className="text-body text-muted-foreground">
                     {t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) })}
                   </p>

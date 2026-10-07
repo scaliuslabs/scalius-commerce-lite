@@ -17,7 +17,7 @@ type CostInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" |
  */
 export const CostInput = React.forwardRef<HTMLInputElement, CostInputProps>(({ symbol, className, ...props }, ref) => (
   <div className="relative">
-    <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-body text-muted-foreground">
+    <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 inset-s-3 flex items-center text-body text-muted-foreground">
       {symbol}
     </span>
     <NumberInput
@@ -25,7 +25,7 @@ export const CostInput = React.forwardRef<HTMLInputElement, CostInputProps>(({ s
       placeholder="0.00"
       {...props}
       // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
-      className={cn("pl-7", className)}
+      className={cn("ps-7", className)}
     />
   </div>
 ));

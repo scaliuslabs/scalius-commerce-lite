@@ -146,11 +146,11 @@ export function ReceiveLines({
           </Button>
         </div>
         {lineInvalid ? (
-          <p id={`receive-${line.id}-error`} className="text-right text-body text-destructive">
+          <p id={`receive-${line.id}-error`} className="text-end text-body text-destructive">
             {line.retired ? t("retiredLine") : t("receiveInvalid", { max: line.open })}
           </p>
         ) : line.retired ? (
-          <p className="text-right text-body text-muted-foreground">{t("retiredLine")}</p>
+          <p className="text-end text-body text-muted-foreground">{t("retiredLine")}</p>
         ) : null}
       </div>
     );
@@ -178,12 +178,12 @@ export function ReceiveLines({
       <CardContent className="space-y-2">
         <Label htmlFor="receive-scan">{t("scanLabel")}</Label>
         <div className="relative">
-          <ScanBarcode aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <ScanBarcode aria-hidden className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={scanRef}
             id="receive-scan"
             // eslint-disable-next-line shadcn/no-restyle -- room for the scanner icon inside the field
-            className="pl-9"
+            className="ps-9"
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}

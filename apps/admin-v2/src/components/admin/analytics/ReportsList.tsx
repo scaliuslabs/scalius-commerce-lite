@@ -40,7 +40,7 @@ export function ReportsList({ search }: { search: AnalyticsSearch }) {
       <PageHeader title={t("reports")} backTo="/admin/analytics" />
       <p className="-mt-2 text-body text-muted-foreground">{t("reportsIntro")}</p>
       <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search className="pointer-events-none absolute top-1/2 inset-s-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           type="search"
           value={query}
@@ -48,7 +48,7 @@ export function ReportsList({ search }: { search: AnalyticsSearch }) {
           placeholder={t("searchReports")}
           aria-label={t("searchReports")}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-          className="pl-9"
+          className="ps-9"
         />
       </div>
       {matches.length === 0 ? (

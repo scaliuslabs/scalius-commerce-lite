@@ -36,6 +36,7 @@ import {
 } from "~/lib/api-query-options/settings-screens";
 import { appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
 import { queryKeys } from "~/lib/query-keys";
+import { formatList } from "@scalius/shared/locale-words";
 import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { paymentsMessages } from "~/i18n/settings-payments";
@@ -81,8 +82,7 @@ const GATEWAY_KEYS: Record<"stripe", Partial<Record<GatewayKey, string>>> = {
 function useKeyList() {
   const t = useMessages(paymentsMessages);
   return (keys: readonly string[]) =>
-    new Intl.ListFormat(getLocale() === "bn" ? "bn" : "en", { type: "conjunction" })
-      .format(keys.map((key) => t(`key_${key as GatewayKey}`)));
+    formatList(keys.map((key) => t(`key_${key as GatewayKey}`)), getLocale());
 }
 
 function useCanEditPayments() {
@@ -312,7 +312,7 @@ function RemoveKeys({ gateway, revision }: { gateway: "stripe"; revision: number
         : getServerFnError(remove.error);
   return (
     <div className="space-y-2 border-t border-border pt-4">
-      <Button type="button" variant="ghost" className="-ml-3" onClick={() => setConfirming(true)}>
+      <Button type="button" variant="ghost" className="-ms-3" onClick={() => setConfirming(true)}>
         {t("removeKeys")}
       </Button>
       {failure ? <p role="alert" className="text-body text-destructive">{failure}</p> : null}
@@ -407,7 +407,7 @@ export function PaymentMethodsCard() {
   const currencyText = (currencies: readonly string[]) =>
     currencies.length === 1 && currencies[0] === "BDT"
       ? t("needsTaka")
-      : t("needsCurrency", { currencies: new Intl.ListFormat(getLocale() === "bn" ? "bn" : "en", { type: "disjunction" }).format(currencies) });
+      : t("needsCurrency", { currencies: formatList(currencies, getLocale(), "disjunction") });
   const toggle = (method: MethodKey, on: boolean) =>
     setValues((draft) => {
       const enabledMethods = on

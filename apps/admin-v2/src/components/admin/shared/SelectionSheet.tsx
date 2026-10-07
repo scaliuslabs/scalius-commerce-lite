@@ -38,7 +38,7 @@ function SelectionBar({ count, clearLabel, onClear, children }: { count: number;
         aria-label={t("selected", { count })}
         className="fixed inset-x-0 bottom-0 z-40 flex flex-wrap items-center gap-2 border-t bg-background p-3 md:hidden"
       >
-        <span className="mr-auto text-body font-medium">{t("selected", { count })}</span>
+        <span className="me-auto text-body font-medium">{t("selected", { count })}</span>
         <Button type="button" variant="ghost" onClick={onClear}>
           {clearLabel}
         </Button>

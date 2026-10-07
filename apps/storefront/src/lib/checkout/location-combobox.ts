@@ -48,7 +48,7 @@ export function enhanceLocationCombobox(
   input.type = "text";
   input.id = id;
   select.id = `${id}-native`;
-  input.className = `${select.className} cursor-pointer pr-9 text-ellipsis`;
+  input.className = `${select.className} cursor-pointer pe-9 text-ellipsis`;
   input.setAttribute("role", "combobox");
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
@@ -67,7 +67,7 @@ export function enhanceLocationCombobox(
 
   const chevron = doc.createElement("span");
   chevron.setAttribute("aria-hidden", "true");
-  chevron.className = "pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground";
+  chevron.className = "pointer-events-none absolute inset-y-0 inset-e-3 flex items-center text-muted-foreground";
   chevron.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 
   // Below the field on a wide screen; a full-height sheet on a phone.

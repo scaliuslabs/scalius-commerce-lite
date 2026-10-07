@@ -476,7 +476,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
           <button
             type="button"
             onclick="window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { intent: 'sign_in' } }))"
-            class="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            class="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-start text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span class="font-medium">
               {checkoutConfig.guestCheckoutEnabled === false
@@ -521,7 +521,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                 <div>
                   <label for="customerName" class={labelClass}>
                     {copy.customerNameLabel}
-                    <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+                    <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
                   </label>
                   <input
                     type="text"
@@ -572,12 +572,12 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                           <>
                             {/* Required while the phone is optional (data-phone-need on the page root). */}
                             <span class="group-data-[phone-need=optional]:hidden">{copy.customerEmailLabel}</span>
-                            <span class="hidden group-data-[phone-need=optional]:inline">{copy.customerEmailRequiredLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></span>
+                            <span class="hidden group-data-[phone-need=optional]:inline">{copy.customerEmailRequiredLabel}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span></span>
                           </>
                         ) : (
                           <>
                             {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
-                            {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
+                            {contactFields.email === "required" && <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>}
                           </>
                         )}
                       </label>
@@ -678,7 +678,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
               <div>
                 <label for="shippingAddress" class={labelClass}>
                   {copy.shippingAddressLabel}
-                  <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+                  <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
                 </label>
                 <textarea
                   id="shippingAddress"
@@ -904,7 +904,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                   href="/"
                   class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90"
                 >
-                  <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
                   </svg>
                   {copy.continueShoppingText}
@@ -926,13 +926,13 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
               {/* A pickup order has no shipping: the row names the pickup. */}
               <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>
               <span class="hidden group-data-[delivery-mode=pickup]:inline">{copy.deliveryModePickupText}</span>
-              <span id="shippingCost" class="text-right font-medium tabular-nums text-foreground">—</span>
+              <span id="shippingCost" class="text-end font-medium tabular-nums text-foreground">—</span>
             </div>
             <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>
             <div id="discountLines" class="space-y-1"></div>
             <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
               <span id="taxLabel">{copy.taxText}</span>
-              <span id="taxAmount" class="text-right font-medium tabular-nums text-foreground">—</span>
+              <span id="taxAmount" class="text-end font-medium tabular-nums text-foreground">—</span>
             </div>
 
             <div class="mt-2 border-t border-border pt-2">

@@ -56,7 +56,7 @@ export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChan
         <button
           type="button"
           title={row.original.name}
-          className="block max-w-full truncate text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block max-w-full truncate text-start font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => openEditor(row.original)}
         >
           {row.original.name}

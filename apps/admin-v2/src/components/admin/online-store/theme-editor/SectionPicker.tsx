@@ -56,7 +56,7 @@ export function SectionPicker({ options, disabled, onAdd }: {
               {group ? <p role="presentation" className="px-2 py-1 text-body font-medium">{group}</p> : null}
               {visible.filter((option) => option.group === group).map((option) => (
                 <button key={option.value} type="button" role="option" aria-selected="false" disabled={option.disabled}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   onClick={() => { onAdd(option.value); setOpen(false); setSearch(""); }}>
                   <SectionThumbnail type={option.value} />
                   <span className="min-w-0"><span className="block font-medium">{option.label}</span>{option.description ? <span className="block text-muted-foreground">{option.description}</span> : null}</span>

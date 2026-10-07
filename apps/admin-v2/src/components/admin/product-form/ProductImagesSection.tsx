@@ -172,7 +172,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   unavailableFileIds={attachedMediaIds}
                   trigger={(
                     <Button type="button" variant="outline" size="sm">
-                      <ImagePlus className="mr-2 h-4 w-4" />
+                      <ImagePlus className="me-2 h-4 w-4" />
                       {t("addMedia")}
                     </Button>
                   )}
@@ -240,19 +240,19 @@ function ProductMediaTile({
           </div>
         )}
         {item.isPrimary ? (
-          <span className="absolute left-1.5 top-1.5 rounded-sm bg-foreground px-1.5 text-body font-medium text-background">
+          <span className="absolute inset-s-1.5 top-1.5 rounded-sm bg-foreground px-1.5 text-body font-medium text-background">
             {t("mainMedia")}
           </span>
         ) : null}
         {item.kind === "video" ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background">
-              <Play className="ml-0.5 h-4 w-4 fill-current" />
+              <Play className="ms-0.5 h-4 w-4 fill-current" />
             </span>
           </div>
         ) : null}
         {duration ? (
-          <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-foreground px-1.5 text-body text-background">
+          <span className="absolute bottom-1.5 inset-e-1.5 rounded-sm bg-foreground px-1.5 text-body text-background">
             {duration}
           </span>
         ) : null}

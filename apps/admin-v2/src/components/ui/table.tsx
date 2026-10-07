@@ -74,7 +74,7 @@ TableRow.displayName = "TableRow";
  *   table never makes a column narrower than its widest unbreakable line).
  */
 const LAYOUT =
-  "data-[capped]:*:max-w-(--column-max) data-[numeric]:whitespace-nowrap data-[numeric]:text-right data-[numeric]:tabular-nums data-[pin=actions]:w-px data-[pin=actions]:whitespace-nowrap data-[pin=actions]:text-right data-[pin=primary]:min-w-40 in-data-[scrolls]:data-[pin]:sticky data-[pin=select]:left-0 data-[pin=primary]:left-0 data-[pin=primary]:data-[after-select]:left-10 data-[pin=actions]:right-0 in-data-[scrolls]:data-[pin=primary]:before:pointer-events-none in-data-[scrolls]:data-[pin=primary]:before:absolute in-data-[scrolls]:data-[pin=primary]:before:inset-y-0 in-data-[scrolls]:data-[pin=primary]:before:-right-3 in-data-[scrolls]:data-[pin=primary]:before:w-3 in-data-[scrolls]:data-[pin=primary]:before:bg-linear-to-r in-data-[scrolls]:data-[pin=primary]:before:from-foreground/10 in-data-[scrolls]:data-[pin=primary]:before:to-transparent in-data-[scrolls]:data-[pin=actions]:before:pointer-events-none in-data-[scrolls]:data-[pin=actions]:before:absolute in-data-[scrolls]:data-[pin=actions]:before:inset-y-0 in-data-[scrolls]:data-[pin=actions]:before:-left-3 in-data-[scrolls]:data-[pin=actions]:before:w-3 in-data-[scrolls]:data-[pin=actions]:before:bg-linear-to-l in-data-[scrolls]:data-[pin=actions]:before:from-foreground/10 in-data-[scrolls]:data-[pin=actions]:before:to-transparent";
+  "data-[capped]:*:max-w-(--column-max) data-[numeric]:whitespace-nowrap data-[numeric]:text-end data-[numeric]:tabular-nums data-[pin=actions]:w-px data-[pin=actions]:whitespace-nowrap data-[pin=actions]:text-end data-[pin=primary]:min-w-40 in-data-[scrolls]:data-[pin]:sticky data-[pin=select]:inset-s-0 data-[pin=primary]:inset-s-0 data-[pin=primary]:data-[after-select]:inset-s-10 data-[pin=actions]:inset-e-0 in-data-[scrolls]:data-[pin=primary]:before:pointer-events-none in-data-[scrolls]:data-[pin=primary]:before:absolute in-data-[scrolls]:data-[pin=primary]:before:inset-y-0 in-data-[scrolls]:data-[pin=primary]:before:-inset-e-3 in-data-[scrolls]:data-[pin=primary]:before:w-3 in-data-[scrolls]:data-[pin=primary]:before:bg-linear-to-r in-data-[scrolls]:data-[pin=primary]:before:from-foreground/10 in-data-[scrolls]:data-[pin=primary]:before:to-transparent in-data-[scrolls]:data-[pin=actions]:before:pointer-events-none in-data-[scrolls]:data-[pin=actions]:before:absolute in-data-[scrolls]:data-[pin=actions]:before:inset-y-0 in-data-[scrolls]:data-[pin=actions]:before:-inset-s-3 in-data-[scrolls]:data-[pin=actions]:before:w-3 in-data-[scrolls]:data-[pin=actions]:before:bg-linear-to-l in-data-[scrolls]:data-[pin=actions]:before:from-foreground/10 in-data-[scrolls]:data-[pin=actions]:before:to-transparent";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
@@ -83,7 +83,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         // Sticky with its own 1px bottom rule: a collapsed `border-b` would scroll away.
         // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
-        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-left align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pr-0 in-data-[scrolls]:data-[pin]:z-20",
+        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
         LAYOUT,
         className,
       )}
@@ -98,7 +98,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     <td
       ref={ref}
       className={cn(
-        "px-3 py-1.5 align-middle has-[[role=checkbox]]:pr-0 in-data-[scrolls]:data-[pin]:z-10 in-data-[scrolls]:data-[pin]:bg-card in-data-[scrolls]:data-[pin]:group-hover:bg-muted in-data-[scrolls]:data-[pin]:group-data-[state=selected]:bg-accent",
+        "px-3 py-1.5 align-middle has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-10 in-data-[scrolls]:data-[pin]:bg-card in-data-[scrolls]:data-[pin]:group-hover:bg-muted in-data-[scrolls]:data-[pin]:group-data-[state=selected]:bg-accent",
         LAYOUT,
         className,
       )}

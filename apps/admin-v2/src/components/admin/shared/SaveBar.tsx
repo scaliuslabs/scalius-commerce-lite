@@ -397,7 +397,7 @@ export function SaveErrorBanner() {
               {errors.length === 1 ? (
                 <p>{errors[0]}</p>
               ) : (
-                <ul className="list-disc space-y-1 pl-4">
+                <ul className="list-disc space-y-1 ps-4">
                   {errors.map((error) => <li key={error}>{error}</li>)}
                 </ul>
               )}
@@ -545,7 +545,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="absolute inset-x-2 top-1.5 z-30 flex h-11 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 pl-3 text-topbar-foreground md:inset-0 md:h-9"
+              className="absolute inset-x-2 top-1.5 z-30 flex h-11 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 ps-3 text-topbar-foreground md:inset-0 md:h-9"
             >
               <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
                 <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />

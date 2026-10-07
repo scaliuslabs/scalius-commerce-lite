@@ -140,13 +140,13 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
     {
       optional ? (
         <>
-          <span class="group-data-[phone-need=optional]:hidden">{label}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></span>
+          <span class="group-data-[phone-need=optional]:hidden">{label}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span></span>
           <span class="hidden group-data-[phone-need=optional]:inline">{optional.label}</span>
         </>
       ) : (
         <>
           {label}
-          <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+          <span aria-hidden="true" class="ms-0.5 text-destructive">*</span>
         </>
       )
     }
@@ -156,7 +156,7 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
     data-phone-box
     class="flex h-11 w-full items-center overflow-hidden rounded-lg border border-input bg-background text-base text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
   >
-    <span class="relative flex h-full shrink-0 items-center border-r border-input">
+    <span class="relative flex h-full shrink-0 items-center border-e border-input">
       {
         singleCountry ? (
           <span class="px-3 text-sm font-medium text-muted-foreground">{callingCode}</span>

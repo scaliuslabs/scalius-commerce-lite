@@ -46,7 +46,7 @@ export function FormImageUploadField({
             type="button"
             variant="destructive"
             size="icon"
-            className="absolute -right-2 -top-2 h-11 w-11 sm:h-8 sm:w-8"
+            className="absolute -inset-e-2 -top-2 h-11 w-11 sm:h-8 sm:w-8"
             onClick={() => onChange(null)}
             aria-label={t("removeImage", { name: value.filename })}
           >

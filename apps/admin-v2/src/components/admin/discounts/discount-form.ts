@@ -3,6 +3,7 @@
  * types, conversion to and from the API rule, validation (message keys from
  * the discounts catalog) and the live summary. Pure, so it is unit tested.
  */
+import { timeZoneOffsetSeconds } from "@scalius/shared/commerce-time";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 
@@ -10,6 +11,7 @@ import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
 import { getStoreTimeZone } from "~/lib/store-time-zone";
 import type { DiscountType } from "./discount-kinds";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 export type DiscountClass = "product" | "order" | "shipping";
 export type ScopeKind = "products" | "collections";
@@ -75,18 +77,10 @@ const CODE_PATTERN = /^[A-Z0-9_-]{3,50}$/u;
 /** Customer segments one discount can be limited to (the API's limit). */
 export const MAX_CUSTOMER_SEGMENTS = 5;
 
+/** An instant's wall date and time in the store's zone. */
 function partsIn(epochMs: number) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: getStoreTimeZone(),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(epochMs);
-  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
-  return { date: `${value("year")}-${value("month")}-${value("day")}`, time: `${value("hour")}:${value("minute")}` };
+  const wall = new Date(epochMs + timeZoneOffsetSeconds(getStoreTimeZone(), epochMs / 1_000) * 1_000).toISOString();
+  return { date: wall.slice(0, 10), time: wall.slice(11, 16) };
 }
 
 /** Store wall time (the store's zone) → epoch seconds; null when not a real time (a daylight saving gap). */
@@ -115,12 +109,9 @@ export const MAX_AMOUNT_MAJOR = 1_000_000;
 /** The API's cap for item quantities (buy, get, per order, minimum items). */
 export const MAX_QUANTITY = 10_000;
 
-/** Bengali digits (০-৯) typed on a Bangla keyboard → Latin, so every number field accepts them. */
-/** A number as merchants type it: Bangla digits become Latin, and grouping commas ("1,000", "1,00,000") are dropped. */
+/** A number as merchants type it: Bangla and Arabic digits become Latin, and grouping commas ("1,000", "1,00,000") are dropped. */
 export function latinDigits(value: string): string {
-  return value
-    .replace(/[০-৯]/gu, (digit) => String(digit.charCodeAt(0) - 0x09e6))
-    .replace(/(?<=\d),(?=\d)/gu, "");
+  return toLatinDigits(value).replace(/(?<=\d),(?=\d)/gu, "");
 }
 
 /**

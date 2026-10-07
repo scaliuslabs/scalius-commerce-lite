@@ -306,7 +306,7 @@ function ComboboxView({
           }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => select(option)}
-          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body outline-none data-[active]:bg-accent data-[active]:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
+          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-body outline-none data-[active]:bg-accent data-[active]:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
         >
           <Check
             aria-hidden="true"
@@ -346,7 +346,7 @@ function ComboboxView({
             disabled={disabled}
             className={cn(
               fieldClassName,
-              "flex h-11 w-full items-center gap-2 text-left sm:h-9",
+              "flex h-11 w-full items-center gap-2 text-start sm:h-9",
             )}
           >
             <span data-placeholder={label ? undefined : ""} className="min-w-0 flex-1 truncate data-[placeholder]:text-muted-foreground">
@@ -370,7 +370,7 @@ function ComboboxView({
               setPicked(null);
               onValueChange("", null);
             }}
-            className="absolute right-8 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-6"
+            className="absolute inset-e-8 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-6"
           >
             <X aria-hidden="true" className="size-3.5" />
           </button>

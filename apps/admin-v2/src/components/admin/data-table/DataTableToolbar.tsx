@@ -110,7 +110,7 @@ export function DataTableToolbar({
       ) : null}
       <div data-bulk-hidden={bulk ? "" : undefined} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 data-[bulk-hidden]:hidden">
         <div className="relative min-w-[220px] max-w-sm flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute inset-s-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchInputRef}
             placeholder={searchPlaceholder ?? t("search")}
@@ -118,14 +118,14 @@ export function DataTableToolbar({
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             // eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon and clear button
-            className="pl-8 pr-11 sm:pr-9"
+            className="ps-8 pe-11 sm:pe-9"
           />
           {localSearch && (
             <button
               type="button"
               onClick={clearSearch}
               aria-label={t("clearSearch")}
-              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground sm:h-9 sm:w-9"
+              className="absolute inset-e-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground sm:h-9 sm:w-9"
             >
               <X className="h-3.5 w-3.5" />
             </button>

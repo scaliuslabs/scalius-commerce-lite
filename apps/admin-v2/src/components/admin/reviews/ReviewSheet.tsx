@@ -64,7 +64,7 @@ export function ReviewSheet({
               </SheetDescription>
             </SheetHeader>
             <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={t("close")}>
+              <Button variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")}>
                 <X className="size-4" />
               </Button>
             </SheetClose>
@@ -270,7 +270,7 @@ function ReviewActions({
   return (
     <SheetFooter>
       {canMessage ? (
-        <Button type="button" variant="outline" loading={thread.isPending} onClick={messageReviewer} className="sm:mr-auto">
+        <Button type="button" variant="outline" loading={thread.isPending} onClick={messageReviewer} className="sm:me-auto">
           {t("messageReviewer")}
         </Button>
       ) : null}

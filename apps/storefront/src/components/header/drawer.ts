@@ -23,6 +23,9 @@ export interface DrawerElements {
   onOpen?: () => void;
 }
 
+/** A closed drawer waits off screen on its start side: the left, or the right in a right-to-left language. */
+const CLOSED_PANEL = ["-translate-x-full", "rtl:translate-x-full"] as const;
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
@@ -105,7 +108,7 @@ export function installDrawer(elements: DrawerElements): () => void {
       overlay.classList.remove("invisible");
       requestAnimationFrame(() => {
         if (!isOpen) return;
-        panel.classList.remove("-translate-x-full");
+        panel.classList.remove(...CLOSED_PANEL);
         overlay.classList.remove("opacity-0", "pointer-events-none");
       });
       document.body.style.overflow = "hidden";
@@ -115,7 +118,7 @@ export function installDrawer(elements: DrawerElements): () => void {
       requestAnimationFrame(() => closeButton?.focus());
     } else {
       setBackgroundInert(false);
-      panel.classList.add("-translate-x-full");
+      panel.classList.add(...CLOSED_PANEL);
       overlay.classList.add("opacity-0", "pointer-events-none");
       visibilityTimer = window.setTimeout(() => {
         if (isOpen) return;

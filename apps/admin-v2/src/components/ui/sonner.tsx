@@ -19,7 +19,7 @@ function Toaster(props: ToasterProps) {
         unstyled: true,
         classNames: {
           toast:
-            "flex w-full items-center gap-2.5 rounded-xl py-3 pl-4 pr-2 text-body font-medium shadow-popover",
+            "flex w-full items-center gap-2.5 rounded-xl py-3 ps-4 pe-2 text-body font-medium shadow-popover",
           default: inverse,
           success: inverse,
           info: inverse,
@@ -32,7 +32,7 @@ function Toaster(props: ToasterProps) {
           actionButton: "shrink-0 rounded-lg px-2 py-1 underline underline-offset-2 hover:no-underline",
           cancelButton: "shrink-0 rounded-lg px-2 py-1 opacity-80 hover:opacity-100",
           closeButton:
-            "order-last ml-auto flex size-7 shrink-0 items-center justify-center rounded-lg opacity-80 hover:opacity-100",
+            "order-last ms-auto flex size-7 shrink-0 items-center justify-center rounded-lg opacity-80 hover:opacity-100",
         },
       }}
       icons={{

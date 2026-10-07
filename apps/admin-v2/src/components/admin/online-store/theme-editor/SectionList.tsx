@@ -103,7 +103,7 @@ function Row({ row, index, count, selected, onSelect, onHover, onMove, onDuplica
         onClick={onSelect}
         onFocus={() => onHover(true)}
         onBlur={() => onHover(false)}
-        className="flex min-w-0 flex-1 items-center rounded-md py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 items-center rounded-md py-1.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="min-w-0 flex-1">
           <span className={cn("block truncate text-body", row.hidden && "text-muted-foreground")}>{row.name}</span>

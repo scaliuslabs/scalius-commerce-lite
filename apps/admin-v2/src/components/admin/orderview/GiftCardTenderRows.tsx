@@ -119,7 +119,7 @@ export function GiftCardTenderRows({ payments }: {
             <dt className="text-muted-foreground">
               {t(line.kind === "tender" ? "tender.label" : "storeCredit.label", { last4: line.last4 })}
             </dt>
-            <dd className="min-w-0 break-words text-right">{value}</dd>
+            <dd className="min-w-0 break-words text-end">{value}</dd>
           </div>
         );
       })}

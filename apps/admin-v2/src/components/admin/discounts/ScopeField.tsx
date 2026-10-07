@@ -229,7 +229,7 @@ export function ScopeField({
             ) : null}
           </div>
           <DialogFooter className="sm:items-center">
-            <p className="text-body text-muted-foreground sm:mr-auto" aria-live="polite">
+            <p className="text-body text-muted-foreground sm:me-auto" aria-live="polite">
               {t("selectedCount", { count: formatNumber(staged.size) })}
             </p>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button>

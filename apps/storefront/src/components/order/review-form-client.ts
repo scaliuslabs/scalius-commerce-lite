@@ -38,7 +38,7 @@ function showError(form: HTMLFormElement, answer: ReviewPostAnswer): void {
   if (editHref && typeof answer.editText === "string") {
     const link = document.createElement("a");
     link.href = editHref;
-    link.className = "ml-1 underline";
+    link.className = "ms-1 underline";
     link.textContent = answer.editText;
     slot.append(" ", link);
   }

@@ -66,6 +66,11 @@ export interface StorefrontRuntime {
   /** The store's IANA time zone from the layout payload (Settings -> Store details). */
   STORE_TIME_ZONE?: string;
   /**
+   * The page's country from the layout payload: the presence's (`en-in` is
+   * IN), else the backup market's. Numbers and dates are written as there.
+   */
+  STORE_REGION?: string;
+  /**
    * The subfolder presence this render is in (`en-in`), from the header only
    * the gateway sets; absent for the root (the backup market).
    */
@@ -213,7 +218,7 @@ function optional(value: string | null | undefined): string | undefined {
  * empty storefront setting keeps the request origin.
  */
 export function applyPlatformOrigins(
-  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone"> | null | undefined,
+  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone" | "markets"> | null | undefined,
 ): void {
   const store = getRuntime();
   if (!store) return;
@@ -235,6 +240,16 @@ export function applyPlatformOrigins(
     typeof cspAllowedDomains === "string" ? cspAllowedDomains : "";
   const timeZone = layout?.timeZone;
   store.STORE_TIME_ZONE = isValidTimeZone(timeZone) ? timeZone : undefined;
+  const presence = store.MARKET_PRESENCE;
+  const country = presence
+    ? presence.slice(3).toUpperCase()
+    : layout?.markets?.markets.find((market) => market.isBackup)?.countries[0];
+  store.STORE_REGION = country && /^[A-Z]{2}$/.test(country) ? country : undefined;
+}
+
+/** The page's country seeded from this request's layout payload, if any. */
+export function getRuntimeStoreRegion(): string | undefined {
+  return getRuntime()?.STORE_REGION;
 }
 
 /** The store's time zone seeded from this request's layout payload, if any. */

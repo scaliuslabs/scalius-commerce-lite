@@ -306,7 +306,7 @@ function optionAriaLabel(
       {!factsColumn && !factPills && (
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -457,7 +457,7 @@ function optionAriaLabel(
       {factsColumn && (
         <div class="flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -465,9 +465,9 @@ function optionAriaLabel(
       <div>
         <label for="quantity" class:list={["mb-1 block text-sm font-medium text-foreground", look?.cta.inlineQuantity && "lg:sr-only"]}>{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
-          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
-          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
         </div>
         <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
       </div>
@@ -475,7 +475,7 @@ function optionAriaLabel(
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="buy-box-ctas flex gap-2 pt-1">
         <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          {look?.cta.showBuyNow !== false && <Icon name="shopping-cart" class="mr-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+          {look?.cta.showBuyNow !== false && <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
         {look?.cta.showBuyNow !== false && (
           <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
@@ -642,7 +642,7 @@ function optionAriaLabel(
     align-items: flex-start;
     height: auto;
     min-height: 2.75rem;
-    text-align: left;
+    text-align: start;
   }
   [data-option-price]:not([hidden]):not(.\#) {
     font-size: 0.75rem;

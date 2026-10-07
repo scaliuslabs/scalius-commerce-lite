@@ -33,9 +33,23 @@ const storefront = "apps/storefront/src";
  * paths: files or directories. forbid: no file may match any pattern.
  * require: every file must match every pattern. extensions: optional file filter.
  * optionalPaths: skip listed paths that do not exist yet (a later slice adds them).
+ * allow: repo-relative files the policy does not cover, each with its reason.
  * sample: text that must violate the policy.
  */
 export const policies = [
+  {
+    rule: "numbers, money, dates, lists and plurals are formatted through @scalius/shared/locale-format",
+    why: "one Intl layer, keyed by the reader's language and the store's country (CLDR); a hard-coded locale (en-US, en-IN, en-GB) writes a store abroad in another country's format",
+    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src", "packages/shared/src"],
+    allow: {
+      "packages/shared/src/locale-format.ts": "the layer itself",
+      "packages/shared/src/locale-words.ts": "the layer's lists, plurals, relative times and units",
+      "packages/shared/src/store-defaults.ts": "checks that the runtime knows a time zone",
+      "apps/admin-v2/src/lib/time-zone-options.ts": "names about 600 zones once each for the picker's search, which would only churn the layer's cache",
+    },
+    forbid: [/\bIntl\.(?:NumberFormat|DateTimeFormat|RelativeTimeFormat|PluralRules|ListFormat)\s*\(/, /\.toLocale(?:Date|Time)?String\(/],
+    sample: 'const total = new Intl.NumberFormat("en-IN").format(amount);',
+  },
   {
     rule: "storefront never imports server-only packages (@scalius/core, @scalius/database)",
     why: "the storefront Worker must not bundle domain services or database credentials",
@@ -336,6 +350,70 @@ export function policyViolations(policy, files) {
   return violations;
 }
 
+// ---------------------------------------------------------------------------
+// Right-to-left readiness: logical direction utilities
+// ---------------------------------------------------------------------------
+
+/** Tailwind utilities that name a physical side, and their logical spelling. */
+const PHYSICAL_UTILITY = /^-?(?:(?:ml|mr|pl|pr|left|right|scroll-m[lr]|scroll-p[lr])-.+|(?:border|rounded)-(?:[lr]|tl|tr|bl|br)(?:-.+)?|(?:text|float)-(?:left|right))$/;
+
+/**
+ * Physical utilities that are meant (file -> utilities): centring with a
+ * translate, and positions measured from the left in pixels or percent.
+ */
+export const PHYSICAL_UTILITY_ALLOW = {
+  "apps/admin-v2/src/components/ui/dialog.tsx": ["left-1/2"],
+  "apps/admin-v2/src/components/admin/online-store/HeroFocalPointEditor.tsx": ["left-1/2", "left-(--focus-x)"],
+  "apps/admin-v2/src/components/admin/layout/AppSidebar.tsx": ["left-(--tip-x)"],
+  "apps/admin-v2/src/components/admin/analytics/SalesTrendChart.tsx": ["left-(--dot-x)", "left-(--tip-edge)", "right-(--tip-edge)"],
+  "apps/storefront/src/components/header/variants/ClassicHeader.astro": ["left-1/2"],
+  "apps/storefront/src/components/sliders/CustomCarousel.astro": ["left-1/2"],
+};
+
+/** A class token's utility: the part after its variants (`md:hover:` ...) and `!`. */
+function utilityOf(token) {
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < token.length; index += 1) {
+    const char = token[index];
+    if (char === "[" || char === "(") depth += 1;
+    else if (char === "]" || char === ")") depth -= 1;
+    else if (char === ":" && depth === 0) start = index + 1;
+  }
+  return { variants: token.slice(0, start), utility: token.slice(start).replace(/^!/, "") };
+}
+
+/**
+ * Dashboard and storefront class names use logical sides (`ms-`, `pe-`,
+ * `inset-s-`, `border-e`, `rounded-s-`, `text-start`), so a right-to-left
+ * page mirrors. An `rtl:`/`ltr:` variant marks a deliberate physical pair.
+ */
+export function physicalUtilityViolations(files, allow = PHYSICAL_UTILITY_ALLOW) {
+  const violations = [];
+  for (const { name, text } of files) {
+    const allowed = new Set(allow[name] ?? []);
+    text.split("\n").forEach((line, index) => {
+      const code = line.trim();
+      if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) return;
+      for (const raw of line.match(/[^\s"'`{}]+/g) ?? []) {
+        // Unwrap a token's closing parenthesis or trailing punctuation from code (`cn("ml-2")`).
+        let token = raw.replace(/[,;]+$/, "");
+        while (token.endsWith(")") && (token.match(/\(/g) ?? []).length < (token.match(/\)/g) ?? []).length) token = token.slice(0, -1);
+        const { variants, utility } = utilityOf(token);
+        if (!PHYSICAL_UTILITY.test(utility) || /(?:^|:)(?:rtl|ltr):$/.test(variants) || allowed.has(utility)) continue;
+        violations.push(`${name}:${index + 1}: ${token}`);
+      }
+    });
+  }
+  return violations;
+}
+
+function collectPhysicalUtilityViolations() {
+  return [storefront, "apps/admin-v2/src"]
+    .flatMap((path) => codeFiles(path, new Set([".ts", ".tsx", ".astro"])))
+    .flatMap((file) => physicalUtilityViolations([{ name: relative(root, file), text: readFileSync(file, "utf8") }]));
+}
+
 export function collectSourcePolicyViolations() {
   const violations = policies.flatMap((policy) => policyViolations(
     policy,
@@ -344,10 +422,12 @@ export function collectSourcePolicyViolations() {
       .flatMap((path) => codeFiles(path, policy.extensions ? new Set(policy.extensions) : undefined)).map((file) => ({
       name: relative(root, file),
       text: readFileSync(file, "utf8"),
-    })),
+    }))
+      .filter((file) => !Object.hasOwn(policy.allow ?? {}, file.name)),
   ).map((violation) => `${policy.rule}\n    ${violation}`));
   return [
     ...violations,
+    ...collectPhysicalUtilityViolations().map((v) => `dashboard and storefront classes use logical sides (ms-, pe-, inset-s-, text-start), so right-to-left pages mirror\n    ${v}`),
     ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
     ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
   ];
@@ -360,6 +440,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 2} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 3} policies)`);
   }
 }

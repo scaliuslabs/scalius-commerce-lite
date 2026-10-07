@@ -65,7 +65,7 @@ const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
             {tickerText.map((text) => <li>{text}</li>)}
           </ul>
         </div>
-        <label for={`${section.id}-ticker-pause`} class="usp-ticker-pause grid h-10 w-10 shrink-0 cursor-pointer place-items-center border-l border-border text-muted-foreground" aria-hidden="true">
+        <label for={`${section.id}-ticker-pause`} class="usp-ticker-pause grid h-10 w-10 shrink-0 cursor-pointer place-items-center border-s border-border text-muted-foreground" aria-hidden="true">
           <span class="usp-ticker-pause-icon"><Icon name="pause" class="size-3.5" /></span>
           <span class="usp-ticker-play-icon"><Icon name="play" class="size-3.5" /></span>
         </label>

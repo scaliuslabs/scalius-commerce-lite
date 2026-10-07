@@ -78,7 +78,7 @@ export const DETAILS_CONFIG = {
     icon: {
       size: "h-4 w-4",
       color: "text-green-600",
-      spacing: "mr-2",
+      spacing: "me-2",
       shrink: "shrink-0",
       marginTop: "mt-0.5",
     },
@@ -128,7 +128,7 @@ export const RELATED_PRODUCTS_CONFIG = {
       imgHover: "group-hover:scale-105 transition-all duration-300",
     },
     discountBadge: {
-      position: "absolute top-2 left-2",
+      position: "absolute top-2 inset-s-2",
       style:
         "rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700",
     },
@@ -141,7 +141,7 @@ export const RELATED_PRODUCTS_CONFIG = {
       originalPrice: "text-xs text-gray-500 line-through",
       freeDelivery: {
         container: "mt-1 text-xs text-green-700 font-medium flex items-center",
-        iconSize: "h-3 w-3 mr-0.5",
+        iconSize: "h-3 w-3 me-0.5",
       },
     },
   },

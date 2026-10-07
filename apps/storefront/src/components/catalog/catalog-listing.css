@@ -133,7 +133,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-left: auto;
+    margin-inline-start: auto;
     flex-shrink: 0;
   }
 }
@@ -215,7 +215,7 @@
   }
 
   .catalog-band[data-boutique-bar] .catalog-band-count {
-    margin-left: 1.25rem;
+    margin-inline-start: 1.25rem;
   }
 
   .catalog-band[data-boutique-bar] select {
@@ -295,7 +295,7 @@
 .catalog-facet-chevron {
   width: 1rem;
   height: 1rem;
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
   color: var(--muted-foreground);
   transition: transform 150ms;
@@ -446,11 +446,11 @@
 
 /* Leading currency symbol or search icon inside the field. */
 .catalog-filter-input.catalog-filter-input--lead {
-  padding-left: 1.5rem;
+  padding-inline-start: 1.5rem;
 }
 
 .catalog-filter-input.catalog-filter-input--icon {
-  padding-left: 2rem;
+  padding-inline-start: 2rem;
 }
 
 /* The compact sort in the phone chip row keeps its label's width. */
@@ -713,8 +713,8 @@
   [data-catalog-layout="sidebar"][data-catalog-rail="fashion"] > #filter-section[data-placement="sidebar"] {
     top: var(--header-height, 0px);
     max-height: calc(100dvh - var(--header-height, 0px));
-    padding-right: 0.5rem;
-    border-right: 1px solid var(--border);
+    padding-inline-end: 0.5rem;
+    border-inline-end: 1px solid var(--border);
     background: var(--background);
   }
 
@@ -797,13 +797,13 @@
   }
 
   .catalog-filter-form[data-placement="bar"] .catalog-facet-chevron {
-    margin-left: 0.125rem;
+    margin-inline-start: 0.125rem;
   }
 
   .catalog-filter-form[data-placement="bar"] .catalog-facet-body {
     position: absolute;
     top: calc(100% + 0.25rem);
-    left: 0;
+    inset-inline-start: 0;
     z-index: 40;
     width: max-content;
     min-width: 15rem;
@@ -870,7 +870,7 @@
   [data-catalog-fashion-phone-bar] label:has([data-catalog-sort]) {
     min-width: 0;
     max-width: 10rem;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   html:has([data-catalog-fashion-phone-bar]) body {
@@ -984,8 +984,8 @@
   }
 
   #filter-section[data-mobile-facet-rail] .catalog-facet[open] > .catalog-facet-summary {
-    border-left: 4px solid var(--primary);
-    padding-left: 0.5rem;
+    border-inline-start: 4px solid var(--primary);
+    padding-inline-start: 0.5rem;
     background: var(--background);
     color: var(--primary);
     font-weight: 700;
@@ -998,8 +998,8 @@
   #filter-section[data-mobile-facet-rail] .catalog-facet[open] > .catalog-mobile-facet-title {
     position: absolute;
     top: 0;
-    right: 0;
-    left: 31%;
+    inset-inline-end: 0;
+    inset-inline-start: 31%;
     z-index: 2;
     display: block;
     min-height: 3.5rem;
@@ -1011,9 +1011,9 @@
   #filter-section[data-mobile-facet-rail] .catalog-facet-body {
     position: absolute;
     top: 3.5rem;
-    right: 0;
+    inset-inline-end: 0;
     bottom: calc(4rem + env(safe-area-inset-bottom));
-    left: 31%;
+    inset-inline-start: 31%;
     z-index: 1;
     display: flex;
     align-content: flex-start;
@@ -1230,7 +1230,7 @@
   flex: 1 0 7rem;
   justify-content: center;
   border: 0;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   border-radius: 0;
   background: transparent;
   font-size: 0.75rem;
@@ -1240,7 +1240,7 @@
 }
 
 .catalog-showcase-tabs a:last-child {
-  border-right: 0;
+  border-inline-end: 0;
 }
 
 .catalog-showcase-tabs a[aria-current] {

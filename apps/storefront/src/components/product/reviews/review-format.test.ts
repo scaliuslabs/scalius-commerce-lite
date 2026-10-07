@@ -53,8 +53,8 @@ describe("review numbers", () => {
 describe("review dates", () => {
   it("show the store's calendar day (Asia/Dhaka), not UTC", () => {
     // 01:52 on 26 September in Dhaka is still 25 September in UTC.
-    expect(formatReviewDate("2026-09-25T19:52:39.000Z", "en")).toBe("26 September 2026");
-    expect(formatReviewDate("2026-09-25T17:59:00.000Z", "en")).toBe("25 September 2026");
+    expect(formatReviewDate("2026-09-25T19:52:39.000Z", "en")).toBe("September 26, 2026");
+    expect(formatReviewDate("2026-09-25T17:59:00.000Z", "en")).toBe("September 25, 2026");
     expect(formatReviewDate("2026-09-25T19:52:39.000Z", "bn")).toBe("২৬ সেপ্টেম্বর, ২০২৬");
     expect(formatReviewDate("not a date", "en")).toBe("");
   });
@@ -111,7 +111,7 @@ describe("publicReviewMarkup", () => {
     expect(html).toContain("Size: M");
     expect(html).toContain("Edited");
     expect(html).toContain("Response from Dhaka Store");
-    expect(html).toContain("12 September 2026");
+    expect(html).toContain("September 12, 2026");
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("<b>Good</b>");
     expect(html).toContain("&lt;b&gt;Good&lt;/b&gt;");

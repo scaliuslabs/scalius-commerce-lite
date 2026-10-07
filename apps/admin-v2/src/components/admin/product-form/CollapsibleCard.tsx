@@ -72,7 +72,7 @@ export function CollapsibleCard({
         <button
           ref={toggleRef}
           type="button"
-          className="flex w-full items-start justify-between gap-3 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-start justify-between gap-3 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-expanded={isOpen}
           aria-controls={contentId}
           onClick={toggle}

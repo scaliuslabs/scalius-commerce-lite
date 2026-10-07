@@ -9,7 +9,6 @@ import {
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiData, type ApiResult } from "~/lib/api";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
-import { formatNumber } from "~/i18n";
 
 export type DigitalAssetDto = ApiResult<typeof postApiV1AdminDigitalAssetsByIdUploadsByUploadIdComplete>["asset"];
 export type DigitalUploadSessionDto = NonNullable<ApiResult<typeof postApiV1AdminDigitalAssetsByIdUploads>["upload"]>;
@@ -92,14 +91,3 @@ export async function startDigitalUpload(assetId: string, file: File): Promise<D
   return upload;
 }
 
-/** "12.5 MB" in the dashboard's number format. */
-export function formatBytes(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${formatNumber(value, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
-}
