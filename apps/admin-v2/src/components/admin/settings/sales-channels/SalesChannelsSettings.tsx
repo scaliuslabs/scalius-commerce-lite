@@ -1,9 +1,9 @@
 // Settings › Sales channels (docs/MARKETS-DESIGN.md D6), Shopify's "Apps and
 // sales channels": the online store, Google, Facebook and Instagram, AI
-// agents and each app's channel, with its status, the products published to
-// it and the locations whose stock it sells. Manage opens one channel: switch
-// it on or off (not the online store; an app's follows the app) and choose
-// its locations.
+// agents and each app's channel, with its status and the products published
+// to it. Manage opens one channel: switch it on or off (not the online store;
+// an app's follows the app) and, in a store with more than one location,
+// choose the locations whose stock it sells.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -50,8 +50,10 @@ export function SalesChannelsSettings() {
   const allLocations = locations.data ?? [];
   const activeLocations = allLocations.filter((location) => location.status === "active");
 
+  // One location means no choice to make: the locations stay out of sight.
+  const choosesLocations = activeLocations.length > 1;
   const locationSummary = (channel: SalesChannel) => {
-    if (!locations.data) return null;
+    if (!locations.data || !choosesLocations) return null;
     const linked = activeLocations.filter((location) => channel.locationIds.includes(location.id)).length;
     return linked === activeLocations.length
       ? t("allLocations")
@@ -87,7 +89,7 @@ export function SalesChannelsSettings() {
                     {locationSummary(channel) ? <> · {locationSummary(channel)}</> : null}
                   </p>
                 </div>
-                {canEdit ? (
+                {canEdit && (choosesLocations || channel.id !== ONLINE_STORE) ? (
                   <Button type="button" variant="outline" size="sm" onClick={() => setManaging(channel)}>
                     {t("manage")}
                   </Button>
@@ -102,6 +104,7 @@ export function SalesChannelsSettings() {
           key={managing.id}
           channel={managing}
           locations={allLocations}
+          choosesLocations={choosesLocations}
           onClose={() => setManaging(null)}
         />
       ) : null}
@@ -109,9 +112,10 @@ export function SalesChannelsSettings() {
   );
 }
 
-function ManageChannelDialog({ channel, locations, onClose }: {
+function ManageChannelDialog({ channel, locations, choosesLocations, onClose }: {
   channel: SalesChannel;
   locations: InventoryLocation[];
+  choosesLocations: boolean;
   onClose: () => void;
 }) {
   const t = useMessages(salesChannelsMessages);
@@ -127,7 +131,7 @@ function ManageChannelDialog({ channel, locations, onClose }: {
   const name = salesChannelName(channel);
 
   const save = () => {
-    if (!locationIds.some((id) => shown.find((location) => location.id === id)?.status === "active")) {
+    if (choosesLocations && !locationIds.some((id) => shown.find((location) => location.id === id)?.status === "active")) {
       setError(t("locationsRequired"));
       return;
     }
@@ -174,6 +178,7 @@ function ManageChannelDialog({ channel, locations, onClose }: {
               </span>
             </label>
           </section>
+          {choosesLocations ? (
           <section className="space-y-2">
             <h3 className="text-body font-medium">{t("locations")}</h3>
             <p className="text-body text-muted-foreground">{t("locationsHelp")}</p>
@@ -204,6 +209,7 @@ function ManageChannelDialog({ channel, locations, onClose }: {
             )}
             {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
           </section>
+          ) : error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={update.isPending} onClick={onClose}>{t("cancel")}</Button>

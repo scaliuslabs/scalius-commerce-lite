@@ -1,8 +1,10 @@
-// Settings › Languages (docs/MARKETS-DESIGN.md D9), Shopify's Languages: the
-// default language first, then every other one with whether it is
-// published, the market web addresses in it and how much is translated.
-// A language is added unpublished, translated, then published; the default
-// can move to another language; a language no web address uses can go.
+// Settings › Languages (docs/MARKETS-DESIGN.md D9), Shopify's Languages. A
+// store with one language sees it in a sentence and one way to add another.
+// With more, the default language comes first, then every other one with
+// whether it is published, the web address that uses it and how much is
+// translated. A language is added unpublished, translated, then published;
+// the default can move to another language; a language no web address uses
+// can go. Machine translation shows once there is a language to translate to.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -61,6 +63,7 @@ export function LanguagesSettings() {
 
   if (isError) return <SettingsLoadFailure title={t("languagesLoadFailed")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
+  const sole = data.length === 1 ? data[0]! : null;
 
   const name = (locale: string) => languageName(locale, uiLocale);
   const setPublished = (language: StoreLanguage, published: boolean) => update.mutate({ locale: language.locale, published }, {
@@ -75,7 +78,15 @@ export function LanguagesSettings() {
         title={t("languagesTitle")}
         description={t("languagesDescription")}
         action={canEdit ? <Button type="button" size="sm" onClick={() => setAdding(true)}>{t("addLanguage")}</Button> : null}
-        rows={
+        rows={sole ? (
+          <div className="space-y-1 px-4 py-3">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="text-body font-medium">{name(sole.locale)}</span>
+              <Badge variant="info">{t("default")}</Badge>
+            </p>
+            <p className="text-body text-muted-foreground">{t("soleSummary", { language: name(sole.locale) })}</p>
+          </div>
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -157,12 +168,16 @@ export function LanguagesSettings() {
               ))}
             </TableBody>
           </Table>
-        }
+        )}
       />
-      <p className="px-1 text-body text-muted-foreground">
-        {t("defaultHelp")} <Link to="/admin/settings/markets" className="text-link hover:underline">{t("markets")}</Link>
-      </p>
-      <MachineTranslationCard />
+      {sole ? null : (
+        <>
+          <p className="px-1 text-body text-muted-foreground">
+            {t("defaultHelp")} <Link to="/admin/settings/markets" className="text-link hover:underline">{t("markets")}</Link>.
+          </p>
+          <MachineTranslationCard />
+        </>
+      )}
       <AddLanguageDialog open={adding} onOpenChange={setAdding} taken={data.map((language) => language.locale)} />
       <ConfirmDialog
         open={removing !== null}

@@ -35,7 +35,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
   const navigate = useNavigate();
   const choices = useQuery({ ...priceListChoicesQueryOptions(), enabled: open });
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<PriceListKind>("market");
+  const [chosenKind, setKind] = useState<PriceListKind>("market");
   const [marketId, setMarketId] = useState("");
   const [segmentId, setSegmentId] = useState("");
   const [problems, setProblems] = useState<Problems>({});
@@ -53,9 +53,13 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
     reset();
   }, [open, reset, fixedMarket]);
 
-  // Market and sale lists price a market other than the backup (it sells at the product prices).
+  // Market and sale lists price a market other than the primary one (it sells at the product prices),
+  // so a store with one market can only make a customer segment list.
+  const needsMarket = choices.data !== undefined && !choices.data.markets.some((market) => !market.isBackup);
+  const kind: PriceListKind = needsMarket ? "segment" : chosenKind;
   const markets = (choices.data?.markets ?? []).filter((market) => kind === "segment" || !market.isBackup);
-  const chosenMarket = markets.some((market) => market.id === marketId) ? marketId : "";
+  // With one market there is nothing to choose: its list prices it.
+  const chosenMarket = markets.some((market) => market.id === marketId) ? marketId : needsMarket ? markets[0]?.id ?? "" : "";
   const segments = choices.data?.segments ?? [];
   const dirty = name.trim() !== "" || segmentId !== "" || (marketId !== "" && marketId !== fixedMarket);
   const { requestClose, discardDialog } = useDirtyDialogClose({ dirty, busy: create.isPending, onClose: () => onOpenChange(false) });
@@ -133,15 +137,16 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                 <RadioGroup value={kind} onValueChange={(value) => setKind(value as PriceListKind)}>
                   {PRICE_LIST_KINDS.map((option) => (
                     <label key={option} className="flex min-h-11 items-start gap-2 py-1 text-body">
-                      <span className="flex h-lh items-center"><RadioGroupItem value={option} /></span>
+                      <span className="flex h-lh items-center"><RadioGroupItem value={option} disabled={needsMarket && option !== "segment"} /></span>
                       <span>
                         <span className="block font-medium">{t(KIND_LABEL[option])}</span>
-                        <span className="block text-muted-foreground">{t(KIND_HELP[option])}</span>
+                        <span className="block text-muted-foreground">{needsMarket && option !== "segment" ? t("kindNeedsMarket") : t(KIND_HELP[option])}</span>
                       </span>
                     </label>
                   ))}
                 </RadioGroup>
               </fieldset>
+              {needsMarket ? null : (
               <div className="space-y-1.5">
                 <Label htmlFor="price-list-create-market">{t("market")}</Label>
                 <SearchableSelect
@@ -157,8 +162,9 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                     if (problems.market) setProblems((current) => ({ ...current, market: undefined }));
                   }}
                 />
-                {note("market", kind === "segment" ? undefined : t(markets.length === 0 ? "noOtherMarkets" : "marketBackupNote"))}
+                {note("market", kind === "segment" ? undefined : t(markets.length === 0 ? "noOtherMarkets" : "marketPrimaryNote"))}
               </div>
+              )}
               {kind === "segment" ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="price-list-create-segment">{t("segment")}</Label>

@@ -21,7 +21,7 @@ import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { productsQueryOptions } from "~/lib/api-query-options/products";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
-import { salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
+import { channelsInUse, salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { useDuplicateProduct } from "~/lib/api-mutations/products";
@@ -105,10 +105,13 @@ function ProductsPage() {
   const { data: channelData } = useQuery(salesChannelsQueryOptions());
   const c = useMessages(salesChannelNamesMessages);
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
+  // The Channels column and filter appear once the store tells channels apart
+  // (or a link, such as Settings › Sales channels, filters by one).
+  const showChannels = Boolean(channelData && (channelsInUse(channelData) || search.channel));
   const channelNames = useMemo(
-    () => (channelData ? new Map(channelData.map((channel) => [channel.id, salesChannelName(channel)])) : undefined),
+    () => (channelData && showChannels ? new Map(channelData.map((channel) => [channel.id, salesChannelName(channel)])) : undefined),
     // Names follow the dashboard language (c changes with it).
-    [channelData, c],
+    [channelData, showChannels, c],
   );
 
   const columns = useMemo(
@@ -171,6 +174,7 @@ function ProductsPage() {
             ariaLabel={t("filterCategory")}
             triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-40"
           />
+          {showChannels ? (
           <SearchableSelect
             value={channelFilter}
             onValueChange={(value) => {
@@ -200,6 +204,7 @@ function ProductsPage() {
             ariaLabel={c("filterChannel")}
             triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-44"
           />
+          ) : null}
           </>
         }
         rowTo={rowTo}
