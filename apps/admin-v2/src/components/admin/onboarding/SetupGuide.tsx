@@ -112,31 +112,35 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
         </div>
       </CardHeader>
       {expanded ? (
-        <Accordion type="single" collapsible value={open} onValueChange={setOpen} className="border-t">
-          {steps.map((step) => (
-            <AccordionItem key={step.key} value={step.key} className="px-4">
-              <AccordionTrigger>
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-lh shrink-0 items-center">
-                    {step.done ? (
-                      <Check aria-hidden="true" className="size-4 rounded-full bg-success p-0.5 text-success-foreground" />
-                    ) : (
-                      <Circle aria-hidden="true" className="size-4 text-muted-foreground" strokeDasharray="3 3" />
-                    )}
+        <div className="border-t px-4">
+          <Accordion type="single" collapsible value={open} onValueChange={setOpen}>
+            {steps.map((step) => (
+              <AccordionItem key={step.key} value={step.key}>
+                <AccordionTrigger>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-lh shrink-0 items-center">
+                      {step.done ? (
+                        <Check aria-hidden="true" className="size-4 rounded-full bg-success p-0.5 text-success-foreground" />
+                      ) : (
+                        <Circle aria-hidden="true" className="size-4 text-muted-foreground" strokeDasharray="3 3" />
+                      )}
+                    </span>
+                    <span className="sr-only">{step.done ? t("stepDone") : t("stepTodo")}:</span>
+                    <span>{t(step.key)}</span>
                   </span>
-                  <span className="sr-only">{step.done ? t("stepDone") : t("stepTodo")}:</span>
-                  <span>{t(step.key)}</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="flex flex-col items-start gap-3 ps-7">
-                <p className="text-muted-foreground">{t(step.body)}</p>
-                <Button variant={step.done ? "outline" : "default"} size="sm" asChild>
-                  <Link to={step.to} params={step.params as never}>{t(`${step.key}Action`)}</Link>
-                </Button>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-col items-start gap-3 ps-7">
+                    <p className="text-muted-foreground">{t(step.body)}</p>
+                    <Button variant={step.done ? "outline" : "default"} size="sm" asChild>
+                      <Link to={step.to} params={step.params as never}>{t(`${step.key}Action`)}</Link>
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
       ) : null}
     </Card>
   );
