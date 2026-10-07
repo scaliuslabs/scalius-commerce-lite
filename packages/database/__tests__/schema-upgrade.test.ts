@@ -535,6 +535,18 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 4,
         postgresStatements: 4,
       },
+      {
+        version: 118,
+        name: "0118_places",
+        // The place directory: places created and filled from
+        // delivery_locations, zone places moved onto it (rebuilt on SQLite,
+        // the foreign key moved on PostgreSQL) with their triggers, the old
+        // table dropped (and its PostgreSQL trigger functions), the indexes,
+        // the parent guards, the checkout fence and the generated cache
+        // triggers: one statement each.
+        sqliteStatements: 28,
+        postgresStatements: 31,
+      },
     ]);
   });
 
@@ -701,6 +713,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 115, name: "0115_selling_countries_dependency" },
           { version: 116, name: "0116_tax_regions" },
           { version: 117, name: "0117_phoneless_guest_customers" },
+          { version: 118, name: "0118_places" },
         ],
       });
     } finally {

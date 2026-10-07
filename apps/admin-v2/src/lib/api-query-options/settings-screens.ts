@@ -39,7 +39,7 @@ import type { GatewayStatus } from "~/components/admin/settings/payment-method-o
 import type { PolicyKind } from "~/components/admin/settings/policy-templates";
 import { apiClient, apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
-import { deliveryProvidersQueryOptions } from "./delivery";
+import { addressPlaceQuery, deliveryProvidersQueryOptions } from "./delivery";
 import { pagesQueryOptions } from "./pages";
 import { getAdminUsers, getRbacRoles } from "./rbac";
 
@@ -131,12 +131,13 @@ export const customerRequestsQuery = {
 
 // ── Shipping ─────────────────────────────────────────────────────────────
 
+/** Bangladesh's cities, thanas and areas: the places its addresses pick from. */
 export const areaCountsQuery = {
   queryKey: [...queryKeys.settings.deliveryLocations(), "counts"],
   queryFn: async () => {
     const [cities, zones, areas] = await Promise.all(
       (["city", "zone", "area"] as const).map((type) =>
-        apiData(getApiV1AdminSettingsDeliveryLocations({ query: { type, page: 1, limit: 1 } })),
+        apiData(getApiV1AdminSettingsDeliveryLocations({ query: { ...addressPlaceQuery(type), page: 1, limit: 1 } })),
       ),
     );
     return { cities: cities!.pagination.total, zones: zones!.pagination.total, areas: areas!.pagination.total };

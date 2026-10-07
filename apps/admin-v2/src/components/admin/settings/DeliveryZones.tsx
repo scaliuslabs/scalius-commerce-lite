@@ -17,6 +17,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiClient, apiData } from "~/lib/api";
 import {
+  addressPlaceQuery,
   allDeliveryLocationsQueryOptions,
   deliveryLocationLoader,
   deliveryLocationsQueryOptions,
@@ -38,6 +39,7 @@ import { locationMessages } from "~/i18n/location";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
 import { cn } from "@scalius/shared/utils";
+import { PLACE_ADDRESS_COUNTRY, deliveryHierarchyField } from "@scalius/shared/places";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
@@ -319,7 +321,7 @@ function PlaceRow({
 }
 
 function AreasOf({ zoneId, ...row }: { zoneId: string } & Omit<Parameters<typeof PlaceList>[0], "places" | "depth">) {
-  const areas = useQuery(deliveryLocationsQueryOptions({ type: "area", parentId: zoneId, limit: 500 }));
+  const areas = useQuery(deliveryLocationsQueryOptions({ ...addressPlaceQuery("area"), parentId: zoneId, limit: 500 }));
   return <PlaceList {...row} places={areas.data?.locations ?? []} depth={2} />;
 }
 
@@ -383,16 +385,18 @@ function PlacePicker({
   const zones = useQuery(allDeliveryLocationsQueryOptions({ type: "zone" })).data?.locations ?? [];
   const cityName = new Map(cities.map((city) => [city.id, city.name]));
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  // A zone holds Bangladesh places: City (level 1), Thana (2), Area (3).
+  const fieldOf = (location: DeliveryLocation) => deliveryHierarchyField(location.level) ?? "area";
   const parentName = (location: DeliveryLocation): string | null => {
     if (location.parentPath?.length) return location.parentPath.join(", ");
-    if (location.type === "zone") return cityName.get(location.parentId ?? "") ?? null;
-    if (location.type !== "area") return null;
+    if (fieldOf(location) === "zone") return cityName.get(location.parentId ?? "") ?? null;
+    if (fieldOf(location) !== "area") return null;
     const zone = zoneById.get(location.parentId ?? "");
     return zone ? [zone.name, cityName.get(zone.parentId ?? "")].filter(Boolean).join(", ") : null;
   };
   const chosen = new Set(selected.map((item) => item.id));
   const add = (location: DeliveryLocation) =>
-    onChange([...selected, { id: location.id, name: location.name, type: location.type, parentName: parentName(location) }]);
+    onChange([...selected, { id: location.id, name: location.name, type: fieldOf(location), parentName: parentName(location) }]);
   const toggle = (location: DeliveryLocation, checked: boolean) =>
     checked ? add(location) : onChange(selected.filter((item) => item.id !== location.id));
   const flip = (id: string) =>
@@ -443,13 +447,14 @@ function PlacePicker({
           emptyMessage={t("noPlaces")}
           triggerClassName="w-full"
           load={deliveryLocationLoader({
+            country: PLACE_ADDRESS_COUNTRY,
             toOption: (location) => {
               found.set(location.id, location);
               const zone = taken.get(location.id);
               return {
                 value: location.id,
                 label: location.name,
-                description: [typeName[location.type], ...(location.parentPath ?? []), zone ? t("inZone", { zone }) : null]
+                description: [typeName[fieldOf(location)], ...(location.parentPath ?? []), zone ? t("inZone", { zone }) : null]
                   .filter(Boolean)
                   .join(" · "),
                 disabled: Boolean(zone),

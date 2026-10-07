@@ -34,9 +34,9 @@ describe("agent storefront checkout submission on D1 storage", () => {
         ('s_countries', 'document', '{"allowedCountries":["BD"],"allowedCountriesMode":"include"}', 'json', 'customer_countries'),
         ('s_methods', 'document', '{"enabledMethods":["cod"],"defaultMethod":"cod"}', 'json', 'payment_methods'),
         ('s_checkout', 'document', '{"guestCheckoutEnabled":true,"checkoutMode":"all","partialPaymentEnabled":false,"partialPaymentAmount":0}', 'json', 'checkout');
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-      VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-             ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+      VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+             ('zone_1', 'Dhanmondi', 'BD', 2, 'city_1', '{}', '{}', 1);
       INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('ship_1', 'Standard', 6000, 1, 'dz_bd');
       INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tea', 'tea', 10000, 1);
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)

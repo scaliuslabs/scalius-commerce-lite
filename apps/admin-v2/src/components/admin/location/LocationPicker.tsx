@@ -9,7 +9,6 @@ import { locationMessages } from "~/i18n/location";
 import {
   deliveryLocationByIdQueryOptions,
   deliveryLocationLoader,
-  type DeliveryLocationsQuery,
 } from "~/lib/api-query-options/delivery";
 import { queryKeys } from "~/lib/query-keys";
 
@@ -34,7 +33,7 @@ const COPY = {
 } as const;
 
 /** Where the loader for each level looks. */
-function levelQuery(level: LocationLevel, value: LocationValue): { type: DeliveryLocationsQuery["type"]; parentId?: string } | null {
+function levelQuery(level: LocationLevel, value: LocationValue): { type: LocationLevel; parentId?: string } | null {
   if (level === "city") return { type: "city" };
   const parent = level === "zone" ? value.city : value.zone;
   return parent ? { type: level, parentId: parent.id } : null;

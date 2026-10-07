@@ -1,38 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { countLocationDescendants, deleteLocations } from "./locations";
+import { countPlaceDescendants, deletePlaces } from "./places";
 import { createDeliveryZone, listDeliveryRatesForDestination, listDeliveryZones } from "./zones";
 
 /** Nagar (Para → Pallabi, Kazipara; Savar → Hemayetpur) and Chattogram (Agrabad). */
 function seed() {
     const harness = createSqliteD1Database();
     harness.sqlite.exec(`
-        INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-            ('nagar', 'Nagar', 'city', NULL, '{}', '{}', 1),
-            ('para', 'Para', 'zone', 'nagar', '{}', '{}', 1),
-            ('pallabi', 'Pallabi', 'area', 'para', '{}', '{}', 1),
-            ('kazipara', 'Kazipara', 'area', 'para', '{}', '{}', 1),
-            ('savar', 'Savar', 'zone', 'nagar', '{}', '{}', 1),
-            ('hemayetpur', 'Hemayetpur', 'area', 'savar', '{}', '{}', 1),
-            ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1),
-            ('agrabad', 'Agrabad', 'zone', 'ctg', '{}', '{}', 1);
+        INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+            ('nagar', 'Nagar', 'BD', 1, NULL, '{}', '{}', 1),
+            ('para', 'Para', 'BD', 2, 'nagar', '{}', '{}', 1),
+            ('pallabi', 'Pallabi', 'BD', 3, 'para', '{}', '{}', 1),
+            ('kazipara', 'Kazipara', 'BD', 3, 'para', '{}', '{}', 1),
+            ('savar', 'Savar', 'BD', 2, 'nagar', '{}', '{}', 1),
+            ('hemayetpur', 'Hemayetpur', 'BD', 3, 'savar', '{}', '{}', 1),
+            ('ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1),
+            ('agrabad', 'Agrabad', 'BD', 2, 'ctg', '{}', '{}', 1);
     `);
     return harness;
 }
 
 const live = (harness: ReturnType<typeof seed>) =>
-    (harness.sqlite.prepare("SELECT id FROM delivery_locations WHERE deleted_at IS NULL ORDER BY id").all() as Array<{ id: string }>)
+    (harness.sqlite.prepare("SELECT id FROM places WHERE deleted_at IS NULL ORDER BY id").all() as Array<{ id: string }>)
         .map((row) => row.id);
 
 const rate = { name: "Standard", fee: 60, isActive: true };
 
-describe("deleting delivery locations", () => {
+describe("deleting places", () => {
     it("counts the thanas and areas under each place", async () => {
         const { db } = seed();
-        const counts = await countLocationDescendants(db, ["nagar", "para", "ctg", "pallabi"]);
-        expect(counts.get("nagar")).toEqual({ zones: 2, areas: 3 });
-        expect(counts.get("para")).toEqual({ zones: 0, areas: 2 });
-        expect(counts.get("ctg")).toEqual({ zones: 1, areas: 0 });
+        const counts = await countPlaceDescendants(db, ["nagar", "para", "ctg", "pallabi"]);
+        expect(counts.get("nagar")).toEqual({ "2": 2, "3": 3 });
+        expect(counts.get("para")).toEqual({ "3": 2 });
+        expect(counts.get("ctg")).toEqual({ "2": 1 });
         expect(counts.get("pallabi")).toBeUndefined();
     }, 20_000); // The first test also builds the migrated SQLite database.
 
@@ -42,7 +42,7 @@ describe("deleting delivery locations", () => {
         await createDeliveryZone(db, { name: "Para zone", locationIds: ["para", "hemayetpur"], rates: [rate] }, { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 });
         await createDeliveryZone(db, { name: "Port", locationIds: ["agrabad"], rates: [{ ...rate, name: "Port" }] }, { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 });
 
-        await deleteLocations(db, ["nagar"]);
+        await deletePlaces(db, ["nagar"]);
 
         expect(live(harness)).toEqual(["agrabad", "ctg"]);
         const zones = (await listDeliveryZones(db, 2)).zones;
@@ -58,16 +58,16 @@ describe("deleting delivery locations", () => {
 
     it("deletes a thana with its areas and leaves the rest of the city", async () => {
         const harness = seed();
-        await deleteLocations(harness.db, ["para", "agrabad"]);
+        await deletePlaces(harness.db, ["para", "agrabad"]);
         expect(live(harness)).toEqual(["ctg", "hemayetpur", "nagar", "savar"]);
-        expect(await countLocationDescendants(harness.db, ["nagar"])).toEqual(new Map([["nagar", { zones: 1, areas: 1 }]]));
+        expect(await countPlaceDescendants(harness.db, ["nagar"])).toEqual(new Map([["nagar", { "2": 1, "3": 1 }]]));
     });
 
     it("stays under D1's bound-parameter limit however many places are deleted at once", async () => {
         const harness = seed();
         const many = [...Array.from({ length: 200 }, (_, index) => `missing-${index}`), "nagar", "ctg"];
-        expect((await countLocationDescendants(harness.db, many)).get("nagar")).toEqual({ zones: 2, areas: 3 });
-        await deleteLocations(harness.db, many);
+        expect((await countPlaceDescendants(harness.db, many)).get("nagar")).toEqual({ "2": 2, "3": 3 });
+        await deletePlaces(harness.db, many);
         expect(live(harness)).toEqual([]);
     });
 });

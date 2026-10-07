@@ -37,11 +37,11 @@ describe("manual COD order amendments on D1 storage", () => {
       },
     }));
     sqlite.exec(`
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
       VALUES
-        ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-        ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1),
-        ('zone_2', 'South', 'zone', 'city_1', '{}', '{}', 1);
+        ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+        ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1),
+        ('zone_2', 'South', 'BD', 2, 'city_1', '{}', '{}', 1);
       INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
       INSERT OR REPLACE INTO tax_settings
         (id, enabled, tax_shipping, default_tax_class_id, display_label, version)

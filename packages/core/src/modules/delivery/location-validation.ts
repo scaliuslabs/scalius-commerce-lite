@@ -1,7 +1,8 @@
 import type { Database } from "@scalius/database/client";
-import { deliveryLocations, deliveryZoneLocations } from "@scalius/database/schema";
+import { deliveryZoneLocations, placeAddressFieldSql, places } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { addressPlaceCountrySql } from "./places";
 
 /**
  * The chosen city, thana or area was removed or turned off since the buyer
@@ -48,25 +49,27 @@ export function selectActiveDeliveryLocationRowsByIds(
     rawLocationIds: readonly string[],
 ) {
     const locationIds = [...new Set(rawLocationIds.map((id) => id.trim()).filter(Boolean))];
+    // Bangladesh places only: the adapter reads a place's field from its level.
     const query = db
         .select({
-            id: deliveryLocations.id,
-            name: deliveryLocations.name,
-            type: deliveryLocations.type,
-            parentId: deliveryLocations.parentId,
-            isActive: deliveryLocations.isActive,
-            deletedAt: deliveryLocations.deletedAt,
-            deliveryZoneId: sql<string | null>`(SELECT ${deliveryZoneLocations.zoneId} FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.locationId} = ${deliveryLocations.id})`,
+            id: places.id,
+            name: places.name,
+            type: placeAddressFieldSql,
+            parentId: places.parentId,
+            isActive: places.isActive,
+            deletedAt: places.deletedAt,
+            deliveryZoneId: sql<string | null>`(SELECT ${deliveryZoneLocations.zoneId} FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.locationId} = ${places.id})`,
         })
-        .from(deliveryLocations);
+        .from(places);
 
     if (locationIds.length === 0) return query.limit(0);
 
     return query.where(
         and(
-            inArray(deliveryLocations.id, locationIds),
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
+            inArray(places.id, locationIds),
+            addressPlaceCountrySql,
+            eq(places.isActive, true),
+            isNull(places.deletedAt),
         ),
     );
 }

@@ -37,8 +37,8 @@ describe("order writes repeated by a double click", () => {
     beforeEach(() => {
         ({ sqlite, db } = createSqliteD1Database());
         sqlite.exec(`
-            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-            VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
+            INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+            VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1);
             INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('product_1', 'Kurta', 'kurta', 80000, 1);
             INSERT INTO product_variants
               (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory)

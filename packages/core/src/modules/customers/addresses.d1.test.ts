@@ -25,12 +25,12 @@ let db: Database;
 beforeEach(() => {
     ({ sqlite, db } = createSqliteD1Database());
     sqlite.exec(`
-        INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-          ('city_dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-          ('zone_mirpur', 'Mirpur', 'zone', 'city_dhaka', '{}', '{}', 1),
-          ('area_10', 'Section 10', 'area', 'zone_mirpur', '{}', '{}', 1),
-          ('city_ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1),
-          ('zone_old', 'Old Thana', 'zone', 'city_dhaka', '{}', '{}', 0);
+        INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+          ('city_dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+          ('zone_mirpur', 'Mirpur', 'BD', 2, 'city_dhaka', '{}', '{}', 1),
+          ('area_10', 'Section 10', 'BD', 3, 'zone_mirpur', '{}', '{}', 1),
+          ('city_ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1),
+          ('zone_old', 'Old Thana', 'BD', 2, 'city_dhaka', '{}', '{}', 0);
         INSERT INTO customers (id, name, phone) VALUES ('cust_1', 'Karim', '+8801711111111');
     `);
 });

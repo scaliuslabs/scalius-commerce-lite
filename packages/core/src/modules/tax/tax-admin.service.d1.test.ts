@@ -106,8 +106,8 @@ describe("tax lifecycle D1 atomicity", () => {
   it("adds a country, its admin areas, postal prefixes and Bangladesh places, and refuses an orphan or a duplicate", async () => {
     const db = createDatabase();
     sqlite!.exec(`
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata)
-        VALUES ('city_dhaka', 'Dhaka', 'city', NULL, '{}', '{}');
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata)
+        VALUES ('city_dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}');
     `);
     await expect(createTaxRegion(db, { countryCode: "US", adminArea: "California" }))
       .rejects.toThrow("Add the country before its regions.");

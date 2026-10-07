@@ -1,6 +1,8 @@
 import { spawnSync } from "child_process";
+import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import {
+  FIXTURE_PLACE_KEYS,
   attachAuthoritativeQuote,
   buildCartValidationPayload,
   buildCheckoutPayload,
@@ -96,9 +98,9 @@ describe("local post-sale smoke CLI", () => {
     expect(cartPayload).toEqual({
       items: payload.items,
       inventoryPool: "regular",
-      city: "ops006_city_dhaka",
-      zone: "ops006_zone_mirpur",
-      area: "ops006_area_section_10",
+      city: "nntq06qxtlwr8g6a5bjzdxc2",
+      zone: "rjof19xr3o3p09gnb3pz0uwm",
+      area: "hunpbkhnihodlxlar9tatoip",
       shippingMethodId: "ops006_shipping_standard",
     });
   });
@@ -134,6 +136,16 @@ describe("local post-sale smoke CLI", () => {
     expect(request.path).not.toContain("chk_private");
     expect(request.path).not.toContain("token=");
     expect(request.headers).toEqual({ "X-Receipt-Token": "chk_private" });
+  });
+
+  it("takes its delivery places from the Bangladesh dataset, not an ad-hoc seed", () => {
+    const places = JSON.parse(readFileSync("data/places/bd/places.json", "utf8"));
+    const byKey = new Map(places.map((place) => [place.key, place]));
+    const payload = buildCheckoutPayload({ sequence: 1 });
+    expect(byKey.get(FIXTURE_PLACE_KEYS.cityId)).toMatchObject({ level: 1, name: "Dhaka", legacyId: payload.city });
+    expect(byKey.get(FIXTURE_PLACE_KEYS.zoneId)).toMatchObject({ level: 2, parent: FIXTURE_PLACE_KEYS.cityId, legacyId: payload.zone });
+    expect(byKey.get(FIXTURE_PLACE_KEYS.areaId)).toMatchObject({ level: 3, parent: FIXTURE_PLACE_KEYS.zoneId, legacyId: payload.area });
+    expect(buildFixtureSql()).not.toMatch(/INSERT INTO (?:places|delivery_locations)/);
   });
 
   it("seeds checkout, auth policy, delivery, and one untracked default SKU", () => {

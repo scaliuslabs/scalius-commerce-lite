@@ -288,7 +288,7 @@ export async function seedLiveCheckoutTarget(
 
     const requiredTables = [
       "customers",
-      "delivery_locations",
+      "places",
       "orders",
       "product_variants",
       "products",
@@ -333,7 +333,7 @@ export async function seedLiveCheckoutTarget(
          (SELECT COUNT(*) FROM customers) AS customers_count,
          (SELECT COUNT(*) FROM settings) AS settings_count,
          (SELECT COUNT(*) FROM shipping_methods) AS shipping_methods_count,
-         (SELECT COUNT(*) FROM delivery_locations) AS delivery_locations_count`,
+         (SELECT COUNT(*) FROM places) AS places_count`,
     );
     for (const [key, value] of Object.entries(countRows[0] ?? {})) {
       if (Number(value) !== 0) {
@@ -393,21 +393,21 @@ export async function seedLiveCheckoutTarget(
         args: [fixture.shippingMethodId, `${identity.targetId} delivery`, `${fixture.shippingMethodId}_zone`],
       },
       {
-        sql: `INSERT INTO delivery_locations
-                (id, name, type, parent_id, external_ids, metadata, is_active, sort_order)
-              VALUES (?, 'Loadtest City', 'city', NULL, '{}', '{}', 1, 0)`,
+        sql: `INSERT INTO places
+                (id, name, country_code, level, parent_id, external_ids, metadata, is_active, sort_order)
+              VALUES (?, 'Loadtest City', 'BD', 1, NULL, '{}', '{}', 1, 0)`,
         args: [fixture.cityId],
       },
       {
-        sql: `INSERT INTO delivery_locations
-                (id, name, type, parent_id, external_ids, metadata, is_active, sort_order)
-              VALUES (?, 'Loadtest Zone', 'zone', ?, '{}', '{}', 1, 0)`,
+        sql: `INSERT INTO places
+                (id, name, country_code, level, parent_id, external_ids, metadata, is_active, sort_order)
+              VALUES (?, 'Loadtest Zone', 'BD', 2, ?, '{}', '{}', 1, 0)`,
         args: [fixture.zoneId, fixture.cityId],
       },
       {
-        sql: `INSERT INTO delivery_locations
-                (id, name, type, parent_id, external_ids, metadata, is_active, sort_order)
-              VALUES (?, 'Loadtest Area', 'area', ?, '{}', '{}', 1, 0)`,
+        sql: `INSERT INTO places
+                (id, name, country_code, level, parent_id, external_ids, metadata, is_active, sort_order)
+              VALUES (?, 'Loadtest Area', 'BD', 3, ?, '{}', '{}', 1, 0)`,
         args: [fixture.areaId, fixture.zoneId],
       },
       {

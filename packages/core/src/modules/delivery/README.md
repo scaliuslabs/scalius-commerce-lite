@@ -13,13 +13,13 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 |-------|---------|
 | `delivery_providers` | A saved courier account: `type`, `is_active` (default false), encrypted `credentials`, `config`, and the live-test proof (`last_test_*` columns). |
 | `delivery_shipments` | A parcel. `provider_type` is `manual` for an own rider. |
-| `delivery_locations` | The city, zone (thana) and area tree. `external_ids` is JSON, for example `{ "pathao": "123" }`. Soft delete. |
+| `places` | The place directory: a tree of numbered levels per country (Bangladesh: City, Thana, Area). `external_ids` is JSON, for example `{ "pathao": "123" }`. Imports key places by `source_key`. Soft delete. [Places](../../../../../docs/PLACES.md). |
 | `delivery_zones`, `delivery_zone_locations` | A zone and its Bangladesh places. A place belongs to at most one zone. `delivery_zones.revision` guards edits. |
 | `delivery_zone_regions` | What else a zone serves: a whole country (`admin_area` and `postal_prefix` empty), one admin area (the address rules' code) or a postal-code prefix. Primary key (`country_code`, `admin_area`, `postal_prefix`): a region belongs to one zone. Migration 0114. |
 | `shipping_methods` | A rate: `zone_id`, `kind` (`delivery` or `pickup`), `fee_minor`, `free_over_minor`, `pickup_address`. A live delivery rate has a zone (trigger `SHIPPING_RATE_ZONE_REQUIRED`); local pickup has none. Soft delete. |
 
 - Settings document `delivery_pickup` (`zones.ts`) is empty. Its revision guards edits of the local pickup rates.
-- DVC: `shipping_methods`, `delivery_zones`, `delivery_zone_locations` and `delivery_zone_regions` advance dependency `ship`. `delivery_locations` advances `loc`. Providers and shipments are private. Zone, location and region writes also advance `checkout_authority`.
+- DVC: `shipping_methods`, `delivery_zones`, `delivery_zone_locations` and `delivery_zone_regions` advance dependency `ship`. `places` advances `loc` (not for its `source*` columns). Providers and shipments are private. Zone, place and region writes also advance `checkout_authority`; a place write only when its name, parent, level, country, status or deletion changes.
 
 ## Couriers
 
@@ -90,7 +90,8 @@ Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`a
 
 ## Locations and zones
 
-- A location is a city, a zone (thana) or an area. A name is trimmed and whitespace-collapsed, at most 120 characters. Active names are unique per parent and type. `deleteLocations()` soft-deletes a place with its children and removes all of them from zones in one batch, because orders and bookings still read the names.
+- A place has a country and a level (`places.ts`). Bangladesh addresses read levels 1 to 3 as city, zone (thana) and area (`placeAddressFieldSql`). A name is trimmed and whitespace-collapsed, at most 120 characters. Active names are unique per parent and level. `deletePlaces()` soft-deletes a place with everything under it and removes all of them from zones in one batch, because orders and bookings still read the names.
+- `importPlaces()` (`places-import.ts`) is the one idempotent dataset import: the dashboard, agents, plugins, the dev seed and the Pathao import use it. Rules are in [Places](../../../../../docs/PLACES.md).
 - `resolveActiveDeliveryLocationNames()` checks a checkout address: the city is a root city, the zone belongs to it, the area belongs to the zone, and all are active. Otherwise it throws `delivery_location_unavailable` with the failing field.
 - Pathao needs positive-integer `external_ids` for city and zone. The area is optional.
 - A zone is a name plus Bangladesh places and regions (MARKETS-DESIGN step 3b). `resolveDestinationZoneId()` (`zone-match.ts`, browser safe; the dashboard order form uses it too) picks an address's zone, most specific first: Bangladesh place (area, then zone, then city), the longest postal prefix, the admin area, the whole country. With no zone the address gets no delivery rate. A `pickup` rate is store-wide, needs a pickup address, and is offered for every address.
@@ -98,7 +99,7 @@ Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`a
 - `resolveDeliveryRate()` is the one checkout decision: the rate is active and live, its zone matches the destination (pickup always matches), and the rate is free when the items subtotal before discounts reaches `free_over_minor`. The rate statement carries the destination country's regions as one JSON column, so the decision costs no extra statement.
 - Limits: a rate or threshold up to 100,000 major units (`MAX_DELIVERY_AMOUNT`), 20 rates per zone, 2,000 places and 500 regions per zone, postal prefixes of 1 to 10 letters or digits. A fee is on the store's price increment (whole taka by default in BDT).
 - Zone edits need the current `delivery_zones.revision`. Pickup edits need the revision of the `delivery_pickup` document. A region another zone holds is refused with that zone's name. A write cannot remove the last active rate. `applyDeliveryZoneTemplate()` creates starter Dhaka zones (Inside Dhaka, optionally Near Dhaka, and the zone Bangladesh for Outside Dhaka) only when no zone exists.
-- `processPathaoImportChunk()` imports cities, zones and areas in chunks through repeated dashboard calls until the status is `complete`. Progress is in KV under `location_import:pathao` (24-hour TTL).
+- `processPathaoImportChunk()` turns Pathao's cities, zones and areas into dataset entries and applies them through `importPlaces()` in steps, through repeated dashboard calls until the status is `complete`. Progress is in KV under `location_import:pathao` (24-hour TTL). `buildPathaoPlaceDataset()` reads the whole tree for a dataset refresh.
 
 ## Routes
 
@@ -110,7 +111,8 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/settings.ts` a
 | Same path: `GET /{id}` | `settings.delivery_providers.view` |
 | Same path: `POST /`, `PUT /`, `POST /create-test` (test an unsaved setup), `POST /{id}` (test a saved one), `DELETE /{id}` | `settings.delivery_providers.edit` |
 | `/api/v1/admin/settings/delivery-locations`: reads (`GET /`, `GET /{id}`) | `settings.delivery_locations.view` |
-| Same path: `POST /`, `PUT /{id}`, `DELETE /`, `DELETE /all`, `DELETE /{id}`, `POST`/`DELETE /import-pathao`, `GET /import-pathao/status` | `settings.delivery_locations.edit` |
+| Same path: `GET /countries` | `settings.delivery_locations.view` |
+| Same path: `POST /`, `POST /import`, `PUT /{id}`, `DELETE /`, `DELETE /all`, `DELETE /{id}`, `POST`/`DELETE /import-pathao`, `GET /import-pathao/status` | `settings.delivery_locations.edit` |
 | `/api/v1/admin/settings/shipping-methods`: `GET /`, `POST /` (create zone), `PUT /{id}`, `DELETE /{id}`, `PUT /pickup`, `PUT /template` | `settings.shipping_methods.view` (`GET`), `.edit` (writes) |
 | `GET /api/v1/locations/cities`, `/zones`, `/areas` (and `/summaries`), `GET /api/v1/shipping-methods` (Bangladesh `cityId`/`zoneId`/`areaId`, or `countryCode`/`adminArea`/`postalCode`) | public |
 | `GET`, `DELETE /api/v1/admin/shipments/{id}`; `POST /api/v1/admin/shipments/{id}/check-status` | `orders.view` / `orders.manage_shipments` |

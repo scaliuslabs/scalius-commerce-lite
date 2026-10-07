@@ -27,12 +27,14 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     risk: "destructive",
     batch: "forbidden",
   },
+  "dashboard.delivery_locations.countries": {},
   "dashboard.delivery_locations.create": {},
   "dashboard.delivery_locations.delete_all": {
     risk: "destructive",
     batch: "forbidden",
   },
   "dashboard.delivery_locations.get": {},
+  "dashboard.delivery_locations.import": { batch: "forbidden" },
   "dashboard.delivery_locations.list": {},
   "dashboard.delivery_locations.pathao_import_chunk": {
     openWorld: true,

@@ -72,7 +72,7 @@ export const CACHE_DEP_KINDS = [
   "nav",
   /** `ship`: shipping methods and delivery zones. */
   "ship",
-  /** `loc`: delivery locations. */
+  /** `loc`: the place directory (delivery places). */
   "loc",
   /** `tax`: tax classes, rates and settings. */
   "tax",
@@ -644,7 +644,12 @@ const CACHE_DEP_TABLE_RULES = {
     note: "The countries, admin areas and postal prefixes a shipping zone serves (MARKETS-DESIGN step 3b): which rates an address gets and which countries discovery claims.",
     rules: everyChange([{ dep: "ship" }]),
   },
-  delivery_locations: { kinds: ["loc"], noise: ["updated_at"], rules: everyChange([{ dep: "loc" }]) },
+  places: {
+    kinds: ["loc"],
+    noise: ["source", "source_key", "source_version", "source_active", "updated_at"],
+    note: "The place directory (docs/PLACES.md): the City/Thana/Area pickers read it. Import bookkeeping (source columns) is never shown.",
+    rules: everyChange([{ dep: "loc" }]),
+  },
   tax_classes: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
   tax_rates: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
   tax_settings: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },

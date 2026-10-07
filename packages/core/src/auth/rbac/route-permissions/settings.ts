@@ -225,6 +225,12 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
     DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
   },
+  "/api/v1/admin/settings/delivery-locations/countries": {
+    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
+  },
+  "/api/v1/admin/settings/delivery-locations/import": {
+    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+  },
   "/api/v1/admin/settings/delivery-locations/import-pathao": {
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },

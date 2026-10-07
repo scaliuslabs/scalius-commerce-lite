@@ -827,6 +827,13 @@
       "when": 1791322891034,
       "tag": "0117_phoneless_guest_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "6",
+      "when": 1791340000000,
+      "tag": "0118_places",
+      "breakpoints": true
     }
   ]
 }

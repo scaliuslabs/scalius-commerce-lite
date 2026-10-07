@@ -775,6 +775,9 @@ export const EMPTY_PROVIDER_SNAPSHOT_TRANSIENT_TABLES: ReadonlySet<string> =
 const LEGACY_UTC_TEXT_TIMESTAMP_COLUMNS: ReadonlySet<string> = new Set([
   "delivery_locations.created_at",
   "delivery_locations.updated_at",
+  // 0118 carries delivery_locations' timestamps into places as they were.
+  "places.created_at",
+  "places.updated_at",
   "hero_sliders.created_at",
   "settings.updated_at",
 ] as const);

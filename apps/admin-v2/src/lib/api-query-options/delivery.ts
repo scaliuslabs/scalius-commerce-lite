@@ -1,9 +1,15 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsDeliveryLocations,
+  getApiV1AdminSettingsDeliveryLocationsCountries,
   getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus,
   getApiV1AdminSettingsDeliveryProviders,
 } from "@scalius/api-client/sdk";
+import {
+  PLACE_ADDRESS_COUNTRY,
+  deliveryHierarchyLevel,
+  type DeliveryHierarchyField,
+} from "@scalius/shared/places";
 import { apiData, type ApiQuery, type ApiResult, type WithTimestamps } from "../api";
 import { queryKeys } from "../query-keys";
 import type { SearchableSelectLoader, SearchableSelectOption } from "~/components/ui/searchable-select";
@@ -43,6 +49,10 @@ export const getDeliveryLocations = (query: DeliveryLocationsQuery, signal?: Abo
 /** Places a picker offers per page. */
 export const LOCATION_PAGE_SIZE = 50;
 
+/** The list filter for one Bangladesh address field (city, thana or area). */
+export const addressPlaceQuery = (field: DeliveryHierarchyField) =>
+  ({ country: PLACE_ADDRESS_COUNTRY, level: deliveryHierarchyLevel(field) });
+
 /** A place as a combobox option: its parents ("Mirpur · Dhaka") as the secondary text. */
 export function locationOption(location: Pick<DeliveryLocation, "id" | "name" | "parentPath">): SearchableSelectOption {
   const path = location.parentPath?.join(" · ");
@@ -50,12 +60,14 @@ export function locationOption(location: Pick<DeliveryLocation, "id" | "name" | 
 }
 
 /**
- * Server-searched, paged places for a picker: one type, optionally under one
- * parent, active only unless asked. The search goes in the API request, never
- * in the page URL.
+ * Server-searched, paged places for a picker: one Bangladesh address field
+ * (`type`) or one country's level, optionally under one parent, active only
+ * unless asked. The search goes in the API request, never in the page URL.
  */
 export function deliveryLocationLoader(filter: {
-  type?: DeliveryLocationsQuery["type"];
+  type?: DeliveryHierarchyField;
+  country?: string;
+  level?: number;
   parentId?: string;
   includeInactive?: boolean;
   /** Turns each place into an option (defaults to `locationOption`). */
@@ -63,7 +75,9 @@ export function deliveryLocationLoader(filter: {
 }): SearchableSelectLoader {
   return async ({ search, page, signal }) => {
     const result = await getDeliveryLocations({
-      ...(filter.type ? { type: filter.type } : {}),
+      ...(filter.type ? addressPlaceQuery(filter.type) : {}),
+      ...(filter.country ? { country: filter.country } : {}),
+      ...(filter.level ? { level: filter.level } : {}),
       ...(filter.parentId ? { parentId: filter.parentId } : {}),
       ...(filter.includeInactive ? {} : { isActive: "true" as const }),
       ...(search ? { search } : {}),
@@ -85,11 +99,12 @@ export const deliveryLocationByIdQueryOptions = (id: string) =>
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
-async function getAllDeliveryLocations(type?: DeliveryLocationsQuery["type"]) {
-  const firstPage = await getDeliveryLocations({ type, limit: 500, page: 1 });
+async function getAllDeliveryLocations(type?: DeliveryHierarchyField) {
+  const filter = type ? addressPlaceQuery(type) : {};
+  const firstPage = await getDeliveryLocations({ ...filter, limit: 500, page: 1 });
   const locations = [...firstPage.locations];
   for (let page = 2; page <= firstPage.pagination.totalPages; page += 1) {
-    const nextPage = await getDeliveryLocations({ type, limit: 500, page });
+    const nextPage = await getDeliveryLocations({ ...filter, limit: 500, page });
     locations.push(...nextPage.locations);
   }
   return { locations, pagination: firstPage.pagination };
@@ -110,11 +125,19 @@ export const deliveryLocationsQueryOptions = (query: DeliveryLocationsQuery) =>
   });
 
 export const allDeliveryLocationsQueryOptions = (params: {
-  type?: DeliveryLocationsQuery["type"];
+  type?: DeliveryHierarchyField;
 }) =>
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocationsAll(params),
     queryFn: () => getAllDeliveryLocations(params.type),
+    staleTime: LOOKUP_STALE_TIME_MS,
+  });
+
+/** The countries that have places, with their place counts. */
+export const placeCountriesQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.settings.deliveryLocations(), "countries"],
+    queryFn: async () => (await apiData(getApiV1AdminSettingsDeliveryLocationsCountries())).countries,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 

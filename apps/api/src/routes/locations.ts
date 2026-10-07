@@ -1,12 +1,14 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deps } from "@scalius/core/cache-deps";
 
-import { deliveryLocations } from "@scalius/database/schema";
+import { placeAddressFieldSql, places } from "@scalius/database/schema";
+import { PLACE_ADDRESS_COUNTRY, deliveryHierarchyLevel } from "@scalius/shared/places";
 import { eq, and, isNull, asc, like, count } from "drizzle-orm";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-// Every read here is of delivery locations: one key covers them all.
+// Every read here is of Bangladesh's places (City, Thana, Area: the address
+// adapter's fields, by level): one key covers them all.
 app.use("*", async (_c, next) => {
   deps.locations();
   await next();
@@ -37,6 +39,28 @@ const locationSummaryEnvelope = successEnvelope(z.object({
   }),
 }));
 
+/** The columns a buyer's picker reads, with the place's address field. */
+const publicColumns = {
+  id: places.id,
+  name: places.name,
+  type: placeAddressFieldSql,
+  parentId: places.parentId,
+  isActive: places.isActive,
+  sortOrder: places.sortOrder,
+};
+
+/**
+ * Live, active places of one address field: Bangladesh's cities, or the
+ * children of one place (a child is in its parent's country, so the parent
+ * index alone finds them).
+ */
+const ofField = (field: "city" | "zone" | "area", parentId?: string) => [
+  ...(parentId === undefined ? [eq(places.countryCode, PLACE_ADDRESS_COUNTRY)] : [eq(places.parentId, parentId)]),
+  eq(places.level, deliveryHierarchyLevel(field)),
+  isNull(places.deletedAt),
+  eq(places.isActive, true),
+];
+
 // Helper function to format location data
 const formatLocation = (location: { id: string; name: string; type: "city" | "zone" | "area"; parentId: string | null; isActive: boolean; sortOrder: number }) => ({
   id: location.id,
@@ -66,16 +90,10 @@ const listCitiesRoute = createRoute({
 app.openapi(listCitiesRoute, async (c) => {
   const db = c.get("db");
   const cities = await db
-    .select()
-    .from(deliveryLocations)
-    .where(
-      and(
-        eq(deliveryLocations.type, "city"),
-        isNull(deliveryLocations.deletedAt),
-        eq(deliveryLocations.isActive, true),
-      ),
-    )
-    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+    .select(publicColumns)
+    .from(places)
+    .where(and(...ofField("city")))
+    .orderBy(asc(places.sortOrder), asc(places.name));
 
   return ok(c, cities.map(formatLocation));
 });
@@ -97,15 +115,13 @@ app.openapi(listCitySummariesRoute, async (c) => {
   const db = c.get("db");
   const { page, limit, search } = c.req.valid("query");
   const where = and(
-    eq(deliveryLocations.type, "city"),
-    isNull(deliveryLocations.deletedAt),
-    eq(deliveryLocations.isActive, true),
-    search ? like(deliveryLocations.name, `%${search}%`) : undefined,
+    ...ofField("city"),
+    search ? like(places.name, `%${search}%`) : undefined,
   );
   const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(deliveryLocations).where(where),
-    db.select().from(deliveryLocations).where(where)
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name))
+    db.select({ total: count() }).from(places).where(where),
+    db.select(publicColumns).from(places).where(where)
+      .orderBy(asc(places.sortOrder), asc(places.name))
       .limit(limit).offset((page - 1) * limit),
   ]);
   const total = Number(counts[0]?.total ?? 0);
@@ -142,17 +158,10 @@ app.openapi(listZonesRoute, async (c) => {
 
   const db = c.get("db");
   const zones = await db
-    .select()
-    .from(deliveryLocations)
-    .where(
-      and(
-        eq(deliveryLocations.type, "zone"),
-        eq(deliveryLocations.parentId, cityId),
-        isNull(deliveryLocations.deletedAt),
-        eq(deliveryLocations.isActive, true),
-      ),
-    )
-    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+    .select(publicColumns)
+    .from(places)
+    .where(and(...ofField("zone", cityId)))
+    .orderBy(asc(places.sortOrder), asc(places.name));
 
   return ok(c, zones.map(formatLocation));
 });
@@ -177,16 +186,13 @@ app.openapi(listZoneSummariesRoute, async (c) => {
   const db = c.get("db");
   const { cityId, page, limit, search } = c.req.valid("query");
   const where = and(
-    eq(deliveryLocations.type, "zone"),
-    eq(deliveryLocations.parentId, cityId),
-    isNull(deliveryLocations.deletedAt),
-    eq(deliveryLocations.isActive, true),
-    search ? like(deliveryLocations.name, `%${search}%`) : undefined,
+    ...ofField("zone", cityId),
+    search ? like(places.name, `%${search}%`) : undefined,
   );
   const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(deliveryLocations).where(where),
-    db.select().from(deliveryLocations).where(where)
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name))
+    db.select({ total: count() }).from(places).where(where),
+    db.select(publicColumns).from(places).where(where)
+      .orderBy(asc(places.sortOrder), asc(places.name))
       .limit(limit).offset((page - 1) * limit),
   ]);
   const total = Number(counts[0]?.total ?? 0);
@@ -223,17 +229,10 @@ app.openapi(listAreasRoute, async (c) => {
 
   const db = c.get("db");
   const areas = await db
-    .select()
-    .from(deliveryLocations)
-    .where(
-      and(
-        eq(deliveryLocations.type, "area"),
-        eq(deliveryLocations.parentId, zoneId),
-        isNull(deliveryLocations.deletedAt),
-        eq(deliveryLocations.isActive, true),
-      ),
-    )
-    .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name));
+    .select(publicColumns)
+    .from(places)
+    .where(and(...ofField("area", zoneId)))
+    .orderBy(asc(places.sortOrder), asc(places.name));
 
   return ok(c, areas.map(formatLocation));
 });
@@ -258,16 +257,13 @@ app.openapi(listAreaSummariesRoute, async (c) => {
   const db = c.get("db");
   const { zoneId, page, limit, search } = c.req.valid("query");
   const where = and(
-    eq(deliveryLocations.type, "area"),
-    eq(deliveryLocations.parentId, zoneId),
-    isNull(deliveryLocations.deletedAt),
-    eq(deliveryLocations.isActive, true),
-    search ? like(deliveryLocations.name, `%${search}%`) : undefined,
+    ...ofField("area", zoneId),
+    search ? like(places.name, `%${search}%`) : undefined,
   );
   const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(deliveryLocations).where(where),
-    db.select().from(deliveryLocations).where(where)
-      .orderBy(asc(deliveryLocations.sortOrder), asc(deliveryLocations.name))
+    db.select({ total: count() }).from(places).where(where),
+    db.select(publicColumns).from(places).where(where)
+      .orderBy(asc(places.sortOrder), asc(places.name))
       .limit(limit).offset((page - 1) * limit),
   ]);
   const total = Number(counts[0]?.total ?? 0);

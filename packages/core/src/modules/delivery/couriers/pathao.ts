@@ -1,5 +1,5 @@
 // Pathao: an OAuth2 password-grant token per call, numeric location IDs
-// mapped on the store's delivery locations (`external_ids.pathao`) and
+// mapped on the store's places (`places.external_ids.pathao`) and
 // whole-taka cash on delivery. Pathao has no verified lookup by the merchant
 // order id (no findShipment), and its tracking pushes keep their own route
 // (routes/webhooks/pathao.ts: the integration handshake answers with a header).
@@ -14,7 +14,7 @@ import {
   type CourierTracking,
 } from "@scalius/shared/plugins/providers";
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "../locations";
+import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "../places";
 import { mapProviderStatus } from "../status-mapper";
 import type {
   PathaoConfig,

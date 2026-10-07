@@ -269,9 +269,9 @@ describe("app courier through core delivery", () => {
   }
 
   beforeEach(async () => {
-    await db.insert(schema.deliveryLocations).values([
-      { id: "city_local", name: "Dhaka", type: "city", externalIds: "{}", metadata: "{}" },
-      { id: "zone_local", name: "Gulshan", type: "zone", parentId: "city_local", externalIds: "{}", metadata: "{}" },
+    await db.insert(schema.places).values([
+      { id: "city_local", name: "Dhaka", countryCode: "BD", level: 1, externalIds: "{}", metadata: "{}" },
+      { id: "zone_local", name: "Gulshan", countryCode: "BD", level: 2, parentId: "city_local", externalIds: "{}", metadata: "{}" },
     ]);
     await db.insert(schema.products).values({ id: "product_local", name: "Panjabi", slug: "panjabi", priceMinor: 10_000 });
     await db.insert(schema.productVariants).values({ id: "variant_local", productId: "product_local", sku: "PANJABI-1", priceMinor: 10_000, isDefault: true, trackInventory: false });

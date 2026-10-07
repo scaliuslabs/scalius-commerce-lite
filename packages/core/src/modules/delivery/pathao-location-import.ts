@@ -1,40 +1,39 @@
 /**
- * Pathao Location Import Service — Fast Edition
+ * Pathao's delivery locations as place dataset entries (docs/PLACES.md).
  *
- * Imports cities, zones, and areas from the Pathao Courier API.
- * Optimized for speed while staying within Cloudflare Workers limits:
+ * Pathao's cities, zones (thanas) and areas become `PlaceDatasetEntry` rows
+ * keyed `pathao:<type>:<id>`, the shape of `data/places/bd`. Two uses:
  *
- * - Phase 1 (cities): One API call, ~15 cities. Done in one chunk.
- * - Phase 2 (zones): ALL cities in one chunk. Parallel API calls.
- * - Phase 3 (areas): 30 zones per chunk. Parallel API calls.
- * - DB writes batched (pre-load existing, then bulk insert/update).
- * - Total time: ~60-90 seconds for all of Bangladesh.
+ * - `buildPathaoPlaceDataset()` reads the whole tree for a dataset refresh:
+ *   a courier API refresh becomes a reviewed diff of `places.json`
+ *   (`pnpm places:pathao-dataset`).
+ * - `processPathaoImportChunk()` is the dashboard's import: one bounded step
+ *   per call, each applied through `importPlaces()` (source `bd`, never
+ *   `finish`: a live refresh deactivates only what Pathao marks unusable).
+ *   Progress is in KV under `location_import:pathao` (24-hour TTL).
+ *
+ *   Step 1 (cities): one API call. Step 2 (zones): every city's zones, in
+ *   parallel. Step 3 (areas): 30 zones' areas per step, in parallel.
  */
 
-import { eq, and, isNull, sql } from "drizzle-orm";
-import { deliveryLocations } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
-import { createId } from "@paralleldrive/cuid2";
+import type { Database } from "@scalius/database/client";
+import { PLACE_IMPORT_MAX_ENTRIES, type PlaceDatasetEntry } from "@scalius/shared/places";
 import {
   normalizeDeliveryLocationName,
   shouldSuppressPathaoLocationName,
 } from "./location-names";
+import { importPlaces, type PlaceImportResult } from "./places-import";
+import type { PathaoCredentials } from "./types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface PathaoCredentials {
-  baseUrl: string;
-  clientId: string;
-  clientSecret: string;
-  username: string;
-  password: string;
-}
-
 interface ImportProgress {
   status: "idle" | "cities" | "zones" | "areas" | "complete" | "error";
-  cities: Array<{ pathaoId: number; dbId: string; name: string }>;
-  zones: Array<{ pathaoId: number; dbId: string; name: string; cityDbId: string }>;
+  cities: Array<{ pathaoId: number; name: string }>;
+  zones: Array<{ pathaoId: number; name: string; cityPathaoId: number }>;
   zoneIndex: number;
+  /** The import's dataset version: `pathao-<start time>`. */
+  version?: string;
   stats: {
     citiesCreated: number;
     citiesUpdated: number;
@@ -55,10 +54,17 @@ export interface ImportChunkResult {
   error?: string;
 }
 
+/** The dataset Pathao's places belong to: the Bangladesh dataset (`data/places/bd`). */
+export const PATHAO_PLACE_SOURCE = "bd";
 const KV_KEY = "location_import:pathao";
 const ZONES_PER_CHUNK = 30; // Process 30 zones' areas per request
 const MAX_CONCURRENT = 8; // Parallel Pathao API calls
-const DB_WRITE_BATCH_SIZE = 50;
+
+type PathaoType = "city" | "zone" | "area";
+const LEVEL: Record<PathaoType, 1 | 2 | 3> = { city: 1, zone: 2, area: 3 };
+
+/** The dataset key of a Pathao place. */
+export const pathaoPlaceKey = (type: PathaoType, pathaoId: number | string) => `pathao:${type}:${pathaoId}`;
 
 // ─── Pathao API (request-scoped token + concurrency limit) ──────────────────
 
@@ -99,6 +105,11 @@ function createPathaoApiClient(creds: PathaoCredentials) {
   };
 }
 
+type PathaoApi = ReturnType<typeof createPathaoApiClient>;
+type CityResponse = { data: { data: Array<{ city_id: number; city_name: string }> } };
+type ZoneResponse = { data: { data: Array<{ zone_id: number; zone_name: string }> } };
+type AreaResponse = { data: { data: Array<{ area_id: number; area_name: string; home_delivery_available?: boolean; pickup_available?: boolean }> } };
+
 /** Run promises with max concurrency */
 async function parallelLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
   const results: T[] = [];
@@ -114,25 +125,23 @@ async function parallelLimit<T>(tasks: (() => Promise<T>)[], limit: number): Pro
   return results;
 }
 
-// ─── Bulk DB Operations ──────────────────────────────────────────────────────
-
-interface LocationRow {
-  id: string;
-  name: string;
-  type: string;
-  parentId: string | null;
-  externalIds: string;
-  isActive: boolean;
-}
+// ─── Pathao places as dataset entries ───────────────────────────────────────
 
 export interface PathaoLocationImportItem {
   name: string;
-  type: "city" | "zone" | "area";
-  parentId: string | null;
+  type: PathaoType;
+  /** The parent's Pathao id (null for a city). */
+  parentPathaoId: number | null;
   pathaoId: number;
-  metadata?: Record<string, unknown>;
+  homeDelivery?: boolean;
+  pickup?: boolean;
 }
 
+/**
+ * Normalizes names and splits Pathao's rows: `accepted` are buyer places;
+ * `rejected` are routing artifacts, invalid ids, repeated ids and repeated
+ * names under one parent (the lowest id is kept).
+ */
 export function preparePathaoLocationItems(items: PathaoLocationImportItem[]): {
   accepted: PathaoLocationImportItem[];
   rejected: PathaoLocationImportItem[];
@@ -162,7 +171,7 @@ export function preparePathaoLocationItems(items: PathaoLocationImportItem[]): {
   for (const item of candidatesByPathaoId.values()) {
     const identity = [
       item.type,
-      item.parentId ?? "",
+      item.parentPathaoId ?? "",
       item.name.toLocaleLowerCase("en-US"),
     ].join("\u0000");
     const current = acceptedByIdentity.get(identity);
@@ -182,171 +191,92 @@ export function preparePathaoLocationItems(items: PathaoLocationImportItem[]): {
   return { accepted: [...acceptedByIdentity.values()], rejected };
 }
 
-function parseExternalIds(value: string): Record<string, string | number> {
-  try {
-    const parsed = JSON.parse(value || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, string | number>
-      : {};
-  } catch {
-    return {};
-  }
+/**
+ * Pathao's rows as dataset entries: accepted ones active, rejected ones (with
+ * a usable id and name, listed once) inactive, so a place Pathao stopped
+ * serving is turned off rather than left behind.
+ */
+export function pathaoDatasetEntries(items: PathaoLocationImportItem[]): PlaceDatasetEntry[] {
+  const { accepted, rejected } = preparePathaoLocationItems(items);
+  const entries = new Map<string, PlaceDatasetEntry>();
+  const add = (item: PathaoLocationImportItem, active: boolean) => {
+    if (!Number.isInteger(item.pathaoId) || item.pathaoId <= 0 || !item.name) return;
+    const key = pathaoPlaceKey(item.type, item.pathaoId);
+    if (entries.has(key)) return;
+    entries.set(key, {
+      key,
+      level: LEVEL[item.type],
+      parent: item.type === "city" ? null : pathaoPlaceKey(item.type === "zone" ? "city" : "zone", item.parentPathaoId ?? 0),
+      name: item.name,
+      externalIds: { pathao: String(item.pathaoId) },
+      active,
+      ...(item.homeDelivery !== undefined ? { homeDelivery: item.homeDelivery } : {}),
+      ...(item.pickup !== undefined ? { pickup: item.pickup } : {}),
+    });
+  };
+  for (const item of accepted) add(item, true);
+  for (const item of rejected) add(item, false);
+  return [...entries.values()];
 }
 
-/** Load all existing locations of a type into a map keyed by pathao ID */
-async function loadExistingByPathaoId(
-  db: Database,
-  type: "city" | "zone" | "area",
-): Promise<Map<string, LocationRow>> {
-  const rows = await db
-    .select({
-      id: deliveryLocations.id,
-      name: deliveryLocations.name,
-      type: deliveryLocations.type,
-      parentId: deliveryLocations.parentId,
-      externalIds: deliveryLocations.externalIds,
-      isActive: deliveryLocations.isActive,
-    })
-    .from(deliveryLocations)
-    .where(and(eq(deliveryLocations.type, type), isNull(deliveryLocations.deletedAt)))
-    .all();
+const cityItems = (response: CityResponse): PathaoLocationImportItem[] =>
+  (response.data?.data ?? []).map((city) => ({ name: city.city_name, type: "city", parentPathaoId: null, pathaoId: city.city_id }));
+const zoneItems = (cityPathaoId: number, response: ZoneResponse): PathaoLocationImportItem[] =>
+  (response.data?.data ?? []).map((zone) => ({ name: zone.zone_name, type: "zone", parentPathaoId: cityPathaoId, pathaoId: zone.zone_id }));
+const areaItems = (zonePathaoId: number, response: AreaResponse): PathaoLocationImportItem[] =>
+  (response.data?.data ?? []).map((area) => ({
+    name: area.area_name,
+    type: "area",
+    parentPathaoId: zonePathaoId,
+    pathaoId: area.area_id,
+    ...(typeof area.home_delivery_available === "boolean" ? { homeDelivery: area.home_delivery_available } : {}),
+    ...(typeof area.pickup_available === "boolean" ? { pickup: area.pickup_available } : {}),
+  }));
 
-  const map = new Map<string, LocationRow>();
-  for (const row of rows) {
-    try {
-      const ids = JSON.parse((row.externalIds as string) || "{}");
-      if (ids.pathao) map.set(String(ids.pathao), row as LocationRow);
-    } catch { /* skip malformed */ }
-  }
-  return map;
+/**
+ * Pathao's whole tree as dataset entries, for a dataset refresh. `legacyIds`
+ * (by key) keep the row ids of the dataset being refreshed.
+ */
+export async function buildPathaoPlaceDataset(
+  creds: PathaoCredentials,
+  options: { legacyIds?: ReadonlyMap<string, string> } = {},
+): Promise<PlaceDatasetEntry[]> {
+  const pathao = createPathaoApiClient(creds);
+  const cities = pathaoDatasetEntries(cityItems(await pathao.fetchJson<CityResponse>("/aladdin/api/v1/city-list")));
+  const activeIds = (entries: PlaceDatasetEntry[]) => entries.filter((entry) => entry.active).map((entry) => Number(entry.externalIds.pathao));
+  const zoneResponses = await parallelLimit(
+    activeIds(cities).map((cityId) => async () => zoneItems(cityId, await pathao.fetchJson<ZoneResponse>(`/aladdin/api/v1/cities/${cityId}/zone-list`))),
+    MAX_CONCURRENT,
+  );
+  const zones = pathaoDatasetEntries(zoneResponses.flat());
+  const areaResponses = await parallelLimit(
+    activeIds(zones).map((zoneId) => async () => areaItems(zoneId, await pathao.fetchJson<AreaResponse>(`/aladdin/api/v1/zones/${zoneId}/area-list`))),
+    MAX_CONCURRENT,
+  );
+  const areas = pathaoDatasetEntries(areaResponses.flat());
+  return [...cities, ...zones, ...areas].map((entry) => {
+    const legacyId = options.legacyIds?.get(entry.key);
+    return legacyId ? { ...entry, legacyId } : entry;
+  });
 }
 
-/** Bulk upsert locations — fast path with pre-loaded existing data */
-async function bulkUpsert(
-  db: Database,
-  items: PathaoLocationImportItem[],
-  existing: Map<string, LocationRow>,
-): Promise<{ created: number; updated: number; idMap: Map<number, string> }> {
+// ─── Dashboard import ────────────────────────────────────────────────────────
+
+async function applyEntries(db: Database, entries: PlaceDatasetEntry[], version: string): Promise<{ created: number; updated: number }> {
   let created = 0;
   let updated = 0;
-  const idMap = new Map<number, string>(); // pathaoId → our dbId
-
-  if (items.length === 0) return { created, updated, idMap };
-
-  // Also load all locations of this type for name matching
-  const allRows = await db
-    .select({
-      id: deliveryLocations.id,
-      name: deliveryLocations.name,
-      parentId: deliveryLocations.parentId,
-      externalIds: deliveryLocations.externalIds,
-      isActive: deliveryLocations.isActive,
-    })
-    .from(deliveryLocations)
-    .where(and(eq(deliveryLocations.type, items[0]?.type || "city"), isNull(deliveryLocations.deletedAt)))
-    .all();
-
-  const nameIndex = new Map<string, typeof allRows[0]>();
-  for (const r of allRows) {
-    nameIndex.set(`${r.name}|${r.parentId || ""}`.toLowerCase(), r);
+  for (let offset = 0; offset < entries.length; offset += PLACE_IMPORT_MAX_ENTRIES) {
+    const result: PlaceImportResult = await importPlaces(db, {
+      country: "BD",
+      source: PATHAO_PLACE_SOURCE,
+      version,
+      places: entries.slice(offset, offset + PLACE_IMPORT_MAX_ENTRIES),
+    });
+    created += result.created;
+    updated += result.updated;
   }
-
-  // Separate into updates and inserts
-  const updates: Array<{ id: string; name: string; parentId: string | null; pathaoId: number; externalIds: string; metadata?: Record<string, unknown> }> = [];
-  const inserts: Array<{ id: string; name: string; type: string; parentId: string | null; pathaoId: number; metadata?: Record<string, unknown> }> = [];
-
-  for (const item of items) {
-    const pathaoKey = String(item.pathaoId);
-    const existingByPathao = existing.get(pathaoKey);
-
-    if (existingByPathao) {
-      // Already mapped — update name if changed
-      updates.push({ id: existingByPathao.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, externalIds: existingByPathao.externalIds, metadata: item.metadata });
-      idMap.set(item.pathaoId, existingByPathao.id);
-      updated++;
-    } else {
-      // Check by name match (manually created location)
-      const nameKey = `${item.name}|${item.parentId || ""}`.toLowerCase();
-      const existingByName = nameIndex.get(nameKey);
-
-      if (existingByName) {
-        // Found by name — add pathao ID
-        updates.push({ id: existingByName.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, externalIds: existingByName.externalIds, metadata: item.metadata });
-        idMap.set(item.pathaoId, existingByName.id);
-        updated++;
-      } else {
-        // New location
-        const id = createId();
-        inserts.push({ id, name: item.name, type: item.type, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
-        idMap.set(item.pathaoId, id);
-        created++;
-      }
-    }
-  }
-
-  for (let offset = 0; offset < updates.length; offset += DB_WRITE_BATCH_SIZE) {
-    const statements = updates
-      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
-      .map((update) => {
-        const parsedIds = parseExternalIds(update.externalIds);
-        parsedIds.pathao = String(update.pathaoId);
-        return db.update(deliveryLocations).set({
-          name: update.name,
-          parentId: update.parentId,
-          externalIds: JSON.stringify(parsedIds),
-          metadata: update.metadata ? JSON.stringify(update.metadata) : undefined,
-          isActive: true,
-          updatedAt: sql`(unixepoch())`,
-        }).where(eq(deliveryLocations.id, update.id));
-      });
-    await safeBatch(db, statements);
-  }
-
-  for (let offset = 0; offset < inserts.length; offset += DB_WRITE_BATCH_SIZE) {
-    const statements = inserts
-      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
-      .map((insert) => db.insert(deliveryLocations).values({
-        id: insert.id,
-        name: insert.name,
-        type: insert.type as "city" | "zone" | "area",
-        parentId: insert.parentId,
-        externalIds: JSON.stringify({ pathao: String(insert.pathaoId) }),
-        metadata: insert.metadata ? JSON.stringify(insert.metadata) : "{}",
-        isActive: true,
-        sortOrder: 0,
-      }));
-    await safeBatch(db, statements);
-  }
-
-  return { created, updated, idMap };
+  return { created, updated };
 }
-
-async function deactivateRejectedPathaoLocations(
-  db: Database,
-  rejected: PathaoLocationImportItem[],
-  existing: Map<string, LocationRow>,
-): Promise<number> {
-  const targets = rejected.flatMap((item) => {
-    const row = existing.get(String(item.pathaoId));
-    return row ? [{ item, row }] : [];
-  });
-  for (let offset = 0; offset < targets.length; offset += DB_WRITE_BATCH_SIZE) {
-    const statements = targets
-      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
-      .map(({ item, row }) => db
-        .update(deliveryLocations)
-        .set({
-          name: item.name || row.name,
-          isActive: false,
-          updatedAt: sql`(unixepoch())`,
-        })
-        .where(eq(deliveryLocations.id, row.id)));
-    await safeBatch(db, statements);
-  }
-  return targets.length;
-}
-
-// ─── Progress Management ─────────────────────────────────────────────────────
 
 async function getProgress(kv: KVNamespace): Promise<ImportProgress> {
   const raw = await kv.get(KV_KEY);
@@ -361,7 +291,80 @@ async function saveProgress(kv: KVNamespace, p: ImportProgress): Promise<void> {
   await kv.put(KV_KEY, JSON.stringify(p), { expirationTtl: 86400 });
 }
 
-// ─── Main Import Logic ───────────────────────────────────────────────────────
+async function citiesStep(pathao: PathaoApi, db: Database, progress: ImportProgress): Promise<ImportChunkResult> {
+  const entries = pathaoDatasetEntries(cityItems(await pathao.fetchJson<CityResponse>("/aladdin/api/v1/city-list")));
+  const { created, updated } = await applyEntries(db, entries, progress.version!);
+  progress.cities = entries.filter((entry) => entry.active)
+    .map((entry) => ({ pathaoId: Number(entry.externalIds.pathao), name: entry.name }));
+  progress.stats.citiesCreated += created;
+  progress.stats.citiesUpdated += updated;
+  progress.status = "zones";
+  return {
+    status: "importing", phase: "cities",
+    progress: { current: progress.cities.length, total: entries.length, label: `${progress.cities.length} cities imported` },
+    stats: progress.stats,
+  };
+}
+
+async function zonesStep(pathao: PathaoApi, db: Database, progress: ImportProgress): Promise<ImportChunkResult> {
+  const responses = await parallelLimit(
+    progress.cities.map((city) => async () =>
+      zoneItems(city.pathaoId, await pathao.fetchJson<ZoneResponse>(`/aladdin/api/v1/cities/${city.pathaoId}/zone-list`))),
+    MAX_CONCURRENT,
+  );
+  const entries = pathaoDatasetEntries(responses.flat());
+  const { created, updated } = await applyEntries(db, entries, progress.version!);
+  progress.zones = entries.filter((entry) => entry.active).map((entry) => ({
+    pathaoId: Number(entry.externalIds.pathao),
+    name: entry.name,
+    cityPathaoId: Number(entry.parent!.slice("pathao:city:".length)),
+  }));
+  progress.zoneIndex = 0;
+  progress.stats.zonesCreated += created;
+  progress.stats.zonesUpdated += updated;
+  progress.status = "areas";
+  return {
+    status: "importing", phase: "zones",
+    progress: { current: progress.zones.length, total: progress.zones.length, label: `${progress.zones.length} zones imported across ${progress.cities.length} cities` },
+    stats: progress.stats,
+  };
+}
+
+async function areasStep(pathao: PathaoApi, db: Database, progress: ImportProgress): Promise<ImportChunkResult> {
+  if (progress.zoneIndex >= progress.zones.length) {
+    progress.status = "complete";
+    return {
+      status: "complete", phase: "done",
+      progress: { current: progress.zones.length, total: progress.zones.length, label: "Import complete!" },
+      stats: progress.stats,
+    };
+  }
+  const batchEnd = Math.min(progress.zoneIndex + ZONES_PER_CHUNK, progress.zones.length);
+  const responses = await parallelLimit(
+    progress.zones.slice(progress.zoneIndex, batchEnd).map((zone) => async () => {
+      try {
+        return areaItems(zone.pathaoId, await pathao.fetchJson<AreaResponse>(`/aladdin/api/v1/zones/${zone.pathaoId}/area-list`));
+      } catch (err: unknown) {
+        console.error(`[pathao-import] Failed to fetch areas for zone ${zone.pathaoId}:`, err instanceof Error ? err.message : "unknown error");
+        return [];
+      }
+    }),
+    MAX_CONCURRENT,
+  );
+  const { created, updated } = await applyEntries(db, pathaoDatasetEntries(responses.flat()), progress.version!);
+  progress.stats.areasCreated += created;
+  progress.stats.areasUpdated += updated;
+  progress.zoneIndex = batchEnd;
+  return {
+    status: "importing", phase: "areas",
+    progress: {
+      current: progress.zoneIndex,
+      total: progress.zones.length,
+      label: `Areas: ${progress.zoneIndex}/${progress.zones.length} zones (${progress.stats.areasCreated + progress.stats.areasUpdated} areas)`,
+    },
+    stats: progress.stats,
+  };
+}
 
 export async function processPathaoImportChunk(
   db: Database,
@@ -372,158 +375,25 @@ export async function processPathaoImportChunk(
   const pathao = createPathaoApiClient(creds);
 
   try {
-    // ── Phase 1: Cities (one chunk, one API call) ─────────────────────
+    let result: ImportChunkResult;
+    progress.startedAt = progress.startedAt || new Date().toISOString();
+    progress.version = progress.version || `pathao-${progress.startedAt}`;
     if (progress.status === "idle" || progress.status === "cities") {
       progress.status = "cities";
-      progress.startedAt = progress.startedAt || new Date().toISOString();
-
-      type CityResponse = { data: { data: Array<{ city_id: number; city_name: string }> } };
-      const res = await pathao.fetchJson<CityResponse>("/aladdin/api/v1/city-list");
-      const pathaoCities = res.data?.data || [];
-
-      const existing = await loadExistingByPathaoId(db, "city");
-      const preparedCities = preparePathaoLocationItems(
-        pathaoCities.map(c => ({ name: c.city_name, type: "city" as const, parentId: null, pathaoId: c.city_id })),
-      );
-      const { created, updated, idMap } = await bulkUpsert(
-        db,
-        preparedCities.accepted,
-        existing,
-      );
-      const suppressed = await deactivateRejectedPathaoLocations(db, preparedCities.rejected, existing);
-
-      progress.cities = preparedCities.accepted.flatMap(c => {
-        const dbId = idMap.get(c.pathaoId);
-        return dbId ? [{ pathaoId: c.pathaoId, dbId, name: c.name }] : [];
-      });
-      progress.stats.citiesCreated += created;
-      progress.stats.citiesUpdated += updated + suppressed;
-      progress.status = "zones";
-      await saveProgress(kv, progress);
-
+      result = await citiesStep(pathao, db, progress);
+    } else if (progress.status === "zones") {
+      result = await zonesStep(pathao, db, progress);
+    } else if (progress.status === "areas") {
+      result = await areasStep(pathao, db, progress);
+    } else {
       return {
-        status: "importing", phase: "cities",
-        progress: { current: progress.cities.length, total: pathaoCities.length, label: `${progress.cities.length} cities imported` },
+        status: "complete", phase: "done",
+        progress: { current: 1, total: 1, label: "Import complete" },
         stats: progress.stats,
       };
     }
-
-    // ── Phase 2: ALL zones in one chunk (parallel API calls) ──────────
-    if (progress.status === "zones") {
-      const existing = await loadExistingByPathaoId(db, "zone");
-      const allZones: ImportProgress["zones"] = [];
-
-      type ZoneResponse = { data: { data: Array<{ zone_id: number; zone_name: string }> } };
-
-      // Fetch zones for ALL cities in parallel (limited concurrency)
-      const results = await parallelLimit(
-        progress.cities.map(city => async () => {
-          const res = await pathao.fetchJson<ZoneResponse>(`/aladdin/api/v1/cities/${city.pathaoId}/zone-list`);
-          return { city, zones: res.data?.data || [] };
-        }),
-        MAX_CONCURRENT,
-      );
-
-      // Flatten and upsert all zones
-      const preparedZones = preparePathaoLocationItems(results.flatMap(r =>
-        r.zones.map(z => ({ name: z.zone_name, type: "zone" as const, parentId: r.city.dbId, pathaoId: z.zone_id }))
-      ));
-
-      const { created, updated, idMap } = await bulkUpsert(db, preparedZones.accepted, existing);
-      const suppressed = await deactivateRejectedPathaoLocations(db, preparedZones.rejected, existing);
-
-      for (const zone of preparedZones.accepted) {
-        const dbId = idMap.get(zone.pathaoId);
-        if (dbId && zone.parentId) {
-          allZones.push({ pathaoId: zone.pathaoId, dbId, name: zone.name, cityDbId: zone.parentId });
-        }
-      }
-
-      progress.zones = allZones;
-      progress.zoneIndex = 0;
-      progress.stats.zonesCreated += created;
-      progress.stats.zonesUpdated += updated + suppressed;
-      progress.status = "areas";
-      await saveProgress(kv, progress);
-
-      return {
-        status: "importing", phase: "zones",
-        progress: { current: allZones.length, total: allZones.length, label: `${allZones.length} zones imported across ${progress.cities.length} cities` },
-        stats: progress.stats,
-      };
-    }
-
-    // ── Phase 3: Areas in chunks of ZONES_PER_CHUNK zones ─────────────
-    if (progress.status === "areas") {
-      if (progress.zoneIndex >= progress.zones.length) {
-        progress.status = "complete";
-        await saveProgress(kv, progress);
-        return {
-          status: "complete", phase: "done",
-          progress: { current: progress.zones.length, total: progress.zones.length, label: "Import complete!" },
-          stats: progress.stats,
-        };
-      }
-
-      const batchEnd = Math.min(progress.zoneIndex + ZONES_PER_CHUNK, progress.zones.length);
-      const batch = progress.zones.slice(progress.zoneIndex, batchEnd);
-
-      const existing = await loadExistingByPathaoId(db, "area");
-
-      type AreaResponse = { data: { data: Array<{ area_id: number; area_name: string; home_delivery_available?: boolean; pickup_available?: boolean }> } };
-
-      // Fetch areas for all zones in this batch IN PARALLEL
-      const results = await parallelLimit(
-        batch.map(zone => async () => {
-          try {
-            const res = await pathao.fetchJson<AreaResponse>(`/aladdin/api/v1/zones/${zone.pathaoId}/area-list`);
-            return { zone, areas: res.data?.data || [] };
-          } catch (err: unknown) {
-            console.error(`[pathao-import] Failed to fetch areas for zone ${zone.name}:`, err);
-            return { zone, areas: [] };
-          }
-        }),
-        MAX_CONCURRENT,
-      );
-
-      // Flatten and upsert
-      const preparedAreas = preparePathaoLocationItems(results.flatMap(r =>
-        r.areas.map(a => ({
-          name: a.area_name,
-          type: "area" as const,
-          parentId: r.zone.dbId,
-          pathaoId: a.area_id,
-          metadata: { home_delivery_available: a.home_delivery_available, pickup_available: a.pickup_available },
-        }))
-      ));
-
-      if (preparedAreas.accepted.length > 0 || preparedAreas.rejected.length > 0) {
-        const { created, updated } = await bulkUpsert(db, preparedAreas.accepted, existing);
-        const suppressed = await deactivateRejectedPathaoLocations(db, preparedAreas.rejected, existing);
-        progress.stats.areasCreated += created;
-        progress.stats.areasUpdated += updated + suppressed;
-      }
-
-      progress.zoneIndex = batchEnd;
-      await saveProgress(kv, progress);
-
-      return {
-        status: "importing", phase: "areas",
-        progress: {
-          current: progress.zoneIndex,
-          total: progress.zones.length,
-          label: `Areas: ${progress.zoneIndex}/${progress.zones.length} zones (${progress.stats.areasCreated + progress.stats.areasUpdated} areas)`,
-        },
-        stats: progress.stats,
-      };
-    }
-
-    // Already complete
-    return {
-      status: "complete", phase: "done",
-      progress: { current: 1, total: 1, label: "Import complete" },
-      stats: progress.stats,
-    };
+    await saveProgress(kv, progress);
+    return result;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     const failedPhase = progress.status as string;

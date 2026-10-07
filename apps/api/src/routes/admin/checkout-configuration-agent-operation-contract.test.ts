@@ -49,7 +49,9 @@ const expectedOperations: ExpectedOperation[] = [
   ["put", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.update"],
   ["delete", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.delete"],
   ["get", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.list"],
+  ["get", "/api/v1/admin/settings/delivery-locations/countries", "dashboard.delivery_locations.countries"],
   ["post", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.create"],
+  ["post", "/api/v1/admin/settings/delivery-locations/import", "dashboard.delivery_locations.import"],
   ["delete", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.bulk_delete"],
   ["delete", "/api/v1/admin/settings/delivery-locations/all", "dashboard.delivery_locations.delete_all"],
   ["get", "/api/v1/admin/settings/delivery-locations/{id}", "dashboard.delivery_locations.get"],
@@ -92,6 +94,7 @@ const operationsWithJsonBodies = new Set([
   "dashboard.shipping_zones.pickup_update",
   "dashboard.shipping_zones.apply_template",
   "dashboard.delivery_locations.create",
+  "dashboard.delivery_locations.import",
   "dashboard.delivery_locations.bulk_delete",
   "dashboard.delivery_locations.delete_all",
   "dashboard.delivery_locations.update",
@@ -132,7 +135,9 @@ const backendScenarios = {
   ],
   deliveryHierarchyAndPathaoImport: [
     "dashboard.delivery_locations.list",
+    "dashboard.delivery_locations.countries",
     "dashboard.delivery_locations.create",
+    "dashboard.delivery_locations.import",
     "dashboard.delivery_locations.bulk_delete",
     "dashboard.delivery_locations.delete_all",
     "dashboard.delivery_locations.get",
@@ -190,7 +195,7 @@ describe("checkout configuration agent operation contract", () => {
       expect(ids.has(operationId), `duplicate ${operationId}`).toBe(false);
       ids.add(operationId);
     }
-    expect(ids.size).toBe(47);
+    expect(ids.size).toBe(49);
   });
 
   it("marks every declared JSON mutation body as required", () => {
@@ -199,7 +204,7 @@ describe("checkout configuration agent operation contract", () => {
       if (!operationsWithJsonBodies.has(operationId)) continue;
       expect(spec.paths?.[path]?.[method]?.requestBody?.required, operationId).toBe(true);
     }
-    expect(operationsWithJsonBodies.size).toBe(23);
+    expect(operationsWithJsonBodies.size).toBe(24);
   });
 
   it("maps every server outcome to one backend scenario and keeps local UI actions local", () => {

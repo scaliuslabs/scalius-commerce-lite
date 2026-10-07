@@ -13,7 +13,7 @@
 // - Staff (never buyers) may save an address that breaks its rules
 //   (`skipValidation`): it is stored as typed and marked validation_skipped.
 import type { Database } from "@scalius/database/client";
-import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customers, deliveryLocations } from "@scalius/database/schema";
+import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customers, placeAddressFieldSql, places } from "@scalius/database/schema";
 import {
     deliveryHierarchyCanonicalFields,
     normalizeAddressText,
@@ -114,20 +114,21 @@ export interface AddressLocationRow {
     parentId: string | null;
 }
 
-/** Active delivery locations by id, for the adapter. */
+/** Active Bangladesh places by id, for the adapter (its field from the place's level). */
 export function selectAddressLocationRows(db: Database, ids: readonly string[]) {
     return db
         .select({
-            id: deliveryLocations.id,
-            name: deliveryLocations.name,
-            type: deliveryLocations.type,
-            parentId: deliveryLocations.parentId,
+            id: places.id,
+            name: places.name,
+            type: placeAddressFieldSql,
+            parentId: places.parentId,
         })
-        .from(deliveryLocations)
+        .from(places)
         .where(and(
-            inArray(deliveryLocations.id, ids.length > 0 ? [...ids] : ["__none__"]),
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
+            inArray(places.id, ids.length > 0 ? [...ids] : ["__none__"]),
+            eq(places.countryCode, DELIVERY_HIERARCHY_COUNTRY),
+            eq(places.isActive, true),
+            isNull(places.deletedAt),
         ));
 }
 

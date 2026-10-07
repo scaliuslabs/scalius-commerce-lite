@@ -22,11 +22,11 @@ describe("order amendment inventory atomicity", () => {
       },
     }));
     sqlite.exec(`
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
       VALUES
-        ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-        ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1),
-        ('zone_2', 'South', 'zone', 'city_1', '{}', '{}', 1);
+        ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+        ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1),
+        ('zone_2', 'South', 'BD', 2, 'city_1', '{}', '{}', 1);
       INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
       INSERT OR REPLACE INTO tax_settings
         (id, enabled, tax_shipping, default_tax_class_id, display_label, version)
@@ -154,7 +154,7 @@ describe("order amendment inventory atomicity", () => {
 
   it("rejects invalid delivery-location hierarchy before inventory or order writes", async () => {
     const data = await confirmedInput(quantity(3));
-    sqlite.exec("INSERT INTO delivery_locations (id, name, type, external_ids, metadata, is_active) VALUES ('city_2', 'Other city', 'city', '{}', '{}', 1)");
+    sqlite.exec("INSERT INTO places (id, name, country_code, level, external_ids, metadata, is_active) VALUES ('city_2', 'Other city', 'BD', 1, '{}', '{}', 1)");
     await unchangedOnFailure({ ...data, city: "city_2" }, "Selected thana is no longer available for the chosen city.", "ValidationError");
   });
 

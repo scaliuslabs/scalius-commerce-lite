@@ -12,6 +12,7 @@ import {
   postApiV1AdminSettingsDeliveryLocationsImportPathao,
   putApiV1AdminSettingsDeliveryLocationsById,
 } from "@scalius/api-client/sdk";
+import { PLACE_ADDRESS_COUNTRY, placeLevelName, placeLevels } from "@scalius/shared/places";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -37,17 +38,19 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
+import { addressCountriesQueryOptions } from "~/lib/api-query-options/address-rules";
 import {
   deliveryLocationLoader,
   deliveryLocationsQueryOptions,
   deliveryProvidersQueryOptions,
   importPathaoStatusQueryOptions,
+  placeCountriesQueryOptions,
   type DeliveryLocation,
   type PathaoImportProgress,
 } from "~/lib/api-query-options/delivery";
-import { areaCountsQuery } from "~/lib/api-query-options/settings-screens";
+import { countryName } from "~/lib/country-name";
 import { queryKeys } from "~/lib/query-keys";
-import { formatNumber, useMessages } from "~/i18n";
+import { formatNumber, useLocale, useMessages } from "~/i18n";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
@@ -55,23 +58,43 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsCard, SettingsDialog, SettingsField } from "./SettingsPage";
 
-type Level = "city" | "zone" | "area";
-const PARENT: Record<Exclude<Level, "city">, Level> = { zone: "city", area: "zone" };
 const PAGE_SIZE = 20;
 
-type Descendants = { zones: number; areas: number };
-const descendantsOf = (location: DeliveryLocation): Descendants => location.descendants ?? { zones: 0, areas: 0 };
+/** Live places under a place, by level (`{ "2": 1, "3": 4 }`). */
+type Descendants = Record<string, number>;
+const descendantsOf = (location: DeliveryLocation): Descendants => location.descendants ?? {};
+
+/** A country's level names in the dashboard language: singular, plural and in a sentence. */
+function useLevelNames(country: string) {
+  const locale = useLocale();
+  return {
+    one: (level: number) => placeLevelName(country, level, locale),
+    many: (level: number) => placeLevelName(country, level, locale, { plural: true }),
+    word: (level: number, count = 1) => placeLevelName(country, level, locale, { plural: count !== 1 }).toLocaleLowerCase(locale),
+  };
+}
 
 /** "1 thana and 3 areas", or null when nothing is under the places being deleted. */
-function usePlacesUnder() {
+function usePlacesUnder(country: string) {
   const t = useMessages(shippingMessages);
-  return ({ zones, areas }: Descendants): string | null => {
-    const parts = [
-      zones ? (zones === 1 ? t("oneThana") : t("thanaCount", { count: zones })) : null,
-      areas ? (areas === 1 ? t("oneArea") : t("areaCount", { count: areas })) : null,
-    ].filter((part): part is string => part !== null);
-    return parts.length === 2 ? t("both", { first: parts[0]!, second: parts[1]! }) : parts[0] ?? null;
+  const locale = useLocale();
+  const names = useLevelNames(country);
+  return (descendants: Descendants): string | null => {
+    const parts = Object.entries(descendants)
+      .filter(([, count]) => count > 0)
+      .sort(([left], [right]) => Number(left) - Number(right))
+      .map(([level, count]) => t("levelCount", { count: formatNumber(count), name: names.word(Number(level), count) }));
+    if (parts.length === 0) return null;
+    return new Intl.ListFormat(locale === "bn" ? "bn" : "en", { type: "conjunction" }).format(parts);
   };
+}
+
+function sumDescendants(list: Descendants[]): Descendants {
+  const total: Descendants = {};
+  for (const entry of list) {
+    for (const [level, count] of Object.entries(entry)) total[level] = (total[level] ?? 0) + count;
+  }
+  return total;
 }
 
 function useRefreshAreas() {
@@ -89,11 +112,12 @@ function useRefreshAreas() {
     );
 }
 
-function LocationForm({ level, location }: { level: Level; location: DeliveryLocation | null }) {
+function LocationForm({ country, level, location }: { country: string; level: number; location: DeliveryLocation | null }) {
   const t = useMessages(shippingMessages);
   const common = useMessages(settingsMessages);
+  const names = useLevelNames(country);
   const refresh = useRefreshAreas();
-  const placesUnder = usePlacesUnder();
+  const placesUnder = usePlacesUnder(country);
   const [saved] = useState(() => ({
     name: location?.name ?? "",
     parentId: location?.parentId ?? "",
@@ -102,21 +126,20 @@ function LocationForm({ level, location }: { level: Level; location: DeliveryLoc
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const under = location ? placesUnder(descendantsOf(location)) : null;
+  const top = level === 1;
   const save = useMutation({
     mutationFn: (): Promise<unknown> => {
-      // Courier ids (externalIds) come from the Pathao import, matched by name.
-      const externalIds = (location?.externalIds ?? {}) as Record<string, string | number>;
-      const body = {
+      // Courier ids (externalIds) come from imports, matched by name.
+      const fields = {
         name: draft.name.trim(),
-        type: level,
-        parentId: level === "city" ? null : draft.parentId || null,
-        externalIds,
+        parentId: top ? null : draft.parentId || null,
+        externalIds: (location?.externalIds ?? {}) as Record<string, string | number>,
         metadata: (location?.metadata ?? {}) as Record<string, string>,
         isActive: draft.isActive,
       };
       return location
-        ? apiData(putApiV1AdminSettingsDeliveryLocationsById({ path: { id: location.id }, body }))
-        : apiData(postApiV1AdminSettingsDeliveryLocations({ body }));
+        ? apiData(putApiV1AdminSettingsDeliveryLocationsById({ path: { id: location.id }, body: fields }))
+        : apiData(postApiV1AdminSettingsDeliveryLocations({ body: { ...fields, countryCode: country, level } }));
     },
     onSuccess: refresh,
   });
@@ -132,25 +155,25 @@ function LocationForm({ level, location }: { level: Level; location: DeliveryLoc
     fields: { name: "location-name", parentId: "location-parent" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: !draft.name.trim() || (level !== "city" && !draft.parentId),
+    invalid: !draft.name.trim() || (!top && !draft.parentId),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
   return (
     <>
-      <SettingsField id="location-name" label={t(level)} error={draft.name ? null : t("nameRequired")}>
+      <SettingsField id="location-name" label={names.one(level)} error={draft.name ? null : t("nameRequired")}>
         <Input id="location-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </SettingsField>
-      {level !== "city" ? (
+      {!top ? (
         <SettingsField id="location-parent" label={t("parent")} error={draft.parentId ? null : t("parentRequired")}>
           <SearchableSelect
             id="location-parent"
             value={draft.parentId}
             selectedLabel={draft.parentId === location?.parentId ? location?.parentPath?.[0] : undefined}
             triggerClassName="w-full"
-            load={deliveryLocationLoader({ type: PARENT[level], includeInactive: true })}
-            queryKey={[...queryKeys.settings.deliveryLocations(), "picker", PARENT[level], null, true]}
-            placeholder={t(PARENT[level])}
+            load={deliveryLocationLoader({ country, level: level - 1, includeInactive: true })}
+            queryKey={[...queryKeys.settings.deliveryLocations(), "picker", country, level - 1, null, true]}
+            placeholder={names.one(level - 1)}
             searchPlaceholder={t("search")}
             emptyMessage={t("empty")}
             onValueChange={(parentId) => setDraft({ ...draft, parentId })}
@@ -179,6 +202,40 @@ function LocationForm({ level, location }: { level: Level; location: DeliveryLoc
         </>
       ) : null}
     </>
+  );
+}
+
+/** Add a country: it is listed with no places, ready for its first top-level place. */
+function AddCountryForm({ taken, onAdd }: { taken: ReadonlySet<string>; onAdd: (country: string) => void }) {
+  const t = useMessages(shippingMessages);
+  const [country, setCountry] = useState("");
+  const codes = useQuery(addressCountriesQueryOptions()).data ?? [];
+  const options = codes
+    .filter((code) => !taken.has(code))
+    .map((code) => ({ value: code, label: countryName(code), keywords: [code] }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  useSaveBar({
+    fields: { country: "place-country" },
+    dirty: country !== "",
+    saving: false,
+    invalid: !country,
+    save: async () => onAdd(country),
+    discard: () => setCountry(""),
+  });
+  return (
+    <SettingsField id="place-country" label={t("countryLabel")} help={t("addCountryHelp")}>
+      <SearchableSelect
+        id="place-country"
+        value={country}
+        onValueChange={setCountry}
+        options={options}
+        placeholder={t("chooseCountry")}
+        searchPlaceholder={t("searchCountries")}
+        emptyMessage={t("empty")}
+        ariaLabel={t("countryLabel")}
+        triggerClassName="w-full"
+      />
+    </SettingsField>
   );
 }
 
@@ -236,13 +293,32 @@ function usePathaoImport() {
   return { progress, running, start: run, restart };
 }
 
+/**
+ * The place directory by country: a country selector (the countries that
+ * have places, and Add country), the country's levels as tabs, and a
+ * searchable, paged list of one level's places.
+ */
 export function DeliveryAreasManager() {
   const t = useMessages(shippingMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT);
   const refresh = useRefreshAreas();
-  const placesUnder = usePlacesUnder();
-  const [level, setLevel] = useState<Level>("city");
+  const countries = useQuery(placeCountriesQueryOptions()).data;
+  const [added, setAdded] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
+  // Bangladesh first when it has places (its addresses pick from them), else the first country.
+  const country = chosen
+    ?? (countries && countries.length > 0 && !countries.some((entry) => entry.countryCode === PLACE_ADDRESS_COUNTRY)
+      ? countries[0]!.countryCode
+      : PLACE_ADDRESS_COUNTRY);
+  // The countries with places, the ones added this visit and the one shown.
+  const listed = [...new Set([...(countries ?? []).map((entry) => entry.countryCode), ...added, country])];
+  const countryCount = countries?.find((entry) => entry.countryCode === country)?.places ?? 0;
+  const bangladesh = country === PLACE_ADDRESS_COUNTRY;
+  const levels = placeLevels(country).map((_, index) => index + 1);
+  const names = useLevelNames(country);
+  const placesUnder = usePlacesUnder(country);
+  const [level, setLevel] = useState(1);
   const [search, setSearch] = useState("");
   const [parentFilter, setParentFilter] = useState("");
   const [parentFilterLabel, setParentFilterLabel] = useState<string | undefined>();
@@ -250,30 +326,24 @@ export function DeliveryAreasManager() {
   const [selected, setSelected] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<"selected" | "import" | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
-  const counts = useQuery(areaCountsQuery).data;
-  const placeTotal = counts ? counts.cities + counts.zones + counts.areas : 0;
-  const noPlaces = counts !== undefined && placeTotal === 0;
+  const noPlaces = countries !== undefined && countryCount === 0;
   const importer = usePathaoImport();
 
   const list = useQuery({
     ...deliveryLocationsQueryOptions({
-      type: level,
+      country,
+      level,
       page,
       limit: PAGE_SIZE,
       ...(search.trim() ? { search: search.trim() } : {}),
-      ...(level !== "city" && parentFilter ? { parentId: parentFilter } : {}),
+      ...(level > 1 && parentFilter ? { parentId: parentFilter } : {}),
     }),
     placeholderData: (previous) => previous,
   });
   const couriers = useQuery(deliveryProvidersQueryOptions());
-  const hasPathao = (couriers.data ?? []).some((courier) => courier.type === "pathao" && courier.isActive);
+  const hasPathao = bangladesh && (couriers.data ?? []).some((courier) => courier.type === "pathao" && courier.isActive);
   const locations = list.data?.locations ?? [];
-  const selectedUnder = placesUnder(
-    locations
-      .filter((location) => selected.includes(location.id))
-      .map(descendantsOf)
-      .reduce((sum, next) => ({ zones: sum.zones + next.zones, areas: sum.areas + next.areas }), { zones: 0, areas: 0 }),
-  );
+  const selectedUnder = placesUnder(sumDescendants(locations.filter((location) => selected.includes(location.id)).map(descendantsOf)));
   // One place is named, like its own Delete; several are counted.
   const onlySelected = selected.length === 1 ? locations.find((location) => location.id === selected[0]) : undefined;
   const total = list.data?.pagination.total ?? 0;
@@ -288,7 +358,7 @@ export function DeliveryAreasManager() {
   const bulk = useMutation({
     mutationFn: (kind: "selected" | "all") =>
       kind === "all"
-        ? apiData(deleteApiV1AdminSettingsDeliveryLocationsAll({ body: { confirmDeleteAll: true } }))
+        ? apiData(deleteApiV1AdminSettingsDeliveryLocationsAll({ body: { confirmDeleteAll: true, countryCode: country } }))
         : apiData(deleteApiV1AdminSettingsDeliveryLocations({ body: { ids: selected } })),
     onSuccess: async () => {
       toast.success(t("deleted"));
@@ -300,13 +370,21 @@ export function DeliveryAreasManager() {
     onError: () => toast.error(common("saveFailed")),
   });
 
-  const changeLevel = (next: Level) => {
-    setLevel(next);
+  const reset = () => {
     setSearch("");
     setParentFilter("");
     setParentFilterLabel(undefined);
     setPage(1);
     setSelected([]);
+  };
+  const changeLevel = (next: number) => {
+    setLevel(next);
+    reset();
+  };
+  const changeCountry = (next: string) => {
+    setChosen(next);
+    setLevel(1);
+    reset();
   };
   // Selection is per page, so the delete confirmation can count what's under it.
   const changePage = (next: number) => {
@@ -314,6 +392,10 @@ export function DeliveryAreasManager() {
     setSelected([]);
   };
   const progress = importer.progress;
+  const countryOptions = listed.map((code) => {
+    const count = countries?.find((entry) => entry.countryCode === code)?.places ?? 0;
+    return { value: code, label: countryName(code), description: t("placeCount", { count: formatNumber(count) }), keywords: [code] };
+  });
 
   return (
     <>
@@ -336,11 +418,11 @@ export function DeliveryAreasManager() {
       ) : null}
       <SettingsCard
         header={
-          <Tabs value={level} onValueChange={(value) => changeLevel(value as Level)} className="mr-auto">
+          <Tabs value={String(level)} onValueChange={(value) => changeLevel(Number(value))} className="mr-auto">
             <TabsList>
-              <TabsTrigger value="city">{t("cities")}</TabsTrigger>
-              <TabsTrigger value="zone">{t("zones")}</TabsTrigger>
-              <TabsTrigger value="area">{t("areas")}</TabsTrigger>
+              {levels.map((value) => (
+                <TabsTrigger key={value} value={String(value)}>{names.many(value)}</TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
         }
@@ -359,20 +441,46 @@ export function DeliveryAreasManager() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled={placeTotal === 0} onSelect={() => setConfirmAll(true)}>{t("deleteAll")}</DropdownMenuItem>
+                  <DropdownMenuItem disabled={countryCount === 0} onSelect={() => setConfirmAll(true)}>{t("deleteAll")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
             <SettingsDialog
-              title={t(`add${level}`)}
-              trigger={<Button type="button" size="sm" disabled={!canEdit}>{t(`add${level}`)}</Button>}
+              title={t("addPlace", { name: names.word(level) })}
+              trigger={<Button type="button" size="sm" disabled={!canEdit}>{t("addPlace", { name: names.word(level) })}</Button>}
             >
-              <LocationForm level={level} location={null} />
+              <LocationForm key={`${country}-${level}`} country={country} level={level} location={null} />
             </SettingsDialog>
           </div>
         }
         rows={
           <>
+            <div className="flex flex-col gap-2 px-4 pt-3 sm:flex-row sm:items-center">
+              <SearchableSelect
+                value={country}
+                onValueChange={(value) => value && changeCountry(value)}
+                options={countryOptions}
+                ariaLabel={t("countryLabel")}
+                searchPlaceholder={t("searchCountries")}
+                emptyMessage={t("empty")}
+                triggerClassName="w-full sm:w-64"
+              />
+              {canEdit ? (
+                <SettingsDialog
+                  title={t("addCountryTitle")}
+                  savedMessage={t("countryAdded")}
+                  trigger={<Button type="button" variant="outline" size="sm">{t("addCountry")}</Button>}
+                >
+                  <AddCountryForm
+                    taken={new Set(listed)}
+                    onAdd={(code) => {
+                      setAdded((current) => [...current, code]);
+                      changeCountry(code);
+                    }}
+                  />
+                </SettingsDialog>
+              ) : null}
+            </div>
             <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -389,15 +497,15 @@ export function DeliveryAreasManager() {
                   }}
                 />
               </div>
-              {level !== "city" ? (
+              {level > 1 ? (
                 <SearchableSelect
                   value={parentFilter}
                   selectedLabel={parentFilterLabel}
                   clearable
                   ariaLabel={t("parent")}
                   triggerClassName="w-full sm:w-56"
-                  load={deliveryLocationLoader({ type: PARENT[level], includeInactive: true })}
-                  queryKey={[...queryKeys.settings.deliveryLocations(), "picker", PARENT[level], null, true]}
+                  load={deliveryLocationLoader({ country, level: level - 1, includeInactive: true })}
+                  queryKey={[...queryKeys.settings.deliveryLocations(), "picker", country, level - 1, null, true]}
                   placeholder={t("allParents")}
                   searchPlaceholder={t("search")}
                   emptyMessage={t("empty")}
@@ -409,13 +517,19 @@ export function DeliveryAreasManager() {
                 />
               ) : null}
             </div>
-            {level === "zone" ? (
+            {bangladesh && level === 2 ? (
               <p className="px-4 pb-3 text-body text-muted-foreground">{t("pathaoThanas")}</p>
             ) : null}
             {locations.length === 0 ? (
               <div className="space-y-2 border-t border-border px-4 py-8 text-center text-body text-muted-foreground">
-                <p>{noPlaces ? t("noPlacesYet") : t("empty")}</p>
-                {canEdit && !hasPathao && noPlaces ? (
+                <p>
+                  {!noPlaces
+                    ? t("empty")
+                    : bangladesh
+                      ? t("noPlacesYet")
+                      : t("noPlacesCountry", { country: countryName(country), name: names.word(1, 2) })}
+                </p>
+                {canEdit && bangladesh && !hasPathao && noPlaces ? (
                   <Link to="/admin/settings/shipping" hash="couriers" className="text-link hover:underline">{t("connectPathao")}</Link>
                 ) : null}
               </div>
@@ -428,7 +542,7 @@ export function DeliveryAreasManager() {
                     checked={selected.length === locations.length}
                     onCheckedChange={(checked) => setSelected(checked === true ? locations.map((location) => location.id) : [])}
                   />
-                  <span className="flex-1">{selected.length ? t("selectedCount", { count: selected.length }) : t(level)}</span>
+                  <span className="flex-1">{selected.length ? t("selectedCount", { count: selected.length }) : names.one(level)}</span>
                   {selected.length ? (
                     <Button type="button" variant="destructive" size="sm" onClick={() => setConfirm("selected")}>
                       {t("deleteSelected")}
@@ -458,7 +572,7 @@ export function DeliveryAreasManager() {
                         </button>
                       }
                     >
-                      <LocationForm level={level} location={location} />
+                      <LocationForm country={country} level={level} location={location} />
                     </SettingsDialog>
                     <Switch
                       checked={location.isActive}
@@ -521,7 +635,8 @@ export function DeliveryAreasManager() {
       <DeleteAllDialog
         open={confirmAll}
         onOpenChange={setConfirmAll}
-        count={placeTotal}
+        country={country}
+        count={countryCount}
         deleting={bulk.isPending}
         onConfirm={() => bulk.mutate("all")}
       />
@@ -529,16 +644,18 @@ export function DeliveryAreasManager() {
   );
 }
 
-/** Deleting every place can't be undone, so the merchant types the count first. */
+/** Deleting every place of a country can't be undone, so the merchant types the count first. */
 function DeleteAllDialog({
   open,
   onOpenChange,
+  country,
   count,
   deleting,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  country: string;
   count: number;
   deleting: boolean;
   onConfirm: () => void;
@@ -559,7 +676,7 @@ function DeleteAllDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("deleteAllTitle", { count: shown })}</AlertDialogTitle>
-          <AlertDialogDescription>{t("deleteAllConfirm")}</AlertDialogDescription>
+          <AlertDialogDescription>{t("deleteAllConfirm", { country: countryName(country) })}</AlertDialogDescription>
         </AlertDialogHeader>
         <SettingsField id="delete-all-confirm" label={t("deleteAllType", { count: shown })}>
           <Input id="delete-all-confirm" inputMode="numeric" autoComplete="off" value={typed} onChange={(event) => setTyped(event.target.value)} />

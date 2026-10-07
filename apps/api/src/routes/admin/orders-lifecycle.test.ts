@@ -20,8 +20,8 @@ describe("admin order lifecycle routes", () => {
         sqlite = created.sqlite;
         sqlite.exec(`
             INSERT INTO user (id, name, email, is_super_admin) VALUES ('admin_1', 'Nadia', 'nadia@example.test', 1);
-            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-            VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
+            INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+            VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1);
             INSERT INTO orders (id, order_number, customer_name, customer_phone, shipping_address, city, zone,
               city_name, zone_name, shipping_country_code, shipping_locality, shipping_dependent_locality,
               total_amount_minor, balance_due_minor, status, payment_method, payment_status, version, created_at)
