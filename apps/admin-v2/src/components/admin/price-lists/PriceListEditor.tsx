@@ -36,8 +36,7 @@ import {
   type PriceList,
 } from "~/lib/api-query-options/price-lists";
 import { PriceListPrices } from "./PriceListPrices";
-import { scheduleText } from "./PriceListsList";
-import { KIND_HELP, KIND_LABEL, priceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
+import { KIND_HELP, KIND_LABEL, scheduleText, priceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
 
 // The grid is the heaviest part of the page and only staff who edit open it.
 const PriceGridSheet = lazy(() => import("./PriceGridSheet").then((module) => ({ default: module.PriceGridSheet })));

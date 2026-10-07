@@ -758,6 +758,92 @@ Payment provider address verification (AVS). Address autocomplete. The
 billing address in order e-mails and on the buyer's receipt. Checkout
 prefill from the default billing address.
 
+## Step 4a implemented
+
+A store with no price list and no adjusted market behaves as before: the
+same bytes for every read, the same D1 calls and statements in every
+free-plan budget scenario and render budget.
+
+**Schema.** Migration `0120_price_lists` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 120, Drizzle snapshot):
+
+- `price_lists`: name, description, kind (`market` | `segment` | `sale`),
+  market, segment (segment lists only), status (`draft` | `active`),
+  `starts_at`/`ends_at`, priority (0 to 1,000) and a revision. A trigger
+  keeps market and sale lists off the backup market
+  (`PRICE_LIST_BACKUP_MARKET`), so the root catalogue never varies. Segment
+  lists may price any market;
+- `price_list_prices`: one row per list, SKU, currency and `min_quantity`,
+  with `amount_minor` and an optional `compare_at_minor` above it;
+- `markets` gains `price_mode` (`fixed` | `fx`), `fx_rate`,
+  `price_adjustment_bps`, `price_rounding_minor` and `price_ending_minor`.
+  Every market starts `fixed`; the backup market stays `fixed`.
+
+Writes to an active list, its prices or a market's pricing advance the
+checkout authority revision.
+
+**The rule.** `resolvePrice()` in `@scalius/shared/market-pricing` is the
+one precedence: a live sale list, then a segment list, then a market list,
+then the FX-derived price, then the base price. Among lists of one kind the
+higher priority wins, then the lower amount, then the smaller list id. A
+list offers its row with the largest `min_quantity` that the quantity
+reaches. A list price replaces the SKU price and its catalogue discount;
+its compare-at (or, for a sale without one, the price without sales) is the
+struck price. Promotions, bundles and app discounts apply after it.
+
+**FX-derived prices.** `fxPriceMinor()`: base × rate × (1 + adjustment),
+exact in integers. Without a rounding step, the result rounds half-up to the
+price increment. With a step, it rounds up to the step, and an ending sets
+the last part (step 10 and ending 9: 1,428.90 becomes 1,429). Prices are
+computed at read time; nothing is stored. The rate is a cache dependency
+(`pl:<market>`). The rate source is manual (`MANUAL_FX_RATE_SOURCE_ID`).
+`FxRateSource` is the port for a rate provider app; no provider is wired
+yet. While every market sells the shop currency, the rate is 1.
+
+**Reads.** Products, categories, brands, collections, the homepage and
+landing pages are market-keyed (`PUBLIC_API_CACHE_ROUTES`). A presence read
+reads its market's price context in one more statement, beside its own
+reads. A neutral market (no live public list, no adjustment) returns the
+root's bytes. List prices ride in the SKU statements a read already runs.
+Cards priced from the projection read the shown products' SKUs once more,
+only while a list is live. Feeds, Product JSON-LD, search, quick add and
+recommendations show the same prices. In an FX market, price filters are
+inverted exactly.
+
+**Checkout.** Cart validation, the tax quote, the order, agent carts and
+staff orders price lines in the order's market: the shipping country when a
+physical line ships, else the billed country, else the backup market. The
+cart page uses the buyer's country, else the presence. Market pricing and
+list prices ride in statements checkout already runs. Segment membership is
+read only when a segment list applies to the cart.
+
+**DVC.** New kind `pl`: `pl:<market>` (pricing columns, active public
+lists) and `pl:<market>:<product>` (their prices). Drafts and segment lists
+advance nothing. A list's next start or end bounds a cached entry
+(`deps.validUntil`). The property and race gate reports zero findings; its
+seed store has an FX market and four lists.
+
+**Dashboard.** Products → Price lists (Medusa's price lists): the lists with
+state, type, SKU count and schedule; create (market, segment or sale); an
+editor with details, status, priority, schedule and a paged SKU price
+table; a price grid sheet (loaded on first use) with compare-at prices and
+up to four quantity breaks per SKU, at most 100 SKUs per save. Settings →
+Markets → a market: a Pricing card (Shopify's price adjustment) with product
+prices or adjusted prices, rounding step, ending and a live preview. Copy is
+in English and Bangla. Bundle budgets did not change; the nav search words
+moved out of the first download.
+
+**Agents and MCP.** Registry rows `dashboard.price_lists.list`, `choices`,
+`create`, `get`, `update`, `delete` (destructive), `prices_list` and
+`prices_set`; markets take the pricing fields. RBAC: reads need
+`products.view`, writes `products.edit`. The SDK is regenerated.
+
+**Left for later.** Listing sort, price facets and discount sort use the
+base or FX price in a market with lists. Sale lists on the backup market.
+Segment lists in staff orders. Buyer-input surcharges and delivery charges
+are not converted. A rate provider app through `FxRateSource`. A second
+currency (step 6).
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through

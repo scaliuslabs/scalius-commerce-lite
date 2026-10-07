@@ -15,24 +15,11 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { formatNumber, useMessages } from "~/i18n";
-import { priceListMessages, type PriceListMessageKey } from "~/i18n/price-lists";
+import { priceListMessages } from "~/i18n/price-lists";
 import { resourceMessages } from "~/i18n/resource";
-import { formatAdminTimestamp } from "~/lib/admin-time";
-import { priceListsQueryOptions, type PriceList } from "~/lib/api-query-options/price-lists";
+import { priceListsQueryOptions } from "~/lib/api-query-options/price-lists";
 import { CreatePriceListDialog } from "./CreatePriceListDialog";
-import { KIND_LABEL } from "./price-list-form";
-
-type Messages = (key: PriceListMessageKey, vars?: Record<string, string | number>) => string;
-
-/** "Always", "From …", "Until …" or "… to …", in store time. */
-export function scheduleText(list: Pick<PriceList, "startsAt" | "endsAt">, t: Messages): string {
-  const start = formatAdminTimestamp(list.startsAt);
-  const end = formatAdminTimestamp(list.endsAt);
-  if (start && end) return t("betweenDates", { start, end });
-  if (start) return t("fromDate", { date: start });
-  if (end) return t("untilDate", { date: end });
-  return t("always");
-}
+import { KIND_LABEL, scheduleText } from "./price-list-form";
 
 export function PriceListsList() {
   const t = useMessages(priceListMessages);

@@ -229,6 +229,27 @@ describe("markets settings", () => {
     expect(body).toMatchObject({ expectedRevision: 1, status: "draft", presence: { value: "en-in", locale: "en" } });
     expect(body).not.toHaveProperty("priceIncrementMinor");
   });
+  it("gives another market adjusted prices with a live preview (MARKETS-DESIGN D5)", async () => {
+    await render(<MarketEditor marketId="mkt_in" />);
+    await vi.waitFor(() => expect(container.textContent).toContain("Adjusted product prices"));
+    const adjusted = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Adjusted product prices"))!;
+    act(() => adjusted.querySelector<HTMLButtonElement>("button[role=radio]")!.click());
+    await vi.waitFor(() => expect(container.textContent).toContain("Price adjustment (%)"));
+    const input = container.querySelector<HTMLInputElement>("#market-adjustment")!;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      set.call(input, "10");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // ৳1,299 × 1.10, at the whole-taka increment.
+    await vi.waitFor(() => expect(container.textContent).toContain("1,299.00 becomes ৳1,429.00"));
+    let saved = false;
+    await act(async () => { saved = await scope!.saveAll(); });
+    expect(saved).toBe(true);
+    expect(sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body).toMatchObject({
+      priceMode: "fx", priceAdjustmentPercent: 10, priceRounding: null, priceEnding: null,
+    });
+  });
 });
 
 describe("market country picker", () => {
