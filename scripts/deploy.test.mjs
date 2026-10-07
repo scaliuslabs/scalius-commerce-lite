@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   cacheStatusBuildId,
   collectStorefrontWarmPaths,
+  d1MigrationsPending,
   fetchPlatformConfig,
   getExternalSchemaPreflightCommand,
   getBuildCommandForTarget,
@@ -174,6 +175,108 @@ describe("deploy API readiness sampling", () => {
       fetchImpl,
       sleepImpl: async () => undefined,
     })).rejects.toThrow("0/2 ready");
+  });
+});
+
+describe("deploy API readiness after migrations", () => {
+  const settleOptions = {
+    migrationsApplied: true,
+    settleMaxMs: 180_000,
+    settleDelayMs: 10_000,
+    settleStableCount: 3,
+  };
+  const settledResponse = () => new Response(JSON.stringify({
+    success: true,
+    status: "ready",
+    checks: {
+      d1: { status: "ok", detail: "schema 121/0121_translations" },
+      r2: { status: "ok" },
+    },
+  }), { status: 200 });
+  const staleReplicaResponse = () => new Response(JSON.stringify({
+    success: false,
+    status: "degraded",
+    checks: {
+      d1: { status: "error", detail: "Database schema migration ledger has 120 row(s); expected 121." },
+      r2: { status: "ok" },
+    },
+  }), { status: 503 });
+
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("waits out replica lag until consecutive samples report the expected schema", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(settledResponse())
+      .mockResolvedValueOnce(staleReplicaResponse())
+      .mockResolvedValueOnce(staleReplicaResponse())
+      .mockResolvedValueOnce(settledResponse())
+      .mockResolvedValueOnce(settledResponse())
+      .mockResolvedValueOnce(settledResponse());
+    const sleepImpl = vi.fn(async () => undefined);
+
+    await sampleApiReadiness("https://api.example.test", { ...settleOptions, fetchImpl, sleepImpl });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    expect(sleepImpl).toHaveBeenCalledTimes(5);
+    expect(sleepImpl).toHaveBeenCalledWith(10_000);
+  });
+
+  it("does not accept a ready response that omits the d1 schema detail", async () => {
+    const fetchImpl = vi.fn(async () => readyResponse());
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      ...settleOptions,
+      settleMaxMs: 30_000,
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    })).rejects.toThrow("did not settle");
+  });
+
+  it("fails after the bound when d1 never reports the expected schema", async () => {
+    const fetchImpl = vi.fn(async () => staleReplicaResponse());
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      ...settleOptions,
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    })).rejects.toThrow("d1 did not report the expected schema");
+    expect(fetchImpl).toHaveBeenCalledTimes(18);
+  });
+
+  it("names a non-d1 failure instead of blaming replica lag", async () => {
+    const fetchImpl = vi.fn(async () => degradedResponse());
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      ...settleOptions,
+      settleMaxMs: 30_000,
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    })).rejects.toThrow("non-d1 check(s) failing (r2)");
+  });
+
+  it("keeps the short sampling window when no migration was applied", async () => {
+    const fetchImpl = vi.fn(async () => staleReplicaResponse());
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      sampleCount: 2,
+      delayMs: 0,
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    })).rejects.toThrow("API /readyz did not recover during deploy verification");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads wrangler's no-op line as no pending migrations", () => {
+    expect(d1MigrationsPending("\u2705 No migrations to apply!\n")).toBe(false);
+    expect(d1MigrationsPending("Migrations to be applied:\n0121_translations.sql")).toBe(true);
+    expect(d1MigrationsPending("")).toBe(true);
   });
 });
 
