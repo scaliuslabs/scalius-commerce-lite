@@ -149,12 +149,12 @@ describe("app quotas and data updates", () => {
       events: {
         "order.paid": async (_event, ctx) => {
           try {
-            await ctx.storage.notes.put("n1", { text: "hello" });
+            await ctx.storage.notes!.put("n1", { text: "hello" });
             results.push("put ok");
           } catch (error) {
             results.push(`put ${(error as { code?: string }).code}`);
           }
-          await ctx.storage.notes.delete("n0");
+          await ctx.storage.notes!.delete("n0");
           results.push("delete ok");
         },
       },
