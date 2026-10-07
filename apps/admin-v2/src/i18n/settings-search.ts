@@ -57,7 +57,7 @@ export const settingsSearchMessages = defineMessages({
     languagesTerms: "language languages translate translation translations multilingual publish default bangla english hreflang localized url",
     machineTranslation: "Machine translation",
     machineTranslationTerms: "machine translation auto translate app provider deepl google translate",
-    marketsTerms: "market international country region subfolder language hreflang web presence backup whole prices price increment decimals rounding",
+    marketsTerms: "market international country region subfolder language hreflang web address presence primary backup whole prices price increment decimals rounding",
     salesChannels: "Sales channels",
     salesChannelsTerms: "sales channel publish publishing available online store google merchant center facebook instagram meta catalog feed ai agents ucp app locations",
     customerFields: "Contact information",

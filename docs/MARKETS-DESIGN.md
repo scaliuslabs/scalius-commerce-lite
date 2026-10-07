@@ -359,11 +359,13 @@ computes its market (`orderMarketIdSql()`).
 root `sitemap.xml` also lists the child sitemaps of each active presence.
 `robots.txt`, `llms.txt` and UCP stay at the root and serve the backup market.
 
-**Dashboard.** Settings → Markets lists each market with a Backup badge,
-status, countries, currency and web presence. A market page edits the name,
-handle, status, countries (a country of another market is disabled), web
-presence (language and a two-letter country code) and, on the backup market
-only, the price increment. Currency is the shop currency, locked until
+**Dashboard.** Settings → Markets lists each market with a Primary badge
+(Shopify's name for the backup market; code and API keep `is_backup`),
+status, countries and currency. A market page edits the name, status,
+countries (a country of another market is disabled) and, on the primary
+market only, the price format (the price increment). The handle and a
+market's own web address (language and a two-letter country code) sit under
+"Web address and handle". Currency is the shop currency, locked until
 step 6. A market with orders cannot be deleted; set it to draft. The API is
 `dashboard.markets.{list,get,create,update,delete}` under
 `/api/v1/admin/settings/markets` with revision checks, and
@@ -1199,6 +1201,43 @@ price facets and discount sort on market prices. Per-currency fixed delivery
 and promotion amounts. Gift cards in a third currency. Duties and
 merchant-of-record. Multi-currency payouts. Staff orders in a market's
 currency.
+
+## Progressive disclosure (newcomer pass 1)
+
+A store with one market, one language, one currency, one channel set and one
+location sees none of the machinery above in its everyday screens. This is
+presentation only: every API route, MCP tool and SDK type is unchanged, and
+an expert reaches every control.
+
+| Screen | A new store sees | Opens when |
+|--------|------------------|------------|
+| Markets | A sentence ("Your store sells in Bangladesh, in BDT, in English") and one action, "Sell in another country". | A second market exists: the table (status, countries, currency; the web address column only if a market has one). |
+| Market page | Name, status, countries, currency, price format, taxes. | "Web address and handle" holds the handle and a non-primary market's own address. A language is asked only when the store has more than one. |
+| Languages | The default language and "Add language". | A second language: status, web address and translated count, then machine translation. |
+| Translate & adapt | Not in the sidebar. Reached from Languages (Translate) and a resource's Translations card. | The sidebar lists it once the store has a second language. The market picker shows once a market besides the primary one exists. |
+| Price lists | Not in the sidebar. Reached from a market's Pricing card and the Markets list. A store with one market can only create a customer segment list (market and sale lists cannot price the primary market). | The sidebar lists it once a price list exists. |
+| Sales channels | Four channels, locations hidden while the store has one. | Locations appear with a second location. |
+| Product Publishing | "Available on all 4 sales channels" and Change. | The checkboxes open with Change, or at once when a product is off a channel. |
+| Products list | No Channels column or filter. | A channel is off, or channels carry different product counts, or a link filters by channel. |
+| Taxes | Collect tax, Where you collect tax, and a one-click "Create a Standard group". | Tax groups and overrides sit under "Tax groups and product overrides", open when more than one group exists. |
+| Shipping | Zones and local pickup. Dhaka setups and Delivery areas only for a store in Bangladesh (or one that has places). | |
+| Payments | Currency badges only once a market sells in its own currency (step 6). | |
+
+Decisions (Shopify's reference in brackets):
+
+- **Primary market** names what the code calls the backup market [Markets:
+  primary market, backup region].
+- **Price lists and Translate & adapt leave the sidebar until used.**
+  Shopify has no top-level entry for either: price changes live inside a
+  market's Pricing and Translate & adapt is an app opened from Languages.
+  Search (Cmd+K) still finds both. The sidebar remembers the last answer per
+  browser (`scalius:store-reach`), so a store that uses them never sees them
+  pop in. An unreadable answer keeps the page listed.
+- **The market's language is the store's Languages list**, not a fixed pair.
+  The primary market's language is the default language: it changes in
+  Languages only.
+- **No new endpoint or contract field.** The sidebar reads the existing
+  languages and price lists lists (`useStoreReach`, `lib/store-reach.ts`).
 
 ## Non-goals in this wave
 
