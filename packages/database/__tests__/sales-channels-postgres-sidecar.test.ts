@@ -82,6 +82,7 @@ describe.runIf(postgresUrl)("0122 sales channels PostgreSQL sidecar", () => {
       INSERT INTO products (id, name, price_minor, slug, is_active, exclude_from_product_feed) VALUES ('p_tee', 'Tee', 50000, 'tee', 1, 0), ('p_cap', 'Cap', 20000, 'cap', 1, 1);
       INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, channel) VALUES ('o_bot', 'B', '+8801711111112', 'H', 'c', 'z', 'pending', 'agent');
       INSERT INTO checkout_authority (id, revision) VALUES ('default', 1) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO inventory_locations (id, name, code, kind, is_default, status, position, version) VALUES ('loc_default', 'Main location', 'MAIN', 'warehouse', 1, 'active', 0, 1) ON CONFLICT (id) DO NOTHING;
     `);
     await applySidecar(client, sidecars.at(-1)!);
 
