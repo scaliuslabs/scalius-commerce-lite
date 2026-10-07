@@ -15,8 +15,8 @@
  * the presence is part of its cache key, and the route reads its market
  * through `publicMarketPresence`, which refuses a market-invariant route. A
  * market-invariant read gets no presence: one cache entry serves every
- * market. Moving a read to market-keyed (price lists, FX and translations
- * in step 4) is a change of this table, never of a route alone.
+ * market. Moving a read to market-keyed (price lists and FX in step 4a,
+ * translations in step 4b) is a change of this table, never of a route alone.
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
 import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
@@ -31,8 +31,11 @@ export interface PublicApiCacheRoute {
   market: PublicApiMarketScope;
 }
 
-/** Step 2: every market sells the one catalogue at base prices in the shop currency, untranslated. */
-const SAME_CATALOGUE = "Every market sells the same catalogue at base prices in the shop currency until price lists, FX and translations (step 4).";
+/** Reads that show no price: the same in every market until translations (step 4b). */
+const NO_PRICES = "Shows no price; buyer copy is store-wide until translations (step 4b).";
+/** A read with only the page's presence in its query (a route that takes no other query). */
+const presenceOnly = (url: URL) => url.searchParams.size === 0
+  || (url.searchParams.size === 1 && url.searchParams.has(MARKET_PRESENCE_QUERY_PARAM));
 const STORE_WIDE_DELIVERY = "Delivery methods and locations are store-wide until markets link delivery methods (step 3).";
 const STORE_WIDE_COPY = "Buyer copy is store-wide until translations (step 4).";
 
@@ -41,12 +44,15 @@ const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
 
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
-  { path: "/api/v1/products", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/categories", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/brands", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/collections", market: { invariant: SAME_CATALOGUE } },
-  // One fixed read: a query string is rejected by the route, and never cached or batched.
-  { path: "/api/v1/storefront/homepage", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  // Prices (step 4a): a presence's market may price its own way (FX, price
+  // lists), so every read that shows a product price is market-keyed. A
+  // market that prices like the backup market answers the root's bytes.
+  { path: "/api/v1/products", market: { keyed: true } },
+  { path: "/api/v1/categories", market: { keyed: true } },
+  { path: "/api/v1/brands", market: { keyed: true } },
+  { path: "/api/v1/collections", market: { keyed: true } },
+  // One fixed read: a query string other than the presence is rejected by the route, and never cached or batched.
+  { path: "/api/v1/storefront/homepage", exact: true, isEligible: presenceOnly, market: { keyed: true } },
   // The checkout settings of the page's market; payment and delivery methods are store-wide until markets link them (steps 3 and 6).
   { path: "/api/v1/checkout/config", exact: true, market: { keyed: true } },
   // The cart and checkout copy; every checkout-language write bumps the generation.
@@ -55,17 +61,18 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/locations", market: { invariant: STORE_WIDE_DELIVERY } },
   // One country's address rules (libaddressinput): code, not data, the same for every market.
   { path: "/api/v1/address-rules", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "Address rules are code (libaddressinput metadata), the same in every market." } },
-  { path: "/api/v1/attributes", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/pages", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/articles", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/attributes", market: { invariant: NO_PRICES } },
+  { path: "/api/v1/pages", market: { invariant: NO_PRICES } },
+  { path: "/api/v1/articles", market: { invariant: NO_PRICES } },
   { path: "/api/v1/seo", market: { invariant: "Discovery policy (feeds, titles, the social image) is store-wide." } },
-  { path: "/api/v1/navigation", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/storefront/pages/slug", market: { invariant: SAME_CATALOGUE } },
-  { path: "/api/v1/storefront/landing", isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/navigation", market: { invariant: NO_PRICES } },
+  { path: "/api/v1/storefront/pages/slug", market: { invariant: NO_PRICES } },
+  // A landing page's product lists are priced in the page's market.
+  { path: "/api/v1/storefront/landing", isEligible: presenceOnly, market: { keyed: true } },
   // The layout carries the whole presence matrix, the same for every market.
   { path: "/api/v1/storefront/layout", exact: true, market: { invariant: "The layout is store-wide and carries the whole active presence matrix." } },
   // A product page's app blocks (`/product-apps/<slug>`); a query string is rejected by the route.
-  { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "An app's product blocks are drawn store-wide; apps read no market until steps 4b and 6." } },
   // The active presence matrix, for the storefront gateway's buyer-choice redirect.
   { path: "/api/v1/storefront/markets", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: "The presence matrix is the same for every market." } },
 ];

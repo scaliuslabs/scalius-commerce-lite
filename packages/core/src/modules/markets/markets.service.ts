@@ -31,6 +31,14 @@ import {
     MAX_MARKETS,
 } from "@scalius/shared/markets";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import {
+    MARKET_PRICE_ADJUSTMENT_MAX_BPS,
+    MARKET_PRICE_ADJUSTMENT_MIN_BPS,
+    isMarketPriceMode,
+    marketFxPolicyIssue,
+    type MarketPriceMode,
+} from "@scalius/shared/market-pricing";
+import { isFxRate } from "@scalius/shared/money-chain";
 import { readStoreCurrency } from "./pricing";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -61,6 +69,20 @@ export interface MarketRecord {
     priceIncrementInherited: boolean;
     /** Whether its prices include tax (MARKETS-DESIGN D8): checkout and the order's tax snapshot read it. */
     pricesIncludeTax: boolean;
+    /**
+     * How it prices (MARKETS-DESIGN D5): `fixed` (base prices and its fixed
+     * price lists) or `fx` (base prices converted at its rate, adjusted,
+     * rounded up to its step and ending). The backup market is always fixed.
+     */
+    priceMode: MarketPriceMode;
+    /** The manual exchange rate; null: the rate source ("1" while it sells the shop currency). */
+    fxRate: string | null;
+    /** Percentage adjustment of FX-derived prices, in basis points. */
+    priceAdjustmentBps: number;
+    /** FX-derived prices round up to this step (minor units); null: the price increment. */
+    priceRoundingMinor: number | null;
+    /** What a rounded price ends in within its step (minor units); null for none. */
+    priceEndingMinor: number | null;
     /** A market that took orders is never deleted; set it to draft instead. */
     hasOrders: boolean;
     createdAt: Date;
@@ -79,7 +101,16 @@ export interface MarketInput {
     pricesIncludeTax?: boolean;
 }
 
-export interface MarketUpdate {
+/** How a non-backup market prices (MARKETS-DESIGN D5); amounts in minor units. */
+export interface MarketPricingUpdate {
+    priceMode?: MarketPriceMode;
+    fxRate?: string | null;
+    priceAdjustmentBps?: number;
+    priceRoundingMinor?: number | null;
+    priceEndingMinor?: number | null;
+}
+
+export interface MarketUpdate extends MarketPricingUpdate {
     expectedRevision: number;
     name?: string;
     handle?: string;
@@ -132,6 +163,11 @@ async function loadRecords(db: Database, ids?: readonly string[]): Promise<Marke
             priceIncrementMinor: row.isBackup ? resolvePriceIncrementMinor(currency.code, row.priceIncrementMinor) : backupIncrement,
             priceIncrementInherited: !row.isBackup,
             pricesIncludeTax: Boolean(row.pricesIncludeTax),
+            priceMode: (row.priceMode === "fx" ? "fx" : "fixed") as MarketPriceMode,
+            fxRate: row.fxRate,
+            priceAdjustmentBps: row.priceAdjustmentBps,
+            priceRoundingMinor: row.priceRoundingMinor,
+            priceEndingMinor: row.priceEndingMinor,
             hasOrders: orderRows.some((each) => each.marketId === row.id),
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
@@ -341,6 +377,8 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
         priceIncrementMinor = update.priceIncrementMinor;
     }
 
+    const pricing = cleanPricing(current, update);
+
     if (update.presence !== undefined) {
         if (current.isBackup) {
             // The root URL stays the backup market's; only its language changes.
@@ -371,6 +409,7 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
         status,
         ...(priceIncrementMinor === null ? {} : { priceIncrementMinor }),
         ...(update.pricesIncludeTax === undefined ? {} : { pricesIncludeTax: update.pricesIncludeTax }),
+        ...pricing,
         revision: sql`${markets.revision} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(eq(markets.id, id)));
@@ -381,6 +420,46 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
     }
     const market = await getMarket(db, id);
     return { market, priceIncrementChanged: market.isBackup && market.priceIncrementMinor !== current.priceIncrementMinor };
+}
+
+/**
+ * The pricing columns a market update writes (only the fields it names),
+ * checked as a whole against the market's currency and price increment: the
+ * backup market sells at base prices; a market in the shop currency converts
+ * at "1"; a rounding step and an ending are multiples of the increment, the
+ * ending inside its step.
+ */
+function cleanPricing(current: MarketRecord, update: MarketPricingUpdate): MarketPricingUpdate {
+    const named = (["priceMode", "fxRate", "priceAdjustmentBps", "priceRoundingMinor", "priceEndingMinor"] as const)
+        .filter((field) => update[field] !== undefined);
+    if (named.length === 0) return {};
+    if (current.isBackup) {
+        throw new ValidationError("The backup market sells at your product prices. Set pricing on your other markets.");
+    }
+    const next = {
+        priceMode: update.priceMode ?? current.priceMode,
+        fxRate: update.fxRate === undefined ? current.fxRate : update.fxRate?.trim() || null,
+        priceAdjustmentBps: update.priceAdjustmentBps ?? current.priceAdjustmentBps,
+        priceRoundingMinor: update.priceRoundingMinor === undefined ? current.priceRoundingMinor : update.priceRoundingMinor,
+        priceEndingMinor: update.priceEndingMinor === undefined ? current.priceEndingMinor : update.priceEndingMinor,
+    };
+    if (!isMarketPriceMode(next.priceMode)) throw new ValidationError("Choose fixed prices or prices converted at an exchange rate.");
+    // Every market sells in the shop currency until step 6: its rate is 1.
+    if (next.fxRate !== null && (!isFxRate(next.fxRate) || Number(next.fxRate) !== 1)) {
+        throw new ValidationError(`This market sells in ${current.currencyCode}, the shop currency, so its exchange rate is 1. Use the price adjustment to raise or lower its prices.`);
+    }
+    const issue = marketFxPolicyIssue({
+        rate: next.fxRate ?? "1",
+        adjustmentBps: next.priceAdjustmentBps,
+        roundingMinor: next.priceRoundingMinor,
+        endingMinor: next.priceEndingMinor,
+    }, current.priceIncrementMinor);
+    if (issue === "adjustment") {
+        throw new ValidationError(`A price adjustment is from ${MARKET_PRICE_ADJUSTMENT_MIN_BPS / 100}% to +${MARKET_PRICE_ADJUSTMENT_MAX_BPS / 100}%.`);
+    }
+    if (issue === "rounding") throw new ValidationError("Round prices to a step that is a whole number of price increments.");
+    if (issue === "ending") throw new ValidationError("A price ending needs a rounding step, and is above zero and below the step, in whole price increments.");
+    return Object.fromEntries(named.map((field) => [field, next[field]])) as MarketPricingUpdate;
 }
 
 export async function deleteMarket(db: Database, id: string, expectedRevision: number): Promise<void> {

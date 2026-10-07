@@ -9,7 +9,7 @@ import {
   type ProductListFilterState,
   type ProductListRangeBound,
 } from "./product-list-query";
-import { pagePath } from "@/lib/presence-url";
+import { currentPresence, pagePath } from "@/lib/presence-url";
 import { formatCount } from "@/lib/store-time-zone";
 
 function selectedValues(currentFilters: ProductListFilterState, key: string): string[] {
@@ -286,6 +286,9 @@ export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
     query.append(key === "q" ? "search" : key, value);
   }
   query.set("limit", "1");
+  // A presence page counts and prices in its market (MARKETS-DESIGN D5).
+  const presence = currentPresence();
+  if (presence) query.set("presence", presence);
   return query;
 }
 

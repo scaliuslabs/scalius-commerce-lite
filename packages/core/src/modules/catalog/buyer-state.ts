@@ -5,7 +5,7 @@
 // request. It is a projection: live cart and checkout validation stay
 // authoritative. Not exported from the domain entry.
 import { products, productBuyerState, productVariants } from "@scalius/database/schema";
-import { sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { type BuyerPricingMinor, resolvedBuyerDiscountSql } from "../products";
 
@@ -31,6 +31,15 @@ export function buyerStateCardSku() {
 }
 
 export type BuyerStateCardSku = ReturnType<typeof buyerStateCardSku>;
+
+/**
+ * The card SKU join: the state's `sku_id`, and only a SKU of the same
+ * product. A card never shows another product's SKU facts, which its
+ * `p:<product>` dependency would not cover.
+ */
+export function buyerStateCardSkuJoin(cardSku: BuyerStateCardSku): SQL {
+    return and(eq(cardSku.id, buyerState.skuId), eq(cardSku.productId, buyerState.productId))!;
+}
 
 /**
  * Card pricing columns (the `presentBuyerPricing` shape) from the stored

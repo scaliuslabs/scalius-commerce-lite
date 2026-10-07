@@ -68,6 +68,8 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   delivery_zone_regions: "0114_shipping_zones",
   tax_regions: "0116_tax_regions",
   places: "0118_places",
+  price_lists: "0120_price_lists",
+  price_list_prices: "0120_price_lists",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -91,6 +93,9 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_delivery_zone_locations_ins: "0118_places",
   cdep_delivery_zone_locations_del: "0118_places",
   cdep_delivery_zone_locations_upd: "0118_places",
+  // A market's pricing columns (0120) advance its `pl:` key.
+  cdep_markets_pricing: "0120_price_lists",
+  cdep_markets_pricing_old: "0120_price_lists",
 };
 
 /**

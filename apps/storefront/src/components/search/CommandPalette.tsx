@@ -16,7 +16,7 @@ import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { createApiUrl } from "@/lib/api/transport";
 import { normalizeSearchQuery } from "@/lib/search-query";
-import { pagePath } from "@/lib/presence-url";
+import { currentPresence, pagePath } from "@/lib/presence-url";
 
 interface SearchResultItem {
   id: string;
@@ -216,6 +216,9 @@ export default function CommandPalette() {
           searchCategories: "true",
           searchPages: "true",
         });
+        // A presence page's market prices the hits (MARKETS-DESIGN D5).
+        const presence = currentPresence();
+        if (presence) params.set("presence", presence);
 
         const res = await fetch(createApiUrl(`/search?${params}`), {
           signal: controller.signal,

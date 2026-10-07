@@ -7,11 +7,11 @@
 // because card prices round to it.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { createMarket, deleteMarket, getMarket, listMarkets, updateMarket } from "@scalius/core/modules/markets";
+import { createMarket, deleteMarket, getMarket, listMarkets, readStoreCurrency, updateMarket } from "@scalius/core/modules/markets";
 import { created, ok } from "../../../utils/api-response";
 import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
-import { createMarketSchema, marketRecordSchema, presentMarket, updateMarketSchema } from "../../../schemas/markets";
+import { createMarketSchema, marketPricingInput, marketRecordSchema, presentMarket, updateMarketSchema } from "../../../schemas/markets";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -80,7 +80,7 @@ app.openapi(createRoute({
   path: "/{id}",
   tags: [TAG],
   summary: "Edit a market under the revision the editor loaded",
-  description: "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it.",
+  description: "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it. Other markets may price by FX: product prices adjusted by a percentage, rounded up to a step and ending in an amount (MARKETS-DESIGN D5).",
   request: {
     params: marketParam,
     body: { required: true, content: { "application/json": { schema: updateMarketSchema } } },
@@ -91,7 +91,12 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   noStore(c);
-  const { market, priceIncrementChanged } = await updateMarket(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
+  const { priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding, ...body } = c.req.valid("json");
+  const db = c.get("db");
+  // Pricing amounts arrive in major units of the shop currency (every market sells it until step 6).
+  const currencyCode = priceRounding !== undefined || priceEnding !== undefined ? (await readStoreCurrency(db)).code : "BDT";
+  const pricing = marketPricingInput({ priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding }, currencyCode);
+  const { market, priceIncrementChanged } = await updateMarket(db, c.req.valid("param").id, { ...body, ...pricing });
   if (priceIncrementChanged) {
     // Card prices in the catalogue projections round to the increment.
     await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {

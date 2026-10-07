@@ -28,6 +28,16 @@ import {
 } from "@scalius/database/schema";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
+import {
+    isNeutralMarketPricing,
+    marketListPricesSql,
+    marketPriceContextOf,
+    parseMarketListPrices,
+    priceProductCards,
+    priceSkuRows,
+    type MarketPricing,
+} from "../price-lists";
+import { discountedPriceMinor } from "@scalius/shared/money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -391,11 +401,43 @@ async function readMediaPage(
     };
 }
 
+type PublicProductIdentity = NonNullable<Awaited<ReturnType<typeof readPublicProductIdentity>>>;
+
+/**
+ * The product's own price in the page's market: its card (the projection's
+ * rule over its buyer SKUs) as the catalogue's price fields. A neutral market
+ * and the root keep the stored row.
+ */
+async function identityInMarket(db: Database, identity: PublicProductIdentity, pricing: MarketPricing | null): Promise<PublicProductIdentity> {
+    const market = await marketPriceContextOf(pricing);
+    if (!market || isNeutralMarketPricing(market)) return identity;
+    const increment = storeCurrencyFromSql(identity.storeCurrencyCode, identity.storePriceIncrementMinor).priceIncrementMinor;
+    const effective = discountedPriceMinor(identity.priceMinor, identity.discountType, identity.discountBps, identity.discountAmountMinor, increment);
+    const [card] = await priceProductCards(db, market, [{
+        id: identity.id,
+        basePriceMinor: identity.priceMinor,
+        discountType: identity.discountType,
+        discountBps: identity.discountBps,
+        discountAmountMinor: identity.discountAmountMinor,
+        effectivePriceMinor: effective,
+        maxBuyerPriceMinor: effective,
+    }]);
+    return {
+        ...identity,
+        priceMinor: card!.basePriceMinor,
+        discountType: card!.discountType as typeof identity.discountType,
+        discountBps: Number(card!.discountBps ?? 0),
+        discountAmountMinor: Number(card!.discountAmountMinor ?? 0),
+    };
+}
+
 async function readSummary(
     db: Database,
-    identity: NonNullable<Awaited<ReturnType<typeof readPublicProductIdentity>>>,
+    storedIdentity: PublicProductIdentity,
     decimalPlaces: number,
+    pricing: MarketPricing | null,
 ) {
+    const identity = await identityInMarket(db, storedIdentity, pricing);
     const [counts, primaryProjectionRows, relatedRows] = await Promise.all([
         db.select({
             media: sql<number>`(SELECT count(*) FROM product_media WHERE product_id = ${identity.id})`,
@@ -458,6 +500,7 @@ export async function getStorefrontProductSection(
     slug: string,
     section: StorefrontProductSection,
     query: StorefrontProductSectionQuery,
+    pricing: MarketPricing | null = null,
 ) {
     const identity = await readPublicProductIdentity(db, slug);
     if (!identity) {
@@ -477,7 +520,7 @@ export async function getStorefrontProductSection(
     const decimalPlaces = storeDecimalPlacesFromCode(identity.storeCurrencyCode);
 
     if (section === "summary") {
-        return assertBoundedResult(await readSummary(db, identity, decimalPlaces));
+        return assertBoundedResult(await readSummary(db, identity, decimalPlaces, pricing));
     }
 
     if (section === "text") {
@@ -685,6 +728,8 @@ export async function getStorefrontProductSection(
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,
                 createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
+                // A presence's market list prices ride on the SKU rows (none at the root).
+                ...(pricing ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: pricing.presence }) } : {}),
             }).from(productVariants).where(and(
                 eq(productVariants.productId, identity.id),
                 isNull(productVariants.deletedAt),
@@ -695,14 +740,25 @@ export async function getStorefrontProductSection(
                 isNull(productVariants.deletedAt),
             )).get(),
         ]);
-        const [selectedOptionMap, mediaRows] = await Promise.all([
+        const [selectedOptionMap, mediaRows, market] = await Promise.all([
             loadVariantSelectedOptions(db, rows.map((row) => row.id)),
             selectCheckoutProductMediaProjectionRows(db, [identity.id], rows.map((row) => row.id)),
+            marketPriceContextOf(pricing),
         ]);
+        // The SKUs in the page's market (a neutral market keeps them as read).
+        const increment = storeCurrencyFromSql(identity.storeCurrencyCode, identity.storePriceIncrementMinor).priceIncrementMinor;
+        if (market?.listed) deps.marketProductPricing(market.marketId, [identity.id]);
+        const pricedRows = market && !isNeutralMarketPricing(market)
+            ? priceSkuRows(market, rows, (row) => {
+                const own = (row.discountType === "percentage" && row.discountBps > 0) || (row.discountType === "flat" && row.discountAmountMinor > 0);
+                const discount = own ? row : identity;
+                return discountedPriceMinor(row.priceMinor, discount.discountType, discount.discountBps, discount.discountAmountMinor, increment);
+            }, (row) => parseMarketListPrices((row as { listPrices?: string | null }).listPrices))
+            : rows;
         const mediaProjection = resolveProductMediaProjectionRows(
             mediaRows as unknown as ProductMediaProjectionRow[],
         ).get(identity.id) ?? [];
-        const items = rows.map((row) => {
+        const items = pricedRows.map((row) => {
             const price = presentCatalogPrice(row, decimalPlaces);
             const masked = maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
                 ...row,
@@ -740,6 +796,7 @@ export async function getStorefrontProductSection(
     const recommendations = await getStorefrontProductRecommendations(db, {
         productIds: [identity.id],
         limit: MAX_RECOMMENDATION_LIMIT,
+        pricing,
     });
     return assertBoundedResult({
         section: "related_products" as const,

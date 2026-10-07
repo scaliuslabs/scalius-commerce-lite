@@ -344,6 +344,17 @@ async function resolveContextCartIdentities(
   });
 }
 
+/** A value computed only when first awaited, and once. */
+function lazyValue<T>(compute: () => Promise<T>): PromiseLike<T> {
+  let pending: Promise<T> | null = null;
+  return {
+    then(onFulfilled, onRejected) {
+      pending ??= compute();
+      return pending.then(onFulfilled, onRejected);
+    },
+  };
+}
+
 async function liveContextCustomer(
   db: Database,
   row: ContextRow,
@@ -415,6 +426,11 @@ export async function submitAgentStorefrontCheckout(
       shippingMethodId: owned.shippingMethodId,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
+      // The order's market prices the lines (MARKETS-DESIGN D5): a cart with
+      // nothing physical is billed at the context's country; the signed-in
+      // buyer is read only when a segment price list applies.
+      billingCountryCode: owned.countryCode,
+      customerId: lazyValue(() => liveContextCustomer(db, owned).then((customer) => customer?.id ?? null)),
     }, options.credentialEncryptionKey, appPayments));
   if (!authority.cartValidation.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {

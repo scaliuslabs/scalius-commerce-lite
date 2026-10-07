@@ -20,6 +20,14 @@ import {
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import type { QuoteManualOrderInput } from "../validation";
+import {
+    checkoutListPricesSql,
+    marketPricingMatrixSql,
+    parseMarketListPrices,
+    resolveCheckoutPriceScope,
+    resolveCheckoutSkuPrice,
+    type CheckoutMarketSignals,
+} from "../../price-lists";
 import { ValidationError } from "@scalius/core/errors";
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import { addressRulesFor } from "@scalius/shared/address-metadata";
@@ -49,7 +57,7 @@ import type {
 } from "@scalius/shared/checkout-app-facts";
 import { manualOrderAppLines } from "./app-lines";
 
-type AdminOrderSkuItem = { productId: string; variantId: string | null };
+type AdminOrderSkuItem = { productId: string; variantId: string | null; quantity?: number };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
     inventoryTracked: boolean;
@@ -387,7 +395,6 @@ export async function prepareManualOrderQuote(
     const submittedLocationNames = submittedAddress
         ? await resolveActiveDeliveryLocationNames(db, submittedAddress)
         : null;
-    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items);
     const deliveryMethod = options.fixedDeliveryMethodKind === undefined
         ? await loadManualOrderDeliveryMethod(db, data.shippingMethodId)
         : null;
@@ -397,6 +404,14 @@ export async function prepareManualOrderQuote(
     const chosenKind: DeliveryMethodKind | null = options.fixedDeliveryMethodKind !== undefined
         ? options.fixedDeliveryMethodKind
         : deliveryMethod?.kind ?? "delivery";
+    // The order's market prices its lines (MARKETS-DESIGN D5), as the order
+    // records it: the shipping country when a physical line ships (a pickup
+    // ships nothing), else the billed country. Segment lists need the buyer,
+    // whom a staff quote does not know yet: left for later.
+    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items, {
+        shippingCountryCode: chosenKind === "pickup" ? null : submittedCountry,
+        billingCountryCode: data.billingCountryCode ?? null,
+    });
     const plan = resolveCheckoutFulfilment(resolvedItems.map((item) => ({
         fulfillmentKind: item.fulfillmentKind,
         isGiftCard: item.isGiftCard,
@@ -587,6 +602,8 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
 export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(
     db: Database,
     items: T[],
+    /** The order's market prices the lines (MARKETS-DESIGN D5); absent: base prices. */
+    market?: CheckoutMarketSignals,
 ): Promise<Array<AdminOrderItemWithInventory<T>>> {
     assertAdminOrderItemsUseSkus(items);
 
@@ -617,16 +634,32 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             fulfillmentKind: productVariants.fulfillmentKind,
             isGiftCard: products.isGiftCard,
             customizationSchema: products.customizationSchema,
+            // The markets' pricing and the SKU's list prices, in the read it already makes.
+            pricingMatrix: marketPricingMatrixSql(),
+            listPrices: checkoutListPricesSql(),
         })
         .from(productVariants)
         .innerJoin(products, eq(products.id, productVariants.productId))
         .where(inArray(productVariants.id, variantIds));
 
     const skuByVariantId = new Map(rows.map((row) => [row.id, row]));
-    const mediaByProduct = await loadProductMediaProjections(
-        db,
-        [...new Set(rows.map((row) => row.productId))],
-    );
+    const storeCurrency = storeCurrencyFromSql(rows[0]?.storeCurrencyCode, rows[0]?.storePriceIncrementMinor);
+    const [mediaByProduct, priceScope] = await Promise.all([
+        loadProductMediaProjections(db, [...new Set(rows.map((row) => row.productId))]),
+        market
+            ? resolveCheckoutPriceScope(db, {
+                items: items.flatMap((item) => item.variantId ? [{ productId: item.productId, variantId: item.variantId }] : []),
+                productRows: rows.map((row) => ({ id: row.productId, isGiftCard: row.isGiftCard === true, pricingMatrix: row.pricingMatrix })),
+                variantRows: rows.map((row) => ({ id: row.id, fulfillmentKind: row.fulfillmentKind, listPrices: row.listPrices })),
+                currency: { code: storeCurrency.code, incrementMinor: storeCurrency.priceIncrementMinor },
+                signals: { ...market, placing: true },
+            })
+            : Promise.resolve(null),
+    ]);
+    const quantityByVariant = new Map<string, number>();
+    for (const item of items) {
+        if (item.variantId) quantityByVariant.set(item.variantId, (quantityByVariant.get(item.variantId) ?? 0) + (item.quantity ?? 1));
+    }
     const issues: AdminOrderSkuIssue[] = [];
     const resolvedItems: Array<AdminOrderItemWithInventory<T>> = [];
 
@@ -678,7 +711,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             (sku.variantDiscountType === "percentage" && sku.variantDiscountBps > 0)
             || (sku.variantDiscountType === "flat" && sku.variantDiscountAmountMinor > 0);
         const { priceIncrementMinor } = storeCurrencyFromSql(sku.storeCurrencyCode, sku.storePriceIncrementMinor);
-        const catalogUnitPriceMinor = variantHasDiscount
+        const baseUnitPriceMinor = variantHasDiscount
             ? discountedPriceMinor(
                 sku.variantPriceMinor,
                 sku.variantDiscountType,
@@ -693,6 +726,15 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 sku.productDiscountAmountMinor,
                 priceIncrementMinor,
             );
+        // The order's market: its lists and FX (`resolvePrice`), else this base price.
+        const catalogUnitPriceMinor = priceScope?.market
+            ? resolveCheckoutSkuPrice(
+                priceScope,
+                { priceMinor: sku.variantPriceMinor, effectiveMinor: baseUnitPriceMinor },
+                parseMarketListPrices(sku.listPrices),
+                quantityByVariant.get(variantId) ?? 1,
+            ).amountMinor
+            : baseUnitPriceMinor;
 
         resolvedItems.push({
             ...item,

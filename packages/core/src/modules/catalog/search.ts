@@ -14,6 +14,14 @@ import { ftsMatch } from "../../search/fts5";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
+import {
+    marketListPricesSql,
+    marketPriceContextOf,
+    priceProductSkus,
+    type CatalogDiscountColumns,
+    type MarketPricing,
+} from "../price-lists";
 import { productImageMapFromMedia, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";
 import { declareProductCards, deps } from "./declare-deps";
 
@@ -54,6 +62,8 @@ async function readStorefrontSearchVariantMap(
     db: Database,
     productIds: string[],
     decimalPlaces: number,
+    market: { pricing: MarketPricing; products: ReadonlyMap<string, CatalogDiscountColumns>; incrementMinor: number } | null,
+    productPrices: Map<string, CatalogDiscountColumns>,
 ): Promise<Map<string, StorefrontSearchProductVariant[]>> {
     const variantMap = new Map<string, StorefrontSearchProductVariant[]>();
     for (
@@ -82,6 +92,8 @@ async function readStorefrontSearchVariantMap(
                 discountType: productVariants.discountType,
                 discountBps: productVariants.discountBps,
                 discountAmountMinor: productVariants.discountAmountMinor,
+                // A presence's market list prices ride on the SKU rows (none at the root).
+                ...(market ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: market.pricing.presence }) } : {}),
             })
             .from(productVariants)
             .where(and(
@@ -91,8 +103,13 @@ async function readStorefrontSearchVariantMap(
             .orderBy(productVariants.productId, productVariants.createdAt, productVariants.id)
             .all();
 
-        const selectedOptionMap = await loadVariantSelectedOptions(db, rows.map((row) => row.id));
-        for (const row of rows) {
+        const [selectedOptionMap, context] = await Promise.all([
+            loadVariantSelectedOptions(db, rows.map((row) => row.id)),
+            marketPriceContextOf(market?.pricing),
+        ]);
+        const priced = priceProductSkus(context, market?.products ?? new Map(), rows, market?.incrementMinor ?? 1);
+        for (const [productId, price] of priced.productPrices) productPrices.set(productId, price);
+        for (const row of priced.skus) {
             const variants = variantMap.get(row.productId) ?? [];
             variants.push(maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
                 ...presentCatalogPrice(row, decimalPlaces),
@@ -111,6 +128,7 @@ async function readStorefrontSearchVariantMap(
 export async function searchStorefrontProducts(
     db: Database,
     params: { search: string; page: number; limit: number },
+    pricing: MarketPricing | null = null,
 ) {
     const { search, page, limit } = params;
     const offset = (page - 1) * limit;
@@ -146,7 +164,7 @@ export async function searchStorefrontProducts(
             .offset(offset)
             .all(),
         db
-            .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
+            .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql(), storePriceIncrementMinor: storePriceIncrementSql() })
             .from(products)
             .where(and(...conditions)),
     ]);
@@ -156,16 +174,24 @@ export async function searchStorefrontProducts(
     const totalPages = Math.ceil(count / limit);
 
     const decimalPlaces = storeDecimalPlacesFromCode(countResults[0]?.storeCurrencyCode);
+    // In a priced market each product's own price is its card's (its SKUs carry their own).
+    const productPrices = new Map<string, CatalogDiscountColumns>();
     const [imageMap, variantMap] = await Promise.all([
         readPrimaryProductImageMap(db, productIds),
-        readStorefrontSearchVariantMap(db, productIds, decimalPlaces),
+        readStorefrontSearchVariantMap(db, productIds, decimalPlaces, pricing
+            ? {
+                pricing,
+                products: new Map(results.map((product) => [product.id, product])),
+                incrementMinor: storeCurrencyFromSql(countResults[0]?.storeCurrencyCode, countResults[0]?.storePriceIncrementMinor).priceIncrementMinor,
+            }
+            : null, productPrices),
     ]);
 
     return {
         data: results.map((product) => {
             const imgData = imageMap.get(product.id);
             return {
-                ...presentCatalogPrice(product, decimalPlaces),
+                ...presentCatalogPrice({ ...product, ...productPrices.get(product.id) }, decimalPlaces),
                 imageUrl: imgData?.url || null,
                 imageMediaId: imgData?.mediaId ?? null,
                 imageAlt: imgData?.alt || null,

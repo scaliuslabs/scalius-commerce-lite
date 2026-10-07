@@ -841,6 +841,13 @@
       "when": 1791350000000,
       "tag": "0119_billing_addresses",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "6",
+      "when": 1791360000000,
+      "tag": "0120_price_lists",
+      "breakpoints": true
     }
   ]
 }

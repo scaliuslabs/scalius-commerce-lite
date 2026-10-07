@@ -27,6 +27,7 @@ import {
   type StorefrontProductFilterInput,
 } from "../products";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories";
 import {
   presentStorefrontCustomFields,
@@ -271,6 +272,7 @@ export async function getPublicCollectionCatalog(
     db: Database,
     id: string,
     params: StorefrontProductFilterInput,
+    pricing: MarketPricing | null = null,
 ) {
     // The row (found or not: a collection can be activated or restored).
     if (/^[\x21-\x7e]{1,200}$/.test(id)) deps.collection(id);
@@ -313,7 +315,7 @@ export async function getPublicCollectionCatalog(
     const catalogPromise = getStorefrontCollectionProducts(db, {
         productIds: membership.productIds,
         categoryIds: membership.categoryIds,
-    }, params);
+    }, params, pricing);
     const featuredPromise: Promise<RawProduct[]> = config.featuredProductId
             ? db
                 .select(buildCollectionProductSelect(buyerPricing))
@@ -333,7 +335,10 @@ export async function getPublicCollectionCatalog(
         catalogPromise,
     ]);
     const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
-    const featuredProducts = await enrichProductsWithMedia(db, featuredRows);
+    const featuredProducts = await enrichProductsWithMedia(
+        db,
+        await priceProductCards(db, await marketPriceContextOf(pricing), featuredRows),
+    );
 
     return {
         collection: { ...collection, config, customFields: presentStorefrontCustomFields(customFieldRows) },
@@ -388,6 +393,8 @@ export function planCollectionProducts(
     requests: readonly CollectionProductsRequest[],
 ): {
     statements: BatchStatement[];
+    /** The statements whose rows are cards (`priceCardRowsInResults`). */
+    productRowSlots: number[];
     resolve(results: readonly unknown[]): Map<string, CollectionProductResult>;
 } {
     const allProductIds = new Set<string>();
@@ -474,6 +481,7 @@ export function planCollectionProducts(
 
     return {
         statements,
+        productRowSlots: productSlots,
         resolve(results) {
             const rowsOf = (list: number | null) =>
                 list === null ? [] : results[productSlots[list]!] as RawProduct[];

@@ -33,6 +33,15 @@ import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import {
+    checkoutListPricesSql,
+    marketPricingMatrixSql,
+    parseMarketListPrices,
+    resolveCheckoutPriceScope,
+    resolveCheckoutSkuPrice,
+    type CheckoutMarketSignals,
+    type CheckoutPriceScope,
+} from "../price-lists";
+import {
     GIFT_CARD_MAX_QUANTITY_PER_LINE,
     GIFT_CARD_MAX_UNITS_PER_ORDER,
     isGiftCardLineQuantityAllowed,
@@ -172,6 +181,8 @@ type InventoryPool = "regular" | "preorder" | "backorder";
 export interface StorefrontCartProductRow {
     id: string;
     name: string;
+    /** Every active market's pricing (`marketPricingMatrixSql`), the same on every row. */
+    pricingMatrix?: string | null;
     isActive: boolean;
     priceMinor: number;
     discountBps: number;
@@ -206,6 +217,8 @@ export interface StorefrontCartVariantRow {
     fulfillmentKind: string;
     /** A digital SKU has something to deliver (a ready file or available keys); false for other kinds. */
     digitalDeliverable: boolean;
+    /** Its active list prices in every market (`checkoutListPricesSql`); null without any. */
+    listPrices?: string | null;
 }
 
 function variantLabel(variant: Pick<StorefrontCartVariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
@@ -234,23 +247,37 @@ function displayVariantLabel(item: StorefrontCartValidationItem, variant?: Store
     return variantLabel(variant) ?? item.variantLabel ?? null;
 }
 
-/** A SKU's own discount wins; otherwise the product discount applies to the SKU price. */
+/**
+ * A unit's catalogue price: the SKU's own discount wins, otherwise the
+ * product discount applies to the SKU price; then, in a market that prices
+ * its own way, `resolvePrice()` (MARKETS-DESIGN D5: sale, segment and market
+ * lists, then FX) at the quantity of this SKU in the cart (quantity breaks).
+ */
 function calculateUnitPriceMinor(
     product: StorefrontCartProductRow,
     variant: StorefrontCartVariantRow,
     priceIncrementMinor: number,
+    priceScope: CheckoutPriceScope | null,
+    quantity: number,
 ): number {
     const variantHasDiscount =
         (variant.discountType === "percentage" && variant.discountBps > 0) ||
         (variant.discountType === "flat" && variant.discountAmountMinor > 0);
     const discount = variantHasDiscount ? variant : product;
-    return discountedPriceMinor(
+    const effectiveMinor = discountedPriceMinor(
         variant.priceMinor,
         discount.discountType,
         discount.discountBps,
         discount.discountAmountMinor,
         priceIncrementMinor,
     );
+    if (!priceScope?.market) return effectiveMinor;
+    return resolveCheckoutSkuPrice(
+        priceScope,
+        { priceMinor: variant.priceMinor, effectiveMinor },
+        parseMarketListPrices(variant.listPrices),
+        quantity,
+    ).amountMinor;
 }
 
 function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryPool): number {
@@ -306,6 +333,8 @@ export function selectStorefrontCartProductRows(
             taxClassId: products.taxClassId,
             isGiftCard: products.isGiftCard,
             customizationSchema: products.customizationSchema,
+            // Every active market's pricing, in a statement checkout already runs.
+            pricingMatrix: marketPricingMatrixSql(),
         })
         .from(products)
         .where(
@@ -350,6 +379,8 @@ export function selectStorefrontCartVariantRows(
             // Digital readiness in the same read (no round trip); only digital SKUs pay for the check.
             digitalDeliverable: sql<boolean>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalDeliverableSql(productVariants.id)} ELSE 0 END`
                 .mapWith((value) => Number(value) === 1),
+            // Its list prices in every market (null without any): no extra statement.
+            listPrices: checkoutListPricesSql(),
         })
         .from(productVariants)
         .where(and(
@@ -372,6 +403,8 @@ export function resolveStorefrontCartValidationFromRows(
         currencyCode?: string | null;
         /** The store's price increment (`PricingCurrency`); absent, the currency's default. */
         priceIncrementMinor?: number | null;
+        /** The market that prices the cart (`resolveCheckoutPriceScope`); absent: base prices. */
+        priceScope?: CheckoutPriceScope | null;
     },
     productRows: readonly StorefrontCartProductRow[],
     variantRows: readonly StorefrontCartVariantRow[],
@@ -625,7 +658,13 @@ export function resolveStorefrontCartValidationFromRows(
             }
         }
 
-        const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, priceIncrementMinor);
+        const baseUnitPriceMinor = calculateUnitPriceMinor(
+            product,
+            variant,
+            priceIncrementMinor,
+            options.priceScope ?? null,
+            requestedForVariant,
+        );
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor;
         const submittedPriceMinor = typeof item.price === "number"
@@ -775,7 +814,13 @@ export async function previewStorefrontBundleSavings<TLine extends BundlePricedL
 export async function validateStorefrontCartItems(
     db: Database,
     items: StorefrontCartValidationItem[],
-    options: { inventoryPool?: string | null; currencyCode?: string | null; priceIncrementMinor?: number | null } = {},
+    options: {
+        inventoryPool?: string | null;
+        currencyCode?: string | null;
+        priceIncrementMinor?: number | null;
+        /** Which market prices the cart (MARKETS-DESIGN D5); absent: the backup market's prices. */
+        market?: CheckoutMarketSignals;
+    } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
         return resolveStorefrontCartValidationFromRows(items, options, [], [], new Map());
@@ -790,11 +835,22 @@ export async function validateStorefrontCartItems(
     ]);
     // Media is presentation snapshot data, so keep it outside catalog authority
     // checks while still persisting the exact image asset chosen at checkout.
-    const mediaByProduct = await loadProductMediaProjections(db, productIds);
+    // The market's prices (segment membership only when a segment list applies) ride beside it.
+    const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
+    const [mediaByProduct, priceScope] = await Promise.all([
+        loadProductMediaProjections(db, productIds),
+        resolveCheckoutPriceScope(db, {
+            items,
+            productRows: productRows as StorefrontCartProductRow[],
+            variantRows: variantRows as StorefrontCartVariantRow[],
+            currency: { code: currencyCode, incrementMinor: resolvePriceIncrementMinor(currencyCode, options.priceIncrementMinor) },
+            signals: options.market ?? {},
+        }),
+    ]);
 
     return resolveStorefrontCartValidationFromRows(
         items,
-        options,
+        { ...options, priceScope },
         productRows as StorefrontCartProductRow[],
         variantRows as StorefrontCartVariantRow[],
         mediaByProduct,

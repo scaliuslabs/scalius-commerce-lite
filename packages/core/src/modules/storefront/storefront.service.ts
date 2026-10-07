@@ -30,8 +30,10 @@ import {
   planCollectionProducts,
   planHomeBrands,
   planHomeProductLists,
+  priceCardRowsInResults,
 } from "../catalog";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";
+import { marketPriceContextOf, type MarketPricing } from "../price-lists";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections";
 import {
   businessDocument,
@@ -199,6 +201,8 @@ export async function getHomepageData(
      * apps' own reads. Without it, app sections draw nothing.
      */
     renderApps?: (requests: HomeAppSectionRequest[]) => Promise<HomepageAppSection[]>;
+    /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
+    pricing?: MarketPricing | null;
   } = {},
 ) {
   // === BATCH 1: Independent top-level queries ===
@@ -299,8 +303,13 @@ export async function getHomepageData(
     ...categoryPlan.statements,
     ...productPlan.statements,
   ];
-  const results = statements.length > 0 ? await safeBatch(db, statements) : [];
+  const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements)] : [];
   const listOffset = collectionPlan.statements.length;
+  // Every card in the page's market (nothing at the root or in a neutral market).
+  await priceCardRowsInResults(db, await marketPriceContextOf(options.pricing), results, [
+    ...collectionPlan.productRowSlots,
+    ...listPlan.productRowSlots.map((slot) => listOffset + slot),
+  ]);
   const mediaOffset = listOffset + listPlan.statements.length;
   const brandOffset = mediaOffset + mediaPlan.statements.length;
   const promotionOffset = brandOffset + brandPlan.statements.length;
@@ -369,7 +378,7 @@ export async function getHomepageData(
 export async function getLandingPageData(
   db: Database,
   slug: string,
-  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps"> = {},
+  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps" | "pricing"> = {},
 ) {
   const data = await getHomepageData(db, { ...options, pageSlug: slug });
   return data.landing ? { landing: data.landing, sections: data.sections } : null;
