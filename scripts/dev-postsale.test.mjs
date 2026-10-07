@@ -9,6 +9,7 @@ import {
   buildFixtureSql,
   buildOtpFixtureSql,
   buildPaymentReadinessFixtureSql,
+  paymentReadinessGateways,
   buildReceiptLookupRequest,
   buildTaxQuotePayload,
   getPostsaleConfig,
@@ -190,10 +191,22 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'BDT', 120000, 8000, 128000, 'incomplete'");
     expect(sql).toContain("'ops006_order_stripe'");
     expect(sql).toContain("'ops006_order_sslcommerz'");
+    // The Bangladesh pack's provider: orders, checkout attempts and the enabled
+    // methods carry the qualified id; the retired id stays for older orders.
+    expect(sql).toContain("'ops006_order_bd_sslcommerz'");
+    expect(sql).toContain("'scalius.bangladesh:sslcommerz'");
+    expect(sql).toContain("ops006-bd_sslcommerz@example.com");
     expect(sql).toContain("'chk_ops006_stripe'");
     expect(sql).toContain("'committed'");
     expect(sql).toContain("'payment_methods'");
     expect(sql).toContain("stripe");
     expect(sql).toContain("sslcommerz");
+  });
+
+  it("calls the Bangladesh pack's SSLCommerz session route by its qualified id", () => {
+    const pack = paymentReadinessGateways.find((item) => item.gateway === "scalius.bangladesh:sslcommerz");
+
+    expect(pack?.path).toBe("/api/v1/payment/scalius.bangladesh%3Asslcommerz/session");
+    expect(decodeURIComponent(pack?.path.split("/")[4] ?? "")).toBe("scalius.bangladesh:sslcommerz");
   });
 });
