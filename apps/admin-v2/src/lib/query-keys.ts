@@ -29,6 +29,7 @@ export const queryKeys = {
     all: ["dashboard"] as const,
     summary: () => ["dashboard", "summary"] as const,
     activity: () => ["dashboard", "activity"] as const,
+    setupGuide: () => ["dashboard", "setup-guide"] as const,
   },
 
   // ── Analytics overview and reports (sales numbers) ───────────────

@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, Globe, ImageOff, Inbox, Menu, Package, Palette, Receipt, Store, TriangleAlert, Truck } from "lucide-react";
+import { ChevronRight, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -25,9 +25,9 @@ import {
   dashboardSummaryQueryOptions,
   homeLowStockQueryOptions,
   homeOpenOrdersQueryOptions,
+  setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
-import { storeSetupQueryOptions } from "~/lib/api-query-options/store-defaults";
 import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
@@ -41,6 +41,7 @@ export const Route = createFileRoute("/admin/")({
     void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
     void queryClient.prefetchQuery(dashboardActivityQueryOptions());
     void queryClient.prefetchQuery(currencySettingsQueryOptions());
+    void queryClient.prefetchQuery(setupGuideQueryOptions());
     // The sales strip's code downloads with the navigation, then starts its
     // read (a failed download shows in the strip itself).
     if (canOpen("/admin/analytics")) {
@@ -58,11 +59,13 @@ export const Route = createFileRoute("/admin/")({
   component: HomePage,
 });
 
-type HomeKey = keyof (typeof homeMessages)["en"];
-
 // The sales strip (its chart, tiles and copy) loads just after Home's own code;
 // its read already started in the loader.
 const HomeAnalytics = lazy(() => import("~/components/admin/analytics/HomeAnalytics").then((module) => ({ default: module.HomeAnalytics })));
+
+// The setup guide's code loads after Home's first render; its read starts in
+// the loader, and Home mounts it only while this staff member keeps it.
+const SetupGuide = lazy(() => import("~/components/admin/onboarding/SetupGuide"));
 
 /** The strip's own loading shape: the range buttons, then four tiles. */
 function HomeAnalyticsSkeleton() {
@@ -99,6 +102,7 @@ function HomePage() {
   // A chosen SMS gateway that cannot send (its app is not active, as after the
   // Bangladesh gateways moved into the Bangladesh pack): order texts and sign-in codes stop.
   const sms = useQuery({ ...homeSmsQueryOptions(), enabled: isSuperAdmin || permissions.has(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW) });
+  const setupGuide = useQuery(setupGuideQueryOptions());
 
   if (summary.isError) {
     return (
@@ -117,7 +121,6 @@ function HomePage() {
 
   const { stats, recentOrders } = summary.data;
   const month = stats.currentMonth;
-  if (stats.totalProducts === 0 && month.orders === 0 && recentOrders.length === 0) return <SetupCards canOpen={canOpen} />;
 
   // Sales numbers come from Analytics (the same definitions); a role without
   // "View analytics" sees order counts only, and the API sends it no money.
@@ -135,6 +138,11 @@ function HomePage() {
   return (
     <div className="space-y-4 pb-8">
       <PageHeader title={t("home")} />
+      {setupGuide.data && !setupGuide.data.dismissed ? (
+        <Suspense fallback={null}>
+          <SetupGuide guide={setupGuide.data} canOpen={canOpen} />
+        </Suspense>
+      ) : null}
       {sales ? (
         <Suspense fallback={<HomeAnalyticsSkeleton />}>
           <HomeAnalytics />
@@ -263,51 +271,5 @@ function TodoLink({ to, search, icon, children }: { to: string; search?: Record<
       <span className="flex-1">{children}</span>
       <ChevronRight className="h-4 w-4 text-muted-foreground" />
     </Link>
-  );
-}
-
-type SetupStep = { to: string; icon: typeof Package; title: HomeKey; body: HomeKey; action: HomeKey };
-
-/** "Tell us about your store": first, while the store is new (no order, markets untouched). */
-const ABOUT_STEP: SetupStep = { to: "/admin/welcome", icon: Globe, title: "setupAbout", body: "setupAboutBody", action: "setupAboutAction" };
-
-const SETUP: ReadonlyArray<SetupStep> = [
-  { to: "/admin/products/new", icon: Package, title: "setupProduct", body: "setupProductBody", action: "setupProductAction" },
-  { to: "/admin/online-store/theme", icon: Palette, title: "setupTheme", body: "setupThemeBody", action: "setupThemeAction" },
-  { to: "/admin/settings/payments", icon: CreditCard, title: "setupPayments", body: "setupPaymentsBody", action: "setupPaymentsAction" },
-  { to: "/admin/settings/store", icon: Store, title: "setupStore", body: "setupStoreBody", action: "setupStoreAction" },
-  // Setup creates no shipping zone and no tax region: these two say what is next.
-  { to: "/admin/settings/shipping", icon: Truck, title: "setupShipping", body: "setupShippingBody", action: "setupShippingAction" },
-  { to: "/admin/settings/taxes", icon: Receipt, title: "setupTaxes", body: "setupTaxesBody", action: "setupTaxesAction" },
-];
-
-/** A store with no products and no orders yet: Shopify's setup cards. */
-function SetupCards({ canOpen }: { canOpen: (to: string) => boolean }) {
-  const t = useMessages(homeMessages);
-  const setup = useQuery({ ...storeSetupQueryOptions(), enabled: canOpen(ABOUT_STEP.to) });
-  const steps = setup.data?.needed ? [ABOUT_STEP, ...SETUP] : SETUP;
-  return (
-    <div className="mx-auto max-w-3xl space-y-4 pb-8">
-      <div>
-        <h1 className="text-heading-lg font-semibold">{t("welcome")}</h1>
-        <p className="text-body text-muted-foreground">{t("welcomeBody")}</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {steps.filter((step) => canOpen(step.to)).map((step) => (
-          <Card key={step.to}>
-            <CardHeader className="space-y-3">
-              <step.icon className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <h2 className="font-semibold">{t(step.title)}</h2>
-                <p className="text-body text-muted-foreground">{t(step.body)}</p>
-              </div>
-              <Button variant="outline" size="sm" asChild>
-                <Link to={step.to}>{t(step.action)}</Link>
-              </Button>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
-    </div>
   );
 }
