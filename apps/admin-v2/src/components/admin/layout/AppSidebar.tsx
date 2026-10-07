@@ -12,7 +12,7 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 import { SETTINGS_ITEM, activeNavChild, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
-import { NAV_ICON_BUTTON, NAV_ROW } from "./nav-button";
+import { NAV_ICON_BUTTON, NAV_ROW, NAV_PANEL_QUERY } from "./nav-button";
 import { ariaKeys, comboCaps, SHORTCUTS } from "./shortcuts";
 import { ShellLink } from "./ShellLink";
 import { useShell } from "./shell";
@@ -86,10 +86,10 @@ function useNavTooltip() {
 }
 
 /**
- * Shopify's navigation on the near-black frame. From md: a 240px panel (logo
+ * Shopify's navigation on the near-black frame. From 1100px: a 240px panel (logo
  * and collapse button, the sections, Settings) or, collapsed with ⌘B, a 56px
  * icon rail with tooltips; Settings swaps the panel for the settings list
- * beside the rail. On phones the same panel is a drawer that lists every
+ * beside the rail. Narrower (phones, tablets, a 1024px laptop) the same panel is a drawer that lists every
  * section with its sub-pages open (no accordions). The width eases
  * between states and a new panel slides in; neither moves on first paint.
  * Search, notifications and the store menu live in the canvas' top bar.
@@ -99,7 +99,7 @@ export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
   const router = useRouter();
   const path = useLocation({ select: (location) => location.pathname });
   const { collapsed, drawerOpen, setDrawerOpen } = useShell();
-  const desktop = useMediaQuery("(min-width: 768px)");
+  const desktop = useMediaQuery(NAV_PANEL_QUERY);
   const inSettings = matchesPath(path, SETTINGS_ITEM.to);
   const panelKey = inSettings ? "settings" : collapsed ? null : "main";
 
@@ -235,7 +235,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
             rel="noopener noreferrer"
             aria-label={t("viewStore")}
             onClick={onClose}
-            className={cn(NAV_ICON_BUTTON, "absolute right-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100")}
+            className={cn(NAV_ICON_BUTTON, "absolute inset-e-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100")}
           >
             <Eye aria-hidden />
           </a>
@@ -249,7 +249,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
                   preload="intent"
                   current={child === activeChild}
                   onClick={onClose}
-                  className={cn(NAV_ROW, "pl-8 text-sidebar-muted-foreground")}
+                  className={cn(NAV_ROW, "ps-8 text-sidebar-muted-foreground")}
                 >
                   {/* An app page's title is the app's own text (plain, never translated). */}
                   <span className="truncate">{child.label ?? t(child.key)}</span>

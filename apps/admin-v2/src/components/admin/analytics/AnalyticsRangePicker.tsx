@@ -143,7 +143,7 @@ export function AnalyticsRangePicker({
         className="flex max-h-(--radix-popover-content-available-height) w-auto flex-col overflow-hidden p-0"
       >
         <div className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="w-44 shrink-0 border-r p-2">{presets}</div>
+          <div className="w-44 shrink-0 border-e p-2">{presets}</div>
           {calendar}
         </div>
         <div data-slot="analytics-range-footer" className="flex shrink-0 items-center justify-between gap-3 border-t p-2">

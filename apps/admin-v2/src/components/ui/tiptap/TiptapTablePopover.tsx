@@ -164,7 +164,7 @@ export function TiptapTablePopover({
                 type="button"
                 onClick={() => editor.chain().focus()[command]().run()}
                 disabled={!tableState.can[command]}
-                className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
+                className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-start text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
               >
                 <Icon className="size-4 shrink-0 text-muted-foreground" />
                 {t(command)}

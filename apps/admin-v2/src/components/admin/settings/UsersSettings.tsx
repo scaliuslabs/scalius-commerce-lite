@@ -127,7 +127,7 @@ export function PermissionChecklist({
               onCheckedChange={(value) => onChange(togglePermissions(checked, changeable, value === true))}
             />
             <CollapsibleTrigger asChild>
-              <button type="button" className="group flex min-h-12 flex-1 items-center gap-2 text-left text-body">
+              <button type="button" className="group flex min-h-12 flex-1 items-center gap-2 text-start text-body">
                 <span id={`${id}-${key}`} className="flex-1 font-medium">{group(key)}</span>
                 <span className="text-muted-foreground tabular-nums">
                   {t("selectedCount", { count: on, total: permissions.length })}
@@ -137,11 +137,11 @@ export function PermissionChecklist({
             </CollapsibleTrigger>
           </div>
           <CollapsibleContent>
-            <div role="group" aria-labelledby={`${id}-${key}`} className="pb-2 pl-11 pr-4">
+            <div role="group" aria-labelledby={`${id}-${key}`} className="pb-2 ps-11 pe-4">
               {permissions.map((permission) => (
                 <label
                   key={permission}
-                  className={cn("flex min-h-11 items-start gap-3 py-2.5 text-body", isDependentPermission(permission) && "pl-7")}
+                  className={cn("flex min-h-11 items-start gap-3 py-2.5 text-body", isDependentPermission(permission) && "ps-7")}
                 >
                   <span className="flex h-lh items-center">
                     <Checkbox
@@ -176,7 +176,7 @@ function ListRow({ to, params, label, value, note }: {
       {note ? <span className="block text-body text-muted-foreground">{note}</span> : null}
     </span>
   );
-  const row = "flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left first:border-t-0";
+  const row = "flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-start first:border-t-0";
   if (!to) return <div className={row}>{body}</div>;
   return (
     <Link to={to} params={params as never} className={cn(row, "hover:bg-muted")}>

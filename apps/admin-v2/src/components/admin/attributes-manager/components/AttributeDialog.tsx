@@ -299,7 +299,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                         type="button"
                         onClick={() => setOptions(options.filter((item) => item !== option))}
                         aria-label={t("removeValue", { value: option })}
-                        className="ml-1 rounded-full"
+                        className="ms-1 rounded-full"
                       >
                         <X className="size-3" />
                       </button>

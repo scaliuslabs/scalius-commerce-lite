@@ -109,7 +109,7 @@ export function WebhookTopicPicker({
               <span id={`${groupId}-${group.filter}`}>{label(group.filter)}</span>
             </Choice>
             {group.topics.length > 0 ? (
-              <div className="grid gap-x-4 pb-2 pl-10 pr-3 sm:grid-cols-2">
+              <div className="grid gap-x-4 pb-2 ps-10 pe-3 sm:grid-cols-2">
                 {group.topics.map((topic) => (
                   <Choice
                     key={topic}

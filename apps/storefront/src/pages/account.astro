@@ -112,7 +112,7 @@ const cards = orders.map((order) => {
                   <span class:list={["relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted sm:h-14 sm:w-14", index > 0 && "hidden sm:block"]}>
                     <img src={thumb.src} alt="" width="64" height="64" loading="lazy" decoding="async" class="h-full w-full object-contain" />
                     {index === 0 && card.thumbs.length + card.more > 1 && (
-                      <span class="absolute bottom-0.5 right-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{card.thumbs.length + card.more - 1}</span>
+                      <span class="absolute bottom-0.5 inset-e-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{card.thumbs.length + card.more - 1}</span>
                     )}
                   </span>
                 ))}

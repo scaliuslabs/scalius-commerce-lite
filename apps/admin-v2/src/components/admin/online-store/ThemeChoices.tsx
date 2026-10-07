@@ -53,7 +53,7 @@ export function VisualChoice<Value extends string>({
           <RadioGroupPrimitive.Item
             key={option.value}
             value={option.value}
-            className="group flex flex-col rounded-xl border bg-card p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
+            className="group flex flex-col rounded-xl border bg-card p-1.5 text-start hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
           >
             {option.sketch}
             <span className="flex items-start justify-between gap-1 px-1 pt-1.5 text-body font-medium">
@@ -209,7 +209,7 @@ export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer
         <span className="flex items-center gap-1.5 py-1">
           <Logo className="h-3 w-6" />
           <span className="flex h-2.5 flex-1 items-center rounded-full border border-(--sk-ink) px-1">
-            <span className="ml-auto h-1 w-5 border-l border-(--sk-line)" />
+            <span className="ms-auto h-1 w-5 border-s border-(--sk-line)" />
           </span>
           <span className="h-2.5 w-4 rounded-full bg-(--sk-accent)" />
         </span>
@@ -224,8 +224,8 @@ export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer
         <span className="flex items-center gap-1 py-1">
           <Logo className="h-3 w-6" />
           <span className="flex h-2.5 flex-1 rounded-xs border border-(--sk-accent)">
-            <span className="w-5 border-r border-(--sk-line) bg-(--sk-soft)" />
-            <span className="ml-auto w-3 bg-(--sk-accent)" />
+            <span className="w-5 border-e border-(--sk-line) bg-(--sk-soft)" />
+            <span className="ms-auto w-3 bg-(--sk-accent)" />
           </span>
           <Dot /><Dot />
         </span>
@@ -269,7 +269,7 @@ export function NavigationSketch({ kind }: { kind: StorefrontNavigationRenderer 
         <Line />
         <Line />
       </span>
-      <span className="ml-auto flex gap-1">
+      <span className="ms-auto flex gap-1">
         <Dot />
         <Dot />
       </span>
@@ -293,7 +293,7 @@ export function NavigationSketch({ kind }: { kind: StorefrontNavigationRenderer 
       <Sketch>
         {header}
         <span className="flex flex-1 gap-1.5">
-          <span className="flex w-1/4 shrink-0 flex-col gap-1 border-r border-(--sk-edge) pt-0.5 pr-1">
+          <span className="flex w-1/4 shrink-0 flex-col gap-1 border-e border-(--sk-edge) pt-0.5 pe-1">
             <Line className="w-full bg-(--sk-accent)" />
             <Line className="w-full" />
             <Line className="w-2/3" />
@@ -321,7 +321,7 @@ export function NavigationSketch({ kind }: { kind: StorefrontNavigationRenderer 
         </span>
       ) : (
         // A short list under the open item.
-        <span className="absolute top-4 left-7 flex w-8 flex-col gap-1 rounded-xs border border-(--sk-edge) bg-(--sk-paper) p-1">
+        <span className="absolute top-4 inset-s-7 flex w-8 flex-col gap-1 rounded-xs border border-(--sk-edge) bg-(--sk-paper) p-1">
           <Line className="w-full" />
           <Line className="w-2/3" />
           <Line className="w-full" />
@@ -358,7 +358,7 @@ export function MobileNavigationSketch({ kind }: { kind: StorefrontMobileNavigat
             <Dot />
           </span>
         ) : (
-          <span className="absolute inset-y-0 left-0 flex w-2/3 flex-col gap-1 border-r border-(--sk-edge) bg-(--sk-paper) p-1">
+          <span className="absolute inset-y-0 inset-s-0 flex w-2/3 flex-col gap-1 border-e border-(--sk-edge) bg-(--sk-paper) p-1">
             <Line className="w-full bg-(--sk-accent)" />
             <Line className="w-full" />
             <Line className="w-2/3" />
@@ -398,7 +398,7 @@ export function FooterSketch({ kind }: { kind: StorefrontFooterRenderer }) {
           <span className="flex gap-2">
             <LineStack />
             <LineStack />
-            <span className="ml-auto flex flex-col gap-1">
+            <span className="ms-auto flex flex-col gap-1">
               <span className="h-1.5 w-5 rounded-full bg-(--sk-accent)" />
               <span className="h-1.5 w-5 rounded-full border border-(--sk-accent)" />
             </span>
@@ -463,9 +463,9 @@ export function ProductTile({
         )}
       >
         {/* The second photo that shows on hover. */}
-        {spec.hoverImage ? <span className="ml-auto w-1/3 bg-(--sk-edge)" /> : null}
-        {badge && spec.badge !== "price" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
-        {spec.quickBuy && spec.action === "round" ? <span data-card-sketch-round-action className="absolute right-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
+        {spec.hoverImage ? <span className="ms-auto w-1/3 bg-(--sk-edge)" /> : null}
+        {badge && spec.badge !== "price" ? <span className="absolute top-0.5 inset-s-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {spec.quickBuy && spec.action === "round" ? <span data-card-sketch-round-action className="absolute inset-e-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
       </span>
       {showcase ? <span data-card-sketch-showcase-title className="flex flex-col items-center gap-0.5"><Line className="w-4/5" /><Line className="w-2/3" /></span> : <Line className="w-full" />}
       <span className="flex items-center gap-0.5">

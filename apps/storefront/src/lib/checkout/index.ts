@@ -452,7 +452,7 @@ function appendSummaryRow(
   const valueElement = appendTextElement(row, "span", "", value);
   if (struck) {
     const original = document.createElement("s");
-    original.className = "mr-1.5 text-muted-foreground";
+    original.className = "me-1.5 text-muted-foreground";
     original.textContent = struck;
     valueElement.prepend(original);
   }
@@ -1005,8 +1005,8 @@ async function renderGateways(): Promise<void> {
       ? document.createElement("div")
       : document.createElement("button");
     control.className = singleMethod
-      ? "flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left"
-      : "payment-method-control flex min-h-16 w-full appearance-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-wait";
+      ? "flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+      : "payment-method-control flex min-h-16 w-full appearance-none items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-wait";
     if (control instanceof HTMLButtonElement) {
       control.type = "button";
       control.id = `payment-method-${gw.id}`;
@@ -1400,7 +1400,7 @@ function renderGiftCardChips(): void {
   for (const card of appliedGiftCards) {
     const chip = document.createElement("li");
     chip.className =
-      "inline-flex min-h-9 items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-3 pr-0.5 text-sm";
+      "inline-flex min-h-9 items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 ps-3 pe-0.5 text-sm";
     const label = giftCardChipLabel(card.last4);
     const tender = tenders.get(card.handle);
     appendTextElement(

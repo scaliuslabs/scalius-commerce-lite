@@ -1,10 +1,11 @@
-# Store setup, time zone and units
+# Store setup, time zone, units and formatting
 
-This document describes three store-wide facts and the step that sets them on a new store:
+This document describes the store-wide facts and the step that sets them on a new store:
 
 - the **store setup** step after the first admin;
 - the **store time zone** (the merchant calendar);
-- the **unit system** and the default weight unit.
+- the **unit system** and the default weight unit;
+- the **store country**, which numbers, dates and the first day of the week follow.
 
 They copy Shopify: "Tell us about your store" during sign-up, and the Store defaults card in Settings → Store details.
 
@@ -69,11 +70,25 @@ The store time zone is an IANA name, such as `America/New_York`. It is the merch
 
 Weights are stored in grams (`product_variants.weight`). The unit system and the default weight unit change only how the dashboard shows and accepts them: the product form's weight field converts at the field (`WeightInput`). The metric system offers kg and g; the imperial system offers lb and oz. A new system without a unit takes the system's default unit. Courier settings keep the courier's own unit (kg), because the courier's API defines it. Rates by weight are a later item.
 
+## Formatting and the week
+
+`@scalius/shared/locale-format` is the one formatting layer: numbers, money amounts, dates, relative times, lists, plurals and units go through `Intl` for a locale built from the reader's language and the store's country (CLDR). `scripts/check-source-policies.mjs` rejects an `Intl` formatter or `toLocaleString` anywhere else.
+
+**Store country.** The backup market's country (the first, sorted, when it sells to several): `readStoreCountry` in `packages/core/src/utils/store-country.ts`. The store-defaults read returns it as `countryCode`, and the dashboard keeps it with the zone (`lib/store-time-zone.ts`). A storefront page uses its presence's country, else the backup market's (`STORE_REGION` in the request runtime; `data-store-region` on `<html>` when it is not BD).
+
+**Locales.** `numberLocale(language, country)` and `dateLocale(language, country)`. English in Bangladesh writes numbers as `en-IN` (lakhs: 12,34,567), because CLDR has no English for Bangladesh, and dates as `en-BD` ("Oct 7, 2026"). Bangla is `bn-BD`: Bangla digits; the Bangla dashboard shows the 24-hour clock (Intl has no Bangla AM/PM). Buyer pages, emails and invoices group a money amount by its currency (`moneyLocale` in `@scalius/shared/money-format`: lakhs for BDT and INR) with Latin digits; buyer counts are Latin digits grouped as the store's country groups them.
+
+**Week start.** `weekStartDay(country)` (`@scalius/shared/week-start`) is the CLDR `weekData` first day (Sunday in Bangladesh and the US, Monday in most of Europe, Saturday in Egypt). The date pickers start their weeks on it, and the analytics context (`weekStart`) buckets "week" rows from it in JavaScript and SQL (`bucketStartSql`: `day - ((day + offset) % 7)`, offset 4 for Sunday). A Bangladesh store's weeks and SQL are unchanged.
+
+**Units in messages.** The dashboard states a weight limit in the store's weight unit (`formatWeight`: "Enter 1,000 kg or less.").
+
+**Direction.** `textDirection(language)` gives `rtl` for Arabic, Hebrew, Persian, Urdu and the other right-to-left languages; the storefront writes `dir="rtl"` on `<html>` for them, and the dashboard sets `dir` with its language. `RTL_PSEUDO_LOCALE` (`ar-XB`) is for tests only.
+
 ## Operations
 
 | Operation | Permission | Notes |
 | --- | --- | --- |
-| `dashboard.settings.store_defaults_get` | any staff | time zone, unit system, weight unit, platform revision |
+| `dashboard.settings.store_defaults_get` | any staff | time zone, unit system, weight unit, store country, platform revision |
 | `dashboard.settings.store_defaults_update` | Edit store settings | revision required; writes the KV mirror |
 | `dashboard.settings.store_setup_get` | View store settings | `needed`, `done`, current values, `currencyLocked` |
 | `dashboard.settings.store_setup_apply` | Edit store settings | 409 `STORE_SETUP_DONE` once the store is not new |

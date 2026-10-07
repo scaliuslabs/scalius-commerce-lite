@@ -119,7 +119,7 @@ Cash on delivery:
 ### Attribution and time
 
 - Every figure belongs to the order's placement day on the store calendar: the store time zone, daylight saving included ([STORE-DEFAULTS.md](../../../../../docs/STORE-DEFAULTS.md)). That includes later returns and refunds, so a period's numbers move as its orders resolve, and they reconcile with the Orders list filtered by date.
-- A range is at most 731 days. Day buckets work up to 92 days, so an overview fits one 64 KB agent response. Longer ranges use Sunday weeks or calendar months.
+- A range is at most 731 days. Day buckets work up to 92 days, so an overview fits one 64 KB agent response. Longer ranges use weeks (starting on the store country's CLDR first day: Sunday in Bangladesh, `docs/STORE-DEFAULTS.md`) or calendar months.
 - The comparison is the same number of days just before, or the same days a year earlier (29 February becomes 28 February).
 - A request without dates reads the last 30 days (presets: `analytics-period.ts`). Snapshot reports (stock) read the store as it is now.
 

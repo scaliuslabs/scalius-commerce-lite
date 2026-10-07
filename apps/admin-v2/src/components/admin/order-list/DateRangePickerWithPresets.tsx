@@ -165,7 +165,7 @@ export function DateRangePickerWithPresets({
         className="flex max-h-(--radix-popover-content-available-height) w-auto flex-col overflow-hidden p-0"
       >
         <div data-slot="date-range-body" className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div data-slot="date-range-presets" className="flex shrink-0 flex-col gap-1 border-r p-2">
+          <div data-slot="date-range-presets" className="flex shrink-0 flex-col gap-1 border-e p-2">
             {presetButtons}
           </div>
           {calendar}

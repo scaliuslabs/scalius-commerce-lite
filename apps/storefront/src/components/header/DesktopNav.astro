@@ -237,7 +237,7 @@ const link = (item: NavigationItem) => ({
 
   /* A link with a disclosure button: the chevron sits snug against it. */
   a.desktop-nav-link:has(+ .desktop-nav-toggle) {
-    padding-right: 0.125rem;
+    padding-inline-end: 0.125rem;
   }
 
   a.desktop-nav-link:has(+ .desktop-nav-toggle):hover,
@@ -252,7 +252,7 @@ const link = (item: NavigationItem) => ({
     justify-content: center;
     width: 1.5rem;
     height: var(--nav-link-height, 2.5rem);
-    margin-right: 0.25rem;
+    margin-inline-end: 0.25rem;
     border-radius: var(--radius);
     color: var(--nav-ink-muted, var(--muted-foreground));
   }
@@ -292,14 +292,14 @@ const link = (item: NavigationItem) => ({
 
     .desktop-nav-toggle:not(.desktop-nav-link) {
       width: 2.75rem;
-      margin-right: 0;
+      margin-inline-end: 0;
     }
   }
 
   .desktop-nav-dropdown {
     position: absolute;
     top: calc(100% + 0.375rem);
-    left: 0;
+    inset-inline-start: 0;
     z-index: 60;
     width: max-content;
     min-width: 14rem;
@@ -319,8 +319,8 @@ const link = (item: NavigationItem) => ({
 
   [data-align-end] > .desktop-nav-dropdown,
   .desktop-nav-more > .desktop-nav-dropdown {
-    left: auto;
-    right: 0;
+    inset-inline-start: auto;
+    inset-inline-end: 0;
   }
 
   .desktop-nav-dropdown:not([hidden]) {

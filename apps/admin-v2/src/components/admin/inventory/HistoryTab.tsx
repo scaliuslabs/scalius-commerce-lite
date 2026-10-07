@@ -312,7 +312,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                   </div>
                   <MovementDetails movement={movement} />
                 </div>
-                <div className="shrink-0 space-y-1 sm:text-right">
+                <div className="shrink-0 space-y-1 sm:text-end">
                   {counterChanges(movement, severalLocations).map((change) => (
                     <p key={change.label} className="text-body tabular-nums">
                       <span className="text-muted-foreground">{t(change.label, { location: change.location ?? "" })} </span>

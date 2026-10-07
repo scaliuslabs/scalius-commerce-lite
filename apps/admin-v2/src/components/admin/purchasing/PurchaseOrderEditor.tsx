@@ -509,7 +509,7 @@ function PurchaseOrderLinesCard({
                       <span className="block text-body text-muted-foreground">{t("colCost")}</span>
                       {field.cost}
                     </div>
-                    <div className="ml-auto space-y-1 text-right">
+                    <div className="ms-auto space-y-1 text-end">
                       <span className="block text-body text-muted-foreground">{t("colLineTotal")}</span>
                       <span className="flex h-9 items-center justify-end">{field.total}</span>
                     </div>

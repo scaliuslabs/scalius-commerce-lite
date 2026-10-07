@@ -58,13 +58,4 @@ export function defaultUnitSystemForCountry(country: string): UnitSystem {
 }
 
 /** A currency's narrow symbol (`$`, `€`, `৳`), else its code. */
-export function defaultCurrencySymbol(code: string): string {
-  try {
-    const symbol = new Intl.NumberFormat("en", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
-      .formatToParts(0)
-      .find((part) => part.type === "currency")?.value;
-    return symbol || code;
-  } catch {
-    return code;
-  }
-}
+export { currencySymbol as defaultCurrencySymbol } from "./money-format";

@@ -43,7 +43,7 @@ const inline = layout === "inline";
 <form
   method="post"
   action={NEWSLETTER_SUBSCRIBE_ENDPOINT}
-  class:list={["newsletter-form relative text-left", className]}
+  class:list={["newsletter-form relative text-start", className]}
   data-newsletter-form
   data-newsletter-copy={scriptCopy}
 >
@@ -112,7 +112,7 @@ const inline = layout === "inline";
 <style>
   .newsletter-hp {
     position: absolute;
-    left: -10000px;
+    inset-inline-start: -10000px;
     top: auto;
     width: 1px;
     height: 1px;

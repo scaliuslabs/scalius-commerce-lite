@@ -353,7 +353,7 @@ export default function CommandPalette() {
           <div className="relative flex-1 flex items-center">
             <Search
               className={cn(
-                "absolute left-0 w-5 h-5 transition-colors pointer-events-none",
+                "absolute inset-s-0 w-5 h-5 transition-colors pointer-events-none",
                 isLoading ? "text-primary" : "text-muted-foreground",
               )}
             />
@@ -361,7 +361,7 @@ export default function CommandPalette() {
             <input
               ref={inputRef}
               type="text"
-              className="h-11 w-full border-none bg-transparent pl-8 pr-8 text-lg font-medium tracking-tight text-foreground outline-none placeholder:text-muted-foreground sm:text-xl"
+              className="h-11 w-full border-none bg-transparent ps-8 pe-8 text-lg font-medium tracking-tight text-foreground outline-none placeholder:text-muted-foreground sm:text-xl"
               placeholder="Search products…"
               aria-label="Search products"
               value={query}
@@ -384,7 +384,7 @@ export default function CommandPalette() {
 
             {/* Loader Inside Input (No shifting) */}
             {isLoading && (
-              <div className="absolute right-0 top-1/2 -translate-y-1/2">
+              <div className="absolute inset-e-0 top-1/2 -translate-y-1/2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
             )}
@@ -573,7 +573,7 @@ export default function CommandPalette() {
                           }
                           id={`cmd-item-${activeIdx}`}
                         >
-                          <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center mr-3 shrink-0 text-primary">
+                          <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center me-3 shrink-0 text-primary">
                             <Layers className="h-4 w-4" />
                           </div>
                           <span className="font-medium text-foreground text-sm">
@@ -608,7 +608,7 @@ export default function CommandPalette() {
                           onClick={() => navigateToItem({ type: "page", item: page })}
                           id={`cmd-item-${activeIdx}`}
                         >
-                          <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                          <div className="me-3 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
                             <FileText className="h-4 w-4" />
                           </div>
                           <span className="font-medium text-foreground text-sm truncate">
@@ -660,9 +660,9 @@ export default function CommandPalette() {
           {normalizedQuery && (
             <a
               href={searchPageHref(normalizedQuery)}
-              className="flex items-center hover:text-primary transition-colors ml-auto font-medium"
+              className="flex items-center hover:text-primary transition-colors ms-auto font-medium"
             >
-              View all results <ArrowRight className="w-3 h-3 ml-1" />
+              View all results <ArrowRight className="w-3 h-3 ms-1" />
             </a>
           )}
         </div>
@@ -684,7 +684,7 @@ function ProductThumbnail({
   const hasImage = hasProductImage(product.imageUrl) && !failed;
 
   return (
-    <div className="relative mr-3 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-background p-0.5">
+    <div className="relative me-3 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-background p-0.5">
       {hasImage && !loaded ? (
         <span
           className="h-5 w-5 animate-pulse rounded bg-muted motion-reduce:animate-none"
@@ -748,7 +748,7 @@ function ResultRow({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "flex w-full cursor-pointer items-center border-b border-border/50 px-4 py-3 text-left transition-all duration-150 sm:mx-2 sm:rounded-lg sm:border-none",
+        "flex w-full cursor-pointer items-center border-b border-border/50 px-4 py-3 text-start transition-all duration-150 sm:mx-2 sm:rounded-lg sm:border-none",
         active ? "bg-muted" : "bg-background hover:bg-muted/50",
       )}
     >

@@ -195,7 +195,7 @@ const link = (item: NavigationItem) => ({
   }
 
   .cnav[data-cnav-layout="bar"] a.cnav-link:has(+ .cnav-menu) {
-    padding-right: 0.5rem;
+    padding-inline-end: 0.5rem;
   }
 
   .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) {
@@ -206,7 +206,7 @@ const link = (item: NavigationItem) => ({
 
   .cnav[data-cnav-layout="bar"] .cnav-item > .cnav-menu:not(:first-child) > .cnav-toggle {
     position: absolute;
-    right: -0.5rem;
+    inset-inline-end: -0.5rem;
     top: 50%;
     width: 1.25rem;
     height: 1.25rem;
@@ -261,7 +261,7 @@ const link = (item: NavigationItem) => ({
   }
 
   a.cnav-link:has(+ .cnav-menu) {
-    padding-right: 0.125rem;
+    padding-inline-end: 0.125rem;
   }
 
   .cnav-toggle {
@@ -321,7 +321,7 @@ const link = (item: NavigationItem) => ({
   .cnav-panel {
     position: absolute;
     top: calc(100% + 0.25rem);
-    left: 0;
+    inset-inline-start: 0;
     z-index: 60;
     width: max-content;
     min-width: 12.5rem;
@@ -352,8 +352,8 @@ const link = (item: NavigationItem) => ({
   .cnav-panel--end,
   [data-align-end] > .cnav-menu > .cnav-panel,
   .cnav-menu[data-flip] > .cnav-panel {
-    left: auto;
-    right: 0;
+    inset-inline-start: auto;
+    inset-inline-end: 0;
   }
 
   .cnav-more-list {
@@ -399,7 +399,7 @@ const link = (item: NavigationItem) => ({
   }
 
   .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > a.cnav-link {
-    padding-right: 2.75rem;
+    padding-inline-end: 2.75rem;
   }
 
   .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu {
@@ -411,7 +411,7 @@ const link = (item: NavigationItem) => ({
   .cnav[data-cnav-layout="bar"] .cnav-more-list > .cnav-item:has(> a) > .cnav-menu > .cnav-toggle {
     position: absolute;
     top: 0.125rem;
-    right: 0;
+    inset-inline-end: 0;
     width: 2.25rem;
     height: 2.25rem;
     translate: none;
@@ -464,7 +464,7 @@ const link = (item: NavigationItem) => ({
 
   .cnav-more-sublist .cnav-more-link {
     min-height: 2rem;
-    padding-left: 1.25rem;
+    padding-inline-start: 1.25rem;
     color: var(--muted-foreground);
     font-weight: 400;
   }

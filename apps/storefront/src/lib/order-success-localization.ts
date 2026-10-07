@@ -1,4 +1,4 @@
-import { storeTimeZone } from "./store-time-zone";
+import { formatStoreDateTime, storeTimeZone } from "./store-time-zone";
 import type {
   OrderReceiptSupportRequest,
   OrderReceiptSupportRequestType,
@@ -27,16 +27,7 @@ export function formatOrderReceiptDate(
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  const options: Intl.DateTimeFormatOptions = {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone,
-  };
-  try {
-    return new Intl.DateTimeFormat(checkoutLanguageBaseCode(languageCode), options).format(date);
-  } catch {
-    return new Intl.DateTimeFormat("en", options).format(date);
-  }
+  return formatStoreDateTime(date, checkoutLanguageBaseCode(languageCode), { dateStyle: "medium", timeStyle: "short" }, timeZone);
 }
 
 export function formatOrderSuccessLabel(

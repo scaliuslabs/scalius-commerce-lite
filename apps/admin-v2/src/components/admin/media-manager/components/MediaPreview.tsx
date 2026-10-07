@@ -114,7 +114,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
     <>
       <Dialog open={open && Boolean(file)} onOpenChange={requestClose}>
         <DialogContent className="flex h-[92svh] max-h-[760px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] sm:max-w-5xl">
-          <div className="flex flex-col gap-1 border-b py-3 pl-4 pr-14">
+          <div className="flex flex-col gap-1 border-b py-3 ps-4 pe-14">
             <DialogTitle className="break-all">{file?.filename}</DialogTitle>
             <DialogDescription>{meta}</DialogDescription>
           </div>
@@ -126,14 +126,14 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
                 ) : (
                   <VideoPlayer key={file.id} src={file.url} poster={posterUrl ? mediaImageUrl(posterUrl, 960) : undefined} playsInline preload="metadata" className="max-h-full max-w-full" aria-label={file.caption || file.filename} />
                 )}
-                <Button type="button" variant="outline" size="icon" className="absolute left-3 top-1/2 -translate-y-1/2" disabled={index <= 0} onClick={() => requestNavigation(-1)} aria-label={t("previousFile")}>
+                <Button type="button" variant="outline" size="icon" className="absolute inset-s-3 top-1/2 -translate-y-1/2" disabled={index <= 0} onClick={() => requestNavigation(-1)} aria-label={t("previousFile")}>
                   <ChevronLeft aria-hidden="true" />
                 </Button>
-                <Button type="button" variant="outline" size="icon" className="absolute right-3 top-1/2 -translate-y-1/2" disabled={index < 0 || index >= files.length - 1} onClick={() => requestNavigation(1)} aria-label={t("nextFile")}>
+                <Button type="button" variant="outline" size="icon" className="absolute inset-e-3 top-1/2 -translate-y-1/2" disabled={index < 0 || index >= files.length - 1} onClick={() => requestNavigation(1)} aria-label={t("nextFile")}>
                   <ChevronRight aria-hidden="true" />
                 </Button>
               </div>
-              <div className="flex flex-col gap-4 border-t p-4 md:overflow-y-auto md:border-l md:border-t-0">
+              <div className="flex flex-col gap-4 border-t p-4 md:overflow-y-auto md:border-s md:border-t-0">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="media-filename">{t("fileName")}</Label>
                   <Input id="media-filename" maxLength={255} value={filename} onChange={(event) => setFilename(event.target.value)} />
@@ -187,7 +187,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
             </div>
           ) : null}
           <div className="flex flex-wrap items-center justify-end gap-2 border-t px-4 py-3">
-            {dirty ? <span className="mr-auto text-body text-muted-foreground" aria-live="polite">{r("unsavedChanges")}</span> : null}
+            {dirty ? <span className="me-auto text-body text-muted-foreground" aria-live="polite">{r("unsavedChanges")}</span> : null}
             {onSelect && file ? (
               <Button type="button" variant="outline" onClick={() => onSelect(file)}>{t(isVideo ? "useVideo" : "useImage")}</Button>
             ) : null}

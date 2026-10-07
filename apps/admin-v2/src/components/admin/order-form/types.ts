@@ -8,6 +8,7 @@ import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } fro
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH, ORDER_CHANNEL_SOURCE_PRESETS } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { orderNeedsAddress } from "./order-line-properties";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 export interface Product {
   id: string;
@@ -107,7 +108,7 @@ const msg = (key: OrderFormMessageKey) => ({
  * full international number; saved as +8801XXXXXXXXX (E.164).
  */
 export function toE164Phone(raw: string): string | null {
-  const latin = raw.replace(/[০-৯]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6)).trim();
+  const latin = toLatinDigits(raw).trim();
   const bdMobile = /^(?:\+?880|0)?(1[3-9]\d{8})$/.exec(latin.replace(/[\s\-().]/g, ""));
   if (bdMobile) return `+880${bdMobile[1]}`;
   try {

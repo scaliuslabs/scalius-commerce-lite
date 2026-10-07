@@ -1,4 +1,11 @@
 /**
+ * Windows at least this wide show the navigation panel; narrower ones (phones,
+ * tablets, a 1024px laptop) get the menu drawer, as Shopify does below about
+ * 1100px. The Tailwind `nav:` breakpoint is the same width.
+ */
+export const NAV_PANEL_QUERY = "(min-width: 1100px)";
+
+/**
  * Icon buttons on the near-black navigation (rail items, collapse, Back):
  * 44px on phones, 28px from md, 16px icons, instant hover fill, the current
  * page (or an open menu) on the pill.
@@ -8,7 +15,7 @@ export const NAV_ICON_BUTTON =
 
 /** Navigation rows (Shopify's density): 44px on phones, 28px from md, 13px labels, 16px icons, 8px radius. */
 export const NAV_ROW =
-  "flex h-11 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-nav text-sidebar-foreground outline-none hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-semibold aria-[current=page]:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent md:h-7 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-muted-foreground aria-[current=page]:[&>svg]:text-sidebar-accent-foreground";
+  "flex h-11 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-start text-nav text-sidebar-foreground outline-none hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-semibold aria-[current=page]:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent md:h-7 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-muted-foreground aria-[current=page]:[&>svg]:text-sidebar-accent-foreground";
 
 /** Icon and store buttons on the near-black top bar: 44px on phones, 32px from md. */
 export const TOP_BAR_BUTTON =

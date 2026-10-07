@@ -53,8 +53,8 @@ describe("warranty words", () => {
     expect(warrantyTimeLeftText("2026-09-25T18:00:00Z", now, en)).toBe("1 day left");
     expect(warrantyTimeLeftText("2027-09-20T06:00:00Z", now, en)).toBe("11 months left");
     expect(warrantyTimeLeftText("2026-09-01T06:00:00Z", now, en)).toBe("");
-    expect(warrantyDatesText(line, now, en)).toBe("Warranty until 20 Sep 2027 · Replacement until 27 Sep 2026");
-    expect(warrantyDatesText({ ...line, expiresAt: "2026-09-01T06:00:00Z" }, now, en)).toBe("Warranty ended 1 Sep 2026");
+    expect(warrantyDatesText(line, now, en)).toBe("Warranty until Sep 20, 2027 · Replacement until Sep 27, 2026");
+    expect(warrantyDatesText({ ...line, expiresAt: "2026-09-01T06:00:00Z" }, now, en)).toBe("Warranty ended Sep 1, 2026");
     expect(warrantyDatesText({ ...line, voided: true }, now, en)).toBe("Warranty void");
   });
 });

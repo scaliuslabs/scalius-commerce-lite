@@ -93,7 +93,7 @@ function FeedLeftOut() {
           ? t(count === 1 ? "feedMissingOne" : "feedMissing", { count })
           : t(leftOut === 1 ? "feedLeftOutOne" : "feedLeftOut", { count: leftOut })}
       </summary>
-      <ul className="mt-2 space-y-2 pl-4">
+      <ul className="mt-2 space-y-2 ps-4">
         {reasons.map(({ reason, products, samples }) => (
           <li key={reason}>
             <p>

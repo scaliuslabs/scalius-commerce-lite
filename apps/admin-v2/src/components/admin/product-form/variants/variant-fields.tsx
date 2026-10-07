@@ -92,16 +92,16 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
         onValueChange={(next) => onChange(next ?? Number.NaN)}
       />
       {committed > 0 && Number.isFinite(value) ? (
-        <p className="text-right text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
+        <p className="text-end text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
           {t("availableToSell", { count: available })}
         </p>
       ) : null}
       {elsewhere?.breakdown ? (
-        <p className="text-right text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
+        <p className="text-end text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
       ) : null}
       {incomingUnits > 0 ? (
         <p
-          className="text-right text-body text-muted-foreground tabular-nums"
+          className="text-end text-body text-muted-foreground tabular-nums"
           title={t("incomingDetail", { orders: incoming!.purchaseOrders, transfers: incoming!.transfers })}
         >
           {t("incomingCount", { count: incomingUnits })}
@@ -156,7 +156,7 @@ export function VariantImagePicker({ value, images, onChange, label, allowNoChan
           <button
             type="button"
             onClick={() => onChange(undefined)}
-            className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-body hover:bg-muted", value === undefined && "bg-muted")}
+            className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-start text-body hover:bg-muted", value === undefined && "bg-muted")}
           >
             <span className="flex h-9 w-9 items-center justify-center rounded border"><ImageIcon className="h-4 w-4" /></span>
             {t("photoNoChange")}
@@ -165,7 +165,7 @@ export function VariantImagePicker({ value, images, onChange, label, allowNoChan
         <button
           type="button"
           onClick={() => onChange(null)}
-          className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-body hover:bg-muted", value === null && "bg-muted")}
+          className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-start text-body hover:bg-muted", value === null && "bg-muted")}
         >
           <span className="flex h-9 w-9 items-center justify-center rounded border">
             <ImageIcon className="h-4 w-4" />

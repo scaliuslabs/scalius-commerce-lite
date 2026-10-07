@@ -115,8 +115,8 @@ const TONES: Record<string, string | undefined> = {
     content: "";
     position: absolute;
     bottom: calc(-100vh - env(safe-area-inset-bottom, 0px));
-    left: 0;
-    right: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
     height: 100vh;
     background-color: var(--secondary);
     z-index: -20;

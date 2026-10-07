@@ -88,7 +88,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
           aria-label={unread > 0 ? t("unreadNotifications", { count: unread }) : t("notifications")}
         >
           <Bell aria-hidden />
-          {unread > 0 ? <span className="absolute right-2 top-2 size-2 rounded-full bg-destructive md:right-1 md:top-1" aria-hidden /> : null}
+          {unread > 0 ? <span className="absolute inset-e-2 top-2 size-2 rounded-full bg-destructive md:inset-e-1 md:top-1" aria-hidden /> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-80 p-0">
@@ -128,7 +128,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                   update((current) => current.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
                   if (notification.link) void navigate({ to: notification.link });
                 }}
-                className={cn("block w-full rounded-md px-3 py-2 text-left hover:bg-muted", !notification.read && "bg-muted/50")}
+                className={cn("block w-full rounded-md px-3 py-2 text-start hover:bg-muted", !notification.read && "bg-muted/50")}
               >
                 <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
                 {notification.message ? <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p> : null}

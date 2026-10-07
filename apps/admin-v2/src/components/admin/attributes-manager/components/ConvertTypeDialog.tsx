@@ -122,7 +122,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
               {preview.unconvertibleCount > 0 ? (
                 <>
                   <p className="text-destructive">{t("previewBlocked", { count: formatNumber(preview.unconvertibleCount) })}</p>
-                  <ul className="list-disc pl-5 text-muted-foreground">
+                  <ul className="list-disc ps-5 text-muted-foreground">
                     {preview.unconvertibleSamples.map((sample) => <li key={sample} className="break-words">{sample}</li>)}
                   </ul>
                 </>

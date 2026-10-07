@@ -14,10 +14,12 @@ import { zoneOffsetSchedule, type ZoneOffsetSchedule } from "@scalius/shared/com
 import {
   analyticsBuckets,
   analyticsEpochDay,
+  analyticsWeekOffset,
   type AnalyticsGranularity,
   type AnalyticsInstantRange,
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
+import type { WeekDay } from "@scalius/shared/week-start";
 
 /**
  * The orders a report reads: placed in the range, presented and reported in
@@ -71,13 +73,13 @@ export function merchantDaySql(column: string, offsets: ZoneOffsetSchedule): SQL
 
 /**
  * The bucket a merchant day falls in, as the epoch day the bucket starts on.
- * Weeks start on Sunday (epoch day 3); months use their first-day boundaries
- * inside the range (at most 25 literals for a two-year range), so no
- * calendar functions differ between engines.
+ * Weeks start on the store country's first day (Sunday: `+ 4`); months use
+ * their first-day boundaries inside the range (at most 25 literals for a
+ * two-year range), so no calendar functions differ between engines.
  */
-export function bucketStartSql(dayExpression: SQL, granularity: AnalyticsGranularity, range: AnalyticsRange): SQL {
+export function bucketStartSql(dayExpression: SQL, granularity: AnalyticsGranularity, range: AnalyticsRange, weekStart: WeekDay = 0): SQL {
   if (granularity === "day") return dayExpression;
-  if (granularity === "week") return sql`(${dayExpression} - ((${dayExpression} + 4) % 7))`;
+  if (granularity === "week") return sql`(${dayExpression} - ((${dayExpression} + ${sql.raw(String(analyticsWeekOffset(weekStart)))}) % 7))`;
   // Every literal is an integer computed from a validated range.
   const starts = analyticsBuckets(range, "month")
     .map((bucket) => analyticsEpochDay(bucket.key))

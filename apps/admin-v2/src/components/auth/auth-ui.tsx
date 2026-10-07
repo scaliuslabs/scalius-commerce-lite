@@ -132,7 +132,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<ComponentProps<"i
           autoCorrect="off"
           spellCheck={false}
           // eslint-disable-next-line shadcn/no-restyle -- room for the show/hide button inside the field
-          className="pr-11"
+          className="pe-11"
         />
         <button
           type="button"
@@ -141,7 +141,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<ComponentProps<"i
           aria-controls={props.id}
           disabled={props.disabled}
           onClick={() => setVisible((current) => !current)}
-          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+          className="absolute inset-y-0 inset-e-0 flex w-11 items-center justify-center rounded-e-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
         >
           {visible ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
         </button>

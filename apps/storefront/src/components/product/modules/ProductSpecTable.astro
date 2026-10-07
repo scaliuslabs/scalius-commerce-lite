@@ -20,12 +20,12 @@ const groups = groupSpecificationRows(rows);
       <tbody>
         {group.group && (
           <tr>
-            <th colspan="2" scope="colgroup" class="bg-muted px-3 py-2 text-left font-semibold text-foreground lg:px-4">{group.group}</th>
+            <th colspan="2" scope="colgroup" class="bg-muted px-3 py-2 text-start font-semibold text-foreground lg:px-4">{group.group}</th>
           </tr>
         )}
         {group.rows.map((row) => (
           <tr class="border-t border-border first:border-t-0">
-            <th scope="row" class="w-2/5 px-3 py-2 text-left align-top font-normal text-muted-foreground lg:w-1/3 lg:px-4">{row.name}</th>
+            <th scope="row" class="w-2/5 px-3 py-2 text-start align-top font-normal text-muted-foreground lg:w-1/3 lg:px-4">{row.name}</th>
             <td class="px-3 py-2 align-top text-foreground lg:px-4">{specificationValue(row)}</td>
           </tr>
         ))}

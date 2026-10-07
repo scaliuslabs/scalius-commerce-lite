@@ -67,7 +67,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 <div
   id={`${id}-panel`}
   class:list={[
-    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh max-w-[365px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    "nav-drawer invisible fixed inset-s-0 top-0 z-70 flex h-dvh max-w-[365px] -translate-x-full rtl:translate-x-full transform flex-col border-e border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
     marketplace ? "nav-drawer--marketplace w-[80vw] lg:w-[365px]" : "w-[90vw]",
     phoneOnly && "lg:hidden",
   ]}
@@ -86,7 +86,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
     <button
       id={`${id}-close`}
       type="button"
-      class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
+      class="-me-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
       aria-label="Close menu"
       data-drawer-close
     >
@@ -95,7 +95,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
     <noscript>
       <a
         href="#"
-        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground"
+        class="-me-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground"
         aria-label="Close menu"
       >
         <Icon name="x" class="h-5 w-5 stroke-[1.5]" />

@@ -221,7 +221,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
           {t("deleteMenu")}
         </Button>
         {inUse ? (
-          <p id="menu-delete-note" className="text-right text-body text-muted-foreground">{t("deleteMenuInUse")}</p>
+          <p id="menu-delete-note" className="text-end text-body text-muted-foreground">{t("deleteMenuInUse")}</p>
         ) : null}
       </div>
 

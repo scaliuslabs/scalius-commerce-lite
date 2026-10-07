@@ -57,14 +57,14 @@ export function SettingsPage({
             to={back?.to ?? "/admin/settings"}
             aria-label={back?.label ?? t("settings")}
             className={cn(
-              "-ml-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground md:size-9",
-              !back && "md:hidden",
+              "-ms-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground md:size-9",
+              !back && "nav:hidden",
             )}
           >
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
-          {back ? null : <Icon className="hidden size-5 text-muted-foreground md:block" aria-hidden="true" />}
-          <h1 className="mr-auto text-heading-lg">{title ?? t(page)}</h1>
+          {back ? null : <Icon className="hidden size-5 text-muted-foreground nav:block" aria-hidden="true" />}
+          <h1 className="me-auto text-heading-lg">{title ?? t(page)}</h1>
           {actions}
         </div>
         <SaveErrorBanner />
@@ -195,7 +195,7 @@ export function SettingsRow({
     <button
       type="button"
       {...props}
-      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left outline-none first:border-t-0 hover:bg-muted focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-start outline-none first:border-t-0 hover:bg-muted focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium">{label}</span>

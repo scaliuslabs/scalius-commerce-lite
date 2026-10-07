@@ -90,7 +90,7 @@ export function fillCartRuleBanner(
   const messages = groups.cart.map(({ message }) => message).filter(Boolean);
   if (messages.length > 0) {
     const list = document.createElement("ul");
-    list.className = "mt-1 list-disc space-y-0.5 pl-5";
+    list.className = "mt-1 list-disc space-y-0.5 ps-5";
     for (const message of messages) {
       const item = document.createElement("li");
       item.textContent = message;

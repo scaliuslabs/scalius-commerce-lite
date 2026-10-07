@@ -75,7 +75,7 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
         {storefrontUrl ? (
           <Button variant="outline" asChild className="w-full">
             <a href={storefrontUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-2 h-4 w-4" />
+              <ExternalLink className="me-2 h-4 w-4" />
               {t("viewOnStorefront")}
             </a>
           </Button>

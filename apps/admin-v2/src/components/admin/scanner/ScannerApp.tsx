@@ -694,7 +694,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         >
           <ClipboardList className="size-5" />
           {history.length > 0 ? (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-body font-medium text-primary-foreground">
+            <span className="absolute -inset-e-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-body font-medium text-primary-foreground">
               {history.length > 9 ? "9+" : formatNumber(history.length)}
             </span>
           ) : null}
@@ -765,7 +765,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
       {menuOpen ? (
         <div className="fixed inset-0 z-40 flex" onClick={() => setMenuOpen(false)}>
           <div
-            className="flex h-full w-72 flex-col border-r bg-card"
+            className="flex h-full w-72 flex-col border-e bg-card"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b p-4">
@@ -810,14 +810,14 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
               <div className="flex items-center justify-between rounded-lg bg-muted px-4 py-3">
                 <Label htmlFor="scanner-sound" className="flex items-center">
-                  {soundEnabled ? <Volume2 className="mr-3 size-4" /> : <VolumeOff className="mr-3 size-4" />}
+                  {soundEnabled ? <Volume2 className="me-3 size-4" /> : <VolumeOff className="me-3 size-4" />}
                   {t("sound")}
                 </Label>
                 <Switch id="scanner-sound" checked={soundEnabled} onCheckedChange={setSoundEnabled} />
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted px-4 py-3">
                 <Label htmlFor="scanner-vibration" className="flex items-center">
-                  <Smartphone className="mr-3 size-4" />
+                  <Smartphone className="me-3 size-4" />
                   {t("vibration")}
                 </Label>
                 <Switch id="scanner-vibration" checked={hapticsEnabled} onCheckedChange={setHapticsEnabled} />

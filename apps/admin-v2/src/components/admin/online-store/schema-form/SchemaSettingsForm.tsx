@@ -383,7 +383,7 @@ function ChoiceListSetting({ id, label, help, error, path, value, spec, onChange
       {items.length > 0 ? (
         <ol className="divide-y rounded-lg border">
           {items.map((item, index) => (
-            <li key={String(item)} className="flex min-h-11 items-center gap-1 py-1 pr-1 pl-3">
+            <li key={String(item)} className="flex min-h-11 items-center gap-1 py-1 pe-1 ps-3">
               <span className="min-w-0 flex-1 truncate text-body">{name(item)}</span>
               <Button type="button" variant="ghost" size="icon-sm" aria-label={labels.t("form.moveUp", { name: name(item) })} disabled={index === 0} onClick={() => onChange(moveAt(items, index, -1))}>
                 <ArrowUp aria-hidden="true" />

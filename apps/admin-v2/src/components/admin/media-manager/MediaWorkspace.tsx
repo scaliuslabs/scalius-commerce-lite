@@ -200,7 +200,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         <>
           {body}
           <footer className="flex flex-wrap items-center justify-end gap-2 border-t px-4 py-3">
-            {multiple ? <span className="mr-auto text-body text-muted-foreground" aria-live="polite">{r("selected", { count: selected })}</span> : null}
+            {multiple ? <span className="me-auto text-body text-muted-foreground" aria-live="polite">{r("selected", { count: selected })}</span> : null}
             <Button type="button" variant="outline" onClick={onClose}>{r("cancel")}</Button>
             {multiple ? (
               <Button type="button" disabled={!selected || mm.isMutating} onClick={mm.addSelected}>

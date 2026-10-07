@@ -99,7 +99,7 @@ const itemClass = shelf
               </a>
             )}
             {products.length > 1 && (
-              <div class="ml-1 hidden items-center gap-1.5 md:flex">
+              <div class="ms-1 hidden items-center gap-1.5 md:flex">
                 <button
                   type="button"
                   data-rail-direction="previous"
@@ -166,7 +166,9 @@ const itemClass = shelf
       if (!track) return;
       rail.querySelectorAll<HTMLButtonElement>("[data-rail-direction]").forEach((button) => {
         button.addEventListener("click", () => {
-          const direction = button.dataset.railDirection === "previous" ? -1 : 1;
+          // "Next" scrolls toward the line's end: leftward on a right-to-left page.
+          const forward = getComputedStyle(track).direction === "rtl" ? -1 : 1;
+          const direction = (button.dataset.railDirection === "previous" ? -1 : 1) * forward;
           track.scrollBy({
             left: direction * Math.max(240, track.clientWidth * 0.8),
             behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches

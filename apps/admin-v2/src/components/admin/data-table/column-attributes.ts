@@ -15,7 +15,7 @@ type ColumnAttributes = {
  * Polaris IndexTable spacing: 6px each side of a cell, 12px at the table's
  * edges (the checkbox column keeps its own width).
  */
-export const INDEX_CELL = "px-1.5 first:pl-3 last:pr-3";
+export const INDEX_CELL = "px-1.5 first:ps-3 last:pe-3";
 
 /**
  * A column's layout, as data attributes the table cells style themselves by

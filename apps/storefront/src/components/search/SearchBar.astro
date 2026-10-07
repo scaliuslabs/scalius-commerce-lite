@@ -11,7 +11,7 @@ const { containerClass = "", mobileView = false } = Astro.props;
 
 // Simplified classes to avoid "box-in-box" issues
 const baseButtonClass =
-  "group relative flex items-center w-full text-left cursor-text transition-all duration-200 ease-out outline-none overflow-hidden";
+  "group relative flex items-center w-full text-start cursor-text transition-all duration-200 ease-out outline-none overflow-hidden";
 const mobileClasses = "bg-muted h-12 px-4 rounded-xl active:scale-[0.98]";
 // Desktop: Card background with border, shadow on hover
 const desktopClasses =
@@ -40,7 +40,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     {/* Placeholder Text */}
     <span
       aria-hidden="true"
-      class={`ml-3 text-sm truncate font-medium select-none flex-1 ${
+      class={`ms-3 text-sm truncate font-medium select-none flex-1 ${
         mobileView ? "text-muted-foreground" : "text-muted-foreground group-hover:text-foreground"
       }`}
     >
@@ -50,7 +50,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     {/* Keyboard Shortcut Hint (Desktop Only) */}
     {
       !mobileView && (
-        <div aria-hidden="true" class="hidden xl:flex items-center gap-1 ml-auto pl-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
+        <div aria-hidden="true" class="hidden xl:flex items-center gap-1 ms-auto ps-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
           <kbd class="inline-flex h-5 items-center justify-center rounded bg-muted border border-input px-1.5 font-sans text-[10px] font-bold text-muted-foreground">
             <span class="text-xs">⌘</span>K
           </kbd>

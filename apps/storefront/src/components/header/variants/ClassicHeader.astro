@@ -59,7 +59,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         <button
           id="mobile-menu-toggle"
           type="button"
-          class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
+          class="-ms-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
           aria-label="Open menu"
           aria-haspopup="dialog"
           aria-controls="mobile-menu-panel"
@@ -70,7 +70,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         <noscript>
           <a
             href="#mobile-menu-panel"
-            class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground"
+            class="-ms-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground"
             aria-label="Open menu"
           >
             <Icon name="menu" class="h-6 w-6 stroke-[1.5]" />
@@ -141,7 +141,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       </div>
 
       <div
-        class="flex items-center justify-end gap-1 sm:gap-3 lg:gap-0 shrink-0 z-30 ml-auto lg:ml-0"
+        class="flex items-center justify-end gap-1 sm:gap-3 lg:gap-0 shrink-0 z-30 ms-auto lg:ms-0"
       >
         <div
           class="header-action-morph relative hidden h-10 shrink-0 overflow-hidden lg:block"
@@ -150,7 +150,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
           <button
             id="scrolled-search-trigger"
             type="button"
-            class="header-scroll-search absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            class="header-scroll-search absolute inset-y-0 inset-e-0 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="Search"
             aria-haspopup="dialog"
           >
@@ -158,7 +158,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
           </button>
 
           <div
-            class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3"
+            class="header-expanded-actions absolute inset-y-0 inset-s-0 flex items-center gap-3"
           >
             {
               phoneHref && (
@@ -177,7 +177,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
         <div
           data-header-action-group
-          class="group relative flex h-11 shrink-0 items-center rounded-full bg-card-foreground py-1 pl-1 pr-1 text-card shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl lg:pr-1.5"
+          class="group relative flex h-11 shrink-0 items-center rounded-full bg-card-foreground py-1 ps-1 pe-1 text-card shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl lg:pe-1.5"
         >
           <a
             id="account-link"
@@ -187,7 +187,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
               "/account",
               Astro.url,
             )}
-            class="flex h-11 w-11 items-center justify-center rounded-full text-card/80 transition-colors duration-200 hover:bg-card/10 hover:text-card lg:mr-1"
+            class="flex h-11 w-11 items-center justify-center rounded-full text-card/80 transition-colors duration-200 hover:bg-card/10 hover:text-card lg:me-1"
             aria-label="My Account"
             title="My Account"
           >
@@ -210,7 +210,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             type="button"
             id="cart-button"
             data-header-cart
-            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full pl-1.5 active:scale-[0.98] lg:gap-3 lg:pl-2"
+            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full ps-1.5 active:scale-[0.98] lg:gap-3 lg:ps-2"
             aria-label="Open shopping cart"
             aria-haspopup="dialog"
           >
@@ -231,7 +231,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
               <span
                 id="cart-count"
                 aria-hidden="true"
-                class="absolute -top-1 -right-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
+                class="absolute -top-1 -inset-e-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
               >
                 0
               </span>
@@ -356,7 +356,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
   .header-action-morph {
     width: var(--header-actions-expanded-lg);
-    margin-right: var(--header-actions-gap-lg);
+    margin-inline-end: var(--header-actions-gap-lg);
     transition:
       width 240ms cubic-bezier(0.25, 0.1, 0.25, 1),
       margin-right 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -390,7 +390,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
   #main-header[data-header-condense].is-scrolled .header-action-morph {
     width: 2.5rem;
-    margin-right: 0.75rem;
+    margin-inline-end: 0.75rem;
   }
 
   #main-header[data-header-condense].is-scrolled .header-expanded-actions {
@@ -434,12 +434,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   @media (min-width: 80rem) {
     .header-action-morph {
       width: var(--header-actions-expanded-xl);
-      margin-right: var(--header-actions-gap-xl);
+      margin-inline-end: var(--header-actions-gap-xl);
     }
 
     #main-header[data-header-condense].is-scrolled .header-action-morph {
       width: 2.5rem;
-      margin-right: 0.75rem;
+      margin-inline-end: 0.75rem;
     }
   }
 

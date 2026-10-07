@@ -5,16 +5,18 @@
 // scroll). With JavaScript, the next page's own HTML (edge-cached like any
 // page) supplies the cards, and the address bar follows the last page shown.
 
+import { formatCount } from "./store-time-zone";
+
 /** "484", or "1,000+" when the API counted to its cap and more products match. */
 export function catalogCountText(total: number, capped = false): string {
-  return `${total.toLocaleString("en-IN")}${capped ? "+" : ""}`;
+  return `${formatCount(total)}${capped ? "+" : ""}`;
 }
 
 /** "Showing 21–40 of 484 products". */
 export function catalogProgressLabel(from: number, to: number, total: number, capped = false): string {
   const noun = total === 1 && !capped ? "product" : "products";
   if (to <= 0) return `${catalogCountText(total, capped)} ${noun}`;
-  return `Showing ${from.toLocaleString("en-IN")}–${to.toLocaleString("en-IN")} of ${catalogCountText(total, capped)} ${noun}`;
+  return `Showing ${formatCount(from)}–${formatCount(to)} of ${catalogCountText(total, capped)} ${noun}`;
 }
 
 /** Infinite scroll loads this many pages by itself, then hands over to the button so the footer stays reachable. */

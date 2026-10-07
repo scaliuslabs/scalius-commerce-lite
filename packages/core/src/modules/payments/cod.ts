@@ -31,6 +31,7 @@ import { presentedSettlement } from "@scalius/shared/money-chain";
 import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
+import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 
 interface CodCollectionOrderSnapshot {
   totalAmountMinor: number;
@@ -60,11 +61,9 @@ function assertPositiveMinor(amountMinor: number): void {
   }
 }
 
-/** Money for a merchant-facing sentence: "৳2,480" / "৳1,234.50" (lakh grouping). */
+/** Money for a merchant-facing sentence: "৳2,480" / "৳1,234.50" (lakh grouping for taka). */
 function formatOrderMoney(amountMinor: number, currency: { code: string; decimalPlaces: number }): string {
-  const amount = fromMinor(amountMinor, currency.decimalPlaces);
-  const digits = Number.isInteger(amount) ? 0 : currency.decimalPlaces;
-  const number = amount.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const number = formatAmount(fromMinor(amountMinor, currency.decimalPlaces), moneyLocale(currency.code), currency.decimalPlaces, true);
   return currency.code === "BDT" ? `৳${number}` : `${currency.code} ${number}`;
 }
 

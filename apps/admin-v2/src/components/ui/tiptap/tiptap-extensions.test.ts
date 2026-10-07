@@ -97,7 +97,7 @@ describe("rich-text editing document contract", () => {
     ).toBe(false);
     expect(editor.chain().insertContent("Item two").run()).toBe(true);
     expect(editor.getHTML()).toContain(
-      "<ul class=\"list-disc pl-5\"><li><p>Item one</p></li><li><p>Item two</p></li></ul>",
+      "<ul class=\"list-disc ps-5\"><li><p>Item one</p></li><li><p>Item two</p></li></ul>",
     );
 
     host.remove();

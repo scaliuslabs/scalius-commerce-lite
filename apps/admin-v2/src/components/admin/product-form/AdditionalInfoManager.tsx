@@ -260,7 +260,7 @@ export function AdditionalInfoManager({
       </DndContext>
 
       <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
-        <Plus className="mr-2 h-4 w-4" />
+        <Plus className="me-2 h-4 w-4" />
         {t("addSection")}
       </Button>
     </div>

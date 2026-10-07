@@ -365,7 +365,7 @@ export default function CartFlyout({ onReady }: Props) {
           // Mobile: Bottom Half Sheet
           "fixed inset-x-0 bottom-0 h-auto max-h-[55dvh] top-auto rounded-t-[20px] border-t-0",
           // Desktop: Side Sheet
-          "sm:fixed sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-none sm:w-full sm:max-w-[380px] sm:rounded-none sm:border-l",
+          "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:max-w-[380px] sm:rounded-none sm:border-s",
         )}
         onMouseEnter={handleMeaningfulInteraction}
         onTouchStart={handleMeaningfulInteraction}
@@ -407,7 +407,7 @@ export default function CartFlyout({ onReady }: Props) {
 
           <SheetClose
             aria-label="Close cart"
-            className="group -mr-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-mr-2 sm:h-9 sm:w-9 cursor-pointer"
+            className="group -me-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-me-2 sm:h-9 sm:w-9 cursor-pointer"
           >
             <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
           </SheetClose>
@@ -463,7 +463,7 @@ export default function CartFlyout({ onReady }: Props) {
                     <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
                       <div className="flex justify-between items-start gap-1.5">
                         <div className="space-y-0.5 min-w-0 flex-1">
-                          <h3 className="line-clamp-2 pr-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
+                          <h3 className="line-clamp-2 pe-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
                             <a
                               href={pagePath(`/products/${item.slug || item.id}`)}
                               className="hover:text-muted-foreground transition-colors"
@@ -547,7 +547,7 @@ export default function CartFlyout({ onReady }: Props) {
                         </div>
 
                         {/* Price */}
-                        <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-right shrink-0">
+                        <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-end shrink-0">
                           {formatMoney(item.price * item.quantity)}
                         </div>
                       </div>
@@ -643,7 +643,7 @@ export default function CartFlyout({ onReady }: Props) {
           <div
             aria-hidden="true"
             className={cn(
-              "absolute bottom-0 left-0 right-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300",
+              "absolute bottom-0 inset-s-0 inset-e-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300",
               canScrollMore ? "opacity-100" : "opacity-0",
             )}
           />
@@ -783,7 +783,7 @@ export default function CartFlyout({ onReady }: Props) {
                   disableAutoClose();
                   handleCheckout();
                 }}
-                className="ml-auto flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-sm active:scale-[0.97] cursor-pointer"
+                className="ms-auto flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-sm active:scale-[0.97] cursor-pointer"
               >
                 <span>Checkout</span>
                 <ArrowRight className="h-3 w-3" />

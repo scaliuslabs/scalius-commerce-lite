@@ -36,14 +36,14 @@ const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ curren
       {...props}
       onRefusal={onRefusal}
       // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
-      className={cn(prefix && "pl-7", className)}
+      className={cn(prefix && "ps-7", className)}
       wholeUnitsMessage={whole ? t(currencyCode.trim().toUpperCase() === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}
     />
   );
   if (!prefix) return input;
   return (
     <div className="relative">
-      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-body text-muted-foreground">
+      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 inset-s-3 flex items-center text-body text-muted-foreground">
         {prefix}
       </span>
       {input}

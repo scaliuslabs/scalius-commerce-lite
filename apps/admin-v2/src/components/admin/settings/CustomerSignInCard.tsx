@@ -111,7 +111,7 @@ export function CustomerSignInCard() {
             </span>
           </label>
           {!phonelessAllowed ? (
-            <p role={phoneless ? "alert" : undefined} className={`pb-1 pl-7 text-body ${phoneless ? "text-destructive" : "text-muted-foreground"}`}>
+            <p role={phoneless ? "alert" : undefined} className={`pb-1 ps-7 text-body ${phoneless ? "text-destructive" : "text-muted-foreground"}`}>
               {t("phoneOptionalNeedsEmail")}
             </p>
           ) : null}
@@ -184,7 +184,7 @@ export function CustomerSignInCard() {
                   {t(CHANNEL_LABEL[channel])}
                 </label>
                 {hint ? (
-                  <p role={on ? "alert" : undefined} className={`pb-1 pl-7 text-body ${on ? "text-destructive" : "text-muted-foreground"}`}>
+                  <p role={on ? "alert" : undefined} className={`pb-1 ps-7 text-body ${on ? "text-destructive" : "text-muted-foreground"}`}>
                     {collected ? (
                       <Link to="/admin/settings/notifications" hash="sending" className="underline underline-offset-2">{hint}</Link>
                     ) : hint}

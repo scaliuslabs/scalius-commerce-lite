@@ -205,7 +205,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
   <div class="catalog-filter-groups">
     {searchField && (
       <div class="catalog-filter-search relative">
-        <Icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Icon name="search" class="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <label for="catalog-filter-search" class="sr-only">{searchLabel}</label>
         <input
           id="catalog-filter-search"
@@ -215,7 +215,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
           value={query}
           maxlength={120}
           enterkeyhint="search"
-          class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-4 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm"
+          class="w-full rounded-lg border border-border bg-background py-2 ps-9 pe-4 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm"
         />
       </div>
     )}
@@ -308,7 +308,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                 ].map(({ name, label, placeholder }) => (
                   <div class="relative min-w-0">
                     <label for={`catalog-${name}`} class="sr-only">{label} price</label>
-                    <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">{currencySymbol}</span>
+                    <span class="pointer-events-none absolute inset-s-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">{currencySymbol}</span>
                     {/* Plain text with a decimal keypad: Bangla digits are read as Latin. */}
                     <input
                       id={`catalog-${name}`}
@@ -403,7 +403,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
               {searchable && (
                 // Shown by JavaScript (it fetches the values it searches).
                 <div class="catalog-facet-search relative" data-catalog-facet-search hidden>
-                  <Icon name="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Icon name="search" class="pointer-events-none absolute inset-s-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   {/* No name: it narrows the list and is never submitted. */}
                   <input
                     type="search"

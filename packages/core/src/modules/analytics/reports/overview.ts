@@ -17,6 +17,7 @@ import {
   type AnalyticsGranularity,
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
+import type { WeekDay } from "@scalius/shared/week-start";
 import {
   hasPriorSalesOrderSql,
   merchantDaySql,
@@ -403,11 +404,12 @@ export function rollUpDays(
   range: AnalyticsRange,
   days: OverviewPeriod["days"],
   granularity: AnalyticsGranularity,
+  weekStart: WeekDay = 0,
 ): Array<{ key: string; from: string; to: string; measures: SalesMeasures }> {
-  const buckets = analyticsBuckets(range, granularity).map((bucket) => ({ ...bucket, measures: { ...EMPTY_MEASURES } }));
+  const buckets = analyticsBuckets(range, granularity, weekStart).map((bucket) => ({ ...bucket, measures: { ...EMPTY_MEASURES } }));
   const byKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
   for (const day of days) {
-    const bucket = byKey.get(analyticsBucketKey(day.date, granularity));
+    const bucket = byKey.get(analyticsBucketKey(day.date, granularity, weekStart));
     if (!bucket) continue;
     const { date: _date, ...measures } = day;
     bucket.measures = addMeasures(bucket.measures, measures);
@@ -426,9 +428,9 @@ export async function getAnalyticsOverview(ctx: AnalyticsContext, input: Overvie
     ? mapOverviewPeriod(previousRange, previousRows as Record<string, unknown>[])
     : null;
 
-  const currentBuckets = rollUpDays(input.range, current.days, input.granularity);
+  const currentBuckets = rollUpDays(input.range, current.days, input.granularity, ctx.weekStart);
   const previousBuckets = previous && previousRange
-    ? rollUpDays(previousRange, previous.days, input.granularity)
+    ? rollUpDays(previousRange, previous.days, input.granularity, ctx.weekStart)
     : [];
   return {
     currency: { code: ctx.currency.code, decimalPlaces: ctx.currency.decimalPlaces },

@@ -34,6 +34,7 @@ import {
     type AttributeBatchItem,
     type CatalogProjectionRefresh,
 } from "./projection-refresh";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 /** Distinct values an enum conversion may create. */
 export const MAX_ENUM_CONVERSION_VALUES = 2_000;
@@ -171,7 +172,7 @@ export async function convertAttributeValueType(
         }
         if (distinctValues > MAX_CONVERSION_DISTINCT_VALUES) {
             throw new ValidationError(
-                `This attribute has more than ${MAX_CONVERSION_DISTINCT_VALUES.toLocaleString("en")} different values; it cannot be converted in one run.`,
+                `This attribute has more than ${formatNumber(MAX_CONVERSION_DISTINCT_VALUES, "en")} different values; it cannot be converted in one run.`,
             );
         }
         if (page.length < DISTINCT_VALUE_PAGE) break;
@@ -179,7 +180,7 @@ export async function convertAttributeValueType(
     }
     if (target === "enum" && enumDisplays.size > MAX_ENUM_CONVERSION_VALUES) {
         throw new ValidationError(
-            `An enum attribute can have at most ${MAX_ENUM_CONVERSION_VALUES.toLocaleString("en")} values; these products use ${enumDisplays.size.toLocaleString("en")}. Keep it as text.`,
+            `An enum attribute can have at most ${formatNumber(MAX_ENUM_CONVERSION_VALUES, "en")} values; these products use ${formatNumber(enumDisplays.size, "en")}. Keep it as text.`,
         );
     }
 

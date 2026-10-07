@@ -171,7 +171,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" disabled={busy}>
             {r("moreActions")}
-            <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+            <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

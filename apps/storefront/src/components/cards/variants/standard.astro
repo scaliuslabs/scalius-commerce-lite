@@ -5,6 +5,7 @@ import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import type { ProductCardImageLoading } from "@/lib/product-card-layout";
 import CardMedia from "../parts/CardMedia.astro";
 import { reviewStarFill } from "@/components/product/reviews/review-format";
+import { formatCount } from "@/lib/store-time-zone";
 import { CARD_IMAGE_DIMENSIONS, type ProductCardModel } from "../card-model";
 
 interface Props {
@@ -49,8 +50,8 @@ const TitleTag = headingLevel;
       model.facts.rating && (
         <p class="mb-1.5 flex items-center gap-1 text-xs leading-none text-muted-foreground" data-card-fact="rating">
           <span class="sc-stars" style={`--sc-fill:${reviewStarFill(Number(model.facts.rating.average))};--sc-star:0.8125rem`} aria-hidden="true"></span>
-          <span aria-hidden="true" class="tabular-nums">({model.facts.rating.count.toLocaleString("en-IN")})</span>
-          <span class="sr-only">Rated {model.facts.rating.average} out of 5 from {model.facts.rating.count.toLocaleString("en-IN")} {model.facts.rating.count === 1 ? "review" : "reviews"}</span>
+          <span aria-hidden="true" class="tabular-nums">({formatCount(model.facts.rating.count)})</span>
+          <span class="sr-only">Rated {model.facts.rating.average} out of 5 from {formatCount(model.facts.rating.count)} {model.facts.rating.count === 1 ? "review" : "reviews"}</span>
         </p>
       )
     }

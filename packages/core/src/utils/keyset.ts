@@ -32,6 +32,7 @@ import {
     type ListCursorShape,
 } from "@scalius/shared/pagination";
 import { AppError } from "../errors";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 /** The plan's list limits: the count cap and the deepest numbered page. */
 export type ListLimits = PlanLimits["lists"];
@@ -140,7 +141,7 @@ export function tooDeepPage(offset: number, maxOffset: number = planLimits().lis
     return new AppError(
         400,
         LIST_OFFSET_ERROR_CODE,
-        `Page numbers reach the first ${maxOffset.toLocaleString("en-US")} rows only (this page starts at row ${(offset + 1).toLocaleString("en-US")}). Walk further with the after cursor from pageInfo.endCursor.`,
+        `Page numbers reach the first ${formatNumber(maxOffset, "en")} rows only (this page starts at row ${formatNumber(offset + 1, "en")}). Walk further with the after cursor from pageInfo.endCursor.`,
         { maxOffset },
     );
 }

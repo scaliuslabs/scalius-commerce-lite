@@ -93,7 +93,7 @@ export function DataTableHeadCell<TData extends TableRowData>({
     <TableHead
       {...attributes}
       // INDEX_CELL's padding, written out for the class checker.
-      className={cn("px-1.5 first:pl-3 last:pr-3", size !== 150 && "w-(--column-width)")}
+      className={cn("px-1.5 first:ps-3 last:pe-3", size !== 150 && "w-(--column-width)")}
       style={{ "--column-width": `${size}px`, "--column-max": maxWidth ? `${maxWidth}px` : undefined } as CSSProperties}
     >
       {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}

@@ -223,7 +223,7 @@ export function PickList({ label, help, items, onChange, error, children }: {
       {items.length > 0 ? (
         <ol className="divide-y rounded-lg border">
           {items.map((item, index) => (
-            <li key={item.id} className="flex min-h-11 items-center gap-1 py-1 pr-1 pl-3">
+            <li key={item.id} className="flex min-h-11 items-center gap-1 py-1 pe-1 ps-3">
               <span className="min-w-0 flex-1 truncate text-body">{item.name}</span>
               <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionUp", { name: item.name })} disabled={index === 0} onClick={() => onChange(moveAt(ids, index, -1))}>
                 <ArrowUp aria-hidden="true" />

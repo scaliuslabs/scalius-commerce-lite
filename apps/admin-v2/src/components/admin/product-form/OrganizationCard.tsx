@@ -174,7 +174,7 @@ function CategoryCombobox({
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t("chooseCategory")}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
@@ -199,7 +199,7 @@ function CategoryCombobox({
                       setOpen(false);
                     }}
                   >
-                    <Check className="mr-2 h-4 w-4 opacity-0" />
+                    <Check className="me-2 h-4 w-4 opacity-0" />
                     <span className="flex-1 text-muted-foreground">{t("noCategory")}</span>
                   </CommandItem>
                 ) : null}
@@ -213,7 +213,7 @@ function CategoryCombobox({
                       setSearch("");
                     }}
                   >
-                    <Check className={cn("mr-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
+                    <Check className={cn("me-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
                     <span className="flex-1">{pathOf(category)}</span>
                     {statusLabel(category) ? (
                       <span className="text-body text-muted-foreground">{statusLabel(category)}</span>
@@ -233,7 +233,7 @@ function CategoryCombobox({
                     disabled={isCreating}
                     aria-describedby={createError ? "create-category-error" : undefined}
                   >
-                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                    {isCreating ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Plus className="me-2 h-4 w-4" />}
                     {t("createCategory", { name })}
                   </Button>
                   {createError ? (

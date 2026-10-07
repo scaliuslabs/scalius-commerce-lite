@@ -48,13 +48,18 @@ export const CELL_PADDING = 12;
 /** A sortable heading's arrow and its gap. */
 export const SORT_ARROW = 18;
 
+/** The narrowest window that shows the navigation panel (`NAV_PANEL_QUERY`, nav-button.ts); narrower ones use the menu drawer. */
+export const NAV_PANEL_MIN_WIDTH = 1100;
+
 /**
- * The list table's width in a window this wide, with the navigation panel
- * open (240px), the canvas' 8px inset, the page's 24px padding each side, a
- * 15px scrollbar gutter (Windows) and the page's 1280px cap.
+ * The list table's width in a window this wide: the navigation panel open
+ * (240px) from 1100px, else the canvas' 8px inset on its left too; the
+ * canvas' 8px inset, the page's 24px padding each side, a 15px scrollbar
+ * gutter (Windows) and the page's 1280px cap.
  */
 export function tableWidth(viewport: number): number {
-  return Math.min(1280, viewport - 240 - 8 - 48 - 15);
+  const navigation = viewport >= NAV_PANEL_MIN_WIDTH ? 240 : 8;
+  return Math.min(1280, viewport - navigation - 8 - 48 - 15);
 }
 
 /** Window widths the lists are checked at; phones get cards. */

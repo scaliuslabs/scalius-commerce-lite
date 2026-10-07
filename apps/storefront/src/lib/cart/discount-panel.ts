@@ -154,7 +154,7 @@ export function renderDiscountPanel(
     const rejection = facts?.rejectedCodes.find((candidate) => candidate.code === code);
     const chip = element(
       "li",
-      `inline-flex min-h-9 items-center gap-1 rounded-full border pl-3 text-sm ${rejection ? "border-dashed border-border text-muted-foreground" : "border-primary/40 bg-primary/5 font-medium text-foreground"}`,
+      `inline-flex min-h-9 items-center gap-1 rounded-full border ps-3 text-sm ${rejection ? "border-dashed border-border text-muted-foreground" : "border-primary/40 bg-primary/5 font-medium text-foreground"}`,
     );
     chip.append(element("span", "font-mono", code));
     const remove = element("button", "inline-flex h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring");

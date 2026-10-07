@@ -44,9 +44,9 @@ const SheetContent = React.forwardRef<
       className={cn(
         "fixed z-50 h-full w-full bg-white shadow-lg focus:outline-none",
         side === "right" &&
-          "inset-y-0 right-0 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
+          "inset-y-0 inset-e-0 border-s data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
         side === "left" &&
-          "inset-y-0 left-0 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-md",
+          "inset-y-0 inset-s-0 border-e data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-md",
         side === "top" &&
           "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top h-auto",
         side === "bottom" &&
@@ -68,7 +68,7 @@ const SheetHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-2 text-center sm:text-left",
+      "flex flex-col space-y-2 text-center sm:text-start",
       className,
     )}
     {...props}

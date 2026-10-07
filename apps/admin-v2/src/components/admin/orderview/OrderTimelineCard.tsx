@@ -115,7 +115,7 @@ export function OrderTimelineCard({ order }: { order: Order }) {
         ) : events.length === 0 ? (
           <p className="text-muted-foreground">{t("timeline.empty")}</p>
         ) : (
-          <ol className="space-y-3 border-l pl-4">
+          <ol className="space-y-3 border-s ps-4">
             {events.map((event) => {
               const line = describeTimelineEvent(event, t, o, money);
               const comment = event.kind === "comment";

@@ -5,7 +5,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
-import { setStoreTimeZone } from "../store-time-zone";
+import { setStoreRegion, setStoreTimeZone } from "../store-time-zone";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 
@@ -28,13 +28,14 @@ export const storeSetupQueryOptions = () =>
   });
 
 /**
- * Sets the dashboard's store time zone from the setting (the admin frame's
- * loader runs it on each navigation; the read is cached for 30 minutes).
- * Until it returns, the last known zone holds.
+ * Sets the dashboard's store time zone and country from the settings (the
+ * admin frame's loader runs it on each navigation; the read is cached for 30
+ * minutes). Until it returns, the last known values hold.
  */
 export async function syncStoreDefaults(queryClient: QueryClient): Promise<void> {
   const defaults = await queryClient.fetchQuery(storeDefaultsQueryOptions());
   setStoreTimeZone(defaults.timeZone);
+  setStoreRegion(defaults.countryCode);
 }
 
 /** The store's unit system and default weight unit (metric grams until the read returns). */

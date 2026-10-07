@@ -291,7 +291,7 @@ export function SummarySection() {
           <Alert variant="destructive">
             <AlertTitle>{t("appRulesTitle")}</AlertTitle>
             <AlertDescription>
-              <ul className="list-disc space-y-1 pl-4">
+              <ul className="list-disc space-y-1 ps-4">
                 {ruleErrors.map((error, position) => {
                   const name = error.index === null ? null : items?.[error.index]?.name;
                   return (

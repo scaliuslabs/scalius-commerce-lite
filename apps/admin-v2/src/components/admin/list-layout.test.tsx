@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 
 // The orders, products and customers lists with the most and the least data
-// they can hold, at laptop widths (1024, 1280, 1440 and 1920px windows) and on
-// phones, in English and Bangla. happy-dom lays nothing out, so widths are
+// they can hold, at laptop widths (1024, 1280, 1440 and 1920px windows; below
+// 1100px the navigation is the menu drawer) and on phones, in English and Bangla. happy-dom lays nothing out, so widths are
 // budgeted with the fonts' real glyph advances (list-width.fixture.ts):
 // - every column's minWidth holds its widest content and heading, so fitting
 //   the columns by minWidth never overflows the page and never clips;
-// - Order and Date always show; 1280 and 1440 show each list's working set;
+// - Order and Date always show; 1280 and 1440 show each list's working set,
+//   and 1024 the orders list's Total;
 // - apps' data-backed columns fit, step aside first, and the column menu
 //   shows, hides and moves them;
 // - every row has the same lines (stable height) with full or empty data, and
@@ -35,9 +36,11 @@ import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import type { ColumnDef, TableRowData } from "./data-table/table-config";
 import { dataColumns, type DataColumnSpec } from "./data-table/data-columns";
 import { listDateLabel } from "./data-table/ListDate";
+import { NAV_PANEL_QUERY } from "./layout/nav-button";
 import {
   CELL_PADDING,
   LAPTOP_VIEWPORTS,
+  NAV_PANEL_MIN_WIDTH,
   SORT_ARROW,
   TYPE,
   badgeWidth,
@@ -250,6 +253,13 @@ describe("list layout with the most and the least data", () => {
       // They show where there is room.
       expect(fitList(list.columns(), 4000).shown.filter((id) => id.startsWith("app."))).toHaveLength(4);
     });
+  });
+
+  it.each(LOCALES)("shows the orders list's Total on a 1024px laptop, where the navigation is the menu drawer (%s)", (locale) => {
+    setLocale(locale);
+    expect(NAV_PANEL_QUERY).toBe(`(min-width: ${NAV_PANEL_MIN_WIDTH}px)`);
+    expect(tableWidth(1024)).toBeGreaterThan(tableWidth(NAV_PANEL_MIN_WIDTH));
+    expect(fitList(orderColumns(), tableWidth(1024)).shown).toContain("total");
   });
 
   it.each(LOCALES)("folds Payment and Fulfillment into one cell only where they don't fit side by side (%s)", (locale) => {

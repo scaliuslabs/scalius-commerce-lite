@@ -50,7 +50,7 @@ describe("store defaults and store setup routes", () => {
 
   it("reads and saves the time zone and units at the platform revision", async () => {
     const read = await call("GET", "/store-defaults");
-    expect(read).toMatchObject({ status: 200, body: { data: { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0 } } });
+    expect(read).toMatchObject({ status: 200, body: { data: { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0, countryCode: "BD" } } });
 
     const saved = await call("POST", "/store-defaults", { expectedRevision: 0, timeZone: "Europe/London", unitSystem: "imperial" });
     expect(saved).toMatchObject({ status: 200, body: { data: { timeZone: "Europe/London", unitSystem: "imperial", weightUnit: "lb", revision: 1 } } });
@@ -74,5 +74,7 @@ describe("store defaults and store setup routes", () => {
     const again = await call("POST", "/store-setup", { storeName: "Maison", countryCode: "FR", timeZone: "Europe/Paris" });
     expect(again).toMatchObject({ status: 409, body: { error: { code: "STORE_SETUP_DONE" } } });
     expect((await call("GET", "/store-setup")).body.data).toMatchObject({ needed: false, done: "markets_configured" });
+    // The dashboard formats and starts its weeks by the store's country.
+    expect((await call("GET", "/store-defaults")).body.data).toMatchObject({ countryCode: "FR" });
   });
 });

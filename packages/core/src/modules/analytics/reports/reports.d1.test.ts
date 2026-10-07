@@ -137,6 +137,12 @@ describe("sales reports on the known-answer store", () => {
     // Sunday weeks: 26 Jul (holds 1 Aug) … 30 Aug (holds 30–31 Aug).
     expect(weeks.rows.map((row) => row.id)).toEqual(["2026-07-26", "2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"]);
     expect(weeks.rows.reduce((sum, row) => sum + Number(row.values.total_sales), 0)).toBe(276_700);
+    // A store in Germany starts its weeks on Monday (CLDR): the same sales in Monday weeks.
+    const monday = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
+    expect(monday.weekStart).toBe(0);
+    const mondayWeeks = await getAnalyticsReportPage({ ...monday, weekStart: 1 }, "sales_over_time", { ...AUGUST, pageSize: 100, granularity: "week" }, FULL_ACCESS);
+    expect(mondayWeeks.rows.map((row) => row.id)).toEqual(["2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31"]);
+    expect(mondayWeeks.rows.reduce((sum, row) => sum + Number(row.values.total_sales), 0)).toBe(276_700);
     const months = await report("sales_over_time", { from: "2026-07-01", to: "2026-08-31", granularity: "month" });
     expect(months.rows.map((row) => [row.id, row.values.total_sales])).toEqual([["2026-07-01", 23_000], ["2026-08-01", 276_700]]);
   });

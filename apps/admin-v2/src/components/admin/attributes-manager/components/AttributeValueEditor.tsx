@@ -191,7 +191,7 @@ export function AttributeValueEditor({
           <fieldset disabled={pending} className="flex min-w-0 flex-col gap-3">
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative min-w-0 flex-1">
-                <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search aria-hidden="true" className="absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="search"
                   aria-label={t("searchValues")}
@@ -202,7 +202,7 @@ export function AttributeValueEditor({
                     setPage(1);
                   }}
                   // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-                  className="pl-9"
+                  className="ps-9"
                 />
               </div>
               {readOnly ? null : isAddingNew ? (
@@ -267,7 +267,7 @@ export function AttributeValueEditor({
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t("value")}</TableHead>
-                      <TableHead className="w-24 text-right">{t("products")}</TableHead>
+                      <TableHead className="w-24 text-end">{t("products")}</TableHead>
                       {readOnly ? null : <TableHead className="w-24" />}
                     </TableRow>
                   </TableHeader>
@@ -324,7 +324,7 @@ export function AttributeValueEditor({
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{formatNumber(item.productCount)}</TableCell>
+                        <TableCell className="text-end">{formatNumber(item.productCount)}</TableCell>
                         {readOnly ? null : (
                           <TableCell>
                             {editingValue === item.value ? null : (

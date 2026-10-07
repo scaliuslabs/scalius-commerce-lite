@@ -107,7 +107,7 @@ if (images.length === 0) return;
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
-                <picture class:list={["block h-full w-full", editorial && "md:absolute md:inset-y-0 md:right-0 md:w-[48%]"]}>
+                <picture class:list={["block h-full w-full", editorial && "md:absolute md:inset-y-0 md:inset-e-0 md:w-[48%]"]}>
                   <source
                     media={candidate.media}
                     srcset={index === 0 ? source : undefined}
@@ -168,7 +168,7 @@ if (images.length === 0) return;
       canRotate && (
         <button
           type="button"
-          class="absolute bottom-0 right-2 z-20 flex h-11 w-11 items-center justify-center rounded-full text-white"
+          class="absolute bottom-0 inset-e-2 z-20 flex h-11 w-11 items-center justify-center rounded-full text-white"
           aria-label="Pause slideshow"
           data-carousel-pause
         >
@@ -212,7 +212,7 @@ if (images.length === 0) return;
         <>
           <button
             type="button"
-            class="nav-button absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
+            class="nav-button absolute inset-s-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
             aria-label="Previous slide"
             data-nav="prev"
           >
@@ -233,7 +233,7 @@ if (images.length === 0) return;
           </button>
           <button
             type="button"
-            class="nav-button absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
+            class="nav-button absolute inset-e-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
             aria-label="Next slide"
             data-nav="next"
           >
@@ -743,7 +743,7 @@ if (images.length === 0) return;
     [data-carousel-layout="wide-editorial"] .nav-button {
       top: auto;
       bottom: 0.25rem;
-      left: auto;
+      inset-inline-start: auto;
       transform: none;
     }
 

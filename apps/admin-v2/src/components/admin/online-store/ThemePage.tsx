@@ -63,7 +63,7 @@ function TemplatePreview({ theme, layout, className = "h-28" }: { theme: Theme; 
             <span className="flex items-center gap-1">
               <span className="h-1 w-4 bg-(--sk-paper)" />
               <span className="flex h-2 flex-1 overflow-clip rounded-xs bg-(--sk-paper)">
-                <span className="ml-auto w-2 bg-(--sk-purchase)" />
+                <span className="ms-auto w-2 bg-(--sk-purchase)" />
               </span>
               <span className="size-1 rounded-full bg-(--sk-paper)" />
               <span className="size-1 rounded-full bg-(--sk-paper)" />
@@ -75,7 +75,7 @@ function TemplatePreview({ theme, layout, className = "h-28" }: { theme: Theme; 
             </span>
           </span>
           <span className="flex min-h-0 flex-1 gap-1">
-            <span data-marketplace-category-grid className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-r border-(--sk-edge) pr-1">
+            <span data-marketplace-category-grid className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-e border-(--sk-edge) pe-1">
               {[0, 1, 2, 3].map((index) => (
                 <span key={index} className="flex min-h-0 flex-col gap-0.5 rounded-xs border border-(--sk-edge) p-0.5">
                   <span className="min-h-0 flex-1 bg-(--sk-soft)" />

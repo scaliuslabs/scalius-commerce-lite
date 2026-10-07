@@ -121,7 +121,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
             <input type="hidden" name="orderId" value={orderId} />
             <p class="text-sm" data-order-code-order hidden={orderNumber === null}>
               <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
-              <span data-order-number class="ml-2 font-medium text-foreground">{orderNumber !== null ? formatOrderNumber(orderNumber, "") : ""}</span>
+              <span data-order-number class="ms-2 font-medium text-foreground">{orderNumber !== null ? formatOrderNumber(orderNumber, "") : ""}</span>
             </p>
             <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
               <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>

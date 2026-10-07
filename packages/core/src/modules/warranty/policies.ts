@@ -22,6 +22,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import { codePoints, nowSeconds, type BatchStatement } from "./shared";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 const POLICY_CONFLICT = "WARRANTY_POLICY_CHANGED";
 /** Stores keep a handful of policies; the list is bounded all the same. */
@@ -102,7 +103,7 @@ export function normalizeWarrantyPolicyInput(input: {
   if (typeof input.terms === "string") {
     const cleaned = input.terms.replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").trim();
     if (codePoints(cleaned) > WARRANTY_LIMITS.termsLength) {
-      throw new ValidationError(`Keep the terms under ${WARRANTY_LIMITS.termsLength.toLocaleString("en-US")} characters.`, { field: "terms" });
+      throw new ValidationError(`Keep the terms under ${formatNumber(WARRANTY_LIMITS.termsLength, "en")} characters.`, { field: "terms" });
     }
     terms = cleaned || null;
   } else if (input.terms !== null && input.terms !== undefined) {

@@ -38,7 +38,8 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 - All headings are semibold. Inline emphasis is `font-medium`.
 - Wrap SKUs, order IDs, phone numbers and tracking codes in `<code>` inside a sentence (`code`, `kbd` and `samp` render at 0.9em). A standalone mono value, such as a SKU column, uses `font-mono` at body size.
-- Format money with `useCurrency().fmt()`: store currency symbol first, digits grouped in lakhs. Use `tabular-nums` outside tables.
+- Format money with `useCurrency().fmt()`: store currency symbol first, digits grouped as the store's country groups them (lakhs in Bangladesh). Use `tabular-nums` outside tables.
+- Format numbers and dates with `formatNumber` and `formatDateTime` from `~/i18n` (`@scalius/shared/locale-format`: Intl for the dashboard language in the store's country, store time), lists with `formatList(items, getLocale())` (`@scalius/shared/locale-words`), and weights with `formatWeight` (`product-form/variants/weight-format.ts`). Never call `Intl` formatters or `toLocaleString` yourself (`scripts/check-source-policies.mjs`).
 - Bangla (`<html lang="bn">`, set before paint) switches the same classes to the Bangla sizes and loads Noto Sans Bengali. Controls size to their line, so vowel signs never clip, and buttons grow instead of truncating. Truncate only with CSS (`truncate`, `line-clamp-*`), never by slicing strings. Keep Latin digits in inputs, SKUs, phones and IDs.
 
 ## Rules
@@ -121,7 +122,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 Code: `components/admin/layout/`.
 
-- A near-black frame (`bg-sidebar`) holds the navigation and a 56px top bar. From `md`, the page sits on a rounded canvas inset 8px from the frame, and the navigation is a 240px panel that `Cmd+B` or `Ctrl+B` collapses to a 56px icon rail (saved per browser, read before the first render). Phones get a drawer behind a Menu button: one scrolling list of every section with its sub-pages already open (no accordions), opened at the current page and closed by any link.
+- A near-black frame (`bg-sidebar`) holds the navigation and a 56px top bar. From `md`, the page sits on a rounded canvas inset 8px from the frame. From 1100px (`nav:`, `NAV_PANEL_QUERY` in `nav-button.ts`), the navigation is a 240px panel that `Cmd+B` or `Ctrl+B` collapses to a 56px icon rail (saved per browser, read before the first render). Narrower windows (phones, tablets, a 1024px laptop) get a drawer behind a Menu button, as Shopify does: one scrolling list of every section with its sub-pages already open (no accordions), opened at the current page and closed by any link. So a 1024px laptop gives lists the full width.
 - The top bar holds one search pill (`Cmd+K` cap), help, notifications and the store menu. While a form is dirty, the contextual save bar replaces the pill (`SaveBar` portals into `#admin-top-bar-pill`) and shakes when leaving is blocked.
 - Navigation rows use `NAV_ROW` (`nav-button.ts`). The current page (`aria-current=page`) sits on the `bg-sidebar-accent` pill in semibold.
 - Declare every keyboard shortcut once in `shortcuts.ts` (`SHORTCUTS`, `matchesShortcut`). The `?` dialog lists that table.
@@ -144,6 +145,15 @@ Code: `components/admin/orderview/status-badges.ts` (`statusBadgeVariant(status,
 | Record (products, categories, brands, collections, pages, posts, discounts) | active | scheduled | none | draft | expired, error |
 
 Record states `archived`, `hidden` and `inactive` are `secondary`. A cancelled, refunded, returned or incomplete order shows only its status badge (`orderBadgeVisibility`).
+
+## Right to left
+
+Write sides as the reading direction sees them, so a right-to-left language mirrors the page:
+
+- Use logical utilities: `ms-`/`me-`, `ps-`/`pe-`, `inset-s-`/`inset-e-`, `border-s`/`border-e`, `rounded-s-`/`rounded-e-`, `text-start`/`text-end` (lint: `scripts/check-source-policies.mjs`). Keep a physical side only for centring with a translate or a position measured in pixels from the left; add it to `PHYSICAL_UTILITY_ALLOW` with that reason, or pair it with `rtl:`.
+- Write CSS with logical properties (`inset-inline-start`, `margin-inline-end`, `border-inline-start`).
+- Arrows and chevrons that point along the line (lucide `chevron-*`, `arrow-*`) mirror by themselves (`global.css`); a rotated disclosure chevron keeps its turn.
+- `<html dir>` follows the language (`applyDocumentLocale`). Tests use the pseudo-locale `RTL_PSEUDO_LOCALE` (`ar-XB`); the catalogs stay English and Bangla.
 
 ## Checklist for every screen
 

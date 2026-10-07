@@ -22,8 +22,8 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.C
         ref={ref}
         className={cn(
           "fixed z-50 bg-card text-card-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible",
-          side === "right" && "inset-y-0 right-0 h-full w-full sm:max-w-md",
-          side === "left" && "inset-y-0 left-0 h-full w-full sm:max-w-md",
+          side === "right" && "inset-y-0 inset-e-0 h-full w-full sm:max-w-md",
+          side === "left" && "inset-y-0 inset-s-0 h-full w-full sm:max-w-md",
           side === "top" && "inset-x-0 top-0",
           side === "bottom" && "inset-x-0 bottom-0 rounded-t-2xl",
           className,
@@ -38,7 +38,7 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.C
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col gap-1 text-left", className)} {...props} />
+  <div className={cn("flex flex-col gap-1 text-start", className)} {...props} />
 );
 SheetHeader.displayName = "SheetHeader";
 

@@ -152,7 +152,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
             data-image-stage="mobile"
             data-mobile-image-trigger
             class:list={[
-              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-muted text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden motion-reduce:transition-none",
+              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-muted text-start transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden motion-reduce:transition-none",
               mobileSwipe && "touch-pan-y",
               videoFirst && "hidden",
             ]}
@@ -173,7 +173,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
               decoding="sync"
             />
             <span
-              class="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
+              class="pointer-events-none absolute inset-e-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
             >
               <Icon name="maximize-2" class="h-3 w-3" />
               Zoom
@@ -215,7 +215,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
               >
               </div>
               <div
-                class="pointer-events-none absolute right-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+                class="pointer-events-none absolute inset-e-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
               >
                 Zoom
               </div>
@@ -265,7 +265,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
               <button
                 type="button"
                 data-scroll-control="mobile-up"
-                class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
+                class="pointer-events-none absolute -top-1 inset-s-0 inset-e-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media up"
                 tabindex="-1"
               >
@@ -332,10 +332,10 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                             aria-hidden="true"
                           >
                             <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
-                              <Icon name="play" class="ml-0.5 h-4 w-4 fill-current" />
+                              <Icon name="play" class="ms-0.5 h-4 w-4 fill-current" />
                             </span>
                           </span>
-                          <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
+                          <span class="absolute bottom-1 inset-s-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
                             Video
                             {itemData.duration ? ` · ${itemData.duration}` : ""}
                           </span>
@@ -358,7 +358,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
               <button
                 type="button"
                 data-scroll-control="mobile-down"
-                class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
+                class="pointer-events-none absolute bottom-0 inset-s-0 inset-e-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media down"
                 tabindex="-1"
               >
@@ -378,7 +378,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
           <button
             type="button"
             data-scroll-control="desktop-up"
-            class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
+            class="pointer-events-none absolute -top-1 inset-s-0 inset-e-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media up"
             tabindex="-1"
           >
@@ -389,7 +389,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
 
           <div
             data-thumbnail-rail="desktop"
-            class="custom-scrollbar absolute inset-0 flex flex-col gap-3 overflow-y-auto scroll-smooth pr-1 pb-4 snap-y snap-mandatory motion-reduce:scroll-auto"
+            class="custom-scrollbar absolute inset-0 flex flex-col gap-3 overflow-y-auto scroll-smooth pe-1 pb-4 snap-y snap-mandatory motion-reduce:scroll-auto"
             aria-label="Product media"
           >
             {galleryItems.map((itemData, index) => (
@@ -442,10 +442,10 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                       aria-hidden="true"
                     >
                       <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
-                        <Icon name="play" class="ml-0.5 h-4 w-4 fill-current" />
+                        <Icon name="play" class="ms-0.5 h-4 w-4 fill-current" />
                       </span>
                     </span>
-                    <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    <span class="absolute bottom-1 inset-s-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                       Video{itemData.duration ? ` · ${itemData.duration}` : ""}
                     </span>
                   </>
@@ -465,7 +465,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
           <button
             type="button"
             data-scroll-control="desktop-down"
-            class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
+            class="pointer-events-none absolute bottom-0 inset-s-0 inset-e-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media down"
             tabindex="-1"
           >
@@ -524,7 +524,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
     aria-hidden="true"
     inert
   >
-    <div class="absolute top-0 right-0 left-0 z-20 flex justify-end p-4">
+    <div class="absolute top-0 inset-e-0 inset-s-0 z-20 flex justify-end p-4">
       <button
         type="button"
         data-close-mobile-zoom
@@ -550,7 +550,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
       />
     </div>
     <div
-      class="pointer-events-none absolute right-0 bottom-8 left-0 text-center text-xs text-white/50"
+      class="pointer-events-none absolute inset-e-0 bottom-8 inset-s-0 text-center text-xs text-white/50"
     >
       Double tap to zoom • Drag to pan
     </div>

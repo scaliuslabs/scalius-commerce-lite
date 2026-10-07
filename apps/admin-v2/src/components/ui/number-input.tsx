@@ -1,14 +1,14 @@
 import * as React from "react";
 import { Input } from "./input";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 /**
- * Reads a typed number the way merchants type it: Bangla digits (০–৯),
+ * Reads a typed number the way merchants type it: Bangla (০–৯) or Arabic digits,
  * grouping commas and spaces are accepted. Empty text is `null`; text that is
  * not a number is `NaN`, so the caller can say so instead of dropping it.
  */
 export function parseLocaleNumber(text: string): number | null {
-  const latin = text
-    .replace(/[০-৯]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6))
+  const latin = toLatinDigits(text)
     .replace(/[\s,]/g, "")
     .replace(/[٫।]/g, ".");
   if (latin === "") return null;

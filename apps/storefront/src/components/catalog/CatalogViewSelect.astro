@@ -45,7 +45,7 @@ const attributes = {
     <select
       id={id}
       {...attributes}
-      class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+      class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 ps-3 pe-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
     >
       {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
     </select>

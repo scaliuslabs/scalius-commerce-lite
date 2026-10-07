@@ -78,7 +78,7 @@ export function InboxList({
       />
       <div className="flex flex-col gap-2 border-b p-3">
         <div className="relative">
-          <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search aria-hidden className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             value={term}
@@ -86,7 +86,7 @@ export function InboxList({
             placeholder={t("search")}
             aria-label={t("search")}
             // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-            className="pl-9"
+            className="ps-9"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">

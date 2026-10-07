@@ -124,7 +124,7 @@ const DialogPanel = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.C
       <DialogPrimitive.Content ref={panelRef} data-slot="dialog-content" className={cn(variant === "palette" ? paletteClassName : modalClassName, className)} {...props}>
         {children}
         {showCloseButton && variant === "modal" ? (
-          <DialogPrimitive.Close className="absolute right-2 top-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-3 sm:top-3 sm:size-8">
+          <DialogPrimitive.Close className="absolute inset-e-2 top-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inset-e-3 sm:top-3 sm:size-8">
             <X className="size-4" />
             <CloseLabel />
           </DialogPrimitive.Close>
@@ -144,7 +144,7 @@ const DialogContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col gap-1 pr-8 text-left", className)} {...props} />
+  <div className={cn("flex flex-col gap-1 pe-8 text-start", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 

@@ -5,6 +5,7 @@
 // new product never says "0 reviews". It reads the same `product.reviews` as
 // the module and the JSON-LD.
 import type { Product } from "@/lib/api";
+import { formatCount } from "@/lib/store-time-zone";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import {
   formatReviewAverage,
@@ -25,7 +26,7 @@ const average = summary ? formatReviewAverage(summary.average) : "";
 const ratings = summary
   ? summary.count === 1
     ? copy.reviewsRatingsCountOneText
-    : formatCheckoutLanguageText(copy.reviewsRatingsCountText, { count: summary.count.toLocaleString("en-IN") })
+    : formatCheckoutLanguageText(copy.reviewsRatingsCountText, { count: formatCount(summary.count) })
   : "";
 ---
 

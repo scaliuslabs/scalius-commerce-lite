@@ -61,7 +61,7 @@ const own = className !== undefined;
     )
   }
 
-  {(badge || model.soldOut) && <div class={own ? "product-card-badges" : "absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"}>
+  {(badge || model.soldOut) && <div class={own ? "product-card-badges" : "absolute top-3 inset-s-3 flex flex-col gap-1.5 pointer-events-none"}>
     {
       badge && (
         <span data-card-discount class:list={own ? ["product-card-badge", badgeStyle && `pc-badge-${badgeStyle}`] : "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"}>

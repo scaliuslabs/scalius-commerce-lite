@@ -1,7 +1,8 @@
 ---
 // src/layouts/Layout.astro
 import { DEFAULT_STORE_TIME_ZONE } from "@scalius/shared/commerce-time";
-import { storeTimeZone } from "@/lib/store-time-zone";
+import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
+import { DEFAULT_STORE_REGION, textDirection } from "@scalius/shared/locale-format";
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
@@ -195,12 +196,10 @@ const marketPresence = getRuntimePresence();
 const marketMatrix = layoutData?.markets ?? { markets: [] };
 const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPresence) : null;
 const pageLanguage = presenceEntry?.presence.locale ?? documentLanguage;
-// Open Graph locale from the document language and the store's (or the presence's) country.
-const ogLocale = presenceEntry
-  ? `${presenceEntry.presence.locale}_${presenceEntry.presence.value.slice(3).toUpperCase()}`
-  : `${documentLanguage}_${
-    /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
-  }`;
+// The page's country: the presence's, else the store's (the backup market's).
+// Numbers and dates are written as there; Open Graph names it with the language.
+const pageRegion = storeRegion();
+const ogLocale = `${pageLanguage}_${pageRegion}`;
 // hreflang, the market selector and the geo suggestion exist only while the
 // store sells at more than one URL, so a single-presence store's HTML is unchanged.
 const severalPresences = hasSeveralPresences(marketMatrix);
@@ -383,7 +382,9 @@ const pageStoreTimeZone = storeTimeZone();
 <!doctype html>
 <html
   lang={pageLanguage}
+  dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
   data-market-presence={marketPresence ?? undefined}
+  data-store-region={pageRegion === DEFAULT_STORE_REGION ? undefined : pageRegion}
   data-store-time-zone={pageStoreTimeZone === DEFAULT_STORE_TIME_ZONE ? undefined : pageStoreTimeZone}
   data-theme-preview={isThemePreview ? "true" : undefined}
   data-mobile-nav={showMobileTabs ? "tabs" : undefined}
@@ -496,7 +497,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
+      class="sr-only focus:not-sr-only focus:fixed focus:inset-s-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
     >
       Skip to content
     </a>

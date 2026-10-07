@@ -14,6 +14,7 @@ import {
 } from "@scalius/shared/store-defaults";
 import { ValidationError } from "@scalius/core/errors";
 import type { SettingsDocumentWriteRequest, SettingsStoreKv } from "../../settings-store";
+import { readStoreCountry } from "../../utils/store-country";
 import { platformDocument } from "./document";
 
 export interface StoreDefaults {
@@ -56,6 +57,15 @@ export function storeDefaultsPatch(current: StoreDefaults, patch: StoreDefaultsP
 export async function getStoreDefaults(db: Database): Promise<StoreDefaults & { revision: number }> {
   const { value, revision } = await platformDocument.readDetailed(db, {}, { skipCache: true });
   return { ...storeDefaultsOf(value), revision };
+}
+
+/**
+ * The store defaults with the store's country (the backup market's), which
+ * every staff screen formats numbers and dates and starts its weeks by.
+ */
+export async function getStoreFormatting(db: Database): Promise<StoreDefaults & { revision: number; countryCode: string | null }> {
+  const [defaults, countryCode] = await Promise.all([getStoreDefaults(db), readStoreCountry(db)]);
+  return { ...defaults, countryCode };
 }
 
 /** Saves a patch against the platform revision the editor loaded; the KV mirror is written through. */

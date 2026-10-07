@@ -1,6 +1,6 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { formatDateTime, getLocale } from "~/i18n";
+import { formatDateTime } from "~/i18n";
 import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
 import type { OrderTimestamp } from "./types";
 
@@ -9,16 +9,10 @@ function toDate(value: OrderTimestamp | null | undefined): Date | null {
   return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
-/**
- * Date and time in the store time zone, in the dashboard language. Bangla
- * uses the 24-hour clock: Intl has no Bangla AM/PM and would print Latin "AM".
- */
+/** Date and time in the store time zone, in the dashboard language (Bangla on the 24-hour clock). */
 export function formatOrderTimestamp(value: OrderTimestamp | null | undefined): string | null {
   const date = toDate(value);
-  if (!date) return null;
-  return formatDateTime(date, getLocale() === "bn"
-    ? { dateStyle: "medium", timeStyle: "short", hourCycle: "h23" }
-    : { dateStyle: "medium", timeStyle: "short" });
+  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : null;
 }
 
 /** The instant in ISO 8601, for a `<time dateTime>`. */

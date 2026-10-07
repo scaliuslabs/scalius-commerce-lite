@@ -1,21 +1,14 @@
 // Formatting utilities for media manager
 
-import { formatDate as formatStoreDate } from "@scalius/shared/timestamps";
-import { getStoreTimeZone } from "~/lib/store-time-zone";
+import { unixToDate } from "@scalius/shared/timestamps";
+import { formatDateTime, formatNumber } from "~/i18n";
 
-/** A media timestamp in store time. */
+/** A media timestamp in store time, in the dashboard language. */
 export function formatDate(value: Date | number | string | null | undefined): string {
-  return formatStoreDate(value, getStoreTimeZone());
+  const date = unixToDate(value ?? null);
+  return date && Number.isFinite(date.getTime()) ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "—";
 }
-export { formatDate as formatDateTime };
 
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
 
 export function formatFileType(mimeType: string): string {
   const typeMap: Record<string, string> = {
@@ -37,4 +30,16 @@ export function formatDuration(durationMs: number | null | undefined): string | 
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/** "12.5 MB" in the dashboard's number format. */
+export function formatFileSize(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${formatNumber(value, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
 }

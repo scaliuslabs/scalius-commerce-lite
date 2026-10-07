@@ -310,7 +310,7 @@ function ReviewRow({
         <button
           type="button"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 flex-col gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="flex flex-wrap items-center gap-2">
             <ReviewStars rating={review.rating} />
@@ -373,7 +373,7 @@ function ProductRatingCard({ stats, onShowAll }: { stats: ProductReviewStats; on
           >
             <span aria-hidden className="tabular-nums">{t("ratingOption", { count: row.rating })}</span>
             <Progress aria-hidden value={stats.count > 0 ? (row.count / stats.count) * 100 : 0} />
-            <span aria-hidden className="text-right tabular-nums">{formatNumber(row.count)}</span>
+            <span aria-hidden className="text-end tabular-nums">{formatNumber(row.count)}</span>
           </li>
         ))}
       </ul>

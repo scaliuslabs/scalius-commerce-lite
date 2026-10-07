@@ -639,14 +639,14 @@ function renderShippingLine(
   const parts: Array<Node | string> = [];
   if (net < shipping.baseFee) {
     const struck = document.createElement("s");
-    struck.className = "mr-1.5 font-normal text-muted-foreground";
+    struck.className = "me-1.5 font-normal text-muted-foreground";
     struck.textContent = formatMoney(shipping.baseFee);
     parts.push(struck);
   }
   parts.push(net === 0 ? copy.freeText : formatMoney(net));
   if (delivery.length > 0) {
     const codes = document.createElement("span");
-    codes.className = "ml-1 font-normal text-muted-foreground";
+    codes.className = "ms-1 font-normal text-muted-foreground";
     codes.textContent = `(${delivery.map(({ code, title }) => code ?? title).join(", ")})`;
     parts.push(codes);
   }
@@ -1224,7 +1224,7 @@ function renderCartLine(
                 <span class="flex h-full w-8 items-center justify-center text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
-              <div class="text-right"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
+              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
             </div>`}
             ${ruleBlock}
           </div>

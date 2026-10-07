@@ -3,6 +3,7 @@
 // count (Shopify's /collections). One batched read with the layout; the
 // cards take the template's own card colours, border and radius.
 import Layout from "@/layouts/Layout.astro";
+import { formatCount } from "@/lib/store-time-zone";
 import { getCollectionDirectory } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
@@ -35,7 +36,7 @@ const breadcrumbJsonLd = canonicalUrl && storefrontUrl
   : null;
 const hrefOf = (collection: (typeof collections)[number]) =>
   collection.canonicalPath || `/collections/${encodeURIComponent(collection.id)}`;
-const countText = (count: number) => `${count.toLocaleString("en-IN")} ${count === 1 ? "product" : "products"}`;
+const countText = (count: number) => `${formatCount(count)} ${count === 1 ? "product" : "products"}`;
 const letter = (name: string) => {
   const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next().value;
   return (first?.segment ?? "").toLocaleUpperCase();

@@ -28,7 +28,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
   return (
     <header
       data-slot="topbar"
-      className="relative flex h-14 shrink-0 items-center gap-1 px-2 text-topbar-foreground md:grid md:grid-cols-[1fr_minmax(0,40rem)_1fr] md:gap-2 md:pl-0 print:hidden"
+      className="relative flex h-14 shrink-0 items-center gap-1 px-2 text-topbar-foreground md:grid md:grid-cols-[1fr_minmax(0,40rem)_1fr] md:gap-2 nav:ps-0 print:hidden"
     >
       <div className="flex min-w-0">
         <button
@@ -36,7 +36,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           onClick={() => setDrawerOpen(true)}
           aria-label={t("toggleSidebar")}
           aria-expanded={drawerOpen}
-          className={cn(TOP_BAR_BUTTON, "md:hidden")}
+          className={cn(TOP_BAR_BUTTON, "nav:hidden")}
         >
           <Menu aria-hidden />
         </button>
@@ -47,10 +47,10 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           type="button"
           onClick={() => setSearchOpen(true)}
           aria-keyshortcuts={ariaKeys("search")}
-          className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-topbar-border bg-topbar-subdued pl-3 pr-1.5 text-body text-topbar-foreground outline-none hover:bg-topbar-hover focus-visible:ring-2 focus-visible:ring-topbar-progress md:h-9"
+          className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-topbar-border bg-topbar-subdued ps-3 pe-1.5 text-body text-topbar-foreground outline-none hover:bg-topbar-hover focus-visible:ring-2 focus-visible:ring-topbar-progress md:h-9"
         >
           <Search className="size-4 shrink-0" aria-hidden />
-          <span className="flex-1 truncate text-left">{t("search")}</span>
+          <span className="flex-1 truncate text-start">{t("search")}</span>
           <span className="hidden items-center gap-1 sm:flex" aria-hidden>
             {comboCaps(SHORTCUTS.search.combos[0]).map((cap) => (
               // 6px inside the 12px pill: 6px corners (concentric).
@@ -61,7 +61,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           </span>
         </button>
       </div>
-      <div className="flex min-w-0 items-center justify-end gap-1 md:pr-2">
+      <div className="flex min-w-0 items-center justify-end gap-1 md:pe-2">
         <button type="button" onClick={() => setHelpOpen(true)} aria-label={t("shortcutsTitle")} aria-keyshortcuts="?" className={cn(TOP_BAR_BUTTON, "hidden md:flex")}>
           <CircleHelp aria-hidden />
         </button>

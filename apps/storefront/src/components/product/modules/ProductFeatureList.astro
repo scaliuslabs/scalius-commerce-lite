@@ -34,7 +34,7 @@ const { features, variant, title = null, compact = false } = Astro.props;
       </ul>
     </div>
   ) : (
-    <ul class:list={["max-w-3xl list-disc pl-5 text-sm", compact ? "space-y-0.5 leading-5 text-muted-foreground" : "space-y-2 text-foreground lg:text-base"]} data-product-features="bullets">
+    <ul class:list={["max-w-3xl list-disc ps-5 text-sm", compact ? "space-y-0.5 leading-5 text-muted-foreground" : "space-y-2 text-foreground lg:text-base"]} data-product-features="bullets">
       {features.map((feature) => <li>{feature}</li>)}
     </ul>
   )

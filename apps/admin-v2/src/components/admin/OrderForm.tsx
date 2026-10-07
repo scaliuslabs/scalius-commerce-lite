@@ -776,7 +776,7 @@ function OrderEditor({
             </AlertDialogDescription>
           </AlertDialogHeader>
           {pendingAmendment && pendingAmendment.changes.length > 0 ? (
-            <ul className="list-disc space-y-1 pl-5 text-body text-muted-foreground">
+            <ul className="list-disc space-y-1 ps-5 text-body text-muted-foreground">
               {pendingAmendment.changes.map((change) => <li key={change}>{change}</li>)}
             </ul>
           ) : null}

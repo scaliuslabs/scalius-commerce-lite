@@ -12,11 +12,20 @@
  *   const t = useMessages(ordersMessages);
  *   t("itemCount", { count: 3 });
  *
- * `bn` must define every `en` key (checked by the type). Numbers, money and
- * dates are formatted with `Intl` for the active locale.
+ * `bn` must define every `en` key (checked by the type). Numbers, money,
+ * dates and lists go through `@scalius/shared/locale-format` (and
+ * `locale-words`) for the dashboard language in the store's country
+ * (`formatNumber`, `formatDateTime`, `dashboardNumberLocale`).
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { getStoreTimeZone, useStoreTimeZone } from "~/lib/store-time-zone";
+import {
+  dateLocale,
+  formatDateTime as formatDateTimeIn,
+  formatNumber as formatNumberIn,
+  numberLocale,
+  textDirection,
+} from "@scalius/shared/locale-format";
+import { getStoreRegion, getStoreTimeZone, useStoreDefaultsVersion } from "~/lib/store-time-zone";
 
 export type Locale = "en" | "bn";
 
@@ -38,8 +47,11 @@ function readStoredLocale(): Locale {
 
 let current: Locale = readStoredLocale();
 
-function applyDocumentLocale(locale: Locale): void {
-  if (typeof document !== "undefined") document.documentElement.lang = locale;
+/** `lang` and `dir` on `<html>`: the dashboard's language and its direction. */
+export function applyDocumentLocale(locale: string): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = locale;
+  document.documentElement.dir = textDirection(locale);
 }
 
 applyDocumentLocale(current);
@@ -98,34 +110,37 @@ export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, 
 /** Returns `t(key, vars)` for one catalog; re-renders when the locale changes. */
 export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key: K, vars?: Vars) => string {
   const locale = useLocale();
-  // Dates in copy are store time: a screen re-renders once the store's zone
-  // is known (`formatDateTime` reads it), like a language change.
-  const timeZone = useStoreTimeZone();
-  // Stable per catalog, language and zone, so memoised columns and callbacks
-  // that use it survive re-renders.
+  // Dates in copy are store time and numbers the store country's: a screen
+  // re-renders once they are known (`formatDateTime` reads them), like a
+  // language change.
+  const storeDefaults = useStoreDefaultsVersion();
+  // Stable per catalog, language, zone and country, so memoised columns and
+  // callbacks that use it survive re-renders.
   return useCallback(
     (key: K, vars?: Vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [catalog, locale, timeZone],
+    [catalog, locale, storeDefaults],
   );
 }
 
-// Bangladesh groups digits in lakhs (12,34,567) in both languages; "en-IN"
-// is the English locale that does so.
-function numberLocale(): string {
-  return current === "bn" ? "bn-BD" : "en-IN";
+/** The locale the dashboard writes numbers in: its language in the store's country (lakhs in Bangladesh). */
+export function dashboardNumberLocale(): string {
+  return numberLocale(current, getStoreRegion());
 }
 
-function dateLocale(): string {
-  return current === "bn" ? "bn-BD" : "en-BD";
+/** The locale the dashboard writes dates in. */
+export function dashboardDateLocale(): string {
+  return dateLocale(current, getStoreRegion());
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(numberLocale(), options).format(value);
+  return formatNumberIn(value, dashboardNumberLocale(), options);
 }
 
+/**
+ * An instant in store time. Bangla has no localised AM/PM in Intl ("৫:৫২ AM"),
+ * so the Bangla dashboard shows the 24-hour clock.
+ */
 export function formatDateTime(date: Date, options?: Intl.DateTimeFormatOptions): string {
-  // Bangla has no localised AM/PM in Intl ("৫:৫২ AM"), so bn shows the 24-hour clock.
-  const clock: Intl.DateTimeFormatOptions = current === "bn" ? { hourCycle: "h23" } : {};
-  return new Intl.DateTimeFormat(dateLocale(), { timeZone: getStoreTimeZone(), ...clock, ...options }).format(date);
+  return formatDateTimeIn(date, dashboardDateLocale(), { timeZone: getStoreTimeZone(), ...(current === "bn" && { hourCycle: "h23" }), ...options });
 }

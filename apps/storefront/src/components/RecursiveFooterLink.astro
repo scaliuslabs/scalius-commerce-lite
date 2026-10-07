@@ -39,7 +39,7 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
 
           {/* Recursive rendering for nested links */}
           {link.subMenu && link.subMenu.length > 0 && (
-            <div class="mt-2 border-l border-primary-foreground/10 ml-1">
+            <div class="mt-2 border-s border-primary-foreground/10 ms-1">
               <Astro.self links={link.subMenu} depth={depth + 1} />
             </div>
           )}
@@ -76,7 +76,7 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
     content: "";
     position: absolute;
     bottom: calc(var(--spacing) * -0.5);
-    left: 0;
+    inset-inline-start: 0;
     width: 0;
     height: 1px;
     background-color: currentColor;

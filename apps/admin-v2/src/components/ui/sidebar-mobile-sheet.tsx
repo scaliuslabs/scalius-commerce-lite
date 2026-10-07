@@ -12,8 +12,9 @@ interface SidebarMobileSheetProps {
 }
 
 /**
- * The phone navigation drawer: the same near-black panel as on a desktop,
- * sliding in from the left over a dimmed page. Escape, the overlay and the
+ * The navigation drawer (phones, tablets, narrow laptops): the same near-black
+ * panel as on a wide window, sliding in from the start side (the left; the
+ * right in a right-to-left language) over a dimmed page. Escape, the overlay and the
  * panel's own close button dismiss it, and focus goes back to whatever
  * opened it (the top bar's Menu button has no Dialog.Trigger to return to).
  */
@@ -34,7 +35,7 @@ export function SidebarMobileSheet({ open, onOpenChange, label, children }: Side
             event.preventDefault();
             opener.current.focus();
           }}
-          className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[calc(100vw-3rem)] flex-col bg-sidebar text-sidebar-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-left motion-safe:data-[state=open]:duration-200"
+          className="fixed inset-y-0 inset-s-0 z-50 flex w-72 max-w-[calc(100vw-3rem)] flex-col bg-sidebar text-sidebar-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-left rtl:motion-safe:data-[state=open]:slide-in-from-right motion-safe:data-[state=open]:duration-200"
         >
           <SheetPrimitive.Title className="sr-only">{label}</SheetPrimitive.Title>
           {children}

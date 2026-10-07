@@ -8,7 +8,7 @@
 // URLs carry only opaque ids (order, `cnv_`, `att_`), a message sequence
 // number, a list cursor and one short status flag from STATUS_FLAGS.
 
-import { storeTimeZone } from "./store-time-zone";
+import { formatStoreDateTime, storeTimeZone } from "./store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import {
   CONVERSATION_ATTACHMENT_UPLOAD_TYPES,
@@ -234,20 +234,10 @@ export function checkAttachmentFiles(entries: Iterable<FormDataEntryValue>): Att
 // Presentation
 // ---------------------------------------------------------------------------
 
-/** "24 Sep 2026, 5:46 PM" in the store's time zone, like the order pages. */
+/** "Sep 24, 2026, 5:46 PM" in the store's time zone, like the order pages. */
 export function formatConversationTime(unixSeconds: number | null | undefined, timeZone: string = storeTimeZone()): string {
   if (typeof unixSeconds !== "number" || !Number.isFinite(unixSeconds) || unixSeconds <= 0) return "";
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone,
-  }).formatToParts(new Date(unixSeconds * 1000));
-  const part = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return `${part.day} ${part.month} ${part.year}, ${part.hour}:${part.minute} ${part.dayPeriod}`;
+  return formatStoreDateTime(unixSeconds * 1000, "en", { dateStyle: "medium", timeStyle: "short" }, timeZone);
 }
 
 function isoTime(unixSeconds: number): string {
@@ -364,13 +354,13 @@ export function renderConversationMessages(
     const mine = message.from === "buyer";
     const author = mine ? CONVERSATION_COPY.you : CONVERSATION_COPY.store;
     const bubble = mine
-      ? "rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground"
-      : "rounded-2xl rounded-bl-md border border-border bg-muted px-4 py-2.5 text-foreground";
+      ? "rounded-2xl rounded-ee-md bg-primary px-4 py-2.5 text-primary-foreground"
+      : "rounded-2xl rounded-es-md border border-border bg-muted px-4 py-2.5 text-foreground";
     const body = message.body ? `<p class="whitespace-pre-line break-words text-sm">${escapeHtml(message.body)}</p>` : "";
     return `${divider}<li class="flex ${mine ? "justify-end" : "justify-start"}" data-seq="${message.seq}">
   <div class="max-w-[85%] sm:max-w-[75%]">
     <div class="${bubble}"><span class="sr-only">${escapeHtml(author)}: </span>${body}${renderAttachments(message, options, mine)}</div>
-    <p class="mt-1 text-xs text-muted-foreground ${mine ? "text-right" : "text-left"}">${escapeHtml(author)}${timeTag ? ` · ${timeTag}` : ""}</p>
+    <p class="mt-1 text-xs text-muted-foreground ${mine ? "text-end" : "text-start"}">${escapeHtml(author)}${timeTag ? ` · ${timeTag}` : ""}</p>
   </div>
 </li>`;
   }).join("");

@@ -145,7 +145,7 @@ export function ImportPreview(props: ImportPreviewProps) {
         <div className="border-t border-border pt-3">
           <Collapsible>
             <CollapsibleTrigger asChild>
-              <button type="button" className="group flex min-h-11 w-full items-center justify-between gap-2 rounded-lg text-left text-body font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8">
+              <button type="button" className="group flex min-h-11 w-full items-center justify-between gap-2 rounded-lg text-start text-body font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8">
                 <span>{t("cantImport")}</span>
                 <ChevronDown className="size-4 text-muted-foreground group-data-[state=open]:rotate-180" aria-hidden="true" />
               </button>
@@ -182,7 +182,7 @@ export function ImportPreview(props: ImportPreviewProps) {
                   {issue.line ? t("lineLabel", { line: issue.line }) : issue.severity}
                 </Badge>
                 <span className="min-w-0 break-words">
-                  {issue.subject ? <code className="mr-1">{issue.subject}</code> : null}
+                  {issue.subject ? <code className="me-1">{issue.subject}</code> : null}
                   {issueText(issue)}
                 </span>
               </li>

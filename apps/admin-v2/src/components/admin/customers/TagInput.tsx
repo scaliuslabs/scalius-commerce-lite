@@ -105,7 +105,7 @@ export function TagInput({
       {value.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5" aria-label={t("tags")}>
           {value.map((tag) => (
-            <li key={tag} className="flex min-w-0 items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 text-body">
+            <li key={tag} className="flex min-w-0 items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 text-body">
               <span className="min-w-0 break-words">{tag}</span>
               <Button
                 type="button"

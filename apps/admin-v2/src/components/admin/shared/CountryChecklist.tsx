@@ -57,7 +57,7 @@ export function CountryChecklist({
   return (
     <div className="space-y-3">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Search className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
           id={id}
           type="search"
@@ -67,7 +67,7 @@ export function CountryChecklist({
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-          className="pl-9"
+          className="ps-9"
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
@@ -98,7 +98,7 @@ export function CountryChecklist({
           <p className="text-body text-muted-foreground">{copy.noneSelected}</p>
         ) : (
           selected.map((code) => (
-            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 pr-0.5 text-body text-secondary-foreground">
+            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 pe-0.5 text-body text-secondary-foreground">
               {countryName(code)}
               <button
                 type="button"

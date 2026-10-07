@@ -39,7 +39,7 @@ function SheetHeading({ title, icon, children }: { title: string; icon?: string 
         {children}
       </SheetHeader>
       <SheetClose asChild>
-        <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 shrink-0" aria-label={t("close")}>
+        <Button type="button" variant="ghost" size="icon" className="-me-2 -mt-1 shrink-0" aria-label={t("close")}>
           <X className="size-4" aria-hidden="true" />
         </Button>
       </SheetClose>

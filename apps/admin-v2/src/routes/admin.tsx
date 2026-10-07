@@ -98,7 +98,7 @@ function AdminLayout() {
             event.preventDefault();
             document.getElementById("admin-main-scroll")?.focus();
           }}
-          className="sr-only z-50 rounded-lg bg-background text-body font-medium text-foreground focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:px-3 focus:py-2"
+          className="sr-only z-50 rounded-lg bg-background text-body font-medium text-foreground focus:not-sr-only focus:fixed focus:inset-s-2 focus:top-2 focus:px-3 focus:py-2"
         >
           {t("skipToContent")}
         </a>
@@ -114,7 +114,7 @@ function AdminLayout() {
           <AppSidebar nav={nav} user={user} showSettings={canOpen(SETTINGS_ITEM.to)} />
           <div className="flex min-w-0 flex-1 flex-col">
             <AdminHeader user={user} />
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-clip rounded-t-xl bg-background text-foreground md:mb-2 md:mr-2 md:rounded-xl print:m-0 print:overflow-visible">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-clip rounded-t-xl bg-background text-foreground md:mb-2 md:ms-2 md:me-2 md:rounded-xl nav:ms-0 print:m-0 print:overflow-visible">
               <AdminNavigationProgress />
               <main
                 id="admin-main-scroll"

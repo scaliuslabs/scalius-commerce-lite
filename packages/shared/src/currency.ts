@@ -11,6 +11,7 @@ import {
   SUPPORTED_CURRENCY_CODES,
   type SupportedCurrencyCode,
 } from "./currency-policy";
+import { currencySymbol, formatAmount, moneyLocale } from "./money-format";
 
 // Declare window for environments without DOM types (e.g. Cloudflare Workers).
 // Uses a plain object type so it compiles without the DOM lib.
@@ -101,8 +102,8 @@ export function getPriceIncrementMinor(code: string = getCurrencyCode()): number
 }
 
 /**
- * Format a price with the correct symbol and decimal places.
- * Uses currency.js for precision.
+ * A price with the page's symbol and every decimal place: "৳1,250.00",
+ * "-৳5.00". currency.js rounds it; Intl writes it.
  */
 export function formatPrice(
   price: number | string,
@@ -111,8 +112,8 @@ export function formatPrice(
   const symbol = opts?.symbol ?? getCurrencySymbol();
   const code = opts?.code ?? getCurrencyCode();
   const precision = opts?.precision ?? getDecimalPlaces(code);
-
-  return Currency(price, { symbol, precision, separator: ",", decimal: "." }).format();
+  const value = Currency(price, { precision }).value;
+  return `${value < 0 ? "-" : ""}${symbol}${formatAmount(Math.abs(value), "en", precision)}`;
 }
 
 /**
@@ -126,14 +127,8 @@ export function formatMoney(
   opts?: { symbol?: string; code?: string },
 ): string {
   const code = (opts?.code ?? getCurrencyCode()).toUpperCase();
-  const precision = getDecimalPlaces(code);
-  const value = Currency(amount, { precision });
-  const whole = value.intValue % 10 ** precision === 0;
-  const digits = whole ? 0 : precision;
-  const grouped = new Intl.NumberFormat(code === "BDT" ? "en-IN" : "en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value.value));
+  const value = Currency(amount, { precision: getDecimalPlaces(code) });
+  const grouped = formatAmount(Math.abs(value.value), moneyLocale(code), getDecimalPlaces(code), true);
   return `${value.value < 0 ? "-" : ""}${opts?.symbol ?? currencySymbolFor(code)}${grouped}`;
 }
 
@@ -143,14 +138,6 @@ function currencySymbolFor(code: string): string {
     return window.__CURRENCY_SYMBOL__;
   }
   if (code === DEFAULT_CURRENCY.code) return DEFAULT_CURRENCY.symbol;
-  try {
-    const symbol = new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: code,
-      currencyDisplay: "narrowSymbol",
-    }).formatToParts(0).find((part) => part.type === "currency")?.value;
-    return symbol && symbol !== code ? symbol : `${code} `;
-  } catch {
-    return `${code} `;
-  }
+  const symbol = currencySymbol(code);
+  return symbol !== code ? symbol : `${code} `;
 }

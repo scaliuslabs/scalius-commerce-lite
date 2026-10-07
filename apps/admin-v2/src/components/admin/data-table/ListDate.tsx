@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -8,19 +9,10 @@ import { getStoreTimeZone } from "~/lib/store-time-zone";
 type Timestamp = Date | string | number | null | undefined;
 type Translate = (key: "justNow" | "minutesAgo" | "todayAt" | "yesterdayAt" | "dateAt", vars?: Record<string, string | number>) => string;
 
-const DAY_FORMATS = new Map<string, Intl.DateTimeFormat>();
-
 /** The store-calendar day (days since 1970) and year of an instant. */
-function storeDay(date: Date, timeZone: string): { day: number; year: number } {
-  let format = DAY_FORMATS.get(timeZone);
-  if (!format) {
-    format = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "numeric", day: "numeric" });
-    DAY_FORMATS.set(timeZone, format);
-  }
-  const parts = format.formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((entry) => entry.type === type)?.value);
-  const year = part("year");
-  return { day: Date.UTC(year, part("month") - 1, part("day")) / 86_400_000, year };
+function storeDay(date: Date, timeZone: string): { day: number; year: string } {
+  const key = commerceCalendarDateKey(timeZone, date);
+  return { day: Date.parse(`${key}T00:00:00Z`) / 86_400_000, year: key.slice(0, 4) };
 }
 
 /**

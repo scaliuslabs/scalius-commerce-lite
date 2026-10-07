@@ -67,6 +67,7 @@ import {
   warrantyNotActive,
   type BatchStatement,
 } from "./shared";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 const WARRANTY_INACTIVE_GUARD = "WARRANTY_NOT_ACTIVE";
 const CLAIM_VERSION_GUARD = "WARRANTY_CLAIM_CHANGED";
@@ -319,7 +320,7 @@ export async function openWarrantyClaim(
   const body = normalizeConversationBody(input.description);
   if (!body.ok) {
     throw new ValidationError(body.reason === "too_long"
-      ? `Keep the description under ${CONVERSATION_LIMITS.bodyLength.toLocaleString("en-US")} characters.`
+      ? `Keep the description under ${formatNumber(CONVERSATION_LIMITS.bodyLength, "en")} characters.`
       : body.reason === "invalid_characters"
         ? "The description contains characters that can't be sent."
         : "Describe the problem with the item.", { field: "description" });

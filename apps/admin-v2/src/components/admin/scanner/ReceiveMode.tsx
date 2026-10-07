@@ -570,7 +570,7 @@ function ChoiceList({ session, showDestination }: { session: ReceiveSession; sho
                     type="button"
                     disabled={session.opening !== null && !session.openFailed}
                     onClick={() => void session.open(choice)}
-                    className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left active:bg-accent disabled:opacity-60"
+                    className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-start active:bg-accent disabled:opacity-60"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="font-mono text-body font-semibold">{choice.number}</p>

@@ -461,7 +461,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       )}
       <p class="text-muted-foreground">{orderSuccessView.message}</p>
       {nextSteps.length > 0 && (
-        <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-left">
+        <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-start">
           <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptNextStepsTitleText}</h2>
           {nextSteps.map((step) => <p class="mt-1 text-sm text-muted-foreground">{step}</p>)}
         </div>
@@ -482,7 +482,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
             {retryPaymentOptions.map((option) => (
               <button
                 type="button"
-                class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
+                class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-start text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
                 aria-label={orderSuccessView.kind === "payment_pending"
                   ? option.actionLabel
                   : formatCheckoutLanguageText(copy.orderReceiptRetryWithProviderText, {
@@ -525,7 +525,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           {stripeRetryGateway && (
             <div
               id="stripeSection"
-              class="hidden w-full max-w-lg rounded-xl border border-border bg-card p-5 text-left"
+              class="hidden w-full max-w-lg rounded-xl border border-border bg-card p-5 text-start"
               data-publishable-key={stripeRetryPublishableKey}
               data-order-id={order.id}
               data-total-amount={String(order.totalAmount)}
@@ -560,7 +560,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
         {tracking.timeline.length > 0 && (
           <>
             <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">{copy.orderTrackingUpdatesText}</h2>
-            <ol class="space-y-3 border-l border-border pl-4" set:html={orderTimelineMarkup(tracking.timeline, trackingText)} />
+            <ol class="space-y-3 border-s border-border ps-4" set:html={orderTimelineMarkup(tracking.timeline, trackingText)} />
           </>
         )}
       </section>
@@ -573,7 +573,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-muted-foreground"
+            class="w-5 h-5 me-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -590,11 +590,11 @@ const orderRecommendations = order && showsSuccessHero && !statusView
         <div class="space-y-4">
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
-            <span class="break-all text-right font-medium">{orderNumber}</span>
+            <span class="break-all text-end font-medium">{orderNumber}</span>
           </div>
           {orderPlacedAt && <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">{copy.orderReceiptPlacedText}</span>
-            <span class="text-right font-medium">{orderPlacedAt}</span>
+            <span class="text-end font-medium">{orderPlacedAt}</span>
           </div>}
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptStatusText}</span>
@@ -605,7 +605,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentText}</span>
-            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order, checkoutConfig.gateways)}</span>
+            <span class="text-end font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order, checkoutConfig.gateways)}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</span>
@@ -622,11 +622,11 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               </div>
               {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
-                <span class="text-right font-medium">
-                  {receiptDeliveryRow.struck && <s class="mr-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
+                <span class="text-end font-medium">
+                  {receiptDeliveryRow.struck && <s class="me-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
                   {receiptDeliveryRow.value}
                   {receiptDeliveryRow.codes && (
-                    <span class="ml-1 font-normal text-muted-foreground">({receiptDeliveryRow.codes})</span>
+                    <span class="ms-1 font-normal text-muted-foreground">({receiptDeliveryRow.codes})</span>
                   )}
                 </span>
               </div>}
@@ -681,7 +681,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-muted-foreground"
+            class="w-5 h-5 me-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -728,7 +728,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-muted-foreground"
+            class="w-5 h-5 me-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -819,7 +819,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                     )}
                     </div>
                   </div>
-                  <div class="shrink-0 text-right">
+                  <div class="shrink-0 text-end">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
                       {savedLine && savedMoneySummary
@@ -831,7 +831,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 {/* Downloads, gift cards and the review form get the line's full
                     width (under its text from sm up), not the column beside the total. */}
                 {(item.extras || preparing) && (
-                  <div class={item.productImage ? "sm:pl-[3.75rem]" : undefined}>
+                  <div class={item.productImage ? "sm:ps-[3.75rem]" : undefined}>
                     <LineExtras line={item} context={{ orderId, access: "receipt" }} />
                     {preparing && (
                       <p class="mt-3 flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-foreground" data-download-preparing data-later-text={copy.orderReceiptDownloadLaterText}>

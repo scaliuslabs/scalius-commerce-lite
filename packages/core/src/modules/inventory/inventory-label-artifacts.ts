@@ -1,5 +1,6 @@
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 
 export const INVENTORY_LABEL_ARTIFACT_MAX_COPIES = 1_000;
 export const INVENTORY_LABEL_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
@@ -187,15 +188,12 @@ function csvCell(value: unknown): string {
 }
 
 /**
- * The dashboard's money format (its label preview): store symbol, lakh
- * grouping, the currency's decimals, digits in the dashboard language.
+ * The dashboard's money format (its label preview): store symbol, the
+ * currency's grouping (lakhs for taka) and decimals, digits in the dashboard
+ * language.
  */
 function formatPrice(value: number, currency: InventoryLabelCurrency, locale: InventoryLabelArtifactJob["locale"]): string {
-  const digits = getDecimalPlaces(currency.code);
-  const amount = new Intl.NumberFormat(locale === "bn" ? "bn-BD" : "en-IN", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value));
+  const amount = formatAmount(Math.abs(value), moneyLocale(currency.code, locale), getDecimalPlaces(currency.code));
   return `${value < 0 ? "-" : ""}${currency.symbol}${amount}`;
 }
 

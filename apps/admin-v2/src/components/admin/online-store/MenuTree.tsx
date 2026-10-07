@@ -151,7 +151,7 @@ function MenuRow({
         <button
           type="button"
           onClick={() => handlers.onEdit(item.id)}
-          className="min-w-0 flex-1 py-2 text-left"
+          className="min-w-0 flex-1 py-2 text-start"
         >
           <span className="block truncate text-body font-medium">{item.label}</span>
           <span className="block truncate text-body text-muted-foreground">

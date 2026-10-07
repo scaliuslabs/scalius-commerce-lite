@@ -10,6 +10,7 @@ import {
   type ProductListRangeBound,
 } from "./product-list-query";
 import { pagePath } from "@/lib/presence-url";
+import { formatCount } from "@/lib/store-time-zone";
 
 function selectedValues(currentFilters: ProductListFilterState, key: string): string[] {
   const value = currentFilters[key];
@@ -213,7 +214,7 @@ export function showsCatalogPriceFilter(
 export function catalogApplyButton(total: number, capped = false): { label: string; disabled: boolean } {
   return total === 0
     ? { label: "No matching products", disabled: true }
-    : { label: `Show ${total.toLocaleString("en-IN")}${capped ? "+" : ""} ${total === 1 && !capped ? "product" : "products"}`, disabled: false };
+    : { label: `Show ${formatCount(total)}${capped ? "+" : ""} ${total === 1 && !capped ? "product" : "products"}`, disabled: false };
 }
 
 /**

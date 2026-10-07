@@ -73,7 +73,7 @@ function ChangeList({ changes, more, text, label }: { changes: readonly ThemeDoc
   const t = useMessages(themeEditorMessages);
   if (changes.length === 0) return <p className="text-body text-muted-foreground">{t("noChanges")}</p>;
   return (
-    <ul aria-label={label} className="list-disc space-y-1 pl-5 text-body">
+    <ul aria-label={label} className="list-disc space-y-1 ps-5 text-body">
       {changes.map((change, index) => <li key={index}>{text(change)}</li>)}
       {more > 0 ? <li className="text-muted-foreground">{t("moreChanges", { count: more })}</li> : null}
     </ul>

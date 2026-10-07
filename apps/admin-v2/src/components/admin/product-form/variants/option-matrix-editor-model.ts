@@ -20,6 +20,8 @@ import type {
 } from "../../../../lib/api-query-options/products";
 import { formatNumber, translate } from "../../../../i18n";
 import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
+import type { WeightUnit } from "@scalius/shared/store-defaults";
+import { formatWeight } from "./weight-format";
 import type { ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
@@ -76,7 +78,7 @@ function checkNumber(value: number | null, max: number, integer: boolean): Produ
 }
 
 /** Problems with one SKU's own numbers and barcode, in the order its fields appear. */
-function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePositivePrice: boolean): DraftIssue | null {
+function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePositivePrice: boolean, weightUnit: WeightUnit = "g"): DraftIssue | null {
   if (sku.price !== undefined) {
     const priceProblem = checkNumber(sku.price, MAX_PRODUCT_PRICE, false);
     if (priceProblem) return { message: issue(priceProblem, { max: MAX_PRODUCT_PRICE }), field: "price" };
@@ -86,16 +88,17 @@ function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePosit
   if (stockProblem) return { message: issue(stockProblem, { max: MAX_SKU_STOCK }), field: "stock" };
   if (sku.sku.trim().length < 3) return { message: issue("issueSkuShort"), field: "sku" };
   const weightProblem = checkNumber(sku.weight, MAX_SKU_WEIGHT_GRAMS, false);
-  if (weightProblem) return { message: issue(weightProblem, { max: MAX_SKU_WEIGHT_GRAMS }), field: "weight" };
+  // The field shows the store's unit, so the limit is said in it ("1,000 kg").
+  if (weightProblem) return { message: translate(productMessages, weightProblem, { max: formatWeight(MAX_SKU_WEIGHT_GRAMS, weightUnit) }), field: "weight" };
   const barcodeProblem = sku.barcode ? getBarcodeValidationError(sku.barcode, sku.barcodeType) : null;
   if (barcodeProblem) return { message: issue("issueBarcodeInvalid"), field: "barcode" };
   return null;
 }
 
-export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean): DraftIssue | null {
+export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean, weightUnit?: WeightUnit): DraftIssue | null {
   const sku = draft.sku.trim();
   // A new product may leave the SKU empty: one is made from the title.
-  const own = skuFieldIssue(skuRequired || sku ? draft : { ...draft, sku: "AUTO" }, false);
+  const own = skuFieldIssue(skuRequired || sku ? draft : { ...draft, sku: "AUTO" }, false, weightUnit);
   if (own) return own;
   if (!draft.trackInventory) {
     return committed > 0 ? { message: issue("issueUntrackCommitted"), field: "stock" } : null;
@@ -462,6 +465,8 @@ export interface MatrixIssueContext {
   allowSavedImageRemovalConfirmation?: boolean;
   /** Active products need every variant priced above 0. */
   requirePositivePrice?: boolean;
+  /** The store's weight unit, which a weight limit is stated in (grams by default). */
+  weightUnit?: WeightUnit;
 }
 
 export function getOptionMatrixIssue(
@@ -507,7 +512,7 @@ export function getOptionMatrixIssue(
   const seenSkus = new Set<string>();
   const seenBarcodes = new Set<string>();
   for (const variant of variants) {
-    const own = skuFieldIssue(variant, Boolean(context.requirePositivePrice));
+    const own = skuFieldIssue(variant, Boolean(context.requirePositivePrice), context.weightUnit);
     if (own) return { ...own, variantId: variant.id };
     const skuKey = normalized(variant.sku);
     if (seenSkus.has(skuKey)) return at("issueSkuUnique", undefined, variant.id, "sku");

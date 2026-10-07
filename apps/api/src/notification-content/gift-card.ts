@@ -18,6 +18,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
+import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
 
 export interface GiftCardIssuedContentInput {
   giftCardId: string;
@@ -38,12 +39,7 @@ export interface GiftCardIssuedContent {
 /** The card's last usable day in the store's time zone. */
 function formatExpiry(epochSeconds: number | null, timeZone: string): string {
   if (epochSeconds === null) return "";
-  return new Date(epochSeconds * 1000).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone,
-  });
+  return formatDateTime(epochSeconds * 1000, dateLocale("en"), { dateStyle: "medium", timeZone });
 }
 
 function storeLink(env: Env): string {

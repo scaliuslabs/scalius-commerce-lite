@@ -40,6 +40,12 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Arrows and chevrons along the line point the reading way on a right-to-left
+   page (Icon.astro marks them); a rotated one keeps its turn. */
+[dir="rtl"] [data-dir-icon]:not([class*="rotate"]) {
+  scale: -1 1;
+}
+
 /* Edge-to-edge utility classes for safe areas */
 .safe-area-top {
   padding-top: var(--safe-area-inset-top);

@@ -47,7 +47,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const delivery = deliveryStatus(order, t, sh);
   const attention = orderAttention(order, t, to)[0] ?? null;
   return (
-    <div className="flex items-start gap-1 py-1 pr-3" data-part="order-card">
+    <div className="flex items-start gap-1 py-1 pe-3" data-part="order-card">
       {selectable ? (
         // 44px touch target around the 16px box.
         <label className="flex size-11 shrink-0 items-center justify-center">
@@ -61,7 +61,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
       <Link
         to="/admin/orders/$orderId"
         params={{ orderId: order.id }}
-        className="min-w-0 flex-1 space-y-1 rounded-sm py-2 pl-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-w-0 flex-1 space-y-1 rounded-sm py-2 ps-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex items-center justify-between gap-3 text-body">
           <span className="flex min-w-0 items-center gap-1.5">

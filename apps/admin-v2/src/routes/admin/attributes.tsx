@@ -84,7 +84,7 @@ function AttributesPage() {
       meta: { mobile: "primary", minWidth: 200 },
       cell: ({ row }) =>
         can.canEdit && !search.trashed ? (
-          <button type="button" className="line-clamp-2 break-words text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
+          <button type="button" className="line-clamp-2 break-words text-start font-medium hover:underline" onClick={() => setEditing(row.original)}>
             {row.original.name}
           </button>
         ) : (

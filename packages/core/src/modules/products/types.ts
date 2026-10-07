@@ -18,6 +18,7 @@ import {
 } from "@scalius/shared/product-options";
 import { editableFulfillmentKindSchema } from "./customization-schema";
 import type { CustomizationView } from "./customization";
+import { formatUnit } from "@scalius/shared/locale-words";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -40,7 +41,7 @@ export const skuStockSchema = z.number()
 /** A SKU weight in grams. */
 export const skuWeightSchema = z.number()
     .min(0, "Enter 0 or more.")
-    .max(MAX_SKU_WEIGHT_GRAMS, `Enter ${MAX_SKU_WEIGHT_GRAMS} or less.`)
+    .max(MAX_SKU_WEIGHT_GRAMS, `Enter ${formatUnit(MAX_SKU_WEIGHT_GRAMS, "gram", "en")} or less.`)
     .describe("Weight in grams.");
 
 const variantPriceSchema = catalogMoneySchema;

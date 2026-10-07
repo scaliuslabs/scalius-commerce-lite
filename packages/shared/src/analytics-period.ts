@@ -8,6 +8,7 @@ import {
   commerceDayStart,
   shiftCommerceCalendarDateKey,
 } from "./commerce-time";
+import type { WeekDay } from "./week-start";
 
 const DAY_SECONDS = 86_400;
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -212,29 +213,38 @@ export function resolveAnalyticsGranularity(
 }
 
 /**
- * Weeks start on Sunday (Bangladesh's first working day, and Shopify's
- * default). 1970-01-01 was a Thursday, so epoch day 3 is the first Sunday.
+ * What a week's first day adds to an epoch day before `% 7`: 1970-01-01 was a
+ * Thursday, so `(day + offset) % 7` counts days since the week began. Sunday
+ * (0, Bangladesh's and the US's first day) is 4.
  */
-export function analyticsWeekStartEpochDay(epochDay: number): number {
-  return epochDay - ((epochDay + 4) % 7);
+export function analyticsWeekOffset(weekStart: WeekDay): number {
+  return (11 - weekStart) % 7;
+}
+
+/**
+ * The first day of the week containing an epoch day. Weeks start on the
+ * store country's CLDR first day (`weekStartDay`): Sunday by default.
+ */
+export function analyticsWeekStartEpochDay(epochDay: number, weekStart: WeekDay = 0): number {
+  return epochDay - ((epochDay + analyticsWeekOffset(weekStart)) % 7);
 }
 
 /** The first merchant day of the bucket containing a merchant day. */
-export function analyticsBucketKey(dateKey: string, granularity: AnalyticsGranularity): string {
+export function analyticsBucketKey(dateKey: string, granularity: AnalyticsGranularity, weekStart: WeekDay = 0): string {
   if (granularity === "day") return dateKey;
   if (granularity === "month") return `${dateKey.slice(0, 7)}-01`;
-  return analyticsDateKeyFromEpochDay(analyticsWeekStartEpochDay(analyticsEpochDay(dateKey)));
+  return analyticsDateKeyFromEpochDay(analyticsWeekStartEpochDay(analyticsEpochDay(dateKey), weekStart));
 }
 
 /** Every bucket of a range in order, each clipped to the range. */
-export function analyticsBuckets(range: AnalyticsRange, granularity: AnalyticsGranularity): AnalyticsBucket[] {
+export function analyticsBuckets(range: AnalyticsRange, granularity: AnalyticsGranularity, weekStart: WeekDay = 0): AnalyticsBucket[] {
   const first = analyticsEpochDay(range.from);
   const last = analyticsEpochDay(range.to);
   const buckets: AnalyticsBucket[] = [];
   let current: AnalyticsBucket | null = null;
   for (let day = first; day <= last; day += 1) {
     const dateKey = analyticsDateKeyFromEpochDay(day);
-    const key = analyticsBucketKey(dateKey, granularity);
+    const key = analyticsBucketKey(dateKey, granularity, weekStart);
     if (!current || current.key !== key) {
       current = { key, from: dateKey, to: dateKey };
       buckets.push(current);

@@ -363,7 +363,7 @@ function AttributeDefinitionCombobox({
           aria-expanded={open}
           className="w-full justify-start"
         >
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="me-2 h-4 w-4" />
           {t("addAttribute")}
         </Button>
       </PopoverTrigger>
@@ -384,7 +384,7 @@ function AttributeDefinitionCombobox({
               <div className="space-y-2 p-3 text-center text-body text-destructive">
                 <p>{error}</p>
                 <Button type="button" size="sm" variant="outline" onClick={() => void loadDefinitions(1, true)}>
-                  <RotateCcw className="mr-2 h-4 w-4" /> {r("retry")}
+                  <RotateCcw className="me-2 h-4 w-4" /> {r("retry")}
                 </Button>
               </div>
             )}
@@ -402,7 +402,7 @@ function AttributeDefinitionCombobox({
                     setOpen(false);
                   }}
                 >
-                  <Check className={cn("mr-2 h-4 w-4", assignedIds.has(item.id) ? "opacity-100" : "opacity-0")} />
+                  <Check className={cn("me-2 h-4 w-4", assignedIds.has(item.id) ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{item.name}</span>
                 </CommandItem>
               ))}
@@ -417,7 +417,7 @@ function AttributeDefinitionCombobox({
                   disabled={loading}
                   onClick={() => void loadDefinitions(page + 1, false)}
                 >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
                   {t("loadMore")}
                 </Button>
               </div>
@@ -433,8 +433,8 @@ function AttributeDefinitionCombobox({
                     })}
                   >
                     {isCreating
-                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      : <Plus className="mr-2 h-4 w-4" />}
+                      ? <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                      : <Plus className="me-2 h-4 w-4" />}
                     {t("createNamed", { name: search.trim() })}
                   </CommandItem>
                 </CommandGroup>
@@ -580,7 +580,7 @@ function AttributeValueSelector({
               <div className="space-y-2 p-3 text-center text-body text-destructive">
                 <p>{error}</p>
                 <Button type="button" size="sm" variant="outline" onClick={() => void loadValues(1, true)}>
-                  <RotateCcw className="mr-2 h-4 w-4" /> {r("retry")}
+                  <RotateCcw className="me-2 h-4 w-4" /> {r("retry")}
                 </Button>
               </div>
             )}
@@ -597,7 +597,7 @@ function AttributeValueSelector({
                     setOpen(false);
                   }}
                 >
-                  <Check className={cn("mr-2 h-4 w-4", value === item.value ? "opacity-100" : "opacity-0")} />
+                  <Check className={cn("me-2 h-4 w-4", value === item.value ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{item.value}</span>
                 </CommandItem>
               ))}
@@ -612,7 +612,7 @@ function AttributeValueSelector({
                   disabled={loading}
                   onClick={() => void loadValues(page + 1, false)}
                 >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
                   {t("loadMore")}
                 </Button>
               </div>
@@ -622,13 +622,13 @@ function AttributeValueSelector({
                 <CommandSeparator />
                 <CommandGroup>
                   <CommandItem onSelect={useCustomValue}>
-                    <Plus className="mr-2 h-4 w-4" /> {t("useValue", { value: search.trim() })}
+                    <Plus className="me-2 h-4 w-4" /> {t("useValue", { value: search.trim() })}
                   </CommandItem>
                   {canSavePreset && (
                     <CommandItem disabled={savingPreset} onSelect={() => void savePresetAndUse()}>
                       {savingPreset
-                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        : <Plus className="mr-2 h-4 w-4" />}
+                        ? <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                        : <Plus className="me-2 h-4 w-4" />}
                       {t("saveAndUseValue")}
                     </CommandItem>
                   )}
