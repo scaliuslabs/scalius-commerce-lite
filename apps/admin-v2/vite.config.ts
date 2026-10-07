@@ -99,6 +99,10 @@ export default defineConfig(({ command }) => ({
       autoCodeSplitting: true,
       codeSplittingOptions: { defaultBehavior: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]] },
     }),
+    // React Compiler stays off: `viteReact({ compiler: true })` (native oxc
+    // port, plugin-react 6.1) added 8.9 KiB Brotli to Home and 26.9 KiB to
+    // the order page on 2026-10-07, past their budgets
+    // (scripts/admin-perf-check.mjs). Retry when its output shrinks.
     viteReact(),
     tailwindcss(),
   ],
