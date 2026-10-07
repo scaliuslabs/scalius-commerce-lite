@@ -77,9 +77,9 @@ export interface TreeHandlers {
 }
 
 /** The first words of a block (its heading, title, question), for its row. */
-function blockSummary(block: unknown): string {
-  if (!block || typeof block !== "object") return "";
-  const record = block as Record<string, unknown>;
+function blockSummary(item: unknown): string {
+  if (typeof item !== "object" || item === null) return "";
+  const record = item as Record<string, unknown>;
   for (const key of ["heading", "title", "question", "label", "quote", "alt", "text"]) {
     const value = record[key];
     if (typeof value === "string" && value.trim()) return value.trim().slice(0, 60);

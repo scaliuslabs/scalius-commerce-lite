@@ -341,9 +341,9 @@ export function moveBlock(section: Section, path: string, from: number, to: numb
 }
 
 export function toggleBlockHidden(section: Section, path: string, index: number): Section {
-  return withBlockList(section, path, blockList(section, path).map((block, at) => {
-    if (at !== index || !block || typeof block !== "object") return block;
-    const { hidden, ...rest } = block as Record<string, unknown>;
+  return withBlockList(section, path, blockList(section, path).map((item, at) => {
+    if (at !== index || typeof item !== "object" || item === null) return item;
+    const { hidden, ...rest } = item as Record<string, unknown>;
     return hidden === true ? rest : { ...rest, hidden: true };
   }));
 }

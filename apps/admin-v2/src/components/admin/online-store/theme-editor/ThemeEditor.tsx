@@ -458,7 +458,7 @@ export function ThemeEditor({ workspace, refetch }: {
       const at = ids.indexOf(selectionMark(selected) ?? "");
       const next = ids[matchesEditorShortcut("previous", press) ? Math.max(0, at - 1) : Math.min(ids.length - 1, at + 1)];
       if (next) select(next, "tree");
-    } else if (canEdit && selectedSection && !block) {
+    } else if (canEdit && selectedSection && block === null) {
       if (matchesEditorShortcut("duplicate", press)) { handled(); duplicate(selectedSection.id); }
       else if (matchesEditorShortcut("hide", press)) { handled(); toggle(selectedSection.id); }
       else if (matchesEditorShortcut("remove", press)) { handled(); remove(selectedSection.id); }
@@ -722,7 +722,7 @@ export function ThemeEditor({ workspace, refetch }: {
             page={page}
             onPage={setPage}
             onCreate={canEdit ? () => setCreatingLanding(true) : undefined}
-            className={phone ? "w-full" : "w-44 xl:w-56"}
+            className={phone ? "w-full" : "w-44"}
           />
         )}
         market={<MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />}
@@ -774,7 +774,7 @@ export function ThemeEditor({ workspace, refetch }: {
                   inert={!pane}
                   className={cn(
                     "absolute inset-0 bg-card",
-                    pane ? "translate-x-0" : "invisible translate-x-full rtl:-translate-x-full",
+                    !pane && "invisible translate-x-full rtl:-translate-x-full",
                     animated && "transition-transform duration-200 motion-reduce:transition-none",
                   )}
                 >
@@ -814,10 +814,10 @@ export function ThemeEditor({ workspace, refetch }: {
             aria-label={t("sidebar")}
             inert={!drawerOpen}
             className={cn(
-              "fixed z-30 bg-card shadow-modal",
+              "fixed z-30 flex flex-col bg-card shadow-modal",
               phone
-                ? cn("inset-x-0 bottom-14 rounded-t-2xl", sheet === "full" ? "top-16" : "h-[48dvh]", drawerOpen ? "translate-y-0" : "invisible translate-y-full")
-                : cn("inset-y-12 start-0 w-80", drawerOpen ? "translate-x-0" : "invisible -translate-x-full rtl:translate-x-full"),
+                ? cn("inset-x-0 bottom-14 rounded-t-2xl", sheet === "full" ? "top-16" : "h-[48dvh]", !drawerOpen && "invisible translate-y-full")
+                : cn("inset-y-12 start-0 w-80", !drawerOpen && "invisible -translate-x-full rtl:translate-x-full"),
               "transition-transform duration-200 motion-reduce:transition-none",
             )}
           >
@@ -826,12 +826,12 @@ export function ThemeEditor({ workspace, refetch }: {
                 type="button"
                 aria-label={t(sheet === "full" ? "sheetHalf" : "sheetFull")}
                 onClick={() => setSheet((current) => (current === "full" ? "half" : "full"))}
-                className="flex h-5 w-full items-center justify-center rounded-t-2xl"
+                className="flex h-5 w-full shrink-0 items-center justify-center rounded-t-2xl"
               >
-                <span className="h-1 w-9 rounded-full bg-input" aria-hidden="true" />
+                <span className="h-1 w-9 rounded-full bg-border" aria-hidden="true" />
               </button>
             ) : null}
-            <div className={cn("relative", phone ? "h-[calc(100%-1.25rem)]" : "h-full")}>
+            <div className="relative min-h-0 flex-1">
               {pane ?? sidebar}
             </div>
           </aside>
@@ -839,13 +839,13 @@ export function ThemeEditor({ workspace, refetch }: {
       </div>
 
       {phone ? (
-        <nav aria-label={t("editorBar")} className="z-40 flex h-14 items-stretch gap-1 border-t border-border bg-card px-2">
+        <nav aria-label={t("editorBar")} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">
           {([
             ["layers", Rows3, () => { setTab("sections"); setSelected(null); setDrawerOpen((open) => !(open && tab === "sections" && !selected)); }],
             ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
             ["add", Plus, () => setLibraryAt(items.length)],
           ] as const).map(([key, Icon, onClick]) => (
-            <TopBarButton key={key} label={t(`bar_${key}`)} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex size-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
+            <TopBarButton key={key} label={t(`bar_${key}`)} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
               <Icon aria-hidden="true" />
               <span className="text-caption">{t(`bar_${key}`)}</span>
             </TopBarButton>
