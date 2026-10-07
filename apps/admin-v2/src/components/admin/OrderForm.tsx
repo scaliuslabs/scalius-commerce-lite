@@ -515,7 +515,8 @@ function OrderEditor({
 
     if (isEdit) {
       const id = enrichedValues.id || orderId;
-      const quote = manualQuote.data;
+      // An edit's query previews the amendment (see quoteQuery above).
+      const quote = manualQuote.data as ApiResult<typeof postApiV1AdminOrdersByIdAmendmentsPreview> | null;
       if (!id || !values.version || !quote || !("quoteFingerprint" in quote) || !quote.quoteFingerprint) {
         throw new SaveNotCompleted(t("reloadToSave"));
       }

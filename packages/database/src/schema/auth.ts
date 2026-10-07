@@ -65,7 +65,11 @@ export const account = sqliteTable("account", {
         .references(() => user.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
-    issuer: text("issuer").notNull(),
+    // Better Auth 1.7.0-1.7.2 wrote this column; 1.7.3+ keys accounts by
+    // providerId + accountId and never writes it. Every account here is a
+    // credential account, so new rows get its issuer and the NOT NULL column
+    // and its unique index keep holding (no migration needed).
+    issuer: text("issuer").notNull().$defaultFn(() => "local:credential"),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),

@@ -177,10 +177,10 @@ function useSingleFlightMutation<TData, TVariables>(
     },
   });
   const { mutate: run } = mutation;
-  const mutate = useCallback<typeof run>((variables, callbacks) => {
+  const mutate = useCallback<typeof run>((...args) => {
     if (busy.current) return;
     busy.current = true;
-    run(variables, callbacks);
+    run(...args);
   }, [run]);
   return { ...mutation, mutate };
 }
