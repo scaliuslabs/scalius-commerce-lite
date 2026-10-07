@@ -131,7 +131,7 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
     homeProduct: null,
     ...(entry.scenario.apps === undefined ? {} : {
       apps: entry.scenario.apps
-        ? requests.apps.map((app) => ({
+        ? (requests.apps ?? []).map((app) => ({
             sectionId: app.sectionId,
             html: `<div class="mx-auto max-w-7xl px-3 py-6 text-center sm:px-6"><h2 class="text-xl font-bold">${String(app.values.heading ?? "")}</h2><p class="mt-2 text-muted-foreground">${String(app.values.text ?? "")}</p></div>`,
             head: { meta: [], jsonLd: [] },

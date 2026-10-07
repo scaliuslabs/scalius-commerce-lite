@@ -34,10 +34,9 @@ import {
   type StorefrontTemplateId,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import type { z } from "zod";
 import { ARABIC_TEXT, BANGLA_LONG, type ProductScenario } from "./fixtures";
 import { SECTION_CONTENT } from "./section-content";
-import { settingVariants, settingChoices, settingWith } from "./variants";
+import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 
 export type GalleryPage = "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page";
 
@@ -186,7 +185,7 @@ function sectionEntries(): GalleryEntry[] {
   for (const type of STOREFRONT_SECTION_TYPES) {
     const spec = STOREFRONT_SECTION_REGISTRY[type];
     const base = contentSection(type, "gallery").settings;
-    const variants = settingVariants(spec.settings as z.ZodType, base);
+    const variants = settingVariants(spec.settings as SettingsSchema, base);
     for (const [name, alternative] of Object.entries(SECTION_CONTENT[type].alternatives ?? {})) {
       const settings = { ...base, ...alternative };
       if (spec.settings.safeParse(settings).success) variants.push({ label: name, settings });
@@ -271,7 +270,7 @@ function blockEntries(): GalleryEntry[] {
 }
 
 function listingEntries(): GalleryEntry[] {
-  const listingSchema = (storefrontThemeBlocksSchema as unknown as { shape: { listing: z.ZodType } }).shape.listing;
+  const listingSchema = (storefrontThemeBlocksSchema as unknown as { shape: { listing: SettingsSchema } }).shape.listing;
   const base = baseTheme();
   const entries: GalleryEntry[] = [];
   for (const { path, values } of settingChoices(listingSchema)) {

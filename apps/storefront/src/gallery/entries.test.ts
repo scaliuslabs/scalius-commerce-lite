@@ -10,7 +10,6 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { z } from "zod";
 import {
   STOREFRONT_BLOCK_REGISTRY,
   STOREFRONT_PRODUCT_MODULES,
@@ -24,7 +23,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { entryId, galleryEntries } from "./entries";
 import { SECTION_CONTENT } from "./section-content";
-import { settingChoices } from "./variants";
+import { settingChoices, type SettingsSchema } from "./variants";
 import { fixtureFacets, fixtureMenu, menuLinkCount } from "./fixtures";
 
 const entries = galleryEntries();
@@ -42,7 +41,7 @@ describe("the storefront gallery", () => {
       expect(SECTION_CONTENT[type], type).toBeDefined();
       expect(families.has(`section:${type}`), type).toBe(true);
       const sectionEntries = entries.filter((entry) => entry.family === `section:${type}`);
-      for (const { path, values } of settingChoices(STOREFRONT_SECTION_REGISTRY[type].settings as z.ZodType)) {
+      for (const { path, values } of settingChoices(STOREFRONT_SECTION_REGISTRY[type].settings as SettingsSchema)) {
         for (const value of values) {
           // Each value renders in some entry of the section (the base, or the entry varying it).
           const shown = sectionEntries.some((entry) => {

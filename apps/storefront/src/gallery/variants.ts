@@ -6,24 +6,27 @@
  * (a product source, an editorial layout) need content, so the section's
  * fixture content lists their options (`section-content.ts`).
  */
-import type { z } from "zod";
+/** A Zod schema as far as this file reads it (the storefront does not depend on zod itself). */
+export interface SettingsSchema {
+  safeParse(value: unknown): { success: boolean };
+}
 
 interface SchemaDef {
   type: string;
-  innerType?: z.ZodType;
-  shape?: Record<string, z.ZodType>;
+  innerType?: SettingsSchema;
+  shape?: Record<string, SettingsSchema>;
   entries?: Record<string, string | number>;
-  options?: z.ZodType[];
+  options?: SettingsSchema[];
   values?: unknown[];
   discriminator?: string;
 }
 
-function def(schema: z.ZodType): SchemaDef {
+function def(schema: SettingsSchema): SchemaDef {
   return (schema as unknown as { _zod: { def: SchemaDef } })._zod.def;
 }
 
 /** The schema under optional, nullable, default, readonly and catch wrappers. */
-function unwrap(schema: z.ZodType): z.ZodType {
+function unwrap(schema: SettingsSchema): SettingsSchema {
   let current = schema;
   for (;;) {
     const inner = def(current);
@@ -36,7 +39,7 @@ function unwrap(schema: z.ZodType): z.ZodType {
 }
 
 /** The values one leaf setting can take, or null when it is not a closed choice. */
-function choices(schema: z.ZodType): unknown[] | null {
+function choices(schema: SettingsSchema): unknown[] | null {
   const leaf = def(unwrap(schema));
   if (leaf.type === "enum" && leaf.entries) return Object.values(leaf.entries);
   if (leaf.type === "boolean") return [true, false];
@@ -54,7 +57,7 @@ export interface SettingChoice {
 }
 
 /** Every closed-choice setting of an object schema, depth first (nested objects too). */
-export function settingChoices(schema: z.ZodType, prefix = ""): SettingChoice[] {
+export function settingChoices(schema: SettingsSchema, prefix = ""): SettingChoice[] {
   const root = def(unwrap(schema));
   if (root.type !== "object" || !root.shape) return [];
   return Object.entries(root.shape).flatMap(([key, child]) => {
@@ -93,7 +96,7 @@ export interface SettingVariant<Settings> {
  * the schema accepts over that base (a value the schema refuses there, such
  * as open dropdown filters, is left out).
  */
-export function settingVariants<Settings>(schema: z.ZodType, base: Settings): Array<SettingVariant<Settings>> {
+export function settingVariants<Settings>(schema: SettingsSchema, base: Settings): Array<SettingVariant<Settings>> {
   const variants: Array<SettingVariant<Settings>> = [{ label: "default", settings: base }];
   const seen = new Set([JSON.stringify(base)]);
   for (const { path, values } of settingChoices(schema)) {
