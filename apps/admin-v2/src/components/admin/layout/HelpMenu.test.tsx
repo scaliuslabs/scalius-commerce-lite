@@ -16,17 +16,14 @@ describe("help menu", () => {
     host.remove();
   });
 
-  it("is a Help button that offers where to ask, where to report, and the keyboard shortcuts", async () => {
+  it("offers where to ask, where to report, and the keyboard shortcuts", async () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
     const onShortcuts = vi.fn();
-    await act(async () => root.render(<HelpMenu onShortcuts={onShortcuts} />));
-    const button = host.querySelector<HTMLButtonElement>('button[aria-label="Help"]')!;
-    expect(button).not.toBeNull();
-    await act(async () => {
-      button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
-    });
+    await act(async () => root.render(
+      <HelpMenu open onOpenChange={() => {}} trigger={<button type="button">Help</button>} onShortcuts={onShortcuts} />,
+    ));
     const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
     expect(items.map((item) => item.textContent)).toEqual(["Ask a question", "Report a problem", "Keyboard shortcuts"]);
     expect(items[0]?.getAttribute("href")).toBe("https://scalius.com/discord");
