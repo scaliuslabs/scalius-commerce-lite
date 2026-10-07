@@ -101,3 +101,43 @@ describe("phone country policy", () => {
     expect(phoneNumberSchema.parse("+8801712345678")).toBe("+8801712345678");
   });
 });
+
+describe("server phone validation (libphonenumber max metadata)", () => {
+  // One number per Bangladesh operator prefix: Grameenphone 013/017, Banglalink
+  // 014/019, Teletalk 015, Airtel 016, Robi 018.
+  const operators = [
+    ["01311223344", "+8801311223344"],
+    ["01412345678", "+8801412345678"],
+    ["01512345678", "+8801512345678"],
+    ["01612345678", "+8801612345678"],
+    ["01712345678", "+8801712345678"],
+    ["01812345678", "+8801812345678"],
+    ["01912345678", "+8801912345678"],
+  ] as const;
+
+  it.each(operators)("accepts the Bangladesh mobile %s in every typing", (national, e164) => {
+    expect(validateAndFormatPhone(national)).toBe(e164);
+    expect(validateAndFormatPhone(e164)).toBe(e164);
+    expect(validateAndFormatPhone(`880${national.slice(1)}`)).toBe(e164);
+    expect(validateAndFormatPhone(`${national.slice(0, 5)}-${national.slice(5)}`)).toBe(e164);
+    expect(validateAndFormatPhone(toBanglaDigits(national))).toBe(e164);
+  });
+
+  it("refuses Bangladesh landlines and the unused 012 range as mobiles", () => {
+    for (const bad of ["01212345678", "+8801212345678", "029876543", "+88029876543"]) {
+      expect(() => validateAndFormatPhone(bad)).toThrow("Bangladeshi mobile");
+    }
+  });
+
+  it("checks other countries' number patterns, not only their lengths", () => {
+    // Indian numbers never start with 0 after the country code; the small
+    // browser metadata accepts this one because its length is right.
+    expect(() => validateAndFormatPhone("+910123456789")).toThrow("Invalid phone number format");
+    expect(validateAndFormatPhone("+919812345678")).toBe("+919812345678");
+    expect(validateAndFormatPhone("+447400123456")).toBe("+447400123456");
+  });
+});
+
+function toBanglaDigits(value: string): string {
+  return value.replace(/\d/g, (digit) => "০১২৩৪৫৬৭৮৯"[Number(digit)]!);
+}

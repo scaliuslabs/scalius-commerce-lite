@@ -6,6 +6,14 @@
   "exports": {
     "./*": "./src/*.ts"
   },
+  "imports": {
+    "#libphonenumber": {
+      "workerd": "libphonenumber-js/max",
+      "worker": "libphonenumber-js/max",
+      "node": "libphonenumber-js/max",
+      "default": "libphonenumber-js"
+    }
+  },
   "scripts": {
     "lint": "oxlint -c ../../.oxlintrc.json src/",
     "test": "vitest run",
