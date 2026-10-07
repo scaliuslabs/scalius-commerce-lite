@@ -8,7 +8,8 @@ import {
 } from "~/components/admin/taxes/TaxesSettings";
 import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { useQuery } from "@tanstack/react-query";
-import { SettingsAdvanced, SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { SettingsAdvanced } from "~/components/admin/settings/SettingsAdvanced";
+import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { TaxRegionPage } from "~/components/admin/taxes/TaxRegionPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";

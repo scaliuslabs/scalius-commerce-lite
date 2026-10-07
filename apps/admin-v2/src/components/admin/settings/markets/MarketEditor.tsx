@@ -40,7 +40,8 @@ import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
 import { storeLanguagesQueryOptions } from "~/lib/api-query-options/translations";
 import { languageName } from "../../translations/translation-form";
 import { marketCurrenciesQueryOptions, marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
-import { SettingsAdvanced, SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
+import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
+import { SettingsAdvanced } from "../SettingsAdvanced";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { MarketCountryPicker } from "./MarketCountryPicker";
 import {
