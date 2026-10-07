@@ -15,6 +15,14 @@ const sdk = vi.hoisted(() => ({
   getApiV1AdminAppsByIdLogs: vi.fn(),
   getApiV1AdminAppsByIdDeliveries: vi.fn(),
   postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry: vi.fn(),
+  getApiV1AdminAppsRegistry: vi.fn(),
+  getApiV1AdminAppsRegistrySettings: vi.fn(),
+  putApiV1AdminAppsRegistrySettings: vi.fn(),
+  postApiV1AdminAppsRegistryInstall: vi.fn(),
+  postApiV1AdminAppsByIdUpdate: vi.fn(),
+  postApiV1AdminAppsUpload: vi.fn(),
+  postApiV1AdminAppsStopThirdParty: vi.fn(),
+  postApiV1AdminAppsByIdStop: vi.fn(),
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -73,6 +81,8 @@ function summary(overrides: Record<string, unknown> = {}) {
     source: "bundled",
     status: "installed",
     needsApproval: false,
+    thirdParty: false,
+    signed: false,
     failureReason: null,
     revision: 3,
     installedAt: "2026-10-01T08:00:00.000Z",
@@ -134,7 +144,10 @@ function detail(overrides: Record<string, unknown> = {}) {
     customFields: [],
     storefront: { proxy: false, head: false, sections: [], productBlocks: [], scripts: [] },
     admin: { pages: [], cards: [], actions: [], widgets: [] },
-    limits: { cpuMs: 50, wallMs: 1000 },
+    limits: { cpuMs: 50, wallMs: 1000, subrequests: 20, invocationsPerMinute: 60, storageBytes: 10 * 1024 * 1024 },
+    storageUsage: { bytes: 0, measuredAt: null },
+    signer: null,
+    migrations: { declared: [], applied: 0 },
     ...overrides,
   };
 }
@@ -791,5 +804,525 @@ describe("App page: settings and services", () => {
       path: { id: "acme.pack" },
       body: { expectedRevision: 3, values: { store_code: "DHK-1", alpha_sender: "ACMEBD", beta_weight: 0.5 } },
     });
+  });
+});
+
+
+// ── Registry, upload, update, emergency stop and trusted developers ──
+
+const registryApp = (overrides: Record<string, unknown> = {}) => ({
+  registryId: "official",
+  id: "acme.wrap",
+  name: "Gift box",
+  version: "1.1.0",
+  tagline: "Box every order",
+  description: "Boxes for your orders.",
+  author: "Acme",
+  signer: { keyId: "key_acme", name: "Acme Ltd", trusted: true, official: false },
+  compatible: true,
+  incompatibleReason: null,
+  installed: null,
+  updateAvailable: false,
+  installCommand: "pnpm plugin add acme.wrap --registry https://registry.example/index.json",
+  ...overrides,
+});
+
+const registryList = (overrides: Record<string, unknown> = {}) => ({
+  officialConfigured: true,
+  installMode: "dashboard",
+  registries: [{ id: "official", name: "Scalius", official: true, status: "ok", error: null }],
+  apps: [registryApp()],
+  ...overrides,
+});
+
+const thirdParty = (overrides: Record<string, unknown> = {}) =>
+  summary({ id: "acme.loyalty", source: "registry", thirdParty: true, signed: true, status: "active", ...overrides });
+
+const LIST = (overrides: Record<string, unknown> = {}) => ({ apps: [thirdParty()], available: [], sandboxAvailable: true, ...overrides });
+
+const settingsView = (overrides: Record<string, unknown> = {}) => ({
+  revision: 2,
+  officialConfigured: true,
+  registries: [{ id: "partner", name: "Partner apps", indexUrl: "https://partner.example/index.json" }],
+  trustedKeys: [
+    { id: "key_official", name: "Scalius", publicKey: "OFFICIALKEYOFFICIALKEYOFFICIALKEYOFFICIALKEY1=", official: true },
+    { id: "key_acme", name: "Acme Ltd", publicKey: "ACMEKEYACMEKEYACMEKEYACMEKEYACMEKEYACMEKEY12=", official: false },
+  ],
+  ...overrides,
+});
+
+async function chooseFile(name = "acme-loyalty.zip", size = 2048) {
+  const picker = dialog().querySelector<HTMLInputElement>('input[type="file"]')!;
+  const file = new File([new Uint8Array(size)], name, { type: "application/zip" });
+  Object.defineProperty(picker, "files", { value: [file], configurable: true });
+  await act(async () => {
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flush();
+  return file;
+}
+
+async function openAppsMenuItem(label: string) {
+  await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
+  await chooseMenuItem(label);
+}
+
+/** A fresh page for a test that renders twice. */
+function restart() {
+  act(() => root.unmount());
+  host.remove();
+  document.body.innerHTML = "";
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  queryClient.clear();
+}
+
+const registryRowButton = (name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>("li button")].find((element) => element.textContent?.includes(name))!;
+
+describe("Registry apps in the Apps list", () => {
+  it("does not read the registries until a view needs them", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList()));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
+    expect(sdk.getApiV1AdminAppsRegistry).not.toHaveBeenCalled();
+
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+    expect(sdk.getApiV1AdminAppsRegistry).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists registry apps beside the first-party ones, with who signed each", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({ available: [listing()] })));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [
+        registryApp(),
+        registryApp({ id: "stranger.tool", name: "Mystery tool", signer: { keyId: "key_x", name: null, trusted: false, official: false } }),
+        registryApp({ id: "acme.loyalty", name: "Loyalty points", installed: { version: "1.2.0", source: "registry" } }),
+      ],
+    })));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+
+    const list = rows();
+    expect(list[0]).toContain("Gift wrap");
+    expect(list.find((row) => row.includes("Gift box"))).toContain("Verified developer");
+    expect(list.find((row) => row.includes("Gift box"))).toContain("by Acme · Scalius");
+    expect(list.find((row) => row.includes("Mystery tool"))).toContain("Unknown developer");
+    // An installed app is not offered again.
+    expect(list.some((row) => row.includes("Loyalty points"))).toBe(false);
+  });
+
+  it("says when the official registry is not set up and when a registry cannot be read", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      officialConfigured: false,
+      registries: [
+        { id: "official", name: "Scalius", official: true, status: "ok", error: null },
+        { id: "partner", name: "Partner apps", official: false, status: "unavailable", error: "It answered 503." },
+      ],
+      apps: [],
+    })));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("The official app registry is not set up yet."));
+    expect(text()).toContain("Couldn't load apps from Partner apps: It answered 503.");
+    expect(text()).toContain("No apps to install");
+  });
+
+  it("installs from the dashboard, then opens the app's page for the access review", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList()));
+    sdk.postApiV1AdminAppsRegistryInstall.mockImplementation(() => ok({ app: detail({ id: "acme.wrap", name: "Gift box", source: "registry" }) }));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+    await click(registryRowButton("Gift box"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
+
+    expect(dialog().textContent).toContain("Verified developer: Acme Ltd");
+    await click(button("Install", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRegistryInstall).toHaveBeenCalledTimes(1));
+    expect(sdk.postApiV1AdminAppsRegistryInstall.mock.calls[0]![0]).toEqual({ body: { registryId: "official", id: "acme.wrap", version: "1.1.0" } });
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/admin/apps/$pluginId", params: { pluginId: "acme.wrap" } }));
+  });
+
+  it("warns about an unknown developer and does not offer the install", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ signer: { keyId: "key_x", name: null, trusted: false, official: false } })],
+    })));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+    await click(registryRowButton("Gift box"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
+
+    expect(dialog().textContent).toContain("Unknown developer");
+    expect(dialog().textContent).toContain("This store doesn't know who made this app.");
+    expect(button("Install", dialog()).disabled).toBe(true);
+  });
+
+  it("offers no install for an app that needs a newer Scalius", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ compatible: false, incompatibleReason: "It needs Scalius 2.0.0." })],
+    })));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+    await click(registryRowButton("Gift box"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
+
+    expect(dialog().textContent).toContain("Needs a newer Scalius");
+    expect(dialog().textContent).toContain("It needs Scalius 2.0.0.");
+    expect(hasButton("Install")).toBe(false);
+  });
+
+  it("shows the command and a copy button when the store installs by command", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({ sandboxAvailable: false })));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({ installMode: "command" })));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Available to install"));
+    await vi.waitFor(() => expect(text()).toContain("Gift box"));
+    await click(registryRowButton("Gift box"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
+
+    expect(dialog().querySelector("code")?.textContent).toBe("pnpm plugin add acme.wrap --registry https://registry.example/index.json");
+    expect(dialog().textContent).toContain("Then deploy your store to finish.");
+    expect(hasButton("Install")).toBe(false);
+    await click(button("Copy command", dialog()));
+    expect(writeText).toHaveBeenCalledWith("pnpm plugin add acme.wrap --registry https://registry.example/index.json");
+  });
+
+  it("lists registry updates for installed apps in Updates available", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ id: "acme.loyalty", name: "Loyalty points", version: "1.3.0", installed: { version: "1.2.0", source: "registry" }, updateAvailable: true })],
+    })));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
+    await click(tab("Updates available"));
+    await vi.waitFor(() => expect(text()).toContain("Version 1.3.0 available"));
+    expect(document.querySelector('a[href="/admin/apps/acme.loyalty"]')?.textContent).toContain("Version 1.3.0 available");
+  });
+});
+
+describe("Upload, emergency stop and notices on the Apps list", () => {
+  it("offers Upload app only to managers on a store that installs from the dashboard", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
+    expect(hasButton("Upload app")).toBe(false);
+
+    restart();
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({ sandboxAvailable: false })));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
+    expect(hasButton("Upload app")).toBe(false);
+  });
+
+  it("installs an uploaded package signed by a trusted developer and opens its page", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsUpload.mockImplementation(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    expect(button("Upload", dialog()).disabled).toBe(true);
+
+    const file = await chooseFile();
+    expect(dialog().textContent).toContain("acme-loyalty.zip");
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(1));
+    expect(sdk.postApiV1AdminAppsUpload.mock.calls[0]![0]).toEqual({ body: file, query: {} });
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/admin/apps/$pluginId", params: { pluginId: "acme.wrap" } }));
+  });
+
+  it("stops at a warning for a developer the store does not trust; a Super Admin can trust and install", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsUpload
+      .mockImplementationOnce(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
+      .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
+    await render(<AppsList />, MANAGER, true);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile();
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("Signed by Newcomer Ltd, who this store does not trust yet. Only trust developers you know."));
+
+    await click(button("Trust developer and install", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
+    expect((sdk.postApiV1AdminAppsUpload.mock.calls[1]![0] as { query: unknown }).query).toEqual({ trustDeveloper: "true" });
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+  });
+
+  it("tells anyone else to ask a Super Admin instead of offering the choice", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile();
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("Ask a Super Admin to trust this developer and install the app."));
+    expect(hasButton("Trust developer and install")).toBe(false);
+    expect(hasButton("Upload")).toBe(false);
+  });
+
+  it("warns that an unsigned app could have been changed, and a Super Admin can install it anyway", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsUpload
+      .mockImplementationOnce(() => refused(422, { code: "signature.missing" }))
+      .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap", signer: null }), updated: false, rolledBack: false, error: null }));
+    await render(<AppsList />, MANAGER, true);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile();
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("This app is not signed. Anyone could have changed it."));
+
+    await click(button("Install unsigned app", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
+    expect((sdk.postApiV1AdminAppsUpload.mock.calls[1]![0] as { query: unknown }).query).toEqual({ allowUnsigned: "true" });
+  });
+
+  it("refuses a file that is not a zip before sending anything", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    await render(<AppsList />, MANAGER);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile("notes.txt");
+    expect(dialog().textContent).toContain("Choose a .zip file.");
+    expect(button("Upload", dialog()).disabled).toBe(true);
+    expect(sdk.postApiV1AdminAppsUpload).not.toHaveBeenCalled();
+  });
+
+  it("stops every third-party app after a confirmation that counts them", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({
+      apps: [thirdParty(), thirdParty({ id: "acme.sms", name: "SMS alerts" }), summary({ id: "scalius.bkash", name: "bKash", status: "active" })],
+    })));
+    sdk.postApiV1AdminAppsStopThirdParty.mockImplementation(() => ok({ stopped: ["acme.loyalty", "acme.sms"] }));
+    await render(<AppsList />, MANAGER);
+    await openAppsMenuItem("Stop all third-party apps");
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Stop 2 third-party apps?"));
+    expect(sdk.postApiV1AdminAppsStopThirdParty).not.toHaveBeenCalled();
+
+    await click(button("Stop all", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsStopThirdParty).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("2 apps stopped"));
+  });
+
+  it("offers the emergency stop only to managers", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
+    await act(async () => {
+      button("More actions").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    });
+    await flush();
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((element) => element.textContent?.trim());
+    expect(items).toEqual(["Registries and trusted developers"]);
+  });
+
+  it("lists stopped apps in a notice with their reasons and links to each", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({
+      apps: [
+        thirdParty({ status: "disabled", failureReason: "Stopped automatically: it went over its limits 3 times within an hour." }),
+        thirdParty({ id: "acme.sms", name: "SMS alerts", status: "disabled", failureReason: "Stopped with the emergency switch." }),
+        summary({ id: "acme.feed", name: "Product feed", status: "disabled" }),
+      ],
+    })));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("2 apps are stopped"));
+
+    const notice = document.querySelector<HTMLElement>('[role="alert"]')!;
+    expect(notice.textContent).toContain("Stopped automatically: it went over its limits 3 times within an hour.");
+    expect(notice.textContent).toContain("Stopped with the emergency switch.");
+    expect(notice.textContent).not.toContain("Product feed");
+    expect(notice.querySelector('a[href="/admin/apps/acme.sms"]')).not.toBeNull();
+  });
+});
+
+describe("Registries and trusted developers", () => {
+  it("lets a Super Admin add a registry and a developer, and saves with the revision shown", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistrySettings.mockImplementation(() => ok(settingsView()));
+    sdk.putApiV1AdminAppsRegistrySettings.mockImplementation(() => ok(settingsView({ revision: 3 })));
+    await render(<AppsList />, MANAGER, true);
+    await openAppsMenuItem("Registries and trusted developers");
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Scalius official registry"));
+    expect([...dialog().querySelectorAll<HTMLInputElement>("input")].map((field) => field.value)).toContain("Partner apps");
+    expect(dialog().textContent).toContain("Key id: key_acme");
+    // The official key is shown, never editable.
+    expect(dialog().textContent).toContain("Scalius (official)");
+
+    const fields = () => [...dialog().querySelectorAll<HTMLInputElement>("input")];
+    await click(button("Add registry", dialog()));
+    await type(fields().find((field) => field.id.includes("-r") && field.id.endsWith("-name") && field.value === "")!, "Agency apps");
+    await type(fields().find((field) => field.value === "https://")!, "https://agency.example/index.json");
+    await click(button("Add developer", dialog()));
+    await type(fields().find((field) => field.id.includes("-k") && field.id.endsWith("-name") && field.value === "")!, "Agency Ltd");
+    await type(fields().find((field) => field.id.includes("-k") && field.id.endsWith("-key") && field.value === "")!, "AGENCYKEYAGENCYKEYAGENCYKEYAGENCYKEYAGEN12=");
+    await click(button("Save", dialog()));
+
+    await vi.waitFor(() => expect(sdk.putApiV1AdminAppsRegistrySettings).toHaveBeenCalledTimes(1));
+    expect(sdk.putApiV1AdminAppsRegistrySettings.mock.calls[0]![0]).toEqual({
+      body: {
+        expectedRevision: 2,
+        registries: [
+          { id: "partner", name: "Partner apps", indexUrl: "https://partner.example/index.json" },
+          { id: "agency-apps", name: "Agency apps", indexUrl: "https://agency.example/index.json" },
+        ],
+        trustedKeys: [
+          { name: "Acme Ltd", publicKey: "ACMEKEYACMEKEYACMEKEYACMEKEYACMEKEYACMEKEY12=" },
+          { name: "Agency Ltd", publicKey: "AGENCYKEYAGENCYKEYAGENCYKEYAGENCYKEYAGEN12=" },
+        ],
+      },
+    });
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("Registries saved"));
+  });
+
+  it("refuses an address that is not https before saving", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistrySettings.mockImplementation(() => ok(settingsView()));
+    await render(<AppsList />, MANAGER, true);
+    await openAppsMenuItem("Registries and trusted developers");
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Scalius official registry"));
+    const url = [...dialog().querySelectorAll<HTMLInputElement>("input")].find((field) => field.value.startsWith("https://partner"))!;
+    await type(url, "http://partner.example/index.json");
+    await click(button("Save", dialog()));
+    expect(dialog().textContent).toContain("Use an address that starts with https://");
+    expect(sdk.putApiV1AdminAppsRegistrySettings).not.toHaveBeenCalled();
+  });
+
+  it("shows everyone else the same lists read-only", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.getApiV1AdminAppsRegistrySettings.mockImplementation(() => ok(settingsView()));
+    await render(<AppsList />, VIEWER);
+    await openAppsMenuItem("Registries and trusted developers");
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Partner apps"));
+
+    expect(dialog().textContent).toContain("Only a Super Admin can change these.");
+    expect(dialog().textContent).toContain("Acme Ltd");
+    expect(dialog().querySelectorAll("input")).toHaveLength(0);
+    expect(hasButton("Save")).toBe(false);
+    expect(hasButton("Add registry")).toBe(false);
+  });
+});
+
+describe("App page lifecycle", () => {
+  it("stops an active app at once after a confirmation", async () => {
+    sdk.postApiV1AdminAppsByIdStop.mockImplementation(() => ok({ app: detail({ status: "disabled", failureReason: "Stopped with the emergency switch." }), stopped: true }));
+    await renderApp(detail({ status: "active", source: "registry" }), MANAGER);
+    await vi.waitFor(() => expect(hasButton("Stop now")).toBe(true));
+    await click(button("Stop now"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Stop Loyalty points now?"));
+    expect(dialog().textContent).toContain("Stops the app at once without running its code. Its data and settings stay. A Super Admin starts it again.");
+    expect(sdk.postApiV1AdminAppsByIdStop).not.toHaveBeenCalled();
+
+    await click(button("Stop now", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsByIdStop).toHaveBeenCalledWith({ path: { id: "acme.loyalty" } }));
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("App stopped"));
+  });
+
+  it("offers Stop now only to managers and only while the app is active", async () => {
+    await renderApp(detail({ status: "active" }), VIEWER);
+    expect(hasButton("Stop now")).toBe(false);
+  });
+
+  it("shows why a stopped app is off, with the way to start it again for a Super Admin", async () => {
+    await renderApp(detail({ status: "disabled", source: "registry", failureReason: "Stopped automatically: it went over its limits 3 times within an hour." }), MANAGER, true);
+    await vi.waitFor(() => expect(text()).toContain("This app is stopped"));
+    expect(text()).toContain("Stopped automatically: it went over its limits 3 times within an hour.");
+    expect(text()).toContain("To start it again, a Super Admin reviews and activates it.");
+    expect(hasButton("Review and activate")).toBe(true);
+    expect(hasButton("Stop now")).toBe(false);
+  });
+
+  it("offers the newer registry version and updates with the revision shown", async () => {
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ id: "acme.loyalty", version: "1.3.0", installed: { version: "1.2.0", source: "registry" }, updateAvailable: true })],
+    })));
+    sdk.postApiV1AdminAppsByIdUpdate.mockImplementation(() => ok({ app: detail({ version: "1.3.0", revision: 4 }), rolledBack: false, error: null }));
+    await renderApp(detail({ status: "active", source: "registry" }), MANAGER);
+    await vi.waitFor(() => expect(hasButton("Update to 1.3.0")).toBe(true));
+    expect(text()).toContain("Version 1.3.0 is available");
+
+    await click(button("Update to 1.3.0"));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsByIdUpdate).toHaveBeenCalledTimes(1));
+    expect(sdk.postApiV1AdminAppsByIdUpdate.mock.calls[0]![0]).toEqual({
+      path: { id: "acme.loyalty" },
+      body: { expectedRevision: 3, registryId: "official", version: "1.3.0" },
+    });
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("App updated"));
+  });
+
+  it("says plainly that an update was undone and why", async () => {
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ id: "acme.loyalty", version: "1.3.0", installed: { version: "1.2.0", source: "registry" }, updateAvailable: true })],
+    })));
+    sdk.postApiV1AdminAppsByIdUpdate.mockImplementation(() => ok({ app: detail({ source: "registry" }), rolledBack: true, error: "Data update 2 failed." }));
+    await renderApp(detail({ status: "active", source: "registry" }), MANAGER);
+    await vi.waitFor(() => expect(hasButton("Update to 1.3.0")).toBe(true));
+    await click(button("Update to 1.3.0"));
+    await vi.waitFor(() => expect(text()).toContain("The update was undone: Data update 2 failed."));
+  });
+
+  it("offers no update for a bundled app or to someone who cannot manage apps", async () => {
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
+      apps: [registryApp({ id: "acme.loyalty", version: "1.3.0", installed: { version: "1.2.0", source: "registry" }, updateAvailable: true })],
+    })));
+    await renderApp(detail({ source: "bundled" }), MANAGER);
+    expect(hasButton("Update to 1.3.0")).toBe(false);
+    expect(sdk.getApiV1AdminAppsRegistry).not.toHaveBeenCalled();
+
+    restart();
+    await renderApp(detail({ source: "registry" }), VIEWER);
+    expect(hasButton("Update to 1.3.0")).toBe(false);
+    expect(sdk.getApiV1AdminAppsRegistry).not.toHaveBeenCalled();
+  });
+
+  it("shows who signed the code, its storage, its limits and its data updates", async () => {
+    await renderApp(detail({
+      source: "registry",
+      runtime: "sandbox",
+      signer: { keyId: "key_acme", name: "Acme Ltd", official: false },
+      storageUsage: { bytes: 2 * 1024 * 1024, measuredAt: "2026-10-07T00:00:00.000Z" },
+      limits: { cpuMs: 50, wallMs: 1500, subrequests: 20, invocationsPerMinute: 60, storageBytes: 10 * 1024 * 1024 },
+      migrations: { declared: [{ version: 1, description: "Add tiers" }, { version: 2, description: "Backfill" }], applied: 1 },
+    }), VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Verified developer: Acme Ltd"));
+
+    expect(text()).toContain("2 MB of 10 MB");
+    expect(text()).toContain("Up to 50 ms of work and 1.5 s in total, 20 calls, 60 runs a minute");
+    expect(text()).toContain("1 of 2");
+  });
+
+  it("calls an upload without a signature an unsigned upload, and says nothing for bundled code", async () => {
+    await renderApp(detail({ source: "upload", runtime: "sandbox", signer: null }), VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Unsigned upload"));
+
+    restart();
+    await renderApp(detail({ source: "bundled" }), VIEWER);
+    expect(text()).not.toContain("Unsigned upload");
+    expect(text()).not.toContain("Verified developer");
+    expect(text()).not.toContain("Storage used");
   });
 });
