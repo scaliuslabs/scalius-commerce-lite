@@ -99,6 +99,7 @@ export function useCheckoutFlowForm(isValid: (draft: CheckoutFlow) => boolean, l
           checkoutMode: draft.checkoutMode,
           partialPaymentEnabled: draft.partialPaymentEnabled,
           partialPaymentAmount: draft.partialPaymentAmount,
+          requireFullBillingAddress: draft.requireFullBillingAddress,
           expectedRevision,
         },
       })),

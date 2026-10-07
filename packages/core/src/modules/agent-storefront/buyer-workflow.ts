@@ -49,7 +49,7 @@ import {
   ValidationError,
 } from "../../errors";
 import { createAgentStorefrontBootstrap } from "./bootstrap";
-import { parseAgentStorefrontCartJson } from "./state";
+import { agentContextBillingLocation, parseAgentStorefrontCartJson } from "./state";
 import { presentAgentStorefrontCartIssues } from "./service";
 import {
   assertAgentStorefrontCheckoutQuoteFingerprint,
@@ -100,8 +100,41 @@ export interface AgentStorefrontCheckoutSubmitInput {
   shippingAddressLine2?: string | null;
   shippingLocality?: string | null;
   shippingDependentLocality?: string | null;
+  /**
+   * The billing address (Shopify's rule). An order that ships uses its
+   * shipping address unless `billingSameAsShipping` is false with a billing
+   * address. A cart with nothing physical is billed (and taxed) at the
+   * context's country, region and postal code; its other billing lines come
+   * from here when the merchant requires a full billing address.
+   */
+  billingSameAsShipping?: boolean | null;
+  billingCountryCode?: string | null;
+  billingName?: string | null;
+  billingCompany?: string | null;
+  billingAddress?: string | null;
+  billingAddressLine2?: string | null;
+  billingDependentLocality?: string | null;
+  billingLocality?: string | null;
+  billingAdminArea?: string | null;
+  billingPostalCode?: string | null;
   notes: string | null;
   paymentMethod: string;
+}
+
+/** The billing fields an agent submit sent, trimmed (only those sent, so earlier hashes are unchanged). */
+function agentBillingHashFields(input: AgentStorefrontCheckoutSubmitInput): Record<string, unknown> {
+  return {
+    ...(input.billingSameAsShipping === false ? { billingSameAsShipping: false } : {}),
+    ...optionalText("billingCountryCode", input.billingCountryCode?.toUpperCase()),
+    ...optionalText("billingName", input.billingName),
+    ...optionalText("billingCompany", input.billingCompany),
+    ...optionalText("billingAddress", input.billingAddress),
+    ...optionalText("billingAddressLine2", input.billingAddressLine2),
+    ...optionalText("billingDependentLocality", input.billingDependentLocality),
+    ...optionalText("billingLocality", input.billingLocality),
+    ...optionalText("billingAdminArea", input.billingAdminArea),
+    ...optionalText("billingPostalCode", input.billingPostalCode),
+  };
 }
 
 export interface AgentStorefrontCheckoutSubmitView {
@@ -179,6 +212,7 @@ export async function buildAgentStorefrontCheckoutRequestHash(
     ...optionalText("shippingAddressLine2", input.shippingAddressLine2),
     ...optionalText("shippingLocality", input.shippingLocality),
     ...optionalText("shippingDependentLocality", input.shippingDependentLocality),
+    ...agentBillingHashFields(input),
     notes: input.notes?.trim() || null,
     paymentMethod: input.paymentMethod,
   });
@@ -417,10 +451,9 @@ export async function submitAgentStorefrontCheckout(
     // is its delivery rate's (MARKETS-DESIGN step 3b): the order's country,
     // Bangladesh's City/Thana/Area or another country's admin area and
     // postal code are the ones the rate was priced for.
-    // With nothing to ship, the context's market country places the order for
-    // the shared contact rule, only when the store lets such orders go without a phone.
-    shippingCountryCode: delivery.address?.countryCode
-      ?? (authority.contactFields.phoneOptionalForDigital && !delivery.fulfilment.requiresShipping ? owned.countryCode ?? null : null),
+    // With nothing to ship the order has no shipping country: its billing
+    // country (the context's) places it.
+    shippingCountryCode: delivery.address?.countryCode ?? null,
     shippingAddress: delivery.fulfilment.requiresShipping ? shippingAddress : null,
     ...(delivery.fulfilment.requiresShipping && delivery.address?.countryCode !== DELIVERY_HIERARCHY_COUNTRY
       ? {
@@ -434,6 +467,22 @@ export async function submitAgentStorefrontCheckout(
     city: delivery.address?.city ?? null,
     zone: delivery.address?.zone ?? null,
     area: delivery.address?.area ?? null,
+    // The billing address: the agent's lines; with nothing physical, its
+    // country, region and postal code are the context's (what the quote taxed).
+    billingSameAsShipping: input.billingSameAsShipping ?? null,
+    billingName: input.billingName ?? null,
+    billingCompany: input.billingCompany ?? null,
+    billingAddress: input.billingAddress ?? null,
+    billingAddressLine2: input.billingAddressLine2 ?? null,
+    billingDependentLocality: input.billingDependentLocality ?? null,
+    billingLocality: input.billingLocality ?? null,
+    ...(delivery.fulfilment.requiresDeliveryMethod
+      ? {
+        billingCountryCode: input.billingCountryCode ?? null,
+        billingAdminArea: input.billingAdminArea ?? null,
+        billingPostalCode: input.billingPostalCode ?? null,
+      }
+      : agentContextBillingLocation(owned) ?? {}),
     notes: input.notes?.trim() || null,
     items: authority.cartValidation.items.map((item) => ({
       productId: item.productId,
@@ -494,6 +543,7 @@ export async function submitAgentStorefrontCheckout(
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       contactFields: authority.contactFields,
       shippingCountries: authority.shippingCountries,
+      requireFullBillingAddress: authority.checkoutSettings.requireFullBillingAddress,
     }),
     authority.taxAuthority,
     {},

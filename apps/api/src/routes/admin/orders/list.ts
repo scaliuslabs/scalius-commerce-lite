@@ -379,6 +379,7 @@ app.openapi(exportOrdersRoute, async (c) => {
                 shippingDependentLocality: detail?.shippingDependentLocality ?? null,
                 shippingAdminArea: detail?.shippingAdminArea ?? null,
                 shippingPostalCode: detail?.shippingPostalCode ?? null,
+                billing: detail?.billing,
                 notes: detail?.notes ?? null,
                 lines: detail?.lines ?? [],
             };

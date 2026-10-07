@@ -185,15 +185,15 @@ export type AddressBookResult =
   | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
 
 /**
- * One address-book change: add (no `addressId`), change, delete or make
- * default. The API checks the address against its country's rules and
+ * One address-book change: add (no `addressId`), change, delete, make
+ * default or make the default billing address. The API checks the address against its country's rules and
  * answers the whole book; a refusal's message names the field.
  */
 export async function changeAccountAddresses(
   request: Request,
   change:
     | { action: "save"; addressId?: string; body: unknown }
-    | { action: "delete" | "default"; addressId: string },
+    | { action: "delete" | "default" | "default_billing"; addressId: string },
 ): Promise<AddressBookResult> {
   const path = "/api/v1/customer-auth/addresses";
   const id = "addressId" in change && change.addressId ? `/${encodeURIComponent(change.addressId)}` : "";
@@ -201,7 +201,7 @@ export async function changeAccountAddresses(
     ? await callAccountApi(request, `${path}${id}`, { method: id ? "PUT" : "POST", body: change.body })
     : change.action === "delete"
       ? await callAccountApi(request, `${path}${id}`, { method: "DELETE" })
-      : await callAccountApi(request, `${path}${id}/default`, { method: "POST" });
+      : await callAccountApi(request, `${path}${id}/${change.action === "default_billing" ? "default-billing" : "default"}`, { method: "POST" });
   const addresses = answer?.status === 200 ? (answer.data as { addresses?: unknown } | null)?.addresses : null;
   if (Array.isArray(addresses)) return { ok: true, addresses: addresses as CustomerAddress[] };
   if (answer?.status === 400 || answer?.status === 404 || answer?.status === 409 || answer?.status === 422) {

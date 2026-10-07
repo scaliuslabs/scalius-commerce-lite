@@ -10,6 +10,7 @@ import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
 import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
 import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
+import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
 import {
   defaultShippingCountry,
   shippingCountryName,
@@ -224,6 +225,7 @@ if (!codAvailable) {
       {
         customerSessionToken,
         waitUntil: (promise) => Astro.locals.cfContext.waitUntil(promise),
+        requireFullBillingAddress: checkoutConfig.requireFullBillingAddress === true,
       },
     );
     if (result.success && "orderId" in result && result.orderId && "receiptToken" in result && result.receiptToken) {
@@ -475,6 +477,36 @@ const secondaryButtonClass =
             )}
           </section>
         )}
+
+        {/* The billing address (Shopify's rule): asked when nothing ships, or when the merchant requires one. */}
+        <BillingAddressFields
+          path={mode}
+          countries={shippingCountries}
+          selected={form.billing.billingCountryCode || form.shippingCountryCode}
+          requireFull={checkoutConfig.requireFullBillingAddress === true}
+          language={checkoutLanguageBaseCode(lang.code)}
+          values={form.billing}
+          sameAsShipping={form.billingSameAsShipping}
+          labels={{
+            heading: copy.billingHeadingText,
+            sameAsShipping: copy.billingSameAsShippingText,
+            help: copy.billingHelpText,
+            country: copy.shippingCountryLabel,
+            billingName: copy.billingNameLabel,
+            billingCompany: copy.billingCompanyLabel,
+            billingAddress: copy.billingAddressLabel,
+            billingAddressLine2: copy.shippingAddressLine2Label,
+            billingDependentLocality: copy.shippingDependentLocalityLabel,
+            billingLocality: copy.shippingLocalityLabel,
+            billingAdminArea: copy.shippingAdminAreaLabel,
+            billingPostalCode: copy.shippingPostalCodeLabel,
+          }}
+          labelClass={labelClass}
+          fieldClass={fieldClass}
+        >
+          {/* An order with nothing to ship is taxed there: its total comes with the next step. */}
+          {mode === "none" && <div class="sm:col-span-2"><button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button></div>}
+        </BillingAddressFields>
 
         {lang.fieldVisibility.showOrderNotesField && (
           <div>

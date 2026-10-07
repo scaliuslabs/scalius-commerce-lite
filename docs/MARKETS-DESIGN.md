@@ -469,7 +469,7 @@ row (the address); nothing else changes.
 
 **Left for later steps.** Shipping zones and rates by country, and per-market
 delivery methods (3b). Tax regions, the system tax provider and
-`prices_include_tax` per market (3c). Billing addresses. Address
+`prices_include_tax` per market (3c). Billing addresses (0119). Address
 autocomplete. Quick checkout ("Buy now") and agent buyer contexts keep the
 Bangladesh address until 3b. Customer segments by country.
 
@@ -691,6 +691,72 @@ zone and the units, in one guarded batch. It runs only while the store has
 no order and the backup market is as migration 0112 created it (revision 1,
 the only market). It creates no tax region and no shipping zone. Details:
 [STORE-DEFAULTS.md](STORE-DEFAULTS.md).
+
+## Billing addresses (0119)
+
+Shopify's rule. A store that sells only to Bangladesh shows no new field
+for an order that ships, and its D1 calls and statements do not change.
+
+**Rule** (`@scalius/shared/billing-address`, `billingAddressNeed()`):
+
+- An order that ships is billed at its shipping address ("Billing address
+  same as shipping", on by default).
+- An order that ships nothing (only digital, service or gift-card lines)
+  asks for a billing address. By default it is minimal: the country, plus
+  the admin area and the postal code when the country's rules require them
+  (what tax regions match on). The country select shows only when the
+  active markets sell to more than one country; with one, that country is
+  the billing country.
+- A pickup order asks for none.
+- Settings → Checkout → "Require full billing address" (off by default)
+  asks every order for a full address by its country's rules. A shipped
+  order then shows "Same as shipping address", ticked.
+- A billing country must be one an active market sells to
+  (`billing_country_unavailable`). A missing one is
+  `billing_address_required`; a broken one `billing_address_invalid` with
+  `details.issues`. When checkout does not ask, the API ignores what was
+  sent.
+
+**Tax** (`tax/region-match.ts`, `taxAddressSource()`): an order that ships
+is taxed at its shipping address, a pickup order where it is collected (the
+origin), and an order that ships nothing at its billing address (else the
+origin). The order's market is the market of the taxed address's country.
+The quote records `jurisdiction.addressSource`, and the order's tax
+snapshot keeps it in `order_tax_snapshots.address_source` (an SQL
+literal). The tax quote takes `billingCountryCode`, `billingAdminArea` and
+`billingPostalCode`.
+
+**Schema.** Migration `0119_billing_addresses` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 119, Drizzle snapshot) adds to
+`orders` the billing snapshot (`billing_name`, `billing_company`,
+`billing_address`, `billing_address_line2`, `billing_country_code`,
+`billing_dependent_locality`, `billing_locality`, `billing_admin_area`,
+`billing_postal_code`, `billing_phone`, `billing_validation_skipped`) and
+`billing_same_as_shipping`. A billing address has no City/Thana/Area
+adapter. Nothing is backfilled: an older order has no billing address.
+`customer_addresses.is_default_billing` marks one default billing address
+per customer. Billing changes are `order.updated` and address-book changes
+`customer.updated` (ids and states only). Orders and the address book are
+private: no cache dependency.
+
+**Cost.** The checkout order insert writes both billing flags as SQL
+literals and leaves absent values out, so a shipped order binds no billing
+value. The largest insert (a foreign delivery with a full separate billing
+address) stays within 100 bound values.
+
+**Surfaces.** Checkout (cart page, payment step, quick checkout; works
+without JavaScript), the tax quote, agent checkout (a cart with nothing
+physical is billed at the context's delivery country, region and postal
+code), staff orders (create: "Same as delivery address" or an optional
+billing address; edit: the order's details dialog; amendments keep it),
+the order page, invoices ("Bill to", and "Ship to" when they differ), the
+CSV export (billing columns at the end), the address book (dashboard,
+account page and agents: `set_default_billing`) and the SDK.
+
+**Left for later.** VAT and tax ID collection on billing addresses.
+Payment provider address verification (AVS). Address autocomplete. The
+billing address in order e-mails and on the buyer's receipt. Checkout
+prefill from the default billing address.
 
 ## Non-goals in this wave
 

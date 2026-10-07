@@ -39,6 +39,7 @@ import type { AppProviders } from "../../../integrations/provider-port";
 import { ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW, orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
 import { orderMarketIdSql } from "../../markets";
 import { orderShippingAddressColumns, orderShippingAddressInsertColumns, resolveOrderAddress } from "../shipping-address";
+import { orderBillingAddressColumns, orderBillingAddressInsertColumns, resolveStaffBillingAddress } from "../billing-address";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
@@ -158,6 +159,12 @@ export async function createManualOrder(
                 { skipValidation: data.skipAddressValidation === true },
             )
             : null;
+        // The billing address: the shipping address by default when the order
+        // ships; otherwise optional (staff may skip its rules too).
+        const billing = resolveStaffBillingAddress(data, {
+            ships: requiresShipping,
+            skipValidation: data.skipAddressValidation === true,
+        });
         const initialPaymentState = computeOrderPaymentState({
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
@@ -194,6 +201,7 @@ export async function createManualOrder(
             initialPaymentState,
             address,
             shippingAddress,
+            billing,
             requiresShipping,
             deliveryMethodKind,
             cityName,
@@ -220,6 +228,7 @@ export async function createManualOrder(
         initialPaymentState,
         address,
         shippingAddress,
+        billing,
         requiresShipping,
         deliveryMethodKind,
         cityName,
@@ -311,6 +320,10 @@ export async function createManualOrder(
                 name: data.customerName,
                 phone: data.customerPhone,
             })),
+            ...orderBillingAddressInsertColumns(orderBillingAddressColumns(billing, {
+                name: data.customerName,
+                phone: data.customerPhone,
+            })),
             requiresShipping,
             shippingMethodKind: deliveryMethodKind,
             pickupAddress: deliveryMethodKind === "pickup" ? shippingMethod?.pickupAddress ?? null : null,
@@ -348,8 +361,10 @@ export async function createManualOrder(
             paymentMethod: PaymentMethod.COD,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             status: OrderStatus.CONFIRMED,
-            // The shipping country's market, else the backup market (MARKETS-DESIGN D4).
-            marketId: orderMarketIdSql(shippingAddress?.countryCode ?? null),
+            // The shipping country's market, else (an order taxed at its billing
+            // address) the billing country's, else the backup market (MARKETS-DESIGN D4).
+            marketId: orderMarketIdSql(shippingAddress?.countryCode
+                ?? (taxQuote.jurisdiction?.addressSource === "billing" ? billing?.address?.countryCode ?? null : null)),
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).

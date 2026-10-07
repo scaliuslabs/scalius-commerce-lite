@@ -49,6 +49,7 @@ import { isWithinRateLimit } from "../../utils/rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
 import { linePropertiesInputSchema } from "../../schemas/order-lines";
+import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     getCustomerSessionTokenFromRequest,
     giftCardHandlesSchema,
@@ -241,7 +242,7 @@ const createOrderSchema = z.object({
    * Absent means Bangladesh, whose City/Thana/Area form sends `city`, `zone`
    * and `area` instead of a locality. Another country sends what its rules
    * require (GET /api/v1/address-rules/{countryCode}). An order with nothing
-   * to ship sends its market's country here, without an address.
+   * to ship sends none: its country is its billing country.
    */
   shippingCountryCode: z.string().trim().length(2).nullable().optional(),
   /**
@@ -262,6 +263,7 @@ const createOrderSchema = z.object({
   city: z.string().min(1, "City is required").nullable().optional(),
   zone: z.string().min(1, "Zone is required").nullable().optional(),
   area: z.string().nullable().optional(),
+  ...billingAddressBodyShape,
   notes: z
     .string()
     .max(500, "Notes must be less than 500 characters")
@@ -329,7 +331,8 @@ const createOrderSchema = z.object({
     return z.NEVER;
   }
   try {
-    return { ...order, customerPhone: validateAndFormatPhone(rawPhone, undefined, { defaultCountry: order.shippingCountryCode }) };
+    // An order that ships nothing reads it in its billing country.
+    return { ...order, customerPhone: validateAndFormatPhone(rawPhone, undefined, { defaultCountry: order.shippingCountryCode ?? order.billingCountryCode }) };
   } catch (error: unknown) {
     context.addIssue({
       code: "custom",
@@ -562,6 +565,7 @@ app.openapi(createOrderRoute, async (c) => {
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
         contactFields: checkoutAuthority.contactFields,
         shippingCountries: checkoutAuthority.shippingCountries,
+        requireFullBillingAddress: checkoutAuthority.checkoutSettings.requireFullBillingAddress,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },

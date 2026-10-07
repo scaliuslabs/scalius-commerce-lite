@@ -244,6 +244,8 @@ function clearReadableCustomerAuthMirrorCookie(): void {
 export interface CustomerAddress {
   id: string;
   isDefault: boolean;
+  /** The default billing address (none: the default address bills). */
+  isDefaultBilling?: boolean;
   /** ISO 3166-1 alpha-2. */
   countryCode: string;
   /** The recipient when not the account holder (null: the account's name). */

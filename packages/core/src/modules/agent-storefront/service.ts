@@ -37,6 +37,7 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   addAgentStorefrontCartLine,
+  agentContextBillingLocation,
   normalizeAgentStorefrontDeliverySelection,
   normalizeAgentStorefrontDiscountCode,
   parseAgentStorefrontCartJson,
@@ -47,6 +48,7 @@ import {
   type AgentStorefrontDeliverySelection,
 } from "./state";
 import { buildAgentStorefrontCheckoutQuoteFingerprint } from "./quote-fingerprint";
+import { billingTaxLocation } from "../orders";
 
 export const AGENT_STOREFRONT_CONTEXT_TTL_SECONDS = 24 * 60 * 60;
 
@@ -875,6 +877,12 @@ export async function quoteAgentStorefrontCheckout(
     apps,
     appProviders: input.appProviders,
     channel: "agent",
+    // A cart with nothing physical is taxed at its billing location: the
+    // context's country, region and postal code, as submit bills it.
+    billing: (() => {
+      const location = agentContextBillingLocation(row);
+      return location ? billingTaxLocation(location) : null;
+    })(),
     // Submit lists delivery options from the order's own address (none for pickup), so the quote does too.
     location: null,
   });

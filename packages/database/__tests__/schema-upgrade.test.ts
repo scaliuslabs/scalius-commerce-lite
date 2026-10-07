@@ -547,6 +547,16 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 28,
         postgresStatements: 31,
       },
+      {
+        version: 119,
+        name: "0119_billing_addresses",
+        // Twelve order billing columns, the tax snapshot's address source,
+        // the address book's default-billing flag and its index, and the two
+        // re-created event triggers (each dropped first) and the ledger: one
+        // statement each.
+        sqliteStatements: 20,
+        postgresStatements: 20,
+      },
     ]);
   });
 
@@ -714,6 +724,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 116, name: "0116_tax_regions" },
           { version: 117, name: "0117_phoneless_guest_customers" },
           { version: 118, name: "0118_places" },
+          { version: 119, name: "0119_billing_addresses" },
         ],
       });
     } finally {

@@ -49,6 +49,27 @@ export function taxCountryOf(
         ?? DELIVERY_HIERARCHY_COUNTRY;
 }
 
+/**
+ * The address an order is taxed at (Shopify's rule, migration 0119):
+ *
+ * - an order that ships: its shipping address;
+ * - a pickup order: where it is collected (the store's origin);
+ * - an order that ships nothing (digital, service, gift card): its billing
+ *   address, else the origin (an order placed without one).
+ */
+export type TaxAddressSource = "shipping" | "billing" | "origin";
+
+export function taxAddressSource(order: {
+    /** The order's delivery method kind; null when nothing physical was bought. */
+    deliveryKind: "delivery" | "pickup" | null;
+    /** Whether the order has a billing address of its own (its country). */
+    hasBillingAddress: boolean;
+}): TaxAddressSource {
+    if (order.deliveryKind === "delivery") return "shipping";
+    if (order.deliveryKind === "pickup") return "origin";
+    return order.hasBillingAddress ? "billing" : "origin";
+}
+
 const sameAdminArea = (left: string, right: string) => left.trim().toLocaleUpperCase() === right.trim().toLocaleUpperCase();
 
 /**

@@ -74,3 +74,34 @@ export function formatShippingAddress(
     postalCode: order.shippingPostalCode,
   }, countryName).join(", ");
 }
+
+/** An order's billing snapshot (migration 0119). */
+export interface PresentedBilling {
+  billingSameAsShipping?: boolean | null;
+  billingName?: string | null;
+  billingCompany?: string | null;
+  billingAddress?: string | null;
+  billingAddressLine2?: string | null;
+  billingCountryCode?: string | null;
+  billingDependentLocality?: string | null;
+  billingLocality?: string | null;
+  billingAdminArea?: string | null;
+  billingPostalCode?: string | null;
+}
+
+/**
+ * The order's own billing address as lines (null when the shipping address
+ * bills or the order has none): the street lines, the places and the country.
+ */
+export function formatBillingAddressLines(order: PresentedBilling, countryName: (code: string) => string): string[] | null {
+  if (order.billingSameAsShipping || !order.billingCountryCode) return null;
+  return formatAddressLines({
+    countryCode: order.billingCountryCode,
+    line1: order.billingAddress,
+    line2: order.billingAddressLine2,
+    dependentLocality: order.billingDependentLocality,
+    locality: order.billingLocality,
+    adminArea: order.billingAdminArea,
+    postalCode: order.billingPostalCode,
+  }, countryName);
+}

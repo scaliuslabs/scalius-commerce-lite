@@ -11,6 +11,8 @@ import {
 } from "../../schemas/storefront-discounts";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
+import { billingTaxLocation } from "@scalius/core/modules/orders";
+import { billingAddressBodyShape } from "../../schemas/billing-address";
 import { fromMinor } from "@scalius/shared/money";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
@@ -188,6 +190,14 @@ const taxQuoteRoute = createRoute({
             shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** Required when a line is physical; omitted when nothing is. */
             shippingMethodId: z.string().min(1).max(180).optional().nullable(),
+            /**
+             * Where a cart with nothing physical is taxed: its billing country,
+             * admin area and postal code (a cart that ships is taxed at its
+             * shipping address, a pickup cart where it is collected).
+             */
+            billingCountryCode: billingAddressBodyShape.billingCountryCode,
+            billingAdminArea: billingAddressBodyShape.billingAdminArea,
+            billingPostalCode: billingAddressBodyShape.billingPostalCode,
             discountCodes: discountCodesSchema,
             customerPhone: phoneNumberSchema.optional().nullable(),
             giftCards: giftCardHandlesSchema,
@@ -270,6 +280,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     apps,
     appProviders: requestAppProviders(c),
     channel: "online_store",
+    // A cart with nothing physical is taxed at its billing address, as typed so far.
+    billing: billingTaxLocation(data),
     location: {
       countryCode: data.shippingCountryCode,
       city: data.city,

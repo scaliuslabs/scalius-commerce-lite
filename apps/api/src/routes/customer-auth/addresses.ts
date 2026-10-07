@@ -8,6 +8,7 @@ import {
     createCustomerAddress,
     deleteCustomerAddress,
     listCustomerAddresses,
+    setDefaultBillingCustomerAddress,
     setDefaultCustomerAddress,
     updateCustomerAddress,
 } from "@scalius/core/modules/customers";
@@ -24,7 +25,7 @@ const bookResponses = {
     200: { description: "The address book, the default first", content: { "application/json": { schema: successEnvelope(bookSchema) } } },
     ...errorResponses,
 };
-const addressBodySchema = addressInputSchema.extend({ isDefault: z.boolean().optional() }).strict();
+const addressBodySchema = addressInputSchema.extend({ isDefault: z.boolean().optional(), isDefaultBilling: z.boolean().optional() }).strict();
 const addressPathSchema = z.object({ addressId: z.string().min(1).max(64) });
 
 async function accountId(c: Parameters<typeof requireCustomerSession>[0]): Promise<string> {
@@ -96,6 +97,22 @@ app.openapi(setDefaultRoute, async (c) => {
     const customerId = await accountId(c);
     const db = c.get("db");
     await setDefaultCustomerAddress(db, customerId, c.req.valid("param").addressId);
+    return ok(c, { addresses: await listCustomerAddresses(db, customerId) });
+});
+
+const setDefaultBillingRoute = createRoute({
+    method: "post",
+    path: "/addresses/{addressId}/default-billing",
+    operationId: "storefront.customer_auth_addresses.set_default_billing",
+    tags: ["Customer Auth"],
+    summary: "Make an address the default billing address",
+    request: { params: addressPathSchema },
+    responses: bookResponses,
+});
+app.openapi(setDefaultBillingRoute, async (c) => {
+    const customerId = await accountId(c);
+    const db = c.get("db");
+    await setDefaultBillingCustomerAddress(db, customerId, c.req.valid("param").addressId);
     return ok(c, { addresses: await listCustomerAddresses(db, customerId) });
 });
 

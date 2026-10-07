@@ -82,6 +82,7 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
   "storefront.customer_auth_addresses.create": addressBook(),
   "storefront.customer_auth_addresses.update": addressBook(),
   "storefront.customer_auth_addresses.set_default": addressBook(),
+  "storefront.customer_auth_addresses.set_default_billing": addressBook(),
   "storefront.customer_auth_addresses.delete": addressBook(),
   "storefront.customer_auth_profile.replace_profile": {
     exposure: "excluded",

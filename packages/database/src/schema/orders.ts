@@ -78,6 +78,29 @@ export const orders = sqliteTable("orders", {
     zoneName: text("zone_name"),
     areaName: text("area_name"),
     /**
+     * The billing address (MARKETS-DESIGN D7, migration 0119). True: the
+     * shipping address is the billing address (Shopify's default for an
+     * order that ships) and the billing columns stay null. False with a
+     * billing country: the separate billing address below. False without
+     * one: no billing address (every order placed before 0119).
+     */
+    billingSameAsShipping: integer("billing_same_as_shipping", { mode: "boolean" }).notNull().default(false),
+    /** The billing name when it is not the order contact; null means `customerName`. */
+    billingName: text("billing_name"),
+    billingCompany: text("billing_company"),
+    /** The first street line (null for a minimal billing address: country, region and postal code only). */
+    billingAddress: text("billing_address"),
+    billingAddressLine2: text("billing_address_line2"),
+    /** ISO 3166-1 alpha-2. An order that ships nothing is taxed and placed in this country. */
+    billingCountryCode: text("billing_country_code"),
+    billingDependentLocality: text("billing_dependent_locality"),
+    billingLocality: text("billing_locality"),
+    billingAdminArea: text("billing_admin_area"),
+    billingPostalCode: text("billing_postal_code"),
+    /** E.164 when given and not the contact's. */
+    billingPhone: text("billing_phone"),
+    billingValidationSkipped: integer("billing_validation_skipped", { mode: "boolean" }).notNull().default(false),
+    /**
      * Every amount is an integer in minor units of the order's own currency
      * (paisa for BDT); `currencyDecimalPlaces` converts it at the HTTP edge.
      */
@@ -201,6 +224,13 @@ export const orders = sqliteTable("orders", {
         sql`${table.shippingCountryCode} IS NULL OR (length(${table.shippingCountryCode}) = 2 AND ${table.shippingCountryCode} NOT GLOB '*[^A-Z]*')`,
     ),
     check("orders_shipping_validation_skipped_flag", sql`${table.shippingValidationSkipped} IN (0, 1)`),
+    // Column checks added by 0119 (ALTER TABLE ADD ... CHECK).
+    check("orders_billing_same_as_shipping_flag", sql`${table.billingSameAsShipping} IN (0, 1)`),
+    check(
+        "orders_billing_country_shape",
+        sql`${table.billingCountryCode} IS NULL OR (length(${table.billingCountryCode}) = 2 AND ${table.billingCountryCode} NOT GLOB '*[^A-Z]*')`,
+    ),
+    check("orders_billing_validation_skipped_flag", sql`${table.billingValidationSkipped} IN (0, 1)`),
     // Triggers orders_shipping_address_required_{insert,update} require a
     // shipped order's address per country (0113).
     uniqueIndex("orders_order_number_unique").on(table.orderNumber),
@@ -707,9 +737,19 @@ export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
     providerId: text("provider_id").notNull().default("system"),
     /** An app provider's calculation, committed or voided with the order; null for `system`. */
     providerCalculationId: text("provider_calculation_id"),
+    /**
+     * The address taxed (migration 0119): `shipping` for an order that ships,
+     * `billing` for one that ships nothing, `origin` where the store ships
+     * from (pickup, or no address). Null on orders placed before 0119.
+     */
+    addressSource: text("address_source", { enum: ["shipping", "billing", "origin"] }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_tax_snapshots_created_idx").on(table.createdAt),
+    check(
+        "order_tax_snapshots_address_source_check",
+        sql`${table.addressSource} IS NULL OR ${table.addressSource} IN ('shipping', 'billing', 'origin')`,
+    ),
     check("order_tax_snapshots_decimal_places_range", sql`${table.decimalPlaces} BETWEEN 0 AND 3`),
     check("order_tax_snapshots_display_label_length", sql`length(${table.displayLabel}) BETWEEN 1 AND 80`),
     check("order_tax_snapshots_settings_version_nonnegative", sql`${table.settingsVersion} >= 0`),

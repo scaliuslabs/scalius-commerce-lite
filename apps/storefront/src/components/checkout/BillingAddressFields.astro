@@ -1,0 +1,132 @@
+---
+// The billing address (migration 0119, Shopify's rule; lib/checkout/
+// billing-address.ts). An order that ships is billed at its shipping address;
+// the section shows for it only when the merchant requires a full billing
+// address, with "Same as shipping address" ticked. An order with nothing to
+// ship always shows it: by default only the country (a select when the store
+// sells to more than one) and the region and postal code its rules require.
+// On the cart page, the page root's data-delivery-need and data-delivery-mode
+// decide what shows; a page that knows its path (quick checkout) passes
+// `path`. Either way CSS alone shows it, so the form works without
+// JavaScript; with it, the country's rules hide the fields it does not use.
+// The API decides either way.
+import { billingAddressNeed } from "@scalius/shared/billing-address";
+import { shippingCountryName } from "@/lib/checkout/shipping-country";
+import { BILLING_ADDRESS_FIELDS, BILLING_FIELD_RULE, MINIMAL_BILLING_FIELDS, type BillingAddressField } from "@/lib/checkout/billing-address";
+
+interface Props {
+  /** The countries a buyer can be billed in (the store's active markets), sorted. */
+  countries: string[];
+  selected: string;
+  /** Settings → Checkout: every order asks for a full billing address. */
+  requireFull: boolean;
+  labels: Record<BillingAddressField | "heading" | "sameAsShipping" | "help" | "country", string>;
+  language?: string;
+  labelClass: string;
+  fieldClass: string;
+  /** A page that knows its path renders it as is (the cart page follows its root's data attributes). */
+  path?: "delivery" | "pickup" | "none";
+  /** What the buyer posted (a page rendered again after a post). */
+  values?: Partial<Record<BillingAddressField, string>>;
+  sameAsShipping?: boolean;
+}
+
+const {
+  countries, selected, requireFull, labels, language = "en", labelClass, fieldClass, path, values = {}, sameAsShipping = true,
+} = Astro.props;
+// With a known path, the section shows only when checkout asks for a billing address.
+const need = path ? billingAddressNeed({ path, requireFullBillingAddress: requireFull }) : null;
+const options = countries
+  .map((code) => ({ code, name: shippingCountryName(code, language) }))
+  .sort((left, right) => left.name.localeCompare(right.name, language));
+// A minimal billing address keeps only what tax regions match on.
+const fields: readonly BillingAddressField[] = requireFull ? BILLING_ADDRESS_FIELDS : MINIMAL_BILLING_FIELDS;
+const AUTOCOMPLETE: Record<BillingAddressField, string> = {
+  billingName: "billing name",
+  billingCompany: "billing organization",
+  billingAddress: "billing address-line1",
+  billingAddressLine2: "billing address-line2",
+  billingDependentLocality: "billing address-level3",
+  billingLocality: "billing address-level2",
+  billingAdminArea: "billing address-level1",
+  billingPostalCode: "billing postal-code",
+};
+---
+
+{(!need || need.asked) && (
+<section
+  aria-labelledby="billingHeading"
+  class:list={[
+    "space-y-3",
+    need || requireFull ? "" : "hidden group-data-[delivery-need=none]:block",
+  ]}
+  data-billing-section
+  data-billing-full={requireFull ? "true" : "false"}
+  data-billing-path={path}
+>
+  <h2 id="billingHeading" class="text-base font-semibold text-foreground">{labels.heading}</h2>
+  {(!path || path === "none") && <p class="text-sm text-muted-foreground" data-billing-help>{labels.help}</p>}
+  {
+    requireFull && (!path || path === "delivery") && (
+      <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-foreground" data-billing-same-row>
+        <input type="checkbox" name="billingSameAsShipping" value="1" checked={sameAsShipping} class="h-4 w-4 shrink-0 accent-primary" data-billing-same />
+        <span>{labels.sameAsShipping}</span>
+      </label>
+    )
+  }
+  <div class="grid gap-3 sm:grid-cols-2" data-billing-fields>
+    {
+      countries.length > 1 ? (
+        <div class="sm:col-span-2">
+          <label for="billing-country" class={labelClass}>{labels.country}</label>
+          <select id="billing-country" name="billingCountryCode" autocomplete="billing country" class={fieldClass} data-billing-country>
+            {options.map((option) => <option value={option.code} selected={option.code === selected}>{option.name}</option>)}
+          </select>
+        </div>
+      ) : (
+        <input type="hidden" name="billingCountryCode" value={countries[0] ?? selected} />
+      )
+    }
+    {
+      fields.map((field) => {
+        const id = `billing-${field}`;
+        const wide = field === "billingAddress" || field === "billingAddressLine2";
+        return (
+          <div class={wide ? "sm:col-span-2" : undefined} data-address-rule={BILLING_FIELD_RULE[field]}>
+            <label for={id} class={labelClass}>
+              {labels[field]}<span aria-hidden="true" class="ml-0.5 hidden text-destructive" data-required-mark>*</span>
+            </label>
+            <input
+              id={id}
+              name={field}
+              type="text"
+              maxlength={field === "billingPostalCode" ? 20 : field === "billingAddress" ? 500 : field === "billingAddressLine2" ? 200 : 120}
+              autocomplete={AUTOCOMPLETE[field]}
+              list={field === "billingAdminArea" ? `${id}-options` : undefined}
+              value={values[field] ?? ""}
+              class={fieldClass}
+            />
+            {field === "billingAdminArea" && <datalist id={`${id}-options`} />}
+          </div>
+        );
+      })
+    }
+    <slot />
+  </div>
+</section>
+)}
+
+<style is:global>
+  /* A shipped order: "Same as shipping address" hides the fields while ticked. */
+  #cartPageRoot[data-delivery-need="method"][data-delivery-mode="delivery"] [data-billing-section]:has([data-billing-same]:checked) [data-billing-fields],
+  [data-billing-section][data-billing-path="delivery"]:has([data-billing-same]:checked) [data-billing-fields] {
+    display: none;
+  }
+  /* Only a shipped order offers "Same as shipping address"; the help line is for orders that ship nothing. */
+  #cartPageRoot:not([data-delivery-need="method"][data-delivery-mode="delivery"]) [data-billing-same-row] {
+    display: none;
+  }
+  #cartPageRoot[data-delivery-need="method"] [data-billing-help] {
+    display: none;
+  }
+</style>

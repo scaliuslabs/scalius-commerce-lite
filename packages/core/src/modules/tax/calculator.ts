@@ -499,6 +499,9 @@ export function completeTaxQuote(prepared: PreparedTaxQuote, calculation: TaxCal
             countryCode: prepared.countryCode,
             providerId: prepared.providerId ?? input.settings.providerId,
             calculationId: calculation && !isSystem ? calculation.calculationId : null,
+            addressSource: Boolean(destination.city) || Boolean(destination.countryCode)
+                ? input.addressSource ?? "shipping"
+                : "origin",
         },
         lines,
         shipping,

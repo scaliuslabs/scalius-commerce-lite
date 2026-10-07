@@ -304,6 +304,13 @@ const checkoutFlowSettingsSchema = z.object({
     partialPaymentAmount: z.number(),
     /** When digital and gift-card lines are delivered (Wave B); B3/B4 surface it in the dashboard. */
     autoFulfilMode: z.enum(["after_payment", "after_confirmation"]),
+    /**
+     * Every order asks for a full billing address (Shopify's "Require full
+     * billing address"). Off: shipped orders bill at the shipping address and
+     * orders with nothing to ship ask only the country, plus the region and
+     * postal code the country requires.
+     */
+    requireFullBillingAddress: z.boolean(),
     revision: z.number().int().nonnegative(),
 });
 
@@ -331,9 +338,11 @@ app.openapi(getCheckoutFlowRoute, async (c) => {
 });
 
 const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
-    .omit({ revision: true, autoFulfilMode: true })
+    .omit({ revision: true, autoFulfilMode: true, requireFullBillingAddress: true })
     .extend({
         autoFulfilMode: checkoutFlowSettingsSchema.shape.autoFulfilMode.optional(),
+        /** Omitted: keep the saved choice. */
+        requireFullBillingAddress: checkoutFlowSettingsSchema.shape.requireFullBillingAddress.optional(),
         expectedRevision: z.number().int().nonnegative(),
     })
     .strict();

@@ -109,14 +109,10 @@ const NO_ADDRESS: CheckoutAddressFields = {
  */
 export function checkoutAddressForMode(
   mode: CheckoutDeliveryMode,
-  values: Partial<Record<keyof CheckoutAddressFields | "orderCountryCode", unknown>>,
+  values: Partial<Record<keyof CheckoutAddressFields, unknown>>,
 ): CheckoutAddressFields {
-  // Nothing ships: no address. A store that lets such orders go without a
-  // phone posts the market's country (`orderCountryCode`), which places the
-  // order for the contact rule; Bangladesh sends none, as before.
-  if (mode === "none" && typeof values.orderCountryCode === "string" && !isLocationCountry(values.orderCountryCode)) {
-    return { ...NO_ADDRESS, shippingCountryCode: shippingCountryOf(values.orderCountryCode) };
-  }
+  // Nothing ships (pickup, or nothing physical): no address. An order with
+  // nothing physical is placed in its billing country (billing-address.ts).
   if (mode !== "delivery") return { ...NO_ADDRESS };
   const text = (value: unknown) => {
     if (typeof value !== "string") return null;

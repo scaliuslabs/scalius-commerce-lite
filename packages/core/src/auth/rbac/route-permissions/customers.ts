@@ -81,4 +81,7 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/customers/*/addresses/*/default": {
     POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
   },
+  "/api/v1/admin/customers/*/addresses/*/default-billing": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
 };

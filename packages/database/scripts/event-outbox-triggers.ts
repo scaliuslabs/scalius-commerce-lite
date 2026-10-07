@@ -132,6 +132,19 @@ export const ORDER_UPDATED_COLUMNS = [
   "city",
   "zone",
   "area",
+  // The billing address (0119).
+  "billing_same_as_shipping",
+  "billing_name",
+  "billing_company",
+  "billing_address",
+  "billing_address_line2",
+  "billing_country_code",
+  "billing_dependent_locality",
+  "billing_locality",
+  "billing_admin_area",
+  "billing_postal_code",
+  "billing_phone",
+  "billing_validation_skipped",
   "notes",
   "shipping_method_id",
   "pickup_ready_at",
@@ -164,6 +177,8 @@ export const CUSTOMER_UPDATED_COLUMNS = [
 export const CUSTOMER_ADDRESS_UPDATED_COLUMNS = [
   "customer_id",
   "is_default",
+  // The default billing address (0119).
+  "is_default_billing",
   "country_code",
   "name",
   "company",
@@ -579,11 +594,12 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
   inventory_transfers_deleted: "0109_inventory_purchasing",
   // 0113 (country-aware addresses) re-creates these two with the new column
   // lists and adds the address book's.
-  orders_updated: "0113_country_aware_addresses",
   customers_updated: "0113_country_aware_addresses",
   customer_addresses_created: "0113_country_aware_addresses",
-  customer_addresses_changed: "0113_country_aware_addresses",
   customer_addresses_deleted: "0113_country_aware_addresses",
+  // 0119 (billing addresses) re-creates these with the billing columns.
+  orders_updated: "0119_billing_addresses",
+  customer_addresses_changed: "0119_billing_addresses",
 };
 
 /**
@@ -619,6 +635,25 @@ export const SUPERSEDED_EVENT_TRIGGER_SPECS: ReadonlyArray<{ migration: string; 
         "name", "email", "phone", "address", "city", "zone", "area", "city_name", "zone_name", "area_name",
         "account_claimed_at", "phone_verified_at", "email_verified_at", "origin", "merged_into_customer_id", "deleted_at",
       ),
+    },
+  },
+  // The 0113 forms, before 0119 added the billing columns.
+  {
+    migration: "0113_country_aware_addresses",
+    spec: {
+      ...EVENT_TRIGGER_SPECS.find((spec) => spec.name === "orders_updated")!,
+      when: and(
+        ne(OLD("status"), text(INCOMPLETE)),
+        ne(NEW("status"), text(INCOMPLETE)),
+        changed(...ORDER_UPDATED_COLUMNS.filter((column) => !column.startsWith("billing_"))),
+      ),
+    },
+  },
+  {
+    migration: "0113_country_aware_addresses",
+    spec: {
+      ...EVENT_TRIGGER_SPECS.find((spec) => spec.name === "customer_addresses_changed")!,
+      when: changed(...CUSTOMER_ADDRESS_UPDATED_COLUMNS.filter((column) => column !== "is_default_billing")),
     },
   },
 ];

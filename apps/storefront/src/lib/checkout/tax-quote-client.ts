@@ -1,3 +1,4 @@
+import { billingQuoteFields } from "./billing-address";
 import {
   normalizeTaxQuoteRequest,
   parseTaxQuoteEnvelope,
@@ -168,6 +169,8 @@ export function buildTaxQuoteRequest(
         }
         : {}),
       ...(mode === "none" ? {} : { shippingMethodId: data.shippingMethodId }),
+      // Nothing physical: taxed at the billing country, region and postal code.
+      ...billingQuoteFields(mode, data),
       discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,
       // Apply handles only (never a code); no cards sends the old request.

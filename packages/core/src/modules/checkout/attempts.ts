@@ -369,6 +369,17 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     shippingMethodId: input.shippingMethodId ?? null,
     paymentMethod: input.paymentMethod,
     inventoryPool: input.inventoryPool,
+    // Only with a billing address (0119), so hashes of requests without one are unchanged.
+    ...(input.billingSameAsShipping === false ? { billingSameAsShipping: false } : {}),
+    ...(input.billingCountryCode?.trim()
+      ? {
+        billing: [
+          input.billingCountryCode, input.billingName, input.billingCompany, input.billingAddress,
+          input.billingAddressLine2, input.billingDependentLocality, input.billingLocality,
+          input.billingAdminArea, input.billingPostalCode,
+        ].map((value) => value?.trim() || null),
+      }
+      : {}),
     // Only with gift cards, so hashes of requests without them are unchanged.
     // Handles keep the buyer's order: it decides which card is debited first,
     // so the same cards in another order are a different request.

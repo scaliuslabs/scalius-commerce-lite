@@ -5,6 +5,7 @@
 // Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
 import { z } from "@hono/zod-openapi";
+import { orderBillingAddressShape } from "./billing-address";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
@@ -357,6 +358,8 @@ export const customerAddressSchema = z.object({
   id: z.string(),
   customerId: z.string(),
   isDefault: z.boolean(),
+  /** The default billing address (none: the default address bills too). */
+  isDefaultBilling: z.boolean(),
   /** ISO 3166-1 alpha-2. */
   countryCode: z.string(),
   /** The recipient when not the customer (null: the customer's name). */
@@ -588,6 +591,8 @@ export const orderDetailSchema = z.object({
   fulfillmentStatus: z.string().nullable(),
   notes: z.string().nullable(),
   ...orderShippingAddressShape,
+  /** The billing snapshot (Shopify's rule): the shipping address bills when `billingSameAsShipping`. */
+  ...orderBillingAddressShape,
   paidAmount: z.number().nullable(),
   balanceDue: z.number().nullable(),
   version: z.number().int().min(1),

@@ -21,6 +21,7 @@ import {
     customerAddressInputSchema,
     deleteCustomerAddress,
     listCustomerAddresses,
+    setDefaultBillingCustomerAddress,
     setDefaultCustomerAddress,
     updateCustomerAddress,
 } from "@scalius/core/modules/customers";
@@ -416,6 +417,25 @@ const setDefaultAddressRoute = createRoute({
 app.openapi(setDefaultAddressRoute, async (c) => {
     const { id, addressId } = c.req.valid("param");
     return ok(c, await setDefaultCustomerAddress(c.get("db"), id, addressId));
+});
+
+const setDefaultBillingAddressRoute = createRoute({
+    operationId: "dashboard.customers.addresses_set_default_billing",
+    method: "post",
+    path: "/{id}/addresses/{addressId}/default-billing",
+    tags: ["Admin - Customers"],
+    summary: "Make an address the customer's default billing address",
+    description: "Without one, the default address bills too.",
+    request: { params: addressParams },
+    responses: {
+        200: { description: "Default billing address", content: { "application/json": { schema: successEnvelope(customerAddressSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(setDefaultBillingAddressRoute, async (c) => {
+    const { id, addressId } = c.req.valid("param");
+    return ok(c, await setDefaultBillingCustomerAddress(c.get("db"), id, addressId));
 });
 
 const deleteAddressRoute = createRoute({

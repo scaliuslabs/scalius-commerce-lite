@@ -6365,7 +6365,7 @@ export type PutApiV1StorefrontAgentContextsByContextIdDeliveryData = {
     body: {
         revision: number;
         /**
-         * The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list).
+         * The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list). A cart with nothing physical is billed and taxed here (with the region and postal code).
          */
         countryCode?: string | null;
         cityId: string | null;
@@ -6626,6 +6626,31 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
          * Outside Bangladesh: the district or suburb, when the country's address rules ask for it.
          */
         shippingDependentLocality?: string | null;
+        /**
+         * An order that ships: false with a billing address sends a separate one; otherwise the shipping address is the billing address (the default).
+         */
+        billingSameAsShipping?: boolean | null;
+        /**
+         * A cart that ships: the billing country of a separate billing address. A cart with nothing physical is billed and taxed at the context's delivery country, region and postal code (storefront.delivery.set) instead.
+         */
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        /**
+         * The billing street line: needed when the store requires a full billing address, or with billingSameAsShipping false.
+         */
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        /**
+         * The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it.
+         */
+        billingAdminArea?: string | null;
+        /**
+         * A minimal billing address sends it when the country's rules require it.
+         */
+        billingPostalCode?: string | null;
         notes: string | null;
         /**
          * Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.
@@ -7027,6 +7052,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesData = {
             zone?: string | null;
             area?: string | null;
             isDefault?: boolean;
+            isDefaultBilling?: boolean;
         };
     } | {
         action: 'update';
@@ -7046,9 +7072,13 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesData = {
             zone?: string | null;
             area?: string | null;
             isDefault?: boolean;
+            isDefaultBilling?: boolean;
         };
     } | {
         action: 'set_default';
+        addressId: string;
+    } | {
+        action: 'set_default_billing';
         addressId: string;
     } | {
         action: 'delete';
@@ -7101,6 +7131,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponse
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -8228,6 +8259,7 @@ export type GetApiV1CheckoutConfigResponses = {
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
+            requireFullBillingAddress: boolean;
             allowedCountries: Array<string>;
             allowedCountriesMode: 'include' | 'exclude';
             currency: {
@@ -8525,6 +8557,7 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                     id: string;
                     customerId: string;
                     isDefault: boolean;
+                    isDefaultBilling: boolean;
                     countryCode: string;
                     name: string | null;
                     company: string | null;
@@ -8620,6 +8653,7 @@ export type GetApiV1CustomerAuthMeResponses = {
                     id: string;
                     customerId: string;
                     isDefault: boolean;
+                    isDefaultBilling: boolean;
                     countryCode: string;
                     name: string | null;
                     company: string | null;
@@ -8753,6 +8787,7 @@ export type PutApiV1CustomerAuthProfileResponses = {
                     id: string;
                     customerId: string;
                     isDefault: boolean;
+                    isDefaultBilling: boolean;
                     countryCode: string;
                     name: string | null;
                     company: string | null;
@@ -8930,6 +8965,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     id: string;
                     customerId: string;
                     isDefault: boolean;
+                    isDefaultBilling: boolean;
                     countryCode: string;
                     name: string | null;
                     company: string | null;
@@ -11353,6 +11389,7 @@ export type GetApiV1CustomerAuthAddressesResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -11396,6 +11433,7 @@ export type PostApiV1CustomerAuthAddressesData = {
         zone?: string | null;
         area?: string | null;
         isDefault?: boolean;
+        isDefaultBilling?: boolean;
     };
     path?: never;
     query?: never;
@@ -11442,6 +11480,7 @@ export type PostApiV1CustomerAuthAddressesResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -11518,6 +11557,7 @@ export type DeleteApiV1CustomerAuthAddressesByAddressIdResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -11561,6 +11601,7 @@ export type PutApiV1CustomerAuthAddressesByAddressIdData = {
         zone?: string | null;
         area?: string | null;
         isDefault?: boolean;
+        isDefaultBilling?: boolean;
     };
     path: {
         addressId: string;
@@ -11609,6 +11650,7 @@ export type PutApiV1CustomerAuthAddressesByAddressIdResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -11685,6 +11727,7 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -11711,6 +11754,83 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses = {
 };
 
 export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponse = PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses[keyof PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses];
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingData = {
+    body?: never;
+    path: {
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/addresses/{addressId}/default-billing';
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingError = PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingErrors[keyof PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingErrors];
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                isDefaultBilling: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponse = PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponses[keyof PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
@@ -15774,6 +15894,18 @@ export type PostApiV1OrdersTaxQuoteData = {
         shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
         /**
+         * The billing country (ISO 3166-1 alpha-2), one an active market sells to. An order that ships nothing needs one (absent: the store's only selling country); it is taxed and placed there.
+         */
+        billingCountryCode?: string | null;
+        /**
+         * The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it.
+         */
+        billingAdminArea?: string | null;
+        /**
+         * A minimal billing address sends it when the country's rules require it.
+         */
+        billingPostalCode?: string | null;
+        /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
          */
         discountCodes?: Array<string>;
@@ -16047,6 +16179,31 @@ export type PostApiV1OrdersData = {
         city?: string | null;
         zone?: string | null;
         area?: string | null;
+        /**
+         * An order that ships: false with a billing address sends a separate one; otherwise the shipping address is the billing address (the default).
+         */
+        billingSameAsShipping?: boolean | null;
+        /**
+         * The billing country (ISO 3166-1 alpha-2), one an active market sells to. An order that ships nothing needs one (absent: the store's only selling country); it is taxed and placed there.
+         */
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        /**
+         * The first street line (a full billing address).
+         */
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        /**
+         * The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it.
+         */
+        billingAdminArea?: string | null;
+        /**
+         * A minimal billing address sends it when the country's rules require it.
+         */
+        billingPostalCode?: string | null;
         notes: string | null;
         items: Array<{
             cartKey?: string | null;
@@ -21507,6 +21664,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -21675,6 +21833,7 @@ export type GetApiV1AdminCustomersByIdAddressesResponses = {
                 id: string;
                 customerId: string;
                 isDefault: boolean;
+                isDefaultBilling: boolean;
                 countryCode: string;
                 name: string | null;
                 company: string | null;
@@ -21718,6 +21877,7 @@ export type PostApiV1AdminCustomersByIdAddressesData = {
         zone?: string | null;
         area?: string | null;
         isDefault?: boolean;
+        isDefaultBilling?: boolean;
         skipValidation?: boolean;
     };
     path: {
@@ -21766,6 +21926,7 @@ export type PostApiV1AdminCustomersByIdAddressesResponses = {
             id: string;
             customerId: string;
             isDefault: boolean;
+            isDefaultBilling: boolean;
             countryCode: string;
             name: string | null;
             company: string | null;
@@ -21856,6 +22017,7 @@ export type PutApiV1AdminCustomersByIdAddressesByAddressIdData = {
         zone?: string | null;
         area?: string | null;
         isDefault?: boolean;
+        isDefaultBilling?: boolean;
         skipValidation?: boolean;
     };
     path: {
@@ -21905,6 +22067,7 @@ export type PutApiV1AdminCustomersByIdAddressesByAddressIdResponses = {
             id: string;
             customerId: string;
             isDefault: boolean;
+            isDefaultBilling: boolean;
             countryCode: string;
             name: string | null;
             company: string | null;
@@ -21980,6 +22143,7 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses = {
             id: string;
             customerId: string;
             isDefault: boolean;
+            isDefaultBilling: boolean;
             countryCode: string;
             name: string | null;
             company: string | null;
@@ -22005,6 +22169,82 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses = {
 };
 
 export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponse = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses];
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingData = {
+    body?: never;
+    path: {
+        id: string;
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses/{addressId}/default-billing';
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingError = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingErrors[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingErrors];
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponses = {
+    /**
+     * Default billing address
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            customerId: string;
+            isDefault: boolean;
+            isDefaultBilling: boolean;
+            countryCode: string;
+            name: string | null;
+            company: string | null;
+            line1: string | null;
+            line2: string | null;
+            dependentLocality: string | null;
+            locality: string | null;
+            adminArea: string | null;
+            postalCode: string | null;
+            phone: string | null;
+            phoneRaw: string | null;
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            validationSkipped: boolean;
+            createdAt: number;
+            updatedAt: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponse = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponses[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponses];
 
 export type GetApiV1AdminCustomersByIdHistoryData = {
     body?: never;
@@ -34063,6 +34303,7 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
+            requireFullBillingAddress: boolean;
             revision: number;
         };
     };
@@ -34077,6 +34318,7 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         partialPaymentEnabled: boolean;
         partialPaymentAmount: number;
         autoFulfilMode?: 'after_payment' | 'after_confirmation';
+        requireFullBillingAddress?: boolean;
         expectedRevision: number;
     };
     path?: never;
@@ -34129,6 +34371,7 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
+            requireFullBillingAddress: boolean;
             revision: number;
         };
     };
@@ -39670,6 +39913,16 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 shippingCompany?: string | null;
                 shippingName?: string | null;
                 shippingPhone?: string | null;
+                billingSameAsShipping?: boolean;
+                billingName?: string | null;
+                billingCompany?: string | null;
+                billingAddress?: string | null;
+                billingAddressLine2?: string | null;
+                billingCountryCode?: string | null;
+                billingDependentLocality?: string | null;
+                billingLocality?: string | null;
+                billingAdminArea?: string | null;
+                billingPostalCode?: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -39846,6 +40099,16 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 shippingCompany?: string | null;
                 shippingName?: string | null;
                 shippingPhone?: string | null;
+                billingSameAsShipping?: boolean;
+                billingName?: string | null;
+                billingCompany?: string | null;
+                billingAddress?: string | null;
+                billingAddressLine2?: string | null;
+                billingCountryCode?: string | null;
+                billingDependentLocality?: string | null;
+                billingLocality?: string | null;
+                billingAdminArea?: string | null;
+                billingPostalCode?: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -41127,6 +41390,16 @@ export type PostApiV1AdminOrdersData = {
         shippingPostalCode?: string | null;
         shippingCompany?: string | null;
         skipAddressValidation?: boolean;
+        billingSameAsShipping?: boolean | null;
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        billingAdminArea?: string | null;
+        billingPostalCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -41643,6 +41916,9 @@ export type PostApiV1AdminOrdersQuoteData = {
         area?: string | null;
         shippingAdminArea?: string | null;
         shippingPostalCode?: string | null;
+        billingCountryCode?: string | null;
+        billingAdminArea?: string | null;
+        billingPostalCode?: string | null;
         items: Array<{
             productId: string;
             variantId: string | null;
@@ -41750,6 +42026,16 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         shippingPostalCode?: string | null;
         shippingCompany?: string | null;
         skipAddressValidation?: boolean;
+        billingSameAsShipping?: boolean | null;
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        billingAdminArea?: string | null;
+        billingPostalCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -41868,6 +42154,16 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         shippingPostalCode?: string | null;
         shippingCompany?: string | null;
         skipAddressValidation?: boolean;
+        billingSameAsShipping?: boolean | null;
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        billingAdminArea?: string | null;
+        billingPostalCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -42534,6 +42830,30 @@ export type GetApiV1AdminOrdersByIdResponses = {
             zoneName: string | null;
             areaName: string | null;
             shippingValidationSkipped: boolean;
+            /**
+             * The shipping address is the billing address; the billing fields are then null.
+             */
+            billingSameAsShipping: boolean;
+            /**
+             * Null: the order contact's name.
+             */
+            billingName: string | null;
+            billingCompany: string | null;
+            billingAddress: string | null;
+            billingAddressLine2: string | null;
+            /**
+             * Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one).
+             */
+            billingCountryCode: string | null;
+            billingDependentLocality: string | null;
+            billingLocality: string | null;
+            billingAdminArea: string | null;
+            billingPostalCode: string | null;
+            billingPhone: string | null;
+            /**
+             * Staff kept a billing address that breaks its country's rules.
+             */
+            billingValidationSkipped: boolean;
             paidAmount: number | null;
             balanceDue: number | null;
             version: number;
@@ -42792,6 +43112,16 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         city?: string | null;
         zone?: string | null;
         area?: string | null;
+        billingSameAsShipping?: boolean | null;
+        billingCountryCode?: string | null;
+        billingName?: string | null;
+        billingCompany?: string | null;
+        billingAddress?: string | null;
+        billingAddressLine2?: string | null;
+        billingDependentLocality?: string | null;
+        billingLocality?: string | null;
+        billingAdminArea?: string | null;
+        billingPostalCode?: string | null;
         expectedVersion: number;
     };
     path: {
@@ -43305,6 +43635,30 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 shippingValidationSkipped: boolean;
+                /**
+                 * The shipping address is the billing address; the billing fields are then null.
+                 */
+                billingSameAsShipping: boolean;
+                /**
+                 * Null: the order contact's name.
+                 */
+                billingName: string | null;
+                billingCompany: string | null;
+                billingAddress: string | null;
+                billingAddressLine2: string | null;
+                /**
+                 * Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one).
+                 */
+                billingCountryCode: string | null;
+                billingDependentLocality: string | null;
+                billingLocality: string | null;
+                billingAdminArea: string | null;
+                billingPostalCode: string | null;
+                billingPhone: string | null;
+                /**
+                 * Staff kept a billing address that breaks its country's rules.
+                 */
+                billingValidationSkipped: boolean;
                 requiresShipping: boolean;
                 shippingMethodId: string | null;
                 /**
@@ -43433,6 +43787,30 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 shippingValidationSkipped: boolean;
+                /**
+                 * The shipping address is the billing address; the billing fields are then null.
+                 */
+                billingSameAsShipping: boolean;
+                /**
+                 * Null: the order contact's name.
+                 */
+                billingName: string | null;
+                billingCompany: string | null;
+                billingAddress: string | null;
+                billingAddressLine2: string | null;
+                /**
+                 * Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one).
+                 */
+                billingCountryCode: string | null;
+                billingDependentLocality: string | null;
+                billingLocality: string | null;
+                billingAdminArea: string | null;
+                billingPostalCode: string | null;
+                billingPhone: string | null;
+                /**
+                 * Staff kept a billing address that breaks its country's rules.
+                 */
+                billingValidationSkipped: boolean;
                 requiresShipping: boolean;
                 shippingMethodId: string | null;
                 /**

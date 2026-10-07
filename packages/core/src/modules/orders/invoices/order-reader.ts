@@ -1,4 +1,5 @@
 import { orderShippingAddressSelection } from "../shipping-address";
+import { orderBillingAddressSelection } from "../billing-address";
 import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
@@ -55,6 +56,7 @@ export async function readInvoiceOrderSource(
       customerEmail: orders.customerEmail,
       customerId: orders.customerId,
       ...orderShippingAddressSelection(orders),
+      ...orderBillingAddressSelection(orders),
       ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
       subtotalAmountMinor: orders.subtotalAmountMinor,

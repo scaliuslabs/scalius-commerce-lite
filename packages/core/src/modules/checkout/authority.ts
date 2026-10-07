@@ -88,6 +88,8 @@ export interface StorefrontCheckoutSettingsAuthority {
     checkoutMode: "guest_cod_only" | "gateways_only" | "all";
     partialPaymentEnabled: boolean;
     partialPaymentAmount: number;
+    /** Settings → Checkout: every order asks for a full billing address. */
+    requireFullBillingAddress: boolean;
 }
 
 /** The shop currency document and the backup market's price increment every checkout prices at. */
@@ -394,6 +396,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                 checkoutMode: site.checkoutMode,
                                 partialPaymentEnabled: site.partialPaymentEnabled,
                                 partialPaymentAmount: site.partialPaymentAmount,
+                                requireFullBillingAddress: site.requireFullBillingAddress,
                             },
                             allowedCountries,
                             shippingCountries,

@@ -61,6 +61,13 @@ export interface TaxQuoteRequest {
   shippingCountryCode?: string;
   shippingAdminArea?: string;
   shippingPostalCode?: string;
+  /**
+   * A cart with nothing physical: its billing country and, when given, its
+   * region and postal code (it is taxed there).
+   */
+  billingCountryCode?: string;
+  billingAdminArea?: string;
+  billingPostalCode?: string;
   /** A delivery or pickup rate; absent when nothing is physical. */
   shippingMethodId?: string;
   discountCodes: string[];
@@ -438,6 +445,11 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   if (foreign && city) fail();
   const shippingAdminArea = foreign ? optionalString(value.shippingAdminArea, 120) : undefined;
   const shippingPostalCode = foreign ? optionalString(value.shippingPostalCode, 20) : undefined;
+  // A cart with nothing physical: its billing location (never with a delivery).
+  const billingCountry = optionalString(value.billingCountryCode, 2)?.toUpperCase();
+  if (billingCountry !== undefined && (!/^[A-Z]{2}$/.test(billingCountry) || city || shippingMethodId)) fail();
+  const billingAdminArea = billingCountry ? optionalString(value.billingAdminArea, 120) : undefined;
+  const billingPostalCode = billingCountry ? optionalString(value.billingPostalCode, 20) : undefined;
   const codes = value.discountCodes ?? [];
   if (!Array.isArray(codes) || codes.length > MAX_DISCOUNT_CODES) fail();
   const discountCodes = codes.map((code) => requiredString(code, MAX_CODE_LENGTH).toUpperCase());
@@ -453,6 +465,9 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     ...(foreign ? { shippingCountryCode: country } : {}),
     ...(shippingAdminArea ? { shippingAdminArea } : {}),
     ...(shippingPostalCode ? { shippingPostalCode } : {}),
+    ...(billingCountry ? { billingCountryCode: billingCountry } : {}),
+    ...(billingAdminArea ? { billingAdminArea } : {}),
+    ...(billingPostalCode ? { billingPostalCode } : {}),
     ...(shippingMethodId ? { shippingMethodId } : {}),
     discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),

@@ -21,6 +21,7 @@ import {
   customerAddressFromRow,
   deleteCustomerAddress,
   listCustomerAddresses,
+  setDefaultBillingCustomerAddress,
   setDefaultCustomerAddress,
   updateCustomerAddress,
   updateCustomerProfile,
@@ -515,14 +516,16 @@ export async function updateAgentStorefrontCustomerProfile(
 
 /**
  * The authorized customer's address book, as the account page offers it
- * (MARKETS-DESIGN step 3a): list, add, edit, make default and remove. A buyer
- * never skips an address's country rules.
+ * (MARKETS-DESIGN step 3a): list, add, edit, make default, make the default
+ * billing address (0119) and remove. A buyer never skips an address's
+ * country rules.
  */
 export type AgentStorefrontAddressBookAction =
   | { action: "list" }
-  | { action: "create"; address: AddressInput & { isDefault?: boolean } }
-  | { action: "update"; addressId: string; address: AddressInput & { isDefault?: boolean } }
+  | { action: "create"; address: AddressInput & { isDefault?: boolean; isDefaultBilling?: boolean } }
+  | { action: "update"; addressId: string; address: AddressInput & { isDefault?: boolean; isDefaultBilling?: boolean } }
   | { action: "set_default"; addressId: string }
+  | { action: "set_default_billing"; addressId: string }
   | { action: "delete"; addressId: string };
 
 export async function manageAgentStorefrontCustomerAddresses(
@@ -543,6 +546,9 @@ export async function manageAgentStorefrontCustomerAddresses(
       break;
     case "set_default":
       await setDefaultCustomerAddress(db, customerId, request.addressId);
+      break;
+    case "set_default_billing":
+      await setDefaultBillingCustomerAddress(db, customerId, request.addressId);
       break;
     case "delete":
       await deleteCustomerAddress(db, customerId, request.addressId);

@@ -84,6 +84,8 @@ export function firstCustomerAddressId(customerId: string): string {
  * 0113): canonical fields validated by the country's rules, and Bangladesh's
  * City/Thana/Area adapter (delivery location ids and names) beside them. At
  * most one address per customer is the default (a partial unique index).
+ * At most one is the default billing address (migration 0119); none means
+ * the default address bills too.
  *
  * `name` and `phone_e164` are the recipient when it is not the customer
  * (null means the customer's own name and phone). `phone_raw` keeps what was
@@ -100,6 +102,8 @@ export const customerAddresses = sqliteTable("customer_addresses", {
         .notNull()
         .references(() => customers.id, { onDelete: "cascade" }),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    /** The default billing address (migration 0119); a partial unique index keeps one per customer. */
+    isDefaultBilling: integer("is_default_billing", { mode: "boolean" }).notNull().default(false),
     /** ISO 3166-1 alpha-2. */
     countryCode: text("country_code").notNull(),
     name: text("name"),
@@ -131,8 +135,12 @@ export const customerAddresses = sqliteTable("customer_addresses", {
     uniqueIndex("customer_addresses_default_unique")
         .on(table.customerId)
         .where(sql`${table.isDefault} = 1`),
+    uniqueIndex("customer_addresses_default_billing_unique")
+        .on(table.customerId)
+        .where(sql`${table.isDefaultBilling} = 1`),
     index("customer_addresses_customer_idx").on(table.customerId, table.createdAt),
     check("customer_addresses_default_flag", sql`${table.isDefault} IN (0, 1)`),
+    check("customer_addresses_default_billing_flag", sql`${table.isDefaultBilling} IN (0, 1)`),
     check("customer_addresses_validation_skipped_flag", sql`${table.validationSkipped} IN (0, 1)`),
     check(
         "customer_addresses_country_shape",

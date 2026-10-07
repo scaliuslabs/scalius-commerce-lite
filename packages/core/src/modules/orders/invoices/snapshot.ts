@@ -56,6 +56,17 @@ export interface InvoiceOrderSnapshot {
   shippingCompany?: string | null;
   shippingName?: string | null;
   shippingPhone?: string | null;
+  /** The billing snapshot (0119); absent on invoices issued before it (no billing address). */
+  billingSameAsShipping?: boolean;
+  billingName?: string | null;
+  billingCompany?: string | null;
+  billingAddress?: string | null;
+  billingAddressLine2?: string | null;
+  billingCountryCode?: string | null;
+  billingDependentLocality?: string | null;
+  billingLocality?: string | null;
+  billingAdminArea?: string | null;
+  billingPostalCode?: string | null;
   city: string | null;
   zone: string | null;
   area: string | null;
@@ -189,6 +200,16 @@ export function snapshotInvoiceOrder(
     shippingCompany: order.shippingCompany ?? null,
     shippingName: order.shippingName ?? null,
     shippingPhone: order.shippingPhone ?? null,
+    billingSameAsShipping: order.billingSameAsShipping === true,
+    billingName: order.billingName ?? null,
+    billingCompany: order.billingCompany ?? null,
+    billingAddress: order.billingAddress ?? null,
+    billingAddressLine2: order.billingAddressLine2 ?? null,
+    billingCountryCode: order.billingCountryCode ?? null,
+    billingDependentLocality: order.billingDependentLocality ?? null,
+    billingLocality: order.billingLocality ?? null,
+    billingAdminArea: order.billingAdminArea ?? null,
+    billingPostalCode: order.billingPostalCode ?? null,
     city: order.city,
     zone: order.zone,
     area: order.area,

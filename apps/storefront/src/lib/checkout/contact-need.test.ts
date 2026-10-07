@@ -54,12 +54,9 @@ describe("the checkout form shows the decision", () => {
   });
 });
 
-describe("an order with nothing to ship carries its market's country", () => {
-  it("sends the posted market country outside Bangladesh, and nothing for Bangladesh", () => {
-    expect(checkoutAddressForMode("none", { orderCountryCode: "us" })).toMatchObject({ shippingCountryCode: "US", shippingAddress: null });
-    expect(checkoutAddressForMode("none", { orderCountryCode: "BD" })).not.toHaveProperty("shippingCountryCode");
-    expect(checkoutAddressForMode("none", {})).not.toHaveProperty("shippingCountryCode");
-    // Pickup and delivery are unchanged by it.
-    expect(checkoutAddressForMode("pickup", { orderCountryCode: "US" })).not.toHaveProperty("shippingCountryCode");
+describe("an order with nothing to ship is placed in its billing country", () => {
+  it("sends no shipping country: the billing address carries the country", () => {
+    expect(checkoutAddressForMode("none", { shippingCountryCode: "US" })).not.toHaveProperty("shippingCountryCode");
+    expect(checkoutAddressForMode("pickup", { shippingCountryCode: "US" })).not.toHaveProperty("shippingCountryCode");
   });
 });

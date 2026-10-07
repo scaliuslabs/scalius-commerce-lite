@@ -35,6 +35,12 @@ import {
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { customerAddressColumns, guestRecordForContact, type ResolvedAddress } from "../../customers";
 import { orderShippingAddressColumns, resolveOrderAddress } from "../shipping-address";
+import {
+    orderBillingAddressColumns,
+    resolveStaffBillingAddress,
+    type OrderBillingAddressInput,
+} from "../billing-address";
+import type { OrderBillingAddressFields } from "../types";
 import { fromMinor } from "@scalius/shared/money";
 import { orderShopAmounts } from "@scalius/shared/money-chain";
 import { nanoid } from "nanoid";
@@ -96,6 +102,16 @@ function normalizeAmendmentRequest(
         city: data.city ?? null,
         zone: data.zone ?? null,
         area: data.area ?? null,
+        // Only when sent, so earlier request hashes are unchanged.
+        ...(data.billingSameAsShipping !== undefined || data.billingCountryCode !== undefined
+            ? {
+                billing: [
+                    data.billingSameAsShipping ?? null, data.billingCountryCode, data.billingName, data.billingCompany,
+                    data.billingAddress, data.billingAddressLine2, data.billingDependentLocality, data.billingLocality,
+                    data.billingAdminArea, data.billingPostalCode,
+                ].map((value) => typeof value === "string" ? value.trim() || null : value ?? null),
+            }
+            : {}),
         notes: data.notes,
         items: data.items.map((item) => ({
             orderItemId: item.orderItemId ?? null,
@@ -187,6 +203,27 @@ function amendmentDeliveryMethodKind(order: {
 }
 
 /**
+ * An amendment that sends no billing address keeps the order's own: an order
+ * that ships nothing stays taxed at it.
+ */
+function withOrderBilling<T extends OrderBillingAddressInput>(data: T, order: OrderBillingAddressFields): T {
+    if (data.billingSameAsShipping !== undefined || data.billingCountryCode !== undefined) return data;
+    return {
+        ...data,
+        billingSameAsShipping: order.billingSameAsShipping,
+        billingCountryCode: order.billingCountryCode,
+        billingName: order.billingName,
+        billingCompany: order.billingCompany,
+        billingAddress: order.billingAddress,
+        billingAddressLine2: order.billingAddressLine2,
+        billingDependentLocality: order.billingDependentLocality,
+        billingLocality: order.billingLocality,
+        billingAdminArea: order.billingAdminArea,
+        billingPostalCode: order.billingPostalCode,
+    };
+}
+
+/**
  * The amended order's address snapshot, checked by its country's rules
  * (staff may skip them; it stays marked); none when nothing ships.
  */
@@ -214,14 +251,16 @@ export async function previewManualOrderAmendment(
     if (data.customerPhone !== order.customerPhone) {
         await validateCustomerPhoneCountry(db, data.customerPhone);
     }
+    const amended = withOrderBilling(data, order);
     const prepared = await prepareManualOrderQuote(
         db,
-        data,
+        amended,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
         { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
     );
     requireAmendmentAddress(data, prepared);
+    resolveStaffBillingAddress(amended, { ships: prepared.requiresShipping, skipValidation: data.skipAddressValidation === true });
     const quoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
     return {
         ...prepared.quote,
@@ -322,14 +361,19 @@ export async function confirmManualOrderAmendment(
     if (data.customerPhone !== order.customerPhone) {
         await validateCustomerPhoneCountry(db, data.customerPhone);
     }
+    const amended = withOrderBilling(data, order);
     const prepared = await prepareManualOrderQuote(
         db,
-        data,
+        amended,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
         { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
     );
     const shippingAddress = requireAmendmentAddress(data, prepared);
+    const billing = resolveStaffBillingAddress(amended, {
+        ships: prepared.requiresShipping,
+        skipValidation: data.skipAddressValidation === true,
+    });
     const currentQuoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
     if (currentQuoteFingerprint !== data.quoteFingerprint) {
         throw new ConflictError(
@@ -512,6 +556,7 @@ export async function confirmManualOrderAmendment(
                 shippingAddress && { ...shippingAddress, name: order.shippingName, phone: order.shippingPhone },
                 { name: data.customerName, phone: data.customerPhone },
             ),
+            ...orderBillingAddressColumns(billing, { name: data.customerName, phone: data.customerPhone }),
             requiresShipping: prepared.requiresShipping,
             notes: data.notes,
             currencyCode: prepared.taxQuote.currencyCode,

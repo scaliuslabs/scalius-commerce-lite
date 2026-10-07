@@ -46,7 +46,7 @@ import {
   TriggerClock,
   type DvcClock,
 } from "./clocks";
-import { MutationCoverage, RowMutator, TRIGGER_OWNED_TABLES, type Mutation } from "./mutations";
+import { MutationCoverage, RowMutator, STRUCTURAL_OP_GAPS, TRIGGER_OWNED_TABLES, type Mutation } from "./mutations";
 import {
   coarseTableRecorder,
   headerDependencies,
@@ -1107,16 +1107,28 @@ export class DvcHarness {
       }
     }
     // Second pass: columns a single attempt could not change (a CHECK couples
-    // them to other columns) get more attempts with companions.
+    // them to other columns), and inserts or deletes a single clone could not
+    // make (a scope another row holds), get more attempts.
     for (let pass = 0; pass < 3; pass += 1) {
-      const { columns } = this.coverage.gaps(this.model);
-      if (columns.length === 0) break;
-      for (const gap of columns) {
-        const [table, column] = gap.split(".") as [string, string];
+      const { columns, ops } = this.coverage.gaps(this.model);
+      const missing = [
+        ...columns.map((gap) => {
+          const [table, column] = gap.split(".") as [string, string];
+          return () => this.mutator.update(table, column);
+        }),
+        ...ops
+          .filter((op) => !(op in STRUCTURAL_OP_GAPS) && !op.endsWith(":update"))
+          .map((op) => {
+            const [table, kind] = op.split(":") as [string, string];
+            return () => (kind === "insert" ? this.mutator.insert(table) : this.mutator.delete(table));
+          }),
+      ];
+      if (missing.length === 0) break;
+      for (const apply of missing) {
         this.step += 1;
         this.stats.steps += 1;
         this.config.setSystemTime(this.now);
-        const mutation = this.mutator.update(table, column);
+        const mutation = apply();
         if (!mutation) continue;
         this.stats.mutations += 1;
         this.stats.writes += 1;

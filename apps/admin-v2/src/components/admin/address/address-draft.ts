@@ -185,6 +185,72 @@ export function orderAddressInput(draft: AddressDraft) {
   };
 }
 
+/** An order's billing snapshot (migration 0119). */
+export interface OrderBillingFields {
+  billingSameAsShipping?: boolean | null;
+  billingCountryCode?: string | null;
+  billingName?: string | null;
+  billingCompany?: string | null;
+  billingAddress?: string | null;
+  billingAddressLine2?: string | null;
+  billingDependentLocality?: string | null;
+  billingLocality?: string | null;
+  billingAdminArea?: string | null;
+  billingPostalCode?: string | null;
+}
+
+/**
+ * The billing editor's draft of an order: its billing snapshot, or (none
+ * yet) an empty address in `fallbackCountry`. A billing address has no
+ * City → Thana picker: Bangladesh fills its canonical fields.
+ */
+export function orderBillingDraft(order: OrderBillingFields, fallbackCountry: string = DELIVERY_HIERARCHY_COUNTRY): AddressDraft {
+  if (!order.billingCountryCode) return emptyAddressDraft(fallbackCountry);
+  return addressDraftFrom({
+    countryCode: order.billingCountryCode,
+    name: order.billingName,
+    company: order.billingCompany,
+    line1: order.billingAddress,
+    line2: order.billingAddressLine2,
+    dependentLocality: order.billingDependentLocality,
+    locality: order.billingLocality,
+    adminArea: order.billingAdminArea,
+    postalCode: order.billingPostalCode,
+  });
+}
+
+/**
+ * The order write's billing fields: "same as shipping" (an order that ships),
+ * a billing address, or none (an empty draft: the order has no billing address).
+ */
+export function orderBillingInput(draft: AddressDraft, sameAsShipping: boolean) {
+  if (sameAsShipping) return { billingSameAsShipping: true, billingCountryCode: null };
+  const empty = ![draft.name, draft.company, draft.line1, draft.line2, draft.dependentLocality, draft.locality, draft.adminArea, draft.postalCode]
+    .some((value) => value.trim());
+  if (empty && !draft.countryCode) return { billingSameAsShipping: false, billingCountryCode: null };
+  return {
+    billingSameAsShipping: false,
+    billingCountryCode: draft.countryCode || null,
+    billingName: text(draft.name),
+    billingCompany: text(draft.company),
+    billingAddress: text(draft.line1),
+    billingAddressLine2: text(draft.line2),
+    billingDependentLocality: text(draft.dependentLocality),
+    billingLocality: text(draft.locality),
+    billingAdminArea: text(draft.adminArea),
+    billingPostalCode: text(draft.postalCode),
+  };
+}
+
+/** The billing fields an address the API refused breaks (`billing_address_invalid`), or null. */
+export function readBillingAddressProblems(error: unknown): AddressProblem[] | null {
+  if (!(error instanceof AdminApiResponseError)) return null;
+  const details = error.details as { reason?: unknown; issues?: unknown } | undefined;
+  if (details?.reason !== "billing_address_invalid" || !Array.isArray(details.issues)) return null;
+  return details.issues.filter((issue): issue is AddressProblem =>
+    Boolean(issue) && typeof issue.field === "string" && typeof issue.code === "string");
+}
+
 export function isAddressDraftEmpty(draft: AddressDraft): boolean {
   return ![draft.line1, draft.line2, draft.locality, draft.adminArea, draft.postalCode, draft.dependentLocality, draft.company, draft.name]
     .some((value) => value.trim()) && !draft.city && !draft.zone;

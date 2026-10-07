@@ -22,6 +22,7 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.addresses_delete": { risk: "destructive" },
   "dashboard.customers.addresses_list": {},
   "dashboard.customers.addresses_set_default": {},
+  "dashboard.customers.addresses_set_default_billing": {},
   "dashboard.customers.addresses_update": {},
   // Customers & marketing.
   "dashboard.customers.export": {

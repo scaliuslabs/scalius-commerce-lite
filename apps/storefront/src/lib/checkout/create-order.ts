@@ -9,6 +9,7 @@ import { checkoutOrderRefusal, type CheckoutOrderRefusal } from "./tax-quote-err
 import { cartItemVariantLabel } from "../cart/item-options";
 import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
+import { storedCheckoutBillingFields } from "./billing-address";
 import { giftCardRequestFields } from "./gift-cards";
 import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "./marketing-consent";
 
@@ -190,6 +191,8 @@ export async function createOrder(
     customerEmail: readOptionalString(checkoutData.customerEmail),
     customerWhatsapp: readOptionalString(checkoutData.customerWhatsapp),
     ...address,
+    // Only what the cart page asked for (Shopify's rule): none, "same as shipping" or a billing address.
+    ...storedCheckoutBillingFields(checkoutData),
     notes: readOptionalString(checkoutData.notes),
     items,
     shippingCharge: deliveryMode === "none"

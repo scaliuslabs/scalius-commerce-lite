@@ -8,7 +8,7 @@ import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraud
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { formatShippingAddress } from "~/lib/location-presentation";
+import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";
 import { countryName } from "~/lib/country-name";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
@@ -109,6 +109,9 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const address = formatShippingAddress(order, countryName);
   // The recipient when the order ships to someone other than its contact.
   const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
+  // The billing address (Shopify's rule): its own lines, or "same as delivery"; none on older orders.
+  const billingLines = formatBillingAddressLines(order, countryName);
+  const billingRecipient = [order.billingName, order.billingCompany].filter(Boolean).join(", ");
   const canEditDetails = actions.canEditOrders && order.editReadiness.details.allowed;
   const record = order.customerRecord ?? null;
   // An account or merchant-added customer named differently from this order: say so, so the mismatch is seen.
@@ -185,6 +188,22 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.shippingPhone)}</p> : null}
           {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
         </section>
+        {billingLines || order.billingSameAsShipping ? (
+          <section className="space-y-1 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">{t("billing.title")}</h2>
+              {order.billingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
+            </div>
+            {billingLines ? (
+              <>
+                {billingRecipient ? <p>{billingRecipient}</p> : null}
+                {billingLines.map((line) => <p key={line} className="text-muted-foreground">{line}</p>)}
+              </>
+            ) : (
+              <p className="text-muted-foreground">{t("billing.sameAsShipping")}</p>
+            )}
+          </section>
+        ) : null}
         {actions.canViewFraudCheck ? (
           <section className="flex items-center justify-between gap-3 px-6 py-4">
             <div>

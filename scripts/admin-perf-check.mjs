@@ -40,8 +40,8 @@ export const BUNDLE_BUDGETS = {
     "admin/orders/_list/index.tsx": 290,
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
     // +1 (catalogue dashboard): the Brands link and its search words in the shell.
-    // 289 (was 288): the store time zone (G1a) and the place directory (G1b)
-    // landed at the old limit; the toolchain slice is to win it back.
+    // 289 (was 288): the store time zone (G1a), the place directory (G1b) and
+    // the billing address block (0119) share one 1 KiB raise; win it back.
     "admin/orders/$orderId/index.tsx": 289,
     "admin/products/index.tsx": 290,
     // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.

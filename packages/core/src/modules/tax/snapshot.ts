@@ -22,6 +22,13 @@ function literal(value: string): SQL {
     return sql.raw(`'${value}'`);
 }
 
+const ADDRESS_SOURCES = new Set(["shipping", "billing", "origin"]);
+
+/** The taxed address as an SQL literal; NULL for a quote priced before 0119. */
+function addressSourceLiteral(value: string | undefined): SQL {
+    return sql.raw(value && ADDRESS_SOURCES.has(value) ? `'${value}'` : "NULL");
+}
+
 /**
  * One order line's tax snapshot columns: four bound values besides the line
  * and order ids. A quote priced by a Worker before tax regions (an in-flight
@@ -75,5 +82,7 @@ export function orderTaxSnapshotColumns(quote: TaxQuote) {
         }),
         providerId: (quote.jurisdiction as TaxQuote["jurisdiction"] | undefined)?.providerId ?? SYSTEM_TAX_PROVIDER_ID,
         providerCalculationId: (quote.jurisdiction as TaxQuote["jurisdiction"] | undefined)?.calculationId ?? null,
+        // An SQL literal (one of three words): the order's snapshot binds nothing more.
+        addressSource: addressSourceLiteral((quote.jurisdiction as TaxQuote["jurisdiction"] | undefined)?.addressSource),
     };
 }

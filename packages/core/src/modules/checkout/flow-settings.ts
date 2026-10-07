@@ -18,6 +18,8 @@ export interface SaveCheckoutFlowSettingsInput {
     partialPaymentAmount: number;
     /** Omitted = keep the saved mode (the dashboard offers it once Wave B delivery lands). */
     autoFulfilMode?: AutoFulfilMode;
+    /** Omitted = keep the saved choice. */
+    requireFullBillingAddress?: boolean;
     expectedRevision: number;
     availablePaymentMethods: readonly string[];
     /** The request's gateways, for app gateways' amount limits. */
@@ -56,6 +58,7 @@ export async function saveCheckoutFlowSettingsDocument(
         partialPaymentEnabled: input.partialPaymentEnabled,
         partialPaymentAmount: input.partialPaymentAmount,
         ...(input.autoFulfilMode === undefined ? {} : { autoFulfilMode: input.autoFulfilMode }),
+        ...(input.requireFullBillingAddress === undefined ? {} : { requireFullBillingAddress: input.requireFullBillingAddress }),
     }, {}, { expectedRevision: input.expectedRevision });
     return { ...value, revision };
 }

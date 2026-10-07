@@ -66,7 +66,7 @@ import {
 import { buildAppDiscountFactInserts } from "../order-kernel";
 import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins";
 import { orderMarketIdSql } from "../markets";
-import { orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
+import { orderBillingAddressInsertColumns, orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
@@ -406,6 +406,9 @@ function buildOrderWriteBatch(
             // The address snapshot (a guest record's first one also seeds its
             // address book: trigger orders_seed_customer_address).
             ...orderShippingAddressInsertColumns(od),
+            // The billing snapshot; "same as shipping" is an SQL literal, so a
+            // shipped order binds nothing more than it did before 0119.
+            ...orderBillingAddressInsertColumns(od),
             notes: od.notes,
             currencyCode: od.currencyCode,
             currencyDecimalPlaces: od.currencyDecimalPlaces,
@@ -446,7 +449,10 @@ function buildOrderWriteBatch(
             // The market of the shipping country, else the backup market, read
             // inside this insert (MARKETS-DESIGN D4); the authority fence covers
             // a market change between the quote and this commit.
-            marketId: orderMarketIdSql(orderShippingCountry(od)),
+            // An order that ships nothing is placed in its billing country, where it is taxed.
+            marketId: orderMarketIdSql(orderShippingCountry(od) ?? (
+                payload.taxQuote.jurisdiction?.addressSource === "billing" ? od.billingCountryCode ?? null : null
+            )),
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),

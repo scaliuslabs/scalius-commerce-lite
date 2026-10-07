@@ -156,6 +156,12 @@ export interface TaxJurisdiction {
     providerId: string;
     /** An app provider's calculation, committed with the order; null for `system`. */
     calculationId: string | null;
+    /**
+     * The address taxed (`taxAddressSource`): the shipping address, the
+     * billing address, or the origin (no address). Absent on a quote priced
+     * before 0119.
+     */
+    addressSource?: "shipping" | "billing" | "origin";
 }
 
 export interface TaxQuote {
@@ -196,6 +202,8 @@ export interface CalculateTaxQuoteInput {
     /** Active rates. */
     rates: TaxRateDefinition[];
     destination: TaxDestination;
+    /** Which address `destination` is when it has one (default: the shipping address). */
+    addressSource?: "shipping" | "billing";
     /** Where the store ships from (an address-less order is taxed there); null: Bangladesh. */
     originCountry?: string | null;
     lines: TaxQuoteLineInput[];

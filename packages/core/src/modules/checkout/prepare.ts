@@ -38,7 +38,9 @@ import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
 import { checkoutDocument } from "../settings";
 import { ValidationError } from "@scalius/core/errors";
 import {
+  orderBillingAddressColumns,
   orderShippingAddressColumns,
+  resolveCheckoutBillingAddress,
   type CreateStorefrontOrderCustomerIdentity,
   type CreateStorefrontOrderIdentity,
   type CreateStorefrontOrderInput,
@@ -132,6 +134,8 @@ export interface StorefrontCheckoutPolicySnapshot {
     shippingCountries?: readonly string[];
     /** Customer accounts contact fields from the checkout authority read. */
     contactFields?: CheckoutContactFieldSettings;
+    /** Settings → Checkout: every order asks for a full billing address (off: Shopify's default). */
+    requireFullBillingAddress?: boolean;
     authorityRevision?: number;
     orderCreatedNotificationEnabled?: boolean;
     metaPurchaseEnabled?: boolean;
@@ -369,19 +373,6 @@ export function assertStorefrontLineFulfilment(
         throw new ValidationError("Some items in your cart need attention.", { itemIssues: issues });
     }
     return types;
-}
-
-/**
- * The country of an order with no address: the one the buyer's market sells
- * to, as the storefront sends it. Only a country an active market sells to
- * counts; anything else is unknown (Bangladesh for the contact rule).
- */
-function orderCountryWithoutShipping(
-    countryCode: string | null | undefined,
-    sellingCountries: readonly string[] | undefined,
-): string | null {
-    const country = countryCode?.trim().toUpperCase();
-    return country && sellingCountries?.includes(country) ? country : null;
 }
 
 /** `details.reason` when no active market sells to the shipping country. */
@@ -708,6 +699,19 @@ export async function createStorefrontOrder(
         ? null
         : await checkoutDocument.read(storefrontDb);
 
+    // The billing address (Shopify's rule): the shipping address bills an
+    // order that ships unless the buyer sent another; an order that ships
+    // nothing needs one (minimal unless the merchant requires a full one); a
+    // pickup order needs one only when the merchant requires it. Its country
+    // must be one an active market sells to.
+    const billing = resolveCheckoutBillingAddress(data, {
+        path: requiresShipping ? "delivery" : deliveryPreflight.kind === "pickup" ? "pickup" : "none",
+        requireFullBillingAddress: checkoutPolicySnapshot?.requireFullBillingAddress
+            ?? fallbackSettings?.requireFullBillingAddress
+            ?? false,
+        sellingCountries: checkoutPolicySnapshot?.shippingCountries,
+    });
+
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
@@ -756,6 +760,10 @@ export async function createStorefrontOrder(
         apps: appOptions.apps,
         appProviders: appOptions.appProviders,
         channel: appOptions.channel ?? "online_store",
+        // An order that ships nothing is taxed at its billing address.
+        billing: billing.address
+            ? { countryCode: billing.address.countryCode, adminArea: billing.address.adminArea, postalCode: billing.address.postalCode }
+            : null,
         location: {
             countryCode: deliveryPreflight.address?.countryCode ?? data.shippingCountryCode ?? null,
             city: data.city,
@@ -821,8 +829,8 @@ export async function createStorefrontOrder(
         lines: cartValidation.items,
         paymentMethod,
         depositPlan: isPartialEnabled && !giftCardsApplied,
-        countryCode: deliveryPreflight.address?.countryCode
-            ?? orderCountryWithoutShipping(data.shippingCountryCode, checkoutPolicySnapshot?.shippingCountries),
+        // Where the order is placed: its shipping country, else its billing country.
+        countryCode: deliveryPreflight.address?.countryCode ?? billing.address?.countryCode ?? null,
     });
     if (giftCardsApplied) {
         // A gateway charges the remainder: below its minimum it cannot.
@@ -857,6 +865,7 @@ export async function createStorefrontOrder(
             customerPhone: data.customerPhone,
             ...contact,
             ...orderShippingAddressColumns(shippingAddress, { name: data.customerName, phone: data.customerPhone }),
+            ...orderBillingAddressColumns(billing, { name: data.customerName, phone: data.customerPhone }),
             notes: data.notes,
             shippingMethodId: shippingMethod?.id ?? null,
             shippingMethodName: shippingMethod?.name ?? null,

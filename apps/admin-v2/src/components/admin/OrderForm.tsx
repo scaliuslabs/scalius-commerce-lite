@@ -84,8 +84,16 @@ import { orderFormMessages } from "@/i18n/order-form";
 import { orderDetailMessages } from "@/i18n/order-detail";
 import { resourceMessages } from "@/i18n/resource";
 import { matchesShortcut } from "./layout/shortcuts";
-import { addressProblemMessages } from "./address/AddressFields";
-import { readAddressProblems, type AddressProblem } from "./address/address-draft";
+import { addressProblemMessages, useAddressErrors } from "./address/AddressFields";
+import {
+  emptyAddressDraft,
+  orderBillingInput,
+  readAddressProblems,
+  readBillingAddressProblems,
+  type AddressDraft,
+  type AddressProblem,
+} from "./address/address-draft";
+import { BillingSection } from "./order-form/BillingSection";
 import { addressMessages } from "@/i18n/address";
 import { locationMessages } from "@/i18n/location";
 import { addressRulesQueryOptions } from "@/lib/api-query-options/address-rules";
@@ -177,11 +185,27 @@ function lineProperties(item: Pick<OrderItem, "orderItemId" | "properties">) {
   return !item.orderItemId && item.properties?.length ? { properties: item.properties } : {};
 }
 
-function toCreateOrderInput(values: OrderFormValues, requestKey: string): CreateOrderInput {
+/**
+ * The new order's billing address: "same as delivery" (or a separate one)
+ * when it ships; otherwise only what staff entered (none when untouched).
+ */
+export interface OrderBillingState {
+  draft: AddressDraft;
+  sameAsShipping: boolean;
+  touched: boolean;
+}
+
+function toOrderBillingInput(values: OrderFormValues, billing: OrderBillingState) {
+  if (orderNeedsAddress(values)) return orderBillingInput(billing.draft, billing.sameAsShipping);
+  return billing.touched ? orderBillingInput(billing.draft, false) : {};
+}
+
+function toCreateOrderInput(values: OrderFormValues, requestKey: string, billing: OrderBillingState): CreateOrderInput {
   const channelSource = orderChannelSourceInput(values);
   return {
     requestKey,
     ...toOrderBaseContentInput(values),
+    ...toOrderBillingInput(values, billing),
     // The order keeps the method's name; a custom charge has none.
     ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
     // Where a staff-created order came in (Facebook, walk-in, …); the server stores it as a slug.
@@ -255,6 +279,14 @@ function OrderEditor({
   const [completed, setCompleted] = React.useState(false);
   // The API refused the address once: staff may then keep it, marked.
   const [addressRefused, setAddressRefused] = React.useState(false);
+  // The billing address of a new order (an edit changes it in the order's details dialog).
+  const [billing, setBilling] = React.useState<OrderBillingState>(() => ({
+    draft: emptyAddressDraft(defaultValues?.shippingCountryCode || "BD"),
+    sameAsShipping: true,
+    touched: false,
+  }));
+  const [billingProblems, setBillingProblems] = React.useState<AddressProblem[] | null>(null);
+  const billingErrors = useAddressErrors(billingProblems, billing.draft.countryCode);
   const addressText = useMessages(addressMessages);
   const placeText = useMessages(locationMessages);
   const queryClient = useQueryClient();
@@ -351,8 +383,16 @@ function OrderEditor({
       shippingCharge: Number(quoteShipping) || 0,
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
+      // A new order that ships nothing is taxed in the billing country staff entered.
+      ...(!isEdit && !needsAddress && billing.touched && billing.draft.countryCode
+        ? {
+          billingCountryCode: billing.draft.countryCode,
+          billingAdminArea: billing.draft.adminArea.trim() || null,
+          billingPostalCode: billing.draft.postalCode.trim() || null,
+        }
+        : {}),
     }),
-    [abroad, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
+    [abroad, billing, isEdit, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
@@ -548,7 +588,7 @@ function OrderEditor({
         submit: (submittedRequestKey) => {
           rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
           return createMutation.mutateAsync(
-            toCreateOrderInput(enrichedValues, submittedRequestKey),
+            toCreateOrderInput(enrichedValues, submittedRequestKey, billing),
           );
         },
         replaceRequestKey: replaceSubmittedAdminOrderRequestKey,
@@ -572,6 +612,11 @@ function OrderEditor({
       const problems = result.outcome === "error" ? readAddressProblems(result.error) : null;
       if (problems) {
         showAddressProblems(problems, enrichedValues.shippingCountryCode || "BD");
+        throw new SaveNotCompleted(r("fixFields"));
+      }
+      const billingRefusal = result.outcome === "error" ? readBillingAddressProblems(result.error) : null;
+      if (billingRefusal) {
+        setBillingProblems(billingRefusal);
         throw new SaveNotCompleted(r("fixFields"));
       }
       throw new SaveNotCompleted(result.outcome === "wait"
@@ -694,6 +739,17 @@ function OrderEditor({
               </div>
               <div className="min-w-0 space-y-4">
                 <CustomerInfoSection />
+                {isEdit ? null : (
+                  <BillingSection
+                    ships={needsAddress}
+                    sameAsShipping={billing.sameAsShipping}
+                    onSameAsShippingChange={(checked) => setBilling((current) => ({ ...current, sameAsShipping: checked, touched: true }))}
+                    value={billing.draft}
+                    onChange={(draft) => setBilling((current) => ({ ...current, draft, touched: true }))}
+                    errors={billingErrors}
+                    disabled={isInteractionLocked}
+                  />
+                )}
                 {isEdit ? null : <SalesChannelSection />}
               </div>
             </div>

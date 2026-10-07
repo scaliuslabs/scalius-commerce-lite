@@ -30,7 +30,10 @@ import {
   refreshCartBlockingState,
   resumeCartPageFromHistory,
   updateCheckoutButtonState,
+  updateTotals,
 } from "./client";
+import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "../checkout/billing-address";
+import { enhanceBillingAddress } from "../checkout/billing-address-rules";
 import { enhanceShippingMethods, fetchDeliveryRates } from "../checkout/shipping-methods";
 import {
   applyCheckoutDeliveryMode,
@@ -78,6 +81,7 @@ import {
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
+  BILLING_ADDRESS_FIELDS,
   applyCheckoutContactNeeds,
   applyCheckoutDeliveryMode,
   browserApiUrl,
@@ -86,12 +90,14 @@ const realImports: Record<string, unknown> = {
   cartNeedsDeliveryMethod,
   cartStore,
   checkoutAddressForMode,
+  checkoutBillingFields,
   checkoutContactNeeds,
   checkoutInformationFields,
   checkoutPhoneResult,
   clearCheckoutFormDraft,
   discardCheckoutFormDraftOfOtherOwner,
   enhanceCheckoutFields,
+  enhanceBillingAddress,
   enhanceLocationSelects,
   enhanceShippingCountry,
   enhanceShippingMethods,
@@ -122,6 +128,7 @@ const realImports: Record<string, unknown> = {
   showCheckoutLoadingOverlay,
   syncCheckoutTransferSession,
   updateCheckoutButtonState,
+  updateTotals,
   writeCheckoutFormDraft,
   writeCheckoutTransferSession,
 };
