@@ -14,9 +14,10 @@ export async function templateSectionData(
   requestTheme: RequestTheme,
   live: Promise<HomepageSectionData | null>,
 ): Promise<HomepageSectionData | null> {
+  // A template without sections to show reads nothing (a preview still marks its empty regions).
+  if (requestTheme.resolved.pages.templates[kind].sections.length === 0) return null;
   if (requestTheme.preview && requestTheme.previewToken) {
     return getThemePreviewHomepageSections(requestTheme.previewToken, { template: kind, presence: getRuntimePresence() });
   }
-  if (requestTheme.resolved.pages.templates[kind].sections.length === 0) return null;
   return live;
 }

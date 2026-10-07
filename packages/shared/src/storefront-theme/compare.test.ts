@@ -22,6 +22,23 @@ describe("theme changes", () => {
     for (const change of changes) expect(themeDocumentChangeSchema.parse(change)).toEqual(change);
   });
 
+  it("reports a template's section changes under template/<kind>", () => {
+    const before = structuredClone(DEFAULT_STOREFRONT_THEME);
+    const after = structuredClone(before);
+    after.pages.templates.product = { sections: [storefrontSectionDefault("faq", "questions")], main: 0 };
+    expect(compareThemeDocuments(before, after)).toEqual([
+      { kind: "section-added", page: "template/product", sectionId: "questions", sectionType: "faq" },
+    ]);
+    expect(compareThemeDocuments(after, before)).toEqual([
+      { kind: "section-removed", page: "template/product", sectionId: "questions", sectionType: "faq" },
+    ]);
+    // The fixed part moving among the sections is a reorder.
+    const moved = structuredClone(after);
+    moved.pages.templates.product.main = 1;
+    expect(compareThemeDocuments(after, moved)).toEqual([{ kind: "sections-reordered", page: "template/product" }]);
+    for (const change of compareThemeDocuments(before, after)) expect(themeDocumentChangeSchema.parse(change)).toEqual(change);
+  });
+
   it("names landing pages and theme areas without changing either document", () => {
     const before = structuredClone(DEFAULT_STOREFRONT_THEME);
     const after = structuredClone(before);

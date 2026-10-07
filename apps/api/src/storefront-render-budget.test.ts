@@ -51,7 +51,7 @@ const PAGE_D1_BUDGETS = {
   product: { roundTrips: 21, waves: 3 },
   category: { roundTrips: 7, waves: 3 },
   search: { roundTrips: 7, waves: 2 },
-  collection: { roundTrips: 7, waves: 3 },
+  collection: { roundTrips: 8, waves: 3 },
   landing: { roundTrips: 13, waves: 2 },
 } as const;
 
@@ -68,13 +68,17 @@ const APP_PAGE_D1_BUDGETS = {
   product: { roundTrips: 20, waves: 3 },
 } as const;
 
+// Product, category and collection pages also request their page template's section part
+// (`/storefront/template/<kind>`). It costs one round trip on a cold miss (the template
+// reads like the homepage, concurrently with the other parts, so no wave) and none when
+// warm: its cache hit is validated in the batch's one statement.
 const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   home: ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
   // The product page's app blocks are a part of their own (theme, product and active apps in one read).
-  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
-  category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest"],
+  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi", "/api/v1/storefront/template/product"],
+  category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest", "/api/v1/storefront/template/collection"],
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
-  collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
+  collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest", "/api/v1/storefront/template/collection"],
   landing: ["/api/v1/storefront/layout", "/api/v1/storefront/landing/eid", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
 };
 

@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(185);
+      expect(d1Tables).toHaveLength(186);
+      // 0124: the draft a theme restore or discard replaced.
+      expect(d1Tables).toContain("theme_restore_points");
       // 0122: sales channels, product publications and channel locations.
       for (const table of ["sales_channels", "product_channel_publications", "sales_channel_locations"]) expect(d1Tables).toContain(table);
       // 0121: the store's languages, translations and localized handles.

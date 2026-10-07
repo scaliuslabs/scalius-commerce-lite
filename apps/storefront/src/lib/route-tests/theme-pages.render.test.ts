@@ -7,8 +7,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { ViteDevServer } from "vite";
 import { Window } from "happy-dom";
 import {
+  storefrontSectionDefault,
   storefrontTemplateTheme,
   storeShapeFromFacts,
+  type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
@@ -108,6 +110,8 @@ const REVIEWS = {
   nextCursor: null,
 };
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
+/** What the template part answers for a template without sections (the API's `{ sections }` body). */
+const NO_SECTION_DATA = { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null };
 
 async function render(kind: string, theme: StorefrontThemeDocument, options: { variant?: string; noIndex?: boolean; empty?: boolean; preview?: StorefrontThemeDocument; previewLabel?: string; previewAppsStatus?: number } = {}) {
   const calls: URL[] = [];
@@ -129,6 +133,9 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
       ], variants: VARIANTS, recommendations: { reason: "similar", products: LISTING.products.slice(0, 2) },
     };
     if (path === "/api/v1/storefront/product-apps/shirt") return { blocks: [{ id: "size-guide", app: "scalius.size-guide/guide", placement: "below", html: "<p>Size guide app</p>", head: { meta: [], jsonLd: [] } }] };
+    // The page template's section data (its sections come from the theme; their content needs no data here).
+    if (path.startsWith("/api/v1/storefront/template/")) return { sections: NO_SECTION_DATA };
+    if (path === "/api/v1/storefront/theme-preview/homepage") return NO_SECTION_DATA;
     if (path === "/api/v1/shipping-methods") return { shippingMethods: [] };
     if (path === "/api/v1/checkout/config") return { gateways: [] };
     if (path === "/api/v1/categories/shirts/products") return { ...LISTING, category: { ...CATEGORY, noIndex: options.noIndex === true } };
@@ -142,7 +149,11 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
     if (url.pathname.startsWith("/api/v1/storefront/theme-preview/")) {
       const request = input instanceof Request ? input : new Request(input, init);
       expect(request.method).toBe("POST");
-      expect(await request.json()).toEqual({ token: PREVIEW_TOKEN });
+      const body = await request.json() as { token?: string; template?: string };
+      expect(body.token).toBe(PREVIEW_TOKEN);
+      // The draft's template sections are the one preview read with more in its body.
+      if (url.pathname.endsWith("/theme-preview/homepage")) expect(body.template).toBe(kind === "product" ? "product" : "collection");
+      else expect(body).toEqual({ token: PREVIEW_TOKEN });
       if (url.pathname.endsWith("/product-apps/shirt") && options.previewAppsStatus) return new Response("{}", { status: options.previewAppsStatus });
     }
     const data = url.pathname === "/api/v1/storefront/batch"
@@ -158,10 +169,15 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
   const document = new Window().document as unknown as Document;
   document.write(html);
   expect(response.status, html.slice(0, 200)).toBe(200);
-  // The batch, then a preview's private reads (resolve, and a product's app blocks); an empty search also reads suggestions.
-  expect(calls).toHaveLength(options.preview ? (kind === "product" ? 3 : 2) : options.empty ? 3 : 1);
+  // The batch, then a preview's private reads (resolve, a product's app blocks, and the draft template's sections when it has any; never on search); an empty search also reads suggestions.
+  const templateRead = kind !== "search" && options.preview && options.preview.pages.templates[kind === "product" ? "product" : "collection"].sections.length > 0 ? 1 : 0;
+  expect(calls).toHaveLength(options.preview ? 2 + (kind === "product" ? 1 : 0) + templateRead : options.empty ? 3 : 1);
   expect(calls[0]!.pathname).toBe("/api/v1/storefront/batch");
-  expect(calls[0]!.searchParams.getAll("r")).toHaveLength(kind === "product" ? 5 : 2);
+  // Every page's parts plus the template part (product, category and collection pages; not search).
+  const parts = calls[0]!.searchParams.getAll("r");
+  expect(parts).toHaveLength((kind === "product" ? 5 : 2) + (kind === "search" ? 0 : 1));
+  if (kind !== "search") expect(parts).toContain(`/api/v1/storefront/template/${kind === "product" ? "product" : "collection"}`);
+  else expect(parts.some((part) => part.includes("/storefront/template/"))).toBe(false);
   const ids = [...document.querySelectorAll("[id]")].map((element) => element.id);
   expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
   return { document, html, response, calls };
@@ -221,6 +237,43 @@ describe("product page structure from the theme's product blocks", () => {
     const failed = await render("product", live, { preview: productTheme(["description"]), previewAppsStatus: 503 });
     expect(failed.html).not.toContain("Size guide app");
     expect(failed.response.headers.get("Cache-Control")).toContain("no-store");
+  });
+});
+
+describe("a product page's template sections", () => {
+  const editorial = (id: string, heading: string) => {
+    const base = storefrontSectionDefault("editorial", id);
+    return { ...base, settings: { ...base.settings, layout: "rich-text", heading, body: `${heading} body.` } } as StorefrontSection;
+  };
+  /** One section above the product information (`main: 1`) and one below it. */
+  const templated = () => {
+    const theme = productTheme(["description", "reviews"]);
+    theme.pages.templates.product = { sections: [editorial("tpl-above", "Above the product"), editorial("tpl-below", "Below the product")], main: 1 };
+    return theme;
+  };
+
+  it("draws them around the product information, in order, unmarked for buyers and marked in a preview", async () => {
+    const live = await render("product", templated());
+    const html = live.html;
+    expect(html).toContain("Above the product");
+    expect(html).toContain("Below the product");
+    expect(html.indexOf("Above the product")).toBeLessThan(html.indexOf('id="product-container"'));
+    expect(html.indexOf('id="product-container"')).toBeLessThan(html.indexOf("Below the product"));
+    expect(marks(live.document)).toEqual([]);
+    expect(html).not.toContain("data-theme-region");
+
+    const preview = await render("product", storefrontTemplateTheme("department-mall"), { preview: templated() });
+    expect(preview.html).toContain("Above the product");
+    // Each region is marked for the editor's bridge, and the fixed part keeps its own marks between them.
+    expect([...preview.html.matchAll(/data-theme-region="([a-z]+)"/g)].map((match) => match[1])).toEqual(["before", "after"]);
+    expect(marks(preview.document)).toEqual(["announcement", "header", "tpl-above", "product-main", "module-description", "module-reviews", "product-apps", "tpl-below", "footer"]);
+  });
+
+  it("renders the regions empty in a preview of a template without sections, and nothing for buyers", async () => {
+    const theme = storefrontTemplateTheme("department-mall");
+    expect((await render("product", theme)).html).not.toContain("data-theme-region");
+    const preview = await render("product", theme, { preview: theme });
+    expect([...preview.html.matchAll(/data-theme-region="([a-z]+)"/g)].map((match) => match[1])).toEqual(["before", "after"]);
   });
 });
 

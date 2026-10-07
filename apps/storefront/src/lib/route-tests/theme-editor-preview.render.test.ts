@@ -4,7 +4,9 @@
  * API through a Vite dev server in middleware mode): a buyer's homepage is
  * byte-identical to the captured baseline (no editor marks, no bridge), and
  * only a request with a valid preview cookie carries the section marks, the
- * preview bridge and a frame policy that lets the dashboard embed it.
+ * preview bridge and a frame policy that lets the dashboard embed it. The
+ * preview-only render and paint routes answer a same-origin POST under a live
+ * preview cookie, and refuse everything else.
  */
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -38,7 +40,8 @@ interface RuntimeModule {
 let server: ViteDevServer;
 let container: Container;
 let HomePage: unknown;
-let SectionPage: unknown;
+let RenderPage: unknown;
+let paintRoute: { ALL(context: { request: Request; locals: object }): Promise<Response> };
 let LandingPage: unknown;
 let runtimeModule: RuntimeModule;
 
@@ -71,7 +74,8 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   HomePage = (await server.ssrLoadModule("/src/pages/index.astro")).default;
-  SectionPage = (await server.ssrLoadModule("/src/pages/theme-preview/section.astro")).default;
+  RenderPage = (await server.ssrLoadModule("/src/pages/theme-preview/render.astro")).default;
+  paintRoute = (await server.ssrLoadModule("/src/pages/theme-preview/paint.ts")) as typeof paintRoute;
   LandingPage = (await server.ssrLoadModule("/src/pages/pages/[slug].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
@@ -233,16 +237,54 @@ function stubApi(api: Api) {
   return calls;
 }
 
-async function renderPage(component: unknown, api: Api, options: { cookie?: string; url?: string; headers?: Record<string, string> } = {}) {
-  const calls = stubApi(api);
-  const runtime = {
-    PUBLIC_API_URL: API,
-    PUBLIC_API_BASE_URL: "https://api.shop.test",
-    DASHBOARD_URL: "https://admin.shop.test",
-    inflightReads: new Map(),
+/** A POST the way the bridge sends it: same origin, JSON; each part can be changed to test a refusal. */
+interface Post {
+  body: unknown;
+  /** The Origin header; null: none. */
+  origin?: string | null;
+  contentType?: string;
+}
+
+interface PageOptions {
+  cookie?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  post?: Post;
+}
+
+function buildRequest(options: PageOptions): Request {
+  const post = options.post;
+  const headers: Record<string, string> = {
+    ...options.headers,
+    ...(options.cookie ? { Cookie: options.cookie } : {}),
+    ...(post ? { "Content-Type": post.contentType ?? "application/json" } : {}),
+    ...(post && post.origin !== null ? { Origin: post.origin ?? "https://shop.test" } : {}),
   };
-  const headers = { ...options.headers, ...(options.cookie ? { Cookie: options.cookie } : {}) };
-  const request = new Request(options.url ?? "https://shop.test/", { headers });
+  return new Request(options.url ?? "https://shop.test/", {
+    headers,
+    ...(post ? { method: "POST", body: typeof post.body === "string" ? post.body : JSON.stringify(post.body) } : {}),
+  });
+}
+
+const RUNTIME = {
+  PUBLIC_API_URL: API,
+  PUBLIC_API_BASE_URL: "https://api.shop.test",
+  DASHBOARD_URL: "https://admin.shop.test",
+};
+
+/** The paint endpoint (an API route, not a page) under the same stubbed API. */
+async function callPaint(api: Api, options: PageOptions) {
+  const calls = stubApi(api);
+  const response = await runtimeModule.requestRuntime.run({ ...RUNTIME, inflightReads: new Map() }, () =>
+    paintRoute.ALL({ request: buildRequest(options), locals: {} }),
+  );
+  return { response, calls, text: await response.text() };
+}
+
+async function renderPage(component: unknown, api: Api, options: PageOptions = {}) {
+  const calls = stubApi(api);
+  const runtime = { ...RUNTIME, inflightReads: new Map() };
+  const request = buildRequest(options);
   const response = await runtimeModule.requestRuntime.run(runtime, () =>
     container.renderToResponse(component, { request, locals: {}, params: { slug: new URL(request.url).pathname.split("/").filter(Boolean).at(-1) ?? "" } }),
   );
@@ -303,7 +345,11 @@ describe("theme landing pages", () => {
     expect(result.response.status).toBe(200);
     expect(marked(result.html)).toEqual(["announcement", "header", "campaign", "campaign-faq", "footer"]);
     expect(result.response.headers.get("Cache-Control")).toContain("no-store");
-    const partial = await renderPage(SectionPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/theme-preview/section?id=campaign&page=eid" });
+    const partial = await renderPage(RenderPage, { document: fixedTheme(), preview }, {
+      cookie: PREVIEW_COOKIE,
+      url: "https://shop.test/theme-preview/render",
+      post: { body: { scope: { kind: "landing", slug: "eid" }, sections: preview.pages.landing.eid!.sections, only: "campaign" } },
+    });
     expect(partial.response.status).toBe(200);
     expect(marked(partial.html)).toEqual(["campaign"]);
     expect(partial.html).toContain("ঈদের অফার");
@@ -317,14 +363,13 @@ describe("theme landing pages", () => {
   });
 });
 
-/** The page's layout statement (or a section unit's), as the bridge compares them. */
-const layoutOf = (html: string) => /data-theme-preview-layout="([^"]*)"/.exec(html)?.[1];
+const regionsOf = (html: string) => [...html.matchAll(/ data-theme-region="([a-z]+)"/g)].map((match) => match[1]);
 const marked = (html: string) => [...html.matchAll(/ data-theme-section-id="([a-z0-9][a-z0-9_-]*)"/g)].map((match) => match[1]);
 
 describe("a theme preview of the homepage", () => {
   it("marks every section and carries the bridge for the dashboard origin, only under a valid preview", async () => {
     const buyer = await renderPage(HomePage, { document: fixedTheme() });
-    for (const marker of ["data-theme-section-id", "data-theme-preview-layout", "scalius-theme-preview", "admin.shop.test"]) {
+    for (const marker of ["data-theme-section-id", "data-theme-region", "scalius-theme-preview", "admin.shop.test"]) {
       expect(buyer.html).not.toContain(marker);
     }
 
@@ -337,7 +382,8 @@ describe("a theme preview of the homepage", () => {
     expect(preview.response.status).toBe(200);
     // The sections in order, between the header (with its announcement bar) and the footer.
     expect(marked(preview.html)).toEqual(["announcement", "header", "hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo", "footer"]);
-    expect(layoutOf(preview.html)).toBeDefined();
+    expect(regionsOf(preview.html)).toEqual(["page"]);
+    expect(preview.html).not.toContain("data-theme-preview-layout");
     // The bridge talks to the dashboard origin only; it names no token.
     expect(preview.html).toContain("scalius-theme-preview");
     expect(preview.html).toContain(JSON.stringify("https://admin.shop.test"));
@@ -360,54 +406,116 @@ describe("a theme preview of the homepage", () => {
   });
 });
 
-describe("the preview section route", () => {
-  const sectionUrl = (id: string) => `https://shop.test/theme-preview/section?id=${id}`;
+const RENDER_URL = "https://shop.test/theme-preview/render";
+const PAINT_URL = "https://shop.test/theme-preview/paint";
+
+describe("the preview render route", () => {
   const draft = () => ({ document: fixedTheme(), preview: fixedTheme() });
+  const homeBody = (extra: Record<string, unknown> = {}) => ({ scope: { kind: "home" }, sections: fixedTheme().pages.home, ...extra });
+  const render = (body: unknown, options: PageOptions = {}, api: Api = draft()) =>
+    renderPage(RenderPage, api, { cookie: PREVIEW_COOKIE, url: RENDER_URL, post: { body }, ...options });
 
-  it("refuses without a valid preview, and never lets a response be stored", async () => {
-    const anonymous = await renderPage(SectionPage, draft(), { url: sectionUrl("story") });
-    expect(anonymous.response.status).toBe(401);
-    expect(anonymous.response.headers.get("Cache-Control")).toContain("no-store");
-    expect(anonymous.calls.some((call) => call.includes("theme-preview"))).toBe(false);
-
-    const stale = await renderPage(SectionPage, { document: fixedTheme() }, { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
+  it("refuses everything but a same-origin JSON POST under a live preview cookie, and never lets a response be stored", async () => {
+    const refusals: Array<[string, Awaited<ReturnType<typeof render>>, number]> = [
+      ["no cookie", await render(homeBody(), { cookie: undefined }), 401],
+      ["a cross-origin post", await render(homeBody(), { post: { body: homeBody(), origin: "https://evil.test" } }), 403],
+      ["no origin", await render(homeBody(), { post: { body: homeBody(), origin: null } }), 403],
+      ["a form post", await render(homeBody(), { post: { body: homeBody(), contentType: "text/plain" } }), 415],
+      ["a body that is not JSON", await render("{", { post: { body: "{" } }), 400],
+      ["a body the theme schema refuses", await render({ scope: { kind: "home" }, sections: [{ id: "x", type: "nope" }] }), 400],
+      ["a scope the page does not have", await render({ scope: { kind: "landing", slug: "Not A Slug" }, sections: [] }), 400],
+      ["a fixed part outside the template's sections", await render({ scope: { kind: "template", template: "product", main: 2 }, sections: [] }), 400],
+      ["an unknown field", await render(homeBody({ extra: true })), 400],
+      ["a get", await renderPage(RenderPage, draft(), { cookie: PREVIEW_COOKIE, url: RENDER_URL }), 405],
+    ];
+    for (const [name, result, status] of refusals) {
+      expect(result.response.status, name).toBe(status);
+      expect(result.response.headers.get("Cache-Control"), name).toContain("no-store");
+      expect(result.html, name).toBe("");
+    }
+    // Nothing was drawn for a refused post: no section data was read.
+    expect(refusals.some(([, result]) => result.calls.some((call) => call.includes("theme-preview/homepage")))).toBe(false);
+    // An expired or revoked session asks for a new one and drops the cookie.
+    const stale = await render(homeBody(), {}, { document: fixedTheme() });
     expect(stale.response.status).toBe(401);
     expect(stale.response.headers.get("Set-Cookie")).toContain("Max-Age=0");
-    expect(stale.calls).not.toContain("/api/v1/storefront/theme-preview/homepage");
-
-    expect((await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("..%2Fx") })).response.status).toBe(400);
-    expect((await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("nope") })).response.status).toBe(404);
+    expect(stale.calls.some((call) => call.includes("theme-preview/homepage"))).toBe(false);
   });
 
-  it("renders one section of the draft with the homepage's renderers and layout statement", async () => {
+  it("draws the page's region from the draft's sections, marked, with the homepage's renderers", async () => {
     const page = await renderPage(HomePage, draft(), { cookie: PREVIEW_COOKIE });
-    const story = await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
+    const result = await render(homeBody());
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(result.response.headers.get("X-Robots-Tag")).toContain("noindex");
+    expect(result.html).not.toContain("<html");
+    expect(regionsOf(result.html)).toEqual(["page"]);
+    expect(marked(result.html)).toEqual(["hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo"]);
+    expect(result.calls).toContain("/api/v1/storefront/theme-preview/homepage");
+    // The sections of the unsaved list, not the saved one.
+    const edited = fixedTheme().pages.home.filter((each) => each.id !== "faq");
+    expect(marked((await render(homeBody({ sections: edited }))).html)).not.toContain("faq");
+    // A unit is the one the page rendered.
+    const storyUnit = (html: string) => /<div[^>]*data-theme-section-id="story"[\s\S]*?<\/section>/.exec(html)?.[0];
+    expect(storyUnit(result.html)).toBeDefined();
+    expect(storyUnit(result.html)).toBe(storyUnit(page.html));
+  });
+
+  it("draws one unit of the draft, and a grouped banner's whole row", async () => {
+    const story = await render(homeBody({ only: "story" }));
     expect(story.response.status).toBe(200);
-    expect(story.response.headers.get("Cache-Control")).toContain("no-store");
-    expect(story.response.headers.get("X-Robots-Tag")).toContain("noindex");
-    expect(story.html).not.toContain("<html");
     expect(story.html).toContain("data-theme-preview-unit");
+    expect(regionsOf(story.html)).toEqual([]);
     expect(marked(story.html)).toEqual(["story"]);
     expect(story.html).toContain("Our story");
-    // The same unit the page rendered, under the same layout statement.
-    expect(layoutOf(story.html)).toBe(layoutOf(page.html));
-    const unit = story.html.slice(story.html.indexOf("<div", story.html.indexOf("data-theme-preview-unit")), story.html.lastIndexOf("</div>"));
-    expect(unit.length).toBeGreaterThan(0);
-    expect(page.html).toContain(unit);
-    expect(story.calls).toContain("/api/v1/storefront/theme-preview/homepage");
+    expect(marked((await render(homeBody({ only: "banner-b" }))).html)).toEqual(["banner-a", "banner-b"]);
+    // A section the list does not hold has no unit: the bridge hides it.
+    expect((await render(homeBody({ only: "ghost" }))).html.trim()).toBe("");
   });
 
-  it("renders a grouped banner's whole row, each banner marked", async () => {
-    const banner = await renderPage(SectionPage, draft(), { cookie: PREVIEW_COOKIE, url: sectionUrl("banner-b") });
-    expect(banner.response.status).toBe(200);
-    expect(marked(banner.html)).toEqual(["banner-a", "banner-b"]);
+  it("draws a template's two regions around its fixed part", async () => {
+    const sections = [section("editorial", "above", { heading: "Above copy", body: "x" }), section("editorial", "below", { heading: "Below copy", body: "y" })];
+    const result = await render({ scope: { kind: "template", template: "product", main: 1 }, sections });
+    expect(result.response.status).toBe(200);
+    expect(regionsOf(result.html)).toEqual(["before", "after"]);
+    expect(marked(result.html)).toEqual(["above", "below"]);
+    expect(result.html.indexOf("Above copy")).toBeLessThan(result.html.indexOf("Below copy"));
+    const only = await render({ scope: { kind: "template", template: "product", main: 1 }, sections, only: "below" });
+    expect(marked(only.html)).toEqual(["below"]);
+  });
+});
+
+describe("the preview paint route", () => {
+  const draft = () => ({ document: fixedTheme(), preview: fixedTheme() });
+  const paint = (body: unknown, options: PageOptions = {}, api: Api = draft()) =>
+    callPaint(api, { cookie: PREVIEW_COOKIE, url: PAINT_URL, post: { body }, ...options });
+
+  it("paints an unsaved document: its tokens, theme attributes and font faces, never stored", async () => {
+    const base = await paint({ theme: fixedTheme() });
+    expect(base.response.status).toBe(200);
+    expect(base.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(base.response.headers.get("Content-Type")).toContain("application/json");
+    const painted = JSON.parse(base.text) as { css: string; attributes: Record<string, string>; fonts: string };
+    expect(painted.css).toMatch(/^:root, \.site-root \{ --/);
+    expect(Object.keys(painted.attributes)).toEqual(expect.arrayContaining(["data-theme-density", "data-theme-radius"]));
+    expect(typeof painted.fonts).toBe("string");
+
+    // Another template's document paints another look.
+    const other = JSON.parse((await paint({ theme: storefrontTemplateTheme("heritage-editorial") })).text) as { css: string };
+    expect(other.css).not.toBe(painted.css);
   });
 
-  it("states another layout once a change moved the page", async () => {
-    const page = await renderPage(HomePage, draft(), { cookie: PREVIEW_COOKIE });
-    const document = fixedTheme();
-    const moved = { ...document, pages: { ...document.pages, home: [document.pages.home[6]!, ...document.pages.home.filter((_, index) => index !== 6)] } };
-    const story = await renderPage(SectionPage, { document, preview: moved }, { cookie: PREVIEW_COOKIE, url: sectionUrl("story") });
-    expect(layoutOf(story.html)).not.toBe(layoutOf(page.html));
+  it("refuses without a live preview cookie, from another origin, with a bad body, or by get", async () => {
+    const theme = fixedTheme();
+    expect((await paint({ theme }, { cookie: undefined })).response.status).toBe(401);
+    expect((await paint({ theme }, { post: { body: { theme }, origin: "https://evil.test" } })).response.status).toBe(403);
+    expect((await paint({ theme: { version: 8 } })).response.status).toBe(400);
+    expect((await paint({ theme, extra: 1 })).response.status).toBe(400);
+    const get = await callPaint(draft(), { cookie: PREVIEW_COOKIE, url: PAINT_URL });
+    expect(get.response.status).toBe(405);
+    const stale = await paint({ theme }, {}, { document: fixedTheme() });
+    expect(stale.response.status).toBe(401);
+    expect(stale.response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    for (const result of [stale, get]) expect(result.response.headers.get("Cache-Control")).toContain("no-store");
   });
 });

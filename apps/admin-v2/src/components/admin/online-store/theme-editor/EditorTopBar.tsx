@@ -145,15 +145,14 @@ export function EditorTopBar({
         {phone ? null : (
           <Badge variant={live ? "success" : "warning"} className="hidden shrink-0 lg:inline-flex">{t(live ? "live" : "draftBadge")}</Badge>
         )}
-        {phone ? null : (
-          <span role="status" aria-live="polite" data-save-status={status} className="flex w-44 min-w-0 shrink-0 items-center gap-1.5 px-1 text-body">
-            <span className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])} aria-hidden="true" />
-            <span className="min-w-0 truncate max-xl:sr-only">{statusText}</span>
-            {status === "failed" ? (
-              <button type="button" onClick={onRetry} className="shrink-0 text-body text-topbar-progress underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress">{t("retry")}</button>
-            ) : null}
-          </span>
-        )}
+        {/* One save status, always there; a phone shows its dot (the words stay for screen readers). */}
+        <span role="status" aria-live="polite" data-save-status={status} className={cn("flex min-w-0 shrink-0 items-center gap-1.5 px-1 text-body", phone ? "w-6" : "w-44")}>
+          <span className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])} aria-hidden="true" />
+          <span className={cn("min-w-0 truncate max-xl:sr-only", phone && "sr-only")}>{statusText}</span>
+          {status === "failed" ? (
+            <button type="button" onClick={onRetry} className="shrink-0 text-body text-topbar-progress underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress">{t("retry")}</button>
+          ) : null}
+        </span>
       </div>
       <div className="flex min-w-0 items-center justify-center gap-1">
         {pagePicker}
