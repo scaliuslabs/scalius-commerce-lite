@@ -27,10 +27,22 @@ const apiDir = resolve(root, "apps", "api");
 const pnpmExecutable = resolvePnpmExecutable();
 const validCommands = new Set(["seed", "checkout-smoke", "load", "otp-smoke", "payment-readiness", "help"]);
 
+/**
+ * The smoke's delivery places come from the Bangladesh dataset
+ * (data/places/bd), loaded through the place import: Dhaka, Mirpur 10 and
+ * Sector 10. The ids are the dataset's legacy ids, which a fresh store gets;
+ * `resolveFixturePlaces()` reads the real ids by key after the import.
+ */
+export const FIXTURE_PLACE_KEYS = {
+  cityId: "pathao:city:1",
+  zoneId: "pathao:zone:19",
+  areaId: "pathao:area:23973",
+};
+
 const fixture = {
-  cityId: "ops006_city_dhaka",
-  zoneId: "ops006_zone_mirpur",
-  areaId: "ops006_area_section_10",
+  cityId: "nntq06qxtlwr8g6a5bjzdxc2",
+  zoneId: "rjof19xr3o3p09gnb3pz0uwm",
+  areaId: "hunpbkhnihodlxlar9tatoip",
   shippingMethodId: "ops006_shipping_standard",
   categoryId: "ops006_category",
   productId: "ops006_product",
@@ -127,9 +139,6 @@ export function buildFixtureSql() {
     ...otpFixtureStatements(),
     patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳" }),
     patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
-    upsertDeliveryLocation(fixture.cityId, "Dhaka", "city", null, 1),
-    upsertDeliveryLocation(fixture.zoneId, "Mirpur", "zone", fixture.cityId, 1),
-    upsertDeliveryLocation(fixture.areaId, "Section 10", "area", fixture.zoneId, 1),
     // A delivery rate belongs to a shipping zone (0114): the fixture city's.
     `INSERT INTO delivery_zones (id, name) VALUES ('dz_ops006', 'OPS006 smoke zone') ON CONFLICT(id) DO NOTHING`,
     `INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES (${sqlString(fixture.cityId)}, 'dz_ops006')
@@ -334,6 +343,8 @@ export async function runCommand(config) {
   if (!config.skipSeed) {
     if (config.command === "otp-smoke") seedOtpFixture(config);
     else seedFixture(config);
+  } else if (config.command !== "otp-smoke") {
+    resolveFixturePlaces(config);
   }
   return withApi(config, async () => {
     if (config.command === "checkout-smoke") return runCheckoutSmoke(config);
@@ -377,6 +388,8 @@ Safety:
 
 function seedFixture(config) {
   ensureLocalMigrations(config);
+  importDevPlaces(config);
+  resolveFixturePlaces(config);
   runD1Execute(config, buildFixtureSql());
   const row = readD1FirstRow(config, fixtureStatusSql());
   const result = {
@@ -448,7 +461,7 @@ export function buildPaymentReadinessFixtureSql() {
           ${sqlString(`ops006-${gateway.gateway}@example.com`)},
           'House 1, Road 10, Mirpur DOHS, Dhaka',
           ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
-          'Dhaka', 'Mirpur', 'Section 10',
+          'Dhaka', 'Mirpur 10', 'Sector 10',
           'BDT', 2, ${subtotalAmountMinor}, ${shippingAmountMinor}, 0, 0,
           ${totalAmountMinor}, 'BDT', ${subtotalAmountMinor}, ${shippingAmountMinor},
           ${totalAmountMinor}, 'incomplete',
@@ -884,24 +897,24 @@ function patchSettingsDocument(category, patch) {
       updated_at = unixepoch()`;
 }
 
-function upsertDeliveryLocation(id, name, type, parentId, sortOrder) {
-  return `INSERT INTO delivery_locations (
-      id, name, type, parent_id, external_ids, metadata, is_active, sort_order,
-      created_at, updated_at, deleted_at
-    ) VALUES (
-      ${sqlString(id)}, ${sqlString(name)}, ${sqlString(type)}, ${parentId ? sqlString(parentId) : "NULL"},
-      '{}', '{}', 1, ${sortOrder}, unixepoch(), unixepoch(), NULL
-    )
-    ON CONFLICT(id) DO UPDATE SET
-      name = excluded.name,
-      type = excluded.type,
-      parent_id = excluded.parent_id,
-      external_ids = excluded.external_ids,
-      metadata = excluded.metadata,
-      is_active = 1,
-      sort_order = excluded.sort_order,
-      deleted_at = NULL,
-      updated_at = unixepoch()`;
+/** Loads data/places/bd through the place import (idempotent; apps/api/scripts/places-import.ts). */
+function importDevPlaces(config) {
+  console.log("Importing the Bangladesh places (data/places/bd)...");
+  execFileSync(pnpmExecutable, [
+    "--dir", "apps/api", "exec", "tsx", "scripts/places-import.ts",
+    "--dataset", resolve(root, "data", "places", "bd"),
+    "--state", config.wranglerState,
+  ], { cwd: root, stdio: "inherit" });
+}
+
+/** The fixture places' ids in this store (a store set up earlier may keep its own ids). */
+function resolveFixturePlaces(config) {
+  const row = readD1FirstRow(config, `SELECT ${Object.entries(FIXTURE_PLACE_KEYS).map(([field, key]) =>
+    `(SELECT id FROM places WHERE country_code = 'BD' AND source_key = ${sqlString(key)}) AS ${field}`).join(", ")}`);
+  for (const field of Object.keys(FIXTURE_PLACE_KEYS)) {
+    if (!row?.[field]) throw new Error(`The place ${FIXTURE_PLACE_KEYS[field]} is missing after the import.`);
+    fixture[field] = row[field];
+  }
 }
 
 function fixtureStatusSql() {
@@ -910,7 +923,7 @@ function fixtureStatusSql() {
       (SELECT COUNT(*) FROM products WHERE id = ${sqlString(fixture.productId)} AND is_active = 1 AND deleted_at IS NULL) AS products,
       (SELECT COUNT(*) FROM product_variants WHERE id = ${sqlString(fixture.variantId)} AND product_id = ${sqlString(fixture.productId)} AND is_default = 1 AND track_inventory = 0 AND deleted_at IS NULL) AS variants,
       (SELECT COUNT(*) FROM shipping_methods WHERE id = ${sqlString(fixture.shippingMethodId)} AND is_active = 1 AND deleted_at IS NULL) AS shipping_methods,
-      (SELECT COUNT(*) FROM delivery_locations WHERE id IN (${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)}) AND is_active = 1 AND deleted_at IS NULL) AS delivery_locations
+      (SELECT COUNT(*) FROM places WHERE id IN (${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)}) AND is_active = 1 AND deleted_at IS NULL) AS places
   `;
 }
 

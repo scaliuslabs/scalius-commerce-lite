@@ -10,10 +10,10 @@ import { shippingMethodRoutes } from "../../shipping-methods";
 function createTestApp() {
   const harness = createSqliteD1Database();
   harness.sqlite.exec(`
-    INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-      ('dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-      ('mirpur', 'Mirpur', 'zone', 'dhaka', '{}', '{}', 1),
-      ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1);
+    INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+      ('dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+      ('mirpur', 'Mirpur', 'BD', 2, 'dhaka', '{}', '{}', 1),
+      ('ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1);
   `);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 

@@ -5,7 +5,8 @@ import {
     type Database,
 } from "@scalius/database/client";
 import {
-    deliveryLocations,
+    placeAddressFieldSql,
+    places,
     productVariants,
     products,
     taxClasses,
@@ -17,6 +18,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { matchAdminArea } from "@scalius/shared/address";
 import { addressRulesFor } from "@scalius/shared/address-metadata";
 import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
+import { deliveryHierarchyLevel } from "@scalius/shared/places";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -276,15 +278,17 @@ export async function getTaxConfiguration(db: Database) {
             asc(taxRates.priority),
             asc(taxRates.id),
         ),
+        // Tax regions name Bangladesh places (City, Thana, Area).
         db.select({
-            id: deliveryLocations.id,
-            name: deliveryLocations.name,
-            type: deliveryLocations.type,
-            parentId: deliveryLocations.parentId,
-        }).from(deliveryLocations).where(and(
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
-        )).orderBy(asc(deliveryLocations.type), asc(deliveryLocations.sortOrder), asc(deliveryLocations.name)),
+            id: places.id,
+            name: places.name,
+            type: placeAddressFieldSql,
+            parentId: places.parentId,
+        }).from(places).where(and(
+            eq(places.countryCode, DELIVERY_HIERARCHY_COUNTRY),
+            eq(places.isActive, true),
+            isNull(places.deletedAt),
+        )).orderBy(asc(placeAddressFieldSql), asc(places.sortOrder), asc(places.name)),
     ]);
     return {
         settings: settings[0] ?? DEFAULT_SETTINGS,
@@ -358,26 +362,27 @@ export async function listTaxJurisdictions(db: Database, input: {
 }) {
     const search = input.search?.trim();
     const where = and(
-        eq(deliveryLocations.isActive, true),
-        isNull(deliveryLocations.deletedAt),
-        input.type ? eq(deliveryLocations.type, input.type) : undefined,
-        input.parentId ? eq(deliveryLocations.parentId, input.parentId) : undefined,
-        search ? like(deliveryLocations.name, `%${search}%`) : undefined,
+        eq(places.countryCode, DELIVERY_HIERARCHY_COUNTRY),
+        eq(places.isActive, true),
+        isNull(places.deletedAt),
+        input.type ? eq(places.level, deliveryHierarchyLevel(input.type)) : undefined,
+        input.parentId ? eq(places.parentId, input.parentId) : undefined,
+        search ? like(places.name, `%${search}%`) : undefined,
     );
     const projection = {
-        id: deliveryLocations.id,
-        name: deliveryLocations.name,
-        type: deliveryLocations.type,
-        parentId: deliveryLocations.parentId,
+        id: places.id,
+        name: places.name,
+        type: placeAddressFieldSql,
+        parentId: places.parentId,
     };
     const [items, totalRow] = await Promise.all([
-        db.select(projection).from(deliveryLocations).where(where).orderBy(
-            asc(deliveryLocations.type),
-            asc(deliveryLocations.sortOrder),
-            asc(deliveryLocations.name),
-            asc(deliveryLocations.id),
+        db.select(projection).from(places).where(where).orderBy(
+            asc(placeAddressFieldSql),
+            asc(places.sortOrder),
+            asc(places.name),
+            asc(places.id),
         ).limit(input.limit).offset((input.page - 1) * input.limit),
-        db.select({ count: sql<number>`count(*)` }).from(deliveryLocations).where(where).get(),
+        db.select({ count: sql<number>`count(*)` }).from(places).where(where).get(),
     ]);
     return { items, total: totalRow?.count ?? 0 };
 }
@@ -626,7 +631,7 @@ function selectTaxRegions(db: Database) {
         postalPrefix: taxRegions.postalPrefix,
         placeType: taxRegions.placeType,
         placeId: taxRegions.placeId,
-        placeName: deliveryLocations.name,
+        placeName: places.name,
         providerId: taxRegions.providerId,
         version: taxRegions.version,
         rateCount: sql<number>`(SELECT count(*) FROM ${taxRates} WHERE ${taxRates.taxRegionId} = ${taxRegions.id})`,
@@ -634,7 +639,7 @@ function selectTaxRegions(db: Database) {
         updatedAt: taxRegions.updatedAt,
     })
         .from(taxRegions)
-        .leftJoin(deliveryLocations, eq(deliveryLocations.id, taxRegions.placeId))
+        .leftJoin(places, eq(places.id, taxRegions.placeId))
         .orderBy(asc(taxRegions.countryCode), asc(taxRegions.id));
 }
 
@@ -754,10 +759,11 @@ export async function createTaxRegion(db: Database, input: CreateTaxRegionInput)
     }
     let placeType: TaxPlaceType | null = null;
     if (placeId) {
-        const place = await db.select({ type: deliveryLocations.type }).from(deliveryLocations).where(and(
-            eq(deliveryLocations.id, placeId),
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
+        const place = await db.select({ type: placeAddressFieldSql }).from(places).where(and(
+            eq(places.id, placeId),
+            eq(places.countryCode, DELIVERY_HIERARCHY_COUNTRY),
+            eq(places.isActive, true),
+            isNull(places.deletedAt),
         )).get();
         if (!place) throw new ValidationError("Choose an active city, thana or area from the delivery locations.");
         placeType = place.type as TaxPlaceType;

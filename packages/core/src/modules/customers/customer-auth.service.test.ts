@@ -766,9 +766,9 @@ describe("sessions and profile", () => {
 
   it("rejects a blank name and an address-less location instead of saving them (BA-08)", async () => {
     sqlite.exec(`
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-        ('city_dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-        ('zone_mirpur', 'Mirpur', 'zone', 'city_dhaka', '{}', '{}', 1);
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+        ('city_dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+        ('zone_mirpur', 'Mirpur', 'BD', 2, 'city_dhaka', '{}', '{}', 1);
     `);
     const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
     await expect(updateCustomerProfile(db, account.session, { name: "" })).rejects.toThrow("Enter your name.");

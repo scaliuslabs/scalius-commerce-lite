@@ -283,12 +283,12 @@ function seedSql(): string {
 
   INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ${q(everySectionTheme())}, 1, ${T}, ${T});
 
-  INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active, sort_order) VALUES
-    ('loc_dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1, 0),
-    ('loc_ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1, 1),
-    ('loc_mirpur', 'Mirpur', 'zone', 'loc_dhaka', '{}', '{}', 1, 0),
-    ('loc_gulshan', 'Gulshan', 'zone', 'loc_dhaka', '{}', '{}', 1, 1),
-    ('loc_mirpur10', 'Mirpur 10', 'area', 'loc_mirpur', '{}', '{}', 1, 0);
+  INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active, sort_order) VALUES
+    ('loc_dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1, 0),
+    ('loc_ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1, 1),
+    ('loc_mirpur', 'Mirpur', 'BD', 2, 'loc_dhaka', '{}', '{}', 1, 0),
+    ('loc_gulshan', 'Gulshan', 'BD', 2, 'loc_dhaka', '{}', '{}', 1, 1),
+    ('loc_mirpur10', 'Mirpur 10', 'BD', 3, 'loc_mirpur', '{}', '{}', 1, 0);
   INSERT INTO delivery_zones (id, name, sort_order) VALUES ('zone_dhaka', 'Inside Dhaka', 0), ('zone_ctg', 'Chattogram', 1),
     ('zone_bd', 'Bangladesh', 2), ('zone_us', 'United States', 3), ('zone_west', 'West coast', 4);
   INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES ('loc_dhaka', 'zone_dhaka'), ('loc_ctg', 'zone_ctg');

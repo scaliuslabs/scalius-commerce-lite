@@ -196829,21 +196829,29 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "List delivery locations",
+        "summary": "List places (delivery locations)",
         "parameters": [
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "city",
-                "zone",
-                "area"
-              ],
-              "description": "Location type filter"
+              "pattern": "^[A-Za-z]{2}$",
+              "description": "ISO 3166-1 alpha-2 country of the places"
             },
             "required": false,
-            "description": "Location type filter",
-            "name": "type",
+            "description": "ISO 3166-1 alpha-2 country of the places",
+            "name": "country",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "description": "Level filter: 1 is the top (Bangladesh: 1 city, 2 thana, 3 area)"
+            },
+            "required": false,
+            "description": "Level filter: 1 is the top (Bangladesh: 1 city, 2 thana, 3 area)",
+            "name": "level",
             "in": "query"
           },
           {
@@ -196949,15 +196957,21 @@
                               "name": {
                                 "type": "string"
                               },
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "city",
-                                  "zone",
-                                  "area"
-                                ]
+                              "countryCode": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "integer"
                               },
                               "parentId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sourceKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "source": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -196988,25 +197002,19 @@
                               },
                               "descendants": {
                                 "type": "object",
-                                "properties": {
-                                  "zones": {
-                                    "type": "integer"
-                                  },
-                                  "areas": {
-                                    "type": "integer"
-                                  }
-                                },
-                                "required": [
-                                  "zones",
-                                  "areas"
-                                ]
+                                "additionalProperties": {
+                                  "type": "integer"
+                                }
                               }
                             },
                             "required": [
                               "id",
                               "name",
-                              "type",
+                              "countryCode",
+                              "level",
                               "parentId",
+                              "sourceKey",
+                              "source",
                               "externalIds",
                               "metadata",
                               "isActive",
@@ -197149,7 +197157,7 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Create a delivery location",
+        "summary": "Create a place (delivery location)",
         "requestBody": {
           "required": true,
           "content": {
@@ -197162,13 +197170,14 @@
                     "minLength": 1,
                     "maxLength": 120
                   },
-                  "type": {
+                  "countryCode": {
                     "type": "string",
-                    "enum": [
-                      "city",
-                      "zone",
-                      "area"
-                    ]
+                    "pattern": "^[A-Za-z]{2}$"
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4
                   },
                   "parentId": {
                     "type": "string",
@@ -197210,7 +197219,8 @@
                 },
                 "required": [
                   "name",
-                  "type"
+                  "countryCode",
+                  "level"
                 ]
               }
             }
@@ -197242,15 +197252,21 @@
                             "name": {
                               "type": "string"
                             },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "city",
-                                "zone",
-                                "area"
-                              ]
+                            "countryCode": {
+                              "type": "string"
+                            },
+                            "level": {
+                              "type": "integer"
                             },
                             "parentId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "sourceKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "source": {
                               "type": "string",
                               "nullable": true
                             },
@@ -197281,25 +197297,19 @@
                             },
                             "descendants": {
                               "type": "object",
-                              "properties": {
-                                "zones": {
-                                  "type": "integer"
-                                },
-                                "areas": {
-                                  "type": "integer"
-                                }
-                              },
-                              "required": [
-                                "zones",
-                                "areas"
-                              ]
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
                             }
                           },
                           "required": [
                             "id",
                             "name",
-                            "type",
+                            "countryCode",
+                            "level",
                             "parentId",
+                            "sourceKey",
+                            "source",
                             "externalIds",
                             "metadata",
                             "isActive",
@@ -197417,7 +197427,7 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Bulk soft-delete delivery locations with their thanas and areas",
+        "summary": "Bulk soft-delete places with everything under them",
         "requestBody": {
           "required": true,
           "content": {
@@ -197569,13 +197579,444 @@
         }
       }
     },
+    "/api/v1/admin/settings/delivery-locations/countries": {
+      "get": {
+        "operationId": "dashboard.delivery_locations.countries",
+        "tags": [
+          "Admin - Delivery Locations"
+        ],
+        "summary": "List the countries that have places",
+        "responses": {
+          "200": {
+            "description": "Countries with their live place counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "countries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "countryCode": {
+                                "type": "string"
+                              },
+                              "places": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "countryCode",
+                              "places"
+                            ]
+                          },
+                          "maxItems": 250
+                        }
+                      },
+                      "required": [
+                        "countries"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.delivery_locations.view"
+        }
+      }
+    },
+    "/api/v1/admin/settings/delivery-locations/import": {
+      "post": {
+        "operationId": "dashboard.delivery_locations.import",
+        "tags": [
+          "Admin - Delivery Locations"
+        ],
+        "summary": "Import one chunk of a place dataset",
+        "description": "Idempotent: places match by key, then legacyId, then courier id, then name under the same parent. Send parents before children, at most 500 places per call; finish on the last call makes the dataset's own places it did not list inactive. Never deletes a place and never changes the status of a merchant's own place.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "country": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z]{2}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "The dataset id (bd): the source of the places this import creates"
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "The dataset version (its manifest sha256)"
+                  },
+                  "places": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "level": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4
+                        },
+                        "parent": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "externalIds": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "default": {}
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "homeDelivery": {
+                          "type": "boolean"
+                        },
+                        "pickup": {
+                          "type": "boolean"
+                        },
+                        "legacyId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "level",
+                        "parent",
+                        "name",
+                        "active"
+                      ]
+                    },
+                    "maxItems": 500
+                  },
+                  "finish": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "country",
+                  "source",
+                  "version",
+                  "places"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What the chunk changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "integer"
+                        },
+                        "updated": {
+                          "type": "integer"
+                        },
+                        "unchanged": {
+                          "type": "integer"
+                        },
+                        "skipped": {
+                          "type": "integer"
+                        },
+                        "deactivated": {
+                          "type": "integer"
+                        },
+                        "conflicts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "parent_missing",
+                                  "parent_mismatch",
+                                  "level_changed",
+                                  "name_taken"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "reason"
+                            ]
+                          },
+                          "maxItems": 50
+                        },
+                        "conflictCount": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "created",
+                        "updated",
+                        "unchanged",
+                        "skipped",
+                        "deactivated",
+                        "conflicts",
+                        "conflictCount"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.delivery_locations.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/delivery-locations/all": {
       "delete": {
         "operationId": "dashboard.delivery_locations.delete_all",
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Delete all delivery locations permanently",
+        "summary": "Delete all of a country's places permanently",
         "requestBody": {
           "required": true,
           "content": {
@@ -197588,10 +198029,15 @@
                     "enum": [
                       true
                     ]
+                  },
+                  "countryCode": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z]{2}$"
                   }
                 },
                 "required": [
-                  "confirmDeleteAll"
+                  "confirmDeleteAll",
+                  "countryCode"
                 ]
               }
             }
@@ -197729,7 +198175,7 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Get a delivery location by ID",
+        "summary": "Get a place by ID",
         "parameters": [
           {
             "schema": {
@@ -197763,15 +198209,21 @@
                         "name": {
                           "type": "string"
                         },
-                        "type": {
-                          "type": "string",
-                          "enum": [
-                            "city",
-                            "zone",
-                            "area"
-                          ]
+                        "countryCode": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "integer"
                         },
                         "parentId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "source": {
                           "type": "string",
                           "nullable": true
                         },
@@ -197802,25 +198254,19 @@
                         },
                         "descendants": {
                           "type": "object",
-                          "properties": {
-                            "zones": {
-                              "type": "integer"
-                            },
-                            "areas": {
-                              "type": "integer"
-                            }
-                          },
-                          "required": [
-                            "zones",
-                            "areas"
-                          ]
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "type",
+                        "countryCode",
+                        "level",
                         "parentId",
+                        "sourceKey",
+                        "source",
                         "externalIds",
                         "metadata",
                         "isActive",
@@ -197933,7 +198379,7 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Update a delivery location",
+        "summary": "Update a place",
         "parameters": [
           {
             "schema": {
@@ -198017,15 +198463,21 @@
                         "name": {
                           "type": "string"
                         },
-                        "type": {
-                          "type": "string",
-                          "enum": [
-                            "city",
-                            "zone",
-                            "area"
-                          ]
+                        "countryCode": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "integer"
                         },
                         "parentId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "source": {
                           "type": "string",
                           "nullable": true
                         },
@@ -198056,25 +198508,19 @@
                         },
                         "descendants": {
                           "type": "object",
-                          "properties": {
-                            "zones": {
-                              "type": "integer"
-                            },
-                            "areas": {
-                              "type": "integer"
-                            }
-                          },
-                          "required": [
-                            "zones",
-                            "areas"
-                          ]
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "type",
+                        "countryCode",
+                        "level",
                         "parentId",
+                        "sourceKey",
+                        "source",
                         "externalIds",
                         "metadata",
                         "isActive",
@@ -198187,7 +198633,7 @@
         "tags": [
           "Admin - Delivery Locations"
         ],
-        "summary": "Soft-delete a delivery location with its thanas and areas",
+        "summary": "Soft-delete a place with everything under it",
         "parameters": [
           {
             "schema": {
@@ -209540,6 +209986,14 @@
           ]
         },
         {
+          "operationId": "dashboard.delivery_locations.countries",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.countries"
+          ]
+        },
+        {
           "operationId": "dashboard.delivery_locations.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -209561,6 +210015,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.delivery_locations.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.import",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.import"
           ]
         },
         {

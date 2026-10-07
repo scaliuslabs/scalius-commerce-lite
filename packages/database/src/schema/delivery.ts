@@ -1,6 +1,6 @@
 // src/db/schema/delivery.ts
-// Delivery domain tables: deliveryLocations, deliveryZones (+ their regions and
-// Bangladesh locations), shippingMethods (a zone's delivery rates and local
+// Delivery domain tables: places (the place directory), deliveryZones (+ their
+// regions and Bangladesh places), shippingMethods (a zone's delivery rates and local
 // pickup), deliveryProviders, deliveryShipments.
 
 import { sql } from "drizzle-orm";
@@ -10,16 +10,38 @@ import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
 import { ShipmentStatus } from "./enums";
 
-export const deliveryLocations = sqliteTable("delivery_locations", {
+/**
+ * The place directory (docs/PLACES.md): the delivery places of any country,
+ * a tree of numbered levels (1 is the top; Bangladesh: City, Thana, Area).
+ * A place's parent is one level up in the same country (a trigger refuses
+ * anything else). An import keys its places by `source_key` and marks the
+ * ones it created with `source`; a place the merchant created has neither.
+ * Removed places are soft-deleted: orders and courier bookings keep reading
+ * their names and courier ids.
+ */
+export const places = sqliteTable("places", {
     id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    type: text("type", { enum: ["city", "zone", "area"] }).notNull(),
+    /** ISO 3166-1 alpha-2, upper case. */
+    countryCode: text("country_code").notNull(),
+    /** 1 is the top level; at most PLACE_MAX_LEVEL. */
+    level: integer("level").notNull(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle self-referential FK requires any return type
-    parentId: text("parent_id").references((): any => deliveryLocations.id, { onDelete: "set null" }),
+    parentId: text("parent_id").references((): any => places.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    /** Courier ids by courier, JSON (`{ "pathao": "32" }`). */
     externalIds: text("external_ids").notNull(),
+    /** JSON: the source's availability flags (`home_delivery_available`, `pickup_available`). */
     metadata: text("metadata").notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
+    /** The dataset that created the place (`bd`); null for a place the merchant created. */
+    source: text("source"),
+    /** The stable source key (`pathao:area:13193`), unique in the country. */
+    sourceKey: text("source_key"),
+    /** The dataset version that last listed the place. */
+    sourceVersion: text("source_version"),
+    /** The `active` value the last import applied; null when it applied none. */
+    sourceActive: integer("source_active", { mode: "boolean" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -28,15 +50,30 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
-    index("delivery_locations_parent_id_idx").on(table.parentId),
-    index("delivery_locations_type_idx").on(table.type),
-    uniqueIndex("delivery_locations_active_city_name_uidx")
-        .on(sql`lower(trim(${table.name}))`)
-        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.type} = 'city'`),
-    uniqueIndex("delivery_locations_active_child_name_uidx")
-        .on(table.type, table.parentId, sql`lower(trim(${table.name}))`)
-        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.type} IN ('zone', 'area') AND ${table.parentId} IS NOT NULL`),
+    // Children of a place (pickers, deletes, imports).
+    index("places_parent_id_idx").on(table.parentId),
+    // A country's places of one level (top-level lists, readiness).
+    index("places_country_level_idx").on(table.countryCode, table.level),
+    // An import's key lookup; NULL keys (the merchant's places) never collide.
+    uniqueIndex("places_country_source_key_uidx").on(table.countryCode, table.sourceKey),
+    // Active names are unique among a country's top places and among a
+    // place's children of one level.
+    uniqueIndex("places_active_root_name_uidx")
+        .on(table.countryCode, sql`lower(trim(${table.name}))`)
+        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.parentId} IS NULL AND ${table.level} = 1`),
+    uniqueIndex("places_active_child_name_uidx")
+        .on(table.parentId, table.level, sql`lower(trim(${table.name}))`)
+        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.parentId} IS NOT NULL`),
+    check("places_country_shape", sql`length(${table.countryCode}) = 2 AND ${table.countryCode} NOT GLOB '*[^A-Z]*'`),
+    check("places_level_range", sql`${table.level} BETWEEN 1 AND 4`),
 ]);
+
+/**
+ * A Bangladesh place's address field from its level, as SQL: `city` (1),
+ * `zone` (2, a thana) or `area` (3). The Bangladesh address adapter, zones
+ * and tax regions name places by these fields (@scalius/shared/places).
+ */
+export const placeAddressFieldSql = sql<"city" | "zone" | "area">`CASE ${places.level} WHEN 1 THEN 'city' WHEN 2 THEN 'zone' WHEN 3 THEN 'area' END`;
 
 /**
  * A shipping zone (Shopify's model, MARKETS-DESIGN step 3b): the places that
@@ -90,11 +127,11 @@ export const deliveryZoneRegions = sqliteTable("delivery_zone_regions", {
     check("delivery_zone_regions_postal_prefix_shape", sql`length(${table.postalPrefix}) <= 10 AND ${table.postalPrefix} NOT GLOB '*[^A-Z0-9]*'`),
 ]);
 
-/** A Bangladesh location belongs to at most one zone (the primary key). */
+/** A Bangladesh place belongs to at most one zone (the primary key). */
 export const deliveryZoneLocations = sqliteTable("delivery_zone_locations", {
     locationId: text("location_id")
         .primaryKey()
-        .references(() => deliveryLocations.id, { onDelete: "cascade" }),
+        .references(() => places.id, { onDelete: "cascade" }),
     zoneId: text("zone_id")
         .notNull()
         .references(() => deliveryZones.id, { onDelete: "cascade" }),
@@ -195,7 +232,7 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     index("delivery_shipments_external_id_idx").on(table.externalId),
 ]);
 
-export type DeliveryLocation = InferSelectModel<typeof deliveryLocations>;
+export type Place = InferSelectModel<typeof places>;
 export type DeliveryZone = InferSelectModel<typeof deliveryZones>;
 export type DeliveryZoneRegion = InferSelectModel<typeof deliveryZoneRegions>;
 export type ShippingMethod = InferSelectModel<typeof shippingMethods>;

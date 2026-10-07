@@ -57582,9 +57582,13 @@ export type GetApiV1AdminSettingsDeliveryLocationsData = {
     path?: never;
     query?: {
         /**
-         * Location type filter
+         * ISO 3166-1 alpha-2 country of the places
          */
-        type?: 'city' | 'zone' | 'area';
+        country?: string;
+        /**
+         * Level filter: 1 is the top (Bangladesh: 1 city, 2 thana, 3 area)
+         */
+        level?: number;
         /**
          * Parent ID filter
          */
@@ -57652,8 +57656,11 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
             locations: Array<{
                 id: string;
                 name: string;
-                type: 'city' | 'zone' | 'area';
+                countryCode: string;
+                level: number;
                 parentId: string | null;
+                sourceKey: string | null;
+                source: string | null;
                 externalIds: {
                     [key: string]: unknown;
                 } | null;
@@ -57665,8 +57672,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 displayName?: string;
                 parentPath?: Array<string>;
                 descendants?: {
-                    zones: number;
-                    areas: number;
+                    [key: string]: number;
                 };
                 [key: string]: unknown;
             }>;
@@ -57685,7 +57691,8 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponse = GetApiV1AdminSettin
 export type PostApiV1AdminSettingsDeliveryLocationsData = {
     body: {
         name: string;
-        type: 'city' | 'zone' | 'area';
+        countryCode: string;
+        level: number;
         parentId?: string | null;
         externalIds?: {
             [key: string]: string | number;
@@ -57740,8 +57747,11 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
             location: {
                 id: string;
                 name: string;
-                type: 'city' | 'zone' | 'area';
+                countryCode: string;
+                level: number;
                 parentId: string | null;
+                sourceKey: string | null;
+                source: string | null;
                 externalIds: {
                     [key: string]: unknown;
                 } | null;
@@ -57753,8 +57763,7 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 displayName?: string;
                 parentPath?: Array<string>;
                 descendants?: {
-                    zones: number;
-                    areas: number;
+                    [key: string]: number;
                 };
                 [key: string]: unknown;
             };
@@ -57764,9 +57773,146 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
 
 export type PostApiV1AdminSettingsDeliveryLocationsResponse = PostApiV1AdminSettingsDeliveryLocationsResponses[keyof PostApiV1AdminSettingsDeliveryLocationsResponses];
 
+export type GetApiV1AdminSettingsDeliveryLocationsCountriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/delivery-locations/countries';
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsCountriesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsCountriesError = GetApiV1AdminSettingsDeliveryLocationsCountriesErrors[keyof GetApiV1AdminSettingsDeliveryLocationsCountriesErrors];
+
+export type GetApiV1AdminSettingsDeliveryLocationsCountriesResponses = {
+    /**
+     * Countries with their live place counts
+     */
+    200: {
+        success: true;
+        data: {
+            countries: Array<{
+                countryCode: string;
+                places: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsCountriesResponse = GetApiV1AdminSettingsDeliveryLocationsCountriesResponses[keyof GetApiV1AdminSettingsDeliveryLocationsCountriesResponses];
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportData = {
+    body: {
+        country: string;
+        /**
+         * The dataset id (bd): the source of the places this import creates
+         */
+        source: string;
+        /**
+         * The dataset version (its manifest sha256)
+         */
+        version: string;
+        places: Array<{
+            key: string;
+            level: number;
+            parent: string | null;
+            name: string;
+            externalIds?: {
+                [key: string]: string | number;
+            };
+            active: boolean;
+            homeDelivery?: boolean;
+            pickup?: boolean;
+            legacyId?: string;
+        }>;
+        finish?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/delivery-locations/import';
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportError = PostApiV1AdminSettingsDeliveryLocationsImportErrors[keyof PostApiV1AdminSettingsDeliveryLocationsImportErrors];
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportResponses = {
+    /**
+     * What the chunk changed
+     */
+    200: {
+        success: true;
+        data: {
+            created: number;
+            updated: number;
+            unchanged: number;
+            skipped: number;
+            deactivated: number;
+            conflicts: Array<{
+                key: string;
+                reason: 'parent_missing' | 'parent_mismatch' | 'level_changed' | 'name_taken';
+            }>;
+            conflictCount: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportResponse = PostApiV1AdminSettingsDeliveryLocationsImportResponses[keyof PostApiV1AdminSettingsDeliveryLocationsImportResponses];
+
 export type DeleteApiV1AdminSettingsDeliveryLocationsAllData = {
     body: {
         confirmDeleteAll: true;
+        countryCode: string;
     };
     path?: never;
     query?: never;
@@ -57915,8 +58061,11 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
         data: {
             id: string;
             name: string;
-            type: 'city' | 'zone' | 'area';
+            countryCode: string;
+            level: number;
             parentId: string | null;
+            sourceKey: string | null;
+            source: string | null;
             externalIds: {
                 [key: string]: unknown;
             } | null;
@@ -57928,8 +58077,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             displayName?: string;
             parentPath?: Array<string>;
             descendants?: {
-                zones: number;
-                areas: number;
+                [key: string]: number;
             };
             [key: string]: unknown;
         };
@@ -57996,8 +58144,11 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
         data: {
             id: string;
             name: string;
-            type: 'city' | 'zone' | 'area';
+            countryCode: string;
+            level: number;
             parentId: string | null;
+            sourceKey: string | null;
+            source: string | null;
             externalIds: {
                 [key: string]: unknown;
             } | null;
@@ -58009,8 +58160,7 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             displayName?: string;
             parentPath?: Array<string>;
             descendants?: {
-                zones: number;
-                areas: number;
+                [key: string]: number;
             };
             [key: string]: unknown;
         };

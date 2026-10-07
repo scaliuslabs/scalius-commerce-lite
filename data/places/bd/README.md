@@ -14,10 +14,15 @@ them on 2026-10-07.
   - `homeDelivery` and `pickup`: the availability flags, when Pathao gives them.
   - `legacyId`: the place's row ID in stores that were set up before this
     dataset existed.
-- `manifest.json` has the level labels, the counts and the SHA-256 of
-  `places.json`.
+- `manifest.json` has the dataset id (`bd`, the source of the places it
+  creates), the level labels, the counts and the SHA-256 of `places.json` (the
+  dataset version).
 
-The Bangladesh pack plugin owns this dataset. It seeds the place directory and
-updates it idempotently. It matches a place by `key` (then by `legacyId`) and
-never deletes a merchant's own places. Do not edit a place by hand: refresh the
-dataset from the couriers' location APIs, then review the diff.
+The import matches a place by `key`, then by `legacyId`, and never deletes or
+switches off a merchant's own places. The rules are in
+[docs/PLACES.md](../../../docs/PLACES.md).
+
+- Load it into the local store: `pnpm places:import`.
+- Do not edit a place by hand. Refresh the dataset from Pathao's location API
+  (`pnpm places:pathao-dataset --credentials <file.json>`), then review the
+  diff.

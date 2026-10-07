@@ -67,6 +67,7 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   market_presences: "0112_markets",
   delivery_zone_regions: "0114_shipping_zones",
   tax_regions: "0116_tax_regions",
+  places: "0118_places",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -86,6 +87,10 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_tax_rates_del: "0116_tax_regions",
   cdep_tax_rates_upd: "0116_tax_regions",
   cdep_tax_settings_upd: "0116_tax_regions",
+  // The place directory (0118) rebuilds delivery_zone_locations onto places.
+  cdep_delivery_zone_locations_ins: "0118_places",
+  cdep_delivery_zone_locations_del: "0118_places",
+  cdep_delivery_zone_locations_upd: "0118_places",
 };
 
 /**
@@ -124,6 +129,24 @@ export interface RetiredCacheDepTable {
  * functions, `retiredCacheDepFunctionDrops`).
  */
 export const CACHE_DEP_RETIRED_TABLES: Readonly<Record<string, RetiredCacheDepTable>> = {
+  // The place directory (`places`, 0118) replaces the Bangladesh-only table.
+  delivery_locations: {
+    after: "delivery_zone_regions",
+    droppedIn: "0118_places",
+    columns: [
+      "id", "name", "type", "parent_id", "external_ids", "metadata", "is_active", "sort_order",
+      "created_at", "updated_at", "deleted_at",
+    ],
+    spec: {
+      kinds: ["loc" as CacheDepKind],
+      noise: ["updated_at"],
+      rules: [
+        { name: "ins", event: "insert", image: "new", keys: [{ dep: "loc" }] },
+        { name: "del", event: "delete", image: "old", keys: [{ dep: "loc" }] },
+        { name: "upd", event: "update", image: "new", changed: "visible", keys: [{ dep: "loc" }] },
+      ],
+    },
+  },
   // The homepage hero lives in the theme document's hero section now.
   hero_sliders: {
     after: "pages",

@@ -279,6 +279,7 @@ pnpm release:check --api-base-url https://api.example.com --storefront-url https
 | [docs/PERFORMANCE-RELEASE.md](docs/PERFORMANCE-RELEASE.md) | Release performance baseline |
 | [packages/shared/src/storefront-theme.md](packages/shared/src/storefront-theme.md) | Storefront theme document and the online store builder |
 | [docs/delivery-providers/README.md](docs/delivery-providers/README.md) | Pathao and Steadfast contracts |
+| [docs/PLACES.md](docs/PLACES.md) | The place directory, its datasets and their import |
 | [docs/MARKETS-DESIGN.md](docs/MARKETS-DESIGN.md) | Markets design (not built) |
 | [apps/admin-v2/README.md](apps/admin-v2/README.md), [apps/admin-v2/DESIGN.md](apps/admin-v2/DESIGN.md) | Dashboard app and design rules |
 | [apps/storefront/README.md](apps/storefront/README.md) | Storefront app |

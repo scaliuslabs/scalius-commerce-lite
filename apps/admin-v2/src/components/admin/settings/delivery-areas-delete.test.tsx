@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdk = vi.hoisted(() => ({
   getApiV1AdminSettingsDeliveryLocations: vi.fn(),
+  getApiV1AdminSettingsDeliveryLocationsCountries: vi.fn(),
   getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus: vi.fn(),
   getApiV1AdminSettingsDeliveryProviders: vi.fn(),
   deleteApiV1AdminSettingsDeliveryLocations: vi.fn(),
@@ -26,11 +27,12 @@ import { DeliveryAreasManager } from "./DeliveryAreas";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
-const city = (id: string, name: string, descendants = { zones: 0, areas: 0 }) => ({
-  id, name, type: "city", parentId: null, externalIds: {}, metadata: {}, isActive: true, sortOrder: 0, descendants,
+const city = (id: string, name: string, descendants: Record<string, number> = {}) => ({
+  id, name, countryCode: "BD", level: 1, parentId: null, sourceKey: null, source: null,
+  externalIds: {}, metadata: {}, isActive: true, sortOrder: 0, descendants,
 });
 const cities = [
-  city("dhaka", "Dhaka", { zones: 2, areas: 5 }),
+  city("dhaka", "Dhaka", { "2": 2, "3": 5 }),
   city("ctg", "Chattogram"),
   city("sylhet", "Sylhet"),
 ];
@@ -47,6 +49,7 @@ describe("deleting selected places", () => {
     root = createRoot(container);
     sdk.getApiV1AdminSettingsDeliveryLocations.mockImplementation(() =>
       ok({ locations: cities, pagination: { page: 1, limit: 20, total: 3, totalPages: 1 } }));
+    sdk.getApiV1AdminSettingsDeliveryLocationsCountries.mockImplementation(() => ok({ countries: [{ countryCode: "BD", places: 10 }] }));
     sdk.getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus.mockImplementation(() => ok({ status: "idle" }));
     sdk.getApiV1AdminSettingsDeliveryProviders.mockImplementation(() => ok({ providers: [] }));
   });
@@ -58,7 +61,7 @@ describe("deleting selected places", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function select(names: string[]) {
+  async function render() {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => {
       root.render(
@@ -67,6 +70,10 @@ describe("deleting selected places", () => {
         </QueryClientProvider>,
       );
     });
+  }
+
+  async function select(names: string[]) {
+    await render();
     await vi.waitFor(() => expect(container.textContent).toContain("Chattogram"));
     for (const name of names) {
       const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.includes(name))!;
@@ -88,5 +95,26 @@ describe("deleting selected places", () => {
     const dialog = await select(["Chattogram", "Sylhet"]);
     expect(dialog).toContain("Delete 2 places?");
     expect(dialog).toContain("This can't be undone.");
+  });
+
+  it("lists Bangladesh by its own levels and reads one country and level", async () => {
+    await render();
+    await vi.waitFor(() => expect(container.textContent).toContain("Chattogram"));
+    const tabs = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Cities", "Thanas", "Areas"]);
+    expect(sdk.getApiV1AdminSettingsDeliveryLocations).toHaveBeenCalledWith(expect.objectContaining({
+      query: expect.objectContaining({ country: "BD", level: 1, page: 1 }),
+    }));
+  });
+
+  it("shows another country's generic levels and its empty state", async () => {
+    sdk.getApiV1AdminSettingsDeliveryLocationsCountries.mockImplementation(() => ok({ countries: [{ countryCode: "IN", places: 0 }] }));
+    sdk.getApiV1AdminSettingsDeliveryLocations.mockImplementation(() =>
+      ok({ locations: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));
+    await render();
+    await vi.waitFor(() => expect(container.textContent).toContain("No places in India yet. Add its regions first."));
+    const tabs = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Regions", "Cities", "Districts", "Areas"]);
+    expect(container.textContent).not.toContain("Import Bangladesh locations");
   });
 });

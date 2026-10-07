@@ -30,10 +30,11 @@ import {
     type Database,
 } from "@scalius/database/client";
 import {
-    deliveryLocations,
     deliveryZoneLocations,
     deliveryZoneRegions,
     deliveryZones,
+    placeAddressFieldSql,
+    places,
     shippingMethods,
 } from "@scalius/database/schema";
 import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "@scalius/shared/money";
@@ -51,6 +52,7 @@ import {
     type DeliveryDestination,
     type DeliveryRegionRow,
 } from "./zone-match";
+import { addressPlaceCountrySql } from "./places";
 
 type Statement = BatchItem<"sqlite">;
 
@@ -427,8 +429,8 @@ export interface DeliveryZonesView {
 }
 
 export async function listDeliveryZones(db: Database, decimalPlaces: number): Promise<DeliveryZonesView> {
-    const parent = alias(deliveryLocations, "parent_location");
-    const grandparent = alias(deliveryLocations, "grandparent_location");
+    const parent = alias(places, "parent_location");
+    const grandparent = alias(places, "grandparent_location");
     const [zones, regions, locations, rates, pickup] = await Promise.all([
         db.select().from(deliveryZones).orderBy(asc(deliveryZones.sortOrder), asc(deliveryZones.createdAt)),
         db.select().from(deliveryZoneRegions)
@@ -436,18 +438,18 @@ export async function listDeliveryZones(db: Database, decimalPlaces: number): Pr
         db
             .select({
                 zoneId: deliveryZoneLocations.zoneId,
-                id: deliveryLocations.id,
-                name: deliveryLocations.name,
-                type: deliveryLocations.type,
+                id: places.id,
+                name: places.name,
+                type: placeAddressFieldSql,
                 parentName: parent.name,
                 grandparentName: grandparent.name,
             })
             .from(deliveryZoneLocations)
-            .innerJoin(deliveryLocations, eq(deliveryLocations.id, deliveryZoneLocations.locationId))
-            .leftJoin(parent, eq(parent.id, deliveryLocations.parentId))
+            .innerJoin(places, eq(places.id, deliveryZoneLocations.locationId))
+            .leftJoin(parent, eq(parent.id, places.parentId))
             .leftJoin(grandparent, eq(grandparent.id, parent.parentId))
-            .where(isNull(deliveryLocations.deletedAt))
-            .orderBy(asc(deliveryLocations.name)),
+            .where(isNull(places.deletedAt))
+            .orderBy(asc(places.name)),
         db.select().from(shippingMethods).where(isNull(shippingMethods.deletedAt))
             .orderBy(asc(shippingMethods.sortOrder), asc(shippingMethods.name)),
         pickupDocument.readDetailed(db, {}, { skipCache: true }),
@@ -769,12 +771,14 @@ async function assertLocationsAssignable(db: Database, zoneId: string | null, lo
     for (let start = 0; start < locationIds.length; start += 90) {
         rows.push(...await db
             .select({ zoneId: deliveryZones.id, zoneName: deliveryZones.name })
-            .from(deliveryLocations)
-            .leftJoin(deliveryZoneLocations, eq(deliveryZoneLocations.locationId, deliveryLocations.id))
+            .from(places)
+            .leftJoin(deliveryZoneLocations, eq(deliveryZoneLocations.locationId, places.id))
             .leftJoin(deliveryZones, eq(deliveryZones.id, deliveryZoneLocations.zoneId))
             .where(and(
-                inArray(deliveryLocations.id, locationIds.slice(start, start + 90)),
-                isNull(deliveryLocations.deletedAt),
+                inArray(places.id, locationIds.slice(start, start + 90)),
+                // A zone holds Bangladesh places: the addresses that carry place ids.
+                addressPlaceCountrySql,
+                isNull(places.deletedAt),
             )));
     }
     const fail = (message: string) => {
@@ -953,13 +957,14 @@ export async function applyDeliveryZoneTemplate(
         throw new ConflictError("Templates are for stores without shipping zones. Edit your zones instead.");
     }
     const candidates = await db
-        .select({ id: deliveryLocations.id, name: deliveryLocations.name, type: deliveryLocations.type })
-        .from(deliveryLocations)
+        .select({ id: places.id, name: places.name, type: placeAddressFieldSql })
+        .from(places)
         .where(and(
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
-            inArray(deliveryLocations.type, ["city", "zone"]),
-            sql`lower(trim(${deliveryLocations.name})) IN ('dhaka', 'savar', 'gazipur', 'narayanganj', 'keraniganj')`,
+            addressPlaceCountrySql,
+            eq(places.isActive, true),
+            isNull(places.deletedAt),
+            inArray(places.level, [1, 2]),
+            sql`lower(trim(${places.name})) IN ('dhaka', 'savar', 'gazipur', 'narayanganj', 'keraniganj')`,
         ));
     const named = (names: readonly string[], type?: "city") =>
         candidates.filter((row) => names.includes(row.name.trim().toLowerCase()) && (!type || row.type === type));

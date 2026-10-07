@@ -4,7 +4,8 @@
 // sign-in channel.
 
 import type { Database } from "@scalius/database/client";
-import { deliveryLocations, shippingMethods } from "@scalius/database/schema";
+import { places, shippingMethods } from "@scalius/database/schema";
+import { PLACE_ADDRESS_COUNTRY } from "@scalius/shared/places";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { mergeReadiness, readiness, type ReadinessIssue } from "@scalius/shared/readiness";
@@ -38,13 +39,15 @@ export async function getCheckoutDeliveryReadiness(
         shippingConditions.push(notInArray(shippingMethods.id, excludedShippingMethodIds));
     }
 
+    // An active thana (level 2) under an active Bangladesh city (level 1).
     const zoneConditions: SQL[] = [
-        eq(deliveryLocations.type, "zone"),
-        eq(deliveryLocations.isActive, true),
-        isNull(deliveryLocations.deletedAt),
+        eq(places.countryCode, PLACE_ADDRESS_COUNTRY),
+        eq(places.level, 2),
+        eq(places.isActive, true),
+        isNull(places.deletedAt),
     ];
     if (excludedDeliveryLocationIds.length > 0) {
-        zoneConditions.push(notInArray(deliveryLocations.id, excludedDeliveryLocationIds));
+        zoneConditions.push(notInArray(places.id, excludedDeliveryLocationIds));
     }
 
     const excludedCityPredicate: SQL = excludedDeliveryLocationIds.length > 0
@@ -53,9 +56,9 @@ export async function getCheckoutDeliveryReadiness(
     zoneConditions.push(sql`
         EXISTS (
             SELECT 1
-            FROM delivery_locations city
-            WHERE city.id = ${deliveryLocations.parentId}
-              AND city.type = 'city'
+            FROM places city
+            WHERE city.id = ${places.parentId}
+              AND city.level = 1
               AND city.is_active = 1
               AND city.deleted_at IS NULL
               ${excludedCityPredicate}
@@ -69,8 +72,8 @@ export async function getCheckoutDeliveryReadiness(
             .where(and(...shippingConditions))
             .limit(1),
         db
-            .select({ id: deliveryLocations.id })
-            .from(deliveryLocations)
+            .select({ id: places.id })
+            .from(places)
             .where(and(...zoneConditions))
             .limit(1),
     ]);

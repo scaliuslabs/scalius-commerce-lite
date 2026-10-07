@@ -50,9 +50,9 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       credentials: JSON.stringify(credentials), config: JSON.stringify(config),
       lastTestAttemptAt: now, lastTestSuccessAt: now, lastTestSuccessFingerprint: fingerprint,
     });
-    await db.insert(schema.deliveryLocations).values([
-      { id: "city_local", name: "Synthetic City", type: "city", externalIds: '{"pathao":"1"}', metadata: "{}" },
-      { id: "zone_local", name: "Synthetic Zone", type: "zone", parentId: "city_local", externalIds: '{"pathao":"2"}', metadata: "{}" },
+    await db.insert(schema.places).values([
+      { id: "city_local", name: "Synthetic City", countryCode: "BD", level: 1, externalIds: '{"pathao":"1"}', metadata: "{}" },
+      { id: "zone_local", name: "Synthetic Zone", countryCode: "BD", level: 2, parentId: "city_local", externalIds: '{"pathao":"2"}', metadata: "{}" },
     ]);
     await db.insert(schema.products).values({ id: "product_local", name: "Synthetic product", slug: "synthetic-product", priceMinor: 10_000 });
     await db.insert(schema.productVariants).values({ id: "variant_local", productId: "product_local", sku: "SYNTHETIC-924", priceMinor: 10_000, isDefault: true, trackInventory: false });

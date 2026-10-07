@@ -46,9 +46,9 @@ const SEED = `
   INSERT INTO pages (id, title, slug, content, is_published, published_at) VALUES
     ('pg_soon', 'Soon', 'soon', '<p>s</p>', 1, ${FUTURE_PUBLISH_AT});
   INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES ('pg_post', 'article', 'Post', 'post', '<p>x</p>', 1);
-  INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-    VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1),
-           ('area_1', 'Banani', 'area', 'zone_1', '{}', '{}', 1);
+  INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+    VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1),
+           ('area_1', 'Banani', 'BD', 3, 'zone_1', '{}', '{}', 1);
   INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, kind, zone_id) VALUES ('m_ship', 'Standard', 6000, 'delivery', 'dz_bd');
   INSERT INTO analytics (id, name, type, is_active, use_partytown, config, location)
     VALUES ('an_1', 'Tag', 'custom', 1, 0, '<script>window.x=1</script>', 'head');

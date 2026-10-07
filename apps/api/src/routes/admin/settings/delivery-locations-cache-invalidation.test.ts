@@ -4,22 +4,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-
-  createLocation: vi.fn(),
-  deleteLocations: vi.fn(),
-  updateLocation: vi.fn(),
-  getLocationById: vi.fn(),
+  createPlace: vi.fn(),
+  deletePlaces: vi.fn(),
+  updatePlace: vi.fn(),
+  getPlaceById: vi.fn(),
   getCheckoutDeliveryReadiness: vi.fn(),
   resetPathaoImportProgress: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
-  countLocationDescendants: vi.fn(async () => new Map()),
-  createLocation: mocks.createLocation,
-  deleteLocations: mocks.deleteLocations,
-  getLocationById: mocks.getLocationById,
-  updateLocation: mocks.updateLocation,
+  countPlaceDescendants: vi.fn(async () => new Map()),
+  createPlace: mocks.createPlace,
+  deletePlaces: mocks.deletePlaces,
+  getPlaceById: mocks.getPlaceById,
+  updatePlace: mocks.updatePlace,
   getPathaoImportStatus: vi.fn(),
   processPathaoImportChunk: vi.fn(),
   resetPathaoImportProgress: mocks.resetPathaoImportProgress,
@@ -50,11 +49,14 @@ function createTestApp(db: Record<string, unknown> = {
     hasActiveDeliveryHierarchy: true,
     issues: [],
   });
-  mocks.createLocation.mockResolvedValue({
+  mocks.createPlace.mockResolvedValue({
     id: "loc_1",
     name: "Dhaka",
-    type: "city",
+    countryCode: "BD",
+    level: 1,
     parentId: null,
+    sourceKey: null,
+    source: null,
     externalIds: {},
     metadata: {},
     isActive: true,
@@ -88,7 +90,8 @@ describe("delivery location write behavior", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "Dhaka",
-          type: "city",
+          countryCode: "BD",
+          level: 1,
           parentId: null,
           externalIds: {},
           metadata: {},
@@ -119,7 +122,7 @@ describe("delivery location write behavior", () => {
       data: { message: "Import progress reset. You can start a fresh import." },
     });
     expect(mocks.resetPathaoImportProgress).toHaveBeenCalledWith(env.CACHE);
-    expect(mocks.getLocationById).not.toHaveBeenCalled();
+    expect(mocks.getPlaceById).not.toHaveBeenCalled();
   });
 
   it("trims location names at the request boundary", async () => {
@@ -132,7 +135,8 @@ describe("delivery location write behavior", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "  Dhaka  ",
-          type: "city",
+          countryCode: "BD",
+          level: 1,
           parentId: null,
         }),
       },
@@ -140,7 +144,7 @@ describe("delivery location write behavior", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.createLocation).toHaveBeenCalledWith(
+    expect(mocks.createPlace).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ name: "Dhaka" }),
     );
@@ -153,13 +157,13 @@ describe("delivery location write behavior", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "  ", type: "city", parentId: null }),
+        body: JSON.stringify({ name: "  ", countryCode: "BD", level: 1, parentId: null }),
       },
       env,
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.createLocation).not.toHaveBeenCalled();
+    expect(mocks.createPlace).not.toHaveBeenCalled();
   });
 
   it("rejects an indistinguishable active location under the same parent", async () => {
@@ -176,20 +180,20 @@ describe("delivery location write behavior", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: " dhaka ", type: "city", parentId: null }),
+        body: JSON.stringify({ name: " dhaka ", countryCode: "BD", level: 1, parentId: null }),
       },
       env,
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.createLocation).not.toHaveBeenCalled();
+    expect(mocks.createPlace).not.toHaveBeenCalled();
   });
 
   it("turns a concurrent identity-constraint race into a readable validation error", async () => {
     const { app, env } = createTestApp();
-    mocks.createLocation.mockRejectedValueOnce(
+    mocks.createPlace.mockRejectedValueOnce(
       new Error(
-        "D1_ERROR: UNIQUE constraint failed: index 'delivery_locations_active_city_name_uidx'",
+        "D1_ERROR: UNIQUE constraint failed: index 'places_active_root_name_uidx'",
       ),
     );
 
@@ -198,7 +202,7 @@ describe("delivery location write behavior", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Dhaka", type: "city", parentId: null }),
+        body: JSON.stringify({ name: "Dhaka", countryCode: "BD", level: 1, parentId: null }),
       },
       env,
     );
@@ -228,7 +232,8 @@ describe("delivery location write behavior", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "Dhanmondi",
-          type: "zone",
+          countryCode: "BD",
+          level: 2,
           parentId: "missing-city",
           isActive: true,
         }),
@@ -237,7 +242,7 @@ describe("delivery location write behavior", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.createLocation).not.toHaveBeenCalled();
+    expect(mocks.createPlace).not.toHaveBeenCalled();
   });
 
   it("bounds bulk deletion below D1's parameter ceiling", async () => {
@@ -294,6 +299,6 @@ describe("delivery location write behavior", () => {
         code: "VALIDATION_ERROR",
       },
     });
-    expect(mocks.deleteLocations).not.toHaveBeenCalled();
+    expect(mocks.deletePlaces).not.toHaveBeenCalled();
   });
 });

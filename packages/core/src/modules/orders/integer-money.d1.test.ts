@@ -42,8 +42,8 @@ function get(sql: string, ...params: string[]): Row {
 /** A 9.99 product at 12.5% off (৳9 each: BDT cash rounding), 10% zone tax on merchandise only. */
 function seedCatalog(pricesIncludeTax: boolean): void {
   sqlite!.exec(`
-    INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-    VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
+    INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+    VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1);
     INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
     INSERT OR REPLACE INTO tax_settings
       (id, enabled, tax_shipping, default_tax_class_id, display_label, version)
@@ -282,8 +282,8 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     // A staff order is cash on delivery, which collects whole taka: a paisa
     // total is refused at the quote, before anything commits.
     sqlite!.exec(`
-      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
-      VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
+      INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+      VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1);
     `);
     await expect(quoteManualOrder(db, manualOrder({ items: [{ productId: "tee", variantId: "tee_sku", quantity: 1 }], discountAmount: 0 })))
       .rejects.toMatchObject({ status: 400, message: expect.stringMatching(/^Cash on delivery collects whole taka, so 68\.74 BDT/) });

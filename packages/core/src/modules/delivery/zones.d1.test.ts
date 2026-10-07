@@ -23,13 +23,13 @@ const BANGLADESH = [{ countryCode: "BD" }];
 function seedLocations() {
     const harness = createSqliteD1Database();
     harness.sqlite.exec(`
-        INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-            ('dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
-            ('mirpur', 'Mirpur', 'zone', 'dhaka', '{}', '{}', 1),
-            ('pallabi', 'Pallabi', 'area', 'mirpur', '{}', '{}', 1),
-            ('savar', 'Savar', 'zone', 'dhaka', '{}', '{}', 1),
-            ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1),
-            ('agrabad', 'Agrabad', 'zone', 'ctg', '{}', '{}', 1);
+        INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+            ('dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1),
+            ('mirpur', 'Mirpur', 'BD', 2, 'dhaka', '{}', '{}', 1),
+            ('pallabi', 'Pallabi', 'BD', 3, 'mirpur', '{}', '{}', 1),
+            ('savar', 'Savar', 'BD', 2, 'dhaka', '{}', '{}', 1),
+            ('ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1),
+            ('agrabad', 'Agrabad', 'BD', 2, 'ctg', '{}', '{}', 1);
     `);
     return harness;
 }
@@ -413,9 +413,9 @@ describe("D1 cost of zones by region (MARKETS-DESIGN step 3b)", () => {
             beforeBatch: () => { batches += 1; },
         });
         harness.sqlite.exec(`
-            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
-                ('dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('mirpur', 'Mirpur', 'zone', 'dhaka', '{}', '{}', 1),
-                ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1), ('agrabad', 'Agrabad', 'zone', 'ctg', '{}', '{}', 1);
+            INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active) VALUES
+                ('dhaka', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('mirpur', 'Mirpur', 'BD', 2, 'dhaka', '{}', '{}', 1),
+                ('ctg', 'Chattogram', 'BD', 1, NULL, '{}', '{}', 1), ('agrabad', 'Agrabad', 'BD', 2, 'ctg', '{}', '{}', 1);
             INSERT INTO delivery_zones (id, name) VALUES ('dz_dhaka', 'Inside Dhaka'), ('dz_bd', 'Bangladesh');
             INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES ('dhaka', 'dz_dhaka');
             INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd');
