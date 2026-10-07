@@ -116,16 +116,18 @@ if (Astro.request.method === "POST") {
         });
       }
     }
-  } else if ((posted?.intent === "remove-address" || posted?.intent === "default-address") && posted.draft.addressId) {
+  } else if ((posted?.intent === "remove-address" || posted?.intent === "default-address" || posted?.intent === "default-billing-address") && posted.draft.addressId) {
     saved = await changeAccountAddresses(Astro.request, {
-      action: posted.intent === "remove-address" ? "delete" : "default",
+      action: posted.intent === "remove-address" ? "delete" : posted.intent === "default-address" ? "default" : "default_billing",
       addressId: posted.draft.addressId,
     });
   } else {
     formMessage = "Something went wrong. Try again.";
   }
   if (saved?.ok) {
-    const flag = posted!.intent === "remove-address" ? "removed" : posted!.intent === "default-address" ? "default" : posted!.intent!;
+    const flag = posted!.intent === "remove-address" ? "removed"
+      : posted!.intent === "default-address" ? "default"
+        : posted!.intent === "default-billing-address" ? "billing" : posted!.intent!;
     return new Response(null, { status: 303, headers: { Location: `/account/profile?saved=${flag}`, ...noStore } });
   }
   if (saved && !saved.ok) {
@@ -157,7 +159,7 @@ const countries = storeShippingCountries(layoutData?.markets);
 const newAddressCountry = defaultShippingCountry(layoutData?.markets, null, countries);
 const addresses = addressesRead.ok ? addressesRead.data : null;
 const addressFailed = posted?.intent === "address";
-const removeFailed = posted?.intent === "remove-address" || posted?.intent === "default-address";
+const removeFailed = posted?.intent === "remove-address" || posted?.intent === "default-address" || posted?.intent === "default-billing-address";
 // The form that failed (posted again with its errors); every other form starts from its saved address.
 const failedAddressId = addressFailed ? posted!.draft.addressId : null;
 const forms = customer && addresses
@@ -261,8 +263,13 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
               <div class="grid gap-3 sm:grid-cols-2">
                 {addresses.map((address) => (
                   <article class="rounded-lg border border-border p-4" aria-label={address.isDefault ? "Default address" : "Address"}>
-                    {address.isDefault && <span class={accountPill("neutral")}>Default</span>}
-                    <div class:list={["space-y-0.5 break-words text-sm text-foreground", address.isDefault && "mt-3"]}>
+                    {(address.isDefault || address.isDefaultBilling) && (
+                      <div class="flex flex-wrap gap-1.5">
+                        {address.isDefault && <span class={accountPill("neutral")}>Default</span>}
+                        {address.isDefaultBilling && <span class={accountPill("neutral")}>Default billing</span>}
+                      </div>
+                    )}
+                    <div class:list={["space-y-0.5 break-words text-sm text-foreground", (address.isDefault || address.isDefaultBilling) && "mt-3"]}>
                       <p class="font-medium">{address.name ?? customer.name}</p>
                       {address.company && <p>{address.company}</p>}
                       {formatAddressLines(address).map((line) => <p>{line}</p>)}
@@ -277,6 +284,13 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                             <input type="hidden" name="intent" value="default-address" />
                             <input type="hidden" name="addressId" value={address.id} />
                             <button type="submit" class={ui.textButton}>Make default</button>
+                          </form>
+                        )}
+                        {!address.isDefaultBilling && (
+                          <form method="post" action="/account/profile">
+                            <input type="hidden" name="intent" value="default-billing-address" />
+                            <input type="hidden" name="addressId" value={address.id} />
+                            <button type="submit" class={ui.textButton}>Use for billing</button>
                           </form>
                         )}
                       </div>

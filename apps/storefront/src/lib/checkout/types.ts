@@ -67,6 +67,8 @@ export interface CheckoutConfig {
   checkoutMode: string;
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
+  /** Settings → Checkout: every order asks for a full billing address (absent: off). */
+  requireFullBillingAddress?: boolean;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   checkoutReadiness?: Readiness & {

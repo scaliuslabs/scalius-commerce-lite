@@ -13,8 +13,8 @@ import {
 import type { CustomerAddress } from "@/lib/api/customer-auth";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 
-export type ProfileIntent = "name" | "address" | "remove-address" | "default-address";
-export type ProfileSavedFlag = "name" | "address" | "removed" | "default";
+export type ProfileIntent = "name" | "address" | "remove-address" | "default-address" | "default-billing-address";
+export type ProfileSavedFlag = "name" | "address" | "removed" | "default" | "billing";
 
 /** One address form: the address being edited (none: a new one) and its fields. */
 export interface AddressDraft {
@@ -43,7 +43,7 @@ export interface ProfileForm {
 
 type Location = { id: string; name: string };
 
-const INTENTS: readonly ProfileIntent[] = ["name", "address", "remove-address", "default-address"];
+const INTENTS: readonly ProfileIntent[] = ["name", "address", "remove-address", "default-address", "default-billing-address"];
 const MAX_FIELD = 500;
 const ADDRESS_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -162,6 +162,7 @@ const SAVED_TEXT: Record<ProfileSavedFlag, string> = {
   address: "Address saved.",
   removed: "Address removed.",
   default: "Default address changed.",
+  billing: "Billing address changed.",
 };
 
 export function readProfileSavedFlag(search: URLSearchParams): ProfileSavedFlag | null {

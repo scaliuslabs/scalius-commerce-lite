@@ -9,6 +9,7 @@
  * Nothing buyer-specific travels in a URL; the checkout id makes a resubmitted
  * form (refresh, double tap) the same order.
  */
+import { BILLING_ADDRESS_FIELDS, billingQuoteFields, type BillingAddressField } from "./billing-address";
 import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -49,6 +50,10 @@ export interface QuickCheckoutForm {
   zone: string;
   /** Another country's address fields (empty for Bangladesh). */
   foreign: Record<ForeignAddressField, string>;
+  /** The billing address as posted (only what checkout asked for is sent: `checkoutBillingFields`). */
+  billing: Record<BillingAddressField | "billingCountryCode", string>;
+  /** "Same as shipping address" ticked (a shipped order, when the merchant requires a full billing address). */
+  billingSameAsShipping: boolean;
   shippingLocation: string;
   notes: string;
   discountCode: string;
@@ -105,6 +110,10 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     zone: id(form, "zone"),
     foreign: Object.fromEntries(Object.entries(readForeignAddressFields((field) => form.get(field)))
       .map(([field, value]) => [field, value ?? ""])) as Record<ForeignAddressField, string>,
+    billing: Object.fromEntries(["billingCountryCode", ...BILLING_ADDRESS_FIELDS]
+      .map((field) => [field, text(form, field, field === "billingAddress" ? 500 : 200)])) as QuickCheckoutForm["billing"],
+    // A first visit has no post yet: the box starts ticked.
+    billingSameAsShipping: form.has("intent") ? form.get("billingSameAsShipping") === "1" : true,
     shippingLocation: id(form, "shippingLocation"),
     notes: text(form, "notes", 500),
     discountCode: text(form, "discountCode", 50).toUpperCase(),
@@ -269,6 +278,8 @@ export function quickCheckoutQuoteInput(
         : { city: form.city, zone: form.zone }
       : {}),
     ...(mode === "none" ? {} : { shippingMethodId: rateId }),
+    // Nothing physical: taxed at the billing country, region and postal code.
+    ...billingQuoteFields(mode, form.billing),
     discountCodes: form.discountCode ? JSON.stringify([form.discountCode]) : "[]",
     ...(customerPhone ? { customerPhone } : {}),
   };
@@ -326,6 +337,9 @@ export function quickCheckoutOrderForm(
         }
         : { shippingAddress: form.shippingAddress, city: form.city, zone: form.zone }
       : {}),
+    // The billing address as posted: the order keeps only what checkout asked for.
+    ...Object.fromEntries(Object.entries(form.billing).filter(([, value]) => value)),
+    ...(form.billingSameAsShipping ? { billingSameAsShipping: "1" } : {}),
   };
   for (const [name, value] of Object.entries(values)) data.set(name, value);
   return data;

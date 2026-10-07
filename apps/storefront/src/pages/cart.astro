@@ -11,6 +11,7 @@ import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
 import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
 import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
+import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
 import {
   LOCATION_COUNTRY,
   defaultShippingCountry,
@@ -180,6 +181,7 @@ if (Astro.request.method === "POST" && codOnly) {
           Astro.request.headers.get("cookie"),
         ),
         waitUntil: (promise) => Astro.locals.cfContext.waitUntil(promise),
+        requireFullBillingAddress: checkoutConfig.requireFullBillingAddress === true,
       });
 
       if (
@@ -560,8 +562,6 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                     }}
                     optional={phoneOptionalForDigital ? { label: copy.customerPhoneOptionalLabel, help: copy.customerPhoneOptionalHelp } : undefined}
                   />
-                  {/* The order's country when nothing ships: the market's (the contact rule reads it). */}
-                  {phoneOptionalForDigital && <input type="hidden" name="orderCountryCode" value={shippingCountry} />}
                 </div>
 
                 {
@@ -744,6 +744,30 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                 goneText={copy.deliveryOptionGoneText}
               />
             </section>
+
+            {/* The billing address (Shopify's rule): asked when nothing ships, or when the merchant requires one. */}
+            <BillingAddressFields
+              countries={shippingCountries}
+              selected={shippingCountry}
+              requireFull={checkoutConfig.requireFullBillingAddress === true}
+              language={checkoutLanguageBaseCode(lang.code)}
+              labels={{
+                heading: copy.billingHeadingText,
+                sameAsShipping: copy.billingSameAsShippingText,
+                help: copy.billingHelpText,
+                country: copy.shippingCountryLabel,
+                billingName: copy.billingNameLabel,
+                billingCompany: copy.billingCompanyLabel,
+                billingAddress: copy.billingAddressLabel,
+                billingAddressLine2: copy.shippingAddressLine2Label,
+                billingDependentLocality: copy.shippingDependentLocalityLabel,
+                billingLocality: copy.shippingLocalityLabel,
+                billingAdminArea: copy.shippingAdminAreaLabel,
+                billingPostalCode: copy.shippingPostalCodeLabel,
+              }}
+              labelClass={labelClass}
+              fieldClass={fieldClass}
+            />
 
             {
               lang.fieldVisibility.showOrderNotesField && (
@@ -979,6 +1003,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     refreshCartBlockingState,
     resumeCartPageFromHistory,
     updateCheckoutButtonState,
+    updateTotals,
   } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import {
@@ -994,6 +1019,8 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     checkoutAddressForMode,
     readCheckoutDeliveryMode,
   } from "@/lib/checkout/delivery-mode";
+  import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
+  import { enhanceBillingAddress } from "@/lib/checkout/billing-address-rules";
   import { formatMoney } from "@/lib/currency";
   import { browserApiUrl } from "@/lib/api/browser-url";
   import {
@@ -1174,10 +1201,13 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   // Customer accounts' opt-in: a cart of digital or service lines may go
   // without a phone (email is then required). Off: the page stays as rendered.
   const contactConfig = window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined;
+  // Settings → Checkout: every order asks for a full billing address (Shopify's option).
+  const requireFullBillingAddress = contactConfig?.requireFullBillingAddress === true;
   const syncContactNeeds = () => {
     const identity = contactConfig?.customerIdentity;
     if (!identity?.phoneOptionalForDigital) return;
-    const orderCountry = document.querySelector<HTMLInputElement>('input[name="orderCountryCode"]')?.value || null;
+    // An order with nothing to ship is placed in its billing country.
+    const orderCountry = findNamedCheckoutControl(document, "billingCountryCode")?.value || null;
     applyCheckoutContactNeeds(checkoutContactNeeds({
       identity,
       lines: Object.values(cartStore.get().items),
@@ -1197,10 +1227,23 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   };
   syncDeliveryPath();
   document.addEventListener("cart-updated", syncDeliveryPath, { signal: cartPageSignal });
+  // The billing country's rules (full, or the minimal region and postal code)
+  // follow the country and the path.
+  enhanceBillingAddress(document, {
+    readMode: () => (requireFullBillingAddress ? "full" : "minimal"),
+    signal: cartPageSignal,
+  });
   document.getElementById("checkoutForm")?.addEventListener(
     "change",
     (event) => {
-      if ((event.target as HTMLInputElement | null)?.name === "deliveryMode") syncDeliveryPath();
+      const name = (event.target as HTMLInputElement | null)?.name;
+      if (name === "deliveryMode") syncDeliveryPath();
+      // A cart with nothing physical is taxed at its billing country, region
+      // and postal code, and placed in that country (the contact rule reads it).
+      if (name === "billingCountryCode" || name === "billingAdminArea" || name === "billingPostalCode") {
+        if (name === "billingCountryCode") syncContactNeeds();
+        if (readCheckoutDeliveryMode() === "none") void updateTotals();
+      }
     },
     { signal: cartPageSignal },
   );
@@ -2016,6 +2059,10 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
             zoneName: locationValue("zoneName"),
             areaName: locationValue("areaName"),
           }));
+          // The billing address: only what checkout asked for (Shopify's rule).
+          const billingFields = checkoutBillingFields(deliveryMode, requireFullBillingAddress, checkoutData);
+          for (const field of ["billingSameAsShipping", "billingCountryCode", ...BILLING_ADDRESS_FIELDS]) delete checkoutData[field];
+          for (const [field, value] of Object.entries(billingFields)) checkoutData[field] = String(value);
           for (const field of Object.keys(checkoutData)) {
             if (checkoutData[field] === null || checkoutData[field] === undefined) delete checkoutData[field];
           }

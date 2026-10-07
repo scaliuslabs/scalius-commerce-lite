@@ -14,6 +14,7 @@ import { CART_RULES_REASON } from "@/lib/checkout/tax-quote-error-contract";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "@/lib/checkout/shipping-country";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
+import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
 import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import {
@@ -30,6 +31,8 @@ import {
 type ProcessOrderOptions = {
   customerSessionToken?: string | null;
   waitUntil?: (promise: Promise<unknown>) => void;
+  /** Settings → Checkout: every order asks for a full billing address. */
+  requireFullBillingAddress?: boolean;
 };
 
 /**
@@ -349,6 +352,12 @@ export async function processOrder(
       zoneName: delivery?.zoneName,
       areaName: delivery?.areaName,
     });
+    // Only what checkout asked for (Shopify's rule): "same as shipping", or the billing address.
+    const billing = checkoutBillingFields(mode, options.requireFullBillingAddress === true, {
+      billingSameAsShipping: formData.get("billingSameAsShipping"),
+      billingCountryCode: formData.get("billingCountryCode"),
+      ...Object.fromEntries(BILLING_ADDRESS_FIELDS.map((field) => [field, formData.get(field)])),
+    });
     const payload: CreateOrderPayload = {
       checkoutRequestId,
       expectedQuoteFingerprint,
@@ -357,6 +366,7 @@ export async function processOrder(
       customerEmail,
       customerWhatsapp,
       ...address,
+      ...billing,
       notes,
       items: processedItems,
       shippingCharge: mode === "none" ? 0 : delivery?.shippingCharge ?? 0,

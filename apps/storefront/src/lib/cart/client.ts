@@ -1,4 +1,5 @@
 // src/lib/cart/client.ts
+import { billingQuoteFields } from "@/lib/checkout/billing-address";
 import {
   cartStore,
   hydrateCartFromStorage,
@@ -527,7 +528,17 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
     discountCodes: cartStore.get().discountCodes,
     customerPhone: formCanonicalPhoneValue() || undefined,
   };
-  if (mode === "none") return common;
+  // Nothing physical: taxed at the billing country, region and postal code (MARKETS-DESIGN, 0119).
+  if (mode === "none") {
+    return {
+      ...common,
+      ...billingQuoteFields(mode, {
+        billingCountryCode: formStringValue("billingCountryCode"),
+        billingAdminArea: formStringValue("billingAdminArea"),
+        billingPostalCode: formStringValue("billingPostalCode"),
+      }),
+    };
+  }
   if (mode === "pickup") {
     return method?.kind === "pickup" ? { ...common, shippingMethodId: method.id } : null;
   }
