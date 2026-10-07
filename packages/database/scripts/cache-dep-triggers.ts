@@ -103,6 +103,8 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_market_presences_locales_ins: "0121_translations",
   cdep_market_presences_locales_del: "0121_translations",
   cdep_market_presences_locales_upd: "0121_translations",
+  // A market's currency (0123) is a visible column of its row.
+  cdep_markets_upd: "0123_market_currencies",
 };
 
 /**

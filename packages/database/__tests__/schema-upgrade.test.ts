@@ -578,6 +578,17 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 69,
         postgresStatements: 69,
       },
+      {
+        version: 123,
+        name: "0123_market_currencies",
+        // The market's three currency columns and the as-of backfill, the
+        // currency guards, the checkout fence and the market's cache trigger
+        // (each re-created on SQLite; the fence's function replaced on
+        // PostgreSQL), the four customer spend triggers (re-created on
+        // SQLite, their functions replaced on PostgreSQL) and the ledger.
+        sqliteStatements: 19,
+        postgresStatements: 14,
+      },
     ]);
   });
 
@@ -748,6 +759,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 119, name: "0119_billing_addresses" },
           { version: 120, name: "0120_price_lists" },
           { version: 121, name: "0121_translations" },
+          { version: 123, name: "0123_market_currencies" },
         ],
       });
     } finally {

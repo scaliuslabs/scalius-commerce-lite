@@ -855,6 +855,13 @@
       "when": 1791370000000,
       "tag": "0121_translations",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "6",
+      "when": 1791390000000,
+      "tag": "0123_market_currencies",
+      "breakpoints": true
     }
   ]
 }

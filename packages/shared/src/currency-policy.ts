@@ -158,11 +158,19 @@ export function isWholeUnitIncrement(code: string, incrementMinor: number): bool
 // ---------------------------------------------------------------------------
 
 /**
- * What cash on delivery can collect, in minor units: riders and couriers in
- * Bangladesh collect whole taka (100). Every other currency collects its
- * minor unit until a market opts into its CLDR cash rounding
- * (`cashIncrementMinor`), so no store's COD changes with this table.
+ * What cash collection (cash on delivery, cash at a counter) can take, in
+ * minor units (MARKETS-DESIGN step 6): riders and couriers in Bangladesh
+ * collect whole taka (100); every other currency collects its CLDR cash
+ * increment (CHF and CAD 0.05, DKK 0.50, SEK whole kronor), else its minor
+ * unit. An amount off it is refused before an order commits (the amount
+ * codec), never rounded silently.
  */
+export function cashIncrementMinor(code: string): number {
+  const normalized = code.trim().toUpperCase();
+  return normalized === "BDT" ? 10 ** currencyExponent("BDT") : currencyPolicy(normalized).cashIncrementMinor;
+}
+
+/** Cash on delivery's increment: the currency's cash increment (`cashIncrementMinor`). */
 export function cashOnDeliveryIncrementMinor(code: string): number {
-  return code.trim().toUpperCase() === "BDT" ? 10 ** currencyExponent("BDT") : 1;
+  return cashIncrementMinor(code);
 }

@@ -59,6 +59,11 @@ export interface PublicMarket {
   handle: string;
   name: string;
   isBackup: boolean;
+  /**
+   * The currency it sells in when it is not the shop currency (MARKETS-DESIGN
+   * step 6); absent: the shop currency.
+   */
+  currencyCode?: string;
   /** ISO 3166-1 alpha-2 codes, sorted. */
   countries: string[];
   /** Its subfolder presences; the backup market's include the root. */
