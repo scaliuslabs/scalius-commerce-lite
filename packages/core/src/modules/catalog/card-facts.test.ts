@@ -171,3 +171,17 @@ describe("card facts", () => {
         expect(byId.get("p_laptop")?.productCondition).toBeNull();
     });
 });
+
+describe("card facts statement shape", () => {
+    // D1 plans each statement within a fixed memory budget. An inlined card_ids
+    // query repeated in every term exhausted it on a real catalogue
+    // (SQLITE_NOMEM, live homepage down), though local SQLite has no such cap.
+    it("materializes the card ids once, for id lists and for embedded queries", () => {
+        const { db } = createSqliteD1Database();
+        const byIds = selectProductCardFactRows(db, ["prod_a", "prod_b"]).toSQL().sql;
+        const byQuery = selectProductCardFactRows(db, db.select({ id: products.id }).from(products)).toSQL().sql;
+        for (const statement of [byIds, byQuery]) {
+            expect(statement).toMatch(/card_ids\(id\) AS MATERIALIZED \(/);
+        }
+    });
+});

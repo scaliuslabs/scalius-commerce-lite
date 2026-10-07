@@ -92,15 +92,19 @@ export interface ProductCardFactRow {
 /**
  * The product ids, written once as the `card_ids` CTE: a caller's id query
  * can be large (a home list's pricing projection), and inlining it in each
- * of the four terms can pass D1's statement length limit.
+ * of the four terms can pass D1's statement length limit. It is
+ * `MATERIALIZED`: left to the planner, SQLite may still inline it into every
+ * term, and on a real catalogue D1 then runs out of memory planning the
+ * statement (SQLITE_NOMEM took the live homepage down). PostgreSQL 12+ and
+ * libSQL accept the same syntax.
  */
 function cardIdsCte(productIds: readonly string[] | SQLWrapper): SQL {
     if (Array.isArray(productIds)) {
         const ids = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
-        return sql`card_ids(id) AS (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
+        return sql`card_ids(id) AS MATERIALIZED (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
     }
     // An embedded query renders parenthesized, which a CTE body cannot be.
-    return sql`card_ids(id) AS (SELECT * FROM ${productIds as SQLWrapper})`;
+    return sql`card_ids(id) AS MATERIALIZED (SELECT * FROM ${productIds as SQLWrapper})`;
 }
 
 function idScope(column: string): SQL {
