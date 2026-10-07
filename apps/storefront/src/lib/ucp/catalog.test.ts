@@ -207,6 +207,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       search: "khaki",
       category: "shoes",
@@ -402,6 +404,8 @@ describe("UCP catalog mapping", () => {
     );
 
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       search: "shoes",
     });
@@ -429,6 +433,8 @@ describe("UCP catalog mapping", () => {
     );
 
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       cursor: "feed-v1.abd.cHJvZF8y",
       limit: 5,
       search: "khaki",
@@ -486,6 +492,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       ids: "var_1,SKU-BLUE",
     });
@@ -509,6 +517,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       ids: "khaki-shoes",
     });
@@ -556,6 +566,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       ids: "khaki-shoes",
     });

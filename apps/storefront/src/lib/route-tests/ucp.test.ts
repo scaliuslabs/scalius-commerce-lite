@@ -274,6 +274,8 @@ describe("UCP storefront routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       search: "khaki",
     });
@@ -351,6 +353,8 @@ describe("UCP storefront routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      // UCP lists the AI agents channel's products (MARKETS-DESIGN D6).
+      channel: "sc_agents",
       limit: 10,
       ids: "khaki-shoes",
     });

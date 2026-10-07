@@ -172,6 +172,18 @@ describe("Facebook product feed route", () => {
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
+  it("reads the Google feed from the Google sales channel", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+    });
+
+    const response = await GOOGLE_FEED_GET(context("https://storefront.example.test/api/product-feed.xml"));
+
+    expect(response.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ channel: "sc_google", limit: 100 });
+  });
+
   it("keeps legitimate empty catalogs as empty XML", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [],
@@ -185,7 +197,8 @@ describe("Facebook product feed route", () => {
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     expect(response.headers.get("Cache-Control")).toContain("max-age=3600");
     expect(body).toContain("<rss");
-    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ limit: 100 });
+    // The Meta feed lists what the Meta sales channel publishes (MARKETS-DESIGN D6).
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ channel: "sc_meta", limit: 100 });
   });
 
   it("starts at the supplied cursor and returns an opaque next continuation link", async () => {
@@ -214,6 +227,7 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledTimes(1);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      channel: "sc_meta",
       cursor: "feed-v1.abc.cHJvZF9jdXJyZW50",
       limit: 1,
     });
@@ -840,7 +854,7 @@ describe("Facebook product feed route", () => {
     expect(firstBody).toContain("<g:id>SKU-A</g:id>");
     expect(firstBody).toContain("<g:id>SKU-B</g:id>");
     expect(firstBody).toContain("<g:id>SKU-C</g:id>");
-    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ limit: 2 });
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ channel: "sc_meta", limit: 2 });
   });
 
   it("keeps product-level rows when the feed variant strategy is products", async () => {
@@ -1740,6 +1754,7 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(mocks.getFeedProducts).toHaveBeenLastCalledWith({
+      channel: "sc_meta",
       cursor: "feed-v1.abc.cHJvZF8x",
       limit: 100,
     });

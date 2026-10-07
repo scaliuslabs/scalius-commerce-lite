@@ -75,6 +75,8 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 - Manual adjustments, stocktakes and scanner writes take an optional `locationId` (default when omitted), which is part of the operation request hash. A stocktake counts that location.
 - Product-editor stock edits and licence-key pools move stock at the default location. `assertSimpleConversionStockAtDefaultLocation()` (`product-admin`) blocks turning a simple product into an optioned one while its SKU holds units elsewhere.
 - Archive a location only when it is not the default, holds no units, has no open order set to ship from it, and has no open purchase order or transfer.
+- A new location without a country takes the store's (the backup market's). Migration 0122 gave the untouched default location the store's country.
+- Sales channels sell the on-hand of their linked locations (`sales_channel_locations`, MARKETS-DESIGN D6). A new location is linked to every channel. A regular reservation with `salesChannelId` (checkout) also needs `stock - reserved_stock` minus the SKU's levels at the channel's unlinked locations to cover the quantity; reservations themselves stay location-free.
 
 ## Adjustments
 
