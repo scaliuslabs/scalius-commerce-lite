@@ -51,6 +51,13 @@ const checkoutConfigSchema = z.object({
   checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
   partialPaymentEnabled: z.boolean(),
   partialPaymentAmount: z.number().min(0),
+  /**
+   * Settings → Checkout: every order asks for a full billing address. Off: an
+   * order that ships is billed at its shipping address, and one that ships
+   * nothing asks only its country plus the region and postal code its rules
+   * require.
+   */
+  requireFullBillingAddress: z.boolean(),
   allowedCountries: z.array(z.string()).max(250),
   allowedCountriesMode: z.enum(["include", "exclude"]),
   currency: z.object({

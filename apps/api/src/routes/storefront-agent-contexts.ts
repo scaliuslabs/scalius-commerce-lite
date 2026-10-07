@@ -45,6 +45,7 @@ import {
   successEnvelope,
 } from "../schemas/responses";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { billingAddressBodyShape } from "../schemas/billing-address";
 import { getOptionalExecutionContext } from "../utils/execution-context";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 import { BUILT_IN_PAYMENT_PROVIDERS, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
@@ -257,6 +258,20 @@ const checkoutSubmitSchema = z.object({
   shippingDependentLocality: z.string().trim().max(120).nullable().optional().openapi({
     description: "Outside Bangladesh: the district or suburb, when the country's address rules ask for it.",
   }),
+  billingSameAsShipping: billingAddressBodyShape.billingSameAsShipping,
+  billingCountryCode: billingAddressBodyShape.billingCountryCode.openapi({
+    description: "A cart that ships: the billing country of a separate billing address. A cart with nothing physical is billed and taxed at the context's delivery country, region and postal code (storefront.delivery.set) instead.",
+  }),
+  billingName: billingAddressBodyShape.billingName,
+  billingCompany: billingAddressBodyShape.billingCompany,
+  billingAddress: billingAddressBodyShape.billingAddress.openapi({
+    description: "The billing street line: needed when the store requires a full billing address, or with billingSameAsShipping false.",
+  }),
+  billingAddressLine2: billingAddressBodyShape.billingAddressLine2,
+  billingDependentLocality: billingAddressBodyShape.billingDependentLocality,
+  billingLocality: billingAddressBodyShape.billingLocality,
+  billingAdminArea: billingAddressBodyShape.billingAdminArea,
+  billingPostalCode: billingAddressBodyShape.billingPostalCode,
   notes: z.string().trim().max(500).nullable(),
   paymentMethod: z.string().max(160).refine(isPaymentMethodId, "Unknown payment method").openapi({
     description: "Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.",
@@ -312,9 +327,10 @@ const profileUpdateSchema = z.object({
 /** One address-book action of the authorized customer (MARKETS-DESIGN D7); a buyer never skips the country rules. */
 const addressBookActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("list") }).strict(),
-  z.object({ action: z.literal("create"), address: addressInputSchema.extend({ isDefault: z.boolean().optional() }).strict() }).strict(),
-  z.object({ action: z.literal("update"), addressId: z.string().min(1).max(64), address: addressInputSchema.extend({ isDefault: z.boolean().optional() }).strict() }).strict(),
+  z.object({ action: z.literal("create"), address: addressInputSchema.extend({ isDefault: z.boolean().optional(), isDefaultBilling: z.boolean().optional() }).strict() }).strict(),
+  z.object({ action: z.literal("update"), addressId: z.string().min(1).max(64), address: addressInputSchema.extend({ isDefault: z.boolean().optional(), isDefaultBilling: z.boolean().optional() }).strict() }).strict(),
   z.object({ action: z.literal("set_default"), addressId: z.string().min(1).max(64) }).strict(),
+  z.object({ action: z.literal("set_default_billing"), addressId: z.string().min(1).max(64) }).strict(),
   z.object({ action: z.literal("delete"), addressId: z.string().min(1).max(64) }).strict(),
 ]);
 
@@ -624,7 +640,7 @@ const setDeliveryRoute = cartMutationRoute(
   z.object({
     revision: revisionSchema,
     countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/, "Use a two-letter ISO country code.").nullable().optional().openapi({
-      description: "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list).",
+      description: "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list). A cart with nothing physical is billed and taxed here (with the region and postal code).",
     }),
     cityId: z.string().trim().min(1).max(180).nullable(),
     zoneId: z.string().trim().min(1).max(180).nullable(),
@@ -916,7 +932,7 @@ const customerAddressesRoute = createRoute({
   operationId: "storefront.customer_addresses.manage",
   tags: ["Storefront Agent Contexts"],
   summary: "List or change the authorized customer's address book",
-  description: "One action: list, create, update, set_default or delete. Addresses follow their country's rules (GET /api/v1/address-rules/{countryCode}); a Bangladesh address sends the City/Thana/Area ids. Answers the address book, the default first.",
+  description: "One action: list, create, update, set_default, set_default_billing or delete. Addresses follow their country's rules (GET /api/v1/address-rules/{countryCode}); a Bangladesh address sends the City/Thana/Area ids. Answers the address book, the default first.",
   request: {
     params: contextPathSchema,
     body: { required: true, content: { "application/json": { schema: addressBookActionSchema } } },

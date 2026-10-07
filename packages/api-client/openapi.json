@@ -24679,7 +24679,7 @@
                     "type": "string",
                     "nullable": true,
                     "pattern": "^[A-Za-z]{2}$",
-                    "description": "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list)."
+                    "description": "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list). A cart with nothing physical is billed and taxed here (with the region and postal code)."
                   },
                   "cityId": {
                     "type": "string",
@@ -25493,6 +25493,61 @@
                     "nullable": true,
                     "maxLength": 120,
                     "description": "Outside Bangladesh: the district or suburb, when the country's address rules ask for it."
+                  },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true,
+                    "description": "An order that ships: false with a billing address sends a separate one; otherwise the shipping address is the billing address (the default)."
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "A cart that ships: the billing country of a separate billing address. A cart with nothing physical is billed and taxed at the context's delivery country, region and postal code (storefront.delivery.set) instead."
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "description": "The billing street line: needed when the store requires a full billing address, or with billingSameAsShipping false."
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it."
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20,
+                    "description": "A minimal billing address sends it when the country's rules require it."
                   },
                   "notes": {
                     "type": "string",
@@ -26636,7 +26691,7 @@
           "Storefront Agent Contexts"
         ],
         "summary": "List or change the authorized customer's address book",
-        "description": "One action: list, create, update, set_default or delete. Addresses follow their country's rules (GET /api/v1/address-rules/{countryCode}); a Bangladesh address sends the City/Thana/Area ids. Answers the address book, the default first.",
+        "description": "One action: list, create, update, set_default, set_default_billing or delete. Addresses follow their country's rules (GET /api/v1/address-rules/{countryCode}); a Bangladesh address sends the City/Thana/Area ids. Answers the address book, the default first.",
         "parameters": [
           {
             "schema": {
@@ -26749,6 +26804,9 @@
                           },
                           "isDefault": {
                             "type": "boolean"
+                          },
+                          "isDefaultBilling": {
+                            "type": "boolean"
                           }
                         },
                         "additionalProperties": false
@@ -26845,6 +26903,9 @@
                           },
                           "isDefault": {
                             "type": "boolean"
+                          },
+                          "isDefaultBilling": {
+                            "type": "boolean"
                           }
                         },
                         "additionalProperties": false
@@ -26864,6 +26925,27 @@
                         "type": "string",
                         "enum": [
                           "set_default"
+                        ]
+                      },
+                      "addressId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "addressId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "set_default_billing"
                         ]
                       },
                       "addressId": {
@@ -26933,6 +27015,9 @@
                                 "type": "string"
                               },
                               "isDefault": {
+                                "type": "boolean"
+                              },
+                              "isDefaultBilling": {
                                 "type": "boolean"
                               },
                               "countryCode": {
@@ -27016,6 +27101,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -30525,6 +30611,9 @@
                           "type": "number",
                           "minimum": 0
                         },
+                        "requireFullBillingAddress": {
+                          "type": "boolean"
+                        },
                         "allowedCountries": {
                           "type": "array",
                           "items": {
@@ -30693,6 +30782,7 @@
                         "checkoutMode",
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
+                        "requireFullBillingAddress",
                         "allowedCountries",
                         "allowedCountriesMode",
                         "currency",
@@ -31375,6 +31465,9 @@
                                 "isDefault": {
                                   "type": "boolean"
                                 },
+                                "isDefaultBilling": {
+                                  "type": "boolean"
+                                },
                                 "countryCode": {
                                   "type": "string"
                                 },
@@ -31456,6 +31549,7 @@
                                 "id",
                                 "customerId",
                                 "isDefault",
+                                "isDefaultBilling",
                                 "countryCode",
                                 "name",
                                 "company",
@@ -31701,6 +31795,9 @@
                                 "isDefault": {
                                   "type": "boolean"
                                 },
+                                "isDefaultBilling": {
+                                  "type": "boolean"
+                                },
                                 "countryCode": {
                                   "type": "string"
                                 },
@@ -31782,6 +31879,7 @@
                                 "id",
                                 "customerId",
                                 "isDefault",
+                                "isDefaultBilling",
                                 "countryCode",
                                 "name",
                                 "company",
@@ -32117,6 +32215,9 @@
                                 "isDefault": {
                                   "type": "boolean"
                                 },
+                                "isDefaultBilling": {
+                                  "type": "boolean"
+                                },
                                 "countryCode": {
                                   "type": "string"
                                 },
@@ -32198,6 +32299,7 @@
                                 "id",
                                 "customerId",
                                 "isDefault",
+                                "isDefaultBilling",
                                 "countryCode",
                                 "name",
                                 "company",
@@ -32785,6 +32887,9 @@
                                 "isDefault": {
                                   "type": "boolean"
                                 },
+                                "isDefaultBilling": {
+                                  "type": "boolean"
+                                },
                                 "countryCode": {
                                   "type": "string"
                                 },
@@ -32866,6 +32971,7 @@
                                 "id",
                                 "customerId",
                                 "isDefault",
+                                "isDefaultBilling",
                                 "countryCode",
                                 "name",
                                 "company",
@@ -40433,6 +40539,9 @@
                               "isDefault": {
                                 "type": "boolean"
                               },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
                               "countryCode": {
                                 "type": "string"
                               },
@@ -40514,6 +40623,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -40717,6 +40827,9 @@
                   },
                   "isDefault": {
                     "type": "boolean"
+                  },
+                  "isDefaultBilling": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false
@@ -40753,6 +40866,9 @@
                                 "type": "string"
                               },
                               "isDefault": {
+                                "type": "boolean"
+                              },
+                              "isDefaultBilling": {
                                 "type": "boolean"
                               },
                               "countryCode": {
@@ -40836,6 +40952,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -41052,6 +41169,9 @@
                   },
                   "isDefault": {
                     "type": "boolean"
+                  },
+                  "isDefaultBilling": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false
@@ -41088,6 +41208,9 @@
                                 "type": "string"
                               },
                               "isDefault": {
+                                "type": "boolean"
+                              },
+                              "isDefaultBilling": {
                                 "type": "boolean"
                               },
                               "countryCode": {
@@ -41171,6 +41294,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -41342,6 +41466,9 @@
                               "isDefault": {
                                 "type": "boolean"
                               },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
                               "countryCode": {
                                 "type": "string"
                               },
@@ -41423,6 +41550,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -41595,6 +41723,9 @@
                               "isDefault": {
                                 "type": "boolean"
                               },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
                               "countryCode": {
                                 "type": "string"
                               },
@@ -41676,6 +41807,264 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
+                              "countryCode",
+                              "name",
+                              "company",
+                              "line1",
+                              "line2",
+                              "dependentLocality",
+                              "locality",
+                              "adminArea",
+                              "postalCode",
+                              "phone",
+                              "phoneRaw",
+                              "city",
+                              "zone",
+                              "area",
+                              "cityName",
+                              "zoneName",
+                              "areaName",
+                              "validationSkipped",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "addresses"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Customer-cookie address book for the hosted account page; use storefront.customer_addresses.manage with live delegated authority."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/addresses/{addressId}/default-billing": {
+      "post": {
+        "operationId": "storefront.customer_auth_addresses.set_default_billing",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Make an address the default billing address",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "addressId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The address book, the default first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "addresses": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "customerId": {
+                                "type": "string"
+                              },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
+                              "countryCode": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "company": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "line1": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "line2": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "dependentLocality": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "locality": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "adminArea": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "postalCode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "phone": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "phoneRaw": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "city": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "zone": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "area": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "cityName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "zoneName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "areaName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "validationSkipped": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "type": "integer"
+                              },
+                              "updatedAt": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "customerId",
+                              "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -56003,6 +56392,25 @@
                     "minLength": 1,
                     "maxLength": 180
                   },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "The billing country (ISO 3166-1 alpha-2), one an active market sells to. An order that ships nothing needs one (absent: the store's only selling country); it is taxed and placed there."
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it."
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20,
+                    "description": "A minimal billing address sends it when the country's rules require it."
+                  },
                   "discountCodes": {
                     "type": "array",
                     "items": {
@@ -56916,6 +57324,61 @@
                   "area": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true,
+                    "description": "An order that ships: false with a billing address sends a separate one; otherwise the shipping address is the billing address (the default)."
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "The billing country (ISO 3166-1 alpha-2), one an active market sells to. An order that ships nothing needs one (absent: the store's only selling country); it is taxed and placed there."
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "description": "The first street line (a full billing address)."
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "The admin area, as its code or name (GET /api/v1/address-rules/{countryCode}). A minimal billing address sends it when the country's rules require it."
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20,
+                    "description": "A minimal billing address sends it when the country's rules require it."
                   },
                   "notes": {
                     "type": "string",
@@ -74025,6 +74488,9 @@
                               "isDefault": {
                                 "type": "boolean"
                               },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
                               "countryCode": {
                                 "type": "string"
                               },
@@ -74106,6 +74572,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -74628,6 +75095,9 @@
                               "isDefault": {
                                 "type": "boolean"
                               },
+                              "isDefaultBilling": {
+                                "type": "boolean"
+                              },
                               "countryCode": {
                                 "type": "string"
                               },
@@ -74709,6 +75179,7 @@
                               "id",
                               "customerId",
                               "isDefault",
+                              "isDefaultBilling",
                               "countryCode",
                               "name",
                               "company",
@@ -74929,6 +75400,9 @@
                   "isDefault": {
                     "type": "boolean"
                   },
+                  "isDefaultBilling": {
+                    "type": "boolean"
+                  },
                   "skipValidation": {
                     "type": "boolean"
                   }
@@ -74963,6 +75437,9 @@
                           "type": "string"
                         },
                         "isDefault": {
+                          "type": "boolean"
+                        },
+                        "isDefaultBilling": {
                           "type": "boolean"
                         },
                         "countryCode": {
@@ -75046,6 +75523,7 @@
                         "id",
                         "customerId",
                         "isDefault",
+                        "isDefaultBilling",
                         "countryCode",
                         "name",
                         "company",
@@ -75269,6 +75747,9 @@
                   "isDefault": {
                     "type": "boolean"
                   },
+                  "isDefaultBilling": {
+                    "type": "boolean"
+                  },
                   "skipValidation": {
                     "type": "boolean"
                   }
@@ -75303,6 +75784,9 @@
                           "type": "string"
                         },
                         "isDefault": {
+                          "type": "boolean"
+                        },
+                        "isDefaultBilling": {
                           "type": "boolean"
                         },
                         "countryCode": {
@@ -75386,6 +75870,7 @@
                         "id",
                         "customerId",
                         "isDefault",
+                        "isDefaultBilling",
                         "countryCode",
                         "name",
                         "company",
@@ -75680,6 +76165,9 @@
                         "isDefault": {
                           "type": "boolean"
                         },
+                        "isDefaultBilling": {
+                          "type": "boolean"
+                        },
                         "countryCode": {
                           "type": "string"
                         },
@@ -75761,6 +76249,267 @@
                         "id",
                         "customerId",
                         "isDefault",
+                        "isDefaultBilling",
+                        "countryCode",
+                        "name",
+                        "company",
+                        "line1",
+                        "line2",
+                        "dependentLocality",
+                        "locality",
+                        "adminArea",
+                        "postalCode",
+                        "phone",
+                        "phoneRaw",
+                        "city",
+                        "zone",
+                        "area",
+                        "cityName",
+                        "zoneName",
+                        "areaName",
+                        "validationSkipped",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.edit"
+        }
+      }
+    },
+    "/api/v1/admin/customers/{id}/addresses/{addressId}/default-billing": {
+      "post": {
+        "operationId": "dashboard.customers.addresses_set_default_billing",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "Make an address the customer's default billing address",
+        "description": "Without one, the default address bills too.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "addressId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default billing address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        },
+                        "isDefaultBilling": {
+                          "type": "boolean"
+                        },
+                        "countryCode": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "company": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "line1": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "line2": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dependentLocality": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "locality": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "adminArea": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "postalCode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "phone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "phoneRaw": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "city": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "zone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "area": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "cityName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "zoneName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "areaName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "validationSkipped": {
+                          "type": "boolean"
+                        },
+                        "createdAt": {
+                          "type": "integer"
+                        },
+                        "updatedAt": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "customerId",
+                        "isDefault",
+                        "isDefaultBilling",
                         "countryCode",
                         "name",
                         "company",
@@ -117430,6 +118179,9 @@
                             "after_confirmation"
                           ]
                         },
+                        "requireFullBillingAddress": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -117441,6 +118193,7 @@
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
                         "autoFulfilMode",
+                        "requireFullBillingAddress",
                         "revision"
                       ]
                     }
@@ -117581,6 +118334,9 @@
                       "after_confirmation"
                     ]
                   },
+                  "requireFullBillingAddress": {
+                    "type": "boolean"
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -117639,6 +118395,9 @@
                             "after_confirmation"
                           ]
                         },
+                        "requireFullBillingAddress": {
+                          "type": "boolean"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -117650,6 +118409,7 @@
                         "partialPaymentEnabled",
                         "partialPaymentAmount",
                         "autoFulfilMode",
+                        "requireFullBillingAddress",
                         "revision"
                       ]
                     }
@@ -136880,6 +137640,45 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "billingSameAsShipping": {
+                              "type": "boolean"
+                            },
+                            "billingName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCompany": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddress": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddressLine2": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCountryCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingDependentLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAdminArea": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPostalCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "city": {
                               "type": "string",
                               "nullable": true
@@ -137556,6 +138355,45 @@
                               "nullable": true
                             },
                             "shippingPhone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingSameAsShipping": {
+                              "type": "boolean"
+                            },
+                            "billingName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCompany": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddress": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddressLine2": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCountryCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingDependentLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAdminArea": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPostalCode": {
                               "type": "string",
                               "nullable": true
                             },
@@ -142187,6 +143025,56 @@
                   "skipAddressValidation": {
                     "type": "boolean"
                   },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
                   "city": {
                     "type": "string",
                     "nullable": true,
@@ -143958,6 +144846,22 @@
                     "nullable": true,
                     "maxLength": 20
                   },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -144371,6 +145275,56 @@
                   },
                   "skipAddressValidation": {
                     "type": "boolean"
+                  },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
                   },
                   "city": {
                     "type": "string",
@@ -144846,6 +145800,56 @@
                   },
                   "skipAddressValidation": {
                     "type": "boolean"
+                  },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
                   },
                   "city": {
                     "type": "string",
@@ -147082,6 +148086,56 @@
                         "shippingValidationSkipped": {
                           "type": "boolean"
                         },
+                        "billingSameAsShipping": {
+                          "type": "boolean",
+                          "description": "The shipping address is the billing address; the billing fields are then null."
+                        },
+                        "billingName": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Null: the order contact's name."
+                        },
+                        "billingCompany": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingAddress": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingAddressLine2": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingCountryCode": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one)."
+                        },
+                        "billingDependentLocality": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingLocality": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingAdminArea": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingPostalCode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingPhone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "billingValidationSkipped": {
+                          "type": "boolean",
+                          "description": "Staff kept a billing address that breaks its country's rules."
+                        },
                         "paidAmount": {
                           "type": "number",
                           "nullable": true
@@ -148166,6 +149220,18 @@
                         "zoneName",
                         "areaName",
                         "shippingValidationSkipped",
+                        "billingSameAsShipping",
+                        "billingName",
+                        "billingCompany",
+                        "billingAddress",
+                        "billingAddressLine2",
+                        "billingCountryCode",
+                        "billingDependentLocality",
+                        "billingLocality",
+                        "billingAdminArea",
+                        "billingPostalCode",
+                        "billingPhone",
+                        "billingValidationSkipped",
                         "paidAmount",
                         "balanceDue",
                         "version",
@@ -148346,6 +149412,56 @@
                   "area": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "billingSameAsShipping": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "billingCountryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "billingName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingCompany": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "billingAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "billingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "billingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "billingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -150352,6 +151468,56 @@
                             "shippingValidationSkipped": {
                               "type": "boolean"
                             },
+                            "billingSameAsShipping": {
+                              "type": "boolean",
+                              "description": "The shipping address is the billing address; the billing fields are then null."
+                            },
+                            "billingName": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Null: the order contact's name."
+                            },
+                            "billingCompany": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddress": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddressLine2": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCountryCode": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one)."
+                            },
+                            "billingDependentLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAdminArea": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPostalCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPhone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingValidationSkipped": {
+                              "type": "boolean",
+                              "description": "Staff kept a billing address that breaks its country's rules."
+                            },
                             "requiresShipping": {
                               "type": "boolean"
                             },
@@ -150428,6 +151594,18 @@
                             "zoneName",
                             "areaName",
                             "shippingValidationSkipped",
+                            "billingSameAsShipping",
+                            "billingName",
+                            "billingCompany",
+                            "billingAddress",
+                            "billingAddressLine2",
+                            "billingCountryCode",
+                            "billingDependentLocality",
+                            "billingLocality",
+                            "billingAdminArea",
+                            "billingPostalCode",
+                            "billingPhone",
+                            "billingValidationSkipped",
                             "requiresShipping",
                             "shippingMethodId",
                             "shippingMethodKind",
@@ -150925,6 +152103,56 @@
                             "shippingValidationSkipped": {
                               "type": "boolean"
                             },
+                            "billingSameAsShipping": {
+                              "type": "boolean",
+                              "description": "The shipping address is the billing address; the billing fields are then null."
+                            },
+                            "billingName": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Null: the order contact's name."
+                            },
+                            "billingCompany": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddress": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAddressLine2": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingCountryCode": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one)."
+                            },
+                            "billingDependentLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingLocality": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingAdminArea": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPostalCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingPhone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "billingValidationSkipped": {
+                              "type": "boolean",
+                              "description": "Staff kept a billing address that breaks its country's rules."
+                            },
                             "requiresShipping": {
                               "type": "boolean"
                             },
@@ -151089,6 +152317,18 @@
                             "zoneName",
                             "areaName",
                             "shippingValidationSkipped",
+                            "billingSameAsShipping",
+                            "billingName",
+                            "billingCompany",
+                            "billingAddress",
+                            "billingAddressLine2",
+                            "billingCountryCode",
+                            "billingDependentLocality",
+                            "billingLocality",
+                            "billingAdminArea",
+                            "billingPostalCode",
+                            "billingPhone",
+                            "billingValidationSkipped",
                             "requiresShipping",
                             "shippingMethodId",
                             "shippingMethodKind",
@@ -211157,6 +212397,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.customers.addresses_set_default"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.addresses_set_default_billing",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.addresses_set_default_billing"
           ]
         },
         {

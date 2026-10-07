@@ -9,6 +9,7 @@ import {
     getOrderDetails,
     getOrderEditReadiness,
     listOrderTimeline,
+    orderBillingAddressSelection,
     orderShippingAddressSelection,
     previewOrderPaymentRecoveryLink,
     releaseOrderHold,
@@ -68,6 +69,7 @@ import {
     selectedProductOptionSchema,
 } from "../../../schemas/entities";
 import { nullableTimestampSchema, timestampSchema } from "../../../schemas/timestamps";
+import { orderBillingAddressShape } from "../../../schemas/billing-address";
 import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../../shared/order-line-extras";
 import {
     customizationViewSchema,
@@ -279,6 +281,8 @@ const orderFormDataSchema = z.object({
      * pickers before they load.
      */
     ...orderShippingAddressShape,
+    /** The billing snapshot: an amendment or edit that sends none keeps it. */
+    ...orderBillingAddressShape,
     /** An amendment keeps the order's delivery method; new physical lines take its kind. */
     requiresShipping: z.boolean(),
     shippingMethodId: z.string().nullable(),
@@ -1019,6 +1023,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
             ...orderShippingAddressSelection(orders),
+            ...orderBillingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodKind: orders.shippingMethodKind,
