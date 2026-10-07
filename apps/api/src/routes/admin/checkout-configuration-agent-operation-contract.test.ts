@@ -195,7 +195,7 @@ describe("checkout configuration agent operation contract", () => {
       expect(ids.has(operationId), `duplicate ${operationId}`).toBe(false);
       ids.add(operationId);
     }
-    expect(ids.size).toBe(47);
+    expect(ids.size).toBe(49);
   });
 
   it("marks every declared JSON mutation body as required", () => {
@@ -204,7 +204,7 @@ describe("checkout configuration agent operation contract", () => {
       if (!operationsWithJsonBodies.has(operationId)) continue;
       expect(spec.paths?.[path]?.[method]?.requestBody?.required, operationId).toBe(true);
     }
-    expect(operationsWithJsonBodies.size).toBe(23);
+    expect(operationsWithJsonBodies.size).toBe(24);
   });
 
   it("maps every server outcome to one backend scenario and keeps local UI actions local", () => {
