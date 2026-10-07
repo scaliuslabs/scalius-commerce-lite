@@ -32,7 +32,6 @@ import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOp
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
 import { pageHead } from "~/i18n/page-titles";
-import { eventTime } from "~/lib/event-time";
 
 export const Route = createFileRoute("/admin/")({
   // Every Home read starts here, in one round trip, rather than after the
@@ -179,7 +178,7 @@ function HomePage() {
                               {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
                             </span>
                             <span className="block text-muted-foreground">
-                              {placed ? eventTime(placed) : null}
+                              {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
                             </span>
                           </span>
                           <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>

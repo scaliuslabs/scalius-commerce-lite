@@ -3,7 +3,6 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatDateTime } from "~/i18n";
 import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
 import type { OrderTimestamp } from "./types";
-import { eventTime } from "~/lib/event-time";
 
 function toDate(value: OrderTimestamp | null | undefined): Date | null {
   const date = unixToDate(value);
@@ -13,7 +12,7 @@ function toDate(value: OrderTimestamp | null | undefined): Date | null {
 /** Date and time in the store time zone, in the dashboard language (Bangla on the 24-hour clock). */
 export function formatOrderTimestamp(value: OrderTimestamp | null | undefined): string | null {
   const date = toDate(value);
-  return date ? eventTime(date) : null;
+  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : null;
 }
 
 /** The instant in ISO 8601, for a `<time dateTime>`. */
