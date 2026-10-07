@@ -38,7 +38,7 @@
   },
   "scripts": {
     "build": "../../node_modules/typescript7/bin/tsc -p tsconfig.build.json && node scripts/set-bin-mode.mjs",
-    "lint": "eslint src/ test/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/ test/",
     "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
     "typecheck": "../../node_modules/typescript7/bin/tsc --build"

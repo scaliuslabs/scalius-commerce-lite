@@ -14,7 +14,7 @@
   "scripts": {
     "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts",
     "generate:spec": "node --import tsx scripts/generate-spec.ts",
-    "lint": "eslint src/ scripts/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/ scripts/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
   "devDependencies": {

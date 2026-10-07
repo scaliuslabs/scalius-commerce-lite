@@ -7,7 +7,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/",
     "test": "vitest run",
     "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },

@@ -13,7 +13,7 @@
     "db:migrate:local": "node ../../scripts/deploy.mjs --migrate-only --local",
     "db:migrate:remote": "node ../../scripts/deploy.mjs --migrate-only",
     "test": "vitest run",
-    "lint": "eslint src/"
+    "lint": "oxlint -c ../../.oxlintrc.json src/"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",

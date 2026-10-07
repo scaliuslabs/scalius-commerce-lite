@@ -1,9 +1,11 @@
 import { plugin as shadcn } from "@shadcn/lint";
-import rootConfig from "../../eslint.config.js";
+import reactHooks from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
+import { ignores } from "../../eslint.config.js";
 
 /**
  * Dashboard design-system lint. The rules and every approved exception are
- * explained in DESIGN.md; keep the two in step.
+ * explained in DESIGN.md; keep the two in step. Oxlint runs every other rule.
  */
 
 // String literals that end up as classes: className props, class helpers and
@@ -90,7 +92,15 @@ const designSystem = (level) => ({
 });
 
 export default [
-  ...rootConfig,
+  { ignores },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    languageOptions: { parser: tseslint.parser },
+    // Oxlint owns every generic rule (.oxlintrc.json); these plugins stay
+    // registered, with no rule on, so their disable comments still resolve.
+    plugins: { "@typescript-eslint": tseslint.plugin, "react-hooks": reactHooks },
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+  },
   {
     files: ["src/**/*.tsx"],
     ignores: ["src/**/*.test.tsx"],

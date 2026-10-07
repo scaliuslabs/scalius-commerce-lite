@@ -9,6 +9,7 @@
     "apps/storefront/.env*",
     "pnpm-lock.yaml",
     "eslint.config.js",
+    ".oxlintrc.json",
     "scripts/copy-flags.mjs"
   ],
   "tasks": {

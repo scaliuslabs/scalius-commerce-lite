@@ -35,7 +35,7 @@
     "upgrade:schema": "tsx scripts/upgrade-provider-schema.ts",
     "compile:migrations": "tsx scripts/compile-provider-migrations.ts",
     "migration-plan": "tsx scripts/print-migration-plan.ts",
-    "lint": "eslint src/",
+    "lint": "oxlint -c ../../.oxlintrc.json src/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --build",
     "check:migrations": "node scripts/check-migration-metadata.mjs",
     "verify:portability-export": "tsx scripts/verify-sqlite-export.ts"
