@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { realtimeTopicsFor } from "@scalius/shared/realtime";
-import { RealtimeConnection } from "~/lib/realtime/connection";
+import { acquireRealtimeConnection } from "~/lib/realtime/connection";
 import { attachRealtime } from "~/lib/realtime/store";
 import { createInvalidator, keysForChanges, resyncKeys } from "~/lib/realtime/invalidate";
 import { MergeChoiceHost } from "./MergeChoiceDialog";
@@ -17,7 +17,8 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
   const permissionKey = permissions.join(",");
   useEffect(() => {
     const topics = realtimeTopicsFor(permissionKey.split(","));
-    const connection = new RealtimeConnection();
+    // One socket per tab, whatever remounts this bridge.
+    const { connection, release } = acquireRealtimeConnection(`${userId}\u0000${permissionKey}`);
     const invalidator = createInvalidator(queryClient);
     const unsubscribe = connection.subscribe({
       changes: (items) => {
@@ -32,11 +33,10 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
       },
     });
     attachRealtime(connection, userId);
-    connection.start();
     return () => {
       unsubscribe();
       attachRealtime(null);
-      connection.stop();
+      release();
       invalidator.dispose();
     };
   }, [queryClient, userId, permissionKey]);

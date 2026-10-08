@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { RealtimeServerMessage } from "@scalius/shared/realtime";
+import { REALTIME_TOPICS, type RealtimeServerMessage } from "@scalius/shared/realtime";
+import { MAX_SOCKETS_PER_USER } from "./hub";
 
 const apiDir = resolve(import.meta.dirname, "../..");
 const HARNESS = resolve(import.meta.dirname, "../testing/realtime-hub-harness.worker.ts");
@@ -128,6 +129,38 @@ describe("RealtimeHub in workerd", () => {
     karim.socket.close(1000);
     expect(await rahim.next((message) => message.t === "presence")).toEqual({ t: "presence", key: "product:prd_1", people: [{ id: "usr_rahim", name: "Rahim" }] });
     rahim.socket.close(1000);
+  }, 60_000);
+
+  it("accepts an owner who hears every topic (more topics than a socket may have tags)", async () => {
+    expect(REALTIME_TOPICS.length).toBeGreaterThan(10);
+    const owner = await connect("usr_owner", "Owner", [...REALTIME_TOPICS]);
+    expect(await owner.next((message) => message.t === "hello")).toEqual({ t: "hello", userId: "usr_owner", topics: [...REALTIME_TOPICS] });
+    const clerk = await connect("usr_clerk", "Clerk", ["products"]);
+    await clerk.next((message) => message.t === "hello");
+    // Every topic reaches the owner; the clerk hears only products.
+    const last = REALTIME_TOPICS[REALTIME_TOPICS.length - 1]!;
+    expect(await publish([{ topic: last, kind: "changed" }])).toEqual({ sockets: 1 });
+    expect(await owner.next((message) => message.t === "changes")).toEqual({ t: "changes", items: [{ topic: last, kind: "changed" }] });
+    expect(await publish([{ topic: "products", kind: "changed" }])).toEqual({ sockets: 2 });
+    await clerk.next((message) => message.t === "changes");
+    await owner.next((message) => message.t === "changes");
+    // Presence works on the owner's socket.
+    owner.socket.send(JSON.stringify({ t: "watch", keys: ["product:prd_9"] }));
+    expect(await owner.next((message) => message.t === "presence")).toEqual({ t: "presence", key: "product:prd_9", people: [{ id: "usr_owner", name: "Owner" }] });
+    owner.socket.close(1000);
+    clerk.socket.close(1000);
+  }, 60_000);
+
+  it("keeps at most MAX_SOCKETS_PER_USER sockets a person: the oldest closes", async () => {
+    const tabs: Client[] = [];
+    for (let index = 0; index <= MAX_SOCKETS_PER_USER; index += 1) {
+      const tab = await connect("usr_tabs", "Tabs", [...REALTIME_TOPICS]);
+      await tab.next((message) => message.t === "hello");
+      tabs.push(tab);
+    }
+    expect(await tabs[0]!.closed).toBe(1008);
+    expect(await publish([{ topic: "orders", kind: "changed" }])).toEqual({ sockets: MAX_SOCKETS_PER_USER });
+    for (const tab of tabs.slice(1)) tab.socket.close(1000);
   }, 60_000);
 
   it("refuses an upgrade without a proven identity", async () => {

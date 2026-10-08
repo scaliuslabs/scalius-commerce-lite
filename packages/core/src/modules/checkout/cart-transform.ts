@@ -274,7 +274,7 @@ export function presentTransformedCartLines(
     buyerItems: readonly StorefrontCartValidationItem[],
 ): { cart: StorefrontCartValidationResult; positions: number[] } {
     const decimalPlaces = result.money.decimalPlaces;
-    const issues: StorefrontCartItemIssue[] = result.issues.map((issue) => ({ ...issue, index: transform.items[issue.index]?.sourceIndex ?? issue.index }));
+    const issues = issuesOnBuyerLines(result.issues, transform, buyerItems);
     const byPosition = new Map(result.items.map((item) => [item.index, item]));
     const expandedSources = new Map(transform.expansions.map((expansion) => [expansion.sourceIndex, expansion]));
     const items: StorefrontCartValidatedItem[] = [];
@@ -347,6 +347,42 @@ export function presentTransformedCartLines(
         cart: { ...result, valid: issues.length === 0, issues, items, subtotalMinor },
         positions: items.map((item) => positions.get(item.index)!),
     };
+}
+
+/**
+ * Issues of the rewritten lines on the buyer's lines. An issue on an
+ * expanded line's component speaks for the bundle line: its quantities are
+ * in bundle units (a component that has 5 left at 2 per bundle leaves 2
+ * bundles), so "reduce the quantity" asks the buyer for a bundle quantity
+ * that the components can fill.
+ */
+export function issuesOnBuyerLines(
+    issues: readonly StorefrontCartItemIssue[],
+    transform: TransformedCart,
+    buyerItems: readonly StorefrontCartValidationItem[],
+): StorefrontCartItemIssue[] {
+    const perUnitAt = new Map<number, number>();
+    for (const expansion of transform.expansions) {
+        for (const component of expansion.components) perUnitAt.set(component.position, component.perUnit);
+    }
+    return issues.map((issue) => {
+        const source = transform.items[issue.index]?.sourceIndex ?? issue.index;
+        const perUnit = perUnitAt.get(issue.index);
+        const buyer = buyerItems[source];
+        if (perUnit === undefined || !buyer) return { ...issue, index: source };
+        const { availableQuantity: componentAvailable, ...rest } = issue;
+        const available = componentAvailable === undefined ? undefined : Math.floor(componentAvailable / perUnit);
+        return {
+            ...rest,
+            index: source,
+            cartKey: buyer.cartKey ?? null,
+            productId: buyer.productId,
+            variantId: buyer.variantId,
+            requestedQuantity: buyer.quantity,
+            ...(available === undefined ? {} : { availableQuantity: available }),
+            action: issue.action === "reduce_quantity" && available !== undefined && available < 1 ? "remove" : issue.action,
+        };
+    });
 }
 
 /**

@@ -263,6 +263,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
       return null;
     }
     let keep: Array<keyof ProductFormValues> = draft.changed;
+    const restore: Partial<Record<keyof ProductFormValues, unknown>> = {};
     if (result.clashes.length > 0) {
       const words = mergeWords();
       const show = (path: string, value: unknown) => path === "categoryId"
@@ -277,11 +278,21 @@ function ProductEditor({ productId, initialProduct, categories }: {
       }
       const theirsKeys = new Set(result.clashes.filter((clash) => choices[clash.key] !== "mine").flatMap((clash) => clash.paths));
       keep = draft.changed.filter((key) => !theirsKeys.has(key));
+      // "Mine" for a coupled group keeps the whole group as the draft has it:
+      // the other save's part of it (a discount beside my price) is undone
+      // too, never mixed with mine.
+      for (const clash of result.clashes) {
+        if (choices[clash.key] !== "mine") continue;
+        for (const path of clash.paths) {
+          const key = path as keyof ProductFormValues;
+          if (path !== VARIANTS_FIELD && !draft.changed.includes(key)) restore[key] = clash.mine[path];
+        }
+      }
     }
     setFormSnapshot(latest);
     setAggregateRevision(latest.aggregateRevision);
     sections.apply();
-    draft.rebase(toFormValues(latest), keep);
+    draft.rebase(toFormValues(latest), keep, restore as Partial<ProductFormValues>);
     costsRef.current.sync(latest.variants);
     if (!matrix.dirty) {
       setMatrixSnapshot(latest);

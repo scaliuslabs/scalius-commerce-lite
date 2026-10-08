@@ -281,7 +281,9 @@ export async function priceStorefrontCheckout(
         properties: item.properties,
       })),
       facts,
-      destination: delivery.fulfilment.requiresShipping ? { city: delivery.cityName, zone: delivery.zoneName } : null,
+      destination: delivery.fulfilment.requiresShipping
+        ? { country: delivery.address?.countryCode ?? null, city: delivery.cityName, zone: delivery.zoneName }
+        : null,
       discountCodes: input.discountCodes,
     }));
     const cart = appCart;
@@ -446,7 +448,9 @@ export async function checkStorefrontCartRules(
   input: {
     cartValidation: Pick<StorefrontCartValidationResult, "items">;
     /** The chosen delivery, when the cart has one: apps see its region. */
-    delivery: Pick<CheckoutPricingDelivery, "cityName" | "zoneName" | "fulfilment"> | null;
+    delivery: (Pick<CheckoutPricingDelivery, "cityName" | "zoneName" | "fulfilment"> & {
+      address?: Pick<NonNullable<CheckoutPricingDelivery["address"]>, "countryCode"> | null;
+    }) | null;
     apps: CheckoutAppFunctions | undefined;
     currency: { code: string; decimalPlaces: number };
     customerId?: string | null;
@@ -476,7 +480,7 @@ export async function checkStorefrontCartRules(
     })),
     facts,
     destination: input.delivery?.fulfilment.requiresShipping
-      ? { city: input.delivery.cityName, zone: input.delivery.zoneName }
+      ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
       : null,
     discountCodes: [],
   }));

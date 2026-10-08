@@ -41,12 +41,27 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
   coupled?: MergeOptions["coupled"];
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+
+/**
+ * The incoming saved version with the draft's edits on top. Nested settings
+ * objects merge field by field: an edit to `a.x` keeps the other save's
+ * `a.y`, never the whole `a` the draft started from (which a later save would
+ * write back over theirs).
+ */
 export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
   const next = { ...incoming };
   for (const key of Object.keys({ ...baseline, ...current }) as (keyof T)[]) {
-    if (JSON.stringify(current[key]) !== JSON.stringify(baseline[key])) {
-      next[key] = current[key];
-    }
+    const mine: unknown = current[key];
+    const base: unknown = baseline[key];
+    if (JSON.stringify(mine) === JSON.stringify(base)) continue;
+    const theirs: unknown = incoming[key];
+    next[key] = (isPlainObject(mine) && isPlainObject(base) && isPlainObject(theirs)
+      ? mergeUneditedFields(mine, base, theirs)
+      : mine) as T[keyof T];
   }
   return next;
 }

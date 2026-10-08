@@ -7,8 +7,10 @@
 //
 // Sockets are hibernatable (`ctx.acceptWebSocket`), so an idle dashboard costs
 // no duration; `ping` is answered by the auto-response without waking the
-// object. Each socket is tagged with its topics and its user, so a notice
-// reaches only the sockets whose permissions allow it.
+// object. Each socket is tagged with its user only (the runtime allows at
+// most 10 tags a socket, fewer than the topics an owner hears); a notice
+// reaches only the sockets whose attachment's topics allow it. A store has
+// few sockets, so scanning them is cheap.
 import { DurableObject } from "cloudflare:workers";
 import {
   MAX_WATCHED_KEYS,
@@ -58,10 +60,6 @@ interface SocketState {
 
 function userTag(userId: string): string {
   return `u:${userId}`;
-}
-
-function topicTag(topic: RealtimeTopic): string {
-  return `t:${topic}`;
 }
 
 function nowSeconds(): number {
@@ -133,7 +131,8 @@ export class RealtimeHub extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    this.ctx.acceptWebSocket(server, [userTag(identity.userId), ...identity.topics.map(topicTag)]);
+    // One tag, whatever the topic count: the runtime refuses more than 10.
+    this.ctx.acceptWebSocket(server, [userTag(identity.userId)]);
     const state: SocketState = {
       userId: identity.userId,
       name: identity.name,
@@ -149,25 +148,20 @@ export class RealtimeHub extends DurableObject<Env> {
   /** RPC from the API Worker: change notices from the event outbox flush and from writes. */
   async publish(changes: RealtimeChange[]): Promise<{ sockets: number }> {
     if (!Array.isArray(changes) || changes.length === 0) return { sockets: 0 };
-    const topics = new Set(changes.map((change) => change.topic));
+    const topics = new Set<string>(changes.map((change) => change.topic));
     const now = nowSeconds();
-    const seen = new Set<HibernatableWebSocket>();
     let sockets = 0;
-    for (const topic of topics) {
-      for (const socket of this.ctx.getWebSockets(topicTag(topic))) {
-        if (seen.has(socket)) continue;
-        seen.add(socket);
-        const state = readState(socket);
-        if (!state) continue;
-        if (state.exp <= now) {
-          socket.close(REALTIME_CLOSE_REAUTH, "Authenticate again");
-          continue;
-        }
-        const items = framesFor(new Set(state.topics), changes);
-        if (items.length === 0) continue;
-        send(socket, { t: "changes", items });
-        sockets += 1;
+    for (const socket of this.ctx.getWebSockets()) {
+      const state = readState(socket);
+      if (!state || !state.topics.some((topic) => topics.has(topic))) continue;
+      if (state.exp <= now) {
+        socket.close(REALTIME_CLOSE_REAUTH, "Authenticate again");
+        continue;
       }
+      const items = framesFor(new Set(state.topics), changes);
+      if (items.length === 0) continue;
+      send(socket, { t: "changes", items });
+      sockets += 1;
     }
     return { sockets };
   }
@@ -215,9 +209,10 @@ export class RealtimeHub extends DurableObject<Env> {
     if (parsed.t === "saved" && typeof parsed.key === "string" && state.keys.includes(parsed.key)) {
       const rev = typeof parsed.rev === "number" && Number.isSafeInteger(parsed.rev) ? parsed.rev : null;
       const by: RealtimePerson = { id: state.userId, name: state.name };
+      const now = nowSeconds();
       for (const other of this.ctx.getWebSockets()) {
         if (other === socket) continue;
-        const otherState = readState(other);
+        const otherState = this.liveState(other, now);
         if (otherState?.keys.includes(parsed.key)) send(other, { t: "saved", key: parsed.key, by, rev });
       }
     }
@@ -249,12 +244,26 @@ export class RealtimeHub extends DurableObject<Env> {
     for (const key of keys) this.broadcastPresence(key, socket);
   }
 
+  /**
+   * A socket's state while its proof lasts. Past it, the socket hears nothing
+   * more (no presence, no save notices: staff names) and is closed, so a
+   * revoked session never outlives its proof.
+   */
+  private liveState(socket: HibernatableWebSocket, now: number): SocketState | null {
+    const state = readState(socket);
+    if (!state) return null;
+    if (state.exp > now) return state;
+    socket.close(REALTIME_CLOSE_REAUTH, "Authenticate again");
+    return null;
+  }
+
   /** Everyone on `key` hears who is on it (one entry per person, however many tabs). */
   private broadcastPresence(key: string, leaving?: HibernatableWebSocket): void {
     const watchers: Array<{ socket: HibernatableWebSocket; state: SocketState }> = [];
+    const now = nowSeconds();
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === leaving) continue;
-      const state = readState(socket);
+      const state = this.liveState(socket, now);
       if (state?.keys.includes(key)) watchers.push({ socket, state });
     }
     const people = new Map<string, RealtimePerson>();

@@ -12,7 +12,7 @@ export const ADMIN_QUERY_RETRY = false;
  * shows "Couldn't reach the server" and Save can be pressed again.
  */
 export function createAdminQueryClient() {
-  return new QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: ADMIN_QUERY_STALE_TIME_MS,
@@ -27,15 +27,28 @@ export function createAdminQueryClient() {
       },
     },
   });
+  pollingClients.add(client);
+  return client;
 }
 
 // Whether the realtime hub is reachable now (set by lib/realtime/store.ts),
 // for query options that poll only without it. Kept here, with the query
 // defaults the shell loads anyway, so the shell's badges add no chunk.
 let realtimeOpen = false;
+/** This tab's query clients: their polls follow the hub at once. */
+const pollingClients = new Set<QueryClient>();
 
 export function setRealtimeOpen(next: boolean): void {
+  if (realtimeOpen === next) return;
   realtimeOpen = next;
+  // A poll is scheduled when its query last fetched: ask every mounted query
+  // for its interval again, so a poll set before the hub opened never fires
+  // and one stopped while it was open starts as soon as it closes.
+  for (const client of pollingClients) {
+    for (const query of client.getQueryCache().getAll()) {
+      for (const observer of query.observers) observer.setOptions(observer.options);
+    }
+  }
 }
 
 /**

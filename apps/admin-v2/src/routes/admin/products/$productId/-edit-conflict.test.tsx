@@ -14,6 +14,14 @@ const fixture = vi.hoisted(() => ({
   },
   dialog: null as ComponentProps<typeof ProductRevisionConflictDialog> | null,
   mounts: 0,
+  /** The draft the merge reads (default: nothing changed). */
+  draft: null as null | { changed: string[]; values: Record<string, unknown>; rebase: ReturnType<typeof vi.fn> },
+  form: null as ComponentProps<typeof ProductForm> | null,
+  choices: null as Record<string, "mine" | "theirs"> | null,
+}));
+vi.mock("~/lib/merge-document", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/lib/merge-document")>()),
+  requestMergeChoice: async () => fixture.choices,
 }));
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: object) => ({ options, useParams: () => ({ productId: "p1" }) }),
@@ -29,8 +37,10 @@ vi.mock("~/lib/api-query-options/settings", () => ({ seoSettingsQueryOptions: vi
 vi.mock("~/components/admin/product-form/utils", () => ({ productFieldLabel: (field: string) => field }));
 vi.mock("~/components/admin/ProductForm", () => ({
   ProductForm: (props: ComponentProps<typeof ProductForm>) => {
+    fixture.form = props;
     props.draftRef!.current = () => ({
       changed: [], changedSections: [], values: {} as never, rebase: vi.fn(),
+      ...(fixture.draft as object | null),
       prepareSectionsRebase: async () => ({ overlaps: [], apply: vi.fn() }),
     });
     return <>
@@ -82,5 +92,36 @@ describe("Apply product conflict while editing SKUs", () => {
     if (remoteSkuChanged) expect(fixture.dialog!.overlap).toHaveLength(1);
     else expect(fixture.dialog!.conflict).toBeNull();
     act(() => root.unmount());
+  });
+});
+
+describe("Merge on save: the pricing group is never mixed", () => {
+  it.each(["mine", "theirs"] as const)("keeping %s keeps the whole price and discount of that side", async (choice) => {
+    // I changed the price; the other save changed the discount.
+    const base = { ...fixture.product, discountType: "percentage", discountPercentage: 10, discountAmount: 0 };
+    const rebase = vi.fn();
+    fixture.draft = { changed: ["price"], values: { price: 12 }, rebase };
+    fixture.choices = { pricing: choice };
+    fixture.product = base;
+    fixture.fetchQuery.mockResolvedValue({ ...base, discountPercentage: 20, aggregateRevision: 2 });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const Page = Route.options.component as ComponentType;
+    await act(async () => { root.render(<Page />); });
+    let next: number | null = null;
+    await act(async () => { next = await fixture.form!.resolveRevisionConflict!({ expectedRevision: 1, currentRevision: 2 }); });
+    expect(next).toBe(2);
+    const [latest, keep, restore] = rebase.mock.calls[0]!;
+    expect(latest).toMatchObject({ price: 10, discountPercentage: 20 });
+    if (choice === "mine") {
+      // My price, and the discount I saw (10), not the other save's 20.
+      expect(keep).toEqual(["price"]);
+      expect(restore).toEqual({ discountPercentage: 10 });
+    } else {
+      expect(keep).toEqual([]);
+      expect(restore).toEqual({});
+    }
+    act(() => root.unmount());
+    fixture.draft = null;
   });
 });

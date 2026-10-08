@@ -38,6 +38,8 @@ export function attachRealtime(next: Connection | null, userId: string | null = 
   watchReleases.clear();
   connection = next;
   currentUserId = userId;
+  // No connection is a closed one: polls resume and presence clears.
+  if (!next) for (const listener of [...waiting.keys()]) listener.status?.("closed");
   if (next) for (const key of watched.keys()) watchReleases.set(key, next.watch(key));
 }
 
