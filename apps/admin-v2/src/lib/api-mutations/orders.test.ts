@@ -29,7 +29,7 @@ vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("../api", () => ({ apiData: (call: unknown) => call }));
 
 import { translate } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderToastMessages } from "~/i18n/order-toasts";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { AdminApiResponseError } from "../admin-api-error";
 import { queryKeys } from "../query-keys";
@@ -49,7 +49,7 @@ import {
 } from "./orders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const msg = (key: keyof typeof orderDetailMessages.en) => translate(orderDetailMessages, key);
+const msg = (key: keyof typeof orderToastMessages.en) => translate(orderToastMessages, key);
 
 let client: QueryClient;
 let invalidate: MockInstance<QueryClient["invalidateQueries"]>;

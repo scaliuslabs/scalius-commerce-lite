@@ -39,7 +39,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { translate } from "~/i18n";
 import { classifyAdminError } from "../admin-api-error";
-import { orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
+import { orderToastMessages, type OrderToastMessageKey } from "~/i18n/order-toasts";
 import { apiData, type ApiBody } from "../api";
 import { showOrderNotice } from "../order-notice";
 import type {
@@ -72,11 +72,11 @@ export type ResolveUnknownShipmentInput = OrderShipmentRef &
     trackingId?: string;
   };
 
-const msg = (key: OrderDetailMessageKey, vars?: Record<string, string | number>) =>
-  translate(orderDetailMessages, key, vars);
+const msg = (key: OrderToastMessageKey, vars?: Record<string, string | number>) =>
+  translate(orderToastMessages, key, vars);
 
 /** Toast per status the merchant can pick: noun + past verb (ORD-35). */
-const STATUS_TOASTS: Partial<Record<string, OrderDetailMessageKey>> = {
+const STATUS_TOASTS: Partial<Record<string, OrderToastMessageKey>> = {
   confirmed: "toast.status.confirmed",
   completed: "toast.status.completed",
   cancelled: "toast.status.cancelled",
@@ -297,7 +297,7 @@ export function useCreateOrderShipment() {
 export type CreateFulfillmentInput = { orderId: string } &
   ApiBody<typeof postApiV1AdminOrdersByIdFulfillments>;
 
-const FULFILLMENT_TOASTS: Record<CreateFulfillmentInput["kind"], OrderDetailMessageKey> = {
+const FULFILLMENT_TOASTS: Record<CreateFulfillmentInput["kind"], OrderToastMessageKey> = {
   ship: "toast.fulfilled",
   pickup: "toast.pickedUp",
   service: "toast.serviceDone",
