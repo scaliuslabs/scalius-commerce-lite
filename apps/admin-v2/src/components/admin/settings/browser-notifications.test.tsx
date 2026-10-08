@@ -203,4 +203,13 @@ describe("Browser notifications card", () => {
     expect(host.textContent).toContain("An app can send them instead.");
     expect(host.querySelector('a[href="/admin/apps"]')).not.toBeNull();
   });
+
+  it("writes the not-ready reason in Bangla in the Bangla dashboard, not the API's English", async () => {
+    setLocale("bn");
+    sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => ok(rules({ customerPush: unready })));
+    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [] }));
+    await render(<BrowserNotificationsCard />);
+    await vi.waitFor(() => expect(host.textContent).toContain("ওয়েব ঠিকানা লাগে"));
+    expect(host.textContent).not.toContain("need your store");
+  });
 });

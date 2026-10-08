@@ -57,6 +57,7 @@ import {
 import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { usePushIssueText } from "./push-issue-text";
 import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
@@ -165,6 +166,7 @@ function RulesTable({
 
 export function CustomerNotificationsCard() {
   const t = useMessages(notificationsMessages);
+  const pushIssueText = usePushIssueText();
   const common = useMessages(settingsMessages);
   const canEdit = useCanEditNotifications();
   const { values, setValues, isLoadError, refetch } = useSettingsForm<CustomerRules>({
@@ -210,7 +212,7 @@ export function CustomerNotificationsCard() {
       {unready.map((channel) => (
         <p key={channel} className="text-body text-muted-foreground">
           {channel === "push"
-            ? values.customerPush?.issues[0]?.message ?? t("browserNotReady")
+            ? pushIssueText(values.customerPush?.issues[0]) ?? t("browserNotReady")
             : t("notReady", { channel: t(channel) })}
         </p>
       ))}

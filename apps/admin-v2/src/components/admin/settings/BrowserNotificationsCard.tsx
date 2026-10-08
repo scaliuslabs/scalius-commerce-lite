@@ -24,6 +24,7 @@ import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { NoAppsLine } from "./AppKindCard";
 import { pushProviderBody, type CustomerRules } from "./notification-channel-policy";
+import { usePushIssueText } from "./push-issue-text";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
@@ -34,6 +35,7 @@ export function BrowserNotificationsCard() {
   const t = useMessages(appKindsMessages);
   const appT = useMessages(appProvidersMessages);
   const common = useMessages(settingsMessages);
+  const pushIssueText = usePushIssueText();
   const queryClient = useQueryClient();
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
   const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
@@ -65,7 +67,7 @@ export function BrowserNotificationsCard() {
     ...(choice !== BUILT_IN && !app ? [{ value: choice, label: choice }] : []),
   ];
   const builtInIssue = choice === BUILT_IN && values.customerPush && !isReady(values.customerPush)
-    ? values.customerPush.issues[0]?.message ?? null
+    ? pushIssueText(values.customerPush.issues[0])
     : null;
   return (
     <SettingsCard id="browserNotifications" title={t("browserTitle")} description={t("browserDescription")}>
