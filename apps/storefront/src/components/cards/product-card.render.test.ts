@@ -461,7 +461,7 @@ describe("the one product card", () => {
     expect(text(fact(paid, "delivery"))).toBe("Delivery from ৳60");
     const free = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: true });
     expect(text(fact(free, "delivery"))).toBe("Free delivery");
-    const unknown = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: false, cardFacts: { ...PRODUCTS.allFacts.cardFacts, delivery: null } });
+    const unknown = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: false, cardFacts: { ...(PRODUCTS.allFacts as unknown as { cardFacts: Record<string, unknown> }).cardFacts, delivery: null } });
     expect(fact(unknown, "delivery")).toBeNull();
   });
 
