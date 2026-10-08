@@ -91,10 +91,10 @@ const text = (node: Element | null | undefined) => node?.textContent?.replace(/\
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 const ANALYTICS = { id: "ga", type: "google-analytics", usePartytown: false, location: "head", config: "<script>window.__gaLoaded=1</script>" };
 
-/** A theme whose footer is the newsletter-grey one (it has its own signup form). */
+/** A theme whose footer is the centered-compact one (it has its own signup form). */
 function themeWithNewsletterFooter() {
   const theme = storefrontTemplateTheme("boutique");
-  theme.blocks.footer = storefrontBlockDefault("footer", "newsletter-grey") as never;
+  theme.blocks.footer = storefrontBlockDefault("footer", "centered-compact") as never;
   return theme;
 }
 
@@ -181,7 +181,7 @@ describe("/newsletter", () => {
     expect(text(refused.querySelector("h1"))).toBe("Check your details");
     expect(refused.querySelector('[role="alert"]')).not.toBeNull();
     expect(refused.querySelector('form[action="/api/newsletter/subscribe"]')).not.toBeNull();
-    // The newsletter-grey footer leaves its own form out here: one signup per page.
+    // The centered-compact footer leaves its own form out here: one signup per page.
     expect(refused.querySelectorAll("form[data-newsletter-form]")).toHaveLength(1);
 
     stubApi({ languageCode: "bn" });

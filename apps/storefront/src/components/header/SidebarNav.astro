@@ -8,6 +8,7 @@
 // keeps to its share of the link budget (nav-tree.ts).
 import type { CategoryNavigationTree, NavigationItem } from "@/lib/api";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import NavTree from "./NavTree.astro";
 import { HEADER_FIXED_LINKS, navigationIndexMode, planHeaderNavigation, sourceNavigation } from "./nav-tree";
 
@@ -17,7 +18,8 @@ interface Props {
   categoryTree?: CategoryNavigationTree | null;
 }
 
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const source = resolved.blocks.navigation;
 const nodes = Astro.props.categoryTree?.nodes ?? [];
 const tree = sourceNavigation(source.source, Astro.props.navigation, nodes);
@@ -29,7 +31,7 @@ const plan = planHeaderNavigation(
 );
 ---
 
-<nav id="sidebar-nav" class="sidebar-nav" aria-label="Main navigation">
+<nav id="sidebar-nav" class="sidebar-nav" aria-label={copy.nav.main}>
   <NavTree items={plan.drawer} idPrefix="sidebar-nav" variant="sidebar" allCategories={plan.drawerAllCategories} />
 </nav>
 

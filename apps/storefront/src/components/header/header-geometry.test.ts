@@ -3,13 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { STOREFRONT_HEADER_VARIANTS } from "@scalius/shared/storefront-theme";
-import {
-  HEADER_GEOMETRY,
-  HEADER_SPECS,
-  headerCondense,
-  headerGeometryStyle,
-  headerSpec,
-} from "./header-variants";
+import { HEADER_GEOMETRY, headerCondense, headerGeometryStyle, headerSpec } from "./header-variants";
 
 const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 
@@ -25,60 +19,45 @@ function rulesFor(file: string, className: string): string[] {
     .map(([, selector, body]) => `${selector!.trim()} { ${body!.trim()} }`);
 }
 
-describe("header scroll geometry", () => {
-  it("places the fashion phone search below the sticky bar without reserving it on scroll", () => {
-    const spec = headerSpec("fashion-department", {});
-    expect(spec?.phoneSearch).toBe("in-page");
-    expect(headerCondense(spec, { foldsMenuRow: false }).phone).toBe(
-      "calc(var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed))",
-    );
-    expect(source("./variants/ComposedHeader.astro")).toContain('spec.phoneSearch === "in-page" && !compactCategorySearch');
-  });
+const COMPOSED = "./variants/ComposedHeader.astro";
 
-  it("reserves exactly what each header loses when it condenses", () => {
+describe("header scroll geometry", () => {
+  it("reserves exactly what each layout loses when it condenses", () => {
     const bar = "var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed)";
-    const classicBar = "var(--hdr-classic-bar) - var(--hdr-classic-bar-condensed)";
     for (const variant of Object.keys(STOREFRONT_HEADER_VARIANTS)) {
-      const spec = variant === "mall-departments" ? null : headerSpec(variant, {});
-      if (!spec) {
-        // The classic header: the bar step on phones; on computers the bar
-        // step plus the dropdown row when it folds into the bar.
-        expect(headerCondense(spec, { foldsMenuRow: true })).toEqual({
-          phone: `calc(${bar})`,
-          desktop: `calc(${classicBar} + var(--hdr-classic-menu-row))`,
-        });
-        expect(headerCondense(spec, { foldsMenuRow: false }).desktop).toBe(`calc(${classicBar})`);
-        continue;
-      }
-      // Composed headers: the bar step plus a sticky phone search row; their
-      // computer rows never change.
-      expect(headerCondense(spec, { foldsMenuRow: true }), variant).toEqual({
+      const spec = headerSpec(variant, {});
+      // The bar step, plus the sticky phone search row where the layout has one.
+      expect(headerCondense(spec), variant).toEqual({
         phone: spec.phoneSearch === "sticky" ? `calc(${bar} + var(--hdr-phone-search-row))` : `calc(${bar})`,
-        desktop: "0rem",
       });
     }
-    expect(HEADER_SPECS["marketplace-search"].phoneSearch).toBe("sticky");
+    expect(headerSpec("search-first", {}).phoneSearch).toBe("sticky");
+    expect(headerSpec("inline-nav", {}).phoneSearch).toBe("none");
+    expect(headerSpec("centered-logo", {}).phoneSearch).toBe("none");
+  });
+
+  it("reads the layout's settings and fits the search to the layout", () => {
+    expect(headerSpec("inline-nav", { search: "field", rowTone: "header", cartTotal: true })).toMatchObject({
+      menu: "inline", search: "field", toneRow: true, cartTotal: true,
+    });
+    expect(headerSpec("search-first", { search: "scoped" })).toMatchObject({ menu: "row", search: "scoped", toneRow: false });
+    // A search-first header always has a field (an icon would not be "first").
+    expect(headerSpec("search-first", { search: "icon" }).search).toBe("field");
+    expect(headerSpec("centered-logo", {})).toMatchObject({ menu: "row", search: "icon" });
   });
 
   it("builds every reserved length from the variables the rows paint with", () => {
-    const { phoneBar, searchField, phoneSearchGap, classicBar, classicMenuRow } = HEADER_GEOMETRY;
-    const style = headerGeometryStyle(headerCondense(null, { foldsMenuRow: true }));
+    const { phoneBar, searchField, phoneSearchGap, navLink } = HEADER_GEOMETRY;
+    const style = headerGeometryStyle(headerCondense(headerSpec("search-first", {})));
     const vars = Object.fromEntries(style.split("; ").map((entry) => entry.split(": ") as [string, string]));
     expect(vars).toMatchObject({
       "--hdr-phone-bar": phoneBar.expanded,
       "--hdr-phone-bar-condensed": phoneBar.condensed,
       "--hdr-search-field": searchField,
       "--hdr-phone-search-row": `calc(var(--hdr-search-field) + ${phoneSearchGap})`,
-      "--hdr-classic-bar": classicBar.expanded,
-      "--hdr-classic-bar-condensed": classicBar.condensed,
-      "--nav-link-height-fine": classicMenuRow.link.fine,
-      "--nav-link-height-coarse": classicMenuRow.link.coarse,
-      "--hdr-classic-menu-row": `calc(${classicMenuRow.border} + 2 * ${classicMenuRow.padding} + var(--nav-link-height))`,
+      "--nav-link-height-fine": navLink.fine,
+      "--nav-link-height-coarse": navLink.coarse,
     });
-    // The row's measured anatomy: py-2 around the menu and a top border.
-    const classicSource = source("./variants/ClassicHeader.astro");
-    expect(classicSource).toContain('class="header-full-nav-row hidden border-t border-border lg:block"');
-    expect(classicSource).toContain('<div class="py-2 flex justify-center relative z-50" data-nav-compact-home=');
     // The menu links, the search field and the phone search row paint with the same variables.
     const nav = source("./DesktopNav.astro");
     expect(nav.match(/height: var\(--nav-link-height, 2\.(?:5|75)rem\)/g)).toHaveLength(3);
@@ -90,19 +69,10 @@ describe("header scroll geometry", () => {
   });
 
   it("paints the rows that condense from the same data, easing only with the reserve's transition", () => {
-    // Composed headers: the bar and the sticky search row.
-    const composed = "./variants/ComposedHeader.astro";
-    const bar = rulesFor(composed, "hdr-bar").join("\n");
+    const bar = rulesFor(COMPOSED, "hdr-bar").join("\n");
     expect(bar).toContain("height: var(--hdr-phone-bar, 3.5rem)");
     expect(bar).toContain("height: var(--hdr-phone-bar-condensed, 3rem)");
-    expect(rulesFor(composed, "hdr-phone-search").join("\n")).toContain("height: var(--hdr-phone-search-row, 3.25rem)");
-    // The classic header: its bar on phones and computers, and its dropdown row.
-    const classic = "./variants/ClassicHeader.astro";
-    const row = rulesFor(classic, "header-row").join("\n");
-    for (const token of ["--hdr-phone-bar", "--hdr-phone-bar-condensed", "--hdr-classic-bar", "--hdr-classic-bar-condensed"]) {
-      expect(row).toContain(`var(${token},`);
-    }
-    expect(rulesFor(classic, "header-full-nav-row").join("\n")).toContain("height: var(--hdr-classic-menu-row);");
+    expect(rulesFor(COMPOSED, "hdr-phone-search").join("\n")).toContain("height: var(--hdr-phone-search-row, 3.25rem)");
     // A height that eased on its own timing while the reserve used another
     // would move the page for a few frames: every transition of a flow size
     // on these rows uses the shared condense duration and easing.
@@ -110,14 +80,8 @@ describe("header scroll geometry", () => {
     const sharedTiming = /\svar\(--hdr-condense-duration, [^)]*\)\s+var\(--hdr-condense-easing, /;
     const seen = new Set<string>();
     const checked: string[] = [];
-    for (const [file, name] of [
-      [composed, "hdr-bar"],
-      [composed, "hdr-phone-search"],
-      [composed, "hdr"],
-      [classic, "header-row"],
-      [classic, "header-full-nav-row"],
-    ] as const) {
-      for (const rule of rulesFor(file, name)) {
+    for (const name of ["hdr-bar", "hdr-phone-search", "hdr"]) {
+      for (const rule of rulesFor(COMPOSED, name)) {
         if (seen.has(rule)) continue;
         seen.add(rule);
         const transition = /transition:([^;]*);/.exec(rule)?.[1];
@@ -126,24 +90,23 @@ describe("header scroll geometry", () => {
         for (const entry of transition.split(/,(?![^(]*\))/).map((part) => part.trim())) {
           if (!flowSize.test(entry)) continue;
           checked.push(entry.split(/\s/)[0]!);
-          expect(entry, `${file} ${rule}`).toMatch(sharedTiming);
+          expect(entry, rule).toMatch(sharedTiming);
         }
       }
     }
-    // The composed bar and search row, the classic bar and dropdown row.
-    expect(checked).toEqual(["height", "height", "padding-bottom", "height", "height"]);
-    const classicRow = source(classic).match(/class="header-row[^"]*"/)![0];
-    expect(classicRow).not.toMatch(/transition|\bh-\d|lg:h-/);
+    // The bar, and the sticky search row (its height and bottom padding).
+    expect(checked).toEqual(["height", "height", "padding-bottom"]);
   });
 
-  it("holds the reserve under the condensed header on every width", () => {
+  it("holds the reserve under the condensed header", () => {
     const css = source("./HeaderLayout.astro");
     expect(css).toMatch(/#main-header\.is-scrolled \{\s*margin-bottom: var\(--hdr-condense-phone, 0rem\);/);
-    expect(css).toMatch(/@media \(min-width: 64rem\) \{\s*#main-header\.is-scrolled \{\s*margin-bottom: var\(--hdr-condense-desktop, 0rem\);/);
+    // Computers keep their rows as they are: nothing to reserve there.
+    expect(css).not.toContain("--hdr-condense-desktop");
     // The reserve eases with the rows (0s for everything under reduced motion).
     expect(css).toMatch(/#main-header \{\s*transition-property: margin-bottom[^;]*;\s*transition-duration: var\(--hdr-condense-duration, 300ms\);\s*transition-timing-function: var\(--hdr-condense-easing,/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*#site-header \{\s*--hdr-condense-duration: 0s;/);
-    expect(headerGeometryStyle(headerCondense(null, { foldsMenuRow: false }))).toContain(
+    expect(headerGeometryStyle(headerCondense(headerSpec("inline-nav", {})))).toContain(
       `--hdr-condense-motion: ${HEADER_GEOMETRY.condense.duration}; --hdr-condense-easing: ${HEADER_GEOMETRY.condense.easing}`,
     );
   });

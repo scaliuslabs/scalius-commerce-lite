@@ -1,15 +1,13 @@
 /**
- * The header variants as data (theme block `header`). Every variant except
- * `mall-departments` renders through ComposedHeader.astro from this spec;
- * `mall-departments` is the merchant-selectable classic header (ClassicHeader.astro),
- * kept pixel-identical. Sizes are the
- * measured desktop anatomy (SYNTHESIS.md section 2.2); colours, radius and
- * type come from the theme tokens, never from here.
+ * The header as data (theme block `header`): three layouts and the settings
+ * that tune them (search, row tone, cart total), all drawn by
+ * ComposedHeader.astro. Sizes follow the 4px scale; colours, radius and type
+ * come from the theme tokens, never from here.
  *
- * Phones share one grammar whatever the variant: a 56px bar (menu, logo
- * centred, account, cart) that condenses to 48px on scroll, plus an
- * optional search row that folds away on scroll, so the sticky stack stays
- * under 120px (mix rule 6).
+ * Phones share one grammar whatever the layout: a 56px bar (menu, logo
+ * centred, account, cart) that condenses to 48px on scroll, plus a search
+ * row for `search-first` that folds away on scroll, so the sticky stack
+ * stays under 120px.
  */
 import type { StorefrontBlockVariant } from "@scalius/shared/storefront-theme";
 
@@ -26,22 +24,17 @@ export interface HeaderLogo {
 }
 
 export interface HeaderSpec {
-  /** The main row wears the header tone (`headerTone`: dark or brand headers). */
+  layout: HeaderVariant;
+  /** The main row wears the header colours (`headerTone`), not the page's. */
   toneRow: boolean;
-  /** The menu row under it: the header tone, or the page surface. */
-  menuRowTone: "tone" | "surface";
   /** Where the desktop menu sits: in the main row, or its own row below. */
   menu: "inline" | "row";
-  /** Top-level menu items in capitals (fashion departments). */
-  uppercaseMenu: boolean;
-  /** icon: a 44px button; field: a filled field; pill: a rounded field; scoped: department select + field + button. */
-  search: "icon" | "field" | "pill" | "scoped" | "scoped-right";
-  /** How account, track order and cart read on computers. */
-  utilities: "icons" | "stacked" | "two-line" | "round";
-  /** A running cart total beside the cart (unless the settings turn it off). */
+  /** icon: a 44px button; field: a filled field; scoped: department select + field + button. */
+  search: "icon" | "field" | "scoped";
+  /** A running cart total beside the cart. */
   cartTotal: boolean;
   /** Phones: a full-width search row under the bar. */
-  phoneSearch: "none" | "sticky" | "in-page";
+  phoneSearch: "none" | "sticky";
   /** Phones: a scrolling row of top links under the header (not sticky). */
   phoneShortcuts: boolean;
   /** Desktop heights in rem: the main row and the menu row. */
@@ -49,179 +42,20 @@ export interface HeaderSpec {
   menuHeight: number;
 }
 
-export const HEADER_SPECS: Record<Exclude<HeaderVariant, "mall-departments">, HeaderSpec> = {
-  // Dawn: 84px, logo, 3-6 inline items, 44px icon buttons (search expands).
-  "boutique-inline": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "inline",
-    uppercaseMenu: false,
-    search: "icon",
-    utilities: "icons",
-    cartTotal: false,
-    phoneSearch: "none",
-    phoneShortcuts: false,
-    mainHeight: 5.25,
-    menuHeight: 0,
-  },
-  // Showcase: a shorter landing-page bar, with the same searchable menu.
-  "showcase-simple": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "inline",
-    uppercaseMenu: false,
-    search: "icon",
-    utilities: "icons",
-    cartTotal: false,
-    phoneSearch: "none",
-    phoneShortcuts: false,
-    mainHeight: 4.125,
-    menuHeight: 0,
-  },
-  // Fabrilife: 80px, uppercase departments, a filled 300x44 search,
-  // icon-over-label utilities.
-  "fashion-department": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "inline",
-    uppercaseMenu: true,
-    search: "field",
-    utilities: "stacked",
-    cartTotal: false,
-    phoneSearch: "in-page",
-    phoneShortcuts: false,
-    mainHeight: 5,
-    menuHeight: 0,
-  },
-  // Heritage: search and account above a separate row of departments.
-  "heritage-nav": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: true,
-    search: "field",
-    utilities: "icons",
-    cartTotal: false,
-    phoneSearch: "none",
-    phoneShortcuts: false,
-    mainHeight: 4,
-    menuHeight: 2.25,
-  },
-  // Star Tech: an 82px toned row (580px search, two-line utilities), then a
-  // 50px light category row that stays on its own; phones keep the search in
-  // the page under a 50px bar.
-  "spec-two-row": {
-    toneRow: true,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "field",
-    utilities: "two-line",
-    cartTotal: false,
-    phoneSearch: "in-page",
-    phoneShortcuts: false,
-    mainHeight: 5.125,
-    menuHeight: 3.125,
-  },
-  // Apple Gadgets: an 80px toned row with a 584x48 pill search and 48px
-  // round icons, then a 52px light row of centred categories.
-  "tech-rounded": {
-    toneRow: true,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "pill",
-    utilities: "round",
-    cartTotal: false,
-    phoneSearch: "sticky",
-    phoneShortcuts: false,
-    mainHeight: 5,
-    menuHeight: 3.25,
-  },
-  // Amazon, Daraz: a 60px toned row with a department-scoped search (790x40)
-  // and two-line utilities, then a 40px toned row ("All" plus top links).
-  "marketplace-search": {
-    toneRow: true,
-    menuRowTone: "tone",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "scoped",
-    utilities: "two-line",
-    cartTotal: false,
-    phoneSearch: "sticky",
-    phoneShortcuts: true,
-    mainHeight: 3.75,
-    menuHeight: 2.5,
-  },
-  // eBay: utility strip, 84px light search row, 54px category row. On
-  // phones, a 52px bar followed by an in-page search, neither sticky.
-  "marketplace-light": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "scoped-right",
-    utilities: "icons",
-    cartTotal: false,
-    phoneSearch: "in-page",
-    phoneShortcuts: false,
-    mainHeight: 5.25,
-    menuHeight: 3.375,
-  },
-  // Department mall: a prominent logo and scoped search over a department rail.
-  "mall-search": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "scoped",
-    utilities: "round",
-    cartTotal: true,
-    phoneSearch: "none",
-    phoneShortcuts: false,
-    mainHeight: 7.5,
-    menuHeight: 2.8125,
-  },
-  // Target, Walmart: an 80px row with the menu as pills, a 628x44 pill
-  // search, account and cart (optionally with its total).
-  "retail-pill": {
-    toneRow: true,
-    menuRowTone: "surface",
-    menu: "inline",
-    uppercaseMenu: false,
-    search: "pill",
-    utilities: "two-line",
-    cartTotal: false,
-    phoneSearch: "sticky",
-    phoneShortcuts: true,
-    mainHeight: 5,
-    menuHeight: 0,
-  },
-  // Chaldal: a 90px light shell header with a wide 48px search and the cart
-  // total always in view; the departments column sits beside the page.
-  "grocery-shell": {
-    toneRow: false,
-    menuRowTone: "surface",
-    menu: "row",
-    uppercaseMenu: false,
-    search: "field",
-    utilities: "icons",
-    cartTotal: true,
-    phoneSearch: "sticky",
-    phoneShortcuts: false,
-    mainHeight: 5.625,
-    menuHeight: 2.75,
-  },
+const LAYOUTS: Record<HeaderVariant, Pick<HeaderSpec, "menu" | "phoneSearch" | "phoneShortcuts" | "mainHeight" | "menuHeight">> = {
+  "inline-nav": { menu: "inline", phoneSearch: "none", phoneShortcuts: false, mainHeight: 5, menuHeight: 0 },
+  "search-first": { menu: "row", phoneSearch: "sticky", phoneShortcuts: true, mainHeight: 4.5, menuHeight: 3 },
+  "centered-logo": { menu: "row", phoneSearch: "none", phoneShortcuts: false, mainHeight: 5, menuHeight: 3 },
 };
 
 /**
  * What changes height when the page scrolls. The sticky header condenses (a
- * shorter bar; the phone search row and the classic dropdown row fold
- * away), and the page under it must not move: while condensed the header
- * keeps its expanded height in the flow as a bottom margin (CLS 0). The rows
- * paint with these lengths and the reserve is built from the same custom
- * properties, so the two can never drift apart; rows and reserve animate
- * with one shared transition, so their sum is the same in every frame.
+ * shorter bar; the phone search row folds away), and the page under it must
+ * not move: while condensed the header keeps its expanded height in the flow
+ * as a bottom margin (CLS 0). The rows paint with these lengths and the
+ * reserve is built from the same custom properties, so the two can never
+ * drift apart; rows and reserve animate with one shared transition, so
+ * their sum is the same in every frame.
  */
 export const HEADER_GEOMETRY = {
   /** The one transition every condensing height and the reserve use. */
@@ -231,42 +65,19 @@ export const HEADER_GEOMETRY = {
   /** A header search field (HeaderSearch), and the space under the phone search row. */
   searchField: "2.75rem",
   phoneSearchGap: "0.5rem",
-  /** The classic header's main row on computers: 72px, 64px once scrolled. */
-  classicBar: { expanded: "4.5rem", condensed: "4rem" },
-  /**
-   * The classic header's dropdown row, which folds into the bar on scroll:
-   * its top border, 0.5rem above and below the menu, and a menu link's
-   * height (DesktopNav; touch screens keep 44px targets).
-   */
-  classicMenuRow: { border: "1px", padding: "0.5rem", link: { fine: "2.5rem", coarse: "2.75rem" } },
+  /** A menu link's height (DesktopNav; touch screens keep 44px targets). */
+  navLink: { fine: "2.5rem", coarse: "2.75rem" },
 } as const;
 
 export interface HeaderCondense {
   /** The height the header loses on scroll below 64rem, as a CSS length. */
   phone: string;
-  /** ...and from 64rem. */
-  desktop: string;
 }
 
-/**
- * How much a header condenses on scroll: the reserve that keeps the page
- * still. `spec` null is the classic header; `foldsMenuRow` its dropdown row
- * folding into the bar.
- */
-export function headerCondense(spec: HeaderSpec | null, options: { foldsMenuRow: boolean }): HeaderCondense {
+/** How much a header condenses on scroll: the reserve that keeps the page still. */
+export function headerCondense(spec: HeaderSpec): HeaderCondense {
   const bar = "var(--hdr-phone-bar) - var(--hdr-phone-bar-condensed)";
-  if (!spec) {
-    const classicBar = "var(--hdr-classic-bar) - var(--hdr-classic-bar-condensed)";
-    return {
-      phone: `calc(${bar})`,
-      desktop: options.foldsMenuRow ? `calc(${classicBar} + var(--hdr-classic-menu-row))` : `calc(${classicBar})`,
-    };
-  }
-  // Composed headers keep their computer rows as they are.
-  return {
-    phone: spec.phoneSearch === "sticky" ? `calc(${bar} + var(--hdr-phone-search-row))` : `calc(${bar})`,
-    desktop: "0rem",
-  };
+  return { phone: spec.phoneSearch === "sticky" ? `calc(${bar} + var(--hdr-phone-search-row))` : `calc(${bar})` };
 }
 
 /**
@@ -275,7 +86,7 @@ export function headerCondense(spec: HeaderSpec | null, options: { foldsMenuRow:
  * and `--hdr-condense-duration` (0s under reduced motion).
  */
 export function headerGeometryStyle(condense: HeaderCondense): string {
-  const { condense: motion, phoneBar, searchField, phoneSearchGap, classicBar, classicMenuRow } = HEADER_GEOMETRY;
+  const { condense: motion, phoneBar, searchField, phoneSearchGap, navLink } = HEADER_GEOMETRY;
   return [
     `--hdr-condense-motion: ${motion.duration}`,
     `--hdr-condense-easing: ${motion.easing}`,
@@ -283,19 +94,21 @@ export function headerGeometryStyle(condense: HeaderCondense): string {
     `--hdr-phone-bar-condensed: ${phoneBar.condensed}`,
     `--hdr-search-field: ${searchField}`,
     `--hdr-phone-search-row: calc(var(--hdr-search-field) + ${phoneSearchGap})`,
-    `--hdr-classic-bar: ${classicBar.expanded}`,
-    `--hdr-classic-bar-condensed: ${classicBar.condensed}`,
-    `--nav-link-height-fine: ${classicMenuRow.link.fine}`,
-    `--nav-link-height-coarse: ${classicMenuRow.link.coarse}`,
-    `--hdr-classic-menu-row: calc(${classicMenuRow.border} + 2 * ${classicMenuRow.padding} + var(--nav-link-height))`,
+    `--nav-link-height-fine: ${navLink.fine}`,
+    `--nav-link-height-coarse: ${navLink.coarse}`,
     `--hdr-condense-phone: ${condense.phone}`,
-    `--hdr-condense-desktop: ${condense.desktop}`,
   ].join("; ");
 }
 
-/** The spec for a composed header, with its settings applied (`cartTotal`). */
-export function headerSpec(variant: string, settings: Record<string, unknown>): HeaderSpec | null {
-  const spec = HEADER_SPECS[variant as keyof typeof HEADER_SPECS];
-  if (!spec) return null;
-  return typeof settings.cartTotal === "boolean" ? { ...spec, cartTotal: settings.cartTotal } : spec;
+/** The spec for a header layout with its settings applied. */
+export function headerSpec(variant: string, settings: Record<string, unknown>): HeaderSpec {
+  const layout: HeaderVariant = variant === "search-first" || variant === "centered-logo" ? variant : "inline-nav";
+  const search = settings.search === "field" || settings.search === "scoped" ? settings.search : "icon";
+  return {
+    layout,
+    ...LAYOUTS[layout],
+    toneRow: settings.rowTone === "header",
+    search: layout === "search-first" && search === "icon" ? "field" : search,
+    cartTotal: settings.cartTotal === true,
+  };
 }

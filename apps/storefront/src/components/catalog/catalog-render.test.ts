@@ -339,7 +339,7 @@ const gridSizes = (context: "grid" | "beside-filters", theme: StorefrontThemeDoc
 const PRICE_FIRST = ["price", "availability", "rating", "brand", "other", "category"] as const;
 function mallWith(listing: Record<string, unknown>, header?: string): StorefrontThemeDocument {
   const theme = storefrontTemplateTheme("department-mall");
-  if (header) theme.blocks.header = { variant: header, settings: {} } as never;
+  if (header) theme.blocks.header = { variant: header, settings: { search: header === "search-first" ? "field" : "icon", rowTone: "page", cartTotal: false } } as never;
   Object.assign(theme.blocks.listing, listing);
   return theme;
 }
@@ -348,7 +348,7 @@ const specListingTheme = () => mallWith({
   filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14, order: [...PRICE_FIRST], searchPlacement: "drawer", ruled: false },
   toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page", "applied-chips"],
   band: "beside-filters",
-}, "spec-two-row");
+}, "search-first");
 /** Target: a filter drawer, rows for searches, the phone's one scrolling pill row, four columns at most. */
 const pillRowListingTheme = () => mallWith({
   searchLayout: "list",
@@ -1252,7 +1252,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(applied.textContent).toContain("On sale");
     expect(applied.textContent).not.toContain("Search:");
 
-    theme.blocks.header = { variant: "showcase-simple", settings: {} };
+    theme.blocks.header = { variant: "inline-nav", settings: { search: "icon", rowTone: "page", cartTotal: false } };
     const alternateHeader = await renderListing(theme, search, TREE_STORE_SHAPE);
     expect(alternateHeader.querySelector("nav[aria-label='Applied filters']")!.textContent).toContain("Search:");
   });

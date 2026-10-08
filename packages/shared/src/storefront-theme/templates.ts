@@ -143,7 +143,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["mall-search"],
+      header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 8 },
       desktopNav: ["mega-panel"],
       mobileNav: ["accordion-drawer"],
@@ -151,7 +151,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       // No per-page: the default listing stays compact, without extra crawl variants.
       listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["mall"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
-      footer: ["product-widgets"],
+      footer: ["columns"],
     }),
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
@@ -172,7 +172,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "announcement",
-      header: ["boutique-inline"],
+      header: ["inline-nav"],
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
@@ -191,7 +191,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         below: ["description", "content-blocks", "policies", "reviews", "related"],
         sticky: NO_STICKY,
       },
-      footer: ["minimal-columns"],
+      footer: ["columns"],
     }),
     // It ends with the newsletter (phone first, the e-mail optional, as
     // everywhere in this market).
@@ -216,7 +216,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["marketplace-search"],
+      header: ["search-first", { search: "scoped", rowTone: "header" }],
       navigation: { source: "tree+menu", maxTopItems: 18 },
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
@@ -256,10 +256,10 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["mall-search", { cartTotal: true }],
+      header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 16 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
-      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "cart", "search", "account"], drawer: "drill-in" }],
+      mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "account"], drawer: "drill-in" }],
       card: ["standard", { facts: "none", action: "quick-add" }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
@@ -285,7 +285,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "announcement",
-      header: ["showcase-simple"],
+      header: ["inline-nav"],
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
@@ -297,7 +297,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         links: "tabs",
       },
       product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
-      footer: ["minimal-columns"],
+      footer: ["columns"],
     }),
     // A landing page opens on its offer: the hero, the store's own delivery
     // and payment facts, then the products themselves, before the story,

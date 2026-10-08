@@ -1,0 +1,128 @@
+---
+// The footer's link groups, one way for every footer: plain columns on
+// computers, accordions on phones (a 48px summary, hairline dividers, no
+// extra gap between them). Each group is a native <details>, open in the
+// markup so computers and no-JavaScript readers see every link; below 64rem
+// the script folds them, and on computers the summary is a plain heading
+// (no "+" and no toggling). Links keep body size everywhere.
+import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+import type { FooterMenu } from "@/lib/api";
+
+interface Props {
+  /** Groups of links: a menu's title and links, or a bare list (policies). */
+  menus: Array<Pick<FooterMenu, "title" | "links">>;
+  /** The accessible name of the group of groups. */
+  label?: string;
+}
+
+const { menus, label } = Astro.props;
+---
+
+{
+  menus.length > 0 && (
+    <nav class="footer-menus" aria-label={label} data-footer-menus>
+      {menus.map((menu) => (
+        <details class="footer-menu" open>
+          <summary>
+            <h2>{menu.title}</h2>
+          </summary>
+          <RecursiveFooterLink links={menu.links} />
+        </details>
+      ))}
+    </nav>
+  )
+}
+
+<style is:global>
+  .footer-menus {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    border-block-start: 1px solid var(--border);
+  }
+
+  .footer-menu {
+    border-block-end: 1px solid var(--border);
+  }
+
+  .footer-menu > summary {
+    display: flex;
+    align-items: center;
+    min-height: 3rem;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .footer-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .footer-menu > summary::after {
+    content: "+";
+    margin-inline-start: auto;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .footer-menu[open] > summary::after {
+    content: "−";
+  }
+
+  .footer-menu > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  .footer-menu h2 {
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .footer-menu > ul {
+    padding-block-end: 0.75rem;
+  }
+
+  @media (min-width: 40rem) {
+    .footer-menus {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 2rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .footer-menus {
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: 2rem;
+      border-block-start: 0;
+    }
+
+    .footer-menu {
+      border-block-end: 0;
+    }
+
+    .footer-menu > summary {
+      min-height: 0;
+      margin-block-end: 0.75rem;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .footer-menu > summary::after,
+    .footer-menu[open] > summary::after {
+      content: none;
+    }
+  }
+</style>
+
+<script>
+  const wideFooter = window.matchMedia("(min-width: 64rem)");
+  const syncFooterMenus = () => {
+    document.querySelectorAll<HTMLDetailsElement>(".footer-menu").forEach((menu) => {
+      menu.open = wideFooter.matches;
+    });
+  };
+  // Phones start folded; computers keep every group open.
+  if (!wideFooter.matches) syncFooterMenus();
+  wideFooter.addEventListener("change", syncFooterMenus);
+</script>

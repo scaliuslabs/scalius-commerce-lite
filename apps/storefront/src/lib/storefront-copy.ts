@@ -6,6 +6,7 @@
 // chrome into its pages. Slices that move more strings here add keys to
 // both languages; the test fails when one language lacks a key.
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { CHROME_BN, CHROME_EN, type ChromeCopy } from "./chrome-copy";
 
 export type StorefrontLanguage = "en" | "bn";
 
@@ -53,6 +54,8 @@ export interface StorefrontCopy {
   section: {
     viewAll: string;
   };
+  /** Header, menus, drawers and footer (chrome-copy.ts). */
+  chrome: ChromeCopy;
 }
 
 const EN: StorefrontCopy = {
@@ -86,6 +89,7 @@ const EN: StorefrontCopy = {
   section: {
     viewAll: "View all",
   },
+  chrome: CHROME_EN,
 };
 
 const BN: StorefrontCopy = {
@@ -119,6 +123,7 @@ const BN: StorefrontCopy = {
   section: {
     viewAll: "সব দেখুন",
   },
+  chrome: CHROME_BN,
 };
 
 const COPY: Record<StorefrontLanguage, StorefrontCopy> = { en: EN, bn: BN };

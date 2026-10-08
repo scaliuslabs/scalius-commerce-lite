@@ -9,6 +9,8 @@
 // arrow keys, Escape and flipping at the viewport's end.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import {
   ariaCurrent,
   navigationChildren,
@@ -25,6 +27,8 @@ interface Props {
 }
 
 const { items: allItems = [], mode, parent, depth = 1 } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 // A fly-out column never scrolls (a scrolling column would clip the next
 // fly-out), so it shows its first rows and ends in "Show all" (Star Tech: 17).
 const MAX_CASCADE_ROWS = 14;
@@ -54,7 +58,7 @@ const link = (item: NavigationItem) => ({
           {cascade && (
             <details class="fly-menu" data-menu="popup" data-menu-hover>
               <summary class:list={["fly-toggle", !item.href && "fly-link"]}>
-                {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
+                {item.href ? <span class="sr-only">{copy.nav.submenu(item.title)}</span> : <span>{item.title}</span>}
                 <i class="nav-chevron nav-chevron--right" aria-hidden="true"></i>
               </summary>
               <div class="fly-panel" data-menu-panel>
@@ -71,7 +75,7 @@ const link = (item: NavigationItem) => ({
     mode === "cascade" && parent?.href && (
       <li class="fly-row fly-row--all">
         <a class="fly-link" {...link(parent)}>
-          Show all {parent.title}
+          {copy.nav.showAll(parent.title)}
         </a>
       </li>
     )

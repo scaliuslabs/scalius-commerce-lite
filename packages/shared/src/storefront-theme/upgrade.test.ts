@@ -84,7 +84,7 @@ describe("step-wise stored theme upgrades", () => {
     expect(partial).toEqual(before);
     expect(theme.tokens).toMatchObject({ typography: "editorial", typeScale: "display", radius: "rounded", density: "airy", surface: "flat", container: "1440" });
     expect(theme.tokens.colors).toMatchObject({ primary: "#123456", "primary-foreground": "#ffffff", border: "#123456", background: "#ffffff", foreground: "#18181b" });
-    expect(theme.blocks.footer.variant).toBe("support-dark");
+    expect(theme.blocks.footer).toMatchObject({ variant: "columns", settings: { tone: "header" } });
     expect(theme.pages.home.map((section) => section.id)).toEqual(["delivery", "hero", "categories", "collections"]);
     expect(parseStoredStorefrontThemeDocument(JSON.stringify(partial))).toEqual(theme);
   });
@@ -241,7 +241,8 @@ describe("v8 to v9: one design system", () => {
   it("changes only the template, the card and its photo tokens", () => {
     const stored = v8Document("fashion-value", { variant: "tech-rounded", settings: { hoverImage: false } });
     const upgraded = upgradeThemeDocument(stored);
-    const withoutCard = ({ card: _card, ...blocks }: Record<string, unknown>) => blocks;
+    // The header and footer are the chrome changes: heritage-nav reads as centered-logo (header-upgrade.test.ts).
+    const withoutCard = ({ card: _card, header: _header, footer: _footer, ...blocks }: Record<string, unknown>) => blocks;
     const withoutPhoto = ({ imageRatio: _ratio, imageFit: _fit, surface: _surface, ...tokens }: Record<string, unknown>) => tokens;
     expect(withoutCard(upgraded.blocks)).toEqual(withoutCard(stored.blocks));
     expect(withoutPhoto(upgraded.tokens)).toEqual(withoutPhoto(stored.tokens));

@@ -394,7 +394,7 @@ async function main() {
         checks.push({ id: `${template}/tiny/desktop/leaf6.filterGroups`, template, block: "tiny", viewport: "desktop", metric: "leaf6.filterGroups", rule: "zero", ours: groups, ref: 0, refSite: "bar", src: "AUDIT §8 slice 3: no filters below 8 results", pass: groups === 0, detail: groups === 0 ? "0" : `${groups} filter groups on a 6-product category` });
         if (template === "boutique") {
           const variant = t["home-desktop"]?.attrs?.["data-header-variant"] ?? null;
-          checks.push({ id: "boutique/tiny/desktop/header.variant", template, block: "tiny", viewport: "desktop", metric: "header.variant", rule: "exact", ours: variant, ref: "boutique-inline", refSite: "bar", src: "AUDIT §8 slice 0: boutique-inline fits the real small store", pass: variant === "boutique-inline", detail: variant === "boutique-inline" ? "equal" : `${variant} vs boutique-inline` });
+          checks.push({ id: "boutique/tiny/desktop/header.variant", template, block: "tiny", viewport: "desktop", metric: "header.variant", rule: "exact", ours: variant, ref: "inline-nav", refSite: "bar", src: "AUDIT §8 slice 0: inline-nav fits the real small store", pass: variant === "inline-nav", detail: variant === "inline-nav" ? "equal" : `${variant} vs inline-nav` });
         }
       }
     }

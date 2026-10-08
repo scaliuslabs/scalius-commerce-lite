@@ -1,15 +1,15 @@
 ---
-// The departments rail (desktop menu `departments-rail`, open "home"; Game
-// Ghor): an "All departments" tab (270px) in the menu row whose list of
-// departments (35px rows, fly-outs for their children) hangs over the page.
-// On the home page it renders open over the hero; elsewhere it opens on hover
-// or press. It is a native <details>: it works without JavaScript, and
-// nav-menus.ts adds hover, arrow keys and Escape. The open-on-home list
-// closes once the page scrolls (HeaderLayout), so it never rides the sticky
-// header over the content. The "always" rail (Chaldal) is the column beside
-// the page: SidebarNav.astro.
+// The departments rail (desktop menu `departments-rail`, open "demand"): an
+// "All departments" button in the menu row whose list of departments
+// (fly-outs for their children) hangs over the page when pressed or hovered.
+// It is never open by itself, so it never covers what the page starts with.
+// It is a native <details>: it works without JavaScript, and nav-menus.ts adds
+// hover, arrow keys and Escape. The "always" rail is the column beside the
+// page: SidebarNav.astro.
 import type { NavigationItem } from "@/lib/api";
 import FlyoutList from "./FlyoutList.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   navigation: NavigationItem[];
@@ -18,25 +18,20 @@ interface Props {
 }
 
 const { navigation, allCategories = false } = Astro.props;
-const onHome = Astro.url.pathname === "/";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
-<nav class="drail" aria-label="All departments" data-menu-root>
-  <details
-    class="drail-menu"
-    data-menu={onHome ? "rail" : "popup"}
-    data-menu-hover={onHome ? undefined : ""}
-    data-menu-home-open={onHome ? "" : undefined}
-    open={onHome}
-  >
+<nav class="drail" aria-label={copy.nav.allDepartments} data-menu-root>
+  <details class="drail-menu" data-menu="popup" data-menu-hover>
     <summary class="drail-tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-      <span>All departments</span>
+      <span>{copy.nav.allDepartments}</span>
       <i class="nav-chevron drail-chevron" aria-hidden="true"></i>
     </summary>
     <div class="drail-panel" data-menu-panel>
       <FlyoutList items={navigation} mode="cascade" />
-      {allCategories && <a class="drail-all" href="/categories">All categories</a>}
+      {allCategories && <a class="drail-all" href="/categories">{copy.nav.allCategories}</a>}
     </div>
   </details>
 </nav>
@@ -59,20 +54,26 @@ const onHome = Astro.url.pathname === "/";
     position: relative;
   }
 
+  /* A bordered button, not a slab: the row holds it with the store's own links. */
   .drail-tab {
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    width: 16.875rem;
-    height: 2.75rem;
-    padding-inline: 1rem;
-    border-radius: var(--radius) var(--radius) 0 0;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font-size: 0.875rem;
-    font-weight: 700;
+    min-width: 13rem;
+    height: 2.5rem;
+    padding-inline: 0.75rem;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: var(--radius);
+    color: var(--nav-ink, var(--foreground));
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
     list-style: none;
     cursor: pointer;
+  }
+
+  .drail-tab:hover,
+  .drail-menu[open] .drail-tab {
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
 
   .drail-tab::-webkit-details-marker {
@@ -107,16 +108,15 @@ const onHome = Astro.url.pathname === "/";
     outline-offset: 2px;
   }
 
-  /* The list hangs from the tab, the tab's width, over the page (the hero on home). */
+  /* The list hangs from the button over the page, only while it is open. */
   .drail-panel {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 0.25rem);
     inset-inline-start: 0;
     z-index: 60;
-    width: 16.875rem;
+    width: 17rem;
     border: 1px solid var(--border);
-    border-top: 0;
-    border-radius: 0 0 var(--radius) var(--radius);
+    border-radius: var(--radius);
     background: var(--popover);
     color: var(--popover-foreground);
     box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.25);
@@ -145,20 +145,6 @@ const onHome = Astro.url.pathname === "/";
   .drail-all:focus-visible {
     background: var(--accent);
     color: var(--accent-foreground);
-  }
-
-  /* The open-on-home list hangs over the page, so the page is at least as tall
-     as the list: it never covers the footer's links (WCAG 2.5.8 target space). */
-  @media (min-width: 64rem) {
-    body:has(.drail-menu[data-menu-home-open][open]) #main-content {
-      min-height: 28rem;
-    }
-  }
-
-  /* Scrolled past the hero: the open-on-home list steps aside (HeaderLayout
-     also closes it, so its state stays truthful). */
-  #main-header.is-scrolled .drail-menu[data-menu-home-open] > .drail-panel {
-    display: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -1,24 +1,21 @@
 ---
-// The header's search, in the shape a header variant asks for. Fields are a
+// The header's search, in the shape a header layout asks for. Fields are a
 // real GET form to /search, so searching works before hydration and without
 // JavaScript; with it, a pointer press on the field opens the typeahead
 // palette instead (keyboard users type in place and press Enter). Scoped
 // fields keep native input focus so pointer users can use the selected
 // department. The select scopes search to a category page (?q= there) with
 // JavaScript; without it, the whole store is searched.
-// - icon: a 44px button (Dawn) that opens the palette (a link to /search
-//   before hydration).
-// - field: a filled field with a button inside (Star Tech 580x42, Fabrilife
-//   300x44, Chaldal 792x48).
-// - pill: a fully rounded field (Apple Gadgets 584x48, Target 628x44).
-// - scoped: department select, field and a filled button as one unit
-//   (Amazon 790x40).
-// - scoped-right: outlined field, department select at the right, separate
-//   pill submit (eBay).
+// - icon: a 44px button that opens the palette (a link to /search before
+//   hydration).
+// - field: a filled field with a button inside.
+// - scoped: department select, field and a filled button as one unit.
 import type { NavigationItem } from "@/lib/api";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
-  shape: "icon" | "field" | "pill" | "scoped" | "scoped-right";
+  shape: "icon" | "field" | "scoped";
   /** Unique per instance (ids of the field and its label). */
   id: string;
   /** Top-level menu items that link a category: the scope choices. */
@@ -27,6 +24,8 @@ interface Props {
 }
 
 const { shape, id, departments = [], class: className } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome.header;
 const scopes = departments
   .filter((item) => item.href?.startsWith("/categories/"))
   .slice(0, 24);
@@ -35,7 +34,7 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
 
 {
   shape === "icon" ? (
-    <a href="/search" class:list={["hsearch-icon", className]} aria-label="Search" aria-haspopup="dialog" data-search-open>
+    <a href="/search" class:list={["hsearch-icon", className]} aria-label={copy.search} aria-haspopup="dialog" data-search-open>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" />
@@ -49,50 +48,32 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
       class:list={["hsearch", `hsearch--${shape}`, className]}
       data-header-search
     >
-      <div class:list={["hsearch-field", shape !== "scoped-right" && "hsearch-field--contents"]}>
-        {shape === "scoped-right" && (
-          <svg class="hsearch-leading-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-        )}
-        {shape === "scoped" && scopes.length > 0 && (
-          <select class="hsearch-scope" aria-label="Search in" data-search-scope>
-            <option value="">All</option>
-            {scopes.map((item) => (
-              <option value={item.href}>{item.title}</option>
-            ))}
-          </select>
-        )}
-        <label for={id} class="sr-only">Search products</label>
-        <input
-          id={id}
-          class="hsearch-input"
-          type="search"
-          name="q"
-          value={currentQuery}
-          placeholder="Search products"
-          autocomplete="off"
-          enterkeyhint="search"
-          maxlength="200"
-          data-search-inline={shape === "scoped" || shape === "scoped-right" ? undefined : ""}
-        />
-        {shape === "scoped-right" && scopes.length > 0 && (
-          <select class="hsearch-scope" aria-label="Search in" data-search-scope>
-            <option value="">All categories</option>
-            {scopes.map((item) => (
-              <option value={item.href}>{item.title}</option>
-            ))}
-          </select>
-        )}
-      </div>
-      <button type="submit" class="hsearch-submit" aria-label="Search">
-        {shape === "scoped-right" ? "Search" : (
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-        )}
+      {shape === "scoped" && scopes.length > 0 && (
+        <select class="hsearch-scope" aria-label={copy.searchIn} data-search-scope>
+          <option value="">{copy.allScopes}</option>
+          {scopes.map((item) => (
+            <option value={item.href}>{item.title}</option>
+          ))}
+        </select>
+      )}
+      <label for={id} class="sr-only">{copy.searchProducts}</label>
+      <input
+        id={id}
+        class="hsearch-input"
+        type="search"
+        name="q"
+        value={currentQuery}
+        placeholder={copy.searchProducts}
+        autocomplete="off"
+        enterkeyhint="search"
+        maxlength="200"
+        data-search-inline={shape === "scoped" ? undefined : ""}
+      />
+      <button type="submit" class="hsearch-submit" aria-label={copy.search}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
       </button>
     </form>
   )
@@ -124,8 +105,8 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     stroke-linejoin: round;
   }
 
-  /* The field is always the card surface with its own ink, whatever the
-     header tone around it (an AA pair of the base set). */
+  /* The field is always the card or muted surface with its own ink, whatever
+     the header tone around it (an AA pair of the base set). */
   .hsearch {
     display: flex;
     align-items: stretch;
@@ -135,7 +116,7 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     height: var(--hdr-search-field, 2.75rem);
     overflow: hidden;
     border: 1px solid var(--input);
-    border-radius: var(--radius);
+    border-radius: var(--theme-button-radius, var(--radius));
     background: var(--card);
     color: var(--card-foreground);
   }
@@ -145,80 +126,10 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     outline-offset: 1px;
   }
 
-  .hsearch-field--contents {
-    display: contents;
-  }
-
-  .hsearch--scoped-right {
-    gap: 0.75rem;
-    overflow: visible;
-    border: 0;
-    background: transparent;
-  }
-
-  .hsearch--scoped-right:focus-within {
-    outline: none;
-  }
-
-  .hsearch--scoped-right .hsearch-field {
-    display: flex;
-    align-items: stretch;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    border: 1.5px solid var(--foreground);
-    border-radius: 9999px;
-    background: var(--card);
-  }
-
-  .hsearch--scoped-right .hsearch-field:focus-within {
-    outline: 2px solid var(--ring, var(--foreground));
-    outline-offset: 1px;
-  }
-
-  .hsearch-leading-icon {
-    align-self: center;
-    flex-shrink: 0;
-    margin-inline-start: 1rem;
-    color: var(--muted-foreground);
-  }
-
-  .hsearch--scoped-right .hsearch-scope {
-    order: 1;
-    max-width: 10rem;
-    border-inline-start: 1px solid var(--border);
-    border-inline-end: 0;
-    background: var(--card);
-  }
-
-  .hsearch--scoped-right .hsearch-submit {
-    width: 8.5rem;
-    border-radius: 9999px;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font-size: 0.875rem;
-    font-weight: 700;
-  }
-
-  .hsearch--scoped-right .hsearch-submit:hover {
-    color: var(--primary-foreground);
-    background: color-mix(in srgb, var(--primary) 88%, var(--foreground));
-  }
-
   .hsearch--field {
     background: var(--muted);
     color: var(--foreground);
     border-color: transparent;
-  }
-
-  .hsearch--pill {
-    border-radius: 9999px;
-  }
-
-  @media (min-width: 64rem) {
-    .hsearch--pill {
-      height: 3rem;
-    }
   }
 
   .hsearch-scope {
@@ -229,7 +140,7 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     border-inline-end: 1px solid var(--border);
     background: var(--muted);
     color: var(--foreground);
-    font-size: 0.8125rem;
+    font-size: var(--theme-text-sm, 0.875rem);
   }
 
   .hsearch-input {
@@ -239,7 +150,7 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     border: 0;
     background: transparent;
     color: inherit;
-    font-size: 0.9375rem;
+    font-size: var(--theme-text-base, 1rem);
   }
 
   .hsearch-input::placeholder {
@@ -274,24 +185,10 @@ const currentQuery = Astro.url.pathname === "/search" ? Astro.url.searchParams.g
     outline-offset: -4px;
   }
 
-  /* The scoped search ends in a filled button (Amazon's 45px). */
+  /* The scoped search ends in a filled button. */
   .hsearch--scoped .hsearch-submit {
     width: 3rem;
-    background: var(--accent);
-    color: var(--accent-foreground);
-  }
-
-  .hsearch--pill .hsearch-submit {
-    margin: 0.25rem;
-    width: 2.25rem;
-    border-radius: 9999px;
     background: var(--primary);
     color: var(--primary-foreground);
-  }
-
-  @media (min-width: 64rem) {
-    .hsearch--pill .hsearch-submit {
-      width: 2.5rem;
-    }
   }
 </style>

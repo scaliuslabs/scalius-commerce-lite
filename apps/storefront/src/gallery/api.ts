@@ -113,6 +113,8 @@ function layout(entry: GalleryEntry) {
     storeShape: storeShape(),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
     seo: { socialImage: "" },
+    // The API serves the store language; a Bangla store speaks Bangla in its chrome too.
+    ...(entry.scenario.locale === "bn" ? { storefrontCopy: { languageCode: "bn" } } : {}),
     timeZone: "Asia/Dhaka",
     // The Platform settings take origins: the gallery server answers `/api/v1`
     // on its own origin (by the page's Referer in the browser), so the page's

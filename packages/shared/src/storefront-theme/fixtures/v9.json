@@ -47,8 +47,12 @@
       "settings": {}
     },
     "header": {
-      "variant": "heritage-nav",
-      "settings": {}
+      "variant": "centered-logo",
+      "settings": {
+        "search": "field",
+        "rowTone": "page",
+        "cartTotal": false
+      }
     },
     "navigation": {
       "source": "tree+menu",
@@ -128,8 +132,9 @@
       }
     },
     "footer": {
-      "variant": "newsletter-grey",
+      "variant": "centered-compact",
       "settings": {
+        "tone": "muted",
         "tagline": "",
         "about": "",
         "copyright": ""

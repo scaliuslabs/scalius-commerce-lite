@@ -42,7 +42,7 @@ import {
   productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
 } from "@/components/product/lib/gallery-images";
-import { HEADER_SPECS, headerCondense, headerSpec } from "@/components/header/header-variants";
+import { headerCondense, headerSpec } from "@/components/header/header-variants";
 import { fitNavOverflow } from "@/components/header/nav-disclosure";
 import { HEADER_LINK_BUDGET } from "@/components/header/nav-tree";
 
@@ -492,7 +492,8 @@ describe("storefront theme render matrix", () => {
     const pairs = new Set(NAVIGATION_MATRIX.flatMap(({ desktop, phone, header }) => {
       const d = `${desktop.variant}${JSON.stringify(desktop.settings)}`;
       const p = `${phone.variant}${JSON.stringify(phone.settings)}`;
-      return [`d${d}|p${p}`, `d${d}|h${header}`, `p${p}|h${header}`];
+      const h = `${header.variant}${JSON.stringify(header.settings)}`;
+      return [`d${d}|p${p}`, `d${d}|h${h}`, `p${p}|h${h}`];
     }));
     expect(pairs.size).toBe(DESKTOP_MENUS.length * PHONE_MENUS.length + DESKTOP_MENUS.length * HEADERS.length + PHONE_MENUS.length * HEADERS.length);
   });
@@ -558,7 +559,7 @@ describe("storefront theme render matrix", () => {
 
     // Top bar and header: each variant's own structure.
     assertTopBar(page, resolved.blocks.topBar.variant, layout.topBar);
-    assertHeader(page, resolved.blocks.header.variant, layout.header);
+    assertHeader(page, resolved.blocks.header.variant, resolved.blocks.header.settings, layout.header);
 
     // Homepage sections in document order: those with data to show.
     expect(
@@ -667,47 +668,37 @@ describe("storefront theme render matrix", () => {
     });
     expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category-tiles", "usp-strip"]);
     expect(resolved.blocks.topBar.variant).toBe("utility");
-    expect(resolved.blocks.header.variant).toBe("mall-search");
+    expect(resolved.blocks.header).toMatchObject({ variant: "search-first", settings: { search: "scoped", cartTotal: true } });
     expect(resolved.blocks.desktopNav).toMatchObject({ variant: "mega-panel" });
     expect(resolved.blocks.mobileNav.variant).toBe("accordion-drawer");
-    expect(["product-widgets", "minimal-columns"]).toContain(resolved.blocks.footer.variant);
+    expect(resolved.blocks.footer.variant).toBe("columns");
   });
 
-  it("renders the default mall search and rail, with the classic header still selectable", async () => {
+  it("renders the default search-first header with its scoped search, and the other two layouts", async () => {
     const mall = parse(await render("/src/layouts/Layout.astro", DEFAULT_STOREFRONT_THEME, {
       title: "Home", layoutData: { ...layoutData({ business: true }), navigation: [...LONG_MENU, { id: "home", title: "Home", href: "/" }] },
     }));
-    expect(mall.querySelector('#main-header[data-header-variant="mall-search"]')).not.toBeNull();
+    expect(mall.querySelector('#main-header[data-header-variant="search-first"]')).not.toBeNull();
     expect(mall.querySelector('.hdr-search form.hsearch--scoped select[data-search-scope]')).not.toBeNull();
     expect(mall.querySelector('.hsearch--scoped input[data-search-inline]')).toBeNull();
-    // The department rail is a choice of its own now: the default's menu is the mega menu.
+    // The department rail is a choice of its own: the default's menu is the mega menu.
     expect(mall.querySelector('#desktop-nav[data-nav-style="mega"]')).not.toBeNull();
     expect(mall.querySelector('.drail-panel')).toBeNull();
-    const classicTheme = storefrontTemplateTheme("department-mall");
-    classicTheme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: null } };
-    classicTheme.blocks.header = { variant: "mall-departments", settings: { cartTotal: true } };
-    classicTheme.blocks.desktopNav = { variant: "dropdown", settings: {} };
-    const page = parse(
-      await render(
-        "/src/layouts/Layout.astro",
-        classicTheme,
-        { title: "Home", layoutData: { ...layoutData({ business: true }), navigation: LONG_MENU } },
-      ),
-    );
-    const header = page.querySelector("#main-header")!;
-    expect(header.getAttribute("data-header-style")).toBe("classic");
-    // The version 3 bar: the centred search button, the account and cart pill with its total.
-    expect(header.querySelector(".header-row #desktop-search-trigger")).not.toBeNull();
-    expect(header.querySelector("[data-header-action-group] #account-link")).not.toBeNull();
-    expect(header.querySelector("[data-header-action-group] #cart-button #cart-total-display")).not.toBeNull();
-    expect(header.querySelector(".header-full-nav-row #desktop-nav[data-nav-style='menu']")).not.toBeNull();
-    // On scroll the row's menu itself moves into the bar (one set of links in the HTML).
-    expect(header.hasAttribute("data-header-condense")).toBe(true);
-    expect(header.querySelector("[data-nav-compact-from='desktop-nav']")!.children).toHaveLength(0);
-    // The announcement bar precedes the header, as before.
-    const bar = page.querySelector("#site-header > .bg-primary")!;
+    // The announcement bar precedes the header.
+    const announced = storefrontTemplateTheme("department-mall");
+    announced.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: null } };
+    const page = parse(await render("/src/layouts/Layout.astro", announced, { title: "Home", layoutData: { ...layoutData({ business: true }), navigation: LONG_MENU } }));
+    const bar = page.querySelector('#site-header > [data-top-bar="announcement"]')!;
     expect(bar.textContent).toContain("Free delivery in Dhaka over");
-    expect(bar.nextElementSibling).toBe(header);
+    expect(bar.nextElementSibling).toBe(page.querySelector("#main-header"));
+    // Inline nav keeps its menu in the bar's own row; centred logo and search-first give it a row.
+    for (const [layout, menu] of [["inline-nav", ".hdr-inline-menu"], ["centered-logo", ".hdr-menu-row"], ["search-first", ".hdr-menu-row"]] as const) {
+      const theme = storefrontTemplateTheme("department-mall");
+      theme.blocks.header = storefrontBlockDefault("header", layout) as never;
+      theme.blocks.desktopNav = { variant: "dropdown", settings: {} } as never;
+      const laid = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: { ...layoutData({ business: true }), navigation: LONG_MENU } }));
+      expect(laid.querySelector(`#main-header[data-header-variant="${layout}"] ${menu} #desktop-nav`), layout).not.toBeNull();
+    }
   });
 
   it("shows the current search term in the header field on search pages", async () => {
@@ -722,23 +713,15 @@ describe("storefront theme render matrix", () => {
 function assertTopBar(page: Document, variant: string, shows: boolean) {
   expect(page.body.textContent?.includes("Free delivery in Dhaka over")).toBe(shows);
   const utility = page.querySelector('[data-top-bar="utility"]');
-  const appBanner = page.querySelector('[data-top-bar="app-banner"]');
   expect(Boolean(utility)).toBe(variant === "utility");
-  expect(Boolean(appBanner)).toBe(variant === "app-banner");
   if (utility) {
-    // Track order and account at the end (the store phone lives in business settings).
+    // Track order at the end; account is the header's, not repeated here.
     expect(utility.querySelector('a[href="/track-order"]')).not.toBeNull();
-    expect(utility.querySelector('a[href="/account"][data-account-link]')).not.toBeNull();
-  }
-  if (appBanner) {
-    // Dismissible before hydration: an open <details> whose summary closes it.
-    expect(appBanner.tagName).toBe("DETAILS");
-    expect(appBanner.hasAttribute("open")).toBe(true);
-    expect(appBanner.querySelector("summary")!.getAttribute("aria-label")).toBe("Dismiss");
+    expect(utility.querySelector('a[href="/account"]')).toBeNull();
   }
 }
 
-function assertHeader(page: Document, variant: string, renderer: string) {
+function assertHeader(page: Document, variant: string, settings: Record<string, unknown>, renderer: string) {
   const header = page.querySelector("#main-header")!;
   expect(header.getAttribute("data-header-style")).toBe(renderer);
   expect(header.getAttribute("data-header-variant")).toBe(variant);
@@ -759,14 +742,8 @@ function assertHeader(page: Document, variant: string, renderer: string) {
     expect(drawer.querySelector(`#${drawer.getAttribute("data-drawer")}-close`)!.hasAttribute("data-drawer-close")).toBe(true);
     expect(drawer.querySelector('noscript')?.innerHTML ?? "").toContain('href="#"');
   }
-  if (variant === "mall-departments") {
-    expect(header.querySelector(".header-row")).not.toBeNull();
-    expect(page.querySelector("#mobile-search-toggle")).not.toBeNull();
-    return;
-  }
-  const spec = HEADER_SPECS[variant as keyof typeof HEADER_SPECS];
+  const spec = headerSpec(variant, settings);
   expect(header.querySelector(".hdr-main")!.getAttribute("data-tone")).toBe(spec.toneRow ? "tone" : "surface");
-  expect(header.getAttribute("data-hdr-utilities")).toBe(spec.utilities);
   // Search: a real GET form to /search (it works before hydration), or the icon.
   const forms = Array.from(page.querySelectorAll("form[data-header-search]"));
   if (spec.search === "icon") {
@@ -781,15 +758,14 @@ function assertHeader(page: Document, variant: string, renderer: string) {
     }
   }
   const scope = page.querySelector("select[data-search-scope]");
-  expect(Boolean(scope)).toBe(spec.search === "scoped" || spec.search === "scoped-right");
+  expect(Boolean(scope)).toBe(spec.search === "scoped");
   if (scope) {
     // Department scopes from the menu's category links; no name, so it never reaches the query.
     expect(scope.hasAttribute("name")).toBe(false);
     expect(Array.from(scope.querySelectorAll("option")).map((option) => option.getAttribute("value"))).toContain("/categories/women");
   }
-  // Phones: a search row (sticky, or in the page under the bar) or the search icon.
+  // Phones: a sticky search row under the bar, or the search icon.
   expect(Boolean(header.querySelector(".hdr-phone-search"))).toBe(spec.phoneSearch === "sticky");
-  expect(Boolean(page.querySelector(".hdr-phone-search--page"))).toBe(spec.phoneSearch === "in-page");
   expect(Boolean(page.querySelector("#mobile-search-toggle"))).toBe(spec.phoneSearch === "none");
   // The running cart total only where the variant shows it.
   expect(Boolean(header.querySelector("#cart-total-display"))).toBe(spec.cartTotal);
@@ -811,16 +787,14 @@ function assertFooter(page: Document, variant: string, options: { business: bool
   expect(headings).not.toContain("Need help ordering?");
   const tone = footer.getAttribute("data-footer-tone");
   const toneByVariant: Record<string, string | null> = {
-    "support-dark": "header",
-    "brand-black": "ink",
-    "newsletter-grey": "muted",
+    "centered-compact": "muted",
   };
   // Amazon's banded directory (`style: bands`) wears the header's tone.
   const banded = footer.hasAttribute("data-footer-marketplace");
   expect(tone).toBe(banded ? "header" : toneByVariant[variant] ?? null);
 
-  if (variant === "newsletter-grey") {
-    // One centred band of every link; the policies are in it, not below.
+  if (variant === "centered-compact") {
+    // Every link, grouped under its heading; the policies are a group of it, not below.
     const band = footer.querySelector('nav[aria-label="Footer"]')!;
     const links = Array.from(band.querySelectorAll("a"));
     expect(links).toHaveLength(FOOTER_MENUS.length * 5 + 3);
@@ -828,16 +802,18 @@ function assertFooter(page: Document, variant: string, options: { business: bool
   } else if (variant === "directory") {
     const directory = footer.querySelector('nav[aria-label="Store directory"]')!;
     expect(directory.querySelectorAll("a").length).toBeLessThanOrEqual(60);
-    expect(headings).toEqual(expect.arrayContaining(["Customer care", ...FOOTER_MENUS.map((menu) => menu.title)]));
-  } else if (variant === "product-widgets") {
-    const menus = Array.from(footer.querySelectorAll("details.footer-menu-details"));
+    // The identity column is titled with the store (or "Contact us"), never a second "Customer care".
+    expect(footer.querySelector("#footer-care-title")!.textContent!.trim()).not.toBe("Customer care");
+    expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
+  } else if (variant === "columns") {
+    // Link groups: columns on computers, accordions on phones; open in the markup.
+    const menus = Array.from(footer.querySelectorAll("details.footer-menu"));
     expect(menus).toHaveLength(FOOTER_MENUS.length);
-    expect(menus.every((menu) => !menu.hasAttribute("open") && menu.querySelector("summary h2") && menu.querySelector("a"))).toBe(true);
+    expect(menus.every((menu) => menu.hasAttribute("open") && menu.querySelector("summary h2") && menu.querySelector("a"))).toBe(true);
     expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
   } else {
     expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
   }
-  if (variant === "brand-black") expect(headings).toContain("Policies");
 
   if (!options.business) {
     expect(tel).toHaveLength(0);
@@ -851,10 +827,9 @@ function assertFooter(page: Document, variant: string, options: { business: bool
     return;
   }
   expect(tel.length).toBeGreaterThan(0);
-  const columns = variant === "minimal-columns" || variant === "product-widgets";
-  expect(whatsapp.length).toBe(["support-dark", "newsletter-grey", "directory"].includes(variant) ? 1 : 0);
-  expect(Boolean(footer.querySelector('a[href^="mailto:"]'))).toBe(!columns && variant !== "newsletter-grey");
-  expect(Boolean(footer.querySelector("address"))).toBe(variant === "support-dark" || variant === "brand-black");
+  expect(whatsapp.length).toBe(1);
+  expect(Boolean(footer.querySelector('a[href^="mailto:"]'))).toBe(variant !== "centered-compact");
+  expect(Boolean(footer.querySelector("address"))).toBe(variant === "columns");
 }
 
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
@@ -994,7 +969,7 @@ const DESKTOP_MENUS: Choice[] = [
   choice("desktopNav", "mega-panel"),
   choice("desktopNav", "mega-panel", { promoImages: true }),
   choice("desktopNav", "drill-in-drawer"),
-  choice("desktopNav", "departments-rail", { open: "home" }),
+  choice("desktopNav", "departments-rail", { open: "demand" }),
   choice("desktopNav", "departments-rail", { open: "always" }),
   choice("desktopNav", "sticky-category-bar", { flyouts: "dropdown" }),
   choice("desktopNav", "sticky-category-bar", { flyouts: "cascading" }),
@@ -1005,7 +980,14 @@ const PHONE_MENUS: Choice[] = [
   choice("mobileNav", "bottom-tabs"),
   choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "offers", "compare", "account"], drawer: "drill-in" }),
 ];
-const HEADERS = storefrontBlockVariants("header");
+const HEADERS: Choice[] = [
+  choice("header", "inline-nav"),
+  choice("header", "inline-nav", { search: "field", rowTone: "header" }),
+  choice("header", "search-first"),
+  choice("header", "search-first", { search: "scoped", rowTone: "header", cartTotal: true }),
+  choice("header", "centered-logo"),
+  choice("header", "centered-logo", { search: "field" }),
+];
 
 /**
  * Pairwise: every desktop menu with every header, and the phone menu turning
@@ -1015,19 +997,19 @@ const NAVIGATION_MATRIX = DESKTOP_MENUS.flatMap((desktop, desktopIndex) =>
   HEADERS.map((header, headerIndex) => ({ desktop, header, phone: PHONE_MENUS[(desktopIndex + headerIndex) % PHONE_MENUS.length]! })),
 ).map((entry) => ({
   ...entry,
-  name: `${entry.desktop.variant}${JSON.stringify(entry.desktop.settings)} / ${entry.phone.variant}${JSON.stringify(entry.phone.settings)} / ${entry.header}`,
+  name: `${entry.desktop.variant}${JSON.stringify(entry.desktop.settings)} / ${entry.phone.variant}${JSON.stringify(entry.phone.settings)} / ${entry.header.variant}${JSON.stringify(entry.header.settings)}`,
 }));
 
-function navigationTheme(entry: { desktop: Choice; phone: Choice; header: string }): StorefrontThemeDocument {
+function navigationTheme(entry: { desktop: Choice; phone: Choice; header: Choice }): StorefrontThemeDocument {
   const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
   theme.blocks.desktopNav = entry.desktop as never;
   theme.blocks.mobileNav = entry.phone as never;
-  theme.blocks.header = storefrontBlockDefault("header", entry.header) as never;
+  theme.blocks.header = entry.header as never;
   const parsed = storefrontThemeDocumentSchema.parse(theme);
   // The test store fits every variant, so each renders as itself.
   const { resolved } = requestThemeFor(parsed, STORE_SHAPE);
   expect(resolved.blocks.desktopNav.variant).toBe(entry.desktop.variant);
-  expect(resolved.blocks.header.variant).toBe(entry.header);
+  expect(resolved.blocks.header.variant).toBe(entry.header.variant);
   return parsed;
 }
 
@@ -1083,37 +1065,13 @@ function headerLinks(page: Document): number {
 /** Star Tech's header: two rows, a sticky category bar, bottom tabs with Offers (the retired spec preset's blocks, as plain settings). */
 function specHeaderTheme(): StorefrontThemeDocument {
   const theme = storefrontTemplateTheme("department-mall");
-  theme.blocks.header = storefrontBlockDefault("header", "spec-two-row") as never;
+  theme.blocks.header = choice("header", "search-first", { search: "field", rowTone: "header" }) as never;
   theme.blocks.desktopNav = { variant: "sticky-category-bar", settings: { flyouts: "cascading" } } as never;
   theme.blocks.mobileNav = { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "compare", "account"], drawer: "accordion" } } as never;
   return theme;
 }
 
 describe("navigation", () => {
-  it("uses the narrower phone drill drawer only for tall drill rows", async () => {
-    const drill = (rows: "tall" | "standard") => {
-      const theme = storefrontTemplateTheme("department-mall");
-      theme.blocks.header = storefrontBlockDefault("header", "retail-pill") as never;
-      theme.blocks.desktopNav = storefrontBlockDefault("desktopNav", "drill-in-drawer") as never;
-      theme.blocks.mobileNav = { variant: "drill-in-drawer", settings: rows === "tall" ? { rows: "tall" } : {} } as never;
-      return theme;
-    };
-    for (const rows of ["tall", "standard"] as const) {
-      const page = await renderNavigationPage(drill(rows));
-      const tall = rows === "tall";
-      const drawer = page.querySelector("#mobile-menu-panel")!;
-      expect(drawer.classList.contains("max-w-[365px]")).toBe(true);
-      expect(drawer.classList.contains("nav-drawer--marketplace")).toBe(tall);
-      expect(drawer.classList.contains("w-[80vw]")).toBe(tall);
-      expect(drawer.classList.contains("lg:w-[365px]")).toBe(tall);
-      expect(drawer.classList.contains("w-[90vw]")).toBe(!tall);
-      expect(drawer.querySelector(".drill[data-menu-root] details[data-menu='drill'] [data-menu-panel] details[data-menu='drill']")).not.toBeNull();
-    }
-    // The Marketplace preset keeps the plain drill drawer.
-    const marketplace = await renderNavigationPage(storefrontTemplateTheme("marketplace"));
-    expect(marketplace.querySelector("#mobile-menu-panel")!.classList.contains("nav-drawer--marketplace")).toBe(false);
-  });
-
   it.each(NAVIGATION_MATRIX)("$name", async (entry) => {
     const theme = navigationTheme(entry);
     const { layout } = requestThemeFor(theme, STORE_SHAPE);
@@ -1125,7 +1083,6 @@ describe("navigation", () => {
     expect(siteHeader.getAttribute("data-desktop-nav")).toBe(entry.desktop.variant);
     expect(headerLinks(page)).toBeLessThanOrEqual(HEADER_LINK_BUDGET);
     const popups = assertDisclosures(page).filter((button) => button.getAttribute("data-disclosure") === "popup");
-    const classic = entry.header === "mall-departments";
     const desktop = entry.desktop.variant;
     const railAlways = desktop === "departments-rail" && entry.desktop.settings.open === "always";
 
@@ -1133,13 +1090,9 @@ describe("navigation", () => {
     // button; row items that don't fit move into "More" in the browser.
     const v3 = desktop === "dropdown" || desktop === "mega-panel";
     expect(Boolean(page.querySelector("#desktop-nav"))).toBe(v3);
-    const condensed = classic && desktop === "dropdown";
-    expect(header.hasAttribute("data-header-condense")).toBe(condensed);
-    expect(Boolean(header.querySelector("[data-nav-compact-from='desktop-nav']"))).toBe(condensed);
-    // The scroll reserve under the sticky header is the variant's data.
-    const reserve = headerCondense(classic ? null : headerSpec(entry.header, {}), { foldsMenuRow: condensed });
+    // The scroll reserve under the sticky header is the layout's data.
+    const reserve = headerCondense(headerSpec(entry.header.variant, entry.header.settings));
     expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-phone: ${reserve.phone}`);
-    expect(siteHeader.getAttribute("style")).toContain(`--hdr-condense-desktop: ${reserve.desktop}`);
     if (v3) {
       const nav = page.querySelector("#desktop-nav")!;
       expect(nav.getAttribute("data-nav-style")).toBe(desktop === "dropdown" ? "menu" : "mega");
@@ -1217,16 +1170,12 @@ describe("navigation", () => {
       expect(list.querySelector("[data-nav-more-list] a")).toBeNull();
       assertOverflowMoves(list);
     }
-    // The category bar is the sticky row of a composed header.
-    if (desktop === "sticky-category-bar" && !classic) {
-      expect(header.getAttribute("data-hdr-sticky")).toBe("menu-row");
-      expect(header.querySelector(".hdr-menu-row [data-category-bar]")).not.toBeNull();
-    }
-    if (entry.header === "spec-two-row" && !railAlways) {
-      expect(header.getAttribute("data-hdr-sticky")).toBe("menu-row");
-    }
+    // A menu row of its own is the sticky part; the category bar always has one.
+    const menuRow = desktop === "sticky-category-bar" || entry.header.variant !== "inline-nav";
+    expect(header.getAttribute("data-hdr-sticky")).toBe(!railAlways && menuRow ? "menu-row" : "header");
+    if (desktop === "sticky-category-bar") expect(header.querySelector(".hdr-menu-row [data-category-bar]")).not.toBeNull();
 
-    // Departments rail open on "home": a tab with its list, open only on the home page.
+    // Departments rail on demand: a button with its list, never open by itself.
     const rail = page.querySelector(".drail details");
     expect(Boolean(rail)).toBe(desktop === "departments-rail" && !railAlways);
     if (rail) {
@@ -1279,7 +1228,7 @@ describe("navigation", () => {
       const drawer = page.getElementById(panelId)!;
       expect(drawer.getAttribute("data-drawer-screens")).toBe("all");
       assertDrill(drawer);
-      expect(trigger.textContent).toContain(entry.header === "retail-pill" ? "Categories" : "All");
+      expect(trigger.textContent).toContain("All");
     } else {
       expect(page.querySelector("#nav-drawer-panel")).toBeNull();
     }
@@ -1306,8 +1255,10 @@ describe("navigation", () => {
       expect(tabs.querySelector('a[href="/"]')!.hasAttribute("aria-current")).toBe(false);
       const drop = header.getAttribute("data-phone-drop") ?? "";
       expect(drop.includes("account")).toBe(chosen.includes("account"));
-      expect(drop.includes("cart")).toBe(chosen.includes("cart"));
-      if (chosen.includes("cart")) expect(tabs.querySelector("[data-cart-open] #mobile-cart-count")).not.toBeNull();
+      // One rule: the cart and the search stay in the header, so the bar repeats neither.
+      expect(drop.includes("cart")).toBe(false);
+      expect(tabs.querySelector("[data-cart-open], [data-search-open]")).toBeNull();
+      expect(header.querySelector("#cart-button")).not.toBeNull();
     } else {
       expect(page.querySelector("#mobile-cart-count")).toBeNull();
       expect(header.hasAttribute("data-phone-drop")).toBe(false);
@@ -1315,13 +1266,13 @@ describe("navigation", () => {
   });
 
   it("shows the Compare tab the merchant chose, linking to the comparison", async () => {
-    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" });
-    const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: "mall-departments" });
+    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "account"], drawer: "accordion" });
+    const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: HEADERS[2]! });
     const page = await renderNavigationPage(theme);
     expect(page.querySelector("#mobile-tab-bar a[href='/compare'][data-compare-tab]")).not.toBeNull();
   });
 
-  it("keeps Cart in the spec phone header unless the merchant puts it in the tabs", async () => {
+  it("keeps the cart and the search in the phone header, whatever the tabs", async () => {
     const theme = specHeaderTheme();
     const pageFor = async () => parse(await render("/src/layouts/Layout.astro", theme, {
       title: "Home", layoutData: layoutData({ business: true }),
@@ -1334,42 +1285,34 @@ describe("navigation", () => {
 
     const mobileNav = theme.blocks.mobileNav;
     if (mobileNav.variant !== "bottom-tabs") throw new Error("The spec catalogue uses bottom tabs.");
-    mobileNav.settings.tabs = ["home", "categories", "compare", "cart", "account"];
+    mobileNav.settings.tabs = ["home", "categories", "compare", "account"];
     const merchantPage = await pageFor();
-    expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("cart account");
-    expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open]")).not.toBeNull();
+    expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("account");
+    expect(merchantPage.querySelector("#main-header #cart-button")).not.toBeNull();
+    expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open], #mobile-tab-bar [data-search-open]")).toBeNull();
   });
 
-  it("uses a search action instead of the spec phone search band on category pages", async () => {
-    const theme = specHeaderTheme();
-    for (const path of ["/categories", "/categories/laptop"]) {
-      const page = await renderNavigationPage(theme, {}, `https://shop.test${path}`);
-      expect(page.querySelector(".hdr-phone-search--page")).toBeNull();
-      const search = page.querySelector("#main-header .hdr-actions a.hdr-category-search")!;
-      expect(search.getAttribute("href")).toBe("/search");
-      expect(search.getAttribute("aria-label")).toBe("Search");
-      expect(search.hasAttribute("data-search-open")).toBe(true);
-      expect(page.querySelector("#main-header #cart-button")).not.toBeNull();
+  it("gives search-first a sticky phone search row and the other layouts a search icon, on every page", async () => {
+    for (const path of ["/", "/categories", "/categories/laptop", "/search?q=ssd"]) {
+      const searchFirst = await renderNavigationPage(specHeaderTheme(), {}, `https://shop.test${path}`);
+      expect(searchFirst.querySelector("#main-header .hdr-phone-search form[action='/search']"), path).not.toBeNull();
+      expect(searchFirst.querySelector("#mobile-search-toggle"), path).toBeNull();
+      expect(searchFirst.querySelector("#main-header #cart-button"), path).not.toBeNull();
     }
-    for (const path of ["/", "/search?q=ssd"]) {
-      const page = await renderNavigationPage(theme, {}, `https://shop.test${path}`);
-      expect(page.querySelector(".hdr-phone-search--page form[action='/search']")).not.toBeNull();
-      expect(page.querySelector(".hdr-category-search")).toBeNull();
-    }
-
-    theme.blocks.header = storefrontBlockDefault("header", "tech-rounded") as never;
-    const merchantPage = await renderNavigationPage(theme);
-    expect(merchantPage.querySelector("#main-header .hdr-phone-search form[action='/search']")).not.toBeNull();
-    expect(merchantPage.querySelector(".hdr-category-search")).toBeNull();
+    const inline = specHeaderTheme();
+    inline.blocks.header = storefrontBlockDefault("header", "inline-nav") as never;
+    const page = await renderNavigationPage(inline);
+    expect(page.querySelector(".hdr-phone-search")).toBeNull();
+    expect(page.querySelector("#main-header #mobile-search-toggle")).not.toBeNull();
   });
 
   it("keeps the header within 150 links for a Star Tech-size tree, whatever the menus", async () => {
     for (const desktop of DESKTOP_MENUS) {
       for (const phone of PHONE_MENUS) {
-        for (const header of ["mall-departments", "marketplace-search", "spec-two-row"]) {
+        for (const header of [HEADERS[2]!, HEADERS[3]!, HEADERS[0]!]) {
           const theme = navigationTheme({ desktop, phone, header });
           const page = await renderNavigationPage(theme, {}, "https://shop.test/", HUGE_NAVIGATION);
-          const name = `${desktop.variant}${JSON.stringify(desktop.settings)} / ${phone.variant} / ${header}`;
+          const name = `${desktop.variant}${JSON.stringify(desktop.settings)} / ${phone.variant} / ${header.variant}`;
           expect(headerLinks(page), name).toBeLessThanOrEqual(HEADER_LINK_BUDGET);
           // Every department stays reachable; deeper levels live on their pages.
           const hrefs = new Set(Array.from(page.querySelectorAll("#site-header a[href]")).map((link) => link.getAttribute("href")));
@@ -1471,25 +1414,27 @@ describe("navigation", () => {
     expect(plainBanner.querySelector(".wide-editorial-support")).toBeNull();
   });
 
-  it("opens the departments rail over the hero on the home page only", async () => {
+  it("never opens the departments list by itself, on the home page included", async () => {
     const theme = navigationTheme({
-      desktop: choice("desktopNav", "departments-rail", { open: "home" }),
+      desktop: choice("desktopNav", "departments-rail", { open: "demand" }),
       phone: choice("mobileNav", "accordion-drawer"),
-      header: "mall-departments",
+      header: HEADERS[2]!,
     });
     const home = await renderNavigationPage(theme, {}, "https://shop.test/");
     const rail = home.querySelector(".drail details")!;
-    expect(rail.hasAttribute("open")).toBe(true);
-    expect(rail.getAttribute("data-menu")).toBe("rail");
-    expect(rail.hasAttribute("data-menu-home-open")).toBe(true);
-    expect(rail.hasAttribute("data-menu-hover")).toBe(false);
+    expect(rail.hasAttribute("open")).toBe(false);
+    expect(rail.getAttribute("data-menu")).toBe("popup");
+    expect(rail.hasAttribute("data-menu-home-open")).toBe(false);
+    expect(rail.hasAttribute("data-menu-hover")).toBe(true);
+    // The button sits in the menu row of the header, not over the page.
+    expect(home.querySelector("#main-header .hdr-menu-row .drail")).not.toBeNull();
   });
 
   it("keeps the sidebar and tab bar off checkout, cart and focused pages", async () => {
     const theme = navigationTheme({
       desktop: choice("desktopNav", "departments-rail", { open: "always" }),
       phone: choice("mobileNav", "bottom-tabs"),
-      header: "mall-departments",
+      header: HEADERS[2]!,
     });
     // Cart and checkout render without the header.
     const checkout = await renderNavigationPage(theme, { hideHeader: true, hideFooter: true }, "https://shop.test/checkout");
@@ -1576,15 +1521,15 @@ describe("theme brand and words", () => {
     const theme = storefrontTemplateTheme("boutique");
     theme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: "/collections/eid" } };
     const page = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
-    const bar = page.querySelector("#site-header > .bg-primary")!;
+    const bar = page.querySelector('#site-header > [data-top-bar="announcement"]')!;
     const link = bar.querySelector("a[data-top-bar-link]")!;
     expect(link.getAttribute("href")).toBe("/collections/eid");
     expect(link.textContent!.trim()).toBe(ANNOUNCEMENT);
     expect(link.hasAttribute("target")).toBe(false);
 
-    theme.blocks.topBar = { variant: "app-banner", settings: { text: ANNOUNCEMENT, link: "https://apps.example.com/nakshi" } };
+    theme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: "https://apps.example.com/nakshi" } };
     const external = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }))
-      .querySelector('[data-top-bar="app-banner"] a[data-top-bar-link]')!;
+      .querySelector('[data-top-bar="announcement"] a[data-top-bar-link]')!;
     expect(external.getAttribute("href")).toBe("https://apps.example.com/nakshi");
     expect(external.getAttribute("target")).toBe("_blank");
     expect(external.getAttribute("rel")).toBe("noopener noreferrer");
@@ -1592,12 +1537,12 @@ describe("theme brand and words", () => {
     theme.blocks.topBar = { variant: "none", settings: {} };
     const none = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
     expect(none.body.textContent).not.toContain(ANNOUNCEMENT);
-    expect(none.querySelector("#site-header > .bg-primary, [data-top-bar]")).toBeNull();
+    expect(none.querySelector("[data-top-bar]")).toBeNull();
 
     // Empty words: no announcement line; the utility bar keeps its own links.
     theme.blocks.topBar = { variant: "announcement", settings: { text: "", link: "/sale" } };
     const empty = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
-    expect(empty.querySelector("#site-header > .bg-primary, [data-top-bar-link]")).toBeNull();
+    expect(empty.querySelector("[data-top-bar], [data-top-bar-link]")).toBeNull();
     theme.blocks.topBar = { variant: "utility", settings: { text: "", link: null } };
     const utility = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }))
       .querySelector('[data-top-bar="utility"]')!;
@@ -1606,11 +1551,11 @@ describe("theme brand and words", () => {
     expect(utility.querySelector('a[href^="tel:"]')).not.toBeNull();
   });
 
-  it("puts the newsletter signup in the newsletter-grey footer, once per page, in the store's language", async () => {
+  it("puts the newsletter signup in the centered-compact footer, once per page, in the store's language", async () => {
     // A home page with no newsletter section (the mall's) and one that ends with it (the boutique's).
     const footerForm = async (home: "mall" | "boutique", url: string, languageCode = "en") => {
       const theme = storefrontTemplateTheme(home === "mall" ? "department-mall" : "boutique");
-      theme.blocks.footer = storefrontBlockDefault("footer", "newsletter-grey") as never;
+      theme.blocks.footer = storefrontBlockDefault("footer", "centered-compact") as never;
       const page = parse(await render(
         "/src/layouts/Layout.astro",
         withStoreContent(theme),
@@ -1637,8 +1582,8 @@ describe("theme brand and words", () => {
   it("writes the footer block's words, its about text as escaped paragraphs and the © name", async () => {
     const theme = withStoreContent(storefrontTemplateTheme("boutique"));
     theme.blocks.footer = {
-      variant: "minimal-columns",
-      settings: { tagline: "Handmade in Bangladesh", about: "Woven in Tangail.\n\nEvery saree takes <b>two weeks</b>.", copyright: "" },
+      variant: "columns",
+      settings: { tone: "page", tagline: "Handmade in Bangladesh", about: "Woven in Tangail.\n\nEvery saree takes <b>two weeks</b>.", copyright: "" },
     };
     const year = new Date().getFullYear();
     const page = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
@@ -1654,7 +1599,7 @@ describe("theme brand and words", () => {
     expect(copyright()).toBe(`© ${year} Nakshi Ghor. All rights reserved.`);
 
     // The footer's own name after ©, in every variant; without words, no about block.
-    for (const variant of ["support-dark", "brand-black", "newsletter-grey", "directory"]) {
+    for (const variant of ["columns", "centered-compact", "directory"]) {
       const named = structuredClone(theme);
       const footer = storefrontBlockDefault("footer", variant);
       named.blocks.footer = { ...footer, settings: { ...footer.settings, copyright: "Nakshi Ghor Limited" } } as never;

@@ -2,13 +2,14 @@
 // src/components/Footer.astro
 // The footer block (theme block `footer`), one component per variant under
 // ./footer, all reading one model (footer/footer-model.ts):
-// - minimal-columns, product-widgets: the columns footer (version 3, the
-//   default template's; product lists wait for product data in the layout).
-// - support-dark: the header's tone, a large phone card (Star Tech).
-// - brand-black: the ink surface, policies and a watermark (Apple Gadgets).
-// - newsletter-grey: the muted surface, one centred band (Fabrilife).
-// - directory: customer care and a curated link directory (Daraz); with
-//   `style: bands`, Amazon's banded directory in the header's tone.
+// - columns: the logo, words and contact details, then the link groups.
+// - centered-compact: one centred stack with the signup and grouped links.
+// - directory: the store's contact details and a curated link directory;
+//   with `style: bands`, a banded directory in the header's tone.
+// `tone` (columns, centered-compact) picks the surface: page, muted, the
+// header colours or the page's ink.
+// Every footer sits in the page Container, so its edges line up with the
+// header and the sections, and groups links the same way (FooterMenus).
 // Tones re-point the footer's own surface tokens (secondary, border), so the
 // shared bottom row and the menus read correctly on every surface. Every
 // tone is a theme pair the AA rule checks (the header pair, ink on page, ink
@@ -23,12 +24,12 @@ import type { StorefrontFooterRenderer } from "@scalius/shared/storefront-theme"
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { footerModel, footerWords } from "./footer/footer-model";
 import ColumnsFooter from "./footer/ColumnsFooter.astro";
-import SupportFooter from "./footer/SupportFooter.astro";
-import BrandFooter from "./footer/BrandFooter.astro";
 import NewsletterFooter from "./footer/NewsletterFooter.astro";
 import DirectoryFooter from "./footer/DirectoryFooter.astro";
 import FooterBottom from "./footer/FooterBottom.astro";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
+import Container from "./ui/Container.astro";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { newsletterFormModel, themeNewsletterSettings } from "@/lib/newsletter-form";
 
 interface Props {
@@ -48,7 +49,8 @@ interface Props {
 }
 
 const { menus, storeName, storePhone, social, policies, business, languageCode } = Astro.props;
-const { resolved, brand } = await currentRequestTheme(Astro.locals);
+const { resolved, brand, language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const variant = resolved.blocks.footer.variant;
 // newsletter-grey carries the signup form, with the homepage newsletter
 // section's settings when the theme has one. A homepage that shows that
@@ -57,7 +59,7 @@ const variant = resolved.blocks.footer.variant;
 const newsletterSettings = themeNewsletterSettings(resolved.pages.home);
 const pageHasSignup = /^\/newsletter(?:\/|$)/.test(Astro.url.pathname)
   || (Astro.url.pathname === "/" && resolved.pages.homeMode.kind === "sections" && newsletterSettings !== null);
-const signup = variant === "newsletter-grey" && !pageHasSignup
+const signup = variant === "centered-compact" && !pageHasSignup
   ? newsletterFormModel(newsletterSettings, newsletterLanguage(languageCode))
   : null;
 const marketplaceDirectory = variant === "directory" && resolved.blocks.footer.settings.style === "bands";
@@ -70,34 +72,30 @@ const model = footerModel({
   social,
   policies,
   business,
+  trackOrderLabel: copy.nav.trackOrder,
 });
-const TONES: Record<string, string | undefined> = {
-  "support-dark": "header",
-  "brand-black": "ink",
-  "newsletter-grey": "muted",
-};
+const tone = resolved.blocks.footer.settings.tone;
+const TONES: Record<string, string | undefined> = { muted: "muted", header: "header", ink: "ink" };
 ---
 
 <footer
   class="relative border-t border-border bg-secondary text-secondary-foreground overflow-hidden"
   data-footer-variant={variant}
-  data-footer-tone={marketplaceDirectory ? "header" : TONES[variant]}
+  data-footer-tone={marketplaceDirectory ? "header" : typeof tone === "string" ? TONES[tone] : undefined}
   data-footer-marketplace={marketplaceDirectory ? "" : undefined}
 >
-  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">Back to top</a>}
-  <div class:list={["relative mx-auto w-full px-4 sm:px-6", marketplaceDirectory ? "directory-main max-w-5xl py-8 lg:py-10" : "max-w-7xl py-5 lg:py-6"]}>
-    {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} collapsibleMenus={variant === "product-widgets"} />}
-    {variant === "support-dark" && <SupportFooter model={model} />}
-    {variant === "brand-black" && <BrandFooter model={model} />}
-    {variant === "newsletter-grey" && <NewsletterFooter model={model} signup={signup} />}
+  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">{copy.footer.backToTop}</a>}
+  <Container class:list={["relative", marketplaceDirectory ? "directory-main py-8 lg:py-10" : "py-8 lg:py-10"]}>
+    {variant === "columns" && <ColumnsFooter model={model} />}
+    {variant === "centered-compact" && <NewsletterFooter model={model} signup={signup} />}
     {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
-    {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "newsletter-grey" && variant !== "brand-black"} />}
-  </div>
+    {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "centered-compact"} />}
+  </Container>
   {marketplaceDirectory && (
     <div class="directory-lower" data-footer-lower>
-      <div class="relative mx-auto w-full max-w-5xl px-4 sm:px-6">
+      <Container class="relative">
         <FooterBottom model={model} marketplace />
-      </div>
+      </Container>
     </div>
   )}
 </footer>
@@ -156,7 +154,7 @@ const TONES: Record<string, string | undefined> = {
     min-height: 50px;
     background: var(--theme-header-raised);
     color: var(--theme-header-foreground);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
 

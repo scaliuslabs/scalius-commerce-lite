@@ -125,7 +125,8 @@ const specSearch = kind === "search" && listingPresentation.filters.placement ==
 const presentation = specSearch
   ? { ...listingPresentation, filters: { ...listingPresentation.filters, placement: "drawer" as const, columnPx: 0 } }
   : listingPresentation;
-const specSearchShowsQuery = specSearch && Boolean(query) && resolved.blocks.header.variant === "spec-two-row";
+// The header's own search field shows the query then, so the band drops its copy.
+const specSearchShowsQuery = specSearch && Boolean(query) && resolved.blocks.header.variant === "search-first" && resolved.blocks.header.settings.search === "field";
 const results = kind === "search" && query && resolved.blocks.listing.searchLayout !== "same"
   ? resolved.blocks.listing.searchLayout
   : presentation.results;

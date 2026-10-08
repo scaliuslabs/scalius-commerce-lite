@@ -1,22 +1,21 @@
 ---
 // The button that opens the drill-in drawer on computers (desktop menu
-// `drill-in-drawer`): Amazon's "☰ All" in a menu row, Target's "Categories"
-// pill in the main row. Without JavaScript it is a link to the drawer's
+// `drill-in-drawer`): a "☰ All" button in a menu row. Without JavaScript it
+// is a link to the drawer's
 // :target (NavDrawer.astro); with it, drawer.ts opens the dialog.
 interface Props {
   /** The drawer's id base (its panel is `${drawer}-panel`). */
   drawer: string;
-  shape: "text" | "pill";
   label: string;
 }
 
-const { drawer, shape, label } = Astro.props;
+const { drawer, label } = Astro.props;
 ---
 
 <a
   href={`#${drawer}-panel`}
   role="button"
-  class:list={["drawer-trigger", `drawer-trigger--${shape}`]}
+  class="drawer-trigger"
   aria-haspopup="dialog"
   aria-controls={`${drawer}-panel`}
   aria-expanded="false"
@@ -47,25 +46,13 @@ const { drawer, shape, label } = Astro.props;
     }
   }
 
-  .drawer-trigger--text {
+  .drawer-trigger {
     padding-inline-start: 0;
   }
 
-  .drawer-trigger--text:hover span {
+  .drawer-trigger:hover span {
     text-decoration: underline;
     text-underline-offset: 0.3em;
-  }
-
-  /* Target's 44px pill. */
-  .drawer-trigger--pill {
-    height: 2.75rem;
-    padding-inline: 1rem;
-    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-    border-radius: 9999px;
-  }
-
-  .drawer-trigger--pill:hover {
-    background: color-mix(in srgb, currentColor 10%, transparent);
   }
 
   .drawer-trigger svg {

@@ -11,6 +11,7 @@ import ThemeFonts from "../components/ThemeFonts.astro";
 import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { themePaint } from "@/lib/theme-paint";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
@@ -131,7 +132,9 @@ const {
   brand: themeBrand,
   previewToken: themePreviewToken,
   preview: themePreview,
+  language: themeLanguage,
 } = await resolveRequestTheme(Astro, layoutData);
+const chromeCopy = storefrontCopy(themeLanguage).chrome;
 const isThemePreview = themePreview !== null;
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview
@@ -498,7 +501,7 @@ const pageStoreTimeZone = storeTimeZone();
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:inset-s-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
     >
-      Skip to content
+      {chromeCopy.skipToContent}
     </a>
 
     {themePreviewBar && <ThemePreviewBar copy={themePreviewBar} />}

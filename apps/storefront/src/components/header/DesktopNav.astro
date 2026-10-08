@@ -10,6 +10,8 @@
 // wrap shows its first items by a server estimate and "All categories".
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
 import { navigationPanelKey } from "./nav-tree";
 import MegaMenuPanel from "./MegaMenuPanel.astro";
@@ -48,9 +50,12 @@ const {
   allCategories = false,
   noScriptFit,
   align = "center",
-  label = "Main navigation",
+  label: labelProp,
   panelsSrc,
 } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
+const label = labelProp ?? copy.nav.main;
 const items = (Array.isArray(navigation) ? navigation : []).filter((item) => item?.title);
 const moreId = `${id}-more`;
 const hasExtras = extras.length > 0 || allCategories;
@@ -91,7 +96,7 @@ const link = (item: NavigationItem) => ({
                 aria-controls={panelId}
                 data-disclosure="popup"
               >
-                {item.href ? <span class="sr-only">{item.title} submenu</span> : item.title}
+                {item.href ? <span class="sr-only">{copy.nav.submenu(item.title)}</span> : item.title}
                 <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
               </button>
             )}
@@ -115,7 +120,7 @@ const link = (item: NavigationItem) => ({
         aria-controls={moreId}
         data-disclosure="popup"
       >
-        More
+        {copy.nav.more}
         <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
       </button>
       <div id={moreId} class="desktop-nav-dropdown" hidden>
@@ -128,7 +133,7 @@ const link = (item: NavigationItem) => ({
           ))}
           {allCategories && (
             <li class="nav-more-extra nav-more-all">
-              <a class="nav-dropdown-link" href="/categories">All categories</a>
+              <a class="nav-dropdown-link" href="/categories">{copy.nav.allCategories}</a>
             </li>
           )}
         </ul>
@@ -137,7 +142,7 @@ const link = (item: NavigationItem) => ({
     {
       allCategories && (
         <li class="desktop-nav-item desktop-nav-nojs" data-nav-nojs-only>
-          <a class="desktop-nav-link" href="/categories">All categories</a>
+          <a class="desktop-nav-link" href="/categories">{copy.nav.allCategories}</a>
         </li>
       )
     }
