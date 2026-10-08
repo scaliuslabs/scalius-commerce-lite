@@ -166,6 +166,59 @@ interface Message<T = unknown> {
   retry(options?: { delaySeconds?: number }): void;
 }
 
+// Durable Objects and hibernatable WebSockets: only what the realtime hub
+// (src/realtime/hub.ts) uses.
+interface HibernatableWebSocket {
+  send(message: string): void;
+  close(code?: number, reason?: string): void;
+  accept(): void;
+  serializeAttachment(value: unknown): void;
+  deserializeAttachment(): unknown;
+  readonly readyState: number;
+}
+
+declare const WebSocketPair: {
+  new (): { 0: HibernatableWebSocket; 1: HibernatableWebSocket };
+};
+
+declare class WebSocketRequestResponsePair {
+  constructor(request: string, response: string);
+}
+
+interface DurableObjectState {
+  acceptWebSocket(socket: HibernatableWebSocket, tags?: string[]): void;
+  getWebSockets(tag?: string): HibernatableWebSocket[];
+  getTags(socket: HibernatableWebSocket): string[];
+  setWebSocketAutoResponse(pair?: WebSocketRequestResponsePair): void;
+}
+
+interface DurableObjectId {
+  toString(): string;
+}
+
+interface DurableObjectNamespace<T = unknown> {
+  idFromName(name: string): DurableObjectId;
+  get(id: DurableObjectId): DurableObjectStub<T>;
+}
+
+type DurableObjectStub<T = unknown> = {
+  fetch(request: Request): Promise<Response>;
+} & {
+  [K in keyof T as T[K] extends (...args: never[]) => unknown ? K : never]: T[K] extends (...args: infer A) => infer R
+    ? (...args: A) => Promise<Awaited<R>>
+    : never;
+};
+
+interface ResponseInit {
+  /** workerd: the client end of a WebSocketPair on a 101 response. */
+  webSocket?: HibernatableWebSocket | null;
+}
+
+interface Response {
+  /** workerd: set on a 101 response that carries a WebSocket. */
+  readonly webSocket?: HibernatableWebSocket | null;
+}
+
 // Cloudflare Workers environment bindings (global Env interface).
 // Must stay in sync with wrangler.jsonc.
 interface Env {
@@ -186,6 +239,11 @@ interface Env {
   // unchanged: `pnpm run deploy --plugin-sandbox` (or `pnpm plugin sandbox on`)
   // adds it to a generated config. Absent, only bundled plugins run.
   LOADER?: WorkerLoader;
+
+  // The realtime hub: one Durable Object per store that fans out change
+  // notices, presence and save notices to staff dashboards over hibernatable
+  // WebSockets (src/realtime/hub.ts, docs/platform/REALTIME.md).
+  REALTIME_HUB?: DurableObjectNamespace<import("./realtime/hub").RealtimeHub>;
 
   // Producer for the single `jobs` queue (DLQ `jobs-dlq`); routed by payload.type.
   JOBS_QUEUE: Queue;
@@ -247,4 +305,13 @@ declare module "cloudflare:workers" {
     queue?(batch: MessageBatch): Promise<void>;
   }
   export const env: Env;
+  export abstract class DurableObject<E = unknown> {
+    protected ctx: DurableObjectState;
+    protected env: E;
+    constructor(ctx: DurableObjectState, env: E);
+    fetch?(request: Request): Promise<Response>;
+    webSocketMessage?(ws: HibernatableWebSocket, message: string | ArrayBuffer): void | Promise<void>;
+    webSocketClose?(ws: HibernatableWebSocket, code: number, reason: string, wasClean: boolean): void | Promise<void>;
+    webSocketError?(ws: HibernatableWebSocket, error: unknown): void | Promise<void>;
+  }
 }

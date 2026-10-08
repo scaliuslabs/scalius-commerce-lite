@@ -148,8 +148,30 @@ export async function flushPendingEventOutbox(options: {
   queue: EventsQueue | undefined;
   targets: readonly EventFanOutTarget[];
   limit?: number;
+  /**
+   * The events this flush moved on (settled or handed to the queue), parsed
+   * from the rows the claim already returns: no extra read. The API fans them
+   * out to the realtime hub. Called once, after the flush; never throws into it.
+   */
+  onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
   const result: EventFlushResult = { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0 };
+  const flushed: OutboxEvent[] = [];
+  const noteFlushed = (rows: ReadonlyArray<Pick<EventOutboxRow, "id" | "topic" | "resourceType" | "resourceId" | "data" | "occurredAt">>) => {
+    if (!options.onFlushed) return;
+    for (const row of rows) {
+      const event = toOutboxEvent(row);
+      if (event) flushed.push(event);
+    }
+  };
+  const report = async () => {
+    if (!options.onFlushed || flushed.length === 0) return;
+    try {
+      await options.onFlushed(flushed);
+    } catch (error) {
+      console.warn("[events] Flush observer failed:", normalizeError(error));
+    }
+  };
   const limit = Math.max(1, Math.min(options.limit ?? EVENT_FLUSH_BATCH_SIZE, MAX_EVENT_FLUSH_LIMIT));
   const { db } = options;
 
@@ -179,10 +201,12 @@ export async function flushPendingEventOutbox(options: {
           updatedAt: sql`unixepoch()`,
         })
         .where(and(inArray(eventOutbox.id, ids), claimableCondition()))
-        .returning({ id: eventOutbox.id });
+        .returning(flushedColumns());
+      noteFlushed(settled);
       result.settledWithoutSubscribers += settled.length;
       result.skipped += ids.length - settled.length;
     }
+    await report();
     return result;
   }
 
@@ -201,7 +225,7 @@ export async function flushPendingEventOutbox(options: {
         updatedAt: sql`unixepoch()`,
       })
       .where(and(inArray(eventOutbox.id, ids), claimableCondition()))
-      .returning({ id: eventOutbox.id, attempts: eventOutbox.attempts });
+      .returning({ ...flushedColumns(), attempts: eventOutbox.attempts });
     result.skipped += ids.length - claimed.length;
     if (claimed.length === 0) continue;
 
@@ -227,6 +251,7 @@ export async function flushPendingEventOutbox(options: {
     }
 
     result.enqueued += claimed.length;
+    noteFlushed(claimed);
     await db
       .update(eventOutbox)
       .set({
@@ -243,7 +268,20 @@ export async function flushPendingEventOutbox(options: {
         console.error("[events] Failed to mark events queued:", normalizeError(error));
       });
   }
+  await report();
   return result;
+}
+
+/** What a flush returns per row: enough to parse the event, so observers need no read. */
+function flushedColumns() {
+  return {
+    id: eventOutbox.id,
+    topic: eventOutbox.topic,
+    resourceType: eventOutbox.resourceType,
+    resourceId: eventOutbox.resourceId,
+    data: eventOutbox.data,
+    occurredAt: eventOutbox.occurredAt,
+  };
 }
 
 /** Parses a stored row into a catalog event, or null when it is unreadable. */

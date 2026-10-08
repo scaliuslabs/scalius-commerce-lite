@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { pollWhileOffline } from "~/lib/realtime/store";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -119,17 +120,18 @@ function OrderViewPage() {
   const { orderId } = Route.useParams();
   const isHydrated = useHydrated();
   const { canManageOrderShipments } = useOrderActionPermissions();
-  // Poll for webhook-driven updates (shipment status, payment confirmation)
+  // Webhook-driven updates (shipment status, payment confirmation) arrive
+  // through the realtime hub; the poll runs only while it is unreachable.
   const { data: order } = useSuspenseQuery({
     ...orderQueryOptions(orderId),
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
-    refetchInterval: 30_000,
+    refetchInterval: pollWhileOffline(30_000),
   });
   const shipmentsQuery = useQuery({
     ...orderShipmentsQueryOptions(orderId),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
-    refetchInterval: 30_000,
+    refetchInterval: pollWhileOffline(30_000),
   });
   // The courier list is only readable by staff who can book couriers.
   const providersQuery = useQuery({

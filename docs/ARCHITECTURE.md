@@ -44,6 +44,7 @@ Related docs:
 - `apps/api/src/runtime/fetch-runtime-app.ts` sorts a request path into one family (`probe`, `public`, `admin`, `system`, `docs`, `plugins`) and loads only that family's app. `runtime/admin-app.ts` and `runtime/public-app.ts` split their families into lazy groups.
 - `apps/api/src/app.ts` is the full contract app that produces the OpenAPI contract. `runtime/route-family-parity.test.ts` checks that each of its routes belongs to exactly one runtime app.
 - `JOBS_QUEUE` message types: `payment.event`, `auth.send_otp`, `notification`, `order.notification` (legacy), `order.auto_fulfil`, `media.render_variants`, `catalog.recommendations.refresh`, `catalog.projections.rebuild`, `events.dispatch`, `webhooks.deliver`, `plugins.deliver`. `jobs-dlq` archives exhausted messages.
+- The API Worker also exports the realtime hub, one Durable Object per store (see [Realtime hub](#realtime-hub)).
 - The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`). On Workers Free the sweeps rotate through four slices, so each runs hourly. On Paid every sweep runs on every tick. Sweeps marked `every` (notification outbox flush, event outbox maintenance, plugin maintenance) run on every tick on both plans.
 
 ## Layer rules
@@ -179,7 +180,7 @@ Shared composition files are split so that features in different domains never e
 
 ## Runtime configuration boundary
 
-Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It limits bindings to KV `CACHE`, R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD` and queue producer `JOBS_QUEUE`. It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
+Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It limits bindings to KV `CACHE`, R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD`, queue producer `JOBS_QUEUE` and the Durable Object `REALTIME_HUB` (class `RealtimeHub`, SQLite-backed, created by a `new_sqlite_classes` migration). It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
 
 - Installed secrets: `SCALIUS_SECRET` on both Workers and `CREDENTIAL_ENCRYPTION_KEY` on the API Worker. Every per-purpose secret is HKDF-derived from `SCALIUS_SECRET` at Worker entry (`packages/shared/src/runtime-secrets.ts`).
 - Public origins are the `platform` settings document, not deployment configuration. Merchants edit the origins under Settings > Store details > Web addresses. They edit the customer cookie domain, extra CORS origins and single sign-on under Settings > Advanced > Sign-in and access. `GET /api/v1/platform` serves the four origins and the setup-token and identity-handoff flags with `Cache-Control: no-store`.
@@ -195,6 +196,17 @@ No build inlines a local value. Secrets reach a Worker only through its `env` at
 - Storefront: Astro inlines every non-`PUBLIC_` variable it can see wherever server code reads `import.meta.env.NAME`. A bare `import.meta.env`, even in a comment, inlines every variable the module's text names. `@astrojs/cloudflare` copies `.dev.vars` into `process.env`, and the Cloudflare Vite plugin writes it into `dist/server/`. `apps/storefront/integrations/build-env-isolation.mjs` keeps only the built-in keys (`DEV`, `SSR`, `PROD`, `MODE`, `BASE_URL`, `SITE`, `ASSETS_PREFIX`), turns off Vite env files and drops env files from the bundle.
 - Dashboard: `envDir: false`. API: `wrangler deploy` inlines no env. Source policy: storefront and dashboard code never read `process.env`.
 - `pnpm check:dist-secrets` scans every `dist/` file for env files, extra `import.meta.env` keys and secret names bound to string literals. It reports names only. `pnpm check:build-canaries` builds a copy of each app with canary secrets and fails if one reaches `dist/`. `pnpm run deploy*` runs both after the build and before any upload.
+
+## Realtime hub
+
+Decision (2026-10, research R8): the dashboard is live through one SQLite-backed Durable Object per store, `RealtimeHub` (`apps/api/src/realtime/hub.ts`), exported by the API Worker. It is the only Durable Object. WebSockets on Workers need a Durable Object, and nothing portable does this job, so the owner rule "a new Cloudflare primitive only where nothing portable can do the job" allows it. SQLite Durable Objects run on Workers Free. Do not add another Durable Object or Workflows without a new decision.
+
+- The relational database stays the authority. The hub keeps no business state and uses no storage. Each socket's attachment holds its staff id, name, topics, proof expiry and open editors.
+- `<dashboard>/api/realtime` (`realtime/connect.ts`) checks the Origin, the signed session cookie, onboarding and 2FA gates and RBAC once per connection. The hub receives the proven identity and the topics the permissions allow (`realtimeTopicsFor`, `@scalius/shared/realtime`), never the cookie.
+- Sockets are hibernatable and tagged by topic and user; `ping` is an auto-response. An idle dashboard costs no duration and no database read.
+- Producers send ids, kinds, states and revisions only: the event outbox flush (the rows it claims or settles, no extra read) and the write observer for tables without events (inbox, reviews, courier shipments, payments). One RPC per flush or write, never per row.
+- Presence and save notices go from editor to hub to the other editors; the three-way field merge (`apps/admin-v2/src/lib/three-way-merge.ts`) settles a save that meets a newer revision.
+- Details, costs and merge rules: `docs/platform/REALTIME.md`.
 
 ## Database provider boundary
 

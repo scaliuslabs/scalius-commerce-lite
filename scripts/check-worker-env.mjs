@@ -17,12 +17,45 @@ export const ALLOWED_WRANGLER_VARS = Object.freeze({
 // The per-store resource shape: one KV namespace, one R2 bucket, one jobs
 // queue (plus its DLQ), two rate limiters. Other users share these by key
 // prefix; a new binding of these kinds needs an explicit architecture decision.
+// Durable Objects: only the realtime hub (WebSockets on Workers need one;
+// docs/ARCHITECTURE.md, "Realtime hub"). It must be SQLite-backed, which is
+// what Workers Free allows.
 export const ALLOWED_RESOURCE_BINDINGS = Object.freeze({
   kv_namespaces: Object.freeze(["CACHE"]),
   r2_buckets: Object.freeze(["BUCKET"]),
   ratelimits: Object.freeze(["RL_STRICT", "RL_STANDARD"]),
   queue_producers: Object.freeze(["JOBS_QUEUE"]),
+  durable_objects: Object.freeze(["REALTIME_HUB"]),
 });
+
+/** Durable Object classes a config may create; each must be a SQLite class (Workers Free has no KV-backed objects). */
+export const ALLOWED_DURABLE_OBJECT_CLASSES = Object.freeze({ REALTIME_HUB: "RealtimeHub" });
+
+export function collectDurableObjectViolations(configPath, config) {
+  const errors = [];
+  const sqliteClasses = new Set();
+  const deleted = new Set();
+  for (const migration of config?.migrations ?? []) {
+    for (const name of migration.new_sqlite_classes ?? []) sqliteClasses.add(name);
+    for (const name of migration.deleted_classes ?? []) deleted.add(name);
+    if ((migration.new_classes ?? []).length > 0) {
+      errors.push(`${configPath} migration ${migration.tag} creates KV-backed Durable Object classes; use new_sqlite_classes (Workers Free).`);
+    }
+  }
+  for (const binding of config?.durable_objects?.bindings ?? []) {
+    const expected = ALLOWED_DURABLE_OBJECT_CLASSES[binding.name];
+    if (expected && binding.class_name !== expected) {
+      errors.push(`${configPath} binds ${binding.name} to ${binding.class_name}; it must be ${expected}.`);
+    }
+    if (binding.script_name) {
+      errors.push(`${configPath} binds ${binding.name} to another Worker; the hub lives in this Worker.`);
+    }
+    if (!sqliteClasses.has(binding.class_name) || deleted.has(binding.class_name)) {
+      errors.push(`${configPath} binds ${binding.name} without a live new_sqlite_classes migration for ${binding.class_name}.`);
+    }
+  }
+  return errors;
+}
 
 export function collectResourceBindingViolations(configPath, config) {
   const declared = {
@@ -30,6 +63,7 @@ export function collectResourceBindingViolations(configPath, config) {
     r2_buckets: (config?.r2_buckets ?? []).map((entry) => entry.binding),
     ratelimits: (config?.ratelimits ?? []).map((entry) => entry.name),
     queue_producers: (config?.queues?.producers ?? []).map((entry) => entry.binding),
+    durable_objects: (config?.durable_objects?.bindings ?? []).map((entry) => entry.name),
   };
   return Object.entries(declared).flatMap(([kind, names]) => {
     const extra = sorted(names.filter((name) => !ALLOWED_RESOURCE_BINDINGS[kind].includes(name)));
@@ -382,6 +416,7 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
       errors.push(...collectCommittedPlanViolations(configPath, config));
       errors.push(...collectWranglerVarsViolations(configPath, config));
       errors.push(...collectResourceBindingViolations(configPath, config));
+      errors.push(...collectDurableObjectViolations(configPath, config));
       for (const name of collectConfigNames(config)) {
         expected.add(name);
       }

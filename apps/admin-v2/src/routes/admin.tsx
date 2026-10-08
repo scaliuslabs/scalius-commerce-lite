@@ -28,6 +28,8 @@ import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
 
 // Asks the API what the store uses once the first page is up.
 const StoreReachProbe = lazy(() => import("~/lib/store-reach-probe"));
+// The live connection to the store's realtime hub (orders, inbox, presence).
+const RealtimeBridge = lazy(() => import("@/components/admin/realtime/RealtimeBridge"));
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -86,6 +88,9 @@ function AdminLayout() {
     return (
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <AdminSessionSync />
+        <Suspense fallback={null}>
+          <RealtimeBridge userId={user.id} permissions={permissions} />
+        </Suspense>
         <ShellProvider>
           <div id="admin-main-scroll" tabIndex={-1} className="h-svh overflow-clip outline-none">
             <Outlet />
@@ -99,6 +104,9 @@ function AdminLayout() {
   return (
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
       <AdminSessionSync />
+      <Suspense fallback={null}>
+        <RealtimeBridge userId={user.id} permissions={permissions} />
+      </Suspense>
       <ShellProvider>
         <a
           href="#admin-main-scroll"

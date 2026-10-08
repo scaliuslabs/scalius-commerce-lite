@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { presenceKey } from "@scalius/shared/realtime";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -164,6 +165,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
 
   return (
     <FormContainer
+      presenceKey={isEdit && defaultValues?.id ? presenceKey("category", defaultValues.id) : null}
       heading={isEdit ? defaultValues?.name || t("category") : t("addCategory")}
       actions={isEdit && defaultValues?.id ? <AppActionsMenu target="category" id={defaultValues.id} extraItems={translateItem} /> : undefined}
       isSubmitting={isSubmitting}

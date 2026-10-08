@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type SetStateAction } from "react";
+import { PresenceScopeContext, announceSave } from "~/lib/realtime/store";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
-import { translate } from "~/i18n";
+import { formatNumber, translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
+import { realtimeMessages } from "~/i18n/realtime";
+import { mergeDisplayValue, requestMergeChoice } from "~/lib/merge-choice";
+import { resolveMerge, threeWayMerge, type MergeOptions } from "~/lib/three-way-merge";
 
 /**
  * A settings document's revision as its GET returns it (`data.revision`): a
@@ -31,7 +35,32 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
   label?: string;
   /** API body path → control id, so a rejected field is marked in place (see `SaveBarEntry.fields`). */
   fields?: SaveBarEntry["fields"];
+  /**
+   * Fields that must keep one person's version together when two saves meet
+   * (lib/three-way-merge.ts). Every other field merges on its own.
+   */
+  coupled?: MergeOptions["coupled"];
 }
+
+/** The label the page shows for a field: its control's `<label>`, else the key in words. */
+function fieldLabel(path: string, fields: SaveBarEntry["fields"] | undefined): string {
+  const controlId = (fields as Record<string, string> | undefined)?.[path] ?? (fields as Record<string, string> | undefined)?.[path.split(".")[0]!];
+  if (controlId && typeof document !== "undefined") {
+    const text = document.querySelector(`label[for="${CSS.escape(controlId)}"]`)?.textContent?.trim();
+    if (text) return text;
+  }
+  const last = path.split(".").pop() ?? path;
+  const words = last.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+const mergeWords = () => ({
+  empty: translate(realtimeMessages, "emptyValue"),
+  on: translate(realtimeMessages, "valueOn"),
+  off: translate(realtimeMessages, "valueOff"),
+  items: (count: number) => translate(realtimeMessages, "valueItems", { count }),
+  number: (value: number) => formatNumber(value),
+});
 
 export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
   const next = { ...incoming };
@@ -83,8 +112,11 @@ export function useSettingsForm<
   canEdit = true,
   label,
   fields,
+  coupled,
 }: UseSettingsFormOptions<T, SaveResult, R>) {
   const queryClient = useQueryClient();
+  // The settings page's presence key: a save here tells its other viewers at once.
+  const scopeKey = useContext(PresenceScopeContext);
 
   const { data, dataUpdatedAt, error, isError, isLoading } = useQuery({
     queryKey: queryKey as unknown[],
@@ -124,12 +156,58 @@ export function useSettingsForm<
     [queryClient, JSON.stringify(queryKey)],
   );
 
+  // The saved version the draft was edited from: the merge's base.
+  const savedValuesRef = useRef(savedValues);
+  savedValuesRef.current = savedValues;
+
+  /**
+   * Someone saved first: merge their version with this draft field by field
+   * (lib/three-way-merge.ts) and save again at their revision. A field both
+   * changed differently goes to the merchant's side-by-side choice; cancelling
+   * it keeps the draft unsaved and the conflict on screen.
+   */
+  const mergeAfterConflict = async (draft: T): Promise<{ values: T; revision: R } | null> => {
+    const latest = await fetchFn();
+    const revision = readRevision(latest);
+    if (revision === undefined) return null;
+    const theirs = formValues(defaultValuesRef.current, latest);
+    const result = threeWayMerge(savedValuesRef.current, theirs, draft, { coupled });
+    let values = result.merged;
+    if (result.clashes.length > 0) {
+      const words = mergeWords();
+      const choices = await requestMergeChoice({
+        rows: result.clashes.map((clash) => ({
+          key: clash.key,
+          label: clash.paths.length > 1 ? clash.paths.map((path) => fieldLabel(path, fields)).join(", ") : fieldLabel(clash.key, fields),
+          theirs: clash.paths.map((path) => mergeDisplayValue(clash.theirs[path], words)).join(" · "),
+          mine: clash.paths.map((path) => mergeDisplayValue(clash.mine[path], words)).join(" · "),
+          coupled: clash.paths.length > 1,
+        })),
+      });
+      if (!choices) return null;
+      values = resolveMerge(result, choices);
+    }
+    return { values, revision: revision as R };
+  };
+
   const mutation = useMutation({
     // The revision the cached document was loaded at. Cards that share a
     // document read it at save time, so one save bar never conflicts with itself.
-    mutationFn: (draft: T) =>
-      saveFn(draft, readRevision(queryClient.getQueryData(queryKey as unknown[])) as R),
-    onSuccess: async (result, submittedValues) => {
+    mutationFn: async (draft: T): Promise<{ result: SaveResult; submitted: T; merged: boolean }> => {
+      try {
+        const result = await saveFn(draft, readRevision(queryClient.getQueryData(queryKey as unknown[])) as R);
+        return { result, submitted: draft, merged: false };
+      } catch (error) {
+        if (!readSettingsRevisionConflict(error)) throw error;
+        const merged = await mergeAfterConflict(draft).catch(() => null);
+        if (!merged) throw error;
+        const result = await saveFn(merged.values, merged.revision);
+        return { result, submitted: merged.values, merged: true };
+      }
+    },
+    onSuccess: async ({ result, submitted: submittedValues, merged }) => {
+      if (merged) toast.success(translate(realtimeMessages, "merged"));
+      if (scopeKey) announceSave(scopeKey, null);
       const savedRevision = readRevision(result);
       const resolved = resolveSavedValues?.(result, submittedValues);
       const canonicalValues = resolved && withoutRevision(resolved);
@@ -210,7 +288,7 @@ export function useSettingsForm<
     invalid: !canEdit || !hasLoaded || (isValid ? !isValid(values) : false),
     label,
     fields,
-    save: () => mutation.mutateAsync(values),
+    save: () => mutation.mutateAsync(values).then(({ result }) => result),
     discard: reset,
     reload: reloadLatest,
   });

@@ -9,6 +9,8 @@ import { saveBarMessages } from "~/i18n/save-bar";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
+import { EditorPresence } from "@/components/admin/realtime/EditorPresence";
+import { announceSave } from "~/lib/realtime/store";
 
 interface FormContainerProps<
   TFieldValues extends FieldValues,
@@ -43,6 +45,11 @@ interface FormContainerProps<
   savedMessage?: string;
   /** Replaces the permission notice when the record is read-only for another reason (e.g. it's in Trash). */
   readOnlyNotice?: React.ReactNode;
+  /**
+   * The saved record's presence key (`presenceKey("category", id)`): shows who
+   * else is editing it and announces this editor's saves. Null for a new record.
+   */
+  presenceKey?: string | null;
 }
 
 function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends FieldValues>({
@@ -55,8 +62,10 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   className,
   header,
   readOnlyNotice,
+  presenceKey = null,
   children,
 }: {
+  presenceKey?: string | null;
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   saving: boolean;
   canSave: boolean;
@@ -69,8 +78,18 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   children: React.ReactNode;
 }) {
   const t = useMessages(saveBarMessages);
-  useFormSaveBar({ form, saving, locked: !canSave, save, savedValues, reload });
+  // A save tells the other editors on this record at once (realtime presence).
+  const announcingSave = async (values: TTransformedValues) => {
+    const result = await save(values);
+    if (presenceKey) {
+      const revision = (savedValues?.(result) as { revision?: unknown } | undefined)?.revision;
+      announceSave(presenceKey, typeof revision === "number" ? revision : null);
+    }
+    return result;
+  };
+  useFormSaveBar({ form, saving, locked: !canSave, save: announcingSave, savedValues, reload });
   const scope = useSaveScope();
+  const loadedRevision = (form.formState.defaultValues as { revision?: unknown } | undefined)?.revision;
   return (
     <form
       method="post"
@@ -86,6 +105,12 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
       {/* A flex gap, so the banner's hidden placeholder adds no space. */}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
+        <EditorPresence
+          presenceKey={presenceKey}
+          revision={typeof loadedRevision === "number" ? loadedRevision : null}
+          dirty={Boolean(scope?.dirty)}
+          onLoadLatest={reload ? () => void reload() : undefined}
+        />
         {canSave ? null : readOnlyNotice ?? <ReadOnlyNotice />}
         {/* Without the save permission the record opens read-only. */}
         <fieldset disabled={!canSave} className="min-w-0">
@@ -128,6 +153,7 @@ export function FormContainer<
   unsavedLabel,
   savedMessage,
   readOnlyNotice,
+  presenceKey,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
   return (
     <ErrorBoundary>
@@ -143,6 +169,7 @@ export function FormContainer<
             className={formClassName}
             header={<PageHeader backTo={backUrl} badge={badge} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
+            presenceKey={presenceKey}
           >
             {children}
           </EditorForm>

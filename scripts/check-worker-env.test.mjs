@@ -6,6 +6,7 @@ import {
   apps,
   collectConfigNames,
   collectDuplicateEnvDeclarations,
+  collectDurableObjectViolations,
   collectResourceBindingViolations,
   collectVersionMetadataViolations,
   collectWranglerVarsViolations,
@@ -176,6 +177,30 @@ describe("worker env check: per-store resource shape", () => {
       expect.stringContaining("ratelimits SEARCH_RATE_LIMITER"),
       expect.stringContaining("queue_producers AUTH_OTP_QUEUE"),
     ]);
+  });
+
+  it("allows only the realtime hub as a Durable Object, SQLite-backed and live", () => {
+    for (const configPath of apps[0].configs) {
+      const config = readRepoJsonc(configPath);
+      expect(collectDurableObjectViolations(configPath, config), configPath).toEqual([]);
+      expect(config.durable_objects.bindings).toEqual([{ name: "REALTIME_HUB", class_name: "RealtimeHub" }]);
+    }
+    const migrations = [
+      { tag: "realtime-hub-v1", new_sqlite_classes: ["RealtimeHub"] },
+    ];
+    expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", {
+      durable_objects: { bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub" }, { name: "CHECKOUT", class_name: "Checkout" }] },
+    })).toEqual([expect.stringContaining("durable_objects CHECKOUT")]);
+    expect(collectDurableObjectViolations("x", {
+      migrations: [{ tag: "kv", new_classes: ["RealtimeHub"] }],
+      durable_objects: { bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub" }] },
+    })).toEqual([expect.stringContaining("KV-backed"), expect.stringContaining("without a live new_sqlite_classes")]);
+    expect(collectDurableObjectViolations("x", {
+      migrations: [...migrations, { tag: "gone", deleted_classes: ["RealtimeHub"] }],
+      durable_objects: { bindings: [{ name: "REALTIME_HUB", class_name: "RealtimeHub", script_name: "other" }] },
+    })).toEqual([expect.stringContaining("another Worker"), expect.stringContaining("without a live")]);
+    expect(collectDurableObjectViolations("x", { migrations, durable_objects: { bindings: [{ name: "REALTIME_HUB", class_name: "Hub" }] } }))
+      .toEqual([expect.stringContaining("must be RealtimeHub"), expect.stringContaining("without a live")]);
   });
 });
 

@@ -35,6 +35,9 @@ export type { AppType } from "./app";
 // through `ctx.exports.PluginBridge` (plugins/loaders/sandbox.ts). Its methods
 // load the bridge lazily, so this export costs no startup work.
 export { PluginBridge } from "./plugins/bridge-entrypoint";
+// The store's realtime hub (Durable Object, docs/platform/REALTIME.md). The
+// class imports only the wire contract, so this export costs no startup work.
+export { RealtimeHub } from "./realtime/hub";
 
 const PROBE_PATHS = new Set([
   "/api/v1/health",

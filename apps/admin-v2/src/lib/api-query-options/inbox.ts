@@ -10,6 +10,7 @@ import {
   getApiV1AdminConversationsSummary,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
+import { pollWhileOffline } from "../realtime/store";
 
 export type InboxQuery = ApiQuery<typeof getApiV1AdminConversations>;
 export type InboxItem = ApiResult<typeof getApiV1AdminConversations>["items"][number];
@@ -25,7 +26,10 @@ export const inboxKeys = {
   order: (orderId: string) => [...inboxKeys.all, "order", orderId] as const,
 };
 
-/** Keep an open inbox current without a socket: short polls while visible. */
+/**
+ * The realtime hub refreshes the inbox the moment a message lands
+ * (lib/realtime/invalidate.ts); these polls run only while it is unreachable.
+ */
 const THREAD_POLL_MS = 20_000;
 const SUMMARY_POLL_MS = 60_000;
 
@@ -33,7 +37,7 @@ export const inboxSummaryQueryOptions = () =>
   queryOptions({
     queryKey: inboxKeys.summary(),
     queryFn: () => apiData(getApiV1AdminConversationsSummary()),
-    refetchInterval: SUMMARY_POLL_MS,
+    refetchInterval: pollWhileOffline(SUMMARY_POLL_MS),
     staleTime: 30_000,
   });
 
@@ -41,7 +45,7 @@ export const threadQueryOptions = (id: string) =>
   queryOptions({
     queryKey: inboxKeys.thread(id),
     queryFn: async () => (await apiData(getApiV1AdminConversationsById({ path: { id } }))).conversation,
-    refetchInterval: THREAD_POLL_MS,
+    refetchInterval: pollWhileOffline(THREAD_POLL_MS),
     staleTime: 0,
   });
 
@@ -49,7 +53,7 @@ export const orderThreadQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: inboxKeys.order(orderId),
     queryFn: async () => (await apiData(getApiV1AdminConversationsOrderByOrderId({ path: { orderId } }))).conversation,
-    refetchInterval: THREAD_POLL_MS,
+    refetchInterval: pollWhileOffline(THREAD_POLL_MS),
     staleTime: 0,
   });
 

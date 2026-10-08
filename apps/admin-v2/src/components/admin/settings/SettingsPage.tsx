@@ -14,12 +14,16 @@ import {
 } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
-import { SaveErrorBanner, SaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
+import { SaveErrorBanner, SaveScope, useSaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
 import { useMessages } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
+import { presenceKey } from "@scalius/shared/realtime";
+import { useQueryClient } from "@tanstack/react-query";
+import { EditorPresence } from "../realtime/EditorPresence";
+import { PresenceScopeContext } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
 
 type SettingsNavTo = (typeof SETTINGS_NAV)[number]["to"];
@@ -49,7 +53,9 @@ export function SettingsPage({
   const common = useMessages(settingsMessages);
   const Icon = SETTINGS_NAV.find((item) => item.key === page)!.icon;
   const hash = useLocation({ select: (location) => location.hash });
+  const key = presenceKey("settings", page);
   return (
+    <PresenceScopeContext.Provider value={key}>
     <TargetCardContext.Provider value={hash}>
       <div className="mx-auto w-full max-w-3xl space-y-4">
         <div className="flex min-h-11 flex-wrap items-center gap-2 md:min-h-9">
@@ -68,10 +74,29 @@ export function SettingsPage({
           {actions}
         </div>
         <SaveErrorBanner />
+        <SettingsPresence presenceKey={key} />
         {readOnly ? <p className="text-body text-muted-foreground">{common("readOnly")}</p> : null}
         {children}
       </div>
     </TargetCardContext.Provider>
+    </PresenceScopeContext.Provider>
+  );
+}
+
+/**
+ * Who else has this settings page open, and their saves. "Load latest"
+ * refetches the page's documents; each card keeps the fields it has edited
+ * (`useSettingsForm` merges unedited fields from the fresh read).
+ */
+function SettingsPresence({ presenceKey: key }: { presenceKey: string }) {
+  const scope = useSaveScope();
+  const queryClient = useQueryClient();
+  return (
+    <EditorPresence
+      presenceKey={key}
+      dirty={Boolean(scope?.dirty)}
+      onLoadLatest={() => void queryClient.invalidateQueries({ queryKey: ["settings"] })}
+    />
   );
 }
 
