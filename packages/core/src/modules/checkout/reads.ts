@@ -23,6 +23,8 @@ import {
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsability } from "../payments";
 import { NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
 import type { AppLinePricer } from "./app-line-prices";
+import { presentTransformedCart, type CartTransformer, type TransformedCart } from "./cart-transform";
+import { ValidationError } from "@scalius/core/errors";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
     type StorefrontCheckoutAuthorityInput,
@@ -67,14 +69,68 @@ function tagCheckoutError(error: unknown, code: string): unknown {
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
     identity: CheckoutAttemptIdentity,
-    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null },
+    authorityInput: CheckoutReadsAuthorityInput,
     credentialEncryptionKey?: string,
     options: {
         paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
         apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
         linePricer?: (apps: CheckoutAppFunctions) => AppLinePricer | undefined;
+        /** `cart.transform`: rewritten lines are read again (one more round trip, only while such an app is active). */
+        transformer?: (apps: CheckoutAppFunctions) => CartTransformer | undefined;
     } = {},
-): Promise<{
+): Promise<StorefrontCheckoutReads<TResponse>> {
+    let linePricer: AppLinePricer | undefined;
+    let transformer: CartTransformer | undefined;
+    const reads = await readCheckoutOnce<TResponse>(db, identity, authorityInput, credentialEncryptionKey, options, (apps) => {
+        linePricer = options.linePricer?.(apps);
+        transformer = options.transformer?.(apps);
+        return { linePricer: () => linePricer, deferSubmittedPriceCheck: () => transformer !== undefined };
+    });
+    // A replayed or in-flight attempt resolves nothing new.
+    const status = reads.existingAttempt?.status;
+    if (!transformer || status === "replay" || status === "processing") return reads;
+    let first: StorefrontCheckoutAuthoritySnapshot;
+    try {
+        first = reads.authority();
+    } catch {
+        // The cart cannot be ordered as it is: the caller reports why.
+        return reads;
+    }
+    const buyerItems = authorityInput.items;
+    // The apps rewrite the lines from the first pass; the buyer's prices are
+    // checked on the second, for the lines as the order holds them.
+    const transform = await transformer(buyerItems, first.cartValidation);
+    const again = await readCheckoutOnce<TResponse>(
+        db,
+        identity,
+        transform ? { ...authorityInput, items: transform.items } : authorityInput,
+        credentialEncryptionKey,
+        { ...options, apps: () => reads.apps },
+        () => ({ linePricer: () => linePricer }),
+    );
+    if (!transform) return again;
+    return {
+        ...again,
+        transform,
+        authority() {
+            let snapshot: StorefrontCheckoutAuthoritySnapshot;
+            try {
+                snapshot = again.authority();
+            } catch (error) {
+                throw remapTransformedIssues(error, transform);
+            }
+            const buyerView = presentTransformedCart(snapshot.cartValidation, transform, buyerItems);
+            if (!buyerView.valid) {
+                throw new ValidationError("Some items in your cart need attention.", { itemIssues: buyerView.issues });
+            }
+            return snapshot;
+        },
+    };
+}
+
+type CheckoutReadsAuthorityInput = StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null };
+
+export interface StorefrontCheckoutReads<TResponse> {
     existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
     authority(): StorefrontCheckoutAuthoritySnapshot;
@@ -84,9 +140,38 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     paymentProviders: PaymentProviders;
     /** The request's checkout functions (`options.apps`), or none. */
     apps: CheckoutAppFunctions;
-}> {
-    let linePricer: AppLinePricer | undefined;
-    const plan = createStorefrontCheckoutAuthorityReadPlan(db, { ...authorityInput, linePricer: () => linePricer });
+    /** Set when `cart.transform` rewrote the lines: the order holds `transform.items`. */
+    transform?: TransformedCart;
+}
+
+/** Item issues of the rewritten lines, on the buyer's lines. */
+function remapTransformedIssues(error: unknown, transform: TransformedCart): unknown {
+    if (!(error instanceof ValidationError)) return error;
+    const details = error.details as { itemIssues?: Array<{ index: number }> } | undefined;
+    if (!details || !Array.isArray(details.itemIssues)) return error;
+    return new ValidationError(error.message, {
+        ...details,
+        itemIssues: details.itemIssues.map((issue) => ({ ...issue, index: transform.items[issue.index]?.sourceIndex ?? issue.index })),
+    });
+}
+
+async function readCheckoutOnce<TResponse>(
+    db: Database,
+    identity: CheckoutAttemptIdentity,
+    authorityInput: CheckoutReadsAuthorityInput,
+    credentialEncryptionKey: string | undefined,
+    options: {
+        paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
+        apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
+    },
+    bind: (apps: CheckoutAppFunctions) => Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck">,
+): Promise<StorefrontCheckoutReads<TResponse>> {
+    let bound: Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck"> = {};
+    const plan = createStorefrontCheckoutAuthorityReadPlan(db, {
+        ...authorityInput,
+        linePricer: () => bound.linePricer?.(),
+        deferSubmittedPriceCheck: () => bound.deferSubmittedPriceCheck?.() ?? false,
+    });
     const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
     const variantIds = [...new Set(authorityInput.items
         .map((item) => item.variantId)
@@ -118,7 +203,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         : BUILT_IN_PAYMENT_PROVIDERS;
     const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
     const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
-    linePricer = options.linePricer?.(apps);
+    bound = bind(apps);
     const settled: SettledAuthority = existingAttempt?.status === "replay"
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
         : await plan.resolve(

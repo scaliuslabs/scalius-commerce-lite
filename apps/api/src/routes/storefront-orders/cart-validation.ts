@@ -6,6 +6,9 @@ import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   checkStorefrontCartRules,
   createAppLinePricer,
+  createCartTransformer,
+  presentTransformedCartLines,
+  type StorefrontCartFulfilmentSummary,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   resolveCartPaymentMethods,
@@ -272,6 +275,11 @@ app.openapi(cartValidationRoute, async (c) => {
   };
   const sessionCustomerId = lazySessionCustomerId(c, (token) =>
     getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
+  const appContext = {
+    channel: "online_store" as const,
+    customerId: sessionCustomerId,
+    destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+  };
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
@@ -282,13 +290,26 @@ app.openapi(cartValidationRoute, async (c) => {
       shippingCountryCode: data.shippingCountryCode,
       customerId: sessionCustomerId,
     },
-    // The apps' line prices: the cart shows what checkout will charge.
-    linePricer: createAppLinePricer(db, apps, {
-      channel: "online_store",
-      customerId: sessionCustomerId,
-      destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
-    }),
+    // The apps' lines and line prices: the cart shows what checkout will charge.
+    linePricer: createAppLinePricer(db, apps, appContext),
+    transformer: createCartTransformer(db, apps, appContext),
   });
+  // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
+  // lines (a bundle priced as its components), checkout the rewritten ones.
+  const transform = result.transform;
+  const buyerView = transform ? presentTransformedCartLines(result, transform, data.items) : null;
+  const cartValid = buyerView ? buyerView.cart.valid : result.valid;
+  const presentCart = (fulfilment: StorefrontCartFulfilmentSummary, hashes: readonly string[]) => buyerView
+    ? presentStorefrontCartValidation(
+      buyerView.cart,
+      decimalPlaces,
+      { ...fulfilment, lineTypes: buyerView.positions.map((position) => fulfilment.lineTypes[position] ?? null) },
+      buyerView.positions.map((position) => hashes[position] ?? ""),
+    )
+    : presentStorefrontCartValidation(result, decimalPlaces, fulfilment, hashes);
+  const onBuyerLines = <T extends { index: number | null }>(errors: T[]): T[] => transform
+    ? errors.map((error) => ({ ...error, index: error.index === null ? null : transform.items[error.index]?.sourceIndex ?? error.index }))
+    : errors;
   // The cart's currency: its market's (MARKETS-DESIGN step 6).
   const money = result.money ?? shopPresentment({ code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor });
   const decimalPlaces = money.decimalPlaces;
@@ -305,11 +326,11 @@ app.openapi(cartValidationRoute, async (c) => {
   // Delivery is priced once a method is chosen: a pickup rate needs no
   // address, a delivery rate needs city and zone.
   const wantsDelivery = Boolean(data.shippingMethodId) || Boolean(data.city && data.zone);
-  if (!result.valid || !cartOnly.requiresDeliveryMethod || !wantsDelivery) {
-    const ruleErrors = await ruleErrorsFor(result.valid, null);
+  if (!cartValid || !cartOnly.requiresDeliveryMethod || !wantsDelivery) {
+    const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, null));
     return ok(c, {
-      ...presentStorefrontCartValidation(result, decimalPlaces, cartOnly, propertiesHashes),
-      valid: result.valid && ruleErrors.length === 0,
+      ...presentCart(cartOnly, propertiesHashes),
+      valid: cartValid && ruleErrors.length === 0,
       ruleErrors,
       allowedPaymentMethods: cartOnlyPayment,
       giftCardIssues,
@@ -330,10 +351,10 @@ app.openapi(cartValidationRoute, async (c) => {
     result,
   );
   const presented = presentStorefrontDeliveryPreflight(delivery, decimalPlaces);
-  const ruleErrors = await ruleErrorsFor(result.valid, delivery);
+  const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, delivery));
   return ok(c, {
-    ...presentStorefrontCartValidation(result, decimalPlaces, delivery.fulfilment, propertiesHashes),
-    valid: result.valid && ruleErrors.length === 0,
+    ...presentCart(delivery.fulfilment, propertiesHashes),
+    valid: cartValid && ruleErrors.length === 0,
     ruleErrors,
     allowedPaymentMethods: resolveCartPaymentMethods(
       paymentMethods.enabledMethods,

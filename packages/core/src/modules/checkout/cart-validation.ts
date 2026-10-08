@@ -38,6 +38,7 @@ import { digitalDeliverableSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
 import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
+import type { CartTransformer, TransformedCart } from "./cart-transform";
 import {
     checkoutListPricesSql,
     marketPricingMatrixSql,
@@ -189,6 +190,12 @@ export interface StorefrontCartValidationResult {
     hasFreeDeliveryProduct: boolean;
     /** Products whose quantity reached a bundle tier; absent means none. */
     bundles?: StorefrontCartBundleSaving[];
+    /**
+     * Set when `cart.transform` rewrote the buyer's lines: `items` and
+     * `issues` are then the rewritten lines' (what checkout orders), and
+     * `presentTransformedCart` gives the buyer's view.
+     */
+    transform?: TransformedCart;
 }
 
 const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
@@ -922,12 +929,37 @@ export async function validateStorefrontCartItems(
         salesChannelId?: string;
         /** The apps' `cart.line_prices` (app-line-prices.ts); absent: catalogue prices only. */
         linePricer?: AppLinePricer;
+        /** The apps' `cart.transform` (cart-transform.ts); absent: the buyer's lines as they are. */
+        transformer?: CartTransformer;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
         return resolveStorefrontCartValidationFromRows(items, options, [], [], new Map());
     }
+    if (!options.transformer) return validateCartLines(db, items, options);
+    // The apps see the cart priced once (before their own prices), then the
+    // rewritten lines are read and validated like any cart.
+    const preliminary = await validateCartLines(db, items, { ...options, linePricer: undefined, deferSubmittedPriceCheck: true });
+    const transform = await options.transformer(items, preliminary);
+    if (!transform) return validateCartLines(db, items, options);
+    const result = await validateCartLines(db, transform.items, options);
+    result.transform = transform;
+    return result;
+}
 
+async function validateCartLines(
+    db: Database,
+    items: StorefrontCartValidationItem[],
+    options: {
+        inventoryPool?: string | null;
+        currencyCode?: string | null;
+        priceIncrementMinor?: number | null;
+        market?: CheckoutMarketSignals;
+        salesChannelId?: string;
+        linePricer?: AppLinePricer;
+        deferSubmittedPriceCheck?: boolean;
+    },
+): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
     const variantIds = [...new Set(items.map((item) => item.variantId))];
     const [productRows, variantRows, bundleRows] = await Promise.all([
@@ -952,7 +984,7 @@ export async function validateStorefrontCartItems(
 
     return resolveCartWithAppLinePrices(options.linePricer, (pass) => resolveStorefrontCartValidationFromRows(
         items,
-        { ...options, priceScope, ...pass },
+        { ...options, priceScope, ...pass, deferSubmittedPriceCheck: options.deferSubmittedPriceCheck || pass.deferSubmittedPriceCheck },
         productRows as StorefrontCartProductRow[],
         variantRows as StorefrontCartVariantRow[],
         mediaByProduct,
@@ -972,7 +1004,7 @@ export function presentStorefrontCartValidation(
     propertiesHashes: readonly string[] = [],
 ) {
     // Bundle savings are checkout discounts: the tax quote shows them.
-    const { subtotalMinor, items, bundles: _bundles, money, ...rest } = result;
+    const { subtotalMinor, items, bundles: _bundles, money, transform: _transform, ...rest } = result;
     // Amounts are in the cart's currency (its market's), with its places.
     decimalPlaces = money?.decimalPlaces ?? decimalPlaces;
     return {

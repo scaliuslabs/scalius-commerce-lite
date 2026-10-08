@@ -391,8 +391,12 @@ export interface StorefrontOrderItem {
     productId: string;
     variantId: string;
     quantity: number;
-    /** The unit price the buyer saw: base plus surcharges. */
-    price: number;
+    /**
+     * The unit price the buyer saw: base plus surcharges. Absent only on a
+     * line the platform made (a cart transform's component), whose buyer
+     * line was checked instead.
+     */
+    price?: number;
     productName?: string | null;
     variantLabel?: string | null;
     /** Buyer inputs `[{ key, value }]` (line-item properties). */

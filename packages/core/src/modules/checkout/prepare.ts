@@ -31,6 +31,7 @@ import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type Paymen
 import { assertDiscountCodesApplied } from "../promotions";
 import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
 import { createAppLinePricer } from "./app-line-prices";
+import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -659,7 +660,13 @@ export async function createStorefrontOrder(
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
     }
 
-    const cartValidation = prevalidatedCart ?? await validateStorefrontCartItems(
+    const appContext = {
+        channel: appOptions.channel ?? "online_store",
+        customerId: customerIdentity?.customerId ?? null,
+        destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+        discountCodes: data.discountCodes,
+    } as const;
+    const validated = prevalidatedCart ?? await validateStorefrontCartItems(
         storefrontDb,
         data.items.map((item) => ({
             cartKey: item.cartKey,
@@ -677,24 +684,25 @@ export async function createStorefrontOrder(
             priceIncrementMinor: requestCurrency.priceIncrementMinor,
             // The order's sales channel: its publications and its locations' units.
             salesChannelId: defaultOrderSalesChannelId(appOptions.channel ?? "online_store"),
-            // The apps' line prices, as the quote priced them.
-            linePricer: createAppLinePricer(storefrontDb, appOptions.apps, {
-                channel: appOptions.channel ?? "online_store",
-                customerId: customerIdentity?.customerId ?? null,
-                destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
-                discountCodes: data.discountCodes,
-            }),
+            // The apps' lines and line prices, as the quote saw them.
+            linePricer: createAppLinePricer(storefrontDb, appOptions.apps, appContext),
+            transformer: createCartTransformer(storefrontDb, appOptions.apps, appContext),
         },
     );
 
-    if (!cartValidation.valid) {
+    // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
+    // lines, the order holds the rewritten ones.
+    const transform = validated.transform;
+    if (!validated.valid || (transform && !presentTransformedCart(validated, transform, data.items).valid)) {
         throw new ValidationError("Some items in your cart need attention.", {
-            itemIssues: cartValidation.issues,
+            itemIssues: transform ? presentTransformedCart(validated, transform, data.items).issues : validated.issues,
         });
     }
+    const cartValidation = validated;
+    const orderLines: ReadonlyArray<{ cartKey?: string | null }> = transform ? transform.items : data.items;
     if (
-        cartValidation.items.length !== data.items.length ||
-        data.items.some((_, index) => !cartValidation.items.some((item) => item.index === index))
+        cartValidation.items.length !== orderLines.length ||
+        orderLines.some((_, index) => !cartValidation.items.some((item) => item.index === index))
     ) {
         throw new ValidationError("Checkout cart validation returned an incomplete item set. Please retry checkout.");
     }
@@ -779,7 +787,7 @@ export async function createStorefrontOrder(
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
     const lineTypeByIndex = new Map(cartValidation.items.map((item, position) => [item.index, lineTypes[position]!]));
-    const preparedItems = data.items.map((item, idx) => {
+    const preparedItems = orderLines.map((item, idx) => {
         const validatedItem = validatedItemByIndex.get(idx)!;
         return {
             id: `item_${nanoid()}`,
@@ -792,7 +800,7 @@ export async function createStorefrontOrder(
             baseUnitPriceMinor: validatedItem.baseUnitPriceMinor,
             isGiftCard: validatedItem.isGiftCard === true,
             propertiesPriceMinor: validatedItem.propertiesPriceMinor,
-            properties: serializeOrderLineProperties(validatedItem.properties),
+            properties: serializeOrderLineProperties([...validatedItem.properties, ...bundleLineProperties(validatedItem.bundle)]),
             fulfillmentType: lineTypeByIndex.get(idx)!,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,
@@ -833,7 +841,7 @@ export async function createStorefrontOrder(
             postalCode: data.shippingPostalCode,
         },
     });
-    assertNoCheckoutRuleErrors(pricing.ruleErrors);
+    assertNoCheckoutRuleErrors(ruleErrorsOnBuyerLines(pricing.ruleErrors, cartValidation));
     assertDiscountCodesApplied(pricing.typedCodes);
     const bundleDiscountByLine = new Map(pricing.bundleLines.map((line) => [line.lineId, line.amountMinor]));
     const taxQuote = pricing.taxQuote;

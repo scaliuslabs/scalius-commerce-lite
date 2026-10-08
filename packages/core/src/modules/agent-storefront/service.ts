@@ -12,6 +12,7 @@ import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError
 import {
   assertNoCheckoutRuleErrors,
   createAppLinePricer,
+  createCartTransformer,
   DELIVERY_ADDRESS_REQUIRED_REASON,
   NO_CHECKOUT_APP_FUNCTIONS,
   presentCheckoutRateOptions,
@@ -628,18 +629,21 @@ async function loadAgentStorefrontCart(
   const identityLines = await resolveProductIdsForCart(db, cart);
   const currency = await readStoreCurrency(db);
   const market = agentCartMarket(db, row);
+  const appContext = {
+    channel: "agent" as const,
+    customerId: market.customerId,
+    destination: row.countryCode ? { country: row.countryCode, city: null, zone: null } : null,
+    discountCodes: row.discountCode ? [row.discountCode] : [],
+  };
   const validation = await validateStorefrontCartItems(db, identityLines, {
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
     market,
     // A buyer agent sells what the AI agents channel publishes (MARKETS-DESIGN D6).
     salesChannelId: AGENTS_CHANNEL_ID,
-    linePricer: createAppLinePricer(db, apps, {
-      channel: "agent",
-      customerId: market.customerId,
-      destination: row.countryCode ? { country: row.countryCode, city: null, zone: null } : null,
-      discountCodes: row.discountCode ? [row.discountCode] : [],
-    }),
+    linePricer: createAppLinePricer(db, apps, appContext),
+    // The quote sees the lines submit orders (`cart.transform`).
+    transformer: createCartTransformer(db, apps, appContext),
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a

@@ -97,6 +97,11 @@ export interface StorefrontCheckoutAuthorityInput {
      * cart is priced: after the read, which also says which apps are active.
      */
     linePricer?: () => AppLinePricer | undefined;
+    /**
+     * True while `cart.transform` is still to rewrite the lines: the
+     * buyer's prices are checked after it (reads.ts), not here.
+     */
+    deferSubmittedPriceCheck?: () => boolean;
 }
 
 export interface StorefrontCheckoutSettingsAuthority {
@@ -397,6 +402,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             priceIncrementMinor: currency.priceIncrementMinor,
                             priceScope,
                             ...pass,
+                            deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() || pass.deferSubmittedPriceCheck,
                         },
                         productRows,
                         variantRows,
