@@ -281,6 +281,11 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "auth", "UserMenu.tsx"),
       "utf8",
     );
+    // The menu itself loads on first use; it reaches the auth client lazily too.
+    const userMenuContentSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "UserMenuContent.tsx"),
+      "utf8",
+    );
     const deferredToasterSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "deferred-toaster.tsx"),
       "utf8",
@@ -293,7 +298,10 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain("@/components/ui/deferred-toaster");
     expect(adminRouteSource).not.toContain("@/components/ui/sonner");
     expect(userMenuSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
-    expect(userMenuSource).toContain('await import("@/lib/auth-client")');
+    expect(userMenuSource).not.toContain("@/lib/auth-client");
+    expect(userMenuSource).toContain('lazy(loadUserMenuContent)');
+    expect(userMenuContentSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
+    expect(userMenuContentSource).toContain('await import("@/lib/auth-client")');
     expect(deferredToasterSource).toContain("lazy(() =>");
     expect(deferredToasterSource).toContain('import("./sonner")');
     expect(sidebarSource).toContain('import("@/components/ui/sidebar-mobile-sheet")');
