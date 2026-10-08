@@ -126,11 +126,14 @@ export function useAppActionRunner(target: AppTarget, bulk: boolean): Runner {
   return { entries, start, pending, dialogs };
 }
 
-/** A "More actions" menu of apps' actions for one record; nothing when no app offers one. */
-export function AppActionsMenu({ target, id, size }: { target: AppTarget; id: string; size?: "sm" }) {
+/**
+ * A "More actions" menu of apps' actions for one record, after the page's own
+ * `extraItems` (menu items); nothing when neither exists.
+ */
+export function AppActionsMenu({ target, id, size, extraItems }: { target: AppTarget; id: string; size?: "sm"; extraItems?: ReactNode }) {
   const r = useMessages(resourceMessages);
   const runner = useAppActionRunner(target, false);
-  if (runner.entries.length === 0) return null;
+  if (runner.entries.length === 0 && !extraItems) return null;
   return (
     <>
       <DropdownMenu>
@@ -141,6 +144,7 @@ export function AppActionsMenu({ target, id, size }: { target: AppTarget; id: st
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {extraItems}
           {runner.entries.map((entry) => (
             <DropdownMenuItem
               key={appActionKey(entry)}

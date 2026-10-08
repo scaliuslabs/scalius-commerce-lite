@@ -39,7 +39,11 @@ export type PluginInvocation =
   | { kind: "provider"; provider: string; operation: string; input: unknown }
   | { kind: "route"; surface: "admin" | "public" | "webhooks"; name: string; request: PluginRouteRequest }
   | { kind: "cron"; name: string; scheduledAt: string }
-  | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean };
+  | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean }
+  /** One declared data update (`migrations[version]`); the host runs each once, in order. */
+  | { kind: "migration"; version: number }
+  /** Loads the module and checks it against the manifest; runs no app code (an update's load check). */
+  | { kind: "check" };
 
 export interface PluginLogRecord {
   level: "debug" | "info" | "warn" | "error";
@@ -342,6 +346,15 @@ export async function invokePluginDefinition(
         if (!handler) return result(true, null, null);
         const ctx = createContext(seed, requireBridge(bridge), logs);
         await (invocation.hook === "uninstall" ? handler(ctx, { keepData: invocation.keepData !== false }) : handler(ctx));
+        return result(true, null, null);
+      }
+      case "check":
+        return result(true, null, null);
+      case "migration": {
+        const key = String(invocation.version);
+        const handler = (seed.inventory.migrations ?? []).includes(key) ? handlerIn(definition.migrations, key) : null;
+        if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No migration ${key}.` });
+        await handler(createContext(seed, requireBridge(bridge), logs));
         return result(true, null, null);
       }
     }

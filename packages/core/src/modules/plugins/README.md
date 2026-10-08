@@ -10,6 +10,7 @@ Installed apps' persistent state and lifecycle (layer L1), for contributors. The
 | `plugin_registrations` | Rows derived from the manifest in the same batch as each manifest write (`registry.ts`). `kind` is `event`, `function`, `cron` or `provider` (one row per app and port). |
 | `plugin_records`, `plugin_kv` | `ctx.storage` and `ctx.kv` data, each with a `revision`. |
 | `plugin_log_entries`, `plugin_event_deliveries`, `plugin_cron_runs` | The masked log ring, delivery state (8 attempts), cron claims. |
+| `plugin_migrations` | One row per data update an app ran (0125). Kept by a keep-data uninstall. |
 
 An app's sales channels (`manifest.salesChannels`, MARKETS-DESIGN D6) are `sales_channels` rows `<plugin id>:<id>` (kind `app`), written in the batch of each install, update and uninstall: declared channels are upserted, a channel no longer declared is removed when no order names it, else switched off. They are active while the app is active (activate, deactivate and a load failure set them in the same batch).
 
@@ -23,7 +24,10 @@ Status is `installed`, `active`, `disabled` or `failed`. Activate, deactivate, u
 2. `activatePlugin` needs the required settings filled, stores the grant the manifest asks for and sets `active`. Only a Super Admin may activate.
 3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and re-indexes changed collections. An active app whose update asks for more access returns to `installed` until a Super Admin approves it.
 4. Deactivate sets `disabled`. `markPluginFailed` sets `failed` when the host cannot load the code.
-5. `uninstallPlugin` removes the row. With `keepData` it cancels waiting deliveries. Without it, it also deletes the app's records, KV, logs, deliveries, cron runs and custom-field definitions.
+5. `uninstallPlugin` removes the row. With `keepData` it cancels waiting deliveries. Without it, it also deletes the app's records, KV, logs, deliveries, cron runs, data-update rows and custom-field definitions.
+6. `restorePluginRelease` puts back the release an update replaced (rollback). `stopPlugin` and `stopThirdPartyPlugins` (`safety.ts`) are the emergency stop: `disabled` with a reason, no revision check, no app code. `recordPluginBreach` counts limit breaches and stops an app at the plan's threshold. `recordPluginMigration` and `measurePluginStorage` keep the data-update marker and the measured size on the installation.
+
+`registry-trust.ts` declares the `plugin_registry` settings document (registries and trusted developer keys); the official registry is pinned in `/shared/plugins/registry`.
 
 `apps/api/src/plugins/lifecycle.ts` runs the app's hooks around these calls. In `/api/v1/admin/apps/*`, `GET` needs `apps.view`. Activate, deactivate, settings, uninstall and delivery retry need `apps.manage`. An app's own routes (`/api/v1/plugins/<id>/admin/**`) need `apps.view` for `GET` and `apps.use` for other methods.
 

@@ -149,6 +149,10 @@ export function checkAppDist(appDir, { canaries = [], extraNames = [] } = {}) {
     for (const message of scanText(text, { names, browser: !server, canaries })) {
       violations.push(`${rel}: ${message}`);
     }
+    // The section gallery and its fixture API are dev and test only (docs/STOREFRONT-QUALITY.md).
+    if (basename(appDir) === "storefront" && text.includes("/__gallery/")) {
+      violations.push(`${rel}: the dev-only section gallery is in the build output`);
+    }
   }
   return violations;
 }

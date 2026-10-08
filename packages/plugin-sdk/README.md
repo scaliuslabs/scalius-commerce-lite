@@ -59,6 +59,9 @@ pnpm run deploy                 # compile the app into the API Worker
 
 `pnpm plugin` keeps `scalius.plugins.json` and the generated files in `apps/api/src/plugins/` in step: `bundled.gen.ts`, `sandbox-runtime.gen.ts`, `assets.gen.ts` (the listing images) and `catalog.gen.ts` (the first-party apps in `plugins/` that the lockfile does not list). Do not edit them by hand. Other subcommands:
 
+- `create <vendor.name>` scaffolds an app with an event, a checkout function, a storefront section, an admin page, a data update and a test. `validate [path]` checks the manifest, compatibility, handlers, permissions, images and bundle size, one line each.
+- `keygen <dir>` makes an Ed25519 signing key (keep it out of every repository). `pack <path> [--key <pem>] [--developer <name>]` writes `dist/` and, with a key, `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
+- The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs and admin requests.
 - `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
 - `wrangler-config [--local] [--plan paid]` prints the API Wrangler config path. A generated config is `wrangler.deploy.gen.json` (`wrangler.local.deploy.gen.json` with `--local`); Free without the sandbox uses the committed config.
@@ -70,9 +73,9 @@ After the deploy, the app shows on the Apps page as not active. A Super Admin re
 One module runs in both loaders with the same runtime code, so a passing harness test holds in either.
 
 - **Bundled** runs in the API Worker on any plan, from `scalius.plugins.json`. Values crossing the bridge are structured-cloned.
-- **Sandbox** needs Workers Paid. Each app version runs in its own Dynamic Worker (binding `LOADER`), cached by id, version and SHA-256. It has no network (`globalOutbound: null`), the CPU limit `limits.cpuMs` and 200 bridge calls per invocation.
+- **Sandbox** needs Workers Paid. Each app version runs in its own Dynamic Worker (binding `LOADER`), cached by id, version and SHA-256. It has no network (`globalOutbound: null`), and the CPU limit `limits.cpuMs` within the plan's ceiling.
 
-An installation with `source` `bundled` uses the bundled loader. `registry` and `upload` use the sandbox; only API tests create those. A Free deploy has no `LOADER` binding, so sandbox calls fail as `unavailable` (provider calls as `misconfigured`). `pnpm plugin sandbox on` and `pnpm run deploy --plugin-sandbox` bind the loader. [docs/FREE-PLAN.md](../../docs/FREE-PLAN.md) owns the plan rules (the sandbox implies `--plan paid`).
+An installation with `source` `bundled` uses the bundled loader. `registry` and `upload` use the sandbox; they install from the dashboard (see "Install, update and trust"). A Free deploy has no `LOADER` binding, so sandbox calls fail as `unavailable` (provider calls as `misconfigured`). `pnpm plugin sandbox on` and `pnpm run deploy --plugin-sandbox` bind the loader. [docs/FREE-PLAN.md](../../docs/FREE-PLAN.md) owns the plan rules (the sandbox implies `--plan paid`).
 
 ## The manifest
 
@@ -129,6 +132,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - `cron.<name>`: `(ctx, { name, scheduledAt })`.
 - `providers.<id>`: `definePaymentProvider`, `defineCourierProvider`, `defineSmsProvider`, `defineEmailProvider`, `defineFraudProvider` or `defineTaxProvider`.
 - `lifecycle.install`, `activate`, `deactivate`, `uninstall`: `(ctx)`. `uninstall` also gets `{ keepData }`. No declaration needed.
+- `migrations["1"]`, `["2"]`: `(ctx)`. One for each `manifest.migrations[].version` (see "Data updates").
 
 **Events.** `EVENT_TOPICS` in `packages/shared/src/events.ts` lists the 16 topics. The catalogue changes only by addition. An event carries ids, states and quantities, never contact data or money. Read the resource with `ctx.api`.
 
@@ -257,3 +261,47 @@ Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, ope
 
 - **SMS and email.** Implement `send`. Never send twice for one idempotency key (`clientReference` for SMS, `idempotencyKey` for email). Answer `{ success, providerRef?, rawStatus?, retryable? }`. Set `retryable: false` for errors a retry cannot fix.
 - **Fraud.** Implement `check({ phone, orderId? })`. The merchant reads the answer on the order page as advice. It never blocks automatically. An app that must stop fulfilment answers `order.risk` with `hold: true`.
+
+## Data updates
+
+An app declares versioned updates of its own data (`manifest.migrations`, up to 200, versions increasing) and one handler for each (`migrations: { "1": async (ctx) => { … } }`). They use `ctx.storage` and `ctx.kv`, so they work the same on D1, TursoDB and PostgreSQL.
+
+- The platform runs each pending update once, in order, before the app's next run after an install or an update. It records each one (`plugin_migrations`) and stores the newest version on the installation (`migratedVersion`). Checkout functions do not wait for them.
+- A failed update stops the run. A dashboard update then puts back the previous version. A bundled app (updated by a deploy) becomes `failed` until it is fixed.
+- A rollback does not reverse data. Make each update idempotent (it can run again after a crash), and keep the previous version able to read the result: add first, remove in a later version.
+- Never renumber or remove a declared update.
+- Uninstall with "keep data" keeps the record, so a reinstall does not run the updates again. "Delete data" removes it.
+
+## Install, update and trust
+
+- **Workers Free (bundled).** An operator adds the app to the fork and deploys: `pnpm plugin add <path>`, or `pnpm plugin add <vendor.name> --registry <index URL>` for a signed registry release. The Apps page shows that command.
+- **Workers Paid (sandbox).** The Apps page installs from a registry with one click, or from an uploaded package (a ZIP that `pnpm plugin pack` writes). The platform downloads the release, checks its SHA-256, its compatibility, its Ed25519 signature and its images, and stores it in R2. Nothing runs until a Super Admin approves its access.
+- **Signatures.** A release is signed over its id, version, bundle SHA-256 and the SHA-256 of its canonical manifest (`@scalius/shared/plugins/registry`). The store trusts the official key (pinned in code; empty until the official registry exists) and the keys a Super Admin added (Apps → Registries and trusted developers). An upload signed by an unknown developer, or not signed, installs only after a Super Admin chooses "trust this developer" or "install unsigned app".
+- **Updates.** The Apps page shows newer registry versions. An update that asks for more access waits for a Super Admin. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back and the page says why.
+- **Private apps.** Keep an app in `plugins/` of your fork (both loaders: `pnpm plugin add plugins/<dir>`, then deploy), or sign it with your own key and upload it on Paid. Add your public key as a trusted developer once, and your uploads need no extra step. A private app never needs the official registry.
+
+## Quotas
+
+The plan profile (`planLimits().plugins`) sets each app's ceilings. The manifest's `limits` apply within them.
+
+| Limit | Free | Paid |
+| --- | --- | --- |
+| CPU per run (sandbox) | 50 ms | 200 ms |
+| Wall time per run | 10 s | 30 s |
+| Platform calls per run | 50 | 1,000 |
+| Stored data (records and key/value) | 50 MiB | 1 GiB |
+| Event, route and cron runs per minute | 600 | 6,000 |
+
+- A run over a limit fails, and the app's log records a breach. Five breaches within an hour (at most one counted each minute) stop the app; the staff get a notice. A Super Admin starts it again by approving it.
+- Storage is measured once a day. Above the limit, writes that add data fail with `quota.storage`; deletes still work.
+- Checkout functions, provider operations and storefront output are paced by the platform, so the runs-per-minute limit does not count them.
+- The emergency switch on the Apps page (and the `dashboard.apps.stop` and `dashboard.apps.stop_third_party` operations) stops one app, or every app not published by Scalius, at once. It runs no app code.
+
+## The stable plugin API
+
+This package, the manifest (`packages/shared/src/plugins`), the event catalogue and the bridge contract are the plugin API. It is the one part of Scalius that keeps backward compatibility.
+
+- `apiVersion` names the version an app was built for (`PLUGIN_API_VERSION`, date-versioned). `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions this platform runs. Install, activation and update refuse a manifest built for a version that is not listed, or whose `minPlatformVersion` is newer than this release, with a plain reason.
+- Within one `apiVersion`, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points and provider operations. Existing fields, types, error codes and behaviour do not change.
+- A breaking change makes a new `apiVersion`. The platform then supports the old and the new version side by side for at least 12 months. The changelog marks each deprecation with the version that removes it.
+- A deprecated field or method keeps working until the platform drops its `apiVersion`.

@@ -24,6 +24,10 @@ const BEFORE_THE_PROFILE = {
   /** Every sweep ran its full limit, and the cron rendered up to MEDIA_RENDITION_BACKFILL_MAX_PER_RUN images itself. */
   sweepLimitScale: 1,
   inlineRenditionsPerRun: 240,
+  /** Apps: the manifest's own ceilings (cpuMs 200, wallMs 30 s) and PLUGIN_SANDBOX_SUBREQUESTS. */
+  pluginCpuMs: 200,
+  pluginWallMs: 30_000,
+  pluginSubrequests: 200,
 } as const;
 
 describe("plan profile", () => {
@@ -52,6 +56,16 @@ describe("plan profile", () => {
 
   describe("Paid keeps at least what the code did before the profile", () => {
     const paid = PLAN_LIMITS.paid;
+
+    it("apps keep the CPU, wall time and calls an invocation had before the profile", () => {
+      expect(paid.plugins.cpuMs).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.pluginCpuMs);
+      expect(paid.plugins.wallMs).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.pluginWallMs);
+      expect(paid.plugins.subrequests).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.pluginSubrequests);
+      // New quotas: Paid is never below Free.
+      expect(paid.plugins.storageBytes).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.storageBytes);
+      expect(paid.plugins.invocationsPerMinute).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.invocationsPerMinute);
+      expect(paid.plugins.breachesBeforeStop).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.breachesBeforeStop);
+    });
 
     it("CPU stays at 30 s", () => {
       expect(paid.cpuMs).toBe(BEFORE_THE_PROFILE.cpuMs);

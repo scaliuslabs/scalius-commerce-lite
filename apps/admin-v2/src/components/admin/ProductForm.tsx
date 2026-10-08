@@ -87,7 +87,7 @@ import type {
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
-import { LazyResourceTranslationsCard } from "./translations/LazyResourceTranslationsCard";
+import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -363,6 +363,7 @@ function ProductEditor({
   const productId = defaultValues?.id;
   const productName = defaultValues?.name ?? "";
   const appActions = useAppActionRunner("product", false);
+  const translateItem = useTranslateMenuItem("product", isEdit ? productId : undefined);
 
   const moreActions = isEdit && productId ? (
     <DropdownMenu>
@@ -378,6 +379,7 @@ function ProductEditor({
             {t("duplicate")}
           </DropdownMenuItem>
         ) : null}
+        {translateItem}
         {variantIds.length > 0 ? (
           <DropdownMenuItem asChild>
             <Link to="/admin/inventory/labels" search={{ variants: variantIds.join(",") }}>{t("printLabels")}</Link>
@@ -490,7 +492,6 @@ function ProductEditor({
               )}
               <AttributesSection form={form} defaultOpen={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
-              {isEdit && productId ? <LazyResourceTranslationsCard type="product" id={productId} /> : null}
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">

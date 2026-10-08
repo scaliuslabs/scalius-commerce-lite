@@ -6,6 +6,7 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_FUNCTION_SCHEMAS,
   parsePluginManifest,
+  pluginCompatibility,
   pluginGrantExpands,
   pluginGrantKey,
   pluginGrantRequest,
@@ -60,6 +61,22 @@ const FULL: PluginManifestInput = {
 describe("plugin manifest", () => {
   it("versions the plugin API with the event catalog", () => {
     expect(PLUGIN_API_VERSION).toBe(EVENTS_API_VERSION);
+  });
+
+  it("takes data updates in increasing version order only", () => {
+    const ok = parsePluginManifest({ ...FULL, migrations: [{ version: 1, description: "Seed" }, { version: 3, description: "Backfill" }] });
+    expect(ok.ok).toBe(true);
+    const backwards = parsePluginManifest({ ...FULL, migrations: [{ version: 2, description: "B" }, { version: 2, description: "Again" }] });
+    expect(backwards.ok).toBe(false);
+    if (!backwards.ok) expect(backwards.issues[0]).toMatchObject({ path: "migrations.1.version" });
+  });
+
+  it("says plainly when this platform cannot run a manifest", () => {
+    expect(pluginCompatibility(FULL)).toEqual({ ok: true });
+    expect(pluginCompatibility({ ...FULL, apiVersion: "2025-01" })).toMatchObject({ ok: false, reason: "api_version" });
+    expect(pluginCompatibility({ ...FULL, minPlatformVersion: "99.0.0" }))
+      .toMatchObject({ ok: false, reason: "platform_version", message: expect.stringMatching(/Needs Scalius 99.0.0/) });
+    expect(pluginCompatibility({ ...FULL, minPlatformVersion: "0.1.0" })).toEqual({ ok: true });
   });
 
   it("accepts a manifest using every extension point and fills defaults", () => {

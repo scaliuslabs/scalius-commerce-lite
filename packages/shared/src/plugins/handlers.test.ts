@@ -36,6 +36,7 @@ describe("plugin handler inventory", () => {
       routes: { admin: ["dashboard"], public: [], webhooks: ["acme-callback"] },
       cron: ["expire"],
       providers: [],
+      migrations: [],
     });
     expect(checkPluginHandlers(inventory, { default: complete })).toEqual([]);
     expect(checkPluginHandlers(inventory, complete)).toEqual([]);
@@ -52,6 +53,15 @@ describe("plugin handler inventory", () => {
     expect(checkPluginHandlers(inventory, { ...complete, lifecycle: { upgrade: handler } })).toEqual(['Unknown lifecycle hook "upgrade".']);
     expect(checkPluginHandlers(inventory, { ...complete, extra: true })).toEqual(['Unknown plugin definition key "extra".']);
     expect(checkPluginHandlers(inventory, null)).toHaveLength(1);
+  });
+
+  it("needs a handler for each declared data update, and none for undeclared ones", () => {
+    const withMigrations = { ...inventory, migrations: ["1", "2"] };
+    expect(checkPluginHandlers(withMigrations, { ...complete, migrations: { 1: handler, 2: handler } })).toEqual([]);
+    expect(checkPluginHandlers(withMigrations, { ...complete, migrations: { 1: handler } }))
+      .toEqual(['Migration "2" is declared in the manifest but has no handler.']);
+    expect(checkPluginHandlers(inventory, { ...complete, migrations: { 3: handler } }))
+      .toEqual(['Migration "3" has a handler but is not declared in the manifest.']);
   });
 
   it("delivers an event to the exact topic, else its resource wildcard, else *", () => {

@@ -52,6 +52,13 @@ export interface PluginBridgeProps {
    * would call itself), everything else its grant allows is available.
    */
   provider?: { kind: string };
+  /**
+   * The plan's quotas for this run (docs/platform/PLUGINS.md, "Quotas"):
+   * calls per run (counted here for bundled apps; the sandbox counts its
+   * own), and whether the app's measured storage is at its size limit, when
+   * writes that add data are refused and recorded as a breach.
+   */
+  limits?: { subrequests: number; storageFull: boolean; storageBytes: number; breachesBeforeStop: number };
 }
 
 /** Bridge methods a storefront render may call (reads of declared collections). */
@@ -141,12 +148,30 @@ export class PluginBridgeHost implements PluginBridgeApi {
     private readonly runtime: PluginBridgeEnvironment,
   ) {}
 
+  private calls = 0;
+
   private get pluginId(): string {
     return this.props.pluginId;
   }
 
+  /** Refuses the call and records a breach (repeated breaches stop the app). */
+  private async overQuota(kind: "subrequests" | "storage", code: "quota.subrequests" | "quota.storage", message: string): Promise<never> {
+    const { recordPluginBreach } = await import("@scalius/core/modules/plugins");
+    await recordPluginBreach(this.runtime.db(), this.pluginId, {
+      kind,
+      detail: message,
+      threshold: this.props.limits?.breachesBeforeStop ?? Number.POSITIVE_INFINITY,
+    }).catch(() => undefined);
+    fail(code, message);
+  }
+
   private async guard<T>(method: string, work: () => Promise<T>): Promise<T> {
     try {
+      this.calls += 1;
+      const limit = this.props.limits?.subrequests;
+      if (limit !== undefined && this.calls > limit) {
+        await this.overQuota("subrequests", "quota.subrequests", `More than ${limit} platform calls in one run.`);
+      }
       if (this.props.render && !RENDER_METHODS.has(method)) {
         fail("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
       }
@@ -200,6 +225,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
   async storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>> {
     return this.guard("storageWrite", async () => {
       if (!Array.isArray(operations)) fail("storage.invalid_batch", "A write is a list of operations.");
+      if (this.props.limits?.storageFull && operations.some((operation) => isRecord(operation) && operation.op === "put")) {
+        await this.overQuota("storage", "quota.storage", `The app's storage is full (${formatBytes(this.props.limits.storageBytes)}); delete records to make room.`);
+      }
       const { writePluginRecords } = await import("@scalius/core/modules/plugins");
       return writePluginRecords(this.runtime.db(), this.pluginId, (name) => this.collection(name), operations);
     });
@@ -235,6 +263,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
     return this.guard("kvSet", async () => {
       const { compareAndSetPluginKv, setPluginKv } = await import("@scalius/core/modules/plugins");
       const { ttlSeconds, expectedRevision }: PluginKvSetOptions = isRecord(options) ? options : {};
+      if (this.props.limits?.storageFull) {
+        await this.overQuota("storage", "quota.storage", `The app's storage is full (${formatBytes(this.props.limits.storageBytes)}); delete keys or records to make room.`);
+      }
       const ttl = ttlSeconds === undefined ? {} : { ttlSeconds };
       return expectedRevision === undefined
         ? setPluginKv(this.runtime.db(), this.pluginId, key, value, ttl)
@@ -445,4 +476,9 @@ async function readBoundedText(response: Response): Promise<string> {
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(bytes);
+}
+
+/** A byte count in plain words (MiB or GiB). */
+function formatBytes(bytes: number): string {
+  return bytes >= 1024 ** 3 ? `${Math.round(bytes / 1024 ** 3)} GiB` : `${Math.round(bytes / 1024 ** 2)} MiB`;
 }

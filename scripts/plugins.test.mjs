@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, WORKER_SIZE_LIMIT_BYTES } from "./check-api-bundle.mjs";
-import { isPathSource, renderBundledGen, renderCatalogGen, renderLockfile, sealBundle } from "./plugin-build.mjs";
+import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "../packages/plugin-sdk/src/testing.ts";
+import { isPathSource, packPlugin, renderBundledGen, renderCatalogGen, renderLockfile, sealBundle } from "./plugin-build.mjs";
+import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
+import { editSource, makeTempPlugin } from "./plugin-test-helpers.mjs";
+import { BUNDLE_WARN_BYTES, formatChecks, validatePlugin } from "./plugin-validate.mjs";
 import { pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -73,13 +77,119 @@ describe("pnpm plugin", () => {
     expect(generated).not.toContain("pages");
   });
 
-  it("scaffolds a plugin package with a manifest and matching handlers", () => {
+  it("scaffolds a plugin with an event, a function, a section, an admin page, a migration and a test", () => {
     const files = scaffoldFiles("acme.loyalty", "loyalty");
-    expect(Object.keys(files).sort()).toEqual(["package.json", "src/index.ts", "tsconfig.json"]);
+    expect(Object.keys(files).sort()).toEqual(["package.json", "src/index.test.ts", "src/index.ts", "tsconfig.json"]);
     expect(JSON.parse(files["package.json"]).dependencies).toEqual({ "@scalius/plugin-sdk": "workspace:*" });
-    expect(files["src/index.ts"]).toContain('id: "acme.loyalty"');
-    expect(files["src/index.ts"]).toContain('"order.created": async');
+    const source = files["src/index.ts"];
+    expect(source).toContain('id: "acme.loyalty"');
+    expect(source).toContain('from "@scalius/plugin-sdk"');
+    expect(source).toContain('"order.created": async');
+    expect(source).toContain('"checkout.discounts": ()');
+    expect(source).toContain('type: "banner"');
+    expect(source).toContain("pages: [{ id: \"overview\"");
+    expect(source).toContain("migrations: [{ version: 1");
+    expect(source).toContain('"1": async');
+    const test = files["src/index.test.ts"];
+    for (const used of ["createPluginTestHarness", "harness.deliver", "harness.fn", "harness.runMigrations", "harness.render", 'harness.route("admin"']) {
+      expect(test).toContain(used);
+    }
   });
+});
+
+describe("scaffolded plugin", () => {
+  it("passes pnpm plugin validate and behaves as its own test says", async () => {
+    const plugin = makeTempPlugin({ id: "acme.loyalty" });
+    try {
+      const outcome = await validatePlugin(plugin.dir);
+      expect(formatChecks(outcome.checks)).not.toContain("✗");
+      expect(outcome).toMatchObject({ ok: true, id: "acme.loyalty" });
+      expect(outcome.checks.map((check) => check.label)).toEqual([
+        "Plugin entry", "Bundles", "Plugin definition", "Manifest", "Compatibility", "Handlers match the manifest", "Permissions", "Listing images", "Bundle size",
+      ]);
+
+      // The same steps as its generated test, against the packed bundle.
+      const packed = await packPlugin(plugin.dir);
+      const module = await import(`data:text/javascript;base64,${Buffer.from(packed.code).toString("base64")}`);
+      const harness = createPluginTestHarness(module);
+      expect((await harness.deliver(fixtures.event("order.created", { resource: { type: "order", id: "o1" } }))).ok).toBe(true);
+      expect(harness.kv.get("last_order")).toBe("o1");
+      expect((await harness.fn("checkout.discounts", fixtures.checkoutDiscountsInput())).value).toEqual({ discounts: [] });
+      expect((await harness.runMigrations()).ok).toBe(true);
+      expect(harness.kv.get("install_note")).toBe("Installed");
+      const section = await harness.render("section", "banner", { settings: { heading: "Sale <now>", text: "" } });
+      expect(JSON.stringify(section.value)).toContain("Sale &#60;now&#62;");
+      const page = parsePluginUiDocument(((await harness.route("admin", "overview", fixtures.adminRouteRequest())).value).body);
+      expect(page.ok).toBe(true);
+    } finally {
+      plugin.cleanup();
+    }
+  });
+});
+
+describe("pnpm plugin validate", () => {
+  it("reports every problem in one run: manifest issues, a missing handler, a permission a plugin cannot hold and a missing image", async () => {
+    const plugin = makeTempPlugin({ id: "acme.broken" });
+    try {
+      editSource(plugin.dir, (source) => source
+        .replace('permissions: ["orders.view"]', 'permissions: ["orders.view", "team.manage", "nonsense.do"]')
+        .replace('categories: ["marketing"],', 'categories: ["marketing"],\n  icon: "assets/missing.svg",')
+        .replace('"checkout.discounts": () => ({ discounts: [] }),', ""));
+      const outcome = await validatePlugin(plugin.dir);
+      const report = formatChecks(outcome.checks);
+      expect(outcome.ok).toBe(false);
+      expect(report).toContain("✗ Handlers: ");
+      expect(report).toContain("checkout.discounts");
+      expect(report).toContain("✗ Permissions: nonsense.do is not a Scalius permission.");
+      expect(report).toContain("✗ Listing images: assets/missing.svg is declared in the manifest but missing.");
+      expect(report).toMatch(/✗ Permissions: team\.\w+ cannot be granted/);
+    } finally {
+      plugin.cleanup();
+    }
+  });
+
+  it("lists manifest parse issues with their paths, and names a module that has no plugin", async () => {
+    const bad = makeTempPlugin({ id: "acme.bad" });
+    const empty = makeTempPlugin({ id: "acme.empty" });
+    try {
+      editSource(bad.dir, (source) => source.replace('apiVersion: PLUGIN_API_VERSION,', "").replace('version: "0.1.0"', 'version: "one"'));
+      const outcome = await validatePlugin(bad.dir);
+      const report = formatChecks(outcome.checks);
+      expect(outcome.ok).toBe(false);
+      expect(report).toMatch(/✗ Manifest: version/);
+      expect(report).toMatch(/✗ Manifest: apiVersion/);
+
+      editSource(empty.dir, () => "export const nothing = 1;\n");
+      expect(formatChecks((await validatePlugin(empty.dir)).checks)).toContain("✗ Plugin definition: The module has no default export from definePlugin() with a manifest.");
+    } finally {
+      bad.cleanup();
+      empty.cleanup();
+    }
+  });
+
+  it("warns above 1 MiB and fails above the registry's 16 MiB, and says when the source does not compile", async () => {
+    const big = makeTempPlugin({ id: "acme.big" });
+    const broken = makeTempPlugin({ id: "acme.syntax" });
+    try {
+      editSource(big.dir, (source) => `${source}\nexport const padding = ${JSON.stringify("x".repeat(BUNDLE_WARN_BYTES + 10))};\n`);
+      const warned = await validatePlugin(big.dir);
+      expect(warned.ok).toBe(true);
+      expect(warned.checks.find((check) => check.label === "Bundle size")).toMatchObject({ status: "warn" });
+
+      editSource(big.dir, (source) => `${source}\nexport const more = ${JSON.stringify("y".repeat(BUNDLE_MAX_BYTES))};\n`);
+      const failed = await validatePlugin(big.dir);
+      expect(failed.ok).toBe(false);
+      expect(failed.checks.find((check) => check.label === "Bundle size")).toMatchObject({ status: "fail" });
+
+      editSource(broken.dir, (source) => `${source}\nconst = ;`);
+      const outcome = await validatePlugin(broken.dir);
+      expect(outcome.ok).toBe(false);
+      expect(formatChecks(outcome.checks)).toContain("✗ Bundles: ");
+    } finally {
+      big.cleanup();
+      broken.cleanup();
+    }
+  }, 30_000);
 });
 
 describe("API bundle size gate", () => {

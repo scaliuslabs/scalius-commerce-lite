@@ -6,6 +6,7 @@
 @source not "../**/*.test.ts";
 @source not "../**/*.test.tsx";
 @source not "../**/__fixtures__";
+@source not "../gallery";
 @import "./theme-foundation.css";
 @import "./rating-stars.css";
 

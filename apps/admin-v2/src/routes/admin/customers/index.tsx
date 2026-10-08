@@ -22,7 +22,7 @@ import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
-import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
+import { Skeleton } from "~/components/ui/skeleton";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 import { resourceMessages } from "~/i18n/resource";
 import {
@@ -55,8 +55,10 @@ function listQuery(search: CustomerListSearch, term: string) {
   });
 }
 
-// The bulk tag dialog and the export dialog load when first used: the list
-// renders without their tag field, radio choices and CSV writer.
+// The filters, the bulk tag dialog and the export dialog load after the list
+// (or when first used): the list renders without the searchable select, the
+// tag field, radio choices and CSV writer.
+const CustomerListFilters = lazy(() => import("~/components/admin/customers/CustomerListFilters").then((module) => ({ default: module.CustomerListFilters })));
 const CustomerBulkActions = lazy(() => import("~/components/admin/customers/CustomerBulkActions").then((module) => ({ default: module.CustomerBulkActions })));
 const ExportCustomersDialog = lazy(() => import("~/components/admin/customers/ExportCustomersDialog").then((module) => ({ default: module.ExportCustomersDialog })));
 
@@ -126,7 +128,11 @@ function CustomersPage() {
         searchPlaceholder={t("searchPlaceholder")}
         countLabel={(count) => (count === 1 ? t("customersCountOne") : t("customersCount", { count }))}
         filterParams={CUSTOMER_FILTER_PARAMS}
-        filters={<CustomerListFilters search={search} />}
+        filters={(
+          <Suspense fallback={<Skeleton className="h-9 w-full sm:w-40" />}>
+            <CustomerListFilters search={search} />
+          </Suspense>
+        )}
         bulkActions={(rows, done) => (
           <Suspense fallback={null}>
             <CustomerBulkActions

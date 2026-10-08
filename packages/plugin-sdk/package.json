@@ -8,6 +8,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./fixtures": "./src/fixtures.ts",
     "./manifest": "./src/manifest.ts",
     "./runtime": "./src/runtime.ts",
     "./testing": "./src/testing.ts"

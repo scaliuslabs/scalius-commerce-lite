@@ -15,7 +15,7 @@ import { normalizeCollectionConfig } from "@scalius/core/modules/collections/bro
 import { collectionQueryOptions } from "~/lib/api-query-options/collections";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
-import { LazyResourceTranslationsCard } from "~/components/admin/translations/LazyResourceTranslationsCard";
+import { useTranslateMenuItem } from "~/components/admin/translations/TranslateMenuItem";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
@@ -95,6 +95,7 @@ export function CollectionForm({
   const queryClient = useQueryClient();
   const { collections: collectionActions } = useCatalogActionPermissions();
   const canSave = isEdit ? collectionActions.canEdit : collectionActions.canCreate;
+  const translateItem = useTranslateMenuItem("collection", isEdit ? defaultValues?.id : undefined);
   const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<CollectionFormInput, unknown, CollectionFormValues>({
@@ -244,7 +245,7 @@ export function CollectionForm({
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
-      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="collection" id={defaultValues.id} /> : undefined}
+      actions={isEdit && defaultValues?.id ? <AppActionsMenu target="collection" id={defaultValues.id} extraItems={translateItem} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/collections"
       canSave={canSave}
@@ -278,7 +279,6 @@ export function CollectionForm({
             moveProduct={moveProduct}
           />
           <CollectionSearchListing form={form} disabled={!canSave} />
-          {isEdit && defaultValues?.id ? <LazyResourceTranslationsCard type="collection" id={defaultValues.id} /> : null}
           {isEdit && defaultValues?.id ? (
             <CustomFieldsCard ownerType="collection" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}

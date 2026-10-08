@@ -17,6 +17,8 @@ export interface PluginHandlerInventory {
   cron: string[];
   /** Each provider's port and the operations its implementation must have. */
   providers: PluginProviderInventory[];
+  /** Declared data updates, by version (`migrations: { "1": handler }`); absent in seeds from before they existed. */
+  migrations?: string[];
 }
 
 export interface PluginProviderInventory {
@@ -41,6 +43,7 @@ export interface PluginHandlerManifest {
   };
   cron: ReadonlyArray<{ name: string }>;
   providers: ReadonlyArray<{ id: string; kind: ProviderKind; operations: readonly string[] }>;
+  migrations?: ReadonlyArray<{ version: number }>;
 }
 
 export function pluginHandlerInventory(manifest: PluginHandlerManifest): PluginHandlerInventory {
@@ -58,6 +61,7 @@ export function pluginHandlerInventory(manifest: PluginHandlerManifest): PluginH
       kind: provider.kind,
       operations: [...PROVIDER_OPERATIONS[provider.kind].required, ...provider.operations],
     })),
+    migrations: (manifest.migrations ?? []).map((migration) => String(migration.version)),
   };
 }
 
@@ -82,7 +86,7 @@ export function checkPluginHandlers(inventory: PluginHandlerInventory, definitio
   const plugin = pluginDefinitionOf(definition);
   if (!plugin) return ["The plugin module must export a plugin definition (definePlugin) as its default export."];
 
-  const known = new Set(["manifest", "events", "functions", "routes", "cron", "providers", "lifecycle"]);
+  const known = new Set(["manifest", "events", "functions", "routes", "cron", "providers", "lifecycle", "migrations"]);
   for (const key of Object.keys(plugin)) {
     if (!known.has(key)) issues.push(`Unknown plugin definition key "${key}".`);
   }
@@ -114,6 +118,7 @@ export function checkPluginHandlers(inventory: PluginHandlerInventory, definitio
   compare("Event", inventory.events, plugin.events, "function");
   compare("Function", inventory.functions, plugin.functions, "function");
   compare("Cron job", inventory.cron, plugin.cron, "function");
+  compare("Migration", inventory.migrations ?? [], plugin.migrations, "function");
   compare("Provider", inventory.providers.map((provider) => provider.id), plugin.providers, "object");
   if (isRecord(plugin.providers)) {
     for (const declared of inventory.providers) {

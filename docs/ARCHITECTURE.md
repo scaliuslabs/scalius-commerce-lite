@@ -358,6 +358,7 @@ A settings document is one `settings` row: `category` is the document key, `key`
 | `email`, `whatsapp`, `sms`, `firebase` | `settings/documents.ts` | Messaging providers | Resend key, WhatsApp token, SMS keys, service account |
 | `stripe`, `payment_methods` (and the retired `sslcommerz`, cleared by the Bangladesh pack's activation) | `settings/documents.ts` | Stripe and the checkout method allowlist | Stripe secret and webhook secret (old SSLCommerz store password) |
 | `meta_conversions` | `settings/documents.ts` | Meta Conversions API | Access token |
+| `plugin_registry` | `plugins/registry-trust.ts` | App registries and trusted developer keys (Super Admin only) | -- |
 
 Fraud-checker provider rows (`category = 'fraud-checker'`) and `notification_provider_health` markers share the table but are not documents. The storefront theme is not a settings document: it lives in `theme_settings` and `theme_settings_drafts`.
 

@@ -698,7 +698,7 @@ describe("runScheduledMaintenance", () => {
     const env = createEnv();
     const ctx = createExecutionContext();
     await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: Date.parse("2026-10-02T10:15:00.000Z") });
-    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T10:15:00.000Z"));
+    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T10:15:00.000Z"), { nightly: false });
     expect(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.runScheduledPluginMaintenance.mock.invocationCallOrder[0]!);
   });

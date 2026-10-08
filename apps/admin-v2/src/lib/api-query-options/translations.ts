@@ -23,13 +23,13 @@ export type TranslationResourcePage = ApiResult<typeof getApiV1AdminTranslations
 export type SaveTranslationBody = ApiBody<typeof putApiV1AdminTranslationsByTypeById>;
 export type TranslationProvider = ApiResult<typeof getApiV1AdminTranslationsProviders>["items"][number];
 
-import type { TranslationEditorType } from "../translation-types";
+import { STORE_LANGUAGES_QUERY_KEY, type TranslationEditorType } from "../translation-types";
 
 export { TRANSLATION_EDITOR_TYPES, isTranslationEditorType, type TranslationEditorType } from "../translation-types";
 
 export const translationKeys = {
   all: ["translations"] as const,
-  languages: () => ["settings", "languages"] as const,
+  languages: () => STORE_LANGUAGES_QUERY_KEY,
   providers: () => [...translationKeys.all, "providers"] as const,
   resources: (input: { type: string; locale: string; marketId: string | null; search: string; page: number }) =>
     [...translationKeys.all, "resources", input] as const,
