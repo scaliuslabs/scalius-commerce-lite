@@ -2,6 +2,7 @@ import { memo, type CSSProperties, type MouseEvent } from "react";
 import { cn } from "@scalius/shared/utils";
 import { flexRender, type Cell, type Column, type Header, type TableRowData } from "./table-config";
 import { columnAttributes } from "./column-attributes";
+import { layoutColumnOf } from "./column-layout";
 
 import { TableCell, TableHead, TableRow } from "../../ui/table";
 
@@ -76,15 +77,21 @@ export const DataTableBodyRow = memo(
     previous.cells.every((cell, index) => cell === next.cells[index]),
 ) as typeof DataTableBodyRowInner;
 
-/** One header cell: the column's header, its width and pinning. */
+/**
+ * One header cell: the column's header, its width and pinning. With no rows
+ * to size the columns (an empty search), `holdWidth` gives each the narrowest
+ * width its rows would need, so the headings stay where they were.
+ */
 export function DataTableHeadCell<TData extends TableRowData>({
   column,
   header,
   hasSelect,
+  holdWidth = false,
 }: {
   column: Column<TData, unknown>;
   header: Header<TData, unknown> | undefined;
   hasSelect: boolean;
+  holdWidth?: boolean;
 }) {
   const size = column.getSize();
   const { style: _cap, className: _padding, ...attributes } = columnAttributes(column, hasSelect);
@@ -94,7 +101,11 @@ export function DataTableHeadCell<TData extends TableRowData>({
       {...attributes}
       // INDEX_CELL's padding, written out for the class checker.
       className={cn("px-1.5 first:ps-3 last:pe-3", size !== 150 && "w-(--column-width)")}
-      style={{ "--column-width": `${size}px`, "--column-max": maxWidth ? `${maxWidth}px` : undefined } as CSSProperties}
+      style={{
+        "--column-width": `${size}px`,
+        "--column-max": maxWidth ? `${maxWidth}px` : undefined,
+        ...(holdWidth ? { minWidth: layoutColumnOf(column).minWidth } : {}),
+      } as CSSProperties}
     >
       {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}
     </TableHead>

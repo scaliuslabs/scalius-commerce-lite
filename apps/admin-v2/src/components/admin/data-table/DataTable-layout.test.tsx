@@ -34,7 +34,7 @@ class FakeResizeObserver {
   unobserve() {}
 }
 
-function Harness() {
+function Harness({ empty = false }: { empty?: boolean }) {
   const columns = useMemo<ColumnDef<Variant, unknown>[]>(() => [
     { id: "select", header: "", cell: () => <span role="checkbox" aria-checked="false" /> },
     { accessorKey: "name", header: "Product", meta: { primary: true, minWidth: 200 } },
@@ -45,7 +45,7 @@ function Harness() {
   ], []);
   const table = useTable({
     features: serverTableFeatures,
-    data: [{ id: "v1", name: "Xiaozhi Electronic Pet AI Chatbot", sku: LONG_SKU, stock: 4, vendor: "Aarong" }],
+    data: empty ? [] : [{ id: "v1", name: "Xiaozhi Electronic Pet AI Chatbot", sku: LONG_SKU, stock: 4, vendor: "Aarong" }],
     columns,
     getRowId: (row) => row.id,
     manualPagination: true,
@@ -95,6 +95,19 @@ describe("DataTable column layout", () => {
     expect(headers()).toEqual(["", "Product", "SKU", "Available", "Vendor", ""]);
     await resize(660);
     expect(headers()).toEqual(["", "Product", "SKU", "Available", ""]);
+  });
+
+  it("holds each heading at its column's narrowest width when no row sizes the columns", async () => {
+    await act(async () => root.render(<Harness empty />));
+    await resize(1440);
+    const widths = [...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.minWidth);
+    expect(widths).toEqual(["40px", "200px", "140px", "100px", "140px", "48px"]);
+    // With rows the content sizes the columns, as before.
+    act(() => root.unmount());
+    root = createRoot(host);
+    await act(async () => root.render(<Harness />));
+    await resize(1440);
+    expect([...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.minWidth)).toEqual(["", "", "", "", "", ""]);
   });
 
   it("turns rows into cards by the table's own width, not the window's", async () => {
