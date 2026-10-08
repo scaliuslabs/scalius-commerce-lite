@@ -54,7 +54,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminProducts: vi.fn(async () => ({ products: [], pagination: { page: 1, totalPages: 1 } })),
   getApiV1AdminProductsByIds: vi.fn(async () => ({ products: [] })),
 }));
-vi.mock("~/lib/toast", () => ({ toast: toasts }));
+vi.mock("~/lib/toast", async (importActual) => ({ ...(await importActual<typeof import("~/lib/toast")>()), toast: toasts }));
 vi.mock("sonner", () => ({ toast: toasts }));
 vi.mock("../type-preview-fonts", () => ({ registerTypePreviewFonts: vi.fn() }));
 vi.mock("../theme-preview", () => ({ useOpenThemePreview: () => vi.fn(), isSafeThemePreviewContinuation: () => true }));
@@ -319,6 +319,25 @@ describe("theme editor: live preview and saving", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(field("theme-color-background")));
     expect(colors().getAttribute("aria-expanded")).toBe("true");
     expect(field("theme-color-background-note").textContent).toContain("Use a color code");
+  });
+
+  it("on a phone, keeps toasts above the Layers / Theme / Add bar, and on a computer lifts nothing", () => {
+    const lift = () => document.documentElement.style.getPropertyValue("--toast-lift");
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(56);
+    try {
+      setViewport(390);
+      render();
+      expect(container.querySelector("nav[aria-label='Editor']")).toBeTruthy();
+      expect(lift()).toBe("56px");
+      act(() => root.unmount());
+      expect(lift()).toBe("");
+      root = createRoot(container);
+      setViewport(1440);
+      render();
+      expect(lift()).toBe("");
+    } finally {
+      height.mockRestore();
+    }
   });
 
   it("undoes and redoes across autosave", async () => {

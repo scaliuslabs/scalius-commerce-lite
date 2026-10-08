@@ -15,7 +15,7 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
 import {
@@ -32,7 +32,7 @@ import {
 import { presencePath as presencePathOf } from "@scalius/shared/markets";
 import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import { cn } from "@scalius/shared/utils";
-import { toast } from "~/lib/toast";
+import { toast, useToastsAboveBar } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -133,6 +133,13 @@ const AiDraftDialog = lazyNamed(() => import("./AiDraftDialog").then((module) =>
 /** The first problem's data path in a platform section's settings ("slides.0.alt"), or null. */
 function firstSettingError(section: StorefrontPlatformSection): string | null {
   return settingErrors(STOREFRONT_SECTION_REGISTRY[section.type].settings, section.settings).keys().next().value ?? null;
+}
+
+/** The phone's Layers / Theme / Add bar; toasts (removed, undo) sit above it, never over it. */
+function PhoneBottomBar({ label, children }: { label: string; children: ReactNode }) {
+  const bar = useRef<HTMLElement>(null);
+  useToastsAboveBar(bar);
+  return <nav ref={bar} aria-label={label} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">{children}</nav>;
 }
 
 /** Puts the cursor in a field once the (lazy) pane draws it. */
@@ -915,7 +922,7 @@ export function ThemeEditor({ workspace, refetch }: {
       </div>
 
       {phone ? (
-        <nav aria-label={t("editorBar")} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">
+        <PhoneBottomBar label={t("editorBar")}>
           {([
             ["layers", Rows3, () => { setTab("sections"); setSelected(null); setDrawerOpen((open) => !(open && tab === "sections" && !selected)); }],
             ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
@@ -926,7 +933,7 @@ export function ThemeEditor({ workspace, refetch }: {
               <span className="text-caption">{t(`bar_${key}`)}</span>
             </TopBarButton>
           ))}
-        </nav>
+        </PhoneBottomBar>
       ) : <span />}
 
       <UnsavedChangesGuard isDirty={draft.unsavedEdits} isSubmitting={false} />
