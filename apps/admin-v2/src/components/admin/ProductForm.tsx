@@ -221,7 +221,6 @@ function ProductEditor({
     mode: "onBlur",
     defaultValues: {
       name: "",
-      description: null,
       price: null,
       categoryId: "",
       isActive: false,

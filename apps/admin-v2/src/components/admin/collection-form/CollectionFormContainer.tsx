@@ -104,8 +104,6 @@ export function CollectionForm({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
-      description: null,
-      content: null,
       presentation: "grid",
       isActive: false,
       canonicalPath: null,

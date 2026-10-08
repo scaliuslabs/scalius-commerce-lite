@@ -90,8 +90,6 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     defaultValues: {
       name: "",
       status: "draft",
-      description: null,
-      content: null,
       slug: "",
       metaTitle: null,
       metaDescription: null,
