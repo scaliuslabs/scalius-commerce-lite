@@ -259,7 +259,8 @@ export class RealtimeHub extends DurableObject<Env> {
     }
     const people = new Map<string, RealtimePerson>();
     for (const { state } of watchers) people.set(state.userId, { id: state.userId, name: state.name });
-    const list = [...people.values()];
+    // Sorted, so every watcher sees the same order however the runtime lists sockets.
+    const list = [...people.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     for (const { socket } of watchers) send(socket, { t: "presence", key, people: list });
   }
 }

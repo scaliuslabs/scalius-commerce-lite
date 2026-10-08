@@ -40,10 +40,10 @@ export function PresenceAvatars({ others }: { others: readonly RealtimePerson[] 
   if (!line) return null;
   return (
     <div className="flex min-w-0 items-center gap-2 text-body text-muted-foreground" aria-live="polite">
-      <div className="flex shrink-0 -space-x-1.5">
+      <div className="flex shrink-0 gap-1">
         {others.slice(0, 3).map((person) => (
-          <Avatar key={person.id} className="size-6 rounded-full ring-2 ring-background" title={person.name}>
-            <AvatarFallback className="rounded-full">{initialsOf(person.name)}</AvatarFallback>
+          <Avatar key={person.id} className="size-6" title={person.name}>
+            <AvatarFallback>{initialsOf(person.name)}</AvatarFallback>
           </Avatar>
         ))}
       </div>

@@ -140,7 +140,8 @@ describe("Settings → Apps cards", () => {
   it("refuses a stale Meta save and offers to reload it, keeping the edit", async () => {
     sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() =>
       ok({ settings: { pixelId: "123456789012", accessToken: MASK, testEventCode: null, isEnabled: false, logRetentionDays: 30 }, revision: 4 }));
-    sdk.postApiV1AdminSettingsMetaConversions.mockImplementationOnce(() => Promise.resolve({
+    // Every save meets a newer revision (the merged retry too): the conflict is shown, never a silent overwrite.
+    sdk.postApiV1AdminSettingsMetaConversions.mockImplementation(() => Promise.resolve({
       error: {
         error: {
           code: "SETTINGS_REVISION_CONFLICT",

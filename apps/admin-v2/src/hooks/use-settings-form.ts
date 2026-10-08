@@ -167,7 +167,7 @@ export function useSettingsForm<
    * changed differently goes to the merchant's side-by-side choice; cancelling
    * it keeps the draft unsaved and the conflict on screen.
    */
-  const mergeAfterConflict = async (draft: T): Promise<{ values: T; revision: R } | null> => {
+  const mergeAfterConflict = async (draft: T): Promise<{ values: T; theirs: T; revision: R } | null> => {
     const latest = await fetchFn();
     const revision = readRevision(latest);
     if (revision === undefined) return null;
@@ -188,7 +188,7 @@ export function useSettingsForm<
       if (!choices) return null;
       values = resolveMerge(result, choices);
     }
-    return { values, revision: revision as R };
+    return { values, theirs, revision: revision as R };
   };
 
   const mutation = useMutation({
@@ -202,6 +202,11 @@ export function useSettingsForm<
         if (!readSettingsRevisionConflict(error)) throw error;
         const merged = await mergeAfterConflict(draft).catch(() => null);
         if (!merged) throw error;
+        // The form shows the merged draft over the other save while it saves.
+        setDraft((current) => ({
+          values: mergeUneditedFields(current.values, draft, merged.values),
+          savedValues: merged.theirs,
+        }));
         const result = await saveFn(merged.values, merged.revision);
         return { result, submitted: merged.values, merged: true };
       }

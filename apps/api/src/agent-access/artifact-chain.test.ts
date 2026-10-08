@@ -18,6 +18,7 @@ const chain = vi.hoisted(() => ({
 }));
 
 vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {},
   WorkerEntrypoint: class {
     ctx: ExecutionContext & { props: unknown };
     env: Env;

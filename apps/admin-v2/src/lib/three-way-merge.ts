@@ -81,7 +81,7 @@ function getPath(value: unknown, path: string[]): unknown {
 function setPath<T>(target: T, path: string[], next: unknown): T {
   if (path.length === 0) return next as T;
   const [head, ...rest] = path;
-  const source = isPlainObject(target) ? target : {};
+  const source: Record<string, unknown> = isPlainObject(target) ? target : {};
   return { ...source, [head!]: setPath(source[head!], rest, next) } as T;
 }
 

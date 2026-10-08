@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { Miniflare } from "miniflare";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RealtimeServerMessage } from "@scalius/shared/realtime";
 
@@ -37,14 +37,14 @@ describe("RealtimeHub in workerd", () => {
       stdio: ["ignore", "ignore", "pipe"],
       env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
     });
-    mf = new Miniflare({
+    mf = new Miniflare(convertV4MiniflareOptions({
       modules: true,
       scriptPath: join(workdir, "dist", "realtime-hub-harness.worker.js"),
       modulesRoot: join(workdir, "dist"),
       compatibilityDate: COMPATIBILITY_DATE,
       compatibilityFlags: ["nodejs_compat"],
       durableObjects: { REALTIME_HUB: { className: "RealtimeHub", useSQLite: true } },
-    });
+    }) as never);
   }, 120_000);
 
   afterAll(async () => {
@@ -64,13 +64,13 @@ describe("RealtimeHub in workerd", () => {
     socket.addEventListener("message", (event) => {
       const text = String(event.data);
       const message = text === "pong" ? text : JSON.parse(text);
-      messages.push(message);
-      for (const waiter of [...waiters]) {
-        if (typeof message === "object" && waiter.predicate(message as RealtimeServerMessage)) {
-          waiters.splice(waiters.indexOf(waiter), 1);
-          waiter.resolve(message as RealtimeServerMessage);
-        }
+      const waiter = typeof message === "object" ? waiters.find((candidate) => candidate.predicate(message as RealtimeServerMessage)) : undefined;
+      if (waiter) {
+        waiters.splice(waiters.indexOf(waiter), 1);
+        waiter.resolve(message as RealtimeServerMessage);
+        return;
       }
+      messages.push(message);
     });
     socket.addEventListener("close", (event) => closedResolve(event.code ?? 0));
     socket.accept();
@@ -114,7 +114,7 @@ describe("RealtimeHub in workerd", () => {
     rahim.socket.send(JSON.stringify({ t: "watch", keys: ["product:prd_1", "settings:checkout"] }));
     expect(await rahim.next((message) => message.t === "presence")).toEqual({ t: "presence", key: "product:prd_1", people: [{ id: "usr_rahim", name: "Rahim" }] });
     karim.socket.send(JSON.stringify({ t: "watch", keys: ["product:prd_1"] }));
-    const both = { t: "presence", key: "product:prd_1", people: [{ id: "usr_rahim", name: "Rahim" }, { id: "usr_karim", name: "Karim" }] };
+    const both = { t: "presence", key: "product:prd_1", people: [{ id: "usr_karim", name: "Karim" }, { id: "usr_rahim", name: "Rahim" }] };
     expect(await karim.next((message) => message.t === "presence")).toEqual(both);
     expect(await rahim.next((message) => message.t === "presence")).toEqual(both);
 

@@ -11,6 +11,7 @@ import { createLocalPublicReader, createPublicPartReader, renderPublicRead, isSt
  * in-process. Legacy generation/shadow readers remain comparison fixtures.
  */
 vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {},
   WorkerEntrypoint: class {
     env: Env;
     ctx: ExecutionContext;

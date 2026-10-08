@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 type TestApiWorker = { fetch(request: Request): Promise<Response> };
 
 vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {},
   WorkerEntrypoint: class {
     env: Env;
     ctx: ExecutionContext;

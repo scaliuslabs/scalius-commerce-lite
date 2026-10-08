@@ -30,7 +30,7 @@ vi.mock("~/components/admin/product-form/utils", () => ({ productFieldLabel: (fi
 vi.mock("~/components/admin/ProductForm", () => ({
   ProductForm: (props: ComponentProps<typeof ProductForm>) => {
     props.draftRef!.current = () => ({
-      changed: [], changedSections: [], rebase: vi.fn(),
+      changed: [], changedSections: [], values: {} as never, rebase: vi.fn(),
       prepareSectionsRebase: async () => ({ overlaps: [], apply: vi.fn() }),
     });
     return <>
