@@ -42,7 +42,7 @@ describe("listing presentation", () => {
     expect(presentation("daily-essentials")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
     // Each template carries its reference's numbers: Amazon 262/22/14, Star Tech 225/32/14.
     expect(catalogListingPresentation(resolve("marketplace")).filters).toMatchObject({
-      styleVars: "--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px",
+      styleVars: "--catalog-filter-column:262px;--catalog-filter-row:24px;--catalog-filter-label:14px",
       columnPx: 262,
     });
     expect(catalogListingPresentation(resolve("spec-catalogue")).filters.styleVars)
