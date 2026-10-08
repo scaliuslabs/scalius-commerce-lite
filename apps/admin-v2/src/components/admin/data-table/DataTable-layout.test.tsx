@@ -100,14 +100,14 @@ describe("DataTable column layout", () => {
   it("holds each heading at its column's narrowest width when no row sizes the columns", async () => {
     await act(async () => root.render(<Harness empty />));
     await resize(1440);
-    const widths = [...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.minWidth);
+    const widths = [...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.getPropertyValue("--column-min"));
     expect(widths).toEqual(["40px", "200px", "140px", "100px", "140px", "48px"]);
     // With rows the content sizes the columns, as before.
     act(() => root.unmount());
     root = createRoot(host);
     await act(async () => root.render(<Harness />));
     await resize(1440);
-    expect([...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.minWidth)).toEqual(["", "", "", "", "", ""]);
+    expect([...host.querySelectorAll<HTMLElement>("th")].map((th) => th.style.getPropertyValue("--column-min"))).toEqual(["", "", "", "", "", ""]);
   });
 
   it("turns rows into cards by the table's own width, not the window's", async () => {

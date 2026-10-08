@@ -100,11 +100,11 @@ export function DataTableHeadCell<TData extends TableRowData>({
     <TableHead
       {...attributes}
       // INDEX_CELL's padding, written out for the class checker.
-      className={cn("px-1.5 first:ps-3 last:pe-3", size !== 150 && "w-(--column-width)")}
+      className={cn("px-1.5 first:ps-3 last:pe-3", size !== 150 && "w-(--column-width)", holdWidth && "min-w-(--column-min)")}
       style={{
         "--column-width": `${size}px`,
         "--column-max": maxWidth ? `${maxWidth}px` : undefined,
-        ...(holdWidth ? { minWidth: layoutColumnOf(column).minWidth } : {}),
+        "--column-min": holdWidth ? `${layoutColumnOf(column).minWidth}px` : undefined,
       } as CSSProperties}
     >
       {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}
