@@ -33,37 +33,34 @@ describe("listing presentation", () => {
       return { layout, placement: filters.placement, style: filters.style, open: filters.openByDefault, results, shelves };
     };
     expect(presentation("department-mall")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
-    expect(presentation("rounded-tech")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
-    expect(presentation("spec-catalogue")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
     expect(presentation("marketplace")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
-    expect(presentation("mass-retail")).toEqual({ layout: "grid", placement: "drawer", style: "drawer", open: false, results: "grid", shelves: false });
+    expect(presentation("showcase-landing")).toEqual({ layout: "grid", placement: "drawer", style: "drawer", open: false, results: "grid", shelves: false });
     expect(presentation("boutique")).toEqual({ layout: "grid", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: false });
-    expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: true });
     expect(presentation("daily-essentials")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
-    // Each template carries its reference's numbers: Amazon 262/22/14, Star Tech 225/32/14.
+    // The sidebar presets carry their reference's numbers (Amazon 262/24/14); the others set none.
     expect(catalogListingPresentation(resolve("marketplace")).filters).toMatchObject({
       styleVars: "--catalog-filter-column:262px;--catalog-filter-row:24px;--catalog-filter-label:14px",
       columnPx: 262,
     });
-    expect(catalogListingPresentation(resolve("spec-catalogue")).filters.styleVars)
-      .toBe("--catalog-filter-column:225px;--catalog-filter-row:32px;--catalog-filter-label:14px");
     expect(catalogListingPresentation(resolve("department-mall")).filters.columnPx).toBe(262);
-    expect(catalogListingPresentation(resolve("mass-retail")).filters.styleVars).toBe("");
+    expect(catalogListingPresentation(resolve("showcase-landing")).filters.styleVars).toBe("");
     expect(catalogListingPresentation(resolve("boutique")).filters).toMatchObject({ styleVars: "", barFacets: 4, columnPx: 0 });
   });
 
   it("honours a listing's own listing_template when the store fits it", () => {
-    const spec = resolve("spec-catalogue");
-    expect(catalogListingPresentation(spec, "list")).toMatchObject({ layout: "list", results: "list" });
-    expect(catalogListingPresentation(spec, "shelves")).toMatchObject({ layout: "shelves", shelves: true, maxShelves: 8 });
-    expect(catalogListingPresentation(spec, "bar-dropdowns").filters).toMatchObject({ placement: "bar", openByDefault: false });
-    expect(catalogListingPresentation(spec, "drawer").filters.placement).toBe("drawer");
-    // The quick grid needs the quick-add card; shelves need a tree or collections.
-    expect(catalogListingPresentation(spec, "quick-grid").layout).toBe("grid");
-    const flat = resolve("spec-catalogue", { ...EMPTY_STORE_SHAPE, productCount: 40, categoryDepth: 1 });
+    const mall = resolve("department-mall");
+    expect(catalogListingPresentation(mall, "list")).toMatchObject({ layout: "list", results: "list" });
+    expect(catalogListingPresentation(mall, "shelves")).toMatchObject({ layout: "shelves", shelves: true, maxShelves: 8 });
+    expect(catalogListingPresentation(mall, "bar-dropdowns").filters).toMatchObject({ placement: "bar", openByDefault: false });
+    expect(catalogListingPresentation(mall, "drawer").filters.placement).toBe("drawer");
+    // The quick grid is a listing layout of its own: it needs no particular card.
+    expect(catalogListingPresentation(mall, "quick-grid")).toMatchObject({ layout: "quick-grid", results: "quick" });
+    expect(catalogListingPresentation(resolve("boutique"), "quick-grid")).toMatchObject({ layout: "quick-grid", results: "quick" });
+    // Shelves need a tree or collections.
+    const flat = resolve("department-mall", { ...EMPTY_STORE_SHAPE, productCount: 40, categoryDepth: 1 });
     expect(catalogListingPresentation(flat, "shelves").layout).toBe("grid");
     // Anything else is the theme's own listing.
-    expect(catalogListingPresentation(spec, "spec-grid")).toMatchObject({ layout: "grid", filters: { style: "sidebar-dense" } });
+    expect(catalogListingPresentation(mall, "spec-grid")).toMatchObject({ layout: "grid", filters: { style: "sidebar-dense" } });
     expect(catalogListingPresentation(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TREE), null).layout).toBe("grid");
   });
 

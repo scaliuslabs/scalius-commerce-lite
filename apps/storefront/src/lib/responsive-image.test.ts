@@ -6,7 +6,6 @@ import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { STOREFRONT_DENSITY_SPECS } from "@scalius/shared/storefront-theme";
-import { cardPhotoSizes } from "@/components/cards/card-model";
 import { productCardImageSizes } from "./product-card-layout";
 import {
   DENSITY_CAP_SCALE,
@@ -43,9 +42,10 @@ describe("capSizesDensity", () => {
     ].join(", "));
   });
 
-  it("keeps the marketplace card's rendition at every width, with DPR 3 phones capped", () => {
+  it("keeps a contained card photo's rendition at every width, with DPR 3 phones capped", () => {
     const base = productCardImageSizes(STOREFRONT_DENSITY_SPECS.compact, "160rem", "beside-filters", "grid", Infinity, 262);
-    const card = cardPhotoSizes("marketplace", base);
+    // What ProductCard asks for with a contained photo: 88% of the slot, phones capped.
+    const card = capPhoneSizesDensity(scaleSizes(base, 0.88));
     // The repeated string stays short: the capped copies stop at phones
     // instead of repeating every desktop step.
     const cappedEntries = card.split(", ").filter((entry) => entry.startsWith("(min-resolution: 2.5dppx)"));
@@ -71,7 +71,7 @@ describe("capSizesDensity", () => {
       for (const dpr of [1, 1.25, 1.5, 2, 2.5, 3]) {
         // Phones (to 639px) at DPR 2.5+ ask for about 2x; everything else at its density.
         const capped = dpr >= 2.5 && viewport <= PHONE_DENSITY_CAP_MAX_VIEWPORT_PX;
-        const exact = widthAt(base, viewport, dpr) * 0.8 * (capped ? Number(DENSITY_CAP_SCALE) : 1);
+        const exact = widthAt(base, viewport, dpr) * 0.88 * (capped ? Number(DENSITY_CAP_SCALE) : 1);
         const actual = widthAt(card, viewport, dpr);
         // Never narrower than drawn.
         expect(actual, `${viewport}px at ${dpr} DPR`).toBeGreaterThanOrEqual(exact - 1e-6);

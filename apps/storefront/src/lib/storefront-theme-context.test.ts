@@ -49,10 +49,24 @@ describe("request theme", () => {
     expect(first.theme).toEqual(published);
     expect(first.layout.header).toBe("marketplace");
     expect(first.layout.navigation).toBe("drawer");
-    expect(first.resolved.blocks.card.variant).toBe("detailed");
+    expect(first.resolved.blocks.card.variant).toBe("standard");
+    expect(first.layout.productCard).toMatchObject({ facts: "delivery", action: "none", hoverImage: false });
     expect(await resolveRequestTheme({ request: request(), locals }, {})).toBe(first);
     expect(await currentRequestTheme(locals)).toBe(first);
     expect(resolveThemePreview).not.toHaveBeenCalled();
+  });
+
+  it("carries the store's language for the storefront's own words", async () => {
+    const theme = storefrontTemplateTheme("marketplace");
+    const language = async (storefrontCopy?: { languageCode?: unknown }) =>
+      (await resolveRequestTheme({ request: request(), locals: {} }, { theme, storeShape: SHAPE, storefrontCopy })).language;
+    expect(await language({ languageCode: "bn-BD" })).toBe("bn");
+    expect(await language({ languageCode: "bn" })).toBe("bn");
+    expect(await language({ languageCode: "en-US" })).toBe("en");
+    expect(await language({})).toBe("en");
+    expect(await language(undefined)).toBe("en");
+    expect(requestThemeFor(theme, SHAPE, { languageCode: "bn" }).language).toBe("bn");
+    expect(requestThemeFor(theme, SHAPE).language).toBe("en");
   });
 
   it("resolves with the same resolver and store shape the dashboard uses", async () => {
@@ -67,16 +81,16 @@ describe("request theme", () => {
   });
 
   it("renders the dashboard draft while a valid preview cookie is present", async () => {
-    resolveThemePreview.mockResolvedValue({ theme: storefrontTemplateTheme("heritage-editorial") });
+    resolveThemePreview.mockResolvedValue({ theme: storefrontTemplateTheme("boutique") });
     const resolved = await resolveRequestTheme(
       { request: request(previewCookie), locals: {} },
       { theme: DEFAULT_STOREFRONT_THEME, storeShape: SHAPE },
     );
     expect(resolveThemePreview).toHaveBeenCalledWith(`tpv_${"a".repeat(48)}`);
     expect(resolved.previewToken).toBe(`tpv_${"a".repeat(48)}`);
-    expect(resolved.theme.template).toBe("heritage-editorial");
-    expect(resolved.layout.productPage).toEqual({ gallery: "beside", thumbnails: "below", stageRatio: 0.75, thumbnailSize: 88 });
-    expect(resolved.layout.productCard.imageRatio).toBe("portrait");
+    expect(resolved.theme.template).toBe("boutique");
+    expect(resolved.layout.productPage).toMatchObject({ gallery: "stacked" });
+    expect(resolved.layout.productCard).toMatchObject({ facts: "swatches", action: "none", hoverImage: true, imageRatio: "square", imageFit: "cover", surface: "flat" });
     expect(resolved.layout.density).toBe("airy");
     expect(resolved.layout.grid).toBe(STOREFRONT_DENSITY_SPECS.airy);
   });
@@ -155,9 +169,9 @@ describe("readStorefrontTheme", () => {
 
   it("accepts every template document as is", () => {
     const withStory = {
-      ...storefrontTemplateTheme("fashion-value"),
+      ...storefrontTemplateTheme("boutique"),
       pages: {
-        ...storefrontTemplateTheme("fashion-value").pages,
+        ...storefrontTemplateTheme("boutique").pages,
         home: [
           { id: "story", type: "editorial" as const, version: 1 as const, settings: { layout: "rich-text" as const, heading: "Our story", body: "Made in Dhaka." } },
           { id: "hero", type: "hero" as const, version: 1 as const, settings: { layout: "split" as const, slides: [] } },
@@ -169,7 +183,7 @@ describe("readStorefrontTheme", () => {
   });
 
   it("uses the default theme whole, never a per-field repair", () => {
-    const template = storefrontTemplateTheme("rounded-tech");
+    const template = storefrontTemplateTheme("marketplace");
     const invalid = [
       undefined,
       null,

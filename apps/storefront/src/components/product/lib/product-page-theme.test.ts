@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_STORE_SHAPE,
+  STOREFRONT_RETIRED_TEMPLATE_IDS,
   STOREFRONT_TEMPLATE_IDS,
   resolveStorefrontTheme,
   storefrontTemplateTheme,
@@ -31,6 +32,32 @@ describe("product page template", () => {
       expect(actual.layout.productCard, id).toEqual(requestTheme.resolved.layout.productCard);
     }
     expect(requestTheme.theme).toEqual(storefrontTemplateTheme("department-mall"));
+  });
+
+  it("renders a retired template id as the preset it became", () => {
+    expect(STOREFRONT_RETIRED_TEMPLATE_IDS).toEqual({
+      "spec-catalogue": "department-mall",
+      "rounded-tech": "department-mall",
+      "heritage-editorial": "boutique",
+      "fashion-value": "boutique",
+      "mass-retail": "marketplace",
+    });
+    const boutiqueStore = storefrontTemplateTheme("boutique");
+    const request = { theme: boutiqueStore, resolved: resolveStorefrontTheme(boutiqueStore, EMPTY_STORE_SHAPE) };
+    for (const [retired, preset] of Object.entries(STOREFRONT_RETIRED_TEMPLATE_IDS)) {
+      const expected = resolveStorefrontTheme(storefrontTemplateTheme(preset), EMPTY_STORE_SHAPE);
+      const actual = resolveProductPageTheme(request, { pageTemplate: retired }, EMPTY_STORE_SHAPE);
+      expect(actual.blocks.product, retired).toEqual(expected.blocks.product);
+      expect(actual.layout.productPage, retired).toEqual(expected.layout.productPage);
+      expect(actual.layout.buyBox, retired).toEqual(expected.layout.buyBox);
+      // The shell stays the store's own.
+      expect(actual.tokens, retired).toEqual(request.resolved.tokens);
+      expect(actual.blocks.header, retired).toEqual(request.resolved.blocks.header);
+    }
+    // "classic" still means the department mall; an id nobody knows keeps the request theme.
+    expect(resolveProductPageTheme(request, { pageTemplate: "classic" }, EMPTY_STORE_SHAPE).blocks.product)
+      .toEqual(resolveStorefrontTheme(storefrontTemplateTheme("department-mall"), EMPTY_STORE_SHAPE).blocks.product);
+    expect(resolveProductPageTheme(request, { pageTemplate: "heritage-editorial-2" }, EMPTY_STORE_SHAPE)).toBe(request.resolved);
   });
 
   it("keeps content blocks to stores whose shape has them, and to products that carry them", () => {

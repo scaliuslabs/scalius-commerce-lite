@@ -925,7 +925,7 @@ describe("site settings write behavior", () => {
 
   it("opens the editor with every image the draft names and the store shape in one read", async () => {
     const { app, env } = createTestApp();
-    const draftTheme = storefrontTemplateTheme("heritage-editorial");
+    const draftTheme = storefrontTemplateTheme("boutique");
     const media = [{ id: "media_draft", url: "https://cdn.example.com/story.jpg", alt: "", width: 1200, height: 800 }];
     mocks.getThemeWorkspace.mockResolvedValueOnce({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
