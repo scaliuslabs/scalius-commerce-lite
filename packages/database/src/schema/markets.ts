@@ -82,6 +82,15 @@ export const markets = sqliteTable("markets", {
     fxRateAsOf: integer("fx_rate_as_of"),
     /** How long a placed order keeps its rate (minutes, 5 to 1,440): the order's `fx_locked_until`. */
     fxLockMinutes: integer("fx_lock_minutes").notNull().default(30),
+    /**
+     * Where `fx_rate` comes from (migration 0126): `manual` (the merchant
+     * types it) or an app FX rate provider (`<plugin id>:<provider id>`),
+     * whose rates the scheduled tick writes into `fx_rate` and
+     * `fx_rate_as_of`. A cached read never asks a provider. Added in place
+     * (no table rebuild, so the generated triggers stay); the markets module
+     * checks its shape.
+     */
+    fxRateSource: text("fx_rate_source").notNull().default("manual"),
     /** Optimistic concurrency of the market aggregate (row, countries, presences). */
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" })

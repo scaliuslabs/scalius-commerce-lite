@@ -117,6 +117,12 @@ export const deps = {
     for (const collection of collections) scope.declare(cacheDep.pluginCollection(pluginId, collection));
   },
 
+  // --- Metaobjects --------------------------------------------------------------------
+  /** `mo:<id>`: one metaobject definition and its entries (a section that shows them). */
+  metaobjects: (definitionIds: Iterable<Id>): void => declareEach(cacheDep.metaobjects, definitionIds),
+  /** `mo:*`: which metaobject definitions exist (a read that finds one by its handle). */
+  anyMetaobjects: (): void => declare(cacheDep.anyMetaobjects()),
+
   // --- Markets ----------------------------------------------------------------------
   /** `mk:<id>`: one market (status, identity, countries, presences): a market-keyed read declares its market. */
   market: (marketId: Id): void => declareOne(cacheDep.market, marketId),

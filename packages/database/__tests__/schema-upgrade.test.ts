@@ -614,6 +614,14 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 8,
         postgresStatements: 8,
       },
+      {
+        version: 126,
+        name: "0126_plugin_seams",
+        // Four tables and their seven indexes, the market column, eight
+        // metaobject cache dependency triggers and the ledger.
+        sqliteStatements: 21,
+        postgresStatements: 21,
+      },
     ]);
   });
 
@@ -788,6 +796,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 123, name: "0123_market_currencies" },
           { version: 124, name: "0124_theme_restore_points" },
           { version: 125, name: "0125_plugin_lifecycle" },
+          { version: 126, name: "0126_plugin_seams" },
         ],
       });
     } finally {
