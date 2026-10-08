@@ -156,6 +156,24 @@ describe("tax regions settings", () => {
     expect(container.querySelector("#tax-default-group")?.textContent).toContain("Standard");
   });
 
+  it("keeps what depends on collecting tax switched off until the switch is on", async () => {
+    const off = { ...configuration.settings, enabled: false };
+    sdk.getApiV1AdminTaxes.mockImplementation(() => envelope({ ...configuration, settings: off }));
+    sdk.getApiV1AdminTaxesSettings.mockImplementation(() => envelope({ settings: off }));
+    await render(<TaxCollectionCard />);
+    await vi.waitFor(() => expect(container.querySelector("#tax-default-group")).not.toBeNull());
+    // The switch itself stays usable; the group, the delivery switch and the checkout name wait.
+    const switches = [...container.querySelectorAll<HTMLButtonElement>("button[role=switch]")];
+    expect(switches.map((entry) => entry.disabled)).toEqual([false, true]);
+    expect(container.querySelector<HTMLButtonElement>("#tax-default-group")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("#tax-label")!.disabled).toBe(true);
+    // Turning tax on frees them in place.
+    await act(async () => { switches[0]!.click(); });
+    expect(container.querySelector<HTMLButtonElement>("#tax-default-group")!.disabled).toBe(false);
+    expect(container.querySelector<HTMLInputElement>("#tax-label")!.disabled).toBe(false);
+    expect([...container.querySelectorAll<HTMLButtonElement>("button[role=switch]")].map((entry) => entry.disabled)).toEqual([false, false]);
+  });
+
   it("shows a country's rates with where each applies, and its places", async () => {
     await render(<TaxRegionPage regionId="txreg_bd" />);
     await vi.waitFor(() => expect(container.textContent).toContain("Dhaka levy"));
