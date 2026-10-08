@@ -406,3 +406,38 @@ describe("tax quote with a quantity bundle", () => {
       .toThrow(TaxQuoteContractError);
   });
 });
+
+describe("fetchAuthoritativeTaxQuote repeats a failure in transit", () => {
+  const ok = () => new Response(JSON.stringify({ success: true, data: validQuote() }), { status: 200 });
+
+  it("asks again after a 5xx or a lost connection when the caller gives waits, and then succeeds", async () => {
+    const answers: Array<() => Response> = [() => new Response("{}", { status: 503 }), ok];
+    const fetcher = vi.fn(async () => {
+      const next = answers.shift();
+      if (!next) throw new TypeError("offline");
+      return next();
+    });
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), fetcher as unknown as typeof fetch, [0, 0])).resolves.toMatchObject({ quoteFingerprint: "taxq_abcdefghijklmnopqrstuv" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const lost = vi.fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockImplementation(async () => ok());
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), lost as unknown as typeof fetch, [0])).resolves.toBeDefined();
+    expect(lost).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up as unavailable once the waits run out, and never repeats without waits", async () => {
+    const failing = vi.fn(async () => new Response("{}", { status: 503 }));
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), failing as unknown as typeof fetch, [0, 0])).rejects.toBeInstanceOf(TaxQuoteUnavailableError);
+    expect(failing).toHaveBeenCalledTimes(3);
+    const once = vi.fn(async () => new Response("{}", { status: 503 }));
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), once as unknown as typeof fetch)).rejects.toBeInstanceOf(TaxQuoteUnavailableError);
+    expect(once).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat a refusal with a reason", async () => {
+    const refused = vi.fn(async () => new Response(JSON.stringify({ success: false, error: "no" }), { status: 400 }));
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), refused as unknown as typeof fetch, [0, 0])).rejects.toBeInstanceOf(TaxQuoteUnavailableError);
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+});

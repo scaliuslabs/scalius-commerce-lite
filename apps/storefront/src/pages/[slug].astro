@@ -9,6 +9,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
+import Container from "@/components/ui/Container.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { templateSectionData } from "@/lib/template-sections";
 import { processShortcodes } from "../lib/shortcodes";
@@ -156,7 +157,7 @@ const templateProps = {
   languageCode: layoutData?.storefrontCopy?.languageCode,
 };
 const richContentClasses =
-  "prose prose-lg mx-auto w-full max-w-3xl dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
+  "prose prose-lg w-full max-w-none dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
 ---
 
 <Layout
@@ -200,14 +201,12 @@ const richContentClasses =
         <div class="w-full overflow-hidden" set:html={processedContent} />
       </>
     ) : (
-      <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <div class="mx-auto mb-8 max-w-3xl text-center">
-          {!page.hideTitle && (
-            <h1 class="text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              {page.title}
-            </h1>
-          )}
-        </div>
+      <Container width="text" class="py-8 sm:py-12">
+        {!page.hideTitle && (
+          <h1 class="mb-8 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            {page.title}
+          </h1>
+        )}
 
         {featuredImageUrl && (
           <figure class="mb-10 overflow-hidden rounded-xl bg-muted">
@@ -227,7 +226,7 @@ const richContentClasses =
         )}
 
         <div class={richContentClasses} set:html={processedContent} />
-      </div>
+      </Container>
     )
   }
   </ThemeEditorMark>

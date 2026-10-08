@@ -253,16 +253,16 @@ describe("product page", () => {
     expect(latest.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: true } });
   });
 
-  it.each(["fashion", "heritage"] as const)("adds a Buy now button to the %s purchase panel", (variant) => {
+  it("puts key features under the title from the classic purchase panel's own settings", () => {
     const theme = storefrontTemplateTheme("boutique");
-    theme.blocks.product.buyBox = { variant, settings: { showBuyNow: false } } as never;
+    theme.blocks.product.buyBox = { variant: "classic", settings: { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: false } };
     renderPart(theme, EDITOR_PARTS.productMain, { kind: "product" });
-    const buyNow = field<HTMLButtonElement>("theme-blocks-product-buyBox-settings-showBuyNow");
-    expect(buyNow.getAttribute("aria-checked")).toBe("false");
-    click(buyNow);
+    const features = field<HTMLButtonElement>("theme-blocks-product-buyBox-settings-features");
+    expect(features.getAttribute("aria-checked")).toBe("false");
+    click(features);
     const box = latest.blocks.product.buyBox;
-    expect(box.variant).toBe(variant);
-    expect((box.settings as { showBuyNow?: boolean }).showBuyNow).toBe(true);
+    expect(box.variant).toBe("classic");
+    expect((box.settings as { features?: boolean }).features).toBe(true);
   });
 
   it("turns the sticky bars on and off", () => {
@@ -275,10 +275,10 @@ describe("product page", () => {
   });
 
   it("shows a module below the product at its registry place, from its own settings", () => {
-    renderPart(DEFAULT_STOREFRONT_THEME, moduleId("frequently-bought-together"), { kind: "product" });
+    renderPart(DEFAULT_STOREFRONT_THEME, moduleId("compare-similar"), { kind: "product" });
     expect(container.textContent).toContain("Show on product pages");
-    click(field<HTMLButtonElement>("theme-product-module-frequently-bought-together"));
-    expect(latest.blocks.product.below).toEqual(["frequently-bought-together", "description", "reviews", "related"]);
+    click(field<HTMLButtonElement>("theme-product-module-compare-similar"));
+    expect(latest.blocks.product.below).toEqual(["description", "compare-similar", "reviews", "related"]);
   });
 });
 

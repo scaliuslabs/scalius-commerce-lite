@@ -39,7 +39,9 @@
   overflow-wrap: anywhere;
 }
 
+/* The trail has its own line over the title. */
 .catalog-band-crumbs {
+  flex: 0 0 100%;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
 }
@@ -49,6 +51,19 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.375rem;
+}
+
+.catalog-band-crumbs li + li::before {
+  content: "›";
+  margin-inline-end: 0.375rem;
+}
+
+[dir="rtl"] .catalog-band-crumbs li + li::before {
+  content: "‹";
+}
+
+.catalog-band-crumbs [aria-current="page"] {
+  color: var(--foreground);
 }
 
 .catalog-band-crumbs a:hover {
@@ -209,23 +224,32 @@
     padding-block: 2.5rem 0;
   }
 
-  .catalog-band[data-boutique-bar] .catalog-band-tools {
-    margin-top: 2rem;
-    justify-content: flex-end;
+  /* Dawn's line reads left to right: the filters first, then the sort and
+     the count at the end, and the results under both. */
+  [data-catalog-layout="bar"][data-catalog-boutique] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 1.25rem;
+    row-gap: 1.5rem;
+    align-items: center;
   }
 
-  .catalog-band[data-boutique-bar] .catalog-band-count {
-    margin-inline-start: 1.25rem;
+  [data-catalog-layout="bar"][data-catalog-boutique] > #filter-section {
+    grid-column: 1;
   }
 
-  .catalog-band[data-boutique-bar] select {
+  [data-catalog-layout="bar"][data-catalog-boutique] > .catalog-boutique-tools {
+    grid-column: 2;
+  }
+
+  [data-catalog-layout="bar"][data-catalog-boutique] > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .catalog-boutique-tools select {
     border: 0;
     border-radius: 0;
     background: transparent;
-  }
-
-  [data-catalog-layout="bar"][data-catalog-boutique] {
-    gap: 1.5rem;
   }
 
   [data-catalog-layout="bar"][data-catalog-boutique] .catalog-filter-groups::before {
@@ -603,22 +627,11 @@
     width: var(--catalog-filter-column, 16.875rem);
   }
 
-  /* Keep long filter sidebars usable on category, collection, brand and search pages. */
+  /* The facet column flows with the page. A column that scrolls inside the
+     page hid its last groups (no scrollbar, the wheel scrolled it first),
+     and a sticky column taller than the screen cannot show its end. */
   [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] {
-    position: sticky;
-    top: calc(var(--header-height, 0px) + 1rem);
     align-self: flex-start;
-    max-height: calc(100dvh - var(--header-height, 0px) - 2rem);
-  }
-
-  [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .filter-sheet {
-    max-height: inherit;
-  }
-
-  [data-catalog-layout="sidebar"] > #filter-section[data-placement="sidebar"] .catalog-filter-form {
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
   }
 
   .catalog-filter-form:is([data-placement="sidebar"], [data-placement="bar"]) {
@@ -684,12 +697,9 @@
     font-size: 1rem;
   }
 
-  /* A ruled rail (`filters.ruled`, Fabrilife's department rail) is a flat,
-     independently scrolling list. Keep the merchant's filter width, row
+  /* A ruled rail (`filters.ruled`, Fabrilife's department rail) is a flat list. Keep the merchant's filter width, row
      pitch, colours and radius tokens. */
   [data-catalog-layout="sidebar"][data-catalog-rail="fashion"] > #filter-section[data-placement="sidebar"] {
-    top: var(--header-height, 0px);
-    max-height: calc(100dvh - var(--header-height, 0px));
     padding-inline-end: 0.5rem;
     border-inline-end: 1px solid var(--border);
     background: var(--background);
@@ -820,40 +830,6 @@
    tablets (tapping the dim area closes it), and for the drawer layouts a
    panel from the left on computers. */
 @media (max-width: 63.99rem) {
-  /* Keep the fashion filters reachable while scrolling the product grid. */
-  [data-catalog-phone-bar][data-catalog-fashion-phone-bar] {
-    position: fixed;
-    inset-inline: 0;
-    top: auto;
-    bottom: var(--mobile-tabs-reserve, 0px);
-    z-index: 35;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    min-height: 3.5rem;
-    margin: 0;
-    padding: 0.375rem max(1rem, env(safe-area-inset-right)) 0.375rem max(1rem, env(safe-area-inset-left));
-    border-top: 1px solid var(--border);
-    background: var(--background);
-    backdrop-filter: none;
-  }
-
-  [data-catalog-fashion-phone-bar] #mobile-filter-toggle {
-    min-height: 2.25rem;
-    border-radius: 999px;
-    box-shadow: none;
-  }
-
-  [data-catalog-fashion-phone-bar] label:has([data-catalog-sort]) {
-    min-width: 0;
-    max-width: 10rem;
-    margin-inline-start: auto;
-  }
-
-  html:has([data-catalog-fashion-phone-bar]) body {
-    padding-bottom: calc(var(--mobile-tabs-reserve, 0px) + 3.5rem);
-  }
-
   #filter-section:not(.hidden) {
     display: flex;
     flex-direction: column;

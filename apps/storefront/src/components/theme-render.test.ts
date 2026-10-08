@@ -39,7 +39,6 @@ import { homepageLeadSection, homepageSectionRenders, type HomepageContent } fro
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
   productGalleryMainSlot,
-  productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
 } from "@/components/product/lib/gallery-images";
 import { headerCondense, headerSpec } from "@/components/header/header-variants";
@@ -635,14 +634,8 @@ describe("storefront theme render matrix", () => {
       expect(mainImage.getAttribute("alt")).toBe("Kurta front");
     }
     expect(productPage.querySelector("#product-gallery")!.getAttribute("data-main-sizes")).toBe(mainSizes);
-    // The portrait stage's CSS cap is the width its `sizes` name.
-    const portraitMax = productGalleryPortraitMaxPx(layout.productPage);
-    expect(productPage.querySelector("#product-gallery")!.getAttribute("style")).toBe(
-      portraitMax === null ? null : `--gallery-portrait-max: ${portraitMax}px;`,
-    );
-    if (portraitMax !== null && layout.productPage.thumbnails !== "beside") {
-      expect(mainSizes).toMatch(new RegExp(`(^|\\s)${portraitMax}px$`));
-    }
+    // No width cap or inline style on the gallery: every stage fills its column.
+    expect(productPage.querySelector("#product-gallery")!.getAttribute("style")).toBeNull();
     for (const rail of ["mobile", "desktop"] as const) {
       const thumbs = productPage.querySelectorAll(`[data-thumbnail-rail="${rail}"] [data-gallery-thumbnail] img`);
       expect(thumbs).toHaveLength(GALLERY_MEDIA.length);
@@ -1744,28 +1737,6 @@ describe("theme sections", () => {
 
 describe("product page modules", () => {
   const theme = storefrontTemplateTheme("department-mall");
-
-  it("bundles this item with the co-bought products, joined by +, with a total only for fixed prices", async () => {
-    const props = {
-      title: "Frequently bought together",
-      current: { name: "Linen shirt", imageUrl: image("shirt"), price: 1500, startingAt: false },
-      products: [product("belt", { discountedPrice: 600 }), product("socks", { discountedPrice: 300 })],
-      currencySymbol: "৳",
-      currencyCode: "BDT",
-    };
-    const page = parse(await render("/src/components/product/modules/ProductBoughtTogether.astro", theme, props));
-    const module = page.querySelector("[data-product-module='bought-together']")!;
-    expect(module.querySelector("h2")!.textContent).toBe("Frequently bought together");
-    expect(module.querySelectorAll("ol > li[aria-hidden='true']")).toHaveLength(2);
-    expect(Array.from(module.querySelectorAll("ul a")).map((link) => link.getAttribute("href")))
-      .toEqual(["/products/product-belt", "/products/product-socks"]);
-    expect(module.querySelector("[data-bought-together-total]")!.textContent).toContain("2,400");
-    const varying = parse(await render("/src/components/product/modules/ProductBoughtTogether.astro", theme, {
-      ...props, products: [product("belt", { discountedPrice: 600, priceVaries: true })],
-    }));
-    expect(varying.querySelector("[data-bought-together-total]")).toBeNull();
-    expect(varying.querySelector("ul")!.textContent).toContain("From ");
-  });
 
   it("compares similar items in the store's card and opens /compare with this product and them", async () => {
     const page = parse(await render("/src/components/product/modules/ProductCompareSimilar.astro", theme, {

@@ -20,13 +20,13 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
 ---
 
 {totalPages > 1 && (
-  <nav class="mb-20 mt-8 flex items-center justify-center lg:mb-8" aria-label="Pagination">
-    <div class="flex items-center space-x-1 rounded-lg border border-border bg-background p-2 shadow-sm">
+  <nav class="my-8 flex items-center justify-center" aria-label="Pagination">
+    <div class="flex items-center gap-1">
       {page > 1 ? (
         <a
           href={getPageUrl(page - 1)}
           aria-label="Previous page"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
         >
           <Icon name="chevron-left" class="h-4 w-4" aria-hidden="true" />
         </a>
@@ -35,7 +35,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
           type="button"
           disabled
           aria-label="Previous page"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
         >
           <Icon name="chevron-left" class="h-4 w-4" aria-hidden="true" />
         </button>
@@ -48,7 +48,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
             aria-label={`Page ${item}`}
             aria-current={page === item ? "page" : undefined}
             class:list={[
-              "inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+              "inline-flex h-10 min-w-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
               page === item
                 ? "border-primary bg-primary text-primary-foreground shadow-sm"
                 : "border-border text-foreground hover:bg-muted max-[389px]:hidden",
@@ -57,7 +57,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
             {item}
           </a>
         ) : (
-          <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center text-sm text-muted-foreground max-[389px]:hidden">{item}</span>
+          <span aria-hidden="true" class="inline-flex h-10 w-10 items-center justify-center text-sm text-muted-foreground max-[389px]:hidden">{item}</span>
         ),
       )}
       {/* Narrow phones (320-389px) cannot fit seven page links: they show "3 of 33" between the arrows. */}
@@ -67,7 +67,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
         <a
           href={getPageUrl(page + 1)}
           aria-label="Next page"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
         >
           <Icon name="chevron-right" class="h-4 w-4" aria-hidden="true" />
         </a>
@@ -76,7 +76,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
           type="button"
           disabled
           aria-label="Next page"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
         >
           <Icon name="chevron-right" class="h-4 w-4" aria-hidden="true" />
         </button>

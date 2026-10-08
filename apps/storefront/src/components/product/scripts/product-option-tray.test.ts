@@ -56,7 +56,8 @@ it("updates exact SKU tile prices when another merchant option changes", () => {
   const tile = (axis: string, value: string) => document.querySelector<HTMLButtonElement>(
     `.variant-option-btn[data-option-definition-id="${axis}"][data-option-value-id="${value}"]`,
   )!;
-  expect(tile("plan", "pro").querySelector("[data-option-price]")?.textContent).toBe("৳100");
+  // Values priced the same show no price; once they differ, each shows its own.
+  expect(tile("plan", "pro").querySelector("[data-option-price]")?.textContent).toBe("");
   tile("term", "yearly").click();
   expect(tile("plan", "pro").querySelector("[data-option-price]")?.textContent).toBe("৳120");
   expect(tile("plan", "pro").getAttribute("aria-label")).toBe("Plan: pro ৳120.");

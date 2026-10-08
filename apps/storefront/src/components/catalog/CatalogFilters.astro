@@ -162,10 +162,12 @@ if (order) {
 }
 // A column opens its first groups (and any in use) so the page does not
 // start with a wall; a bar's dropdowns open on demand.
-const OPEN_GROUPS = 6;
+const OPEN_GROUPS = 4;
 const isOpen = (section: Section, index: number) =>
   !bar && (section.selectedCount > 0 || (presentation.openByDefault ? index < OPEN_GROUPS : index < 2));
 const barMore = bar ? Math.max(0, sections.length - presentation.barFacets) : 0;
+// "More filters" counts the filters applied behind it, never the groups it holds.
+const barMoreApplied = bar ? sections.slice(presentation.barFacets).reduce((sum, section) => sum + section.selectedCount, 0) : 0;
 // A selection behind "More filters" keeps those groups in the bar.
 const barOpen = bar && sections.some((section, index) => index >= presentation.barFacets && section.selectedCount > 0);
 
@@ -461,7 +463,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
 
     {bar && barMore > 0 && (
       <button type="button" class="catalog-bar-more" data-catalog-bar-more aria-expanded={barOpen ? "true" : "false"}>
-        More filters ({barMore})
+        More filters{barMoreApplied > 0 && <span class="tabular-nums"> ({barMoreApplied})</span>}
       </button>
     )}
 

@@ -12,6 +12,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { GalleryEntry } from "./entries";
+import { fixtureProductSoldOut } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
   FIXTURE_POLICIES,
@@ -318,11 +319,37 @@ function record(entry: GalleryEntry, path: string) {
   unansweredReads.set(entry.id, reads);
 }
 
+/** The cart check for a seeded cart: every line is priced as sent and in stock, except the fixture's sold-out products. */
+async function cartValidation(request: Request) {
+  const body = (await request.clone().json().catch(() => null)) as { items?: Array<{ cartKey?: string | null; productId: string; variantId: string; quantity: number; price: number; productName?: string | null; variantLabel?: string | null }> } | null;
+  const items = body?.items ?? [];
+  const issues = items.flatMap((item, index) => fixtureProductSoldOut(item.productId)
+    ? [{ index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, code: "OUT_OF_STOCK", message: `${item.productName ?? "This item"} is sold out.`, requestedQuantity: item.quantity, availableQuantity: 0 }]
+    : []);
+  return {
+    valid: issues.length === 0,
+    issues,
+    items: items.map((item, index) => ({
+      index, cartKey: item.cartKey ?? null, productId: item.productId, variantId: item.variantId, quantity: item.quantity,
+      unitPrice: item.price, productName: item.productName ?? "", variantLabel: item.variantLabel ?? null, freeDelivery: false,
+      availableQuantity: fixtureProductSoldOut(item.productId) ? 0 : 12, productImageMediaId: null, productImage: null, fulfillmentKind: "physical", fulfillmentType: null,
+    })),
+    subtotal: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    hasFreeDeliveryProduct: false,
+    requiresDeliveryMethod: true,
+    requiresShipping: true,
+    allowedPaymentMethods: ["cod"],
+  };
+}
+
 /** Answers one request the storefront sent to the fixture API origin. */
 export async function answerFixtureApi(entry: GalleryEntry, request: Request): Promise<Response> {
   const url = new URL(request.url);
   url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
+  if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {
+    return new Response(envelope(await cartValidation(request)), { headers: json });
+  }
   if (url.pathname === "/api/v1/auth/token") {
     return new Response(envelope({ token: "gallery-token", expiresIn: 3600 }), { headers: json });
   }

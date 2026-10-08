@@ -12,6 +12,7 @@
 // above and below the whole listing on category, collection and brand pages.
 import type { ComponentProps } from "astro/types";
 import RichContent from "@/components/RichContent.astro";
+import Container from "@/components/ui/Container.astro";
 import CatalogDescription from "./CatalogDescription.astro";
 import CatalogListing from "./CatalogListing.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -67,19 +68,18 @@ const countLabel = hero.countLabel === undefined
 const breadcrumb = kind === "search" ? null : [{ label: "Home", href: "/" }, ...(hero.breadcrumb ?? [])];
 const description = hero.description && hasRenderableHtmlContent(hero.description) ? hero.description : null;
 const guide = content && hasRenderableHtmlContent(content.html) ? content : null;
-const { descriptionPlacement, surface, gutter, phoneBanner } = resolved.blocks.listing;
+const { descriptionPlacement, surface, phoneBanner } = resolved.blocks.listing;
 const descriptionAbove = descriptionPlacement === "above";
-// The page behind the results (Dawn: the page colour) and its side gutters
-// (Aarong: flush to the container, 8px on phones).
+// The page behind the results (Dawn: the page colour). The side gutters are
+// the container's: the cards line up with the header and the title.
 const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", muted: "bg-muted/30" };
-const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flush: "px-2 lg:px-0" };
 ---
 
 {collectionTemplate && (
   <TemplateSections template={collectionTemplate} region="before" data={templateData} currencySymbol={currency.symbol} currencyCode={currency.code} preview={preview !== null} />
 )}
 <div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data} data-theme-section-id={preview ? THEME_EDITOR_MARKS.listing : undefined}>
-  <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", GUTTER_CLASS[gutter]]}>
+  <Container class="pb-8 pt-1">
     {banner && (
       <img
         src={banner.src}
@@ -104,7 +104,7 @@ const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flu
     >
       {description && descriptionAbove && (
         <section slot="description" class="mb-4" aria-label={`About ${hero.title}`} data-catalog-content="above">
-          <CatalogDescription content={description} />
+          <CatalogDescription content={description} name={hero.title} clamp />
         </section>
       )}
       <slot name="empty" slot="empty" />
@@ -116,7 +116,7 @@ const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flu
         aria-label={guide?.label ?? `About ${hero.title}`}
         data-catalog-content="below"
       >
-        {description && !descriptionAbove && <CatalogDescription content={description} />}
+        {description && !descriptionAbove && <CatalogDescription content={description} name={hero.title} />}
         {guide && (
           <RichContent
             content={guide.html}
@@ -126,7 +126,7 @@ const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flu
         )}
       </section>
     )}
-  </div>
+  </Container>
 </div>
 {collectionTemplate && (
   <TemplateSections template={collectionTemplate} region="after" data={templateData} currencySymbol={currency.symbol} currencyCode={currency.code} preview={preview !== null} />

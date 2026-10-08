@@ -1,33 +1,44 @@
 ---
-// A category/collection description that stays at two lines until the buyer
-// asks for more, so products start above the fold on phones (Baymard). The
-// clamp is decided on the server (no layout shift); without JavaScript the
+// A category/collection description. Above the products on a phone it stays
+// at two lines until the buyer asks for more, so products start above the
+// fold (Baymard); below them it always shows in full. The clamp is decided on
+// the server (no layout shift) from the text's length, and a script drops the
+// "Read more" button when the text turned out to fit. Without JavaScript the
 // full text shows.
 import RichContent from "@/components/RichContent.astro";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { shopCopy } from "@/lib/storefront-shop-copy";
 
 interface Props {
   content: string;
+  /** The listing's name: "Read more about Women". */
+  name: string;
+  /** Only a description above the products is clamped. */
+  clamp?: boolean;
 }
 
-const { content } = Astro.props;
-// Roughly two lines at phone width; shorter descriptions never need the toggle.
-const clamp = htmlToPlainText(content).length > 110;
+const { content, name, clamp: allowClamp = false } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = shopCopy(language).description;
+// About two lines at phone width (a line holds roughly 45 characters).
+const clamp = allowClamp && htmlToPlainText(content).length > 90;
+const bodyId = "catalog-description-body";
 ---
 
 <div data-catalog-description={clamp ? "" : undefined}>
-  <RichContent
-    content={content}
-    className={`text-base leading-relaxed text-muted-foreground sm:text-lg ${clamp ? "catalog-description-clamp" : ""}`}
-    processShortcodes={false}
-  />
+  <div id={clamp ? bodyId : undefined} class:list={["text-base leading-relaxed text-muted-foreground sm:text-lg", clamp && "catalog-description-clamp"]}>
+    <RichContent content={content} processShortcodes={false} />
+  </div>
   {clamp && (
     <button
       type="button"
       aria-expanded="false"
+      aria-controls={bodyId}
       class="catalog-description-toggle min-h-11 text-sm font-semibold text-foreground underline underline-offset-4 hover:text-primary"
     >
-      Read more
+      <span data-description-more>{copy.readMore}<span class="sr-only"> {copy.about(name)}</span></span>
+      <span data-description-less hidden>{copy.readLess}<span class="sr-only"> {copy.about(name)}</span></span>
     </button>
   )}
 </div>
@@ -41,9 +52,17 @@ const clamp = htmlToPlainText(content).length > 110;
 )}
 
 <style is:global>
-  .catalog-description-clamp:not([data-expanded]) {
-    max-height: 2lh;
-    overflow: hidden;
+  /* Phones only: from 640px there is room for the whole text. */
+  @media (max-width: 39.999rem) {
+    .catalog-description-clamp:not([data-expanded]) {
+      max-height: 2lh;
+      overflow: hidden;
+    }
+  }
+  @media (min-width: 40rem) {
+    .catalog-description-toggle {
+      display: none;
+    }
   }
 </style>
 
@@ -54,11 +73,20 @@ const clamp = htmlToPlainText(content).length > 110;
     const toggle = root?.querySelector<HTMLButtonElement>(".catalog-description-toggle");
     if (!root || !body || !toggle || root.dataset.bound === "true") return;
     root.dataset.bound = "true";
+    // The text fits in its two lines: there is nothing more to read.
+    if (window.matchMedia("(max-width: 39.999rem)").matches && body.scrollHeight <= body.clientHeight + 1) {
+      body.classList.remove("catalog-description-clamp");
+      toggle.remove();
+      return;
+    }
+    const more = toggle.querySelector<HTMLElement>("[data-description-more]");
+    const less = toggle.querySelector<HTMLElement>("[data-description-less]");
     toggle.addEventListener("click", () => {
       const expand = !body.hasAttribute("data-expanded");
       body.toggleAttribute("data-expanded", expand);
       toggle.setAttribute("aria-expanded", String(expand));
-      toggle.textContent = expand ? "Read less" : "Read more";
+      if (more) more.hidden = expand;
+      if (less) less.hidden = !expand;
     });
   };
   document.addEventListener("DOMContentLoaded", setupDescription);

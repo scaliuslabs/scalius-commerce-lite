@@ -37,6 +37,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, type ProductScenario } from "./fixtures";
+import type { GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 
@@ -64,6 +65,8 @@ export interface GalleryScenario {
   addressApp?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
+  /** The cart page opens with these lines in the browser's cart (none: an empty cart). */
+  cart?: GalleryCartSeed;
 }
 
 /** A click the audit makes before it checks (a closed drawer has nothing to check). */
@@ -481,6 +484,17 @@ function pageEntries(): GalleryEntry[] {
   const productHome = clone(base);
   return [
     { id: entryId("page", "cart"), family: "page:cart", title: "Cart page (empty cart)", page: "cart", theme: clone(base), focus: MAIN, scenario: {} },
+    // The cart lives in the browser: seeded lines put the lines, totals, delivery picker and checkout form in front of the audit.
+    ...(["one", "three", "ten", "sold-out"] as const).map((cart) => ({
+      id: entryId("page", "cart", cart),
+      family: "page:cart",
+      title: `Cart page (${cart === "one" ? "1 line" : cart === "three" ? "3 lines" : cart === "ten" ? "10 lines" : "a sold-out line"})`,
+      page: "cart" as const,
+      theme: clone(base),
+      focus: MAIN,
+      scenario: { cart },
+    })),
+    { id: entryId("page", "cart", "bangla"), family: "page:cart", title: "Cart page (Bangla store, 3 lines)", page: "cart", theme: clone(base), focus: MAIN, scenario: { locale: "bn", product: "bangla", cart: "bangla" } },
     { id: entryId("page", "cms"), family: "page:cms", title: "CMS page", page: "page", theme: clone(base), focus: MAIN, scenario: {} },
     { id: entryId("page", "landing"), family: "page:landing", title: "Landing page with sections", page: "landing", theme: landing, focus: MAIN, scenario: {} },
     { id: entryId("page", "logo"), family: "page:home", title: "Home with the merchant's logo", page: "home", theme: productHome, focus: CHROME, scenario: { logo: true } },

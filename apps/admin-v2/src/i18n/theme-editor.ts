@@ -91,7 +91,6 @@ export const themeEditorMessages = defineMessages({
     // Product pages
     productMain: "Product information",
     stickyBars: "Sticky bars",
-    "module_frequently-bought-together": "Frequently bought together",
     "module_key-attributes": "Key specifications",
     "module_about-bullets": "About this item",
     "module_spec-table": "Specifications",
@@ -103,7 +102,6 @@ export const themeEditorMessages = defineMessages({
     module_policies: "Store policies",
     module_related: "Related products",
     "module_recently-viewed": "Recently viewed",
-    "moduleHelp_frequently-bought-together": "Products often bought with this one, with a combined price. Shows when your store has co-purchases.",
     "moduleHelp_key-attributes": "The specifications you marked as key, in a short table.",
     "moduleHelp_about-bullets": "The product's feature bullets.",
     "moduleHelp_spec-table": "Every specification of the product, in a table.",
@@ -543,7 +541,6 @@ export const themeEditorMessages = defineMessages({
 
     productMain: "পণ্যের তথ্য",
     stickyBars: "স্থির বার",
-    "module_frequently-bought-together": "প্রায়ই একসাথে কেনা",
     "module_key-attributes": "প্রধান বৈশিষ্ট্য",
     "module_about-bullets": "এই পণ্য সম্পর্কে",
     "module_spec-table": "বিস্তারিত তথ্য",
@@ -555,7 +552,6 @@ export const themeEditorMessages = defineMessages({
     module_policies: "স্টোরের নীতিমালা",
     module_related: "সম্পর্কিত পণ্য",
     "module_recently-viewed": "সম্প্রতি দেখা",
-    "moduleHelp_frequently-bought-together": "এই পণ্যের সঙ্গে প্রায়ই কেনা পণ্য, একসাথে দামসহ। স্টোরে একসাথে কেনার তথ্য থাকলে দেখায়।",
     "moduleHelp_key-attributes": "যে বৈশিষ্ট্যগুলো প্রধান হিসেবে চিহ্নিত করেছেন, ছোট টেবিলে।",
     "moduleHelp_about-bullets": "পণ্যের বৈশিষ্ট্যের বুলেট তালিকা।",
     "moduleHelp_spec-table": "পণ্যের সব বিস্তারিত তথ্য, টেবিলে।",

@@ -1,27 +1,20 @@
 ---
-// The product's key features: Star Tech's list in the buy box, Target's
-// chips, or Amazon's "About this item" bullets below the fold.
+// The product's key features: a check list in the buy box, or the bullets of
+// "About this item" below the fold.
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   features: readonly string[];
-  variant: "list" | "chips" | "bullets";
+  variant: "list" | "bullets";
   /** A small heading over the buy-box list ("Key features"). */
   title?: string | null;
-  compact?: boolean;
 }
 
-const { features, variant, title = null, compact = false } = Astro.props;
+const { features, variant, title = null } = Astro.props;
 ---
 
 {features.length > 0 && (
-  variant === "chips" ? (
-    <ul class="mt-2 flex flex-wrap gap-1.5" data-product-features="chips">
-      {features.map((feature) => (
-        <li class="rounded-full bg-muted px-2.5 py-1 text-sm text-foreground">{feature}</li>
-      ))}
-    </ul>
-  ) : variant === "list" ? (
+  variant === "list" ? (
     <div class="mt-2" data-product-features="list">
       {title && <p class="mb-1 text-sm font-semibold text-foreground">{title}</p>}
       <ul class="space-y-1 text-sm text-foreground">
@@ -34,7 +27,7 @@ const { features, variant, title = null, compact = false } = Astro.props;
       </ul>
     </div>
   ) : (
-    <ul class:list={["max-w-3xl list-disc ps-5 text-sm", compact ? "space-y-0.5 leading-5 text-muted-foreground" : "space-y-2 text-foreground lg:text-base"]} data-product-features="bullets">
+    <ul class="max-w-3xl list-disc space-y-2 ps-5 text-sm text-foreground lg:text-base" data-product-features="bullets">
       {features.map((feature) => <li>{feature}</li>)}
     </ul>
   )

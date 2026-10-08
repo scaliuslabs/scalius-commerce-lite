@@ -181,8 +181,7 @@ a.product-reviews-bar:hover .product-reviews-bar-track,
 
 .product-reviews-filter[hidden],
 .product-reviews-status[hidden],
-.product-reviews-more-button[hidden],
-.product-reviews-all[hidden] {
+.product-reviews-more-button[hidden] {
   display: none;
 }
 
@@ -322,7 +321,7 @@ a.product-reviews-bar:hover .product-reviews-bar-track,
   min-height: 2.75rem;
   padding: 0 1.25rem;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--theme-button-radius, var(--radius));
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--foreground);

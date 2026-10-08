@@ -8,6 +8,7 @@ import v6 from "./fixtures/v6.json";
 import v7 from "./fixtures/v7.json";
 import v8 from "./fixtures/v8.json";
 import v9 from "./fixtures/v9.json";
+import v9Retired from "./fixtures/v9-retired-choices.json";
 import partialV1 from "./fixtures/v1-partial.json";
 import colorsV1 from "./fixtures/v1-colors.json";
 import {
@@ -241,8 +242,8 @@ describe("v8 to v9: one design system", () => {
   it("changes only the template, the card and its photo tokens", () => {
     const stored = v8Document("fashion-value", { variant: "tech-rounded", settings: { hoverImage: false } });
     const upgraded = upgradeThemeDocument(stored);
-    // The header and footer are the chrome changes: heritage-nav reads as centered-logo (header-upgrade.test.ts).
-    const withoutCard = ({ card: _card, header: _header, footer: _footer, ...blocks }: Record<string, unknown>) => blocks;
+    // The header and footer are the chrome changes (header-upgrade.test.ts); v8's heritage buy box now reads as the classic one (see "retired product-page choices").
+    const withoutCard = ({ card: _card, header: _header, footer: _footer, product, listing, ...blocks }: Record<string, any>) => ({ ...blocks, listing: { ...listing, gutter: undefined }, product: { ...product, buyBox: undefined } });
     const withoutPhoto = ({ imageRatio: _ratio, imageFit: _fit, surface: _surface, ...tokens }: Record<string, unknown>) => tokens;
     expect(withoutCard(upgraded.blocks)).toEqual(withoutCard(stored.blocks));
     expect(withoutPhoto(upgraded.tokens)).toEqual(withoutPhoto(stored.tokens));
@@ -254,6 +255,62 @@ describe("v8 to v9: one design system", () => {
 
   it("leaves a v8 card variant it never had for the strict parse to reject", () => {
     expect(() => upgradeThemeDocument(v8Document("boutique", { variant: "hamburger", settings: {} }))).toThrow();
+  });
+});
+
+describe("retired product-page choices", () => {
+  // A v9 document saved before the product page kept two buy boxes: its heritage buy box,
+  // the bottom phone bar and the bundle module all read as what replaced them.
+  const retired = () => structuredClone(v9Retired) as Record<string, any>;
+
+  it("reads a stored document with a retired buy box, phone bar and module", () => {
+    const upgraded = upgradeThemeDocument(retired());
+    expect(storefrontThemeDocumentSchema.safeParse(upgraded).success).toBe(true);
+    expect(upgraded.blocks.product.buyBox).toEqual({ variant: "classic", settings: { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: false } });
+    expect(upgraded.blocks.listing.phoneBar).toBe("standard");
+    expect(upgraded.blocks.listing).not.toHaveProperty("gutter");
+    expect(upgraded.blocks.product.below).toEqual(["description", "reviews", "related", "recently-viewed"]);
+    // Everything else comes through unchanged.
+    expect(upgraded.tokens).toEqual(v9Retired.tokens);
+    expect(upgraded.pages).toEqual(v9Retired.pages);
+  });
+
+  it("is the save schema that rejects them", () => {
+    expect(storefrontThemeDocumentSchema.safeParse(retired()).success).toBe(false);
+  });
+
+  const BUY_BOXES: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+    ["spec", { emi: false }, { cta: "row", features: true, details: "below", emi: false, whatsapp: false }],
+    ["tech", { emi: true, whatsapp: false }, { cta: "stack", features: false, details: "below", emi: true, whatsapp: false }],
+    ["retail", {}, { cta: "stack", features: true, details: "below", emi: false, whatsapp: false }],
+    ["mall", {}, { cta: "row", features: true, details: "below", emi: false, whatsapp: false }],
+    ["essentials", {}, { cta: "row", features: false, details: "below", emi: false, whatsapp: true }],
+    ["boutique", {}, { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: false }],
+    ["showcase", {}, { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: true }],
+    ["fashion", { showBuyNow: true }, { cta: "row", features: false, details: "buy-box", emi: false, whatsapp: false }],
+    ["heritage", { showBuyNow: false }, { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: false }],
+    ["digital", {}, { cta: "row", features: false, details: "below", emi: false, whatsapp: false }],
+  ];
+  for (const [variant, settings, expected] of BUY_BOXES) {
+    it(`reads the ${variant} buy box as the classic one with settings`, () => {
+      const doc = retired();
+      doc.blocks.product.buyBox = { variant, settings };
+      expect(upgradeThemeDocument(doc).blocks.product.buyBox).toEqual({ variant: "classic", settings: expected });
+    });
+  }
+
+  it("fills a stored classic buy box with the settings it never had", () => {
+    const doc = structuredClone(v9) as Record<string, any>;
+    doc.blocks.product.buyBox = { variant: "classic", settings: {} };
+    const upgraded = upgradeThemeDocument(doc);
+    expect(upgraded.blocks.product.buyBox.settings).toEqual({ cta: "row", features: false, details: "buy-box", emi: false, whatsapp: false });
+    expect(storefrontThemeDocumentSchema.safeParse(upgraded).success).toBe(true);
+  });
+
+  it("keeps the settings a stored classic buy box has", () => {
+    const doc = structuredClone(v9) as Record<string, any>;
+    doc.blocks.product.buyBox = { variant: "classic", settings: { cta: "stack", features: true } };
+    expect(upgradeThemeDocument(doc).blocks.product.buyBox.settings).toMatchObject({ cta: "stack", features: true, details: "buy-box" });
   });
 });
 

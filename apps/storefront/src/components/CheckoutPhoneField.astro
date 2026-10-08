@@ -164,10 +164,11 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
           <button
             type="button"
             data-phone-country
-            aria-label={countrySelectLabel}
             class="flex h-full items-center gap-1 px-3 text-sm font-medium text-foreground"
           >
             <span data-phone-code>{callingCode}</span>
+            {/* The visible code is part of the name (WCAG 2.5.3): "+880, Phone number country". */}
+            <span class="sr-only">{countrySelectLabel}</span>
             <svg aria-hidden="true" class="h-3 w-3 opacity-60" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 4.5 3 3 3-3" /></svg>
           </button>
         )

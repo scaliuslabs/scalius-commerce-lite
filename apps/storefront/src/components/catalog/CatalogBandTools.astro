@@ -1,0 +1,58 @@
+---
+// The listing's controls on computers: the filter button and quick filters
+// of a drawer layout, the page size, the sort and the grid/list toggle, and
+// (when the template asks) the result count. They sit in the title band;
+// Dawn's bar layout puts them at the end of the filter line instead.
+import type { ComponentProps } from "astro/types";
+import Icon from "@/components/icons/Icon.astro";
+import CatalogChipLinks from "./CatalogChipLinks.astro";
+import CatalogViewSelect from "./CatalogViewSelect.astro";
+import CatalogViewToggle from "./CatalogViewToggle.astro";
+
+interface Props {
+  /** The filters open in a drawer from a button here. */
+  drawerButton: boolean;
+  refinementCount: number;
+  quickFilters: ComponentProps<typeof CatalogChipLinks>["links"];
+  showPageSize: boolean;
+  showSort: boolean;
+  showViewToggle: boolean;
+  limit: number;
+  sortBy: string;
+  sortOptions: ComponentProps<typeof CatalogViewSelect>["options"];
+  viewSelect: Pick<ComponentProps<typeof CatalogViewSelect>, "pathname" | "defaultSort" | "currentFilters">;
+  results: string;
+  /** The count at the end of the line (Dawn); null leaves it in the title. */
+  countLabel?: string | null;
+  class?: string;
+}
+
+const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, showViewToggle, limit, sortBy, sortOptions, viewSelect, results, countLabel = null, class: className } = Astro.props;
+---
+
+<div class:list={["catalog-band-tools", className]}>
+  {drawerButton && (
+    <Fragment>
+      <button
+        type="button"
+        data-catalog-filter-toggle
+        aria-controls="filter-section"
+        aria-expanded="false"
+        class="relative inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+      >
+        <Icon name="sliders-horizontal" class="h-4 w-4" />
+        <span>Filter</span>
+        {refinementCount > 0 && (
+          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+            {refinementCount}<span class="sr-only"> applied</span>
+          </span>
+        )}
+      </button>
+      <CatalogChipLinks label="Quick filters" links={quickFilters} class="min-w-0" />
+    </Fragment>
+  )}
+  {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
+  {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
+  {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
+  {countLabel && <p class="catalog-band-count">{countLabel}</p>}
+</div>

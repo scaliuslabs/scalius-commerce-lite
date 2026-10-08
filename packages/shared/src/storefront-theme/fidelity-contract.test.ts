@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_STORE_SHAPE,
-  STOREFRONT_BUY_BOX_LOOKS,
+  STOREFRONT_MARKETPLACE_BUY_BOX_LOOK,
   STOREFRONT_CARD_ACTIONS,
   STOREFRONT_CARD_FACTS,
   STOREFRONT_FILTER_MIN_RESULTS,
@@ -402,25 +402,20 @@ describe("resolver on true store shapes", () => {
 describe("product page per preset", () => {
   const resolved = (id: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(id), EMPTY_STORE_SHAPE);
 
-  it("gives each preset its buy box while keeping the department gallery", () => {
+  it("gives each preset the classic buy box with its settings (the marketplace has the facts column) while keeping the department gallery", () => {
     const mall = resolved("department-mall");
     expect(mall.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
-    expect(mall.layout.buyBox).toEqual({ look: STOREFRONT_BUY_BOX_LOOKS.mall, emi: false, whatsapp: false });
-    expect(resolved("boutique").layout.buyBox.look).toEqual(STOREFRONT_BUY_BOX_LOOKS.boutique);
-    expect(resolved("showcase-landing").layout.buyBox.look?.title).toEqual({ size: { desktop: 48, phone: 31 }, weight: 700 });
-    expect(resolved("marketplace").layout.buyBox.look?.facts).toBe("column");
-    expect(resolved("daily-essentials").layout.buyBox.look).toMatchObject({
-      title: { size: { phone: 20 } }, price: { size: { phone: 20 }, tone: "primary" },
-      cta: { layout: "row", first: "add-to-cart" },
-    });
+    expect(mall.layout.buyBox).toEqual({ look: { cta: { layout: "row" }, facts: "list", features: "list", details: "below" }, emi: false, whatsapp: false });
+    expect(resolved("boutique").layout.buyBox.look).toEqual({ cta: { layout: "stack" }, facts: "list", features: "none", details: "buy-box" });
+    expect(resolved("showcase-landing").layout.buyBox).toMatchObject({ look: { cta: { layout: "stack" } }, whatsapp: true });
+    expect(resolved("marketplace").layout.buyBox.look).toEqual(STOREFRONT_MARKETPLACE_BUY_BOX_LOOK);
+    expect(resolved("daily-essentials").layout.buyBox).toMatchObject({ look: { cta: { layout: "row" }, details: "below" }, whatsapp: true });
   });
 
-  it("starts the fashion buy box with one purchase action and accepts a merchant's Buy now choice", () => {
+  it("takes the buyer's arrangement from the classic buy box's settings", () => {
     const theme = storefrontTemplateTheme("boutique");
-    theme.blocks.product.buyBox = { variant: "fashion", settings: { showBuyNow: false } };
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(false);
-    theme.blocks.product.buyBox.settings = { showBuyNow: true };
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(true);
+    theme.blocks.product.buyBox = { variant: "classic", settings: { cta: "row", features: true, details: "below", emi: true, whatsapp: false } };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look).toEqual({ cta: { layout: "row" }, facts: "list", features: "list", details: "below" });
   });
 
   it("renders real gallery variants: stacked, a narrow thumbnail strip and the classic stage", () => {

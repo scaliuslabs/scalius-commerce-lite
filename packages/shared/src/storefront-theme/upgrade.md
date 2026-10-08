@@ -29,6 +29,10 @@ A reset migration deleted every stored theme row not at the version it introduce
 | v8 | none | One design system. The ten templates become the five presets (Department, Boutique, Marketplace, Essentials, Landing): `spec-catalogue` and `rounded-tech` read as `department-mall`; `heritage-editorial` and `fashion-value` as `boutique`; `mass-retail` as `marketplace`; the other five keep their id. The thirteen card looks become the one `standard` card with `facts`, `action` and `hoverImage` settings (`v8Card` holds the mapping), and the photo ratio, fit and surface the old look drew with move into `tokens.imageRatio`, `tokens.imageFit` and `tokens.surface` (the `standard` card already followed the tokens). The stored `hoverImage` stays. |
 | v9 | none | The current document. It is the input of the next step. |
 
+## Choices retired inside v9
+
+A choice removed without a version bump reads as its replacement in `withTightenedBounds` (so a stored document always reads), and the strict save schema no longer knows it. `retired-product-blocks.ts` holds them: the ten measured buy boxes (`spec`, `tech`, `retail`, `mall`, `essentials`, `boutique`, `showcase`, `fashion`, `heritage`, `digital`) read as `classic` with `cta`, `features`, `details`, `emi` and `whatsapp` settings (a stored `classic` without them takes the old classic's values); the `bottom` listing phone bar reads as `standard`; the `frequently-bought-together` module is dropped from `below`; the listing's `gutter` is dropped. `fixtures/v9-retired-choices.json` is a v9 document that uses them, and `upgrade.test.ts` follows it.
+
 ## Adding v10
 
 1. Add `9: v9to10` to `THEME_UPGRADES`, written against the shape in `v9.json` with its own literals.

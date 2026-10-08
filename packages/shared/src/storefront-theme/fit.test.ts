@@ -121,10 +121,9 @@ describe("fallback resolution", () => {
     const quickGrid = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "quick-grid", settings: {} }; });
     expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("quick-grid");
     expect(resolve(quickGrid).fallbacks.filter((each) => each.kind === "block" && each.key === "listing")).toEqual([]);
-    // The digital buy box needs digital lines; the directory footer needs categories.
-    const digital = withBlock(base, (blocks) => { blocks.product.buyBox = { variant: "digital", settings: {} }; blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "", about: "", copyright: "" } }; });
-    expect(resolve(digital).blocks.product.buyBox.variant).toBe("classic");
-    expect(resolve(digital).blocks.footer.variant).toBe("columns");
+    // The directory footer needs categories.
+    const directory = withBlock(base, (blocks) => { blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "", about: "", copyright: "" } }; });
+    expect(resolve(directory).blocks.footer.variant).toBe("columns");
     // Modules and toolbar pieces without data are left out; nothing renders an empty box.
     const market = storefrontTemplateTheme("marketplace");
     const resolvedMarket = resolve(market);

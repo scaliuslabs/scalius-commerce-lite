@@ -84,5 +84,6 @@ These rules live in `apps/storefront/src/styles/theme-foundation.css`. Component
 
 ## What the gallery does for the audit
 
+- The cart lives in the browser, so the cart entries (`page:cart`) carry a seed (`gallery/cart-seed.ts`: 1, 3 or 10 lines, a sold-out line, a Bangla cart). The index hands it to the harness, which writes `cart:v3` before the page loads; the fixture API answers the cart check for it. An entry without a seed audits the empty cart.
 - The layout fixture names the gallery origin as the API (Platform settings take an origin only). The server answers `<origin>/api/v1/...` from the fixtures of the entry that asked (the page's Referer in the browser, the render's entry on the server), so browser reads such as the cart's delivery rates work.
 - Component styles are inlined in the page and the first paint waits for the whole page (`<link rel="expect" blocking="render">`). The dev page is large; without this the browser paints it half parsed and the footer grows as its markup arrives, a shift no shopper sees.

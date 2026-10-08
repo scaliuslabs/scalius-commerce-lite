@@ -565,6 +565,9 @@ describe("initCartFunctionality", () => {
         shippingMethodId: "standard",
         cartItems: expect.stringContaining('"variantId":"var_1"'),
       }),
+      // The cart asks again after a failure in transit: the fetcher and the waits.
+      expect.anything(),
+      expect.arrayContaining([expect.any(Number)]),
     );
     expect(document.getElementById("taxLabel")?.textContent).toBe("VAT");
     expect(document.getElementById("shippingCost")?.textContent).toBe("৳60");
@@ -593,6 +596,8 @@ describe("initCartFunctionality", () => {
           zone: "zone_bagerhat_sadar",
           customerPhone: undefined,
         }),
+        expect.anything(),
+        expect.arrayContaining([expect.any(Number)]),
       );
       expect(document.getElementById("total")?.textContent).toBe("৳171.20");
     });

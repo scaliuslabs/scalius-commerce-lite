@@ -117,7 +117,7 @@ describe("storefront theme document v9", () => {
     // The owner-protected gallery with the department mall's buy box.
     expect(resolved.blocks.product).toMatchObject({
       gallery: { variant: "classic" },
-      buyBox: { variant: "mall" },
+      buyBox: { variant: "classic" },
       below: ["description", "reviews", "related"],
       sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" },
     });

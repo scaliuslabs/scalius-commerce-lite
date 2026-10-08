@@ -2341,13 +2341,6 @@
                       "muted"
                     ]
                   },
-                  "gutter": {
-                    "type": "string",
-                    "enum": [
-                      "inset",
-                      "flush"
-                    ]
-                  },
                   "band": {
                     "type": "string",
                     "enum": [
@@ -2361,8 +2354,7 @@
                     "enum": [
                       "standard",
                       "pill-row",
-                      "split-sheet",
-                      "bottom"
+                      "split-sheet"
                     ]
                   },
                   "links": {
@@ -2391,7 +2383,6 @@
                   "phoneLayout",
                   "paging",
                   "surface",
-                  "gutter",
                   "band",
                   "phoneBar",
                   "links",
@@ -2550,56 +2541,24 @@
                           },
                           "settings": {
                             "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "spec"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
                             "properties": {
-                              "emi": {
+                              "cta": {
+                                "type": "string",
+                                "enum": [
+                                  "row",
+                                  "stack"
+                                ]
+                              },
+                              "features": {
                                 "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "emi"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "tech"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {
+                              },
+                              "details": {
+                                "type": "string",
+                                "enum": [
+                                  "buy-box",
+                                  "below"
+                                ]
+                              },
                               "emi": {
                                 "type": "boolean"
                               },
@@ -2608,6 +2567,9 @@
                               }
                             },
                             "required": [
+                              "cta",
+                              "features",
+                              "details",
                               "emi",
                               "whatsapp"
                             ],
@@ -2640,182 +2602,6 @@
                           "settings"
                         ],
                         "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "retail"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "mall"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "essentials"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "boutique"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "showcase"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "fashion"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {
-                              "showBuyNow": {
-                                "type": "boolean"
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "heritage"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {
-                              "showBuyNow": {
-                                "type": "boolean"
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "variant": {
-                            "type": "string",
-                            "enum": [
-                              "digital"
-                            ]
-                          },
-                          "settings": {
-                            "type": "object",
-                            "properties": {},
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "variant",
-                          "settings"
-                        ],
-                        "additionalProperties": false
                       }
                     ]
                   },
@@ -2824,7 +2610,6 @@
                     "items": {
                       "type": "string",
                       "enum": [
-                        "frequently-bought-together",
                         "key-attributes",
                         "about-bullets",
                         "spec-table",
@@ -2838,7 +2623,7 @@
                         "recently-viewed"
                       ]
                     },
-                    "maxItems": 12
+                    "maxItems": 11
                   },
                   "apps": {
                     "type": "array",

@@ -361,7 +361,7 @@ export default function CommandPalette() {
       >
         {/* Header */}
         <div className="relative z-10 flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-3 sm:py-4">
-          <div className="relative flex-1 flex items-center">
+          <div className="relative flex flex-1 items-center rounded-lg focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-ring">
             <Search
               className={cn(
                 "absolute inset-s-0 w-5 h-5 transition-colors pointer-events-none",

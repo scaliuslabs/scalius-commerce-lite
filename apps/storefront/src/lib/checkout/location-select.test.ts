@@ -190,12 +190,37 @@ describe("fetchLocationOptions", () => {
     );
   });
 
-  it("returns null when the read fails so the page can offer a retry", async () => {
+  it("returns null when the read keeps failing so the page can offer a retry", async () => {
     const failing = vi.fn(async () => new Response("{}", { status: 503 }));
-    await expect(fetchLocationOptions("", "areas", "zone_1", failing)).resolves.toBeNull();
+    await expect(fetchLocationOptions("", "areas", "zone_1", failing, [0, 0])).resolves.toBeNull();
+    // First try plus one repeat per wait.
+    expect(failing).toHaveBeenCalledTimes(3);
     const throwing = vi.fn(async () => {
       throw new TypeError("offline");
     });
-    await expect(fetchLocationOptions("", "areas", "zone_1", throwing)).resolves.toBeNull();
+    await expect(fetchLocationOptions("", "areas", "zone_1", throwing, [0])).resolves.toBeNull();
+    expect(throwing).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers from a failure in transit by asking again, bypassing the browser cache on the repeat", async () => {
+    const answers = [
+      () => new Response("{}", { status: 503 }),
+      () => new Response("{}", { status: 429 }),
+      () => new Response(JSON.stringify({ success: true, data: ZONES }), { status: 200 }),
+    ];
+    const fetchImpl = vi.fn(async (_url: unknown, _init?: RequestInit) => answers.shift()!());
+    await expect(fetchLocationOptions("", "zones", "city_1", fetchImpl, [0, 0])).resolves.toEqual(ZONES);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const cache = fetchImpl.mock.calls.map((call) => call[1]?.cache);
+    expect(cache).toEqual([undefined, "reload", "reload"]);
+  });
+
+  it("does not repeat a refusal or an answer it cannot read", async () => {
+    const refused = vi.fn(async () => new Response("{}", { status: 404 }));
+    await expect(fetchLocationOptions("", "zones", "gone", refused, [0, 0])).resolves.toBeNull();
+    expect(refused).toHaveBeenCalledTimes(1);
+    const odd = vi.fn(async () => new Response(JSON.stringify({ success: false }), { status: 200 }));
+    await expect(fetchLocationOptions("", "zones", "city_1", odd, [0, 0])).resolves.toBeNull();
+    expect(odd).toHaveBeenCalledTimes(1);
   });
 });

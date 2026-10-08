@@ -357,12 +357,11 @@ const pillRowListingTheme = () => mallWith({
   phoneBar: "pill-row",
   maxColumns: 4,
 });
-/** Fabrilife: a ruled department rail and the phone's Filter and Sort row pinned to the bottom. */
+/** Fabrilife: a ruled department rail. */
 const ruledRailListingTheme = () => mallWith({
   filters: { style: "sidebar-comfortable", openByDefault: true, searchPlacement: "same", ruled: true },
   toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"],
   paging: "infinite",
-  phoneBar: "bottom",
 });
 /** Apple Gadgets: price first in a comfortable rail, the category banner on computers only. */
 const comfortableListingTheme = () => mallWith({
@@ -958,7 +957,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(dropdowns.every((dropdown) => !dropdown.hasAttribute("open"))).toBe(true);
     expect(dropdowns.slice(0, 4).some((dropdown) => dropdown.hasAttribute("data-bar-overflow"))).toBe(false);
     expect(dropdowns.slice(4).every((dropdown) => dropdown.hasAttribute("data-bar-overflow"))).toBe(true);
-    expect(form.querySelector("button[data-catalog-bar-more]")!.textContent!.trim()).toBe(`More filters (${dropdowns.length - 4})`);
+    // It counts what is applied behind it, never the groups it holds.
+    expect(form.querySelector("button[data-catalog-bar-more]")!.textContent!.trim()).toBe("More filters");
     // The bar sits above the grid (no column beside it).
     expect(document.querySelector("[data-catalog-layout]")!.getAttribute("data-catalog-layout")).toBe("bar");
   });
@@ -1359,6 +1359,38 @@ describe("listing page", () => {
     expect(document.querySelector("img[data-catalog-banner]")).toBeNull();
   });
 
+  it("ends the breadcrumb with the current page, on its own line, with no separator left hanging", async () => {
+    const document = await categoryPage(DEFAULT_STOREFRONT_THEME);
+    const items = Array.from(document.querySelectorAll("nav[aria-label='Breadcrumb'] li"));
+    expect(items.map((item) => item.textContent!.trim())).toEqual(["Home", "Sarees"]);
+    expect(items.at(-1)!.getAttribute("aria-current")).toBe("page");
+    // Separators are drawn between items by CSS, never as list items.
+    expect(items.some((item) => item.getAttribute("aria-hidden") === "true")).toBe(false);
+    expect(document.querySelector("h2#mobile-filter-title, h2[id='mobile-filter-title']")).toBeNull();
+    expect(document.querySelector("#mobile-filter-title")!.tagName).toBe("P");
+  });
+
+  it("clamps a long description above the products on phones, names what it opens, and never clamps one below", async () => {
+    const long = "<p>" + "Handwoven sarees in cotton and silk, made by weavers across the country. ".repeat(3) + "</p>";
+    const above = themeWith({ descriptionPlacement: "above" });
+    const render_ = (theme: StorefrontThemeDocument) => render(PAGE, theme, {
+      kind: "category", hero: { title: "Sarees", description: long, count: 50 }, listing: plain(),
+    }, EMPTY_SLOT).then(parse);
+    const aboveDoc = await render_(above);
+    const toggle = aboveDoc.querySelector("[data-catalog-content='above'] .catalog-description-toggle")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe("catalog-description-body");
+    expect(aboveDoc.getElementById("catalog-description-body")!.className).toContain("catalog-description-clamp");
+    // The words say what they open, for assistive technology.
+    expect(toggle.textContent!.replace(/\s+/g, " ").trim()).toContain("Read more about Sarees");
+    const belowDoc = await render_(themeWith({ descriptionPlacement: "below" }));
+    expect(belowDoc.querySelector(".catalog-description-toggle")).toBeNull();
+    expect(belowDoc.querySelector("[data-catalog-content='below']")!.textContent).toContain("Handwoven sarees");
+    // A short description needs no toggle.
+    const shortDoc = await render(PAGE, above, { kind: "category", hero: { title: "Sarees", description: "<p>Handwoven.</p>", count: 50 }, listing: plain() }, EMPTY_SLOT).then(parse);
+    expect(shortDoc.querySelector(".catalog-description-toggle")).toBeNull();
+  });
+
   it("places the short description above products while the buying guide stays below", async () => {
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
     theme.blocks.listing.descriptionPlacement = "above";
@@ -1408,10 +1440,8 @@ describe("listing page", () => {
     theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true, searchPlacement: "same", ruled: false };
     const document = await categoryPage(theme);
     expect(document.querySelector("[data-catalog-rail='fashion']")).toBeNull();
-    // The pinned phone row is its own choice (`phoneBar`), kept with any facet style.
-    expect(document.querySelector("[data-catalog-fashion-phone-bar]")).not.toBeNull();
     expect(document.querySelector("[data-filter-style='sidebar-dense']")).not.toBeNull();
-    theme.blocks.listing.phoneBar = "standard";
-    expect((await categoryPage(theme)).querySelector("[data-catalog-fashion-phone-bar]")).toBeNull();
+    // No bar is pinned to the bottom of a phone: it would sit above the tab bar.
+    expect(document.querySelector("[data-catalog-fashion-phone-bar]")).toBeNull();
   });
 });

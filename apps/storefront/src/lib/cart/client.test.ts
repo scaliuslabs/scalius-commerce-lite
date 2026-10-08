@@ -21,7 +21,7 @@ import {
 } from "./bulk-repair-actions";
 
 const maliciousEmptyCartText =
-  '</h3><img src=x onerror="window.__emptyCartPwned=true"><h3>';
+  '</h2><img src=x onerror="window.__emptyCartPwned=true"><h2>';
 const maliciousContinueShoppingText =
   '</a><script>window.__continuePwned=true</script><a>';
 
@@ -65,7 +65,7 @@ describe("renderEmptyCartState", () => {
         continueShoppingText: maliciousContinueShoppingText,
       }),
     );
-    const title = cartItemsContainer?.querySelector("h3");
+    const title = cartItemsContainer?.querySelector("h2");
     const continueLink = cartItemsContainer?.querySelector("a");
 
     expect(cartItemsContainer?.querySelector("img")).toBeNull();

@@ -107,8 +107,10 @@ describe("product page template", () => {
   it("resolves contact-friendly buy boxes from the product override", () => {
     const showcase = storefrontTemplateTheme("showcase-landing");
     const showcaseRequest = { theme: showcase, resolved: resolveStorefrontTheme(showcase, EMPTY_STORE_SHAPE) };
-    expect(resolveProductPageTheme(showcaseRequest, { pageTemplate: null }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("showcase");
-    expect(resolveProductPageTheme(showcaseRequest, { pageTemplate: "classic" }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("mall");
-    expect(resolveProductPageTheme(requestTheme, { pageTemplate: "showcase-landing" }, EMPTY_STORE_SHAPE).blocks.product.buyBox.variant).toBe("showcase");
+    const contact = (request: typeof showcaseRequest, pageTemplate: string | null) =>
+      resolveProductPageTheme(request, { pageTemplate }, EMPTY_STORE_SHAPE).layout.buyBox.whatsapp;
+    expect(contact(showcaseRequest, null)).toBe(true);
+    expect(contact(showcaseRequest, "classic")).toBe(false);
+    expect(contact(requestTheme, "showcase-landing")).toBe(true);
   });
 });

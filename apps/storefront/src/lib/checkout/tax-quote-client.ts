@@ -181,24 +181,53 @@ export function buildTaxQuoteRequest(
   }
 }
 
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** The quote request, repeated after a failure in transit (no connection, a timeout, a 5xx or a 429). */
+async function postTaxQuote(
+  request: TaxQuoteRequest,
+  fetcher: typeof fetch,
+  delays: readonly number[],
+): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    let response: Response | null = null;
+    try {
+      response = await fetcher(TAX_QUOTE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: AbortSignal.timeout(TAX_QUOTE_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const delay = delays[attempt];
+      if (delay === undefined) throw error;
+      await wait(delay);
+      continue;
+    }
+    const delay = delays[attempt];
+    if ((response.status >= 500 || response.status === 429) && delay !== undefined) {
+      await wait(delay);
+      continue;
+    }
+    return response;
+  }
+}
+
 export async function fetchAuthoritativeTaxQuote(
   data: Record<string, unknown>,
   fetcher: typeof fetch = fetch,
+  /** Waits between repeats of a quote that failed in transit; none by default (the caller owns the recovery). */
+  delays: readonly number[] = [],
 ): Promise<CheckoutTaxQuote> {
   const request = buildTaxQuoteRequest(data);
 
   try {
-    const response = await fetcher(TAX_QUOTE_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: AbortSignal.timeout(TAX_QUOTE_TIMEOUT_MS),
-    });
+    const response = await postTaxQuote(request, fetcher, delays);
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
       const issues = parseTaxQuoteCartIssues(payload);

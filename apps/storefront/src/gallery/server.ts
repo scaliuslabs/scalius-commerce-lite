@@ -9,6 +9,7 @@
 import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { answerFixtureApi, entryTheme, galleryApiBase, GALLERY_API_PREFIX, unansweredReads } from "./api";
 import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
+import { galleryCartSeed } from "./cart-seed";
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
 
 if (import.meta.env.PROD) {
@@ -84,6 +85,8 @@ export interface GalleryIndexEntry {
   interact: NonNullable<GalleryEntry["interact"]>;
   /** `localStorage` the audit seeds before the page loads (a saved cart). */
   storage: Record<string, string>;
+  /** The browser cart (`cart:v3`) the harness writes before the page loads; null: an empty cart. */
+  cartSeed: ReturnType<typeof galleryCartSeed> | null;
   /** Variants the resolver replaced for the fixture store (should be none). */
   fallbacks: string[];
   /** Reads the fixture API could not answer when the entry last rendered. */
@@ -107,6 +110,7 @@ export function galleryIndex(): GalleryIndexEntry[] {
       focus: entry.focus,
       interact: entry.interact ?? [],
       storage: entry.scenario.storage ?? {},
+      cartSeed: entry.scenario.cart ? galleryCartSeed(entry.scenario.cart) : null,
       fallbacks: resolved.fallbacks.map((fallback) => `${fallback.kind} ${fallback.key}: ${fallback.requested} -> ${fallback.resolved ?? "left out"}`),
       unanswered: [...(unansweredReads.get(entry.id) ?? [])],
     };

@@ -17,7 +17,11 @@ describe("stacked and grid product pages", () => {
     expect(layout).toMatch(/\[data-gallery="stacked"\] \{\s*--product-info-column: 345px;/);
     expect(layout).toMatch(/\[data-gallery="grid"\] \{\s*--product-info-column: 400px;/);
     expect(layout).toMatch(/@media \(min-width: 80rem\) \{\s*\.product-layout\[data-gallery="grid"\] \{\s*--product-info-column: 480px;/);
-    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*position: sticky;/);
+    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{[^}]*position: sticky;/);
+  });
+
+  it("starts the sticky details column at the top of its row, so the grid never stretches it to the photos' height", () => {
+    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*(?:\/\*[^*]*\*\/\s*)?align-self: start;\s*position: sticky;/);
   });
 
   it("sticks the marketplace gallery within the product grid without changing classic beside pages", () => {
@@ -30,13 +34,9 @@ describe("stacked and grid product pages", () => {
     expect(gallery).toMatch(/\[data-gallery="grid"\](?::not\(\.\\#\))? \.gallery-list(?::not\(\.\\#\))? \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   });
 
-  it("centres only the resolved 3:4 portrait stage at Aarong's desktop width", () => {
-    // The CSS cap is the number the main photo's `sizes` name
-    // (productGalleryPortraitMaxPx), set on the gallery as a custom property.
-    expect(gallery).toContain("const portraitMaxPx = productGalleryPortraitMaxPx(layout);");
-    expect(gallery).toContain('data-portrait-stage={portraitMaxPx === null ? undefined : ""}');
-    expect(gallery).toContain("style={portraitMaxPx === null ? undefined : `--gallery-portrait-max: ${portraitMaxPx}px;`}");
-    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\](?::not\(\.\\#\))? \{\s*max-width: var\(--gallery-portrait-max\);\s*justify-self: center;/);
+  it("never pillarboxes or narrows the portrait stage: it fills its column", () => {
+    expect(gallery).not.toContain("data-portrait-stage");
+    expect(gallery).not.toContain("--gallery-portrait-max");
     expect(gallery).not.toMatch(/\b404px\b/);
   });
 });

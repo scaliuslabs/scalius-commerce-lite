@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_BLOCK_REGISTRY, STOREFRONT_MARKETPLACE_BUY_BOX_LOOK } from "@scalius/shared/storefront-theme";
 import type { Product } from "@/lib/api";
 import {
   buyBoxFeatures,
   compareSimilarProducts,
   descriptionInInfoColumn,
   featuresPlacement,
-  frequentlyBoughtTogether,
   groupSpecificationRows,
   productPageModules,
   publicSpecificationRows,
 } from "./product-page-modules";
+
+// A classic buy box with these settings (the one box; its arrangement is all that differs).
+const classic = (settings: Record<string, unknown> = {}) =>
+  STOREFRONT_BLOCK_REGISTRY.buyBox.classic.renders({ ...STOREFRONT_BLOCK_REGISTRY.buyBox.classic.defaults, ...settings } as never).look;
 
 const spec = (name: string, group: string | null, keySpec = false) => ({
   name, slug: name.toLowerCase(), value: "1", group, unit: null, keySpec,
@@ -31,16 +34,6 @@ function product(overrides: Partial<Product> = {}): Product {
 const card = (id: string, categoryId: string | null = "cat-phones") => ({ id, slug: id, name: id, categoryId } as Product);
 
 describe("modules from data the page already has", () => {
-  it("bundles only real co-purchases: the first half of an also-bought list, two at most", () => {
-    expect(frequentlyBoughtTogether({ reason: "also_bought", products: [card("a"), card("b"), card("c"), card("d")] }).map((item) => item.id))
-      .toEqual(["a", "b"]);
-    // Two rows, one guaranteed co-bought: only the first.
-    expect(frequentlyBoughtTogether({ reason: "also_bought", products: [card("a"), card("b")] }).map((item) => item.id)).toEqual(["a"]);
-    for (const reason of ["similar", "popular", "new_arrivals"] as const) {
-      expect(frequentlyBoughtTogether({ reason, products: [card("a"), card("b")] })).toEqual([]);
-    }
-  });
-
   it("compares with recommended products of the same category, three at most", () => {
     const list = { reason: "similar" as const, products: [card("p1"), card("a"), card("x", "cat-cases"), card("b"), card("c"), card("d")] };
     expect(compareSimilarProducts({ id: "p1", categoryId: "cat-phones" }, list).map((item) => item.id)).toEqual(["a", "b", "c"]);
@@ -48,50 +41,57 @@ describe("modules from data the page already has", () => {
   });
 
   it("renders each new module only with its data; recently viewed always (the browser fills it)", () => {
-    const below = ["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const;
-    expect(productPageModules(below, product(), { look: null, hasRelated: false })).toEqual(["recently-viewed"]);
-    expect(productPageModules(below, product(), { look: null, hasRelated: false, boughtTogether: 1, similar: 2, policies: 3 }))
-      .toEqual(["frequently-bought-together", "compare-similar", "policies", "recently-viewed"]);
+    const below = ["compare-similar", "policies", "recently-viewed"] as const;
+    expect(productPageModules(below, product(), { look: classic(), hasRelated: false })).toEqual(["recently-viewed"]);
+    expect(productPageModules(below, product(), { look: classic(), hasRelated: false, similar: 2, policies: 3 }))
+      .toEqual(["compare-similar", "policies", "recently-viewed"]);
   });
 });
 
 describe("product page modules", () => {
   it("keeps classic's order and leaves the description in the buy box", () => {
     const modules = productPageModules(["description", "reviews", "related"], product({ reviews: {} as Product["reviews"] }), {
-      look: null,
+      look: classic(),
       hasRelated: true,
     });
     expect(modules).toEqual(["reviews", "related"]);
-    expect(descriptionInInfoColumn(null)).toBe(true);
+    expect(descriptionInInfoColumn(classic())).toBe(true);
   });
 
-  it("keeps fashion description beside the gallery without a duplicate below", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.fashion;
+  it("keeps the description beside the gallery without a duplicate below", () => {
+    const look = classic({ cta: "stack" });
     expect(descriptionInInfoColumn(look)).toBe(true);
     expect(productPageModules(["description", "related"], product(), { look, hasRelated: true })).toEqual(["related"]);
   });
 
   it("follows the template list and drops modules this product has no data for", () => {
     const below = ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "related"] as const;
-    const look = STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"];
+    const look = STOREFRONT_MARKETPLACE_BUY_BOX_LOOK;
+    // The facts column already lists the key specs: highlights would repeat them.
     expect(productPageModules(below, product(), { look, hasRelated: false })).toEqual([
-      "about-bullets", "key-attributes", "spec-table", "description",
+      "about-bullets", "spec-table", "description",
     ]);
+    // Highlights show above a longer table in a box that does not list them.
+    const longer = product({ attributes: [spec("Weight", "Body", true), spec("Colour", "Body")] });
+    expect(productPageModules(below, longer, { look: classic(), hasRelated: false })).toEqual([
+      "about-bullets", "key-attributes", "spec-table",
+    ]);
+    expect(productPageModules(below, product(), { look: classic(), hasRelated: false })).not.toContain("key-attributes");
     const withWarranty = product({ warranty: { name: "1 year", provider: "brand", duration: { value: 1, unit: "years" }, replacementDays: null, terms: null } });
     expect(productPageModules(below, withWarranty, { look, hasRelated: true })).toContain("warranty");
     expect(featuresPlacement(["about-bullets"], look)).toBe("about");
   });
 
   it("shows key features once: in a buy box that lists them, never again below", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.retail;
+    const look = classic({ cta: "stack", features: true, details: "below" });
     const modules = productPageModules(["about-bullets", "description"], product(), { look, hasRelated: false });
     expect(modules).toEqual(["description"]);
     expect(featuresPlacement(modules, look)).toBe("buy-box");
-    expect(featuresPlacement(["description"], null)).toBe("description");
+    expect(featuresPlacement(["description"], classic())).toBe("description");
   });
 
   it("puts department-mall's saved highlights in the buy box", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.mall;
+    const look = classic({ features: true, details: "below" });
     expect(look.features).toBe("list");
     const modules = productPageModules(["description", "reviews", "related"], product(), { look, hasRelated: false });
     expect(featuresPlacement(modules, look)).toBe("buy-box");
@@ -112,7 +112,7 @@ describe("product page modules", () => {
     ];
     expect(publicSpecificationRows(rows).map((row) => row.name)).toEqual(["Memory"]);
     expect(productPageModules(["key-attributes", "spec-table"], product({ attributes: rows.slice(0, 2) }), {
-      look: STOREFRONT_BUY_BOX_LOOKS.spec,
+      look: classic({ features: true, details: "below" }),
       hasRelated: false,
     })).toEqual([]);
   });

@@ -14,6 +14,8 @@ import "./catalog-listing.css";
 import type { BuyerPriceRange, Product, ProductFacet, RatingFacetValue } from "@/lib/api";
 import AppliedCatalogFilters from "./AppliedCatalogFilters.astro";
 import CatalogAspectChips from "./CatalogAspectChips.astro";
+import CatalogBandTools from "./CatalogBandTools.astro";
+import CatalogBreadcrumb from "./CatalogBreadcrumb.astro";
 import CatalogChipLinks from "./CatalogChipLinks.astro";
 import CatalogFilters from "./CatalogFilters.astro";
 import CatalogPaging from "./CatalogPaging.astro";
@@ -160,9 +162,8 @@ const controls = catalogListingControls({
 });
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
-// Fabrilife: a ruled rail that scrolls on its own, and the phone row pinned to the bottom.
+// Fabrilife: a ruled rail.
 const ruledRail = showFilters && placement === "sidebar" && presentation.filters.ruled;
-const bottomPhoneBar = showFilters && phoneBar === "bottom";
 // Star Tech: the breadcrumb above, the title band in the results column beside the facets.
 const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
 // Amazon and Daraz: the phone's chip row, the facets in a split sheet.
@@ -245,20 +246,23 @@ const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
 const breadcrumbVisible = piece("breadcrumb");
 const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
+const bandTools = {
+  drawerButton: drawer && showFilters,
+  refinementCount,
+  quickFilters,
+  showPageSize,
+  showSort,
+  showViewToggle,
+  limit,
+  sortBy,
+  sortOptions,
+  viewSelect,
+  results,
+};
 ---
 
-{specRail && band.breadcrumb && band.breadcrumb.length > 0 && (
-  <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs mb-3 py-3", !breadcrumbVisible && "sr-only"]}>
-    <ol>
-      {band.breadcrumb.map((crumb) => (
-        <Fragment>
-          <li><a href={crumb.href}>{crumb.label}</a></li>
-          <li aria-hidden="true">›</li>
-        </Fragment>
-      ))}
-      <li class="sr-only" aria-current="page">{band.title}</li>
-    </ol>
-  </nav>
+{specRail && band.breadcrumb && (
+  <CatalogBreadcrumb crumbs={band.breadcrumb} current={band.title} hidden={!breadcrumbVisible} showCurrent={false} class="mb-3 py-3" />
 )}
 
 {!specRail && <div
@@ -268,50 +272,11 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   data-boutique-bar={boutiqueBar ? "" : undefined}
 >
   <div class="catalog-band-heading">
-    {band.breadcrumb && band.breadcrumb.length > 0 && (
-      // The breadcrumb stays in the page for assistive technology (it matches
-      // the BreadcrumbList JSON-LD) when the template hides it visually.
-      <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs", !breadcrumbVisible && "sr-only"]}>
-        <ol>
-          {band.breadcrumb.map((crumb) => (
-            <Fragment>
-              <li><a href={crumb.href}>{crumb.label}</a></li>
-              <li aria-hidden="true">›</li>
-            </Fragment>
-          ))}
-          <li class="sr-only" aria-current="page">{band.title}</li>
-        </ol>
-      </nav>
-    )}
+    {band.breadcrumb && <CatalogBreadcrumb crumbs={band.breadcrumb} current={band.title} hidden={!breadcrumbVisible} />}
     <h1 class="catalog-band-title">{band.title}</h1>
     {countLabel && (!boutiqueBar || !showPhoneBar) && <p class="catalog-band-count" aria-live="polite">{countLabel}</p>}
   </div>
-  <div class="catalog-band-tools">
-    {drawer && showFilters && (
-      <Fragment>
-        <button
-          type="button"
-          data-catalog-filter-toggle
-          aria-controls="filter-section"
-          aria-expanded="false"
-          class="relative inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-        >
-          <Icon name="sliders-horizontal" class="h-4 w-4" />
-          <span>Filter</span>
-          {refinementCount > 0 && (
-            <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-              {refinementCount}<span class="sr-only"> applied</span>
-            </span>
-          )}
-        </button>
-        <CatalogChipLinks label="Quick filters" links={quickFilters} class="min-w-0" />
-      </Fragment>
-    )}
-    {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
-    {showSort && <CatalogViewSelect id="sortByDesktop" name="sortBy" variant="labelled" options={sortOptions} selected={sortBy} {...viewSelect} />}
-    {showViewToggle && <CatalogViewToggle defaultView={results === "list" ? "list" : "grid"} />}
-    {countLabel && boutiqueBar && showPhoneBar && <p class="catalog-band-count">{countLabel}</p>}
-  </div>
+  {!boutiqueBar && <CatalogBandTools {...bandTools} />}
 </div>}
 
 {specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={specSearch ? "catalog-spec-pills catalog-spec-search-pills mb-2 pb-1" : "catalog-spec-pills mb-3 pb-1"} />}
@@ -330,7 +295,6 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         : !marketplacePhoneFilters && !massRetailPhoneBar && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
     data-catalog-phone-bar
-    data-catalog-fashion-phone-bar={bottomPhoneBar ? "" : undefined}
   >
     {marketplacePhoneFilters ? (
       <Fragment>
@@ -409,7 +373,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
-        {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
+        {showViewToggle && !phoneChips && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
         {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
         {countLabel && boutiqueBar && <p class="catalog-band-count ms-auto shrink-0">{countLabel}</p>}
       </Fragment>
@@ -419,7 +383,8 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
 
 {!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
-<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
+{/* One chip row on phones: the sub-categories. Popular filters are in the Filters sheet (Target's own phone bar carries them). */}
+<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1 max-lg:hidden"} />
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={ruledRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
   {showFilters && (
@@ -445,7 +410,8 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         ]}
       >
         <div class:list={["flex items-center justify-between border-b border-border bg-background p-4", !drawer && "lg:hidden"]}>
-          <h2 id="mobile-filter-title" class="text-lg font-semibold">Filters</h2>
+          {/* A label, not a heading: on some layouts the filters come before the page title in the source. */}
+          <p id="mobile-filter-title" class="text-lg font-semibold">Filters</p>
           <button
             type="button"
             id="mobile-filter-close"
@@ -479,6 +445,9 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
     </aside>
   )}
 
+  {/* Dawn: the sort and the count end the filter line. */}
+  {boutiqueBar && <CatalogBandTools {...bandTools} countLabel={showPhoneBar ? countLabel : null} class="catalog-boutique-tools" />}
+
   <div class="min-w-0 flex-1">
     {specRail && (
       <div class="catalog-band catalog-spec-results-band" data-catalog-band data-catalog-kind={kind} data-spec-search={specSearchShowsQuery ? "" : undefined} data-visible-breadcrumb={visibleBreadcrumb ? "" : undefined} data-placement={placement}>
@@ -510,8 +479,9 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       hideSearch={specSearchShowsQuery}
     />}
 
+    {/* One chip row on phones: these choices are in the Filters sheet. */}
     {facetValueChips && (
-      <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap">
+      <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 max-lg:hidden lg:flex-wrap">
         <span class="shrink-0 text-sm font-medium text-muted-foreground">{facetValueChips.label}</span>
         <CatalogChipLinks label={`${facetValueChips.label} choices`} links={facetValueChips.links} inline />
       </div>

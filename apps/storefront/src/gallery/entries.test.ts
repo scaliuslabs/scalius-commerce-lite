@@ -24,6 +24,8 @@ import {
   type StorefrontBlockSlot,
 } from "@scalius/shared/storefront-theme";
 import { cardEntryId, entryId, galleryEntries } from "./entries";
+import { galleryCartSeed, fixtureProductSoldOut } from "./cart-seed";
+import { galleryIndex } from "./server";
 import { SECTION_CONTENT } from "./section-content";
 import { settingChoices, type SettingsSchema } from "./variants";
 import { fixtureFacets, fixtureMenu, menuLinkCount } from "./fixtures";
@@ -81,6 +83,22 @@ describe("the storefront gallery", () => {
     }
     for (const palette of STOREFRONT_THEME_PALETTE_KEYS) expect(families.has(`palette:${palette}`), palette).toBe(true);
     for (const family of ["app:section", "app:product-block", "app:checkout-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
+  });
+
+  it("audits the cart page with lines in it: 1, 3 and 10 lines, a sold-out line and a Bangla cart", () => {
+    const seeded = entries.filter((entry) => entry.page === "cart" && entry.scenario.cart);
+    expect(seeded.map((entry) => entry.scenario.cart).sort()).toEqual(["bangla", "one", "sold-out", "ten", "three"]);
+    const lines = (kind: Parameters<typeof galleryCartSeed>[0]) => Object.keys(galleryCartSeed(kind).items);
+    expect([lines("one").length, lines("three").length, lines("ten").length]).toEqual([1, 3, 10]);
+    // The sold-out cart carries a product the fixture API answers "sold out" for.
+    const soldOut = Object.values(galleryCartSeed("sold-out").items) as Array<{ id: string; variantId: string }>;
+    expect(soldOut.some((line) => fixtureProductSoldOut(line.id))).toBe(true);
+    // Every line has the persisted ids the cart store requires.
+    for (const line of soldOut) expect(line.variantId).toMatch(/^var_/);
+    // The index hands the harness the seed (and an empty cart none).
+    const index = galleryIndex();
+    expect(index.find((entry) => entry.id === entryId("page", "cart", "three"))?.cartSeed?.discountCodes).toEqual([]);
+    expect(index.find((entry) => entry.id === entryId("page", "cart"))?.cartSeed).toBeNull();
   });
 
   it("uses a large fixture store: a 1,000+ link menu and 50+ facets", () => {

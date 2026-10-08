@@ -5,6 +5,7 @@
 // A new document version adds one entry to THEME_UPGRADES.
 import { z } from "zod";
 import { STOREFRONT_BLOCK_REGISTRY } from "./blocks";
+import { retireProductPageChoices } from "./retired-product-blocks";
 import { STOREFRONT_SECTION_REGISTRY } from "./sections";
 import {
   STOREFRONT_THEME_COLOR_KEYS,
@@ -383,6 +384,8 @@ function withTightenedBounds(doc: Record<string, unknown>): Record<string, unkno
   if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
   withReadableSaleColour(doc);
   withConsolidatedChrome(doc);
+  // Product-page and listing choices the redesign removed read as their replacements.
+  retireProductPageChoices(doc);
   return doc;
 }
 

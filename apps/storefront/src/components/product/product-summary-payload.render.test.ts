@@ -4,11 +4,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
-import { EMPTY_STORE_SHAPE, STOREFRONT_BUY_BOX_LOOKS, resolveStorefrontTheme, storefrontTemplateTheme, type StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_BLOCK_REGISTRY, STOREFRONT_MARKETPLACE_BUY_BOX_LOOK } from "@scalius/shared/storefront-theme";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { buyBoxFeatures } from "./lib/product-page-modules";
-import { resolveProductPageTheme } from "./lib/product-page-theme";
 import { resolveExactVariantSelection, validateSelection } from "./lib/variant-state-machine";
+
+// A classic buy box with these settings (the one box; its arrangement is all that differs).
+const classic = (settings: Record<string, unknown> = {}) =>
+  STOREFRONT_BLOCK_REGISTRY.buyBox.classic.renders({ ...STOREFRONT_BLOCK_REGISTRY.buyBox.classic.defaults, ...settings } as never).look;
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const virtualModules: Record<string, string> = {
@@ -86,151 +89,122 @@ const variants: ProductVariant[] = Array.from({ length: 100 }, (_, i) => ({
   deletedAt: null,
 }));
 
+const html = (markup: string) => {
+  const doc = new Window().document;
+  doc.write(`<body>${markup}</body>`);
+  return doc;
+};
+const request = (slug: string) => new Request(`https://shop.test/products/${slug}`);
+
 describe("product summary browser payload", () => {
-  it("places only saved mall highlights between the title and price", async () => {
-    const request = new Request("https://shop.test/products/game-key");
+  it("places only saved key features after the purchase buttons, so the price and buttons come first", async () => {
     const render = async (features: string[]) => {
       const product = {
         id: "prod_1", slug: "game-key", name: "Game key", price: 1200,
         features,
         attributes: [{ name: "Region", value: "US", slug: "region", group: null, unit: null, keySpec: true }],
       } as Product;
-      const bullets = await container.renderToString(ProductFeatureList, {
-        props: { features: buyBoxFeatures(product, true), variant: "bullets", compact: true }, request,
+      const list = await container.renderToString(ProductFeatureList, {
+        props: { features: buyBoxFeatures(product, true), variant: "list" }, request: request("game-key"),
       });
-      const html = await container.renderToString(ProductSummary, {
-        props: { product, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.mall },
-        slots: { "after-title": bullets }, request,
-      });
-      const doc = new Window().document;
-      doc.write(`<body>${html}</body>`);
-      return doc;
+      return html(await container.renderToString(ProductSummary, {
+        props: { product, category: null, variants: [], options: [], details: false, look: classic({ features: true, details: "below" }) },
+        slots: { "after-actions": list }, request: request("game-key"),
+      }));
     };
     const populated = await render(["Redeem on a US account", "Delivery by email"]);
-    const title = populated.querySelector("h1")!;
-    const list = populated.querySelector('[data-product-features="bullets"]')!;
     const price = populated.querySelector(".buy-box-main-price")!;
+    const buttons = populated.querySelector(".buy-box-ctas")!;
+    const list = populated.querySelector('[data-product-features="list"]')!;
     expect(list.textContent).toContain("Redeem on a US account");
-    expect(list.className).toContain("space-y-0.5");
-    expect(title.compareDocumentPosition(list) & 4).toBe(4);
-    expect(list.compareDocumentPosition(price) & 4).toBe(4);
-    expect(populated.querySelectorAll('[data-product-features="bullets"]')).toHaveLength(1);
-    expect((await render([])).querySelector('[data-product-features="bullets"]')).toBeNull();
+    expect(price.compareDocumentPosition(buttons) & 4).toBe(4);
+    expect(buttons.compareDocumentPosition(list) & 4).toBe(4);
+    expect(populated.querySelectorAll('[data-product-features="list"]')).toHaveLength(1);
+    expect((await render([])).querySelector('[data-product-features="list"]')).toBeNull();
   });
 
-  it("places fashion copy after its purchase card in the photo's info column", async () => {
+  it("keeps the description in the buy box when the setting says so, as one panel without a tab bar", async () => {
     const product = {
       id: "prod_1", slug: "tunic", name: "Cotton tunic", price: 300,
       description: "<p>Soft cotton for everyday wear.</p>",
+    } as Product;
+    const doc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [], options: [], details: true, look: classic({ cta: "stack" }) },
+      request: request("tunic"),
+    }));
+    const details = doc.querySelector("[data-product-summary] .buy-box-body #product-details")!;
+    expect(details.textContent).toContain("Soft cotton for everyday wear.");
+    // One panel needs no tab bar; its heading names it.
+    expect(details.querySelector("[role=tablist]")).toBeNull();
+    expect(details.querySelector("h2")?.textContent).toBe("Description");
+  });
+
+  it("shows the tab bar only when the description has company", async () => {
+    const product = {
+      id: "prod_1", slug: "tunic", name: "Cotton tunic", price: 300,
+      description: "<p>Soft cotton.</p>",
       additionalInfo: [{ id: "fabric", title: "Fabric & care", content: "<p>Machine wash cold.</p>" }],
     } as Product;
-    const html = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants: [], options: [], details: true, look: STOREFRONT_BUY_BOX_LOOKS.fashion },
-      request: new Request("https://shop.test/products/tunic"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
-    const summary = doc.querySelector("[data-product-summary]")!;
-    const details = summary.querySelector("[data-product-details-plain]")!;
-    expect(details.parentElement).toBe(summary);
-    expect(summary.querySelector(".buy-box-body #product-details")).toBeNull();
-    expect(details.textContent).toContain("Soft cotton for everyday wear.");
-    expect(details.textContent).toContain("Fabric & care");
-    expect(details.querySelector("[role=tab]")).toBeNull();
+    const doc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [], options: [], details: true },
+      request: request("tunic"),
+    }));
+    expect([...doc.querySelectorAll("[role=tab]")].map((tab) => tab.textContent?.trim())).toEqual(["Description", "Fabric & care"]);
   });
 
-  it("keeps mall quantity and purchase buttons in one opt-in desktop row", async () => {
+  it("puts the buy buttons in their visual order, Add to cart first, so Tab follows the eye", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
-    const html = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.mall },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
-
-    expect(doc.querySelector("[data-product-summary]")?.hasAttribute("data-quantity-inline")).toBe(true);
-    expect(doc.querySelector("label[for=quantity]")?.classList.contains("lg:sr-only")).toBe(true);
-    expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
-    expect(doc.querySelector("#quantity")?.getAttribute("form")).toBe("product-buy-form");
-    expect(doc.querySelector("[data-action=buy-now]")?.getAttribute("form")).toBe("product-buy-form");
-  });
-
-  it("renders the grocery purchase modifier only for a resolved Essentials buy box", async () => {
-    const product = { id: "prod_1", slug: "mustard-oil", name: "Mustard oil", price: 350 } as Product;
-    const pantry = storefrontTemplateTheme("daily-essentials");
-    const merchantOverride = {
-      ...pantry,
-      blocks: {
-        ...pantry.blocks,
-        product: { ...pantry.blocks.product, buyBox: storefrontTemplateTheme("department-mall").blocks.product.buyBox },
-      },
-    };
-    for (const [theme, expected] of [[pantry, true], [merchantOverride, false]] as const) {
-      const resolved = resolveProductPageTheme(
-        { theme, resolved: resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE) },
-        { pageTemplate: null },
-        EMPTY_STORE_SHAPE,
-      );
-      const html = await container.renderToString(ProductSummary, {
-        props: {
-          product, category: null, variants: [variants[0]], options: [], details: false,
-          look: resolved.layout.buyBox.look,
-          essentials: resolved.blocks.product.buyBox.variant === "essentials",
-        },
-        request: new Request("https://shop.test/products/mustard-oil"),
-      });
-      const doc = new Window().document;
-      doc.write(`<body>${html}</body>`);
-      const summary = doc.querySelector("[data-product-summary]")!;
-      const purchase = summary.querySelector(".buy-box-purchase")!;
-      const quantity = purchase.querySelector("#quantity")!;
-      const addToCart = purchase.querySelector('[data-action="add-to-cart"]')!;
-      const buyNow = purchase.querySelector('[data-action="buy-now"]')!;
-      expect(summary.hasAttribute("data-essentials-buy-box")).toBe(expected);
-      expect(quantity.compareDocumentPosition(addToCart) & 4).toBe(4);
-      expect(addToCart.compareDocumentPosition(buyNow) & 4).toBe(4);
-      expect([quantity, addToCart, buyNow].map((control) => control.getAttribute("form"))).toEqual([
-        "product-buy-form", "product-buy-form", "product-buy-form",
-      ]);
+    for (const look of [classic(), classic({ cta: "stack" }), STOREFRONT_MARKETPLACE_BUY_BOX_LOOK]) {
+      const doc = html(await container.renderToString(ProductSummary, { props: { product, category: null, variants, options, details: false, look }, request: request("sample") }));
+      const buttons = [...doc.querySelectorAll(".buy-box-ctas button")];
+      expect(buttons.map((button) => button.getAttribute("data-action"))).toEqual(["add-to-cart", "buy-now"]);
+      expect(buttons[0]!.compareDocumentPosition(buttons[1]!) & 4).toBe(4);
+      expect(doc.querySelector("#quantity")?.getAttribute("form")).toBe("product-buy-form");
+      expect(doc.querySelector("[data-action=buy-now]")?.getAttribute("form")).toBe("product-buy-form");
     }
+    expect(html(await container.renderToString(ProductSummary, { props: { product, category: null, variants, options, details: false, look: classic({ cta: "stack" }) }, request: request("sample") }))
+      .querySelector("[data-product-summary]")?.getAttribute("data-cta-layout")).toBe("stack");
   });
 
-  it("groups arbitrary merchant options in rounded-tech panels without changing purchase controls", async () => {
+  it("shows a price of 24px/700 and no look-specific type sizes", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
-    const html = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.tech },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
+    const markup = await container.renderToString(ProductSummary, { props: { product, category: null, variants, options, details: false }, request: request("sample") });
+    const price = html(markup).querySelector(".product-price")!;
+    expect(price.className).toContain("text-2xl");
+    expect(price.className).toContain("font-bold");
+    expect(markup).not.toContain("--bb-title");
+    expect(markup).not.toContain("data-buy-box-look");
+  });
+
+  it("groups arbitrary merchant options in panels without changing purchase controls", async () => {
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
+    const doc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants, options, details: false, look: classic({ cta: "stack" }) },
+      request: request("sample"),
+    }));
 
     const panels = doc.querySelector(".variant-option-panels");
     expect([...panels!.children].map((panel) => panel.querySelector("legend")?.textContent)).toEqual(["Model", "Color"]);
     expect(panels?.querySelectorAll(".variant-option-btn")).toHaveLength(20);
     expect(panels?.querySelectorAll(".variant-option-values[data-option-overflow]")).toHaveLength(2);
-    expect(doc.querySelector("[data-product-summary]")?.getAttribute("data-cta-phone-layout")).toBe("row");
     expect(doc.querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
     expect(doc.querySelector("#product-variant-noscript")?.getAttribute("form")).toBe("product-buy-form");
 
     const fewOptions = options.map((option) => ({ ...option, values: option.values.slice(0, 3) }));
-    const fewHtml = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants: variants.filter((variant) => variant.selectedOptions.every((choice) => Number(choice.optionValueId.slice(1)) < 3)), options: fewOptions, details: false, look: STOREFRONT_BUY_BOX_LOOKS.tech },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const fewDoc = new Window().document;
-    fewDoc.write(`<body>${fewHtml}</body>`);
+    const fewDoc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: variants.filter((variant) => variant.selectedOptions.every((choice) => Number(choice.optionValueId.slice(1)) < 3)), options: fewOptions, details: false },
+      request: request("sample"),
+    }));
     expect(fewDoc.querySelectorAll(".variant-option-btn")).toHaveLength(6);
     expect(fewDoc.querySelector(".variant-option-values[data-option-overflow]")).toBeNull();
   });
 
   it("keeps exact SKU selection, prices and availability in a compact 100-SKU payload", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300, discountType: null, discountPercentage: null, discountAmount: null } as Product;
-    const html = await container.renderToString(ProductSummary, {
+    const doc = html(await container.renderToString(ProductSummary, {
       props: { product, category: null, variants, options, details: false, currencyCode: "BDT", currencyDecimalPlaces: 2 },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
+      request: request("sample"),
+    }));
     const variantScript = doc.querySelector("#product-variants-data")?.textContent ?? "";
     const optionScript = doc.querySelector("#product-options-data")?.textContent ?? "";
     const browserVariants = JSON.parse(variantScript);
@@ -260,12 +234,10 @@ describe("product summary browser payload", () => {
       { name: "Feature", value: "Long description", slug: "feature", group: null, unit: null, keySpec: false },
     ];
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300, brand: { name: "Record Brand" }, attributes } as Product;
-    const html = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
+    const doc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants, options, details: false, look: STOREFRONT_MARKETPLACE_BUY_BOX_LOOK },
+      request: request("sample"),
+    }));
     const facts = doc.querySelector("[data-product-compact-facts]");
 
     expect(facts?.classList.contains("hidden")).toBe(true);
@@ -277,98 +249,66 @@ describe("product summary browser payload", () => {
     expect([...facts!.querySelectorAll("dd")].map((row) => row.textContent)).toContain("2 TB");
     expect(doc.querySelectorAll(".variant-option-selector")).toHaveLength(2);
     expect(doc.querySelectorAll(".variant-option-selector")[1]!.compareDocumentPosition(facts!) & 4).toBe(4);
+    // A price on each value, because the values are priced differently.
     const largeModel = doc.querySelector('[data-option-definition-id="model"][data-option-value-id="m1"].variant-option-btn');
     expect(largeModel?.querySelector("[data-option-price]")?.textContent).toContain("310");
     expect(largeModel?.getAttribute("aria-label")).toContain("310");
     const soldOutColor = doc.querySelector('[data-option-definition-id="color"][data-option-value-id="c1"].variant-option-btn');
     expect(soldOutColor?.querySelector("[data-option-price]")?.hasAttribute("hidden")).toBe(true);
 
-    const flatHtml = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants: variants.map((variant) => ({ ...variant, price: 300, discountType: null })), options, details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
-      request: new Request("https://shop.test/products/sample"),
-    });
-    const flatDoc = new Window().document;
-    flatDoc.write(`<body>${flatHtml}</body>`);
-    expect(flatDoc.querySelectorAll("[data-option-price]:not([hidden])")).toHaveLength(19);
-    expect(flatDoc.querySelector('[data-option-definition-id="model"][data-option-value-id="m1"].variant-option-btn [data-option-price]')?.textContent).toContain("300");
+    // Values priced the same repeat nothing.
+    const flatDoc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: variants.map((variant) => ({ ...variant, price: 300, discountType: null })), options, details: false, look: STOREFRONT_MARKETPLACE_BUY_BOX_LOOK },
+      request: request("sample"),
+    }));
+    expect(flatDoc.querySelectorAll("[data-option-price]:not([hidden])")).toHaveLength(0);
 
     const withoutFacts = { ...product, brand: null, attributes: [] };
     const emptyHtml = await container.renderToString(ProductSummary, {
-      props: { product: withoutFacts, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"] },
-      request: new Request("https://shop.test/products/sample"),
+      props: { product: withoutFacts, category: null, variants: [], options: [], details: false, look: STOREFRONT_MARKETPLACE_BUY_BOX_LOOK },
+      request: request("sample"),
     });
     expect(emptyHtml).not.toContain("data-product-compact-facts");
 
     const otherHtml = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants: [], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
-      request: new Request("https://shop.test/products/sample"),
+      props: { product, category: null, variants: [], options: [], details: false, look: classic() },
+      request: request("sample"),
     });
     expect(otherHtml).not.toContain("data-product-compact-facts");
   });
 
-  it("shows only truthful Star Tech fact pills while keeping the live price and stock nodes", async () => {
-    const product = {
-      id: "prod_1", slug: "laptop", name: "Laptop", price: 60_500,
-      discountType: "flat", discountPercentage: null, discountAmount: 3_500,
-      brand: { id: "acer", name: "Acer", slug: "acer" },
-    } as Product;
-    const simpleVariant = {
-      ...variants[0]!, selectedOptions: [], optionCombinationKey: null,
-      sku: "LAP-57", price: 60_500,
-    };
-    const html = await container.renderToString(ProductSummary, {
-      props: { product, category: null, variants: [simpleVariant], options: [], details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
-      request: new Request("https://shop.test/products/laptop"),
-    });
-    const doc = new Window().document;
-    doc.write(`<body>${html}</body>`);
-
-    const factRow = doc.querySelector("[data-fact-pills] .buy-box-main-price")!;
-    expect(factRow.textContent).toContain("Price:");
-    expect(factRow.textContent).toContain("Regular Price:");
-    expect(factRow.textContent).toContain("Status:In Stock");
-    expect(factRow.textContent).toContain("Product Code:LAP-57");
-    expect(factRow.textContent).toContain("Brand:Acer");
-    expect(doc.querySelectorAll(".product-price")).toHaveLength(1);
-    expect(doc.querySelectorAll("#product-stock-text")).toHaveLength(1);
-    expect(doc.querySelector(".product-original-price")?.classList.contains("hidden")).toBe(false);
-
-    const variableHtml = await container.renderToString(ProductSummary, {
-      props: { product: { ...product, discountType: null, discountAmount: null, brand: null }, category: null, variants, options, details: false, look: STOREFRONT_BUY_BOX_LOOKS.spec },
-      request: new Request("https://shop.test/products/laptop"),
-    });
-    const variableDoc = new Window().document;
-    variableDoc.write(`<body>${variableHtml}</body>`);
-    const variableFacts = variableDoc.querySelector("[data-fact-pills] .buy-box-main-price")!;
-    expect(variableFacts.textContent).not.toContain("Product Code:");
-    expect(variableFacts.textContent).not.toContain("Brand:");
-    expect(variableDoc.querySelector(".product-original-price")?.classList.contains("hidden")).toBe(true);
+  it("speaks the store's language in the stock line and uses one word for sold out", async () => {
+    const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
+    const inStock = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [variants[0]!], options: [], details: false, stockWords: { inStock: "স্টকে আছে", lowStock: "স্টক কম" } },
+      request: request("sample"),
+    }));
+    expect(inStock.querySelector("#product-stock-text")?.textContent).toBe("স্টকে আছে");
+    expect(inStock.querySelector("#product-actions")?.getAttribute("data-stock-in-text")).toBe("স্টকে আছে");
+    const soldOut = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [{ ...variants[1]! }], options: [], details: false },
+      request: request("sample"),
+    }));
+    // The badge and the button say the same thing.
+    expect(soldOut.querySelector("#product-stock-text")?.textContent).toBe("Sold out");
+    expect(soldOut.querySelector('[data-action="add-to-cart"]')?.textContent?.trim()).toBe("Sold out");
   });
 
-  it("keeps a single apparel purchase action with sparse or option-rich products, unless the merchant enables Buy now", async () => {
+  it("gives a sold-out product a next step instead of a quantity stepper", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
-    const sparseVariant = { ...variants[0]!, selectedOptions: [], optionCombinationKey: null };
-    const renderActions = async (look: StorefrontBuyBoxLook, rich: boolean, addToCartText?: string) => {
-      const html = await container.renderToString(ProductSummary, {
-        props: { product, category: null, variants: rich ? variants : [sparseVariant], options: rich ? options : [], details: false, look, actionCopy: addToCartText ? { addToCartText } : undefined },
-        request: new Request("https://shop.test/products/sample"),
-      });
-      const doc = new Window().document;
-      doc.write(`<body>${html}</body>`);
-      return doc;
-    };
-    for (const look of [STOREFRONT_BUY_BOX_LOOKS.fashion, STOREFRONT_BUY_BOX_LOOKS.heritage]) {
-      for (const rich of [false, true]) {
-        const doc = await renderActions(look, rich);
-        expect(doc.querySelectorAll('[data-action="add-to-cart"]')).toHaveLength(1);
-        expect(doc.querySelector('[data-action="buy-now"]')).toBeNull();
-        expect(doc.querySelector('[data-action="add-to-cart"] svg')).toBeNull();
-        expect(doc.querySelectorAll(".variant-option-selector")).toHaveLength(rich ? 2 : 0);
-      }
-    }
-    const longLabel = "Add this handwoven item to my bag";
-    expect((await renderActions(STOREFRONT_BUY_BOX_LOOKS.fashion, false, longLabel)).querySelector('[data-action-label="add-to-cart"]')?.textContent).toBe(longLabel);
-    const merchantLook = { ...STOREFRONT_BUY_BOX_LOOKS.fashion, cta: { ...STOREFRONT_BUY_BOX_LOOKS.fashion.cta, showBuyNow: true } };
-    expect((await renderActions(merchantLook, false)).querySelectorAll(".buy-box-ctas button")).toHaveLength(2);
+    const doc = html(await container.renderToString(ProductSummary, {
+      props: { product, category: { id: "cat_1", name: "Phones", slug: "phones" }, variants: [{ ...variants[1]! }], options: [], details: false },
+      request: request("sample"),
+    }));
+    expect(doc.querySelector("label[for=quantity]")?.parentElement?.hasAttribute("hidden")).toBe(true);
+    const soldOut = doc.querySelector("[data-product-sold-out]")!;
+    expect(soldOut.querySelector("a")?.getAttribute("href")).toBe("/categories/phones");
+    // A product that can be bought has neither.
+    const live = html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: [variants[0]!], options: [], details: false },
+      request: request("sample"),
+    }));
+    expect(live.querySelector("[data-product-sold-out]")).toBeNull();
+    expect(live.querySelector("label[for=quantity]")?.parentElement?.hasAttribute("hidden")).toBe(false);
   });
 });

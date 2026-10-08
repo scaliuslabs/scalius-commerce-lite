@@ -103,8 +103,8 @@ describe("templates", () => {
 
   it("lets a merchant change the purchase panel without changing the gallery", () => {
     const theme = storefrontTemplateTheme("boutique");
-    const changed = setBlockVariant(theme, "buyBox", "heritage");
-    expect(blockVariant(changed, "buyBox")).toBe("heritage");
+    const changed = setBlockVariant(theme, "buyBox", "marketplace-3col");
+    expect(blockVariant(changed, "buyBox")).toBe("marketplace-3col");
     expect(changed.blocks.product.gallery).toEqual(theme.blocks.product.gallery);
     expect(storefrontThemeDocumentSchema.safeParse(changed).success).toBe(true);
   });
@@ -300,13 +300,13 @@ describe("product page modules in the theme editor", () => {
   it("shows a module at its registry place and hides it again", () => {
     const below = storefrontTemplateTheme("department-mall").blocks.product.below;
     expect(below).toEqual(["description", "reviews", "related"]);
-    const bundled = toggleProductModule(below, "frequently-bought-together", true);
-    expect(bundled).toEqual(["frequently-bought-together", "description", "reviews", "related"]);
-    const everything = (["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const).reduce((list, module) => toggleProductModule(list, module, true), below);
-    expect(everything).toEqual(["frequently-bought-together", "description", "compare-similar", "reviews", "policies", "related", "recently-viewed"]);
+    const compared = toggleProductModule(below, "compare-similar", true);
+    expect(compared).toEqual(["description", "compare-similar", "reviews", "related"]);
+    const everything = (["compare-similar", "policies", "recently-viewed"] as const).reduce((list, module) => toggleProductModule(list, module, true), below);
+    expect(everything).toEqual(["description", "compare-similar", "reviews", "policies", "related", "recently-viewed"]);
     expect(toggleProductModule(everything, "policies", false)).not.toContain("policies");
     // Turning a present module on again keeps one copy.
-    expect(toggleProductModule(bundled, "frequently-bought-together", true).filter((each) => each === "frequently-bought-together")).toHaveLength(1);
+    expect(toggleProductModule(compared, "compare-similar", true).filter((each) => each === "compare-similar")).toHaveLength(1);
     const theme = storefrontTemplateTheme("department-mall");
     theme.blocks.product.below = everything;
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);

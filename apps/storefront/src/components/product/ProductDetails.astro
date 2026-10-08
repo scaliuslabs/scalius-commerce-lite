@@ -2,28 +2,20 @@
 import Icon from "@/components/icons/Icon.astro";
 import RichContent from "@/components/RichContent.astro";
 import type { Product } from "@/lib/api";
-import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
-import { pickWarrantyCopy } from "@/lib/account-warranties";
-import { warrantySpecRow } from "./warranty-spec-row";
 
 interface Props {
   product: Product;
-  copy?: Partial<CheckoutLanguageData>;
   /** False when the buy box or "About this item" already lists the key features. */
   features?: boolean;
-  /** The fashion info column reads as continuous product copy, not tabs. */
-  plain?: boolean;
 }
 
-const { product, copy, features: showFeatures = true, plain = false } = Astro.props;
+// The warranty has one home: the buy box's warranty row (WarrantyRow.astro).
+const { product, features: showFeatures = true } = Astro.props;
 const features = showFeatures ? (product.features ?? []) : [];
-// The spec table's Warranty row; until the spec table lands it sits in the description tab.
-const warrantyRow = warrantySpecRow(product, pickWarrantyCopy(copy, ENGLISH_CHECKOUT_LANGUAGE_DATA));
 
 const tabs = [];
 
-if (product.description || features.length > 0 || warrantyRow) {
+if (product.description || features.length > 0) {
   tabs.push({ id: "description", label: "Description" });
 }
 
@@ -34,30 +26,19 @@ if (product.additionalInfo && product.additionalInfo.length > 0) {
 }
 
 const hasManyTabs = tabs.length > 4;
+// One panel needs no tab bar: its heading says what it is.
+const tabbed = tabs.length > 1;
 ---
 
-{plain ? (
-  (product.description || features.length > 0 || product.additionalInfo?.length || warrantyRow) ? (
-    <div id="product-details" class="space-y-5 border-t border-border pt-4 text-sm leading-6 text-foreground" data-product-details-plain>
-      {features.length > 0 && <ul class="list-inside list-disc">{features.map((feature) => <li>{feature}</li>)}</ul>}
-      {product.description && <div class="prose prose-sm max-w-none text-foreground"><RichContent content={product.description} /></div>}
-      {product.additionalInfo?.map((section) => (
-        <section>
-          <h3 class="mb-2 font-semibold">{section.title}</h3>
-          <div class="prose prose-sm max-w-none text-foreground"><RichContent content={section.content} /></div>
-        </section>
-      ))}
-      {warrantyRow && <p><strong>{warrantyRow.label}:</strong> {warrantyRow.value}</p>}
-    </div>
-  ) : null
-) : (
+{
   tabs.length > 0 && (
     <div
       id="product-details"
       class="mt-1.5 border-t border-border pt-1.5 lg:mt-2 lg:pt-2"
     >
       <div class="product-details-tabs" data-product-details-tabs>
-        <div
+        {!tabbed && <h2 id="details-tab-description" class="mb-2 mt-2 text-base font-semibold text-foreground">{tabs[0]!.label}</h2>}
+        {tabbed && <div
           class="product-details-tab-rail relative sticky z-40 border-b border-border bg-background"
         >
           {hasManyTabs && (
@@ -123,22 +104,22 @@ const hasManyTabs = tabs.length > 4;
               />
             </>
           )}
-        </div>
+        </div>}
 
         <div class="mt-3 lg:mt-4">
-          {(product.description || features.length > 0 || warrantyRow) && (
+          {(product.description || features.length > 0) && (
             <div
               id="details-panel-description"
-              role="tabpanel"
-              aria-labelledby="details-tab-description"
+              role={tabbed ? "tabpanel" : undefined}
+              aria-labelledby={tabbed ? "details-tab-description" : undefined}
               data-tab-panel="description"
               class="tab-panel"
             >
               {features.length > 0 && (
                 <div class="mb-6">
-                  <h3 class="text-sm font-medium text-foreground mb-3">
-                    Key Features
-                  </h3>
+                  <p class="mb-3 text-sm font-semibold text-foreground">
+                    Key features
+                  </p>
                   <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                     {features.map((feature) => (
                       <li class="flex items-start">
@@ -153,12 +134,6 @@ const hasManyTabs = tabs.length > 4;
                 <div class="prose prose-sm max-w-none text-foreground">
                   <RichContent content={product.description} />
                 </div>
-              )}
-              {warrantyRow && (
-                <dl class="mt-6 grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 border-t border-border pt-3 text-sm first:mt-0 first:border-t-0 first:pt-0" data-warranty-spec-row>
-                  <dt class="text-muted-foreground">{warrantyRow.label}</dt>
-                  <dd class="text-foreground">{warrantyRow.value}</dd>
-                </dl>
               )}
             </div>
           )}
@@ -184,7 +159,7 @@ const hasManyTabs = tabs.length > 4;
       </div>
     </div>
   )
-)}
+}
 
 <script src="./scripts/product-tabs.ts"></script>
 

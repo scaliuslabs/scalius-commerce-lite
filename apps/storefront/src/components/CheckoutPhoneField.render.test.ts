@@ -102,7 +102,7 @@ async function render(properties: object) {
   return {
     html,
     field,
-    badge: field.querySelector("[data-phone-box] > span")?.textContent?.trim(),
+    badge: (field.querySelector("[data-phone-code]") ?? field.querySelector("[data-phone-box] > span"))?.textContent?.trim(),
     sentences: [...doc.querySelectorAll("#customerPhone-help > span")].map((span) => span.textContent),
     placeholder: doc.getElementById("customerPhone-input")?.getAttribute("placeholder"),
   };

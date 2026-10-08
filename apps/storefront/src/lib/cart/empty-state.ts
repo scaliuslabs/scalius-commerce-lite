@@ -26,7 +26,7 @@ export function renderEmptyCartState(
     </svg>
   `);
 
-  const title = document.createElement("h3");
+  const title = document.createElement("h2");
   title.className = "mt-2 text-lg font-medium text-foreground";
   title.textContent = lang.languageData.emptyCartText;
 

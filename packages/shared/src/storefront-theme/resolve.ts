@@ -325,7 +325,6 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
         phoneLayout: listing.phoneLayout,
         paging: listing.paging,
         surface: listing.surface,
-        gutter: listing.gutter,
         band: listing.band,
         phoneBar: listing.phoneBar,
         links: listing.links,
