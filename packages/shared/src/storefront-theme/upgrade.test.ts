@@ -171,3 +171,15 @@ describe("landing pages", () => {
     expect(theme.pages.home).toHaveLength(2);
   });
 });
+
+describe("tightened bounds inside a version", () => {
+  it("reads a stored v8 document whose filter rows were 16 px apart, raised to the 24 px target size", () => {
+    const stored = structuredClone(v8) as Record<string, any>;
+    stored.blocks ??= {};
+    stored.blocks.listing ??= {};
+    stored.blocks.listing.filters = { ...(stored.blocks.listing.filters ?? {}), rowPitch: 16 };
+    const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.blocks.listing.filters?.rowPitch).toBe(24);
+  });
+});

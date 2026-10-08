@@ -296,13 +296,26 @@ export function upgradeThemeDocumentSteps(value: unknown, currentVersion: number
     else if (Object.keys(doc).length > 0 && Object.keys(doc).every((key) => Object.hasOwn(V1_COLORS, key))) doc = { version: 1, colors: doc };
   }
   if (!Number.isInteger(doc.version) || Number(doc.version) < 1 || Number(doc.version) > currentVersion) throw new Error("Unsupported theme document version.");
-  if (doc.version === currentVersion) return doc;
+  if (doc.version === currentVersion) return withTightenedBounds(doc);
   while (doc.version !== currentVersion) {
     const step = THEME_UPGRADES[Number(doc.version)];
     if (!step) throw new Error("Missing theme document upgrade step.");
     doc = step(doc);
   }
-  return withCurrentDefaults(doc);
+  return withTightenedBounds(withCurrentDefaults(doc));
+}
+
+/**
+ * Bounds that tightened inside a document version. A stored value that was
+ * valid when saved must still read (the dashboard fails closed and the
+ * storefront falls back to the default theme on an unreadable document), so
+ * it is raised to the new minimum here. Add an entry whenever a bound tightens.
+ */
+function withTightenedBounds(doc: Record<string, unknown>): Record<string, unknown> {
+  const filters = (doc.blocks as { listing?: { filters?: { rowPitch?: unknown } } } | undefined)?.listing?.filters;
+  // WCAG 2.5.8 target size: filter rows are at least 24 px apart (was 16).
+  if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
+  return doc;
 }
 
 /** CSS Color 4 conversions: https://www.w3.org/TR/css-color-4/#color-conversion-code */
