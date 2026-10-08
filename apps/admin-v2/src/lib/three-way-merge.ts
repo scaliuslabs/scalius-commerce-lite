@@ -56,7 +56,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 /** Structural equality for JSON-like values (key order ignored). */
 export function sameValue(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
-  if ((a === undefined || a === null) && (b === undefined || b === null)) return a === b;
+  // A missing field and null both mean "no value": comparing them as different
+  // would invent a change (and a clash) where nobody changed anything.
+  if ((a === undefined || a === null) && (b === undefined || b === null)) return true;
   if (Array.isArray(a) || Array.isArray(b)) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
     return a.every((item, index) => sameValue(item, b[index]));
@@ -107,6 +109,8 @@ function topLevelPaths(base: object, other: object, fields: readonly string[] | 
 }
 
 const join = (path: string[]) => path.join(".");
+/** `prefix` is `path` or one of its ancestors. */
+const within = (prefix: string[], path: string[]) => prefix.length <= path.length && prefix.every((part, index) => part === path[index]);
 
 export function threeWayMerge<T extends object>(base: T, theirs: T, mine: T, options: MergeOptions = {}): MergeResult<T> {
   const deep = options.deep ?? true;
@@ -114,7 +118,6 @@ export function threeWayMerge<T extends object>(base: T, theirs: T, mine: T, opt
   const groupOf = (path: string[]) => groups.find(([, fields]) => fields.includes(path[0]!))?.[0] ?? null;
   const mineList = topLevelPaths(base, mine, options.fields, deep);
   const theirsList = topLevelPaths(base, theirs, options.fields, deep);
-  const theirsSet = new Set(theirsList.map(join));
 
   let merged = theirs;
   const clashes: MergeClash[] = [];
@@ -138,16 +141,22 @@ export function threeWayMerge<T extends object>(base: T, theirs: T, mine: T, opt
     clashes.push({ key: name, paths: all.map(join), ...snapshot(all) });
   }
 
+  // A change of mine meets one of theirs when the paths are equal or one holds
+  // the other (they replaced `a` while I edited `a.b`, or the reverse). The
+  // clash is then the outer path, so neither save silently overwrites the other.
+  const clashed = new Set<string>();
   for (const path of mineList) {
     const group = groupOf(path);
     if (group && clashedGroups.has(group)) continue;
-    const mineValue = getPath(mine, path);
-    if (theirsSet.has(join(path)) && !group) {
-      if (sameValue(mineValue, getPath(theirs, path))) continue;
-      clashes.push({ key: join(path), paths: [join(path)], ...snapshot([path]) });
+    const met = group ? [] : theirsList.filter((other) => within(other, path) || within(path, other));
+    if (met.length > 0) {
+      const outer = [path, ...met].reduce((shortest, other) => (other.length < shortest.length ? other : shortest));
+      if (sameValue(getPath(mine, outer), getPath(theirs, outer)) || clashed.has(join(outer))) continue;
+      clashed.add(join(outer));
+      clashes.push({ key: join(outer), paths: [join(outer)], ...snapshot([outer]) });
       continue;
     }
-    merged = setPath(merged, path, mineValue);
+    merged = setPath(merged, path, getPath(mine, path));
   }
 
   return {
