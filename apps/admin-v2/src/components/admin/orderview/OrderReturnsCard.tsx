@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { pollWhileOffline } from "~/lib/realtime/store";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";

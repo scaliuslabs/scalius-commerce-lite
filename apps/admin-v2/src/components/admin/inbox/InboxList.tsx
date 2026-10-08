@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { pollWhileOffline } from "~/lib/realtime/store";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Inbox, Search } from "lucide-react";

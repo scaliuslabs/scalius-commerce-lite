@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { pollWhileOffline } from "~/lib/realtime/store";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";

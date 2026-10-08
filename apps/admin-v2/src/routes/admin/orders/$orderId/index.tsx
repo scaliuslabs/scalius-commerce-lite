@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { pollWhileOffline } from "~/lib/realtime/store";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";

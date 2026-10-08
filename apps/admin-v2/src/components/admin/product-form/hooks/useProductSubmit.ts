@@ -24,7 +24,6 @@ import { useSkuCosts } from "../sku-costs";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
-import { realtimeMessages } from "~/i18n/realtime";
 
 const t = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
@@ -259,7 +258,7 @@ export function useProductSubmit({
       } catch (retryError) {
         return explain(retryError, values);
       }
-      toast.success(translate(realtimeMessages, "merged"));
+      void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
     }
     await afterPartsSaved(composition, revision);
     return revision;

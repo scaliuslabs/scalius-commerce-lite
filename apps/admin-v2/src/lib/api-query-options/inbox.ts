@@ -10,7 +10,7 @@ import {
   getApiV1AdminConversationsSummary,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
-import { pollWhileOffline } from "../realtime/store";
+import { pollWhileOffline } from "../admin-query-client";
 
 export type InboxQuery = ApiQuery<typeof getApiV1AdminConversations>;
 export type InboxItem = ApiResult<typeof getApiV1AdminConversations>["items"][number];

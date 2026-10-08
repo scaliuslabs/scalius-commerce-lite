@@ -1,14 +1,13 @@
 import { useCallback, useContext, useEffect, useRef, useState, type SetStateAction } from "react";
-import { PresenceScopeContext, announceSave } from "~/lib/realtime/store";
+import { announceSave } from "~/lib/realtime/store";
+import { PresenceScopeContext } from "~/lib/realtime/presence";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
-import { formatNumber, translate } from "~/i18n";
+import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
-import { realtimeMessages } from "~/i18n/realtime";
-import { mergeDisplayValue, requestMergeChoice } from "~/lib/merge-choice";
-import { resolveMerge, threeWayMerge, type MergeOptions } from "~/lib/three-way-merge";
+import type { MergeOptions } from "~/lib/three-way-merge";
 
 /**
  * A settings document's revision as its GET returns it (`data.revision`): a
@@ -41,27 +40,6 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
    */
   coupled?: MergeOptions["coupled"];
 }
-
-/** The label the page shows for a field: its control's `<label>`, else the key in words. */
-function fieldLabel(path: string, fields: SaveBarEntry["fields"] | undefined): string {
-  const lookup = (key: string) => typeof fields === "function" ? fields(key) : fields?.[key];
-  const controlId = lookup(path) ?? lookup(path.split(".")[0]!);
-  if (controlId && typeof document !== "undefined" && typeof CSS !== "undefined") {
-    const text = document.querySelector(`label[for="${CSS.escape(controlId)}"]`)?.textContent?.trim();
-    if (text) return text;
-  }
-  const last = path.split(".").pop() ?? path;
-  const words = last.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-const mergeWords = () => ({
-  empty: translate(realtimeMessages, "emptyValue"),
-  on: translate(realtimeMessages, "valueOn"),
-  off: translate(realtimeMessages, "valueOff"),
-  items: (count: number) => translate(realtimeMessages, "valueItems", { count }),
-  number: (value: number) => formatNumber(value),
-});
 
 export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
   const next = { ...incoming };
@@ -172,23 +150,9 @@ export function useSettingsForm<
     const revision = readRevision(latest);
     if (revision === undefined) return null;
     const theirs = formValues(defaultValuesRef.current, latest);
-    const result = threeWayMerge(savedValuesRef.current, theirs, draft, { coupled });
-    let values = result.merged;
-    if (result.clashes.length > 0) {
-      const words = mergeWords();
-      const choices = await requestMergeChoice({
-        rows: result.clashes.map((clash) => ({
-          key: clash.key,
-          label: clash.paths.length > 1 ? clash.paths.map((path) => fieldLabel(path, fields)).join(", ") : fieldLabel(clash.key, fields),
-          theirs: clash.paths.map((path) => mergeDisplayValue(clash.theirs[path], words)).join(" · "),
-          mine: clash.paths.map((path) => mergeDisplayValue(clash.mine[path], words)).join(" · "),
-          coupled: clash.paths.length > 1,
-        })),
-      });
-      if (!choices) return null;
-      values = resolveMerge(result, choices);
-    }
-    return { values, theirs, revision: revision as R };
+    const { mergeSettingsDraft } = await import("~/lib/merge-document");
+    const values = await mergeSettingsDraft(savedValuesRef.current, theirs, draft, { coupled, fields });
+    return values ? { values, theirs, revision: revision as R } : null;
   };
 
   const mutation = useMutation({
@@ -212,7 +176,7 @@ export function useSettingsForm<
       }
     },
     onSuccess: async ({ result, submitted: submittedValues, merged }) => {
-      if (merged) toast.success(translate(realtimeMessages, "merged"));
+      if (merged) void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
       if (scopeKey) announceSave(scopeKey, null);
       const savedRevision = readRevision(result);
       const resolved = resolveSavedValues?.(result, submittedValues);

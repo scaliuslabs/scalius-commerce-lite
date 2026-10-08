@@ -10,7 +10,7 @@ import {
   getApiV1AdminReviewsSummary,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
-import { pollWhileOffline } from "../realtime/store";
+import { pollWhileOffline } from "../admin-query-client";
 
 export type AdminReviewQuery = Omit<ApiQuery<typeof getApiV1AdminReviews>, "cursor">;
 export type AdminReview = ApiResult<typeof getApiV1AdminReviews>["items"][number];

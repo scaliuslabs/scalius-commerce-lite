@@ -28,12 +28,8 @@ import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pageHead } from "~/i18n/page-titles";
 import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
-import { formatNumber } from "~/i18n";
-import { realtimeMessages } from "~/i18n/realtime";
 import { presenceKey } from "@scalius/shared/realtime";
 import { EditorPresence } from "~/components/admin/realtime/EditorPresence";
-import { mergeDisplayValue, requestMergeChoice } from "~/lib/merge-choice";
-import { threeWayMerge } from "~/lib/three-way-merge";
 import { announceSave } from "~/lib/realtime/store";
 
 /**
@@ -253,6 +249,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
     for (const key of draft.changed) mine[key] = draft.values[key];
     // An unsaved variant draft counts as a change to the composition.
     if (matrix.dirty) mine[VARIANTS_FIELD] = `${before[VARIANTS_FIELD]}:draft`;
+    const { clashRows, mergeDisplayValue, mergeWords, requestMergeChoice, threeWayMerge } = await import("~/lib/merge-document");
     const result = threeWayMerge(before, after, mine, { deep: false, coupled: { pricing: PRICING_GROUP } });
     const blocked = sections.overlaps.length > 0 || result.clashes.some((clash) => clash.paths.includes(VARIANTS_FIELD));
     const labels = result.clashes.flatMap((clash) => clash.paths.filter((path) => path !== VARIANTS_FIELD)
@@ -268,24 +265,12 @@ function ProductEditor({ productId, initialProduct, categories }: {
     }
     let keep: Array<keyof ProductFormValues> = draft.changed;
     if (result.clashes.length > 0) {
-      const words = {
-        empty: translate(realtimeMessages, "emptyValue"),
-        on: translate(realtimeMessages, "valueOn"),
-        off: translate(realtimeMessages, "valueOff"),
-        items: (count: number) => translate(realtimeMessages, "valueItems", { count }),
-        number: (value: number) => formatNumber(value),
-      };
+      const words = mergeWords();
       const show = (path: string, value: unknown) => path === "categoryId"
         ? categories.find((category) => category.id === value)?.name ?? mergeDisplayValue(value, words)
         : mergeDisplayValue(value, words);
       const choices = await requestMergeChoice({
-        rows: result.clashes.map((clash) => ({
-          key: clash.key,
-          label: [...new Set(clash.paths.map((path) => productFieldLabel(path as keyof ProductFormValues)))].join(", "),
-          theirs: clash.paths.map((path) => show(path, clash.theirs[path])).join(" · "),
-          mine: clash.paths.map((path) => show(path, clash.mine[path])).join(" · "),
-          coupled: clash.paths.length > 1,
-        })),
+        rows: clashRows(result.clashes, (path) => productFieldLabel(path as keyof ProductFormValues), show),
       });
       if (!choices) {
         openDialog();

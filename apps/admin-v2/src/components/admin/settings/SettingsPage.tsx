@@ -23,7 +23,7 @@ import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
 import { presenceKey } from "@scalius/shared/realtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditorPresence } from "../realtime/EditorPresence";
-import { PresenceScopeContext } from "~/lib/realtime/store";
+import { PresenceScopeContext } from "~/lib/realtime/presence";
 import type { SettingsCardId } from "./settings-search";
 
 type SettingsNavTo = (typeof SETTINGS_NAV)[number]["to"];

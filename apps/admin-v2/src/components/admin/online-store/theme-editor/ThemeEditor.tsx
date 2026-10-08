@@ -15,8 +15,8 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
-import { PresenceAvatars } from "~/components/admin/realtime/EditorPresence";
-import { useEditorPresence } from "~/lib/realtime/store";
+import { PresenceAvatars } from "~/components/admin/realtime/PresenceView";
+import { useEditorPresence } from "~/lib/realtime/presence";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
