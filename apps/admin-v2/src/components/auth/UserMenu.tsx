@@ -2,7 +2,8 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const UserMenuContent = lazy(() => import("./UserMenuContent"));
+const loadUserMenuContent = () => import("./UserMenuContent");
+const UserMenuContent = lazy(loadUserMenuContent);
 
 export interface UserMenuUser {
   id: string;
@@ -34,7 +35,14 @@ export function UserAvatar({ user }: { user: UserMenuUser }) {
 export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "top" | "bottom"; children: ReactNode }) {
   const [asked, setAsked] = useState(false);
   // `contents` keeps the wrapper out of layout; a click (or Enter) on the button reaches it.
-  if (!asked) return <span className="contents" onClickCapture={() => setAsked(true)}>{children}</span>;
+  // Hover or focus starts the download, so the menu is usually ready by the click.
+  if (!asked) {
+    return (
+      <span className="contents" onPointerOverCapture={() => void loadUserMenuContent()} onFocusCapture={() => void loadUserMenuContent()} onClickCapture={() => setAsked(true)}>
+        {children}
+      </span>
+    );
+  }
   return (
     <Suspense fallback={<span className="contents">{children}</span>}>
       <UserMenuContent user={user} side={side} defaultOpen>{children}</UserMenuContent>
