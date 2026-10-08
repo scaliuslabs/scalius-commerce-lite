@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { translate, useMessages } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderToastMessages } from "~/i18n/order-toasts";
 import { resourceMessages } from "~/i18n/resource";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import type { Order, OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
@@ -171,7 +172,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
   const kind = classifyAdminError(error);
   const notFound = kind === "notFound";
   const [title, help] = kind === "notFound" ? [t("notFound"), t("notFoundHelp")]
-    : kind === "network" ? [t("error.network"), t("error.networkHelp")]
+    : kind === "network" ? [translate(orderToastMessages, "error.network"), t("error.networkHelp")]
       : kind === "server" ? [t("loadFailed"), translate(saveBarMessages, "serverError")]
         : [t("loadFailed"), error.message];
   return (

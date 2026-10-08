@@ -78,6 +78,7 @@ import {
 import { translate, useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { orderDetailMessages } from "@/i18n/order-detail";
+import { orderToastMessages } from "@/i18n/order-toasts";
 import { resourceMessages } from "@/i18n/resource";
 import { matchesShortcut } from "./layout/shortcuts";
 import { addressProblemMessages, useAddressErrors } from "./address/AddressFields";
@@ -242,7 +243,7 @@ export function OrderForm(props: OrderFormProps) {
   return (
     <SaveBarProvider
       unsavedLabel={isEdit ? undefined : t("unsavedOrder")}
-      savedMessage={d(isEdit ? "toast.orderUpdated" : "toast.orderCreated")}
+      savedMessage={isEdit ? translate(orderToastMessages, "toast.orderUpdated") : d("toast.orderCreated")}
     >
       <OrderEditor {...props} />
     </SaveBarProvider>
