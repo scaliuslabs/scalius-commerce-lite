@@ -86,6 +86,19 @@ describe("publications", () => {
         ]);
     });
 
+    it("counts the products a channel's link lists: trashed products are left out", async () => {
+        sqlite.prepare("UPDATE products SET deleted_at = 1 WHERE id = 'prod_cap'").run();
+        const counts = (await listSalesChannels(db)).map((channel) => [channel.id, channel.publishedProducts]);
+        expect(counts).toEqual([
+            [ONLINE_STORE_CHANNEL_ID, 1],
+            [GOOGLE_CHANNEL_ID, 1],
+            [META_CHANNEL_ID, 1],
+            [AGENTS_CHANNEL_ID, 1],
+        ]);
+        sqlite.prepare("UPDATE products SET deleted_at = NULL WHERE id = 'prod_cap'").run();
+        expect((await listSalesChannels(db))[0]!.publishedProducts).toBe(2);
+    });
+
     it("takes a product unpublished from the online store off its page, listings and every feed", async () => {
         await setProductPublications(db, { productIds: ["prod_cap"], channelIds: [ONLINE_STORE_CHANNEL_ID], action: "unpublish" });
         expect(await getStorefrontProductBySlug(db, "prod-cap")).toBeNull();
