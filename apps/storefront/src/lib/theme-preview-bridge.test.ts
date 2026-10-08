@@ -217,7 +217,7 @@ describe("the storefront preview bridge", () => {
     connect(harness);
     harness.fetch.mockResolvedValue(html(UNIT("story", "Our new story")));
     const body = { scope: { kind: "home" }, sections: [], only: "story" };
-    harness.deliver({ source: EDITOR, type: "render", body, after: null });
+    harness.deliver({ source: EDITOR, type: "render", body, after: null, seq: 7 });
     await vi.waitFor(() => expect(harness.window.document.body.textContent).toContain("Our new story"));
     expect(harness.fetch).toHaveBeenCalledWith("/theme-preview/render", expect.objectContaining({
       method: "POST", credentials: "same-origin", cache: "no-store", body: JSON.stringify(body),
@@ -226,8 +226,29 @@ describe("the storefront preview bridge", () => {
     expect(harness.window.document.body.textContent).toContain("Questions");
     expect(harness.shown()).toEqual(["story", "faq", "seo"]);
     expect(harness.of("render-failed")).toEqual([]);
-    // The page says its marks again after a swap.
-    await vi.waitFor(() => expect(harness.of("ready")).toHaveLength(2));
+    // The render is acknowledged once it landed, with the page's marks; the page does not say ready again.
+    await vi.waitFor(() => expect(harness.of("ack")).toEqual([{ source: "scalius-theme-preview", type: "ack", seq: 7, marks: ["story", "faq", "seo"] }]));
+    expect(harness.of("ready")).toHaveLength(1);
+  });
+
+  it("acknowledges each command once applied, a failed render too, and nothing before it connects", async () => {
+    const harness = start();
+    harness.deliver({ source: EDITOR, type: "tokens", vars: { "color-bg": "#ffffff" }, seq: 1 });
+    expect(harness.of("ack")).toEqual([]);
+    connect(harness);
+    harness.deliver({ source: EDITOR, type: "tokens", vars: { "color-bg": "#ffffff" }, seq: 2 });
+    harness.deliver({ source: EDITOR, type: "reveal", id: "faq", seq: 3 });
+    harness.deliver({ source: EDITOR, type: "arrange", region: "page", order: ["faq", "story"], seq: 4 });
+    harness.deliver({ source: EDITOR, type: "text", id: "faq", from: "Questions", to: "Questions?", seq: 5 });
+    harness.deliver({ source: EDITOR, type: "inspector", on: false, seq: 6 });
+    expect(harness.of("ack").map((message) => message.seq)).toEqual([2, 3, 4, 5, 6]);
+    harness.fetch.mockResolvedValueOnce(new Response("", { status: 500 }));
+    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null, seq: 8 });
+    await vi.waitFor(() => expect(harness.of("ack").at(-1)).toEqual({ source: "scalius-theme-preview", type: "ack", seq: 8 }));
+    expect(harness.of("render-failed")).toHaveLength(1);
+    harness.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ css: ":root{}", fonts: "", attributes: {} }), { headers: { "Content-Type": "application/json" } }));
+    harness.deliver({ source: EDITOR, type: "paint", theme: { version: 8 }, seq: 9 });
+    await vi.waitFor(() => expect(harness.of("ack").at(-1)).toMatchObject({ seq: 9 }));
   });
 
   it("places a new section after its neighbour, and hides one the route no longer draws", async () => {

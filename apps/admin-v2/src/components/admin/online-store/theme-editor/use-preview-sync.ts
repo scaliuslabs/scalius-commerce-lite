@@ -24,8 +24,8 @@ type Theme = StorefrontThemeDocument;
 
 const same = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
 
-/** Typing settles this long before a section is drawn again. */
-export const PREVIEW_RENDER_DELAY_MS = 250;
+/** Edits settle this long before a section is drawn again (typed words show at once by the `text` patch). */
+export const PREVIEW_RENDER_DELAY_MS = 90;
 
 /** The string values that changed between two values (same shape), each with where it was. */
 export function changedTexts(before: unknown, after: unknown, limit = 12): Array<{ from: string; to: string }> {
@@ -59,7 +59,7 @@ function needsWholePage(before: Theme, after: Theme, page: EditorPage): boolean 
     || (page.kind === "home" && !same(before.pages.homeMode, after.pages.homeMode));
 }
 
-export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, onNeedSave }: {
+export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave }: {
   send: (command: PreviewCommand) => void;
   reload: () => void;
   /** Bumps each time a frame connects (it shows the saved draft then). */
@@ -70,6 +70,8 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   savedTheme: Theme;
   page: EditorPage;
   presence: string | null;
+  /** The marks the shown page has (a moved or shown section already drawn needs no render). */
+  marks: readonly string[];
   /** A change only a reload shows: save it now. */
   onNeedSave: () => void;
 }) {
@@ -79,8 +81,8 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   const paintTimer = useRef(0);
   /** A change waits for its save, then the page loads again. */
   const reloadAfterSave = useRef(false);
-  const latest = useRef({ sendable, page, presence });
-  latest.current = { sendable, page, presence };
+  const latest = useRef({ sendable, page, presence, marks });
+  latest.current = { sendable, page, presence, marks };
 
   // A frame that connects shows the saved draft.
   useEffect(() => {
@@ -119,7 +121,7 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
       paintTimer.current = window.setTimeout(() => {
         const document = latest.current.sendable;
         if (document && same(document.tokens, shown.current?.tokens)) send({ type: "paint", theme: document });
-      }, 150);
+      }, PREVIEW_RENDER_DELAY_MS);
     }
 
     // The page's sections: moved and hidden at once, then drawn from the unsaved document.
@@ -129,15 +131,22 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
     const mainMoved = scope?.kind === "template" && pageScope(before, page)?.kind === "template"
       && (pageScope(before, page) as { main: number }).main !== scope.main;
     if (!sameShape(was, now) || mainMoved) {
+      const shownIds: string[] = [];
       if (scope) {
         for (const region of storefrontScopeRegions({ ...working.pages }, scope)) {
-          send({ type: "arrange", region: region.region, order: region.sections.filter((section) => !section.hidden).map((section) => section.id) });
+          const order = region.sections.filter((section) => !section.hidden).map((section) => section.id);
+          shownIds.push(...order);
+          send({ type: "arrange", region: region.region, order });
         }
       }
-      later("regions", PREVIEW_RENDER_DELAY_MS, () => {
-        const body = renderBody({});
-        if (body) send({ type: "render", body, after: null });
-      });
+      // A move or hide of sections the page already drew is done; a section it lacks (added, or hidden when it loaded) needs a render.
+      const drawn = new Set(latest.current.marks);
+      if (mainMoved || !shownIds.every((id) => drawn.has(id))) {
+        later("regions", PREVIEW_RENDER_DELAY_MS, () => {
+          const body = renderBody({});
+          if (body) send({ type: "render", body, after: null });
+        });
+      }
     } else {
       for (const section of now) {
         const old = was.find((each) => each.id === section.id);

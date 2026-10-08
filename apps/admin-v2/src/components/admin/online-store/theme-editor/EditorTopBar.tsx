@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,16 +43,21 @@ import {
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { DESKTOP_WIDTHS, scalePercent, type DesktopWidth, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
+import { shortcutCaps } from "./EditorShortcuts";
 
-/** A plain control on the dark bar (the dashboard's top bar tokens). Menus open from it (it forwards its ref). */
-export const TopBarButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; pressed?: boolean }>(
-  function TopBarButton({ label, pressed, className, children, ...props }, ref) {
-    return (
+/**
+ * A plain control on the dark bar (the dashboard's top bar tokens), with
+ * the app's tooltip and its shortcut. A menu trigger (it forwards its ref)
+ * passes `tip={false}`: the menu's own trigger cannot also be a tooltip's.
+ */
+export const TopBarButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; pressed?: boolean; shortcut?: string; tip?: boolean }>(
+  function TopBarButton({ label, pressed, shortcut, tip = true, className, children, ...props }, ref) {
+    const button = (
       <button
         ref={ref}
         type="button"
         aria-label={label}
-        title={label}
+        title={tip ? undefined : label}
         aria-pressed={pressed}
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-lg text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-40 aria-pressed:bg-topbar-subdued pointer-coarse:size-11 [&_svg]:size-4",
@@ -61,6 +67,16 @@ export const TopBarButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<H
       >
         {children}
       </button>
+    );
+    if (!tip) return button;
+    return (
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="bottom">
+          {label}
+          {shortcut ? <kbd className="ms-2 font-mono text-muted-foreground">{shortcut}</kbd> : null}
+        </TooltipContent>
+      </Tooltip>
     );
   },
 );
@@ -78,13 +94,15 @@ const STATUS_DOT: Record<SaveStatus, string> = {
 };
 
 export function EditorTopBar({
-  status, heldCount, onRetry, live, canEdit, sidebarOpen, onToggleSidebar, pagePicker, market, device, onDevice, desktopWidth, onDesktopWidth,
-  zoom, onZoom, scale, inspector, onInspector, canUndo, canRedo, onUndo, onRedo, onHistory, onShortcuts, onDraftWithAi, onOpenPreview,
+  status, heldCount, onRetry, onShowProblem, live, canEdit, sidebarOpen, onToggleSidebar, pagePicker, market, device, onDevice, desktopWidth, onDesktopWidth,
+  zoom, onZoom, scale, inspector, onInspector, canUndo, canRedo, onUndo, onRedo, onHistory, onShortcuts, onDraftWithAi, draftHere, onOpenPreview,
   canDiscard, onDiscard, canPublish, publishing, onPublish, phone,
 }: {
   status: SaveStatus;
   heldCount: number;
   onRetry: () => void;
+  /** Opens the first setting to fix. */
+  onShowProblem?: () => void;
   /** The draft matches what is live. */
   live: boolean;
   canEdit: boolean;
@@ -108,6 +126,8 @@ export function EditorTopBar({
   onHistory: () => void;
   onShortcuts: () => void;
   onDraftWithAi: (() => void) | null;
+  /** The page has sections to draft into (search results have none). */
+  draftHere: boolean;
   onOpenPreview: (() => void) | null;
   canDiscard: boolean;
   onDiscard: () => void;
@@ -118,7 +138,11 @@ export function EditorTopBar({
   phone: boolean;
 }) {
   const t = useMessages(themeEditorMessages);
-  const statusText = status === "held" ? (heldCount === 1 ? t("statusHeldOne") : t("statusHeld", { count: heldCount })) : t(`status_${status}`);
+  /** A width as the merchant reads it: "Fit width", or "1280 px" (no thousands separator). */
+  const sizeName = (width: DesktopWidth | 390) => (width === "fill" ? t("widthFill") : t("widthPx", { width: String(width) }));
+  const statusText = status === "held" ? (heldCount === 1 ? t("statusHeldOne") : t("statusHeld", { count: heldCount }))
+    : status === "saved" && live ? t("status_noChanges")
+      : t(`status_${status}`);
   return (
     <header
       data-editor-topbar
@@ -138,7 +162,7 @@ export function EditorTopBar({
           {phone ? null : <span className="hidden lg:inline">{t("themeShort")}</span>}
         </Link>
         {phone ? null : (
-          <TopBarButton label={t("toggleSidebar")} pressed={!sidebarOpen} onClick={onToggleSidebar} aria-keyshortcuts="\">
+          <TopBarButton label={t("toggleSidebar")} shortcut={shortcutCaps("sidebar")} pressed={!sidebarOpen} onClick={onToggleSidebar} aria-keyshortcuts="\">
             <PanelLeftClose aria-hidden="true" />
           </TopBarButton>
         )}
@@ -148,7 +172,13 @@ export function EditorTopBar({
         {/* One save status, always there; a phone shows its dot (the words stay for screen readers). */}
         <span role="status" aria-live="polite" data-save-status={status} className={cn("flex min-w-0 shrink-0 items-center gap-1.5 px-1 text-body", phone ? "w-6" : "w-44")}>
           <span className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])} aria-hidden="true" />
-          <span className={cn("min-w-0 truncate max-xl:sr-only", phone && "sr-only")}>{statusText}</span>
+          {status === "held" && onShowProblem ? (
+            <button type="button" onClick={onShowProblem} className={cn("min-w-0 truncate text-start underline decoration-dotted underline-offset-2 hover:text-topbar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress", phone ? "sr-only focus:not-sr-only" : "max-xl:sr-only")}>
+              {statusText}
+            </button>
+          ) : (
+            <span className={cn("min-w-0 truncate max-xl:sr-only", phone && "sr-only")}>{statusText}</span>
+          )}
           {status === "failed" ? (
             <button type="button" onClick={onRetry} className="shrink-0 text-body text-topbar-progress underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress">{t("retry")}</button>
           ) : null}
@@ -183,12 +213,13 @@ export function EditorTopBar({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={t("frameSize", { width: device === "phone" ? 390 : desktopWidth, scale: scalePercent(scale) })}
-                className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex"
+                aria-label={t("frameSize", { size: sizeName(device === "phone" ? 390 : desktopWidth), scale: String(scalePercent(scale)) })}
+                // A fixed width: switching device never moves the controls beside it.
+                className="hidden h-9 w-24 shrink-0 items-center justify-between gap-1 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex xl:w-44"
               >
-                <span className="hidden tabular-nums xl:inline">{device === "phone" ? t("device_phone") : t("desktopWidth", { width: desktopWidth })}</span>
-                <span className="w-9 text-end font-medium tabular-nums">{scalePercent(scale)}%</span>
-                <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
+                <span className="hidden min-w-0 truncate tabular-nums xl:inline">{device === "phone" ? t("device_phone") : sizeName(desktopWidth)}</span>
+                <span className="font-medium tabular-nums">{scalePercent(scale)}%</span>
+                <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center">
@@ -201,9 +232,9 @@ export function EditorTopBar({
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>{t("frameWidth")}</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup value={String(desktopWidth)} onValueChange={(value) => onDesktopWidth(Number(value) as DesktopWidth)}>
+                  <DropdownMenuRadioGroup value={String(desktopWidth)} onValueChange={(value) => onDesktopWidth(value === "fill" ? "fill" : Number(value) as DesktopWidth)}>
                     {DESKTOP_WIDTHS.map((width) => (
-                      <DropdownMenuRadioItem key={width} value={String(width)}>{t("desktopWidth", { width })}</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem key={width} value={String(width)}>{sizeName(width)}</DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
                 </>
@@ -218,14 +249,12 @@ export function EditorTopBar({
             <MousePointer2 aria-hidden="true" />
           </TopBarButton>
         )}
-        <TopBarButton label={t("undo")} disabled={!canUndo || !canEdit} onClick={onUndo} aria-keyshortcuts="Meta+Z Control+Z">
+        <TopBarButton label={t("undo")} shortcut={shortcutCaps("undo")} disabled={!canUndo || !canEdit} onClick={onUndo} aria-keyshortcuts="Meta+Z Control+Z">
           <Undo2 aria-hidden="true" />
         </TopBarButton>
-        {phone ? null : (
-          <TopBarButton label={t("redo")} disabled={!canRedo || !canEdit} onClick={onRedo} className="hidden md:grid" aria-keyshortcuts="Meta+Shift+Z Control+Y">
-            <Redo2 aria-hidden="true" />
-          </TopBarButton>
-        )}
+        <TopBarButton label={t("redo")} shortcut={shortcutCaps("redo")} disabled={!canRedo || !canEdit} onClick={onRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y">
+          <Redo2 aria-hidden="true" />
+        </TopBarButton>
         {phone ? null : (
           <TopBarButton label={t("versions")} onClick={onHistory} className="hidden lg:grid">
             <History aria-hidden="true" />
@@ -233,18 +262,25 @@ export function EditorTopBar({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <TopBarButton label={t("moreActions")}>
+            <TopBarButton label={t("moreActions")} tip={false}>
               <MoreHorizontal aria-hidden="true" />
             </TopBarButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem className="md:hidden" disabled={!canRedo || !canEdit} onSelect={onRedo}><Redo2 aria-hidden="true" />{t("redo")}</DropdownMenuItem>
             <DropdownMenuItem className="lg:hidden" onSelect={onHistory}><History aria-hidden="true" />{t("versions")}</DropdownMenuItem>
             <DropdownMenuItem className="lg:hidden" onSelect={() => onInspector(!inspector)}>
               <MousePointer2 aria-hidden="true" />{t(inspector ? "inspectorOff" : "inspectorOn")}
               {inspector ? <Check className="ms-auto" aria-hidden="true" /> : null}
             </DropdownMenuItem>
-            {onDraftWithAi ? <DropdownMenuItem onSelect={onDraftWithAi}><Sparkles aria-hidden="true" />{t("draftWithAiMenu")}</DropdownMenuItem> : null}
+            {onDraftWithAi ? (
+              <DropdownMenuItem disabled={!draftHere} onSelect={onDraftWithAi}>
+                <Sparkles aria-hidden="true" />
+                <span className="flex flex-col">
+                  {t("draftWithAiMenu")}
+                  {draftHere ? null : <span className="text-caption text-muted-foreground">{t("aiNotHere")}</span>}
+                </span>
+              </DropdownMenuItem>
+            ) : null}
             {onOpenPreview ? <DropdownMenuItem onSelect={onOpenPreview}><ExternalLink aria-hidden="true" />{t("preview")}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={onShortcuts}><Keyboard aria-hidden="true" />{t("shortcuts")}</DropdownMenuItem>
             <DropdownMenuSeparator />

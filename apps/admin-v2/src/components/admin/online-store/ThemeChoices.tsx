@@ -34,7 +34,7 @@ export function VisualChoice<Value extends string>({
   /** Null when no option matches (a fine-tuned Style). */
   value: Value | null;
   /** `badge` sits beside the name (a template's default, say). */
-  options: ReadonlyArray<{ value: Value; label: string; help?: string; badge?: ReactNode; sketch: ReactNode }>;
+  options: ReadonlyArray<{ value: Value; label: string; help?: string; badge?: ReactNode; sketch: ReactNode; unavailable?: string }>;
   onChange: (value: Value) => void;
   /** Grid columns. */
   className?: string;
@@ -53,7 +53,9 @@ export function VisualChoice<Value extends string>({
           <RadioGroupPrimitive.Item
             key={option.value}
             value={option.value}
-            className="group flex flex-col rounded-xl border bg-card p-1.5 text-start hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
+            // An option the store cannot show yet stays readable (with why), and cannot be chosen; a chosen one stays chosen.
+            disabled={option.unavailable !== undefined && option.value !== value}
+            className="group flex flex-col rounded-xl border bg-card p-1.5 text-start hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
           >
             {option.sketch}
             <span className="flex items-start justify-between gap-1 px-1 pt-1.5 text-body font-medium">
@@ -67,7 +69,9 @@ export function VisualChoice<Value extends string>({
                 <Check className="size-4 shrink-0" aria-hidden="true" />
               </span>
             </span>
-            {option.help ? (
+            {option.unavailable ? (
+              <span className="block px-1 pb-0.5 text-body text-muted-foreground">{option.unavailable}</span>
+            ) : option.help ? (
               <span className="block px-1 pb-0.5 text-body text-muted-foreground">{option.help}</span>
             ) : null}
           </RadioGroupPrimitive.Item>

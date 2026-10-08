@@ -9,16 +9,9 @@
  * in the preview.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type Announcements } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ChevronRight, Eye, EyeOff, GripVertical, MoreHorizontal, Plus, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronRight, CircleAlert, Eye, EyeOff, GripVertical, Info, MoreHorizontal, Plus, Sparkles, type LucideIcon } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -56,6 +49,8 @@ export interface TreeItemModel {
 export interface TreeGroupModel {
   id: string;
   label: string;
+  /** The tree's own name when the visible heading is not enough ("Sections on Home page"). */
+  treeLabel?: string;
   /** Shared on every page: drawn in the shared colour. */
   shared?: boolean;
   note?: string;
@@ -127,7 +122,7 @@ function Row({ entry, selected, focused, expanded, picked, onFocusRow, onSelect,
         else onSelect();
       }}
       className={cn(
-        "group relative flex min-h-10 translate-y-(--sort-y) cursor-pointer items-center gap-0.5 rounded-lg ps-(--indent) pe-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative flex h-10 translate-y-(--sort-y) cursor-pointer items-center gap-0.5 rounded-lg ps-(--indent) pe-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
         selected && "bg-accent",
         picked && "bg-accent ring-2 ring-ring",
         sortable.isDragging ? "z-20 bg-card opacity-80 shadow-popover" : "transition-[translate] duration-200 motion-reduce:transition-none",
@@ -160,17 +155,21 @@ function Row({ entry, selected, focused, expanded, picked, onFocusRow, onSelect,
         <span className="size-7 shrink-0" aria-hidden="true" />
       )}
       {Icon ? <span className="flex h-lh items-center text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span> : null}
-      <span className="min-w-0 flex-1 py-1.5 ps-1.5">
-        <span className={cn("flex items-center gap-1.5 text-body", (item.hidden || item.add) && "text-muted-foreground")}>
-          <span className="truncate">{item.name}</span>
-          {item.badge === "ai" ? (
-            <Badge variant="info" className="shrink-0"><Sparkles aria-hidden="true" />{t("aiDraftBadge")}</Badge>
-          ) : item.badge === "app" ? (
-            <Badge variant="secondary" className="shrink-0">{t("appBadge")}</Badge>
-          ) : null}
-        </span>
+      {/* One line for every row (research P14): a note is an icon, its words on hover and for screen readers. */}
+      <span className={cn("flex min-w-0 flex-1 items-center gap-1.5 ps-1.5 text-body", (item.hidden || item.add) && "text-muted-foreground")} title={item.note}>
+        <span className="truncate">{item.name}</span>
+        {item.badge === "ai" ? (
+          <Badge variant="info" className="shrink-0"><Sparkles aria-hidden="true" />{t("aiDraftBadge")}</Badge>
+        ) : item.badge === "app" ? (
+          <Badge variant="secondary" className="shrink-0">{t("appBadge")}</Badge>
+        ) : null}
         {item.note ? (
-          <span className={cn("block text-body", item.noteTone === "critical" ? "text-destructive" : "text-muted-foreground")}>{item.note}</span>
+          <>
+            {item.noteTone === "critical"
+              ? <CircleAlert className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+              : <Info className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+            <span className="sr-only">{item.note}</span>
+          </>
         ) : null}
       </span>
       {item.onToggleHidden ? (
@@ -182,7 +181,6 @@ function Row({ entry, selected, focused, expanded, picked, onFocusRow, onSelect,
             size="icon-sm"
             tabIndex={-1}
             aria-label={t(item.hidden ? "showItem" : "hideItem", { name: item.name })}
-            aria-pressed={!item.hidden}
             onClick={item.onToggleHidden}
           >
             {item.hidden ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
@@ -352,6 +350,22 @@ function GroupTree({ group, selected, expanded, setExpanded, onSelect, onHover, 
     onMove(from.list, from.index, to.index);
   };
 
+  const nameOf = (id: string | number) => rows.find((row) => row.item.id === id)?.item.name ?? "";
+  const placeOf = (id: string | number) => rows.find((row) => row.item.id === id)?.item.move;
+  const announcements: Announcements = {
+    onDragStart: ({ active: dragged }) => {
+      const place = placeOf(dragged.id);
+      return place ? t("pickedUp", { name: nameOf(dragged.id), position: place.index + 1, count: place.count }) : undefined;
+    },
+    onDragOver: () => undefined,
+    onDragMove: () => undefined,
+    onDragEnd: ({ active: dragged, over }) => {
+      const place = placeOf(over?.id ?? dragged.id);
+      return place ? t("dropped", { name: nameOf(dragged.id), position: place.index + 1, count: place.count }) : undefined;
+    },
+    onDragCancel: ({ active: dragged }) => t("cancelled", { name: nameOf(dragged.id) }),
+  };
+
   const lists = new Map<string, string[]>();
   for (const row of rows) if (row.item.move) lists.set(row.item.move.list, [...(lists.get(row.item.move.list) ?? []), row.item.id]);
 
@@ -388,11 +402,11 @@ function GroupTree({ group, selected, expanded, setExpanded, onSelect, onHover, 
         {group.label}
       </h2>
       {group.note ? <p role="status" className="px-2 pb-1 text-body text-muted-foreground">{group.note}</p> : null}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dragEnd} accessibility={{ announcements, screenReaderInstructions: { draggable: t("treeDragHelp") } }}>
         {[...lists.entries()].reduce<ReactNode>((children, [list, ids]) => (
           <SortableContext key={list} items={ids} strategy={verticalListSortingStrategy}>{children}</SortableContext>
         ), (
-          <ul role="tree" aria-labelledby={`tree-${group.id}`} className="space-y-0.5" onKeyDown={keyDown}>
+          <ul role="tree" aria-label={group.treeLabel} aria-labelledby={group.treeLabel ? undefined : `tree-${group.id}`} className="space-y-0.5" onKeyDown={keyDown}>
             {renderRows()}
           </ul>
         ))}

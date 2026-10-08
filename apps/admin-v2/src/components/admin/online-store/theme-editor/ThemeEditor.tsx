@@ -23,6 +23,7 @@ import {
   STOREFRONT_SECTION_RENDERERS,
   failedFitConditions,
   isStorefrontAppSection,
+  storefrontSectionBlockLists,
   storefrontSettingAt,
   type StorefrontPlatformSection,
   type StorefrontSection,
@@ -50,6 +51,8 @@ import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/a
 import { languageName } from "../../translations/translation-form";
 import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
+import { settingErrors } from "../schema-form/errors";
+import { useFitReason } from "../theme-fields";
 import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
@@ -95,7 +98,7 @@ import {
 import { EditorTopBar, MarketSwitcher, TopBarButton } from "./EditorTopBar";
 import { ShortcutsDialog, matchesEditorShortcut } from "./EditorShortcuts";
 import { LayerTree } from "./LayerTree";
-import { CreateLandingDialog, PagePicker, PreviewResource, useDefaultResource, usePageName } from "./PagePicker";
+import { CreateLandingDialog, PagePicker, PageStrip, PreviewResource, useDefaultResource, usePageName } from "./PagePicker";
 import type { LibraryChoice, LibraryOption } from "./SectionLibrary";
 import { SettingsEmpty, SettingsPane, partHasSettings, usePartTitle, type PaneActions } from "./SettingsPanel";
 import { themeVersionDocumentQuery } from "./theme-history-queries";
@@ -126,6 +129,25 @@ const PublishDialog = lazyNamed(() => import("./PublishDialog").then((module) =>
 const ThemeHistory = lazyNamed(() => import("./ThemeHistory").then((module) => module.ThemeHistory));
 const AiDraftDialog = lazyNamed(() => import("./AiDraftDialog").then((module) => module.AiDraftDialog));
 
+/** The first problem's data path in a platform section's settings ("slides.0.alt"), or null. */
+function firstSettingError(section: StorefrontPlatformSection): string | null {
+  return settingErrors(STOREFRONT_SECTION_REGISTRY[section.type].settings, section.settings).keys().next().value ?? null;
+}
+
+/** Puts the cursor in a field once the (lazy) pane draws it. */
+function focusWhenShown(id: string) {
+  let tries = 0;
+  const attempt = () => {
+    const field = document.getElementById(id);
+    const target = field?.matches("input, textarea, button, select") ? field : field?.querySelector<HTMLElement>("input, textarea, button, select");
+    if (target) {
+      target.focus();
+      target.scrollIntoView({ block: "center" });
+    } else if (tries++ < 60) requestAnimationFrame(attempt);
+  };
+  requestAnimationFrame(attempt);
+}
+
 /** Per-browser view choices (research P3: the zoom is remembered). */
 const VIEW_KEY = "scalius.themeEditor.view";
 interface ViewChoices { zoom: PreviewZoom; desktopWidth: DesktopWidth; sidebar: boolean }
@@ -134,11 +156,11 @@ function readView(): ViewChoices {
     const value = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null") as Partial<ViewChoices> | null;
     return {
       zoom: value?.zoom === "actual" ? "actual" : "fit",
-      desktopWidth: DESKTOP_WIDTHS.includes(value?.desktopWidth as DesktopWidth) ? value!.desktopWidth! : 1280,
+      desktopWidth: DESKTOP_WIDTHS.includes(value?.desktopWidth as DesktopWidth) ? value!.desktopWidth! : "fill",
       sidebar: value?.sidebar !== false,
     };
   } catch {
-    return { zoom: "fit", desktopWidth: 1280, sidebar: true };
+    return { zoom: "fit", desktopWidth: "fill", sidebar: true };
   }
 }
 function writeView(view: ViewChoices) {
@@ -261,8 +283,10 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // ── Preview ──────────────────────────────────────────────────────────────
   const [connectedAt, setConnectedAt] = useState(0);
+  const [revealErrors, setRevealErrors] = useState(false);
   const select = useCallback((id: string | null, from: "tree" | "preview" | "other" = "other") => {
     setSelected(id);
+    setRevealErrors(false);
     if (!id) return;
     setTab("sections");
     const sectionId = parseBlockId(id)?.sectionId ?? id;
@@ -290,6 +314,7 @@ export function ThemeEditor({ workspace, refetch }: {
     savedTheme: draft.saved.theme,
     page,
     presence: presence || null,
+    marks: preview.marks,
     onNeedSave: draft.saveSoon,
   });
   // Selecting from the tree brings the part into view only when it is outside it (P8).
@@ -376,6 +401,7 @@ export function ThemeEditor({ workspace, refetch }: {
   // Always offered to editors: without an AI app or agent, the dialog says what to turn on.
   const aiAvailable = canEdit;
   const template = pageTemplate(page);
+  const fitReason = useFitReason(resolved.facts);
   const libraryOptions: LibraryOption[] = useMemo(() => {
     const current = sections ?? [];
     const reason = (blocked: ReturnType<typeof addBlockedReason>) => blocked === "limit" ? t("sectionLimit", { count: 24 })
@@ -389,12 +415,12 @@ export function ThemeEditor({ workspace, refetch }: {
         return {
           choice: { type } as LibraryChoice,
           blocked: reason(addBlockedReason(current, type)),
-          note: deliveryOnly ? t("deliveryFactsNote") : failed.length > 0 ? t("showsWhenFits") : undefined,
+          note: deliveryOnly ? t("deliveryFactsNote") : failed.length > 0 ? fitReason({ failed }) : undefined,
         };
       }),
       ...workspace.apps.flatMap((app) => app.sections.map((section) => ({ choice: { app: section.key } as LibraryChoice, blocked: reason(addBlockedReason(current, "app")) }))),
     ];
-  }, [sections, resolved.facts, workspace.apps, template, t]);
+  }, [sections, resolved.facts, workspace.apps, template, t, fitReason]);
   const addFromLibrary = (choice: LibraryChoice) => {
     const current = sections ?? [];
     const section = "type" in choice
@@ -441,6 +467,37 @@ export function ThemeEditor({ workspace, refetch }: {
     const missing = await draft.replaceDraft(source, withoutMissing);
     if (missing) setRestoreMissing({ source, images: missing.missingImages });
     else preview.reload();
+  };
+
+  /**
+   * "1 setting to fix": opens the first part that is held back, on its page,
+   * at the block that holds the problem, and puts the cursor in the field.
+   */
+  const showProblem = () => {
+    const part = draft.held[0];
+    if (!part) return;
+    if (!part.startsWith("section:")) {
+      setSelected(null);
+      setTab("theme");
+      if (!desktop) setDrawerOpen(true);
+      return;
+    }
+    const rest = part.slice("section:".length);
+    const sectionId = rest.slice(rest.lastIndexOf(":") + 1);
+    const list = rest.slice(0, rest.lastIndexOf(":"));
+    const where: EditorPage = list === "home" ? { kind: "home" }
+      : list.startsWith("landing:") ? { kind: "landing", slug: list.slice("landing:".length) }
+        : { kind: list.slice("template:".length) as "product" | "collection" | "cart" | "page" };
+    const section = pageSections(theme, where)?.find((each) => each.id === sectionId);
+    if (!section) return;
+    if (!samePage(where, page)) setPageState(where);
+    const path = isStorefrontAppSection(section) ? null : firstSettingError(section);
+    const inBlock = path ? storefrontSectionBlockLists(section.type).find((each) => path.startsWith(`${each.path}.`)) : undefined;
+    const index = inBlock && path ? Number(path.slice(inBlock.path.length + 1).split(".")[0]) : -1;
+    select(inBlock && index >= 0 ? `${section.id}/${inBlock.path}/${index}` : section.id, "tree");
+    setRevealErrors(true);
+    // The settings forms' field ids (SectionSettings, SchemaSettingsForm): `theme-section-<id>-<path with dashes>`.
+    if (path) focusWhenShown(`theme-section-${section.id}-${path.replace(/\./g, "-")}`);
   };
 
   // ── Keyboard (research P18) ──────────────────────────────────────────────
@@ -532,12 +589,13 @@ export function ThemeEditor({ workspace, refetch }: {
     return { name, shared };
   })();
 
-  const crumbs = [pageName, ...(block && selectedSection ? [sectionName(selectedSection)] : [])];
+  const sharedSelected = selected === EDITOR_PARTS.header || selected === EDITOR_PARTS.footer || selected === EDITOR_PARTS.announcement;
+  // A shared part is on every page: its place is "All pages", not the page being previewed.
+  const crumbs = [sharedSelected ? t("allPages") : pageName, ...(block && selectedSection ? [sectionName(selectedSection)] : [])];
   const paneTitle = !selected ? ""
     : block && selectedSection ? blockName(selectedSection, block.path, block.index, (storefrontSettingAt(selectedSection.settings, block.path) as unknown[] | undefined)?.[block.index])
       : selectedSection ? sectionName(selectedSection)
         : partTitle(selected, page) ?? "";
-  const sharedSelected = selected === EDITOR_PARTS.header || selected === EDITOR_PARTS.footer || selected === EDITOR_PARTS.announcement;
   const translatable = previewLocale !== null && defaultLocale !== null && previewLocale !== defaultLocale && (selectedSection !== null || sharedSelected);
   const notices: ReactNode = (
     <>
@@ -563,6 +621,7 @@ export function ThemeEditor({ workspace, refetch }: {
         path={block.path}
         index={block.index}
         media={media}
+        reveal={revealErrors}
         onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
       />
     );
@@ -585,6 +644,8 @@ export function ThemeEditor({ workspace, refetch }: {
         section={selectedSection}
         media={media}
         canEdit={canEdit}
+        reveal={revealErrors}
+        onSelectBlock={(id) => select(id, "tree")}
         onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
       />
     );
@@ -614,7 +675,8 @@ export function ThemeEditor({ workspace, refetch }: {
       title={paneTitle}
       crumbs={crumbs}
       notices={notices}
-      onBack={wide ? null : () => setSelected(block ? block.sectionId : null)}
+      onBack={() => setSelected(wide || !block ? null : block.sectionId)}
+      closes={wide}
       actions={paneActions}
       readOnly={!canEdit}
     >
@@ -632,13 +694,12 @@ export function ThemeEditor({ workspace, refetch }: {
           failed={defaults.failed}
           onChange={(next) => setResources((current) => ({ ...current, [resourceKind]: next }))}
         />
-      ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      ) : (
+        <PageStrip text={page.kind === "landing" ? t("landingSlugHelp", { path: `/pages/${page.slug}` }) : t(`pageHint_${page.kind}`)} />
+      )}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
         <LayerTree groups={groups} selected={selected} onSelect={(id) => select(id, "tree")} onHover={(id) => setHovered(id)} onMove={onTreeMove} expandTo={expandTo} />
       </div>
-      {desktop ? (
-        <p className="shrink-0 border-t border-border px-3 py-2 text-body text-muted-foreground">{t("treeHint")}</p>
-      ) : null}
     </div>
   );
 
@@ -694,7 +755,7 @@ export function ThemeEditor({ workspace, refetch }: {
         </span>
       </AlertDescription>
     </Alert>
-  ) : preview.shownPath && path && preview.phase === "ready" && preview.shownPath !== path.split("?")[0] ? (
+  ) : preview.shownPath && path && preview.phase === "ready" && !preview.loading && preview.shownPath !== path.split("?")[0] ? (
     <Alert variant="info">
       <AlertDescription>
         {t("viewingPath", { path: preview.shownPath })}
@@ -708,9 +769,11 @@ export function ThemeEditor({ workspace, refetch }: {
 
   return (
     <div className="grid h-svh grid-rows-[auto_minmax(0,1fr)_auto] bg-background text-foreground" data-theme-editor>
+      <h1 className="sr-only">{t("title")}</h1>
       <EditorTopBar
         status={draft.status}
         heldCount={Math.max(1, draft.held.length)}
+        onShowProblem={showProblem}
         onRetry={() => void draft.save()}
         live={!draft.differsFromLive}
         canEdit={canEdit}
@@ -741,8 +804,14 @@ export function ThemeEditor({ workspace, refetch }: {
         onRedo={() => draft.dispatch({ type: "redo" })}
         onHistory={() => setHistoryOpen(true)}
         onShortcuts={() => setShortcutsOpen(true)}
-        onDraftWithAi={aiAvailable && sections ? () => setAiOpen(true) : null}
-        onOpenPreview={path && draft.saved.revision > 0 ? () => void openPreviewTab(draft.saved.revision, path, "full", previewRevision ?? undefined) : null}
+        onDraftWithAi={aiAvailable ? () => setAiOpen(true) : null}
+        draftHere={sections !== null}
+        onOpenPreview={path && draft.saved.revision > 0 ? () => {
+          void openPreviewTab(draft.saved.revision, path, "full", previewRevision ?? undefined).then((result) => {
+            // A blocked pop-up or a failed hand-over says so (it never does nothing).
+            if (result !== "opened") toast.error(t(result === "path" ? "previewTabPath" : "previewTabFailed"));
+          });
+        } : null}
         canDiscard={canEdit && draft.differsFromLive && !draft.busy}
         onDiscard={() => setConfirmDiscard(true)}
         canPublish={publishable}
@@ -768,16 +837,10 @@ export function ThemeEditor({ workspace, refetch }: {
             )}
           >
             <div className="absolute inset-y-0 start-0 w-80">
-              {sidebar}
+              {/* Under an open settings pane the tree is out of reach (Tab and screen readers too). */}
+              <div inert={!wide && pane !== null} className="h-full">{sidebar}</div>
               {!wide ? (
-                <div
-                  inert={!pane}
-                  className={cn(
-                    "absolute inset-0 bg-card",
-                    !pane && "invisible translate-x-full rtl:-translate-x-full",
-                    animated && "transition-transform duration-200 motion-reduce:transition-none",
-                  )}
-                >
+                <div inert={!pane} className={cn("absolute inset-0 bg-card", !pane && "invisible")}>
                   {pane}
                 </div>
               ) : null}
@@ -799,6 +862,7 @@ export function ThemeEditor({ workspace, refetch }: {
           names={names}
           actions={canvasActions}
           notice={conflictNotice}
+          behind={preview.behind}
           onRetry={preview.retry}
           onScaleChange={(box: FrameBox) => setScale(box.scale)}
         />
@@ -845,7 +909,7 @@ export function ThemeEditor({ workspace, refetch }: {
             ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
             ["add", Plus, () => setLibraryAt(items.length)],
           ] as const).map(([key, Icon, onClick]) => (
-            <TopBarButton key={key} label={t(`bar_${key}`)} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
+            <TopBarButton key={key} label={t(`bar_${key}`)} tip={false} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
               <Icon aria-hidden="true" />
               <span className="text-caption">{t(`bar_${key}`)}</span>
             </TopBarButton>

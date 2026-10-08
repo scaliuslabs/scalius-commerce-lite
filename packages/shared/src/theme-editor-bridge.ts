@@ -12,6 +12,11 @@
  * sends unsaved edits: tokens apply at once, text patches in place, sections
  * move in the page, and `render` and `paint` ask the storefront's
  * preview-only routes to draw unsaved sections and theme settings.
+ *
+ * Every command after `connect` carries a `seq`; the preview answers `ack`
+ * once it applied it (a render or paint: once it landed or failed). The
+ * editor sends a command again until its ack arrives, so an edit sent while
+ * the frame navigates or reloads is never lost.
  */
 
 export const THEME_EDITOR_SOURCE = "scalius-theme-editor";
@@ -54,10 +59,12 @@ export type ThemePreviewMessage =
   /** A preview-only render failed: the editor shows the saved page instead. */
   | { source: typeof THEME_PREVIEW_SOURCE; type: "render-failed" }
   /** The preview session ended (expired or revoked): the dashboard opens a new one. */
-  | { source: typeof THEME_PREVIEW_SOURCE; type: "expired" };
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "expired" }
+  /** A command was applied (`marks`: the page's marks after a render changed them). */
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "ack"; seq: number; marks?: string[] };
 
-/** Dashboard → preview. */
-export type ThemeEditorMessage =
+/** Dashboard → preview. Every command but `connect` carries `seq` (see `ack`). */
+export type ThemeEditorCommand =
   /** Start editing; `scrollY` restores the place a replaced frame showed. */
   | { source: typeof THEME_EDITOR_SOURCE; type: "connect"; inspector: boolean; scrollY: number | null }
   /** Inspector on: a click selects. Off: the page behaves as buyers see it. */
@@ -75,6 +82,10 @@ export type ThemeEditorMessage =
   /** Draw unsaved sections through the preview-only route (`after` places a new one). */
   | { source: typeof THEME_EDITOR_SOURCE; type: "render"; body: unknown; after: string | null };
 
+export type ThemeEditorMessage =
+  | Extract<ThemeEditorCommand, { type: "connect" }>
+  | (Exclude<ThemeEditorCommand, { type: "connect" }> & { seq?: number });
+
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -83,6 +94,7 @@ const markId = (value: unknown): value is string => typeof value === "string" &&
 const path = (value: unknown): value is string =>
   typeof value === "string" && value.startsWith("/") && !value.startsWith("//") && value.length <= 512;
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const seqOf = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 const rect = (value: unknown): value is ThemePreviewRect =>
   Array.isArray(value) && value.length === 4 && value.every(finite) && (value[2] as number) >= 0 && (value[3] as number) >= 0;
 const size = (value: unknown): boolean => {
@@ -124,6 +136,12 @@ export function readThemePreviewMessage(data: unknown): ThemePreviewMessage | nu
     case "render-failed":
     case "expired":
       return { source, type: message.type };
+    case "ack":
+      if (!seqOf(message.seq)) return null;
+      if (message.marks === undefined) return { source, type: "ack", seq: message.seq };
+      return Array.isArray(message.marks) && message.marks.length <= THEME_PREVIEW_MARKS_MAX && message.marks.every(markId)
+        ? { source, type: "ack", seq: message.seq, marks: [...message.marks] }
+        : null;
     default:
       return null;
   }
@@ -133,6 +151,12 @@ export function readThemePreviewMessage(data: unknown): ThemePreviewMessage | nu
 export function readThemeEditorMessage(data: unknown): ThemeEditorMessage | null {
   const message = record(data);
   if (!message || message.source !== THEME_EDITOR_SOURCE) return null;
+  if (message.seq !== undefined && (!seqOf(message.seq) || message.type === "connect")) return null;
+  const command = readThemeEditorCommand(message);
+  return command && command.type !== "connect" && seqOf(message.seq) ? { ...command, seq: message.seq } as ThemeEditorMessage : command;
+}
+
+function readThemeEditorCommand(message: Record<string, unknown>): ThemeEditorCommand | null {
   const source = THEME_EDITOR_SOURCE;
   switch (message.type) {
     case "connect":

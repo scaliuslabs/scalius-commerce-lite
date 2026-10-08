@@ -96,7 +96,13 @@ function renderPart(initial: Theme, selected: string, page: EditorPage = { kind:
   ));
 }
 
-const renderThemeSettings = (initial: Theme) => render(initial, (props) => <ThemeSettingsPanel {...props} />);
+/** Theme settings with one group open (the panel opens with its groups closed). */
+const renderThemeSettings = (initial: Theme, group: string) => {
+  render(initial, (props) => <ThemeSettingsPanel {...props} />);
+  const toggle = [...container.querySelectorAll<HTMLButtonElement>("h2 > button[aria-expanded]")].find((each) => each.textContent === group);
+  expect(toggle, group).toBeDefined();
+  act(() => toggle!.click());
+};
 
 const field = <Element extends HTMLElement = HTMLInputElement>(id: string) => container.querySelector<Element>(`#${CSS.escape(id)}`)!;
 const radioIn = (scope: ParentNode, value: string) => scope.querySelector<HTMLButtonElement>(`[role=radio][value="${value}"]`)!;
@@ -275,7 +281,7 @@ describe("product page", () => {
 describe("theme settings", () => {
   it("lets an essentials merchant restore the compact quick-add card", () => {
     const essentials = storefrontTemplateTheme("daily-essentials");
-    renderThemeSettings(essentials);
+    renderThemeSettings(essentials, "Product cards");
     expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
     const groceryCard = radioIn(container, "quick-add");
     expect(groceryCard.querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(2);
@@ -288,7 +294,7 @@ describe("theme settings", () => {
 
   it("offers the quick action on the retail card without changing its default", () => {
     const retail = storefrontTemplateTheme("mass-retail");
-    renderThemeSettings(retail);
+    renderThemeSettings(retail, "Product cards");
     expect(retail.blocks.card.variant).toBe("retail");
     const quick = field<HTMLButtonElement>("theme-blocks-card-settings-quickAction");
     expect(quick.getAttribute("aria-checked")).toBe("false");
@@ -297,7 +303,7 @@ describe("theme settings", () => {
   });
 
   it("previews and picks the Showcase card with a centered title and price action", () => {
-    renderThemeSettings(DEFAULT_STOREFRONT_THEME);
+    renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Product cards");
     const choice = radioIn(container, "showcase");
     expect(choice.textContent).toContain("Showcase");
     expect(choice.querySelectorAll("[data-card-sketch-showcase-action]")).toHaveLength(2);
@@ -308,7 +314,7 @@ describe("theme settings", () => {
   });
 
   it("names unreadable text in plain words, and the draft cannot be saved until it is readable", () => {
-    renderThemeSettings(DEFAULT_STOREFRONT_THEME);
+    renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Colors");
     const buttonText = field("theme-color-button-text");
     type(buttonText, "#5A5A5A");
     expect(buttonText.value).toBe("#5a5a5a");
@@ -348,7 +354,7 @@ describe("theme settings", () => {
     const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
     it("shows the template's fonts as its default and loads no preview font until the picker opens", async () => {
-      renderThemeSettings(DEFAULT_STOREFRONT_THEME);
+      renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Typography");
       expect(card().textContent).toContain("CleanTemplate default");
       expect(card().textContent).toContain("Inter · Bangla: Noto Sans Bengali");
       expect(checked("Heading size")).toBe("Medium");
@@ -363,7 +369,7 @@ describe("theme settings", () => {
     });
 
     it("lists every pairing drawn in its own fonts, in Latin and Bangla, with the template's preselected", async () => {
-      renderThemeSettings(storefrontTemplateTheme("heritage-editorial"));
+      renderThemeSettings(storefrontTemplateTheme("heritage-editorial"), "Typography");
       expect(card().textContent).toContain("HeritageTemplate default");
       expect(checked("Heading letters")).toBe("All capitals");
       click(button(card(), "Change")!);
@@ -378,7 +384,7 @@ describe("theme settings", () => {
     });
 
     it("picks a new pairing, and cancel keeps the current one", async () => {
-      renderThemeSettings(DEFAULT_STOREFRONT_THEME);
+      renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Typography");
       click(button(card(), "Change")!);
       await flush();
       click(pairings().find((item) => item.value === "editorial")!);
@@ -395,7 +401,7 @@ describe("theme settings", () => {
     });
 
     it("sets heading size and letters, and resets them to the template", () => {
-      renderThemeSettings(DEFAULT_STOREFRONT_THEME);
+      renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Typography");
       choose("Heading size", "Large");
       choose("Heading letters", "All capitals");
       expect(checked("Heading size")).toBe("Large");

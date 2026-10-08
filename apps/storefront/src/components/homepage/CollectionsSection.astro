@@ -67,7 +67,7 @@ const collectionHref = (collection: CollectionWithProducts) => `/collections/${e
 
 {fallbackProducts.length > 0 && (
   <ProductGridSection
-    title="New arrivals"
+    title={section.settings.title || "New arrivals"}
     headingId="home-products-title"
     products={fallbackProducts}
     href="/search"

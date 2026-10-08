@@ -7,6 +7,7 @@
  * restore point, so a restore can be undone.
  */
 import { useState } from "react";
+import { X } from "lucide-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsThemeDocument,
@@ -22,7 +23,7 @@ import {
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -78,7 +79,7 @@ export function useChangeText(documents: readonly StorefrontThemeDocument[], sec
 
 function ChangeList({ changes, more, text, label }: { changes: readonly ThemeDocumentChange[]; more: number; text: (change: ThemeDocumentChange) => string; label?: string }) {
   const t = useMessages(themeEditorMessages);
-  if (changes.length === 0) return <p className="text-body text-muted-foreground">{t("noChanges")}</p>;
+  if (changes.length === 0) return <p className="text-body text-muted-foreground">{t("versionSame")}</p>;
   return (
     <ul aria-label={label} className="list-disc space-y-1 ps-5 text-body">
       {changes.map((change, index) => <li key={index}>{text(change)}</li>)}
@@ -203,11 +204,14 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <div className="border-b border-border p-4">
-          <SheetHeader>
+        <div className="flex items-start gap-2 border-b border-border p-4">
+          <SheetHeader className="min-w-0 flex-1">
             <SheetTitle>{t("versions")}</SheetTitle>
             <SheetDescription>{retained ? t("versionsHelp", { count: retained }) : t("versionsHelpShort")}</SheetDescription>
           </SheetHeader>
+          <SheetClose asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")}><X aria-hidden="true" /></Button>
+          </SheetClose>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {previewRevision !== null ? (

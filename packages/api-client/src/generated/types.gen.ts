@@ -876,6 +876,7 @@ export type StorefrontSectionList = Array<{
     settings: {
         carousel: 'large' | 'compact';
         collectionIds: Array<string>;
+        title?: string;
     };
 } | {
     id: string;

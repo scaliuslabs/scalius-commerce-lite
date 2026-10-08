@@ -6,7 +6,7 @@
  * right column and shows an empty state until something is selected.
  */
 import type { ReactNode } from "react";
-import { ArrowLeft, Copy, Eye, EyeOff, MousePointerClick, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, EyeOff, MousePointerClick, Trash2, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -19,15 +19,16 @@ export interface PaneActions {
   onRemove?: () => void;
 }
 
-export function SettingsPane({ title, crumbs, note, notices, onBack, actions, readOnly, children }: {
+export function SettingsPane({ title, crumbs, note, notices, onBack, closes = false, actions, readOnly, children }: {
   title: string;
   /** Where it is: the page, then its section for a block. */
   crumbs: readonly string[];
   note?: string;
   /** Notices above the settings (shared on every page, an AI draft, a language). */
   notices?: ReactNode;
-  /** Back to the tree (null where the tree stays beside the pane). */
-  onBack: (() => void) | null;
+  /** Back to the tree, or (with `closes`, in the right column beside the tree) close the settings. */
+  onBack: () => void;
+  closes?: boolean;
   actions?: PaneActions;
   readOnly: boolean;
   children: ReactNode;
@@ -36,11 +37,11 @@ export function SettingsPane({ title, crumbs, note, notices, onBack, actions, re
   return (
     <div data-settings-pane className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-12 shrink-0 items-center gap-1 border-b border-border bg-card px-2 py-1.5">
-        {onBack ? (
+        {closes ? null : (
           <Button type="button" variant="ghost" size="icon-sm" aria-label={t("backToTree")} aria-keyshortcuts="Escape" onClick={onBack}>
             <ArrowLeft aria-hidden="true" />
           </Button>
-        ) : null}
+        )}
         <div className="min-w-0 flex-1 px-1">
           <h2 className="truncate text-heading-sm">{title}</h2>
           {crumbs.length > 0 ? (
@@ -56,6 +57,11 @@ export function SettingsPane({ title, crumbs, note, notices, onBack, actions, re
             </nav>
           ) : null}
         </div>
+        {closes ? (
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={t("closeSettings")} aria-keyshortcuts="Escape" onClick={onBack}>
+            <X aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-4 px-4 py-4">
@@ -65,7 +71,7 @@ export function SettingsPane({ title, crumbs, note, notices, onBack, actions, re
         </div>
       </div>
       {actions && !readOnly && (actions.onToggleHidden || actions.onDuplicate || actions.onRemove) ? (
-        <div className="flex shrink-0 flex-wrap gap-2 border-t border-border bg-card px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-card px-4 py-3">
           {actions.onToggleHidden ? (
             <Button type="button" variant="outline" size="sm" onClick={actions.onToggleHidden}>
               {actions.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
@@ -76,7 +82,7 @@ export function SettingsPane({ title, crumbs, note, notices, onBack, actions, re
             <Button type="button" variant="outline" size="sm" onClick={actions.onDuplicate}><Copy aria-hidden="true" />{t("duplicate")}</Button>
           ) : null}
           {actions.onRemove ? (
-            <Button type="button" variant="outline" size="sm" className="ms-auto" onClick={actions.onRemove}><Trash2 aria-hidden="true" />{t("remove")}</Button>
+            <Button type="button" variant="ghost" size="icon-sm" className="ms-auto" aria-label={t("remove")} title={t("remove")} onClick={actions.onRemove}><Trash2 aria-hidden="true" /></Button>
           ) : null}
         </div>
       ) : null}

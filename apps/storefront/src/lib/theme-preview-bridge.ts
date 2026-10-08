@@ -13,7 +13,9 @@
  *   sections drawn by the preview-only render route and theme settings
  *   painted by the preview-only paint route (both same-origin POSTs that
  *   carry the preview cookie);
- * - scrolls only when the editor asks to reveal a part outside the view.
+ * - scrolls only when the editor asks to reveal a part outside the view;
+ * - acknowledges each command (`ack` with its `seq`) once applied, so the
+ *   editor sends again what a navigation or reload lost.
  *
  * Messages are read only from the parent window at the dashboard's exact
  * origin, and sent only there.
@@ -56,35 +58,50 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   let connected = false;
   let inspector = true;
   let hovered = null;
-  // A mark may be display:contents: measure what it holds.
+  // A mark may be display:contents: measure what it holds. Any other mark is
+  // its own box (what it holds may overflow it: a sticky bar, a popover).
   const box = (element) => {
+    if (getComputedStyle(element).display !== "contents") return element.getBoundingClientRect();
     const range = document.createRange();
     range.selectNodeContents(element);
     const rect = range.getBoundingClientRect();
     return rect.width || rect.height ? rect : element.getBoundingClientRect();
   };
+  const measure = () => {
+    if (!connected) return;
+    const rects = {};
+    let count = 0;
+    for (const element of document.querySelectorAll("[" + MARK + "]")) {
+      const id = valid(element.getAttribute(MARK));
+      if (!id || rects[id] || element.closest("[hidden]") || ++count > MAX_MARKS) continue;
+      const rect = box(element);
+      if (!rect.width && !rect.height) continue;
+      rects[id] = [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)];
+    }
+    post({ type: "layout", rects, scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight });
+  };
+  // Scrolls and resizes report once per frame. A hidden frame (a reload
+  // waiting to swap in) may get no animation frames: a timer stands in.
   let queued = false;
   const report = () => {
     if (!connected || queued) return;
     queued = true;
-    requestAnimationFrame(() => {
+    const run = () => {
+      if (!queued) return;
       queued = false;
-      const rects = {};
-      let count = 0;
-      for (const element of document.querySelectorAll("[" + MARK + "]")) {
-        const id = valid(element.getAttribute(MARK));
-        if (!id || rects[id] || element.closest("[hidden]") || ++count > MAX_MARKS) continue;
-        const rect = box(element);
-        if (!rect.width && !rect.height) continue;
-        rects[id] = [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)];
-      }
-      post({ type: "layout", rects, scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight });
-    });
+      measure();
+    };
+    requestAnimationFrame(run);
+    setTimeout(run, 50);
   };
+  // The first layout goes with ready: outlines never wait for a frame.
   const ready = () => {
     post({ type: "ready", path: location.pathname, marks: marks() });
     observe();
-    report();
+    measure();
+  };
+  const ack = (seq, extra) => {
+    if (typeof seq === "number") post(Object.assign({ type: "ack", seq }, extra || {}));
   };
   // Parts that change size (images loading, a carousel) move the outlines.
   const sizes = "ResizeObserver" in window ? new ResizeObserver(report) : null;
@@ -180,10 +197,10 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const template = document.createElement("template");
     template.innerHTML = await response.text();
     if (ticket !== latest[key]) return;
-    for (const fresh of Array.from(template.content.querySelectorAll("[data-theme-region]"))) {
-      const current = document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]');
-      if (!current) return post({ type: "render-failed" });
-      current.replaceWith(fresh);
+    const regions = Array.from(template.content.querySelectorAll("[data-theme-region]"));
+    if (regions.some((fresh) => !document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]'))) return post({ type: "render-failed" });
+    for (const fresh of regions) {
+      document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]').replaceWith(fresh);
       activate(fresh);
     }
     const unit = template.content.querySelector("[data-home-render-unit]");
@@ -202,11 +219,15 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
       else return post({ type: "render-failed" });
       activate(unit);
     }
-    ready();
+    observe();
+    measure();
+    return true;
   };
+  let painted = 0;
   const paint = async (theme) => {
+    const ticket = ++painted;
     const response = await send(PAINT, { theme }, "application/json");
-    if (!response) return;
+    if (!response || ticket !== painted) return;
     const result = await response.json();
     const tokensStyle = document.querySelector("style[data-theme-tokens]");
     const fontsStyle = document.querySelector("style[data-theme-fonts]");
@@ -256,12 +277,18 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
         if (valid(message.region)) arrange(message.region, message.order);
         break;
       case "render":
-        if (message.body && typeof message.body === "object") render(message.body, valid(message.after)).catch(() => post({ type: "render-failed" }));
-        break;
+        // Acknowledged once it landed or failed (a failure also says render-failed).
+        if (message.body && typeof message.body === "object") {
+          render(message.body, valid(message.after))
+            .catch(() => post({ type: "render-failed" }))
+            .then((landed) => ack(message.seq, landed === true ? { marks: marks() } : undefined));
+        }
+        return;
       case "paint":
-        if (message.theme && typeof message.theme === "object") paint(message.theme).catch(() => {});
-        break;
+        if (message.theme && typeof message.theme === "object") paint(message.theme).catch(() => {}).then(() => ack(message.seq));
+        return;
     }
+    ack(message.seq);
   });
   document.addEventListener("pointerover", (event) => {
     if (!connected || !inspector) return;

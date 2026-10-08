@@ -122,23 +122,20 @@ export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgen
             {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
           </form>
         ) : (
+          // One next step: an AI app. Merchants who already run their own AI agent get a quieter second path.
           <div className="space-y-3">
-            <div className="space-y-1 rounded-lg bg-muted px-3 py-2">
-              <p className="text-body font-medium">{t("aiConnectAgent")}</p>
-              <p className="text-body text-muted-foreground">{t("aiConnectAgentHelp")}</p>
-              {canConnectAgent ? (
-                <Button asChild variant="outline" size="sm"><Link to="/admin/settings/integrations">{t("aiConnectAgentAction")}</Link></Button>
-              ) : <p className="text-body text-muted-foreground">{t("aiAskOwner")}</p>}
-            </div>
-            <div className="space-y-1 rounded-lg bg-muted px-3 py-2">
-              <p className="text-body font-medium">{t("aiInstallApp")}</p>
-              <p className="text-body text-muted-foreground">{t("aiInstallAppHelp")}</p>
-              <Button asChild variant="outline" size="sm"><Link to="/admin/apps">{t("aiInstallAppAction")}</Link></Button>
-            </div>
+            <p className="text-body">{t("aiInstallAppHelp")}</p>
+            <Button asChild><Link to="/admin/apps">{t("aiInstallAppAction")}</Link></Button>
+            <p className="text-body text-muted-foreground">
+              {t("aiConnectAgentHelp")}{" "}
+              {canConnectAgent
+                ? <Link to="/admin/settings/integrations" className="text-link hover:underline">{t("aiConnectAgentAction")}</Link>
+                : t("aiAskOwner")}
+            </p>
           </div>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t(providers.length > 0 ? "cancel" : "close")}</Button>
+          {providers.length > 0 ? <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button> : null}
           {providers.length > 0 ? (
             <Button type="submit" form="ai-draft-form" loading={working} disabled={!prompt.trim() || !providerId}>
               <Sparkles aria-hidden="true" />

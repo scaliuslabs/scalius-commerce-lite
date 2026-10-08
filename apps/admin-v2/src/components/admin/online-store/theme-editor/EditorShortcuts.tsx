@@ -53,6 +53,11 @@ function caps(combo: EditorCombo): string {
   return [...(combo.shift ? ["Shift"] : []), ...(combo.mod ? [isMac ? "⌘" : "Ctrl"] : []), ...(combo.alt ? ["Alt"] : []), key].join(" ");
 }
 
+/** A shortcut's keys as the top bar's tooltips show them ("⌘ Z", "Ctrl Z"). */
+export function shortcutCaps(id: EditorShortcut): string {
+  return caps(EDITOR_SHORTCUTS[id][0]);
+}
+
 export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(themeEditorMessages);
   const rows = (Object.keys(EDITOR_SHORTCUTS) as EditorShortcut[]).map((id) => [t(`shortcut_${id}`), (EDITOR_SHORTCUTS[id] as readonly EditorCombo[]).map(caps)] as const);
