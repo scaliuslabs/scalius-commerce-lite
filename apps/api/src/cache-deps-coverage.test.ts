@@ -91,6 +91,8 @@ const URLS = [
   "/api/v1/storefront/landing/eid",
   "/api/v1/storefront/template/product",
   "/api/v1/storefront/product-apps/linen-panjabi",
+  "/api/v1/storefront/app-blocks/checkout",
+  "/api/v1/storefront/app-blocks/account",
   "/api/v1/storefront/pages/slug/about",
   "/api/v1/checkout/config",
   "/api/v1/checkout-languages/active",

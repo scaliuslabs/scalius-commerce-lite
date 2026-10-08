@@ -1,4 +1,7 @@
 ---
+import AppBlocks from "@/components/apps/AppBlocks.astro";
+import { getAppBlocks } from "@/lib/api/app-blocks";
+import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { formatOrderPlaces } from "@/lib/account-format";
 import LineExtras from "@/components/order/LineExtras.astro";
@@ -155,6 +158,8 @@ const [layoutData, checkoutConfig, checkoutLanguageResponse]: [
   getCheckoutConfig(),
   getActiveCheckoutLanguage(),
 ]);
+// Apps' thank-you and order status blocks: read only when the layout says an active app draws one.
+const appBlocks = layoutHasAppBlocks(layoutData, "order") ? await getAppBlocks("order") : [];
 const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   id: "fallback",
   name: "English (Fallback)",
@@ -852,6 +857,11 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       </div>
     </div>
 
+    <AppBlocks
+      blocks={appBlocks}
+      target={statusView ? "customer-account.order-status.block.render" : "purchase.thank-you.customer-information.render-after"}
+      class="mt-6 print:hidden"
+    />
     <OrderSuccessButtons
       orderId={order.id}
       accountLinked={order.accountLinked}

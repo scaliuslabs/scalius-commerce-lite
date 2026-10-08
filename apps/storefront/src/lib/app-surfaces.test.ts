@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { serializeJsonLd, type PluginHead } from "@scalius/shared/plugins/storefront";
-import { mergeAppHeads, readAppHead, readHomepageAppSurfaces, readProductAppBlocks } from "./app-surfaces";
+import { layoutHasAppBlocks, mergeAppHeads, readAppBlocks, readAppHead, readHomepageAppSurfaces, readProductAppBlocks } from "./app-surfaces";
 import { appScriptOrigins, appScriptsForPage, readAppScripts, storefrontAppPage } from "./app-scripts";
 import { setPageCspHeader } from "./middleware-helper/csp-handler";
 
@@ -64,6 +64,30 @@ describe("app surfaces from the API", () => {
   });
 });
 
+describe("checkout and account app blocks", () => {
+  it("keeps blocks with a known target and HTML, each once, in order", () => {
+    expect(readAppBlocks([
+      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Ships today</p>" },
+      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Again</p>" },
+      { id: "acme.notes/odd", target: "purchase.checkout.header.render", html: "<p>Unknown target</p>" },
+      { id: "acme.notes/empty", target: "customer-account.profile.block.render", html: "  " },
+      { id: "not a key", target: "customer-account.profile.block.render", html: "<p>x</p>" },
+      { id: "acme.notes/points", target: "customer-account.order-index.block.render", html: "<p>Points</p>" },
+    ])).toEqual([
+      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Ships today</p>" },
+      { id: "acme.notes/points", target: "customer-account.order-index.block.render", html: "<p>Points</p>" },
+    ]);
+    expect(readAppBlocks(null)).toEqual([]);
+  });
+
+  it("reads a page group's blocks only when the layout names it", () => {
+    expect(layoutHasAppBlocks({ appBlockPages: ["checkout"] }, "checkout")).toBe(true);
+    expect(layoutHasAppBlocks({ appBlockPages: ["checkout"] }, "account")).toBe(false);
+    expect(layoutHasAppBlocks({}, "checkout")).toBe(false);
+    expect(layoutHasAppBlocks(null, "order")).toBe(false);
+  });
+});
+
 describe("app scripts", () => {
   const scripts = [
     { pluginId: "acme.reviews", src: "https://cdn.acme.example/widget.js", placement: "body-end", pages: ["product"] },
@@ -85,7 +109,8 @@ describe("app scripts", () => {
     expect(storefrontAppPage("/checkout")).toBe("checkout");
     expect(storefrontAppPage("/checkout/quick")).toBe("checkout");
     expect(storefrontAppPage("/order-success")).toBe("order-success");
-    for (const path of ["/account", "/about-us", "/apps/acme.wishlist/wishlist", "/blog"]) expect(storefrontAppPage(path), path).toBeNull();
+    for (const path of ["/account", "/account/profile", "/account/orders/ord_1"]) expect(storefrontAppPage(path), path).toBe("account");
+    for (const path of ["/about-us", "/apps/acme.wishlist/wishlist", "/blog", "/accounts"]) expect(storefrontAppPage(path), path).toBeNull();
   });
 
   it("loads only https scripts that name the page or all", () => {
@@ -94,6 +119,17 @@ describe("app scripts", () => {
     expect(appScriptsForPage(scripts, "home").map((script) => script.pluginId)).toEqual(["acme.chat", "acme.listing"]);
     expect(appScriptsForPage(scripts, null).map((script) => script.pluginId)).toEqual(["acme.chat"]);
     expect(appScriptsForPage(undefined, "home")).toEqual([]);
+  });
+
+  it("never loads an \"all\" script on checkout, order or account pages: only a script naming the page", () => {
+    const buyer = [
+      ...scripts,
+      { pluginId: "acme.pay", src: "https://pay.example/p.js", placement: "body-end", pages: ["checkout", "order-success"] },
+    ];
+    expect(appScriptsForPage(buyer, "checkout").map((script) => script.pluginId)).toEqual(["acme.pay"]);
+    expect(appScriptsForPage(buyer, "order-success").map((script) => script.pluginId)).toEqual(["acme.pay"]);
+    expect(appScriptsForPage(buyer, "account")).toEqual([]);
+    expect(appScriptsForPage(buyer, "cart").map((script) => script.pluginId)).toEqual(["acme.chat"]);
   });
 
   it("adds a script's host to the page CSP only when the layout lists it for that page", () => {

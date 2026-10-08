@@ -1,7 +1,8 @@
 // Storefront app output (docs/platform/PLUGINS.md, "Storefront surfaces"):
-// the app sections of the homepage and the app blocks of a product page,
-// drawn by each app's public route inside the batch part that shows them
-// (`/storefront/homepage`, `/storefront/product-apps/<slug>`).
+// the app sections of the homepage, the app blocks of a product page and the
+// checkout and customer-account blocks, drawn by each app's public route
+// inside the batch part that shows them (`/storefront/homepage`,
+// `/storefront/product-apps/<slug>`, `/storefront/app-blocks/<page>`).
 //
 // What a cached entry depends on, and how it is declared here:
 //
@@ -31,9 +32,11 @@ import {
   PLUGIN_RENDER_CONCURRENCY,
   PLUGIN_RENDER_RETRY_SECONDS,
   PLUGIN_RENDER_WALL_MS,
+  pluginBlockAllowsForms,
   pluginRenderOutputSchema,
   resolvePluginSettingValues,
   sanitizePluginHead,
+  type PluginBlockTarget,
   type PluginHead,
   type PluginRenderContext,
   type PluginSettingValue,
@@ -60,6 +63,8 @@ export interface AppSurfaceRender {
   type: string;
   /** Product blocks: where the app puts it. */
   placement: "buy-box" | "below" | null;
+  /** Checkout and customer-account blocks: the extension target it draws at. */
+  target: PluginBlockTarget | null;
   html: string;
   head: PluginHead;
 }
@@ -84,10 +89,14 @@ function surfaceOf(installation: PluginInstallation, request: AppSurfaceRequest)
   const { storefront } = installation.manifest;
   if (request.kind === "section") {
     const section = storefront.sections.find((entry) => entry.type === request.type);
-    return section ? { route: section.route, reads: section.reads, settings: section.settings, placement: null } : null;
+    return section ? { route: section.route, reads: section.reads, settings: section.settings, placement: null, target: null } : null;
+  }
+  if (request.kind === "block") {
+    const block = storefront.blocks.find((entry) => entry.type === request.type);
+    return block ? { route: block.route, reads: block.reads, settings: [], placement: null, target: block.target } : null;
   }
   const block = storefront.productBlocks.find((entry) => entry.type === request.type);
-  return block ? { route: block.route, reads: block.reads, settings: block.settings, placement: block.placement } : null;
+  return block ? { route: block.route, reads: block.reads, settings: block.settings, placement: block.placement, target: null } : null;
 }
 
 /**
@@ -148,6 +157,7 @@ async function renderOne(
 ): Promise<AppSurfaceRender | null> {
   const render: PluginRenderContext = {
     kind: request.kind,
+    ...(surface.target ? { target: surface.target } : {}),
     type: request.type,
     instanceId: request.instanceId,
     settings: resolvePluginSettingValues(surface.settings, request.values),
@@ -191,7 +201,9 @@ async function renderOne(
   }
   const html = sanitizePluginHtml(parsed.data.html, {
     pluginId: installation.pluginId,
-    forms: installation.manifest.storefront.proxy && installation.grant?.publicRoutes === true,
+    // A block inside the checkout form may hold no form of its own.
+    forms: installation.manifest.storefront.proxy && installation.grant?.publicRoutes === true
+      && (surface.target === null || pluginBlockAllowsForms(surface.target)),
   });
   if (!html.ok) {
     await host.reportIncident(installation, source, html.reason === "too_large"
@@ -199,7 +211,8 @@ async function renderOne(
       : "The section's HTML is nested too deeply or has too many elements.");
     return null;
   }
-  const head = installation.manifest.storefront.head && parsed.data.head !== undefined
+  // Checkout and account pages are never indexed: blocks add no head tags.
+  const head = installation.manifest.storefront.head && parsed.data.head !== undefined && surface.target === null
     ? sanitizePluginHead(parsed.data.head)
     : { ...EMPTY_PLUGIN_HEAD, meta: [], jsonLd: [] };
   if (!html.html.trim() && head.meta.length === 0 && head.jsonLd.length === 0) return null;
@@ -208,6 +221,7 @@ async function renderOne(
     pluginId: installation.pluginId,
     type: request.type,
     placement: surface.placement,
+    target: surface.target,
     html: html.html,
     head,
   };

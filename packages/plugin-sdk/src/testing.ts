@@ -354,22 +354,27 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
     }),
     /**
-     * Draws a theme section or product block the way the platform does:
-     * `request.render` with the merchant's settings resolved against the
-     * manifest, and a bridge that refuses everything but reads of the
-     * collections the section declares in `reads`.
+     * Draws a theme section, product block or checkout/account block the way
+     * the platform does: `request.render` with the merchant's settings
+     * resolved against the manifest (blocks have none: they read the app's
+     * settings), and a bridge that refuses everything but reads of the
+     * collections the surface declares in `reads`.
      */
     render: (
-      kind: "section" | "product-block",
+      kind: "section" | "product-block" | "block",
       type: string,
       input: { settings?: Record<string, unknown>; product?: PluginRenderContext["product"]; instanceId?: string } = {},
     ) => {
+      const block = kind === "block" ? manifest.storefront.blocks.find((entry) => entry.type === type) : undefined;
       const surface = kind === "section"
         ? manifest.storefront.sections.find((entry) => entry.type === type)
-        : manifest.storefront.productBlocks.find((entry) => entry.type === type);
+        : kind === "product-block"
+          ? manifest.storefront.productBlocks.find((entry) => entry.type === type)
+          : block ? { ...block, settings: [] } : undefined;
       if (!surface) throw new Error(`The manifest declares no ${kind} of type ${type}.`);
       const render: PluginRenderContext = {
         kind,
+        ...(block ? { target: block.target } : {}),
         type,
         instanceId: input.instanceId ?? `${type}-1`,
         settings: resolvePluginSettingValues(surface.settings, input.settings ?? {}),

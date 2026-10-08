@@ -1,7 +1,9 @@
 /**
  * What installed apps draw on the storefront (docs/platform: "Storefront
  * surfaces"): homepage sections (inside the homepage batch part), product
- * blocks (the `product-apps` batch part) and their head tags.
+ * blocks (the `product-apps` batch part) and their head tags, and checkout
+ * and customer-account blocks (the `app-blocks/<page>` batch part, read only
+ * when the layout's `appBlockPages` names the page).
  *
  * The API asks each app to draw, sanitizes the HTML (`sanitizePluginHtml`)
  * and the head tags (`sanitizePluginHead`) and caches the result under
@@ -9,7 +11,14 @@
  * only checks the payload's shape, so nothing that did not come from those
  * fields is ever injected, and a surface without HTML renders nothing.
  */
-import { PLUGIN_SURFACE_KEY_PATTERN, type PluginHead } from "@scalius/shared/plugins/storefront";
+import {
+  PLUGIN_BLOCK_PAGES,
+  PLUGIN_BLOCK_TARGETS,
+  PLUGIN_SURFACE_KEY_PATTERN,
+  type PluginBlockPage,
+  type PluginBlockTarget,
+  type PluginHead,
+} from "@scalius/shared/plugins/storefront";
 
 /** One drawn homepage section, keyed by its theme section id. */
 export interface HomepageAppSurface {
@@ -101,4 +110,32 @@ export function mergeAppHeads(heads: Iterable<PluginHead>): PluginHead {
     for (const entry of head.jsonLd) jsonLd.add(entry);
   }
   return { meta, jsonLd: [...jsonLd] };
+}
+
+/** One drawn checkout or customer-account block. */
+export interface AppBlock {
+  /** `<plugin id>/<block type>`. */
+  id: string;
+  target: PluginBlockTarget;
+  html: string;
+}
+
+/** A page group's drawn blocks (`blocks`), in order; unknown targets and ones without HTML are left out. */
+export function readAppBlocks(value: unknown): AppBlock[] {
+  const seen = new Set<string>();
+  return (Array.isArray(value) ? value : []).flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !PLUGIN_SURFACE_KEY_PATTERN.test(entry.id) || seen.has(entry.id)) return [];
+    if (typeof entry.target !== "string" || !(PLUGIN_BLOCK_TARGETS as readonly string[]).includes(entry.target)) return [];
+    const html = drawnHtml(entry.html);
+    if (!html) return [];
+    seen.add(entry.id);
+    return [{ id: entry.id, target: entry.target as PluginBlockTarget, html }];
+  });
+}
+
+/** Whether the layout says an active app draws blocks on this page group (absent: none). */
+export function layoutHasAppBlocks(layout: { appBlockPages?: unknown } | null | undefined, page: PluginBlockPage): boolean {
+  return Array.isArray(layout?.appBlockPages)
+    && (PLUGIN_BLOCK_PAGES as readonly string[]).includes(page)
+    && layout.appBlockPages.includes(page);
 }

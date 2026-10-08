@@ -74,6 +74,7 @@ import {
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
+import { activePluginBlockPages } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
     NAME_FIELDS,
@@ -563,6 +564,7 @@ export async function getLayoutData(
     activePluginRows,
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
+  const activeApps = activePluginInstallationsFromRows(activePluginRows as PluginInstallationRow[]);
   const ctx = { encryptionKey: options.credentialEncryptionKey };
   const [currency, media, browserEventsEnabled, seo, business, security, policies] = await Promise.all([
     currencyDocument.fromRows(rows, ctx),
@@ -725,9 +727,10 @@ export async function getLayoutData(
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults as CheckoutCopyRow[], translation?.locale ?? null),
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
-    appScripts: activePluginStorefrontScripts(
-      activePluginInstallationsFromRows(activePluginRows as PluginInstallationRow[]).values(),
-    ),
+    appScripts: activePluginStorefrontScripts(activeApps.values()),
+    // The page groups where an active app draws a checkout or account block:
+    // only those pages read their blocks part (none: no read at all).
+    appBlockPages: activePluginBlockPages(activeApps.values()),
   };
 }
 

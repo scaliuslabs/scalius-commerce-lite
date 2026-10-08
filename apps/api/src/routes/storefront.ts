@@ -10,10 +10,19 @@ import {
   getLayoutData,
   getTemplateSectionsData,
   getPageRenderData,
+  readPluginBlockContext,
   readProductAppContext,
   readThemeBrandAssets,
 } from "@scalius/core/modules/storefront";
-import { PLUGIN_HOME_SECTIONS_MAX, PLUGIN_PRODUCT_BLOCKS_MAX, parsePluginSurfaceKey } from "@scalius/shared/plugins";
+import {
+  PLUGIN_BLOCK_PAGES,
+  PLUGIN_BLOCK_TARGETS,
+  PLUGIN_HOME_SECTIONS_MAX,
+  PLUGIN_PAGE_BLOCKS_MAX,
+  PLUGIN_PRODUCT_BLOCKS_MAX,
+  parsePluginSurfaceKey,
+  pluginSurfaceKey,
+} from "@scalius/shared/plugins";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
@@ -359,6 +368,9 @@ const layoutDataSchema = z.object({
     placement: z.enum(["head", "body-end"]),
     pages: z.array(z.enum(["all", "home", "product", "listing", "cart", "checkout", "order-success"])),
   })),
+  appBlockPages: z.array(z.enum(PLUGIN_BLOCK_PAGES)).openapi({
+    description: "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.",
+  }),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;
 
@@ -540,6 +552,57 @@ async function drawProductAppBlocks(c: Context<{ Bindings: Env }>, slug: string,
 app.openapi(productAppsRoute, async (c) => {
   if (new URL(c.req.url).search) throw new ValidationError("The product apps read takes no query parameters");
   return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug));
+});
+
+// GET /storefront/app-blocks/:page — the checkout or customer-account app blocks
+const appBlocksRoute = createRoute({
+  method: "get",
+  path: "/app-blocks/{page}",
+  operationId: "storefront.app_blocks.get",
+  tags: ["Storefront"],
+  summary: "Get the app blocks a checkout, order or account page shows",
+  description:
+    "Every active app's blocks for one page group (checkout, order, account), drawn by the app at its Shopify-style extension target: sanitized HTML with no scripts, the same for every buyer. Read it only when the layout's appBlockPages lists the page. Takes no query; cached under dependency validation (each app's installation and declared storage), so a cached answer runs no app code.",
+  request: { params: z.object({ page: z.enum(PLUGIN_BLOCK_PAGES) }) },
+  responses: {
+    200: {
+      description: "The drawn blocks, in app id then manifest order",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        blocks: z.array(z.object({
+          id: z.string().openapi({ description: "<app id>/<block type>" }),
+          app: z.string(),
+          target: z.enum(PLUGIN_BLOCK_TARGETS),
+          html: z.string().openapi({ description: "Sanitized HTML. Checkout blocks hold no forms." }),
+        })).max(PLUGIN_PAGE_BLOCKS_MAX),
+      })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+app.openapi(appBlocksRoute, async (c) => {
+  if (new URL(c.req.url).search) throw new ValidationError("The app blocks read takes no query parameters");
+  const db = c.get("db");
+  const context = await readPluginBlockContext(db, c.req.valid("param").page);
+  if (context.requests.length === 0) return ok(c, { blocks: [] });
+  const { renderAppSurfaces } = await import("../plugins/storefront-render");
+  const drawn = await renderAppSurfaces(context.requests.map((request) => ({
+    instanceId: pluginSurfaceKey(request.pluginId, request.type),
+    pluginId: request.pluginId,
+    type: request.type,
+    kind: "block" as const,
+    values: {},
+  })), {
+    env: c.env,
+    ctx: executionContextOf(c),
+    db,
+    context: { installations: context.installations, store: context.store },
+  });
+  return ok(c, {
+    blocks: drawn.flatMap((each) => (each.target && each.html.trim()
+      ? [{ id: each.instanceId, app: each.pluginId, target: each.target, html: each.html }]
+      : [])),
+  });
 });
 
 // GET /storefront/pages/slug/:slug — consolidated CMS page render data

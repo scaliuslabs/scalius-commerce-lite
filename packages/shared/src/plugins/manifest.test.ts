@@ -252,6 +252,18 @@ describe("storefront surfaces in the manifest", () => {
     expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
     expect(issues({ ...base, storefront: { productBlocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.productBlocks.0.route Public route missing is not declared."]);
   });
+
+  it("draws checkout and account blocks at Shopify's extension targets, from declared routes and collections", () => {
+    const block = { type: "note", name: "Note", target: "purchase.checkout.contact.render-after", route: "draw" } as const;
+    const parsed = parsePluginManifest({ ...base, storefront: { blocks: [{ ...block, reads: ["reviews"] }] } });
+    expect(parsed.ok && parsed.manifest.storefront.blocks).toEqual([{ ...block, reads: ["reviews"] }]);
+    // Drawing on the storefront is consented to, like sections.
+    expect(parsed.ok && pluginGrantRequest(parsed.manifest).storefrontSurfaces).toBe(true);
+    expect(issues({ ...base, storefront: { blocks: [{ ...block, target: "purchase.checkout.header.render" }] } })).toHaveLength(1);
+    expect(issues({ ...base, storefront: { blocks: [block, block] } })).toEqual(["storefront.blocks Block types must be unique."]);
+    expect(issues({ ...base, storefront: { blocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.blocks.0.route Public route missing is not declared."]);
+    expect(issues({ ...base, storefront: { blocks: [{ ...block, reads: ["ledger"] }] } })).toEqual(["storefront.blocks.0.reads.0 Storage collection ledger is not declared."]);
+  });
 });
 
 describe("settings groups and page tabs in the manifest", () => {
@@ -346,6 +358,19 @@ describe("settings groups and page tabs in the manifest", () => {
 describe("plugin functions", () => {
   it("declares an input and output schema for every function point", () => {
     expect(Object.keys(PLUGIN_FUNCTION_SCHEMAS).sort()).toEqual([...PLUGIN_FUNCTION_POINTS].sort());
+  });
+
+  it("lets cart.transform and cart.line_prices block, and cart.line_prices read a snapshot it never commits", () => {
+    const withFunctions = (functions: PluginManifestInput["functions"]) => parsePluginManifest({ ...FULL, functions });
+    expect(withFunctions([{ point: "cart.transform", onError: "block" }, { point: "cart.line_prices", onError: "block", snapshot: { collection: "ledger" } }]).ok).toBe(true);
+    expect(withFunctions([{ point: "checkout.shipping_rates", onError: "block" }]).ok).toBe(false);
+    expect(withFunctions([{ point: "cart.transform", snapshot: { collection: "ledger" } }]).ok).toBe(false);
+    const prices = PLUGIN_FUNCTION_SCHEMAS["cart.line_prices"].output;
+    expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 0 }] }).success).toBe(false);
+    expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 12.5 }] }).success).toBe(false);
+    const transform = PLUGIN_FUNCTION_SCHEMAS["cart.transform"].output;
+    expect(transform.safeParse({ operations: [{ op: "expand", lineId: "cart:0:v", components: [] }] }).success).toBe(false);
+    expect(transform.safeParse({ operations: [{ op: "merge", lineIds: ["cart:0:v"], title: "Set" }] }).success).toBe(false);
   });
 
   it("keeps discounts in minor units and rejects a negative or fractional amount", () => {

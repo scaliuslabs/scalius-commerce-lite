@@ -181,7 +181,7 @@ const appSummarySchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
     onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
-    snapshotCollection: z.string().nullable().openapi({ description: "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order." }),
+    snapshotCollection: z.string().nullable().openapi({ description: "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this collection (checkout.discounts also updates it with each order)." }),
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 

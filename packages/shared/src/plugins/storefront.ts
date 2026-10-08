@@ -1,5 +1,6 @@
 // Storefront surfaces of a plugin (docs/platform/PLUGINS.md, "Storefront
-// surfaces"): theme sections, product blocks, head tags and proxy pages.
+// surfaces"): theme sections, product blocks, checkout and customer-account
+// blocks, head tags and proxy pages.
 // Each is answered by one of the app's public routes:
 //
 // - a section or product block route gets `request.render` (what to draw,
@@ -40,9 +41,59 @@ export function parsePluginSurfaceKey(key: string): { pluginId: string; type: st
   return match ? { pluginId: match[1]!, type: match[2]! } : null;
 }
 
-/** What a section or product block route is asked to draw (`request.render`). */
+// ── Checkout and customer-account blocks ─────────────────────────────────
+
+/**
+ * Where an app block draws, by Shopify's extension target names (checkout
+ * and customer-account UI extensions). A block is the same for every buyer:
+ * it is drawn once from the app's settings and declared collections, cached
+ * under dependency validation and served as plain sanitized HTML, so the
+ * page stays usable before hydration and without JavaScript. Never per-buyer
+ * data, never app JavaScript.
+ */
+export const PLUGIN_BLOCK_TARGETS = [
+  // Checkout: the information step (cart page) and the payment step.
+  "purchase.checkout.contact.render-after",
+  "purchase.checkout.shipping-option-list.render-after",
+  "purchase.checkout.cart-line-list.render-after",
+  "purchase.checkout.payment-method-list.render-after",
+  "purchase.checkout.actions.render-before",
+  // The thank-you page.
+  "purchase.thank-you.customer-information.render-after",
+  // Customer accounts: the order status page, the orders list and the profile.
+  "customer-account.order-status.block.render",
+  "customer-account.order-index.block.render",
+  "customer-account.profile.block.render",
+] as const;
+export type PluginBlockTarget = (typeof PLUGIN_BLOCK_TARGETS)[number];
+
+/** The storefront page groups whose batch reads one blocks part each. */
+export const PLUGIN_BLOCK_PAGES = ["checkout", "order", "account"] as const;
+export type PluginBlockPage = (typeof PLUGIN_BLOCK_PAGES)[number];
+
+/** The page group a target draws on. */
+export function pluginBlockPage(target: PluginBlockTarget): PluginBlockPage {
+  if (target.startsWith("purchase.checkout.")) return "checkout";
+  if (target === "purchase.thank-you.customer-information.render-after" || target === "customer-account.order-status.block.render") return "order";
+  return "account";
+}
+
+/**
+ * Targets inside the checkout form: their HTML may hold no form of its own
+ * (a nested form would break the buyer's), so forms are dropped there.
+ */
+export function pluginBlockAllowsForms(target: PluginBlockTarget): boolean {
+  return pluginBlockPage(target) !== "checkout";
+}
+
+/** At most this many app blocks draw on one page group. */
+export const PLUGIN_PAGE_BLOCKS_MAX = 12;
+
+/** What a section, product block or checkout/account block route is asked to draw (`request.render`). */
 export interface PluginRenderContext {
-  kind: "section" | "product-block";
+  kind: "section" | "product-block" | "block";
+  /** Checkout and customer-account blocks: where it draws. */
+  target?: PluginBlockTarget;
   /** The manifest section or block type. */
   type: string;
   /** The theme's id of this placement (stable while the merchant keeps it). */

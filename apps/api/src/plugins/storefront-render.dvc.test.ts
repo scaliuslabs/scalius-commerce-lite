@@ -25,6 +25,7 @@ import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
 import { installHello, pluginTestEnv, PLUGIN_TEST_CREDENTIAL_KEY } from "./testing/fixtures";
 import { manifest as wishlistManifest } from "./testing/apps/wishlist/src/index";
+import { manifest as notesManifest } from "./testing/apps/notes/src/index";
 
 class MemoryCache {
   readonly entries = new Map<string, Response>();
@@ -175,5 +176,48 @@ describe("storefront app output under dependency validation", () => {
     // Any installation change may change which scripts load.
     await deactivatePlugin(db, "acme.wishlist", { expectedRevision: (await requirePluginInstallation(db, "acme.wishlist")).revision });
     expect((await read("/api/v1/storefront/layout")).status).toBe("refresh");
+  });
+
+  it("draws checkout and account blocks once per page group: the layout says where, a hit runs no app code, only their keys refresh them", async () => {
+    // No app draws a block: the layout says so and pages read nothing more.
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual([]);
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).data.blocks).toEqual([]);
+
+    const notes = await installPlugin(db, { manifest: notesManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.notes"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.notes", { actorUserId: "owner", expectedRevision: notes.revision });
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual(["checkout", "account"]);
+
+    const runs = appRuns();
+    const checkout = await read("/api/v1/storefront/app-blocks/checkout");
+    expect(checkout.data.blocks).toEqual([{
+      id: "acme.notes/delivery",
+      app: "acme.notes",
+      target: "purchase.checkout.contact.render-after",
+      // A checkout block holds no form: the buyer's checkout form stays whole.
+      html: expect.not.stringContaining("<form"),
+    }]);
+    expect((checkout.data.blocks as Array<{ html: string }>)[0]!.html).toContain("Orders before 2 pm ship today.");
+    const account = await read("/api/v1/storefront/app-blocks/account");
+    expect((account.data.blocks as Array<{ target: string; html: string }>)).toEqual([expect.objectContaining({
+      target: "customer-account.order-index.block.render",
+      html: expect.stringContaining("action=\"/apps/acme.notes/join\""),
+    })]);
+    expect(appRuns()).toBe(runs + 2);
+
+    // Hits run no app code; a write to a collection only the account block reads refreshes only it.
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).status).toBe("hit");
+    expect((await read("/api/v1/storefront/app-blocks/account")).status).toBe("hit");
+    expect(appRuns()).toBe(runs + 2);
+    const installed = await requirePluginInstallation(db, "acme.notes");
+    await putPluginRecord(db, "acme.notes", "notes", installed.manifest.storage.notes!, "account", { text: "Double points this week." });
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).status).toBe("hit");
+    const refreshed = await read("/api/v1/storefront/app-blocks/account");
+    expect(refreshed.status).toBe("refresh");
+    expect(JSON.stringify(refreshed.data.blocks)).toContain("Double points this week.");
+
+    // Stopping the app removes its blocks everywhere.
+    await deactivatePlugin(db, "acme.notes", { expectedRevision: installed.revision });
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).data.blocks).toEqual([]);
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual([]);
   });
 });

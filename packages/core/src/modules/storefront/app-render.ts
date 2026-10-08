@@ -7,6 +7,13 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { checkoutLanguages, type PluginInstallationRow } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import {
+  PLUGIN_BLOCK_PAGES,
+  PLUGIN_PAGE_BLOCKS_MAX,
+  pluginBlockPage,
+  type PluginBlockPage,
+  type PluginBlockTarget,
+} from "@scalius/shared/plugins/storefront";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { and, eq, isNull } from "drizzle-orm";
 import { deps } from "../../cache-deps";
@@ -75,4 +82,49 @@ export async function readPluginRenderContext(db: Database, pluginIds: readonly 
     installations: activePluginInstallationsFromRows(results[0] as PluginInstallationRow[]),
     store: await facts.resolve(results, 1),
   };
+}
+
+/** One checkout or customer-account block to draw (`storefront.blocks`). */
+export interface PluginBlockRequest {
+  pluginId: string;
+  type: string;
+  target: PluginBlockTarget;
+}
+
+/**
+ * The page groups (checkout, order, account) where an active, approved app
+ * draws a block, from active installations already read: the layout tells
+ * each page whether to read its blocks part at all.
+ */
+export function activePluginBlockPages(installations: Iterable<PluginInstallation>): PluginBlockPage[] {
+  const pages = new Set<PluginBlockPage>();
+  for (const installation of installations) {
+    if (!installation.grant?.storefrontSurfaces) continue;
+    for (const block of installation.manifest.storefront.blocks) pages.add(pluginBlockPage(block.target));
+  }
+  return PLUGIN_BLOCK_PAGES.filter((page) => pages.has(page));
+}
+
+/**
+ * What drawing one page group's blocks reads, in one batch: every active
+ * installation (`plg:*`: an app that starts or stops drawing changes the
+ * answer) and the store facts. The blocks come in app id, then manifest
+ * order, at most `PLUGIN_PAGE_BLOCKS_MAX`.
+ */
+export async function readPluginBlockContext(db: Database, page: PluginBlockPage): Promise<{
+  installations: Map<string, PluginInstallation>;
+  store: PluginRenderStoreFacts;
+  requests: PluginBlockRequest[];
+}> {
+  const facts = planPluginRenderStoreFacts(db);
+  const results = await safeBatch(db, [selectActivePluginInstallations(db), ...facts.statements]);
+  const installations = activePluginInstallationsFromRows(results[0] as PluginInstallationRow[]);
+  const requests: PluginBlockRequest[] = [];
+  for (const installation of installations.values()) {
+    if (!installation.grant?.storefrontSurfaces) continue;
+    for (const block of installation.manifest.storefront.blocks) {
+      if (pluginBlockPage(block.target) === page) requests.push({ pluginId: installation.pluginId, type: block.type, target: block.target });
+    }
+  }
+  return { installations, store: await facts.resolve(results, 1), requests: requests.slice(0, PLUGIN_PAGE_BLOCKS_MAX) };
 }

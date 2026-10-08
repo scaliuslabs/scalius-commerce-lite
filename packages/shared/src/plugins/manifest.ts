@@ -12,6 +12,7 @@ import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { PLUGIN_SETTING_KEY, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
+import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
@@ -189,6 +190,20 @@ const storefrontSchema = z.object({
     name: title,
     placement: z.enum(["buy-box", "below"]),
     settings: pluginSettingsSchemaSchema.default([]),
+    route: name,
+    /** As for sections. */
+    reads: z.array(name).max(20).default([]),
+  }).strict()).max(10).default([]),
+  /**
+   * Checkout and customer-account blocks (Shopify's UI extension targets):
+   * sanitized HTML the public `route` draws from the app's settings and the
+   * collections in `reads`, the same for every buyer, cached under
+   * dependency validation. They draw at their target while the app is active.
+   */
+  blocks: z.array(z.object({
+    type: name,
+    name: title,
+    target: z.enum(PLUGIN_BLOCK_TARGETS),
     route: name,
     /** As for sections. */
     reads: z.array(name).max(20).default([]),
@@ -425,7 +440,7 @@ export const pluginManifestSchema = z.object({
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
-  storefront: storefrontSchema.default({ sections: [], productBlocks: [], head: false, scripts: [], proxy: false }),
+  storefront: storefrontSchema.default({ sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false }),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
 
@@ -501,6 +516,7 @@ export const pluginManifestSchema = z.object({
   const surfaces = [
     ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[] })),
     ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),
+    ...manifest.storefront.blocks.map((surface, index) => ({ surface: { ...surface, settings: [] }, path: ["storefront", "blocks", index] as (string | number)[] })),
   ];
   for (const { surface, path } of surfaces) {
     needPublicRoute([...path, "route"], surface.route);
@@ -585,6 +601,7 @@ export const pluginManifestSchema = z.object({
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
+  unique(manifest.storefront.blocks.map((block) => block.type), ["storefront", "blocks"], "Block types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 
@@ -662,7 +679,8 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
-    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0 || manifest.storefront.head,
+    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
+      || manifest.storefront.blocks.length > 0 || manifest.storefront.head,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
   };
 }
