@@ -1,3 +1,4 @@
+import { fetchWithTransientRetry } from "../transient-fetch";
 import { billingQuoteFields } from "./billing-address";
 import {
   normalizeTaxQuoteRequest,
@@ -181,7 +182,6 @@ export function buildTaxQuoteRequest(
   }
 }
 
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** The quote request, repeated after a failure in transit (no connection, a timeout, a 5xx or a 429). */
 async function postTaxQuote(
@@ -189,33 +189,22 @@ async function postTaxQuote(
   fetcher: typeof fetch,
   delays: readonly number[],
 ): Promise<Response> {
-  for (let attempt = 0; ; attempt += 1) {
-    let response: Response | null = null;
-    try {
-      response = await fetcher(TAX_QUOTE_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
-        cache: "no-store",
-        credentials: "same-origin",
-        signal: AbortSignal.timeout(TAX_QUOTE_TIMEOUT_MS),
-      });
-    } catch (error) {
-      const delay = delays[attempt];
-      if (delay === undefined) throw error;
-      await wait(delay);
-      continue;
-    }
-    const delay = delays[attempt];
-    if ((response.status >= 500 || response.status === 429) && delay !== undefined) {
-      await wait(delay);
-      continue;
-    }
-    return response;
-  }
+  return fetchWithTransientRetry(
+    fetcher,
+    TAX_QUOTE_ENDPOINT,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+    delays,
+    { timeoutMs: TAX_QUOTE_TIMEOUT_MS },
+  );
 }
 
 export async function fetchAuthoritativeTaxQuote(
