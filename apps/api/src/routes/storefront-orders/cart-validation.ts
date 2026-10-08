@@ -5,6 +5,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   checkStorefrontCartRules,
+  createAppLinePricer,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   resolveCartPaymentMethods,
@@ -269,6 +270,8 @@ app.openapi(cartValidationRoute, async (c) => {
       channel: "online_store",
     });
   };
+  const sessionCustomerId = lazySessionCustomerId(c, (token) =>
+    getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
@@ -277,9 +280,14 @@ app.openapi(cartValidationRoute, async (c) => {
     market: {
       presence: data.presence,
       shippingCountryCode: data.shippingCountryCode,
-      customerId: lazySessionCustomerId(c, (token) =>
-        getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
+      customerId: sessionCustomerId,
     },
+    // The apps' line prices: the cart shows what checkout will charge.
+    linePricer: createAppLinePricer(db, apps, {
+      channel: "online_store",
+      customerId: sessionCustomerId,
+      destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+    }),
   });
   // The cart's currency: its market's (MARKETS-DESIGN step 6).
   const money = result.money ?? shopPresentment({ code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor });

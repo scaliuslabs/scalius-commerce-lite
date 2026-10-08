@@ -11,6 +11,7 @@ import {
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   assertNoCheckoutRuleErrors,
+  createAppLinePricer,
   DELIVERY_ADDRESS_REQUIRED_REASON,
   NO_CHECKOUT_APP_FUNCTIONS,
   presentCheckoutRateOptions,
@@ -620,16 +621,25 @@ function agentCartMarket(db: Database, row: ContextRow) {
 async function loadAgentStorefrontCart(
   db: Database,
   row: ContextRow,
+  /** The apps' checkout functions: their line prices price the cart as submit will. */
+  apps?: CheckoutAppFunctions,
 ): Promise<AgentStorefrontCartState> {
   const cart = parseAgentStorefrontCartJson(row.cartJson);
   const identityLines = await resolveProductIdsForCart(db, cart);
   const currency = await readStoreCurrency(db);
+  const market = agentCartMarket(db, row);
   const validation = await validateStorefrontCartItems(db, identityLines, {
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
-    market: agentCartMarket(db, row),
+    market,
     // A buyer agent sells what the AI agents channel publishes (MARKETS-DESIGN D6).
     salesChannelId: AGENTS_CHANNEL_ID,
+    linePricer: createAppLinePricer(db, apps, {
+      channel: "agent",
+      customerId: market.customerId,
+      destination: row.countryCode ? { country: row.countryCode, city: null, zone: null } : null,
+      discountCodes: row.discountCode ? [row.discountCode] : [],
+    }),
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a
@@ -893,7 +903,7 @@ export async function quoteAgentStorefrontCheckout(
   } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
-  const projection = await loadAgentStorefrontCart(db, row);
+  const projection = await loadAgentStorefrontCart(db, row, input.apps);
   assertAgentStorefrontCheckoutProjection(projection);
   const delivery = projection.delivery!;
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;

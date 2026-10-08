@@ -9,7 +9,7 @@
  *
  * Precedence, documented once (Medusa price lists, Shopify catalogs):
  *
- *   active sale list > segment list > market list > FX-derived > base
+ *   active sale list > segment list > market list > app price > FX-derived > base
  *
  * - A list price applies only while its list is active and inside its
  *   schedule, in the market's currency, and (segment lists) to a member of
@@ -26,6 +26,13 @@
  *   increment, then up to the market's rounding step and its ending
  *   (WooPayments' rounding and charm pricing). The compare-at is the base
  *   price converted the same way (Shopify adjusts compare-at too).
+ * - App price (`cart.line_prices`, docs/platform/PLUGINS.md): a checkout
+ *   function's unit price for one cart line, rounded half-up to the price
+ *   increment. It sits below every list, so market and price-list rules stay
+ *   authoritative, and above the FX-derived and base price, so B2B contract,
+ *   subscription and tiered prices replace them. The compare-at is the price
+ *   without the app when that is higher. Checkout only: catalogue reads never
+ *   run apps.
  * - Base: the SKU's price after its catalogue discount (`discountedPriceMinor`).
  *
  * Promotions, bundles and app discounts apply after this, in today's order:
@@ -294,7 +301,7 @@ export interface BasePrice {
   effectiveMinor: number;
 }
 
-export type ResolvedPriceSource = PriceListKind | "fx" | "base";
+export type ResolvedPriceSource = PriceListKind | "app" | "fx" | "base";
 
 export interface ResolvedPrice {
   /** What one unit costs in the market currency. */
@@ -302,8 +309,14 @@ export interface ResolvedPrice {
   /** The struck-through price, only when it is above `amountMinor`. */
   compareAtMinor: number | null;
   source: ResolvedPriceSource;
-  /** The list whose row priced it (null for FX and base). */
+  /** The list whose row priced it (null for an app, FX and base). */
   priceListId: string | null;
+}
+
+/** An app's unit price for one cart line (`cart.line_prices`), in the market currency. */
+export interface AppLinePrice {
+  amountMinor: number;
+  pluginId: string;
 }
 
 export interface PriceResolutionInput {
@@ -316,6 +329,8 @@ export interface PriceResolutionInput {
   fx: FxConversion | null;
   /** The market currency's price increment: list amounts round half-up to it. */
   incrementMinor: number;
+  /** An app's price for this line (checkout only); every list outranks it. */
+  app?: AppLinePrice | null;
 }
 
 function toIncrement(amountMinor: number, incrementMinor: number): number {
@@ -368,11 +383,17 @@ export function resolvePrice(input: PriceResolutionInput): ResolvedPrice {
   const candidates = rowPerList(input.prices, quantity);
   let winner: PriceListPrice | null = null;
   for (const candidate of candidates) if (!winner || better(candidate, winner)) winner = candidate;
-  if (!winner) return withoutLists(input);
+  if (!winner) {
+    const fallback = withoutLists(input);
+    if (!input.app || !Number.isSafeInteger(input.app.amountMinor) || input.app.amountMinor <= 0) return fallback;
+    const amountMinor = toIncrement(input.app.amountMinor, input.incrementMinor);
+    const without = fallback.compareAtMinor ?? fallback.amountMinor;
+    return { amountMinor, compareAtMinor: compareAbove(amountMinor, without), source: "app", priceListId: null };
+  }
   const amountMinor = toIncrement(winner.amountMinor, input.incrementMinor);
   let compareAt = winner.compareAtMinor === null ? null : toIncrement(winner.compareAtMinor, input.incrementMinor);
   if (compareAt === null && winner.kind === "sale") {
-    compareAt = resolvePrice({ ...input, prices: input.prices.filter((price) => price.kind !== "sale") }).amountMinor;
+    compareAt = resolvePrice({ ...input, app: null, prices: input.prices.filter((price) => price.kind !== "sale") }).amountMinor;
   }
   return { amountMinor, compareAtMinor: compareAbove(amountMinor, compareAt), source: winner.kind, priceListId: winner.priceListId };
 }

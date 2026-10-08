@@ -19,6 +19,7 @@ import {
     applicablePriceListPrices,
     isPriceListLive,
     resolvePrice,
+    type AppLinePrice,
     type BasePrice,
     type FxConversion,
     type PriceListRow,
@@ -180,11 +181,14 @@ export function resolveCheckoutSkuPrice(
     base: BasePrice,
     listPrices: readonly PriceListRow[],
     quantity: number,
+    /** An app's price for the line (`cart.line_prices`); every list outranks it. */
+    app: AppLinePrice | null = null,
 ): ResolvedPrice {
     const market = scope.market;
     return resolvePrice({
         base,
         quantity,
+        app,
         fx: market?.fx ?? null,
         incrementMinor: scope.incrementMinor,
         prices: market

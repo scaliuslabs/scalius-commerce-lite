@@ -23,6 +23,7 @@ import {
     assertStorefrontGiftCardTenderReviewed,
     buildCheckoutAttemptIdentity,
     commitStorefrontOrderPayload,
+    createAppLinePricer,
     createAtomicCheckoutAttempt,
     createStorefrontOrder,
     createTrustedStorefrontCheckoutPolicySnapshot,
@@ -459,6 +460,8 @@ app.openapi(createOrderRoute, async (c) => {
 
   try {
     const attemptIdentity = await buildCheckoutAttemptIdentity(data);
+    const sessionCustomerId = lazySessionCustomerId(c, (token) =>
+      getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
     // One read round trip: idempotency row, checkout authority, and the rows
     // the commit needs. A committed request replays before any policy check.
     const checkoutReads = await loadStorefrontCheckoutReads<CheckoutCreatedPayload>(
@@ -488,12 +491,28 @@ app.openapi(createOrderRoute, async (c) => {
         // The order's market prices the lines (MARKETS-DESIGN D5); the
         // session is read only when a segment price list applies.
         billingCountryCode: data.billingCountryCode,
-        customerId: lazySessionCustomerId(c, (token) =>
-          getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
+        customerId: sessionCustomerId,
       },
       getCredentialEncryptionKey(c.env as Record<string, unknown>),
-      // App payment providers join from the registrations the read batch carries.
-      { paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations) },
+      {
+        // App payment providers join from the registrations the read batch carries.
+        paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations),
+        // The apps' checkout functions, from the registrations the read batch
+        // carried: none means no app work. Placement runs them again (it never
+        // trusts the quote's app outcome; the fingerprint compares the totals).
+        apps: (registrations) => createCheckoutAppFunctions({
+          env: c.env,
+          ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+          db,
+          registrations,
+        }),
+        linePricer: (apps) => createAppLinePricer(db, apps, {
+          channel: "online_store",
+          customerId: sessionCustomerId,
+          destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+          discountCodes: data.discountCodes,
+        }),
+      },
     );
     const existingAttempt = checkoutReads.existingAttempt;
     const paymentProviders = checkoutReads.paymentProviders;
@@ -520,15 +539,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
-    // The apps' checkout functions, from the registrations the read batch
-    // carried: none means no app work. Placement runs them again (it never
-    // trusts the quote's app outcome; the fingerprint compares the totals).
-    const apps = createCheckoutAppFunctions({
-      env: c.env,
-      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
-      db,
-      registrations: checkoutReads.functionRegistrations,
-    });
+    const apps = checkoutReads.apps;
     diagnostics?.mark("authority");
 
     const {

@@ -19,6 +19,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
+    createAppLinePricer,
     assertStorefrontLineFulfilment,
     presentCheckoutRateOptions,
     priceStorefrontCheckout,
@@ -257,6 +258,13 @@ app.openapi(taxQuoteRoute, async (c) => {
       billingCountryCode: data.billingCountryCode,
       customerId: sessionCustomer?.customerId ?? null,
     },
+    // The apps' line prices (B2B contracts, subscriptions), as the order prices them.
+    linePricer: createAppLinePricer(db, apps, {
+      channel: "online_store",
+      customerId: sessionCustomer?.customerId ?? null,
+      destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+      discountCodes: data.discountCodes,
+    }),
   });
   if (!cartValidation.valid) {
     throw new ValidationError("Some items in your cart need attention.", {

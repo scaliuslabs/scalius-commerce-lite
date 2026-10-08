@@ -30,6 +30,7 @@ import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
+import { createAppLinePricer } from "./app-line-prices";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -676,6 +677,13 @@ export async function createStorefrontOrder(
             priceIncrementMinor: requestCurrency.priceIncrementMinor,
             // The order's sales channel: its publications and its locations' units.
             salesChannelId: defaultOrderSalesChannelId(appOptions.channel ?? "online_store"),
+            // The apps' line prices, as the quote priced them.
+            linePricer: createAppLinePricer(storefrontDb, appOptions.apps, {
+                channel: appOptions.channel ?? "online_store",
+                customerId: customerIdentity?.customerId ?? null,
+                destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+                discountCodes: data.discountCodes,
+            }),
         },
     );
 

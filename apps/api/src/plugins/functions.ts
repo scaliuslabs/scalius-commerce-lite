@@ -11,10 +11,10 @@
 // `PluginFunctionsBlockedError` (checkout then refuses with the store's
 // buyer-safe message).
 //
-// Snapshots (checkout.discounts with `snapshot`): the signed-in buyer's
-// record in the declared collection is read and passed in with its
-// revision; an answer's `commit` becomes a checked `AppStorageCommit` the
-// order commit writes at that revision. A commit the platform cannot take
+// Snapshots (checkout.discounts and cart.line_prices with `snapshot`): the
+// signed-in buyer's record in the declared collection is read and passed in
+// with its revision; a checkout.discounts answer's `commit` becomes a
+// checked `AppStorageCommit` the order commit writes at that revision. A commit the platform cannot take
 // (no snapshot, a guest, an oversized record) invalidates the whole answer:
 // a discount must never apply without the write that pays for it.
 
@@ -30,6 +30,7 @@ import {
 import type { AppStorageCommit } from "@scalius/shared/checkout-app-facts";
 import {
   PLUGIN_FUNCTION_SCHEMAS,
+  PLUGIN_SNAPSHOT_FUNCTION_POINTS,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
@@ -99,7 +100,9 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
       next += 1;
       const { installation, priority } = registered[index]!;
       const declaration = installation.manifest.functions.find((fn) => fn.point === point);
-      const snapshot = point === "checkout.discounts" ? await readSnapshot(db, installation, declaration?.snapshot, checked.data) : undefined;
+      const snapshot = (PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(point)
+        ? await readSnapshot(db, installation, declaration?.snapshot, checked.data)
+        : undefined;
       const outcome = await host.invokeFunction(installation, point, snapshot ? { ...checked.data, snapshot: snapshot.value } : checked.data);
       if (!outcome.ok || !outcome.value) {
         // Only an approved grant lets an app pause checkout.

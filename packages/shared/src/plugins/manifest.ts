@@ -60,6 +60,8 @@ const description = z.string().trim().min(1).max(500);
 
 /** Synchronous decision points: pure input → output, strict limits (functions.ts). */
 export const PLUGIN_FUNCTION_POINTS = [
+  "cart.transform",
+  "cart.line_prices",
   "cart.validate",
   "checkout.discounts",
   "checkout.shipping_rates",
@@ -71,10 +73,18 @@ export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 /**
  * Points where an app may stop checkout when it cannot answer
  * (`onError: "block"`): a check the store relies on (address or stock
- * verification, payment eligibility). Elsewhere a failure only leaves the
- * app out.
+ * verification, payment eligibility), the lines a bundle store sells and
+ * the prices a B2B store agreed. Elsewhere a failure only leaves the app out.
  */
-export const PLUGIN_BLOCKING_FUNCTION_POINTS = ["cart.validate", "checkout.payment_methods"] as const satisfies readonly PluginFunctionPoint[];
+export const PLUGIN_BLOCKING_FUNCTION_POINTS = [
+  "cart.transform",
+  "cart.line_prices",
+  "cart.validate",
+  "checkout.payment_methods",
+] as const satisfies readonly PluginFunctionPoint[];
+
+/** Points whose function may read the signed-in buyer's record (`snapshot`); only checkout.discounts may commit it. */
+export const PLUGIN_SNAPSHOT_FUNCTION_POINTS = ["cart.line_prices", "checkout.discounts"] as const satisfies readonly PluginFunctionPoint[];
 
 /** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
 export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
@@ -357,15 +367,16 @@ export const pluginManifestSchema = z.object({
     /**
      * What a throw, timeout or invalid answer does: `skip` leaves the app out
      * (fail open); `block` stops checkout with the store's buyer-safe message
-     * (cart.validate and checkout.payment_methods only).
+     * (PLUGIN_BLOCKING_FUNCTION_POINTS only).
      */
     onError: z.enum(["skip", "block"]).default("skip"),
     /**
-     * checkout.discounts only: the signed-in buyer's record in this
-     * collection (record id = customer id) is passed in as `snapshot`, and
-     * the answer may `commit` a new version of it, written with the order in
-     * the same atomic batch at the revision the function saw (a spent
-     * balance can never be spent twice).
+     * checkout.discounts and cart.line_prices: the signed-in buyer's record
+     * in this collection (record id = customer id) is passed in as
+     * `snapshot` (a B2B contract, a subscription, a points balance). A
+     * checkout.discounts answer may `commit` a new version of it, written
+     * with the order in the same atomic batch at the revision the function
+     * saw (a spent balance can never be spent twice).
      */
     snapshot: z.object({ collection: name }).strict().optional(),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
@@ -532,10 +543,10 @@ export const pluginManifestSchema = z.object({
   }
   manifest.functions.forEach((fn, index) => {
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
-      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: "Only cart.validate and checkout.payment_methods may block checkout." });
+      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: `Only ${PLUGIN_BLOCKING_FUNCTION_POINTS.join(", ")} may block checkout.` });
     }
-    if (fn.snapshot && fn.point !== "checkout.discounts") {
-      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: "Only checkout.discounts reads a snapshot." });
+    if (fn.snapshot && !(PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: `Only ${PLUGIN_SNAPSHOT_FUNCTION_POINTS.join(" and ")} read a snapshot.` });
     }
     if (fn.snapshot && !collections.has(fn.snapshot.collection)) {
       context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "collection"], message: `Storage collection ${fn.snapshot.collection} is not declared.` });

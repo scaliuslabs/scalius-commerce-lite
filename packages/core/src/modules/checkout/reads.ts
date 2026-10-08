@@ -21,6 +21,8 @@ import {
   selectActiveCheckoutRegistrations,
 } from "../plugins";
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsability } from "../payments";
+import { NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
+import type { AppLinePricer } from "./app-line-prices";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
     type StorefrontCheckoutAuthorityInput,
@@ -57,14 +59,21 @@ function tagCheckoutError(error: unknown, code: string): unknown {
  * no app work). The attempt is decided first so a committed request replays
  * even if authority changed. `paymentProviders` turns the active payment
  * provider registrations into the request's gateways (the API builds them;
- * without it only built-in gateways are offered).
+ * without it only built-in gateways are offered). `apps` builds the
+ * request's checkout functions from the function registrations, and
+ * `linePricer` the `cart.line_prices` pricer from them, before the cart
+ * is priced.
  */
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
     identity: CheckoutAttemptIdentity,
     authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null },
     credentialEncryptionKey?: string,
-    options: { paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders } = {},
+    options: {
+        paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
+        apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
+        linePricer?: (apps: CheckoutAppFunctions) => AppLinePricer | undefined;
+    } = {},
 ): Promise<{
     existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
@@ -73,8 +82,11 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     functionRegistrations: RegisteredPlugin[];
     /** The request's gateways: built-in and the active app providers. */
     paymentProviders: PaymentProviders;
+    /** The request's checkout functions (`options.apps`), or none. */
+    apps: CheckoutAppFunctions;
 }> {
-    const plan = createStorefrontCheckoutAuthorityReadPlan(db, authorityInput);
+    let linePricer: AppLinePricer | undefined;
+    const plan = createStorefrontCheckoutAuthorityReadPlan(db, { ...authorityInput, linePricer: () => linePricer });
     const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
     const variantIds = [...new Set(authorityInput.items
         .map((item) => item.variantId)
@@ -104,6 +116,9 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     const paymentProviders = paymentRegistrations.length > 0 && options.paymentProviders
         ? options.paymentProviders(paymentRegistrations)
         : BUILT_IN_PAYMENT_PROVIDERS;
+    const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
+    const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
+    linePricer = options.linePricer?.(apps);
     const settled: SettledAuthority = existingAttempt?.status === "replay"
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
         : await plan.resolve(
@@ -127,7 +142,8 @@ export async function loadStorefrontCheckoutReads<TResponse>(
             if (!settled.ok) throw settled.error;
             return settled.snapshot;
         },
-        functionRegistrations: registrations.filter((registration) => registration.kind !== "provider"),
+        functionRegistrations,
         paymentProviders,
+        apps,
     };
 }

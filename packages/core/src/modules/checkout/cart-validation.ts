@@ -36,6 +36,8 @@ import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
+import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
+import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
 import {
     checkoutListPricesSql,
     marketPricingMatrixSql,
@@ -85,6 +87,21 @@ export interface StorefrontCartValidationItem {
     variantLabel?: string | null;
     /** Buyer inputs `[{ key, value }]`; resolved against the product's schema. */
     properties?: unknown;
+    /**
+     * Set by `cart.transform` (cart-transform.ts): the bundle the line
+     * belongs to (an expanded line's components, merged lines) and the
+     * buyer's line it came from. Never taken from a request.
+     */
+    bundle?: CartLineBundle | null;
+    sourceIndex?: number;
+}
+
+/** The bundle a line belongs to on the order (`cart.transform`). */
+export interface CartLineBundle {
+    /** Stable within the cart: the buyer line's tax allocation line id. */
+    id: string;
+    title: string;
+    kind: "expand" | "merge";
 }
 
 export interface StorefrontCartItemIssue {
@@ -115,6 +132,12 @@ export interface StorefrontCartValidatedItem {
     unitPriceMinor: number;
     /** The product/variant price after its own sale; surcharges excluded. */
     baseUnitPriceMinor: number;
+    /** What priced `baseUnitPriceMinor` (`resolvePrice()`; `app`: `cart.line_prices`). */
+    priceSource: ResolvedPriceSource;
+    /** `cart.transform`: the bundle this line belongs to; null for a plain line. */
+    bundle: CartLineBundle | null;
+    /** The buyer's line this came from (`index` unless the cart was transformed). */
+    sourceIndex: number;
     propertiesPriceMinor: number;
     /** Labelled snapshot entries frozen on the order line. */
     properties: ResolvedLineProperty[];
@@ -263,13 +286,14 @@ function displayVariantLabel(item: StorefrontCartValidationItem, variant?: Store
  * its own way, `resolvePrice()` (MARKETS-DESIGN D5: sale, segment and market
  * lists, then FX) at the quantity of this SKU in the cart (quantity breaks).
  */
-function calculateUnitPriceMinor(
+function calculateUnitPrice(
     product: StorefrontCartProductRow,
     variant: StorefrontCartVariantRow,
     priceIncrementMinor: number,
     priceScope: CheckoutPriceScope | null,
     quantity: number,
-): number {
+    app: AppLinePrice | null,
+): { amountMinor: number; source: ResolvedPriceSource } {
     const variantHasDiscount =
         (variant.discountType === "percentage" && variant.discountBps > 0) ||
         (variant.discountType === "flat" && variant.discountAmountMinor > 0);
@@ -281,13 +305,25 @@ function calculateUnitPriceMinor(
         discount.discountAmountMinor,
         priceIncrementMinor,
     );
-    if (!priceScope?.market) return effectiveMinor;
-    return resolveCheckoutSkuPrice(
+    if (!priceScope?.market) {
+        if (!app) return { amountMinor: effectiveMinor, source: "base" };
+        const resolved = resolvePrice({
+            base: { priceMinor: variant.priceMinor, effectiveMinor },
+            prices: [],
+            fx: null,
+            incrementMinor: priceScope?.incrementMinor ?? priceIncrementMinor,
+            app,
+        });
+        return { amountMinor: resolved.amountMinor, source: resolved.source };
+    }
+    const resolved = resolveCheckoutSkuPrice(
         priceScope,
         { priceMinor: variant.priceMinor, effectiveMinor },
         parseMarketListPrices(variant.listPrices),
         quantity,
-    ).amountMinor;
+        app,
+    );
+    return { amountMinor: resolved.amountMinor, source: resolved.source };
 }
 
 function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryPool): number {
@@ -423,6 +459,13 @@ export function resolveStorefrontCartValidationFromRows(
         priceIncrementMinor?: number | null;
         /** The market that prices the cart (`resolveCheckoutPriceScope`); absent: base prices. */
         priceScope?: CheckoutPriceScope | null;
+        /** `cart.line_prices` answers by line index (app-line-prices.ts). */
+        appPrices?: ReadonlyMap<number, AppLinePrice>;
+        /**
+         * Skip the submitted-price check: the first pass of an app-priced
+         * cart, whose final prices are not known yet (never a final answer).
+         */
+        deferSubmittedPriceCheck?: boolean;
     },
     productRows: readonly StorefrontCartProductRow[],
     variantRows: readonly StorefrontCartVariantRow[],
@@ -691,19 +734,22 @@ export function resolveStorefrontCartValidationFromRows(
             }
         }
 
-        const baseUnitPriceMinor = calculateUnitPriceMinor(
+        // Gift cards are money: an app never prices one.
+        const appPrice = isGiftCard ? null : options.appPrices?.get(index) ?? null;
+        const { amountMinor: baseUnitPriceMinor, source: priceSource } = calculateUnitPrice(
             product,
             variant,
             shopIncrementMinor,
             options.priceScope ?? null,
             requestedForVariant,
+            appPrice,
         );
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor;
         const submittedPriceMinor = typeof item.price === "number"
             ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;
-        if (submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
+        if (!options.deferSubmittedPriceCheck && submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
             addIssue(issues, item, index, {
                 code: "PRICE_CHANGED",
                 action: "refresh_item",
@@ -730,6 +776,9 @@ export function resolveStorefrontCartValidationFromRows(
             quantity: item.quantity,
             unitPriceMinor,
             baseUnitPriceMinor,
+            priceSource,
+            bundle: item.bundle ?? null,
+            sourceIndex: item.sourceIndex ?? index,
             propertiesPriceMinor,
             properties: resolvedProperties.properties,
             canonicalProperties: resolvedProperties.canonical,
@@ -871,6 +920,8 @@ export async function validateStorefrontCartItems(
         market?: CheckoutMarketSignals;
         /** The sales channel the cart sells from (MARKETS-DESIGN D6); absent: the online store. */
         salesChannelId?: string;
+        /** The apps' `cart.line_prices` (app-line-prices.ts); absent: catalogue prices only. */
+        linePricer?: AppLinePricer;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -899,14 +950,14 @@ export async function validateStorefrontCartItems(
         }),
     ]);
 
-    return resolveStorefrontCartValidationFromRows(
+    return resolveCartWithAppLinePrices(options.linePricer, (pass) => resolveStorefrontCartValidationFromRows(
         items,
-        { ...options, priceScope },
+        { ...options, priceScope, ...pass },
         productRows as StorefrontCartProductRow[],
         variantRows as StorefrontCartVariantRow[],
         mediaByProduct,
         (bundleRows ?? []) as ProductBundleRow[],
-    );
+    ));
 }
 
 /**
@@ -935,6 +986,9 @@ export function presentStorefrontCartValidation(
             canonicalProperties,
             isGiftCard: _isGiftCard,
             bundleDiscountMinor: _bundleDiscountMinor,
+            priceSource: _priceSource,
+            bundle: _bundle,
+            sourceIndex: _sourceIndex,
             ...item
         }, position) => ({
             ...item,

@@ -53,6 +53,7 @@ import {
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
 import { resolveCheckoutPriceScope } from "../price-lists";
+import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
 import { backupPriceIncrementSql, sellingCountriesFromSql, sellingCountriesSql, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
@@ -91,6 +92,11 @@ export interface StorefrontCheckoutAuthorityInput {
      * Every input of one batch sells from the same channel.
      */
     salesChannelId?: string;
+    /**
+     * The apps' `cart.line_prices` (app-line-prices.ts), asked when the
+     * cart is priced: after the read, which also says which apps are active.
+     */
+    linePricer?: () => AppLinePricer | undefined;
 }
 
 export interface StorefrontCheckoutSettingsAuthority {
@@ -379,23 +385,24 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 },
             }).catch((error: unknown) => ({ error }))));
 
-            return inputs.map((input, inputIndex): StorefrontCheckoutAuthorityResolution => {
+            return Promise.all(inputs.map(async (input, inputIndex): Promise<StorefrontCheckoutAuthorityResolution> => {
                 try {
                     const priceScope = priceScopes[inputIndex];
                     if (priceScope && "error" in priceScope) throw priceScope.error;
-                    const cartValidation = resolveStorefrontCartValidationFromRows(
+                    const cartValidation = await resolveCartWithAppLinePrices(input.linePricer?.(), (pass) => resolveStorefrontCartValidationFromRows(
                         input.items,
                         {
                             inventoryPool: input.inventoryPool,
                             currencyCode: currency.currencyCode,
                             priceIncrementMinor: currency.priceIncrementMinor,
                             priceScope,
+                            ...pass,
                         },
                         productRows,
                         variantRows,
                         mediaByProduct,
                         bundleRows,
-                    );
+                    ));
                     if (!cartValidation.valid) {
                         throw new ValidationError("Some items in your cart need attention.", {
                             itemIssues: cartValidation.issues,
@@ -465,7 +472,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     }
                     return { ok: false, error };
                 }
-            });
+            }));
         },
         async resolve(results, credentialEncryptionKey, appPayments) {
             const resolutions = await this.resolveSettled(results, credentialEncryptionKey, appPayments);
