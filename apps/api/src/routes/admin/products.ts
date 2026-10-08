@@ -57,6 +57,8 @@ import { productMerchandisingSectionResponseSchemas } from "../../schemas/produc
 
 import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
+import { products } from "@scalius/database/schema";
+import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -400,13 +402,14 @@ const listRoute = createRoute({
             salesChannelState: z.enum(["published", "unpublished"]).optional().openapi({ description: "With salesChannel: published (default) or unpublished products." }),
             view: z.enum(["full", "compact"]).optional().default("full").openapi({ description: "Compact lists omit rich descriptions" }),
             sort: z.enum(["name", "price", "category", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
+            ...appListQuerySchema,
         })
     },
     responses: {
         200: {
             description: "Cursor-paginated product list with a capped total",
-            content: { "application/json": { schema: keysetPaginatedEnvelope("products", productSummarySchema) } },
+            content: { "application/json": { schema: keysetPaginatedEnvelope("products", productSummarySchema, { appValues: appListValuesSchema }) } },
         },
         ...errorResponses,
     }
@@ -415,7 +418,10 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
+    // App columns and filters: nothing more is read unless the request names some.
+    const appList = await planAppList(db, "product", products.id, query);
     const result = await listProducts(db, {
+        appCondition: appList.condition,
         page: query.page,
         limit: query.limit,
         after: query.after,
@@ -430,7 +436,8 @@ app.openapi(listRoute, async (c) => {
         sort: query.sort as "name" | "price" | "category" | "createdAt" | "updatedAt" | undefined,
         order: query.order as "asc" | "desc" | undefined
     });
-    return ok(c, result);
+    const appValues = await appList.values(result.products.map((product) => product.id));
+    return ok(c, { ...result, ...(appValues ? { appValues } : {}) });
 });
 
 // ── Bounded Product Summaries for Agents ──

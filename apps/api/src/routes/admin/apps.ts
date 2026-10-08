@@ -33,6 +33,8 @@ import {
 import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permission-metadata";
 import {
   PLUGIN_ADMIN_TARGETS,
+  PLUGIN_LIST_COLUMN_TYPES,
+  PLUGIN_LIST_RESOURCES,
   PLUGIN_CATEGORIES,
   PLUGIN_ID_PATTERN,
   PLUGIN_FUNCTION_POINTS,
@@ -121,6 +123,8 @@ const appTranslationsSchema = z.object({
     cards: z.record(z.string(), z.string()).optional(),
     actions: z.record(z.string(), z.string()).optional(),
     widgets: z.record(z.string(), z.string()).optional(),
+    listColumns: z.record(z.string(), z.string()).optional(),
+    timeline: z.record(z.string(), z.string()).optional(),
     tabs: z.record(z.string(), z.record(z.string(), z.string())).optional(),
     settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
     settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional() })).optional(),
@@ -681,6 +685,15 @@ const appAdminSurfacesSchema = z.object({
     destructive: z.boolean(),
   })),
   widgets: z.array(z.object({ id: z.string(), title: z.string(), route: z.string() })),
+  /** Columns (and filters) on the products, orders and customers lists; ask for them with appColumns / appFilter. */
+  listColumns: z.array(z.object({
+    key: z.string().openapi({ description: "<app id>/<column id>: what appColumns and appFilter name." }),
+    id: z.string(),
+    resource: z.enum(PLUGIN_LIST_RESOURCES),
+    title: z.string(),
+    type: z.enum(PLUGIN_LIST_COLUMN_TYPES),
+    filterable: z.boolean(),
+  })),
   /** The app's admin routes: buttons and forms in its UI may call only these, with these methods. */
   routes: z.array(surfaceRouteSchema),
   /** Its providers: dashboard search opens each one's setup where its capability lives. */
@@ -726,12 +739,21 @@ app.openapi(surfacesRoute, async (c) => {
           destructive: action.destructive,
         })),
         widgets: admin.widgets.map((widget) => ({ id: widget.id, title: widget.title, route: widget.route })),
+        listColumns: admin.listColumns.map((column) => ({
+          key: `${installation.pluginId}/${column.id}`,
+          id: column.id,
+          resource: column.resource,
+          title: column.title,
+          type: column.type,
+          filterable: column.filterable,
+        })),
         routes: routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
         providers: installation.manifest.providers.map((provider) => providerEntry(installation, provider)),
         translations: translations ?? null,
       };
     })
-    .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length + surfaces.providers.length > 0)
+    .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length
+      + surfaces.listColumns.length + surfaces.providers.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return ok(c, { apps });
 });

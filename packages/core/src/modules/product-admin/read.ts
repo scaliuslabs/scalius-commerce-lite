@@ -9,7 +9,7 @@ import {
     productAttributeValues,
     inventoryMovements,
 } from "@scalius/database/schema";
-import { and, sql, eq, asc, inArray, isNull, or, type SQLWrapper } from "drizzle-orm";
+import { and, sql, eq, asc, inArray, isNull, or, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -101,6 +101,8 @@ export async function listProducts(db: Database, options: {
     /** Only products published (`published`, the default) or not published (`unpublished`) to this sales channel. */
     salesChannelId?: string;
     salesChannelState?: "published" | "unpublished";
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
 }) {
     const {
         search,
@@ -119,7 +121,7 @@ export async function listProducts(db: Database, options: {
         salesChannelState = "published",
     } = options;
 
-    const whereConditions = [];
+    const whereConditions: SQL[] = options.appCondition ? [options.appCondition] : [];
 
     if (showTrashed) {
         whereConditions.push(sql`${products.deletedAt} IS NOT NULL`);

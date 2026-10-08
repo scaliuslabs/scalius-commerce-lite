@@ -137,6 +137,37 @@ const customFieldSchema = z.object({
 /** The most tabs one app page declares. */
 export const PLUGIN_PAGE_TABS_MAX = 8;
 
+/** Dashboard lists an app may add columns and filters to. */
+export const PLUGIN_LIST_RESOURCES = ["product", "order", "customer"] as const;
+export type PluginListResource = (typeof PLUGIN_LIST_RESOURCES)[number];
+/** How a list column shows its value (money: integer minor units of the store currency). */
+export const PLUGIN_LIST_COLUMN_TYPES = ["text", "number", "money", "date", "boolean"] as const;
+export type PluginListColumnType = (typeof PLUGIN_LIST_COLUMN_TYPES)[number];
+/** The most app columns one list request asks for. */
+export const PLUGIN_LIST_COLUMNS_PER_REQUEST = 5;
+
+/**
+ * A column the app adds to a dashboard list (Shopify admin list columns),
+ * backed by real data: a field of the app's record whose id is the row's
+ * resource id, or one of its own custom fields on the resource. The list
+ * reads it in one bounded statement for the page shown. `filterable` adds an
+ * equality filter, only on a storage field that leads one of the
+ * collection's declared indexes, so the filter is an index match, never a
+ * scan. No app column sorts a list: no index orders the store's rows by an
+ * app's value.
+ */
+const listColumnSchema = z.object({
+  id: name,
+  resource: z.enum(PLUGIN_LIST_RESOURCES),
+  title,
+  type: z.enum(PLUGIN_LIST_COLUMN_TYPES),
+  source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("storage"), collection: name, field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/) }).strict(),
+    z.object({ kind: z.literal("customField"), key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
+  ]),
+  filterable: z.boolean().default(false),
+}).strict();
+
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
@@ -166,6 +197,8 @@ const adminSchema = z.object({
   }).strict()).max(20).default([]),
   /** Dashboard home widgets. */
   widgets: z.array(z.object({ id: name, title, route: name }).strict()).max(5).default([]),
+  /** Columns (and filters) on the products, orders and customers lists. */
+  listColumns: z.array(listColumnSchema).max(10).default([]),
 }).strict();
 
 /**
@@ -331,6 +364,8 @@ const pluginTranslationSchema = z.object({
   salesChannels: z.record(name, title).optional(),
   actions: z.record(name, title).optional(),
   widgets: z.record(name, title).optional(),
+  /** List column titles by id. */
+  listColumns: z.record(name, title).optional(),
   /** Order timeline entry titles by kind. */
   timeline: z.record(name, title).optional(),
   /** Page tab titles: page id → tab id → title. */
@@ -448,7 +483,7 @@ export const pluginManifestSchema = z.object({
   /** App-wide settings sections (`settings[].group`); additive, presentation only. */
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
-  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
+  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [] }),
   timeline: timelineSchema,
   storefront: storefrontSchema.default({ sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false }),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
@@ -486,7 +521,7 @@ export const pluginManifestSchema = z.object({
   for (const locale of PLUGIN_TRANSLATION_LOCALES) {
     const translation = manifest.translations?.[locale];
     if (!translation) continue;
-    for (const surface of ["pages", "cards", "actions", "widgets"] as const) {
+    for (const surface of ["pages", "cards", "actions", "widgets", "listColumns"] as const) {
       const declared = new Set(manifest.admin[surface].map((entry) => entry.id));
       for (const id of Object.keys(translation[surface] ?? {})) {
         if (!declared.has(id)) {
@@ -613,6 +648,28 @@ export const pluginManifestSchema = z.object({
   });
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
+  unique(manifest.admin.listColumns.map((column) => `${column.resource}:${column.id}`), ["admin", "listColumns"], "List column ids");
+  manifest.admin.listColumns.forEach((column, index) => {
+    const path = ["admin", "listColumns", index];
+    if (column.source.kind === "customField") {
+      const key = column.source.key;
+      if (!manifest.customFields.some((field) => field.ownerType === column.resource && field.key === key)) {
+        context.addIssue({ code: "custom", path: [...path, "source", "key"], message: `Custom field ${column.resource}.${key} is not declared.` });
+      }
+      if (column.filterable) context.addIssue({ code: "custom", path: [...path, "filterable"], message: "Only a storage field an index leads can filter a list." });
+      return;
+    }
+    const collection = manifest.storage[column.source.collection];
+    if (!collection) {
+      context.addIssue({ code: "custom", path: [...path, "source", "collection"], message: `Storage collection ${column.source.collection} is not declared.` });
+      return;
+    }
+    const field = column.source.field;
+    const leads = collection.indexes.some((entry) => (Array.isArray(entry) ? entry[0] : entry) === field);
+    if (column.filterable && !leads) {
+      context.addIssue({ code: "custom", path: [...path, "filterable"], message: `Index ${field} first in collection ${column.source.collection} to filter by it.` });
+    }
+  });
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
   unique(manifest.storefront.blocks.map((block) => block.type), ["storefront", "blocks"], "Block types");

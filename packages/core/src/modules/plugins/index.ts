@@ -12,6 +12,7 @@ export * from "./grants";
 export * from "./index-encoding";
 export * from "./installations";
 export * from "./kv";
+export * from "./list-columns";
 export * from "./logs";
 export * from "./registry";
 export * from "./registry-trust";
