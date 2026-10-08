@@ -69,8 +69,16 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
   },
   "category-tiles": { settings: { style: "photo", title: "Shop by category", categoryIds: FIXTURE_CATEGORY_IDS } },
   collections: { settings: { carousel: "large", collectionIds: FIXTURE_COLLECTION_IDS } },
-  "product-rail": { settings: { title: "New arrivals", source: SOURCES.newest, limit: 12 }, alternatives: sourceAlternatives },
-  "product-grid": { settings: { title: "Best sellers this week", source: SOURCES.popular, columns: 4, rows: 2 }, alternatives: sourceAlternatives },
+  "product-rail": {
+    settings: { title: "New arrivals", source: SOURCES.newest, limit: 12 },
+    // A data state: five cards fit one row from 1280px, so the arrows show only below it.
+    alternatives: { ...sourceAlternatives, "five-products": { limit: 5 } },
+  },
+  "product-grid": {
+    settings: { title: "Best sellers this week", source: SOURCES.popular, columns: 4, rows: 2 },
+    // Two products are a data state shorter than one row: a capped two-column grid.
+    alternatives: { ...sourceAlternatives, "two-products": { columns: 2, rows: 1 } },
+  },
   "deal-block": {
     settings: { title: "Flash sale", source: SOURCES["on-sale"], promotionId: "promo-flash" },
     alternatives: { "no-countdown": { promotionId: null } },

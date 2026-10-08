@@ -3,7 +3,8 @@
 // clipped card (WCAG 2.4.7, 2.4.11). One delegated listener serves every rail:
 // home rails, recently viewed, brands and the cart drawer.
 
-const RING_ROOM_PX = 8;
+// The room a focus ring needs (2px outline + 2px offset): the rails pad their ends by the same 4px.
+const RING_ROOM_PX = 4;
 
 export function revealFocusedRailItem(target: EventTarget | null): void {
   if (!(target instanceof Element)) return;

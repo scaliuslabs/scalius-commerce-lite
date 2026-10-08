@@ -333,9 +333,9 @@ html {
   }
 }
 
-/* Horizontal rails keep focused items clear of the edges (scripts/rail-focus.ts). */
+/* Horizontal rails keep focused items clear of the edges (scripts/rail-focus.ts): the rail pads its ends by 4px (`-mx-1 px-1`), room for the focus ring. */
 [data-h-rail] {
-  scroll-padding-inline: 0.5rem;
+  scroll-padding-inline: 0.25rem;
 }
 
 /* A home section with one or two products (ProductGrid `sparse`): two

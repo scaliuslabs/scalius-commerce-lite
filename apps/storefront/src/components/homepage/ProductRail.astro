@@ -61,7 +61,7 @@ const itemClass = shelf
 ---
 
 {bare && (
-  <div data-h-rail class="home-rail-track flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden">
+  <div data-h-rail class="home-rail-track -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden">
     {products.map((product, index) => (
       <div class={itemClass}>
         <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} context="shelf" index={index} aboveFold={aboveFold} />
@@ -106,7 +106,7 @@ const itemClass = shelf
           <div
             data-product-rail-track
             data-h-rail
-            class="home-rail-track flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
+            class="home-rail-track -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
           >
             {products.map((product, index) => (
               <div class={itemClass}>

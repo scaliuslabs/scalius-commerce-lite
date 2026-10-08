@@ -21,13 +21,13 @@ describe("revealFocusedRailItem", () => {
   it("scrolls a card cut off at the end fully into view with room for its ring", () => {
     const { link, calls } = rail(rect(372, 484));
     revealFocusedRailItem(link);
-    expect(calls).toEqual([484 - (382 - 8)]);
+    expect(calls).toEqual([484 - (382 - 4)]);
   });
 
   it("scrolls a card cut off at the start back", () => {
     const { link, calls } = rail(rect(-40, 72));
     revealFocusedRailItem(link);
-    expect(calls).toEqual([-56]);
+    expect(calls).toEqual([-52]);
   });
 
   it("leaves a card already inside alone, and ignores anything outside a rail", () => {
