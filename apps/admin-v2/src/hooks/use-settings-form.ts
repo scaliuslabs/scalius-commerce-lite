@@ -44,8 +44,9 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
 
 /** The label the page shows for a field: its control's `<label>`, else the key in words. */
 function fieldLabel(path: string, fields: SaveBarEntry["fields"] | undefined): string {
-  const controlId = (fields as Record<string, string> | undefined)?.[path] ?? (fields as Record<string, string> | undefined)?.[path.split(".")[0]!];
-  if (controlId && typeof document !== "undefined") {
+  const lookup = (key: string) => typeof fields === "function" ? fields(key) : fields?.[key];
+  const controlId = lookup(path) ?? lookup(path.split(".")[0]!);
+  if (controlId && typeof document !== "undefined" && typeof CSS !== "undefined") {
     const text = document.querySelector(`label[for="${CSS.escape(controlId)}"]`)?.textContent?.trim();
     if (text) return text;
   }

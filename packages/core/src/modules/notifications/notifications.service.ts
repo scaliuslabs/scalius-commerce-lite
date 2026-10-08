@@ -43,6 +43,7 @@ import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMe
 import { notificationsDocument } from "./documents";
 import { getNotificationChannels, getOrderWhatsAppTemplateSettings } from "./channel-settings";
 import { getNotificationTemplates } from "./notification-templates.service";
+import { onlineStaffIds } from "./staff-presence";
 import { deliverWebPush, readPushSubscriptions, sendAppPush, sendWebPushNotification, webPushPayload, webPushSender } from "./web-push";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
@@ -299,7 +300,8 @@ async function sendStaffWebPushNotice(
 ): Promise<void> {
     const sender = await webPushSender(env);
     if (!sender) return;
-    await sendWebPushNotification(db, sender, { audience: "staff" }, {
+    // Staff with an open dashboard see it live through the realtime hub.
+    await sendWebPushNotification(db, sender, { audience: "staff", skipUserIds: await onlineStaffIds(env) }, {
         title: notice.title.slice(0, 120),
         body: notice.body.slice(0, 500),
         ...(notice.link ? { url: notice.link } : {}),
@@ -369,7 +371,11 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec): Pr
         // A Worker that cannot sign reads nothing.
         const sender = await webPushSender(env);
         if (!sender) return [];
-        const subscriptions = await readPushSubscriptions(db, { audience: "staff" });
+        const subscribed = await readPushSubscriptions(db, { audience: "staff" });
+        if (subscribed.length === 0) return [];
+        // Staff with an open dashboard see it live through the realtime hub: no duplicate push.
+        const online = await onlineStaffIds(env);
+        const subscriptions = subscribed.filter((subscription) => !subscription.userId || !online.has(subscription.userId));
         if (subscriptions.length === 0) return [];
         const payload = webPushPayload({
             title: spec.title.slice(0, 120),

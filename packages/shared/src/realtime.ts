@@ -113,5 +113,8 @@ export type RealtimeClientMessage =
 export const REALTIME_PING = "ping";
 export const REALTIME_PONG = "pong";
 
+/** The store's one hub (`idFromName`): the deployment is one store. */
+export const REALTIME_HUB_NAME = "store";
+
 /** Close codes the client acts on: reconnect (and authenticate again) now. */
 export const REALTIME_CLOSE_REAUTH = 4001;

@@ -10,11 +10,10 @@
 // the dashboard refetches on reconnect and on focus, and the database stays
 // the authority.
 import type { OutboxEvent } from "@scalius/core/modules/events";
-import type { RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
+import { REALTIME_HUB_NAME, type RealtimeChange, type RealtimeTopic } from "@scalius/shared/realtime";
 import type { RealtimeHub } from "./hub";
 
-/** The store's one hub (the deployment is one store). */
-export const REALTIME_HUB_NAME = "store";
+export { REALTIME_HUB_NAME };
 
 export function realtimeHub(env: Env): DurableObjectStub<RealtimeHub> | null {
   const namespace = env.REALTIME_HUB;

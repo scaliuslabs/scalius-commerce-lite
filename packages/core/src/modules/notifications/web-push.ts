@@ -44,6 +44,8 @@ export interface StoredPushSubscription {
   endpoint: string;
   p256dh: string;
   auth: string;
+  /** The staff owner (null for a buyer's browser). */
+  userId?: string | null;
 }
 
 /** What the dashboard shows of a staff member's own devices. */
@@ -167,7 +169,12 @@ export async function deleteStaffPushDevice(db: Database, userId: string, id: st
 
 /** Who a send goes to: every staff browser, some staff, or some buyers. */
 export type PushTarget =
-  | { audience: "staff"; userIds?: readonly string[] }
+  | {
+    audience: "staff";
+    userIds?: readonly string[];
+    /** Staff the realtime hub reaches live now (staff-presence.ts): their browsers are skipped. */
+    skipUserIds?: ReadonlySet<string>;
+  }
   | { audience: "customer"; customerIds: readonly string[] };
 
 /** The subscriptions a send goes to (at most PUSH_SUBSCRIPTIONS_PER_OWNER per owner). */
@@ -177,9 +184,12 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
     endpoint: pushSubscriptions.endpoint,
     p256dh: pushSubscriptions.p256dh,
     auth: pushSubscriptions.auth,
+    userId: pushSubscriptions.userId,
   };
+  const skip = target.audience === "staff" ? target.skipUserIds : undefined;
+  const live = (rows: StoredPushSubscription[]) => skip && skip.size > 0 ? rows.filter((row) => !row.userId || !skip.has(row.userId)) : rows;
   if (target.audience === "staff" && target.userIds === undefined) {
-    return db.select(columns).from(pushSubscriptions).where(eq(pushSubscriptions.audience, "staff")).orderBy(asc(pushSubscriptions.id));
+    return live(await db.select(columns).from(pushSubscriptions).where(eq(pushSubscriptions.audience, "staff")).orderBy(asc(pushSubscriptions.id)));
   }
   const owners = [...new Set(target.audience === "staff" ? target.userIds! : target.customerIds)];
   const found: StoredPushSubscription[] = [];
@@ -189,7 +199,7 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
       ? and(eq(pushSubscriptions.audience, "staff"), inArray(pushSubscriptions.userId, chunk))
       : and(eq(pushSubscriptions.audience, "customer"), inArray(pushSubscriptions.customerId, chunk))));
   }
-  return found;
+  return live(found);
 }
 
 /** What a send needs: the VAPID keys and subject. Null when the Worker cannot sign (no master secret or https origin). */
