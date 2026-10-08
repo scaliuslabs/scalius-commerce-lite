@@ -16,6 +16,7 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
 
 interface Props {
   section: StorefrontSectionOf<"deal-block">;
@@ -39,7 +40,7 @@ const DAY_MS = 86_400_000;
 function lineAt(end: string, now: number): { label: string; clock: string | null } {
   const left = Math.max(0, Math.floor((Date.parse(end) - now) / 1000));
   if (left * 1000 > 2 * DAY_MS) {
-    const date = new Intl.DateTimeFormat(language, { day: "numeric", month: "short", timeZone: "UTC" }).format(Date.parse(end));
+    const date = formatDateTime(Date.parse(end), dateLocale(language), { day: "numeric", month: "short", timeZone: "UTC" });
     return { label: copy.endsOn(date), clock: null };
   }
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -59,7 +60,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
           data-ends-at={endsAt}
           data-label-in={copy.endsIn}
           data-label-on={copy.endsOn("%DATE%")}
-          data-locale={language}
+          data-locale={dateLocale(language)}
         >
           <span data-deal-label>{line.label}</span>
           <time datetime={endsAt} class="deal-clock" data-deal-remaining hidden={line.clock === null}>{line.clock ?? ""}</time>
@@ -82,6 +83,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
   // One timer for every deal line on the page; paused while the tab is hidden.
   // Each tick reads the lines again, so a section the theme editor drew
   // again (astro:page-load) keeps counting.
+  import { formatDateTime } from "@scalius/shared/locale-format";
   const DAY_MS = 86_400_000;
   const pad = (value: number) => String(value).padStart(2, "0");
   let timer = 0;
@@ -103,7 +105,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
       const label = line.querySelector("[data-deal-label]");
       const clock = line.querySelector<HTMLElement>("[data-deal-remaining]");
       if (leftMs > 2 * DAY_MS) {
-        const date = new Intl.DateTimeFormat(line.dataset.locale || undefined, { day: "numeric", month: "short" }).format(end);
+        const date = formatDateTime(end, line.dataset.locale || "en", { day: "numeric", month: "short" });
         if (label) label.textContent = (line.dataset.labelOn ?? "").replace("%DATE%", date);
         if (clock) clock.hidden = true;
       } else {

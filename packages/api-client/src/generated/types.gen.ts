@@ -754,7 +754,7 @@ export type StorefrontSectionList = Array<{
     hidden?: boolean;
     aiDraft?: true;
     settings: {
-        layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+        layout: 'full-bleed' | 'contained-banners' | 'split' | 'full-screen' | 'wide-editorial';
         slides: Array<{
             image: string;
             phoneImage?: string;
