@@ -1058,6 +1058,72 @@
             },
             "maxItems": 8,
             "description": "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing."
+          },
+          "metaobjects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "handle": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string",
+                              "description": "The stored canonical text: money in integer minor units, a media reference its media id (in media), a list a JSON array."
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "name",
+                            "type",
+                            "value"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "title",
+                      "fields"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "entries"
+              ]
+            },
+            "description": "The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id."
           }
         },
         "required": [
@@ -5742,6 +5808,76 @@
                 "type": {
                   "type": "string",
                   "enum": [
+                    "metaobjects"
+                  ]
+                },
+                "version": {
+                  "type": "number",
+                  "enum": [
+                    1
+                  ]
+                },
+                "hidden": {
+                  "type": "boolean"
+                },
+                "aiDraft": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "settings": {
+                  "type": "object",
+                  "properties": {
+                    "heading": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "definitionId": {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    "layout": {
+                      "type": "string",
+                      "enum": [
+                        "list",
+                        "grid",
+                        "accordion"
+                      ]
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 24
+                    }
+                  },
+                  "required": [
+                    "heading",
+                    "definitionId",
+                    "layout",
+                    "limit"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "version",
+                "settings"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
                     "newsletter"
                   ]
                 },
@@ -9090,6 +9226,194 @@
           "prices"
         ]
       },
+      "MetaobjectDefinition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string",
+            "description": "<namespace>.<type>: custom.faq, or an app's acme.loyalty.tiers."
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaobjectFieldDefinition"
+            }
+          },
+          "displayField": {
+            "type": "string",
+            "nullable": true
+          },
+          "storefrontAccess": {
+            "type": "boolean",
+            "description": "Published entries are readable by the storefront (theme sections)."
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "merchant",
+              "app"
+            ]
+          },
+          "entryCount": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "namespace",
+          "type",
+          "name",
+          "description",
+          "fields",
+          "displayField",
+          "storefrontAccess",
+          "owner",
+          "entryCount",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MetaobjectFieldDefinition": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "single_line_text",
+              "multi_line_text",
+              "integer",
+              "decimal",
+              "boolean",
+              "date",
+              "date_time",
+              "url",
+              "color",
+              "json",
+              "money",
+              "product_reference",
+              "variant_reference",
+              "collection_reference",
+              "media_reference",
+              "list.single_line_text",
+              "list.multi_line_text",
+              "list.integer",
+              "list.decimal",
+              "list.date",
+              "list.date_time",
+              "list.url",
+              "list.color",
+              "list.money",
+              "list.product_reference",
+              "list.variant_reference",
+              "list.collection_reference",
+              "list.media_reference"
+            ],
+            "description": "A custom-field type."
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "type"
+        ]
+      },
+      "MetaobjectEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published"
+            ]
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Field key → value in the custom-field contract (money in major units)."
+          },
+          "position": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "definitionId",
+          "handle",
+          "displayName",
+          "status",
+          "fields",
+          "position",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "CustomerSegment": {
         "type": "object",
         "properties": {
@@ -12275,6 +12599,8 @@
                 "point": {
                   "type": "string",
                   "enum": [
+                    "cart.transform",
+                    "cart.line_prices",
                     "cart.validate",
                     "checkout.discounts",
                     "checkout.shipping_rates",
@@ -12297,7 +12623,7 @@
                 "snapshotCollection": {
                   "type": "string",
                   "nullable": true,
-                  "description": "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order."
+                  "description": "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this collection (checkout.discounts also updates it with each order)."
                 }
               },
               "required": [
@@ -12369,6 +12695,18 @@
                 }
               },
               "widgets": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "listColumns": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "timeline": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
@@ -12738,6 +13076,53 @@
               ]
             }
           },
+          "listColumns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "<app id>/<column id>: what appColumns and appFilter name."
+                },
+                "id": {
+                  "type": "string"
+                },
+                "resource": {
+                  "type": "string",
+                  "enum": [
+                    "product",
+                    "order",
+                    "customer"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "boolean"
+                  ]
+                },
+                "filterable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "id",
+                "resource",
+                "title",
+                "type",
+                "filterable"
+              ]
+            }
+          },
           "routes": {
             "type": "array",
             "items": {
@@ -12783,6 +13168,7 @@
           "cards",
           "actions",
           "widgets",
+          "listColumns",
           "routes",
           "providers"
         ]
@@ -22735,6 +23121,146 @@
         "security": []
       }
     },
+    "/api/v1/storefront/app-blocks/{page}": {
+      "get": {
+        "operationId": "storefront.app_blocks.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Get the app blocks a checkout, order or account page shows",
+        "description": "Every active app's blocks for one page group (checkout, order, account), drawn by the app at its Shopify-style extension target: sanitized HTML with no scripts, the same for every buyer. Read it only when the layout's appBlockPages lists the page. Takes no query; cached under dependency validation (each app's installation and declared storage), so a cached answer runs no app code.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "checkout",
+                "order",
+                "account"
+              ]
+            },
+            "required": true,
+            "name": "page",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The drawn blocks, in app id then manifest order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "blocks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "<app id>/<block type>"
+                              },
+                              "app": {
+                                "type": "string"
+                              },
+                              "target": {
+                                "type": "string",
+                                "enum": [
+                                  "purchase.checkout.contact.render-after",
+                                  "purchase.checkout.shipping-option-list.render-after",
+                                  "purchase.checkout.cart-line-list.render-after",
+                                  "purchase.checkout.payment-method-list.render-after",
+                                  "purchase.checkout.actions.render-before",
+                                  "purchase.thank-you.customer-information.render-after",
+                                  "customer-account.order-status.block.render",
+                                  "customer-account.order-index.block.render",
+                                  "customer-account.profile.block.render"
+                                ]
+                              },
+                              "html": {
+                                "type": "string",
+                                "description": "Sanitized HTML. Checkout blocks hold no forms."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "app",
+                              "target",
+                              "html"
+                            ]
+                          },
+                          "maxItems": 12
+                        }
+                      },
+                      "required": [
+                        "blocks"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Rendering infrastructure: apps' sanitized checkout and account HTML, not structured agent data."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/storefront/pages/slug/{slug}": {
       "get": {
         "operationId": "storefront.pages.render_by_slug_alias",
@@ -23877,6 +24403,18 @@
                               "pages"
                             ]
                           }
+                        },
+                        "appBlockPages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "checkout",
+                              "order",
+                              "account"
+                            ]
+                          },
+                          "description": "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}."
                         }
                       },
                       "required": [
@@ -23898,7 +24436,8 @@
                         "cspAllowedDomains",
                         "policies",
                         "storefrontCopy",
-                        "appScripts"
+                        "appScripts",
+                        "appBlockPages"
                       ]
                     }
                   },
@@ -70887,6 +71426,1686 @@
         }
       }
     },
+    "/api/v1/admin/metaobjects/definitions": {
+      "get": {
+        "operationId": "dashboard.metaobjects.definitions_list",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Content types, by name",
+        "description": "Every metaobject definition (the merchant's and the active apps'), with its fields and how many entries it holds.",
+        "responses": {
+          "200": {
+            "description": "Content types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MetaobjectDefinition"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.metaobjects.definitions_create",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Create a content type",
+        "description": "A merchant type in `custom` (an app calling as itself creates one in its own namespace). Field types are the custom-field types.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,63}$",
+                    "description": "The type handle, fixed once created."
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MetaobjectFieldDefinition"
+                    },
+                    "minItems": 1,
+                    "maxItems": 30
+                  },
+                  "displayField": {
+                    "type": "string"
+                  },
+                  "storefrontAccess": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "name",
+                  "fields"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The content type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "definition": {
+                          "$ref": "#/components/schemas/MetaobjectDefinition"
+                        }
+                      },
+                      "required": [
+                        "definition"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      }
+    },
+    "/api/v1/admin/metaobjects/definitions/{id}": {
+      "get": {
+        "operationId": "dashboard.metaobjects.definitions_get",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Get a content type",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The content type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "definition": {
+                          "$ref": "#/components/schemas/MetaobjectDefinition"
+                        }
+                      },
+                      "required": [
+                        "definition"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.metaobjects.definitions_update",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Change a content type",
+        "description": "Name, fields, display field and storefront access, at the revision read. A field's type cannot change while entries hold a value for it. An app's type changes only through its app.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MetaobjectFieldDefinition"
+                    },
+                    "minItems": 1,
+                    "maxItems": 30
+                  },
+                  "displayField": {
+                    "type": "string"
+                  },
+                  "storefrontAccess": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "fields",
+                  "expectedRevision"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The content type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "definition": {
+                          "$ref": "#/components/schemas/MetaobjectDefinition"
+                        }
+                      },
+                      "required": [
+                        "definition"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.metaobjects.definitions_delete",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Delete a content type and its entries",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedRevision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      }
+    },
+    "/api/v1/admin/metaobjects/definitions/{id}/entries": {
+      "get": {
+        "operationId": "dashboard.metaobjects.entries_list",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "A content type's entries, in order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "published"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "definition": {
+                          "$ref": "#/components/schemas/MetaobjectDefinition"
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MetaobjectEntry"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "definition",
+                        "entries",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.metaobjects.entries_create",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Create an entry",
+        "description": "Values follow the field types (the custom-field contract). A published entry needs every required field.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Lowercase letters, digits and dashes; made from the display field when left out."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ]
+                  },
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "$ref": "#/components/schemas/MetaobjectEntry"
+                        }
+                      },
+                      "required": [
+                        "entry"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      }
+    },
+    "/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}": {
+      "get": {
+        "operationId": "dashboard.metaobjects.entries_get",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Get an entry",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "$ref": "#/components/schemas/MetaobjectEntry"
+                        }
+                      },
+                      "required": [
+                        "entry"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.metaobjects.entries_update",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Change an entry",
+        "description": "Only the fields sent change (null clears one); status, handle and position too. At the revision read.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Lowercase letters, digits and dashes; made from the display field when left out."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ]
+                  },
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "$ref": "#/components/schemas/MetaobjectEntry"
+                        }
+                      },
+                      "required": [
+                        "entry"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.metaobjects.entries_delete",
+        "tags": [
+          "Admin - Metaobjects"
+        ],
+        "summary": "Delete an entry",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedRevision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "metaobjects.edit"
+        }
+      }
+    },
     "/api/v1/admin/collections/form-options": {
       "get": {
         "operationId": "dashboard.collections.form_options",
@@ -77186,6 +79405,40 @@
             "description": "Customers subscribed on this channel now (any: on at least one)",
             "name": "subscribed",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 600,
+              "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues."
+            },
+            "required": false,
+            "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.",
+            "name": "appColumns",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "maxItems": 3
+                }
+              ],
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+            },
+            "required": false,
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "name": "appFilter",
+            "in": "query"
           }
         ],
         "responses": {
@@ -77409,6 +79662,27 @@
                             "endCursor"
                           ],
                           "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
+                        },
+                        "appValues": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -114897,6 +117171,8 @@
             "media.manage_folders",
             "media.upload",
             "media.view",
+            "metaobjects.edit",
+            "metaobjects.view",
             "orders.change_status",
             "orders.create",
             "orders.delete",
@@ -118152,6 +120428,8 @@
             "media.manage_folders",
             "media.upload",
             "media.view",
+            "metaobjects.edit",
+            "metaobjects.view",
             "orders.change_status",
             "orders.create",
             "orders.delete",
@@ -119241,6 +121519,8 @@
             "media.manage_folders",
             "media.upload",
             "media.view",
+            "metaobjects.edit",
+            "metaobjects.view",
             "orders.change_status",
             "orders.create",
             "orders.delete",
@@ -126293,6 +128573,8 @@
             "media.manage_folders",
             "media.upload",
             "media.view",
+            "metaobjects.edit",
+            "metaobjects.view",
             "orders.change_status",
             "orders.create",
             "orders.delete",
@@ -148114,6 +150396,40 @@
             "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)",
             "name": "endDate",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 600,
+              "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues."
+            },
+            "required": false,
+            "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.",
+            "name": "appColumns",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "maxItems": 3
+                }
+              ],
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+            },
+            "required": false,
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "name": "appFilter",
+            "in": "query"
           }
         ],
         "responses": {
@@ -148724,6 +151040,27 @@
                             "endCursor"
                           ],
                           "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
+                        },
+                        "appValues": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -152722,7 +155059,8 @@
                                   "archived",
                                   "unarchived",
                                   "invoice_issued",
-                                  "fulfillment_location_changed"
+                                  "fulfillment_location_changed",
+                                  "app_event"
                                 ]
                               },
                               "body": {
@@ -152904,7 +155242,8 @@
                             "archived",
                             "unarchived",
                             "invoice_issued",
-                            "fulfillment_location_changed"
+                            "fulfillment_location_changed",
+                            "app_event"
                           ]
                         },
                         "body": {
@@ -163225,6 +165564,40 @@
             "description": "Sort order",
             "name": "order",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 600,
+              "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues."
+            },
+            "required": false,
+            "description": "Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.",
+            "name": "appColumns",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "maxItems": 3
+                }
+              ],
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+            },
+            "required": false,
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "name": "appFilter",
+            "in": "query"
           }
         ],
         "responses": {
@@ -163463,6 +165836,27 @@
                             "endCursor"
                           ],
                           "description": "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. `page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped)."
+                        },
+                        "appValues": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -190869,6 +193263,8 @@
             "media.manage_folders",
             "media.upload",
             "media.view",
+            "metaobjects.edit",
+            "metaobjects.view",
             "orders.change_status",
             "orders.create",
             "orders.delete",
@@ -220769,6 +223165,86 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.meta-capi"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.definitions_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.definitions_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.definitions_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.definitions_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.definitions_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.definitions_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.definitions_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.definitions_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.definitions_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.definitions_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.entries_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.entries_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.entries_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.entries_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.entries_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.entries_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.entries_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.entries_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.metaobjects.entries_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.metaobjects.entries_update"
           ]
         },
         {

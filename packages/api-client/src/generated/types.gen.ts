@@ -284,6 +284,26 @@ export type StorefrontHomepageSections = {
     apps: Array<StorefrontAppSurface & {
         sectionId: string;
     }>;
+    /**
+     * The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id.
+     */
+    metaobjects?: Array<{
+        id: string;
+        name: string;
+        entries: Array<{
+            handle: string;
+            title: string;
+            fields: Array<{
+                key: string;
+                name: string;
+                type: string;
+                /**
+                 * The stored canonical text: money in integer minor units, a media reference its media id (in media), a list a JSON array.
+                 */
+                value: string;
+            }>;
+        }>;
+    }>;
 };
 
 export type StorefrontAppSurface = {
@@ -1145,6 +1165,18 @@ export type StorefrontSectionList = Array<{
     };
 } | {
     id: string;
+    type: 'metaobjects';
+    version: 1;
+    hidden?: boolean;
+    aiDraft?: true;
+    settings: {
+        heading: string;
+        definitionId: string;
+        layout: 'list' | 'grid' | 'accordion';
+        limit: number;
+    };
+} | {
+    id: string;
     type: 'newsletter';
     version: 1;
     hidden?: boolean;
@@ -1873,6 +1905,58 @@ export type PriceListVariant = {
         compareAt: number | null;
         minQuantity: number;
     }>;
+};
+
+export type MetaobjectDefinition = {
+    id: string;
+    /**
+     * <namespace>.<type>: custom.faq, or an app's acme.loyalty.tiers.
+     */
+    handle: string;
+    namespace: string;
+    type: string;
+    name: string;
+    description: string | null;
+    fields: Array<MetaobjectFieldDefinition>;
+    displayField: string | null;
+    /**
+     * Published entries are readable by the storefront (theme sections).
+     */
+    storefrontAccess: boolean;
+    owner: 'merchant' | 'app';
+    entryCount: number;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type MetaobjectFieldDefinition = {
+    key: string;
+    name: string;
+    /**
+     * A custom-field type.
+     */
+    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference';
+    required?: boolean;
+    description?: string;
+};
+
+export type MetaobjectEntry = {
+    id: string;
+    definitionId: string;
+    handle: string;
+    displayName: string;
+    status: 'draft' | 'published';
+    /**
+     * Field key → value in the custom-field contract (money in major units).
+     */
+    fields: {
+        [key: string]: unknown;
+    };
+    position: number;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type CustomerSegment = {
@@ -2709,7 +2793,7 @@ export type AppSummary = {
      * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
      */
     functions: Array<{
-        point: 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk';
         /**
          * Lower runs first among apps at the same point.
          */
@@ -2719,7 +2803,7 @@ export type AppSummary = {
          */
         onError: 'skip' | 'block';
         /**
-         * checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order.
+         * checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this collection (checkout.discounts also updates it with each order).
          */
         snapshotCollection: string | null;
     }>;
@@ -2743,6 +2827,12 @@ export type AppTranslations = {
             [key: string]: string;
         };
         widgets?: {
+            [key: string]: string;
+        };
+        listColumns?: {
+            [key: string]: string;
+        };
+        timeline?: {
             [key: string]: string;
         };
         tabs?: {
@@ -2845,6 +2935,17 @@ export type AppAdminSurfaces = {
         id: string;
         title: string;
         route: string;
+    }>;
+    listColumns: Array<{
+        /**
+         * <app id>/<column id>: what appColumns and appFilter name.
+         */
+        key: string;
+        id: string;
+        resource: 'product' | 'order' | 'customer';
+        title: string;
+        type: 'text' | 'number' | 'money' | 'date' | 'boolean';
+        filterable: boolean;
     }>;
     routes: Array<{
         name: string;
@@ -5871,6 +5972,53 @@ export type GetApiV1StorefrontProductAppsBySlugResponses = {
 
 export type GetApiV1StorefrontProductAppsBySlugResponse = GetApiV1StorefrontProductAppsBySlugResponses[keyof GetApiV1StorefrontProductAppsBySlugResponses];
 
+export type GetApiV1StorefrontAppBlocksByPageData = {
+    body?: never;
+    path: {
+        page: 'checkout' | 'order' | 'account';
+    };
+    query?: never;
+    url: '/api/v1/storefront/app-blocks/{page}';
+};
+
+export type GetApiV1StorefrontAppBlocksByPageErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1StorefrontAppBlocksByPageError = GetApiV1StorefrontAppBlocksByPageErrors[keyof GetApiV1StorefrontAppBlocksByPageErrors];
+
+export type GetApiV1StorefrontAppBlocksByPageResponses = {
+    /**
+     * The drawn blocks, in app id then manifest order
+     */
+    200: {
+        success: true;
+        data: {
+            blocks: Array<{
+                /**
+                 * <app id>/<block type>
+                 */
+                id: string;
+                app: string;
+                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                /**
+                 * Sanitized HTML. Checkout blocks hold no forms.
+                 */
+                html: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAppBlocksByPageResponse = GetApiV1StorefrontAppBlocksByPageResponses[keyof GetApiV1StorefrontAppBlocksByPageResponses];
+
 export type GetApiV1StorefrontPagesSlugBySlugData = {
     body?: never;
     path: {
@@ -6176,6 +6324,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                 placement: 'head' | 'body-end';
                 pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart' | 'checkout' | 'order-success'>;
             }>;
+            /**
+             * The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.
+             */
+            appBlockPages: Array<'checkout' | 'order' | 'account'>;
         };
     };
 };
@@ -20623,6 +20775,587 @@ export type PutApiV1AdminPriceListsByIdPricesResponses = {
 
 export type PutApiV1AdminPriceListsByIdPricesResponse = PutApiV1AdminPriceListsByIdPricesResponses[keyof PutApiV1AdminPriceListsByIdPricesResponses];
 
+export type GetApiV1AdminMetaobjectsDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions';
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsError = GetApiV1AdminMetaobjectsDefinitionsErrors[keyof GetApiV1AdminMetaobjectsDefinitionsErrors];
+
+export type GetApiV1AdminMetaobjectsDefinitionsResponses = {
+    /**
+     * Content types
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<MetaobjectDefinition>;
+        };
+    };
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsResponse = GetApiV1AdminMetaobjectsDefinitionsResponses[keyof GetApiV1AdminMetaobjectsDefinitionsResponses];
+
+export type PostApiV1AdminMetaobjectsDefinitionsData = {
+    body: {
+        /**
+         * The type handle, fixed once created.
+         */
+        type: string;
+        name: string;
+        description?: string;
+        fields: Array<MetaobjectFieldDefinition>;
+        displayField?: string;
+        storefrontAccess?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions';
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsError = PostApiV1AdminMetaobjectsDefinitionsErrors[keyof PostApiV1AdminMetaobjectsDefinitionsErrors];
+
+export type PostApiV1AdminMetaobjectsDefinitionsResponses = {
+    /**
+     * The content type
+     */
+    201: {
+        success: true;
+        data: {
+            definition: MetaobjectDefinition;
+        };
+    };
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsResponse = PostApiV1AdminMetaobjectsDefinitionsResponses[keyof PostApiV1AdminMetaobjectsDefinitionsResponses];
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/metaobjects/definitions/{id}';
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdError = DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors];
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdResponse = DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions/{id}';
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdError = GetApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdErrors];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+    /**
+     * The content type
+     */
+    200: {
+        success: true;
+        data: {
+            definition: MetaobjectDefinition;
+        };
+    };
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdResponse = GetApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdResponses];
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdData = {
+    body: {
+        name: string;
+        description?: string;
+        fields: Array<MetaobjectFieldDefinition>;
+        displayField?: string;
+        storefrontAccess?: boolean;
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions/{id}';
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdError = PatchApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdErrors];
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+    /**
+     * The content type
+     */
+    200: {
+        success: true;
+        data: {
+            definition: MetaobjectDefinition;
+        };
+    };
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdResponse = PatchApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdResponses];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        status?: 'draft' | 'published';
+        limit?: number;
+        offset?: number | null;
+    };
+    url: '/api/v1/admin/metaobjects/definitions/{id}/entries';
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesError = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses = {
+    /**
+     * Entries
+     */
+    200: {
+        success: true;
+        data: {
+            definition: MetaobjectDefinition;
+            entries: Array<MetaobjectEntry>;
+            total: number;
+        };
+    };
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponse = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses];
+
+export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesData = {
+    body: {
+        /**
+         * Lowercase letters, digits and dashes; made from the display field when left out.
+         */
+        handle?: string;
+        status?: 'draft' | 'published';
+        fields?: {
+            [key: string]: unknown;
+        };
+        position?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions/{id}/entries';
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesError = PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors[keyof PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors];
+
+export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses = {
+    /**
+     * The entry
+     */
+    201: {
+        success: true;
+        data: {
+            entry: MetaobjectEntry;
+        };
+    };
+};
+
+export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponse = PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses[keyof PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses];
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+    body?: never;
+    path: {
+        id: string;
+        entryId: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+    body?: never;
+    path: {
+        id: string;
+        entryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+    /**
+     * The entry
+     */
+    200: {
+        success: true;
+        data: {
+            entry: MetaobjectEntry;
+        };
+    };
+};
+
+export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+    body: {
+        /**
+         * Lowercase letters, digits and dashes; made from the display field when left out.
+         */
+        handle?: string;
+        status?: 'draft' | 'published';
+        fields?: {
+            [key: string]: unknown;
+        };
+        position?: number;
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+        entryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+    /**
+     * The entry
+     */
+    200: {
+        success: true;
+        data: {
+            entry: MetaobjectEntry;
+        };
+    };
+};
+
+export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+
 export type GetApiV1AdminCollectionsFormOptionsData = {
     body?: never;
     path?: never;
@@ -22628,6 +23361,14 @@ export type GetApiV1AdminCustomersData = {
          * Customers subscribed on this channel now (any: on at least one)
          */
         subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+        /**
+         * Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.
+         */
+        appColumns?: string;
+        /**
+         * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).
+         */
+        appFilter?: string | Array<string>;
     };
     url: '/api/v1/admin/customers';
 };
@@ -22731,6 +23472,14 @@ export type GetApiV1AdminCustomersResponses = {
                  * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
                  */
                 endCursor: string | null;
+            };
+            /**
+             * Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for.
+             */
+            appValues?: {
+                [key: string]: {
+                    [key: string]: string | number | boolean | unknown;
+                };
             };
         };
     };
@@ -43217,6 +43966,14 @@ export type GetApiV1AdminOrdersData = {
          * End date filter (YYYY-MM-DD, Bangladesh calendar day)
          */
         endDate?: string;
+        /**
+         * Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.
+         */
+        appColumns?: string;
+        /**
+         * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).
+         */
+        appFilter?: string | Array<string>;
     };
     url: '/api/v1/admin/orders';
 };
@@ -43418,6 +44175,14 @@ export type GetApiV1AdminOrdersResponses = {
                  * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
                  */
                 endCursor: string | null;
+            };
+            /**
+             * Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for.
+             */
+            appValues?: {
+                [key: string]: {
+                    [key: string]: string | number | boolean | unknown;
+                };
             };
         };
     };
@@ -44522,7 +45287,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'app_event';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -44588,7 +45353,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'app_event';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -47334,6 +48099,14 @@ export type GetApiV1AdminProductsData = {
          * Sort order
          */
         order?: 'asc' | 'desc';
+        /**
+         * Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.
+         */
+        appColumns?: string;
+        /**
+         * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).
+         */
+        appFilter?: string | Array<string>;
     };
     url: '/api/v1/admin/products';
 };
@@ -47463,6 +48236,14 @@ export type GetApiV1AdminProductsResponses = {
                  * Cursor of the last row; pass as `after` for the next page. Null for an empty page.
                  */
                 endCursor: string | null;
+            };
+            /**
+             * Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for.
+             */
+            appValues?: {
+                [key: string]: {
+                    [key: string]: string | number | boolean | unknown;
+                };
             };
         };
     };
