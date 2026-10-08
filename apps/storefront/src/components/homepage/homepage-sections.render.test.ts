@@ -772,7 +772,7 @@ describe("homepage sections from the theme's own data", () => {
 });
 
 describe("app sections", () => {
-  const app = (id: string, key = "scalius.hello/greeting") =>
+  const app = (id: string, key = "acme.hello/greeting") =>
     ({ id, type: "app", version: 1, settings: { app: key, values: {} } }) as StorefrontSection;
   const drawn = (content: HomepageContent, surfaces: Record<string, string>): HomepageContent => ({
     ...content,
@@ -794,7 +794,7 @@ describe("app sections", () => {
     const page = await render(sections, content);
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")))
       .toEqual(["app", "product-rail"]);
-    const surface = page.querySelector('[data-home-section="app"] [data-app-section="scalius.hello/greeting"] [data-app-surface]')!;
+    const surface = page.querySelector('[data-home-section="app"] [data-app-section="acme.hello/greeting"] [data-app-surface]')!;
     expect(surface.innerHTML).toBe('<p class="hello">Hello <a href="/sale">sale</a></p>');
     expect(page.querySelector('[data-section-id="gone"]')).toBeNull();
     // An app section never leads: the rail's photos keep the page's priority.

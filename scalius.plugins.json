@@ -16,34 +16,10 @@
       "sha256": "d95039c0b1daa851e17c5e276edcd7ebbfea1eee6d3bcd2de0ad81361137bd1d"
     },
     {
-      "id": "scalius.bulk-discount",
-      "version": "0.1.2",
-      "source": "plugins/bulk-discount",
-      "sha256": "9c7df57685b39fffb0cb72bdb2f426a45826afe624c1bd797aec846c63c4dc5a"
-    },
-    {
-      "id": "scalius.loyalty",
-      "version": "0.1.2",
-      "source": "plugins/loyalty",
-      "sha256": "28e615653b57a30e6bcf582b7464d5060c0eb8146d6e4d7cf5b8c297aa47e92a"
-    },
-    {
       "id": "scalius.nagad",
       "version": "0.1.2",
       "source": "plugins/nagad",
       "sha256": "e2dac744e78b60ec3b0e5d621712ed494f5d7a621f104b3fa5d92f250c6ebc91"
-    },
-    {
-      "id": "scalius.order-tagger",
-      "version": "0.1.3",
-      "source": "plugins/order-tagger",
-      "sha256": "6fe22aa8270643f2e26f694564449c381e312e7933e94ac728c2291dac19782c"
-    },
-    {
-      "id": "scalius.wishlist",
-      "version": "0.1.2",
-      "source": "plugins/wishlist",
-      "sha256": "27457bbc4f01d54c59b5b478922f356c20d5ec9d59433f631d4db7f3e42582eb"
     }
   ]
 }

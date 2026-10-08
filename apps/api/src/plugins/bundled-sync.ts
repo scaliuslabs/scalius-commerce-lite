@@ -12,7 +12,10 @@
 //
 // A plugin id installed from another source (registry, upload) is left alone.
 // Uninstalling a bundled plugin resets it: it appears again as installed.
-// Remove it from the deployment with `pnpm plugin remove`.
+// Remove it from the deployment with `pnpm plugin remove`: after the deploy,
+// its bundled installation is uninstalled keeping its data (records, KV,
+// logs, custom fields), so the Apps page lists only apps this deployment
+// can run. Its settings and approval go with the installation.
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -20,6 +23,7 @@ import {
   installPlugin,
   listPluginInstallations,
   requirePluginInstallation,
+  uninstallPlugin,
   updatePluginInstallation,
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
@@ -32,6 +36,8 @@ export type BundledPluginRegistry = Readonly<Record<string, BundledPluginEntry>>
 export interface BundledSyncResult {
   installed: string[];
   updated: string[];
+  /** Bundled installations whose code this deployment no longer carries: uninstalled, data kept. */
+  removed: string[];
   /** Plugins whose code could not be loaded or whose manifest is not installable (logged, skipped). */
   failed: Array<{ pluginId: string; reason: string }>;
 }
@@ -86,10 +92,19 @@ export async function syncBundledPlugins(
   db: Database,
   registry: BundledPluginRegistry = BUNDLED_PLUGINS,
 ): Promise<BundledSyncResult> {
-  const result: BundledSyncResult = { installed: [], updated: [], failed: [] };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [] };
   const ids = Object.keys(registry);
-  if (ids.length === 0) return result;
   const installations = new Map((await listPluginInstallations(db)).map((installation) => [installation.pluginId, installation]));
+  for (const installation of installations.values()) {
+    if (installation.source !== "bundled" || Object.prototype.hasOwnProperty.call(registry, installation.pluginId)) continue;
+    try {
+      await uninstallPlugin(db, installation.pluginId, { keepData: true, expectedRevision: installation.revision });
+      result.removed.push(installation.pluginId);
+    } catch (error) {
+      if (error instanceof PluginError && error.pluginCode === "installation.revision_conflict") continue; // another sync won
+      throw error;
+    }
+  }
   for (const pluginId of ids.sort()) {
     const entry = registry[pluginId]!;
     const installation = installations.get(pluginId);
@@ -112,7 +127,7 @@ export async function syncBundledPlugin(
   const entry = Object.prototype.hasOwnProperty.call(registry, pluginId) ? registry[pluginId] : undefined;
   if (!entry) return null;
   const current = await requirePluginInstallation(db, pluginId).catch(() => undefined);
-  const result: BundledSyncResult = { installed: [], updated: [], failed: [] };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [] };
   if (needsSync(entry, current)) await syncOne(db, pluginId, entry, current, result);
   if (result.failed.length > 0) return null;
   return requirePluginInstallation(db, pluginId).catch(() => null);

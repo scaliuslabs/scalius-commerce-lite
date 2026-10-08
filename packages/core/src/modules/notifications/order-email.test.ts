@@ -439,7 +439,7 @@ describe("customer order email composition and delivery", () => {
 
   it("lists an installed app's discounts by title after the store's, its delivery part on the delivery line", async () => {
     sqlite.exec(`INSERT INTO order_events (id, order_id, kind, data) VALUES
-        ('oev_app_bulk', 'order_email', 'app_discount', '{"pluginId":"scalius.bulk-discount","appName":"Bulk discount","title":"Bulk savings (5% off)","code":null,"target":"lines","currencyCode":"BDT","amountMinor":1000,"shippingAmountMinor":0,"lines":[{"orderItemId":"item","amountMinor":1000}]}'),
+        ('oev_app_bulk', 'order_email', 'app_discount', '{"pluginId":"acme.bulk-discount","appName":"Bulk discount","title":"Bulk savings (5% off)","code":null,"target":"lines","currencyCode":"BDT","amountMinor":1000,"shippingAmountMinor":0,"lines":[{"orderItemId":"item","amountMinor":1000}]}'),
         ('oev_app_ship', 'order_email', 'app_discount', '{"pluginId":"acme.ship","appName":"Ship","title":"Members ship free","code":null,"target":"shipping","currencyCode":"BDT","amountMinor":0,"shippingAmountMinor":6000,"lines":[]}');
       UPDATE orders SET discount_amount_minor = 7000, total_amount_minor = 20800, balance_due_minor = 20800;`);
     await send("order_created");

@@ -1,4 +1,4 @@
-// Unit tests for scalius.bulk-discount with the SDK's harness: the same
+// Unit tests for acme.bulk-discount with the SDK's harness: the same
 // runtime as the platform over an in-memory bridge.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
@@ -24,7 +24,7 @@ function cart(lines: ReturnType<typeof line>[], discountCodes: string[] = []) {
   };
 }
 
-describe("scalius.bulk-discount", () => {
+describe("acme.bulk-discount", () => {
   it("reads its tiers from settings, highest quantity first, skipping 0% tiers", () => {
     expect(tiersFrom({ tier1_quantity: 3, tier1_percent: 5, tier2_quantity: 6, tier2_percent: 10, tier3_quantity: 12, tier3_percent: 0 }))
       .toEqual([{ quantity: 6, percent: 10 }, { quantity: 3, percent: 5 }]);

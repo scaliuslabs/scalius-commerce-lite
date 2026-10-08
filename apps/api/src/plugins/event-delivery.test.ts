@@ -8,7 +8,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
-vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/hello-bundled")).withHelloBundled(await importOriginal()));
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withHelloBundled(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { eventOutbox } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -102,10 +102,10 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
     const [message] = (outcome as { messages: Array<{ deliveryId: string }> }).messages;
     expect(await deliver(message!.deliveryId)).toEqual({ status: "succeeded", deliveryId: message!.deliveryId, retryInSeconds: null });
     expect(row(message!.deliveryId)).toEqual({ status: "succeeded", attempts: 1, last_error: null });
-    expect(await getPluginKv(db, "scalius.hello", "paid_count")).toBe(1);
+    expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
     // The same message again (at-least-once queue) does nothing.
     expect(await deliver(message!.deliveryId)).toEqual({ status: "skipped", deliveryId: message!.deliveryId, reason: "not_due" });
-    expect(await getPluginKv(db, "scalius.hello", "paid_count")).toBe(1);
+    expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
   });
 
   it("retries a throwing handler with backoff, masks its error and dead-letters it after the last attempt", async () => {
@@ -127,11 +127,11 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
     expect(await deliver(cancelled!)).toMatchObject({ status: "cancelled" });
     expect(row(cancelled!)).toMatchObject({ status: "cancelled", last_error: "The app is not active or no longer receives this event." });
 
-    const ids = [...await deliveriesFor("scalius.hello"), ...await deliveriesFor("scalius.hello")];
+    const ids = [...await deliveriesFor("acme.hello"), ...await deliveriesFor("acme.hello")];
     sqlite.prepare("UPDATE plugin_event_deliveries SET status = 'processing', claim_id = 'held', claim_expires_at = unixepoch() + 60 WHERE id = ?").run(ids[0]!);
     for (let index = 0; index < 3; index += 1) {
       sqlite.prepare(`INSERT INTO plugin_event_deliveries (id, plugin_id, topic, resource_type, resource_id, status, claim_id, claim_expires_at)
-        VALUES (?, 'scalius.hello', 'order.created', 'order', 'x', 'processing', 'held', unixepoch() + 60)`).run(`pld_000000000000${index}busybusybusy`);
+        VALUES (?, 'acme.hello', 'order.created', 'order', 'x', 'processing', 'held', unixepoch() + 60)`).run(`pld_000000000000${index}busybusybusy`);
     }
     const send = env.JOBS_QUEUE!.send as ReturnType<typeof vi.fn>;
     send.mockClear();
@@ -141,13 +141,13 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
   });
 
   it("updates an installation behind the deployed build in place without using the delivery's attempt", async () => {
-    const [id] = await deliveriesFor("scalius.hello");
-    sqlite.prepare("UPDATE plugin_installations SET bundle_sha256 = ? WHERE plugin_id = 'scalius.hello'").run("0".repeat(64));
+    const [id] = await deliveriesFor("acme.hello");
+    sqlite.prepare("UPDATE plugin_installations SET bundle_sha256 = ? WHERE plugin_id = 'acme.hello'").run("0".repeat(64));
     expect(await deliver(id!)).toEqual({ status: "released", deliveryId: id, retryInSeconds: 5 });
     expect(row(id!)).toMatchObject({ status: "failed", attempts: 0 });
-    expect((await requirePluginInstallation(db, "scalius.hello")).bundleSha256).toBe(BUNDLED_PLUGINS["scalius.hello"]!.sha256);
+    expect((await requirePluginInstallation(db, "acme.hello")).bundleSha256).toBe(BUNDLED_PLUGINS["acme.hello"]!.sha256);
     sqlite.prepare("UPDATE plugin_event_deliveries SET next_attempt_at = unixepoch() - 1 WHERE id = ?").run(id!);
     expect(await deliver(id!)).toMatchObject({ status: "succeeded" });
-    expect(await getPluginKv(db, "scalius.hello", "created_count")).toBe(1);
+    expect(await getPluginKv(db, "acme.hello", "created_count")).toBe(1);
   });
 });

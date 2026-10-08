@@ -115,7 +115,7 @@ describe("promotion refund snapshots", () => {
             currencyCode: "BDT",
             discountAmountMinor: 70,
         }], [{ id: "item_1", discountAmountMinor: 80 }], [
-            fact({ pluginId: "scalius.bulk-discount", appName: "Bulk discount", title: "Bulk", code: null, target: "lines", currencyCode: "BDT", amountMinor: 10, shippingAmountMinor: 0, lines: [{ orderItemId: "item_1", amountMinor: 10 }] }),
+            fact({ pluginId: "acme.bulk-discount", appName: "Bulk discount", title: "Bulk", code: null, target: "lines", currencyCode: "BDT", amountMinor: 10, shippingAmountMinor: 0, lines: [{ orderItemId: "item_1", amountMinor: 10 }] }),
             fact({ pluginId: "acme.ship", appName: "Ship", title: "Free delivery", code: null, target: "shipping", currencyCode: "BDT", amountMinor: 0, shippingAmountMinor: 30, lines: [] }),
         ]);
 

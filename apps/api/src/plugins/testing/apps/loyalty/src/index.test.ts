@@ -1,4 +1,4 @@
-// Unit tests for scalius.loyalty with the SDK's harness (the same runtime as
+// Unit tests for acme.loyalty with the SDK's harness (the same runtime as
 // the platform over an in-memory bridge): redemption from the snapshot with
 // the balance committed with the order, and earning once per paid order even
 // when events are redelivered or race.
@@ -25,7 +25,7 @@ function cart(options: { codes?: string[]; signedIn?: boolean; itemsMinor?: numb
 
 const snapshot = (points: number, revision = 4) => ({ revision, data: { points, earned: points, spent: 0 } });
 
-describe("scalius.loyalty", () => {
+describe("acme.loyalty", () => {
   it("prices points in minor units and earns per 100 spent", () => {
     expect(pointValueMinor({ point_value: 1 }, 2)).toBe(100);
     expect(pointValueMinor({ point_value: 0.5 }, 0)).toBe(1);

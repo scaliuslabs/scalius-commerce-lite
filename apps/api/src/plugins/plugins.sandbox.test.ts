@@ -1,11 +1,11 @@
-// The sandbox loader in workerd: the reference plugin (scalius.hello), packed
+// The sandbox loader in workerd: the reference plugin (acme.hello), packed
 // exactly as `pnpm plugin build` packs it, runs in its own Dynamic Worker
 // (Miniflare `workerLoaders`) with no network of its own, reaching the
 // platform only through the real PluginBridge entrypoint over RPC. The same
 // behaviour as the bundled loader: storage, KV, the /api/v1 call as the plugin
 // principal, routes, cron and the checkout function. Plus what only a sandbox
 // can prove: direct fetch is impossible and a tampered bundle never loads.
-// And scalius.bulk-discount priced into a real checkout with Hello's discount
+// And acme.bulk-discount priced into a real checkout with Hello's discount
 // stacked after it, each app in its own isolate.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -140,25 +140,25 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     }) as never);
 
     // Pack the reference plugin exactly as `pnpm plugin build` does and store it in R2.
-    const packed = await packPlugin("plugins/hello");
+    const packed = await packPlugin("./apps/api/src/plugins/testing/apps/hello");
     helloSha = packed.sha256;
     const bucket = await mf.getR2Bucket("BUCKET");
-    await bucket.put(pluginBundleKey("scalius.hello", packed.version, helloSha), packed.code);
+    await bucket.put(pluginBundleKey("acme.hello", packed.version, helloSha), packed.code);
     const installed = await installPlugin(db, { manifest: packed.manifest, source: "registry", bundleSha256: helloSha, actorUserId: "owner" });
-    const configured = await writePluginSettings(db, "scalius.hello", { greeting: "Salam", discount_percent: 20, min_subtotal_minor: 0, api_key: "sandbox-secret" }, {
+    const configured = await writePluginSettings(db, "acme.hello", { greeting: "Salam", discount_percent: 20, min_subtotal_minor: 0, api_key: "sandbox-secret" }, {
       expectedRevision: installed.revision,
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
-    await activatePlugin(db, "scalius.hello", { actorUserId: "owner", expectedRevision: configured.revision });
+    await activatePlugin(db, "acme.hello", { actorUserId: "owner", expectedRevision: configured.revision });
 
     // The Bulk discount example app, packed and stored the same way.
-    const bulk = await packPlugin("plugins/bulk-discount");
-    await bucket.put(pluginBundleKey("scalius.bulk-discount", bulk.version, bulk.sha256), bulk.code);
+    const bulk = await packPlugin("./apps/api/src/plugins/testing/apps/bulk-discount");
+    await bucket.put(pluginBundleKey("acme.bulk-discount", bulk.version, bulk.sha256), bulk.code);
     const bulkInstalled = await installPlugin(db, { manifest: bulk.manifest, source: "registry", bundleSha256: bulk.sha256, actorUserId: "owner" });
-    const bulkConfigured = await writePluginSettings(db, "scalius.bulk-discount", {
+    const bulkConfigured = await writePluginSettings(db, "acme.bulk-discount", {
       title: "Bulk savings", tier1_quantity: 3, tier1_percent: 5, max_quantity_per_line: 10,
     }, { expectedRevision: bulkInstalled.revision, credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY });
-    await activatePlugin(db, "scalius.bulk-discount", { actorUserId: "owner", expectedRevision: bulkConfigured.revision });
+    await activatePlugin(db, "acme.bulk-discount", { actorUserId: "owner", expectedRevision: bulkConfigured.revision });
 
     const probeSha = sha256(PROBE_CODE);
     await bucket.put(pluginBundleKey("acme.probe", "1.0.0", probeSha), PROBE_CODE);
@@ -193,34 +193,34 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
   it("handles order.paid in its isolate: the bridge stores, counts and calls dashboard.orders.get as the plugin", async () => {
     const outcome = await send({
       action: "event",
-      pluginId: "scalius.hello",
+      pluginId: "acme.hello",
       event: { id: "evt_box", topic: "order.paid", apiVersion: "2026-10", occurredAt: "2026-10-01T10:00:00.000Z", resource: { type: "order", id: "ord_box1" }, facts: {} },
     });
     expect(outcome).toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", orderStatus: "confirmed" });
-    expect(await getPluginKv(db, "scalius.hello", "paid_count")).toBe(1);
+    expect(await getPluginRecord(db, "acme.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", orderStatus: "confirmed" });
+    expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events").all())
-      .toEqual([{ plugin_id: "scalius.hello", operation_id: "dashboard.orders.get", outcome: "success" }]);
-    expect((await listPluginLogs(db, "scalius.hello")).map((line) => line.message)).toContain("Greeted a paid order");
+      .toEqual([{ plugin_id: "acme.hello", operation_id: "dashboard.orders.get", outcome: "success" }]);
+    expect((await listPluginLogs(db, "acme.hello")).map((line) => line.message)).toContain("Greeted a paid order");
   });
 
   it("serves routes, runs cron and the checkout function with the same results as bundled", async () => {
     const request = { method: "GET", subpath: "", query: { name: "Karim" }, headers: {}, body: null, rawBody: null, staffId: null };
-    expect(await send({ action: "route", pluginId: "scalius.hello", surface: "public", name: "greet", request }))
+    expect(await send({ action: "route", pluginId: "acme.hello", surface: "public", name: "greet", request }))
       .toEqual({ ok: true, value: { status: 200, headers: {}, body: { message: "Salam, Karim!", visits: 1 } }, error: null });
-    expect((await send({ action: "route", pluginId: "scalius.hello", surface: "admin", name: "dashboard", request: { ...request, query: {} } })).value.body)
+    expect((await send({ action: "route", pluginId: "acme.hello", surface: "admin", name: "dashboard", request: { ...request, query: {} } })).value.body)
       .toMatchObject({
         version: 1,
         root: { children: [{ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, { label: "New orders", value: 0 }] }, expect.anything(), expect.anything()] },
       });
-    expect(await send({ action: "cron", pluginId: "scalius.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
+    expect(await send({ action: "cron", pluginId: "acme.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
       .toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toBeNull();
+    expect(await getPluginRecord(db, "acme.hello", "greetings", "ord_box1")).toBeNull();
     // Every active implementation answers, in priority then id order (one unit: no bulk tier).
-    expect(await send({ action: "function", pluginId: "scalius.hello", point: "checkout.discounts", input: { cart: testCart(5000) } }))
+    expect(await send({ action: "function", pluginId: "acme.hello", point: "checkout.discounts", input: { cart: testCart(5000) } }))
       .toEqual([
-        { pluginId: "scalius.bulk-discount", priority: 100, output: { discounts: [] } },
-        { pluginId: "scalius.hello", priority: 100, output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 20 } }] } },
+        { pluginId: "acme.bulk-discount", priority: 100, output: { discounts: [] } },
+        { pluginId: "acme.hello", priority: 100, output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 20 } }] } },
       ]);
   });
 
@@ -230,16 +230,16 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       inventoryPool: "regular", city: "city_1", zone: "zone_1", area: null, shippingMethodId: "m_std",
       customerPhone: "+8801712345678", discountCodes: [],
     };
-    const priced = await send({ action: "price", pluginId: "scalius.bulk-discount", input: order });
+    const priced = await send({ action: "price", pluginId: "acme.bulk-discount", input: order });
     expect(priced.points).toEqual(["cart.validate", "checkout.discounts"]);
-    // Bulk (priority 100, "scalius.bulk-discount" sorts first): 5% of ৳2,000 = ৳100;
+    // Bulk (priority 100, "acme.bulk-discount" sorts first): 5% of ৳2,000 = ৳100;
     // then Hello's 20% of the ৳1,900 left = ৳380.
     expect(priced.appDiscounts.map((entry: { pluginId: string; amountMinor: number }) => [entry.pluginId, entry.amountMinor])).toEqual([
-      ["scalius.bulk-discount", 10_000],
-      ["scalius.hello", 38_000],
+      ["acme.bulk-discount", 10_000],
+      ["acme.hello", 38_000],
     ]);
     expect(priced).toMatchObject({ ruleErrors: [], discountMinor: 48_000, totalMinor: 200_000 + 6_000 - 48_000 });
-    const blocked = await send({ action: "price", pluginId: "scalius.bulk-discount", input: { ...order, items: [{ ...order.items[0], quantity: 11 }] } });
+    const blocked = await send({ action: "price", pluginId: "acme.bulk-discount", input: { ...order, items: [{ ...order.items[0], quantity: 11 }] } });
     expect(blocked.ruleErrors).toEqual([{ code: "max_quantity", message: "You can buy at most 10 of this item in one order.", index: 0, cartKey: null }]);
   });
 
@@ -295,15 +295,15 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(messages).toEqual([{ type: "plugins.deliver", deliveryId: expect.stringMatching(/^pld_/) }]);
     const deliveryId = (messages[0] as { deliveryId: string }).deliveryId;
 
-    expect(await send({ action: "deliver", pluginId: "scalius.hello", deliveryId })).toEqual({ status: "succeeded", deliveryId, retryInSeconds: null });
+    expect(await send({ action: "deliver", pluginId: "acme.hello", deliveryId })).toEqual({ status: "succeeded", deliveryId, retryInSeconds: null });
     expect(sqlite.prepare("SELECT plugin_id, status, attempts, last_error FROM plugin_event_deliveries WHERE id = ?").get(deliveryId))
-      .toEqual({ plugin_id: "scalius.hello", status: "succeeded", attempts: 1, last_error: null });
-    expect(await getPluginKv(db, "scalius.hello", "created_count")).toBe(1);
+      .toEqual({ plugin_id: "acme.hello", status: "succeeded", attempts: 1, last_error: null });
+    expect(await getPluginKv(db, "acme.hello", "created_count")).toBe(1);
 
     // A redelivered message and a re-dispatched event add nothing.
-    expect(await send({ action: "deliver", pluginId: "scalius.hello", deliveryId })).toEqual({ status: "skipped", deliveryId, reason: "not_due" });
+    expect(await send({ action: "deliver", pluginId: "acme.hello", deliveryId })).toEqual({ status: "skipped", deliveryId, reason: "not_due" });
     expect(await pluginEventFanOutTarget.fanOut(db, event)).toEqual([]);
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_event_deliveries").get()).toEqual({ n: 1 });
-    expect(await getPluginKv(db, "scalius.hello", "created_count")).toBe(1);
+    expect(await getPluginKv(db, "acme.hello", "created_count")).toBe(1);
   });
 });

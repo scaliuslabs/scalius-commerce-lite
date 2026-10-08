@@ -8,6 +8,8 @@
 import { createHmac } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, getPluginRecord, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
@@ -19,11 +21,11 @@ import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
 import { createPluginRoutes } from "./routes";
 import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
-import { manifest as wishlistManifest } from "../../../../plugins/wishlist/src/index";
+import { manifest as wishlistManifest } from "./testing/apps/wishlist/src/index";
 
 const SESSION_KEY = "wishlist-e2e-session-hash-key-0123456789";
 
-describe("scalius.wishlist end to end", { timeout: 30_000 }, () => {
+describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;
@@ -59,8 +61,8 @@ describe("scalius.wishlist end to end", { timeout: 30_000 }, () => {
     `);
     sqlite.prepare("INSERT INTO customer_sessions (token_hash, customer_id, expires_at) VALUES (?, 'cust_buyer', unixepoch() + 3600)")
       .run(await hashCustomerSessionToken("buyer-session", SESSION_KEY));
-    const installed = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
-    await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: installed.revision });
+    const installed = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.wishlist"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.wishlist", { actorUserId: "owner", expectedRevision: installed.revision });
     app = createRuntimeApiApp();
     app.route("/", createPluginRoutes());
   });
@@ -68,38 +70,38 @@ describe("scalius.wishlist end to end", { timeout: 30_000 }, () => {
 
   it("saves a product for the signed-in buyer, shows it on their page and to staff, and follows product edits", async () => {
     // A guest is asked to sign in; nothing is stored.
-    expect(await call("/api/v1/plugins/scalius.wishlist/public/toggle", {
+    expect(await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { ...proxied("application/json", null), "content-type": "application/x-www-form-urlencoded" },
       body: "productId=p_linen",
     })).toMatchObject({ status: 401, json: { navigate: "/account" } });
 
     // The buyer saves it (the app's form, enhanced: JSON back).
-    const saved = await call("/api/v1/plugins/scalius.wishlist/public/toggle", {
+    const saved = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { ...proxied("application/json"), "content-type": "application/x-www-form-urlencoded" },
       body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
     });
     expect(saved).toEqual({ status: 200, json: { pressed: true, message: "Saved to your wishlist." } });
-    expect(await getPluginRecord(db, "scalius.wishlist", "wishes", "cust_buyer:p_linen")).toMatchObject({ customerId: "cust_buyer", productId: "p_linen" });
+    expect(await getPluginRecord(db, "acme.wishlist", "wishes", "cust_buyer:p_linen")).toMatchObject({ customerId: "cust_buyer", productId: "p_linen" });
     // The app read the product through /api/v1 under its own grant (products.view).
-    expect(await getPluginRecord(db, "scalius.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi", slug: "linen-panjabi", wishes: 1 });
+    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi", slug: "linen-panjabi", wishes: 1 });
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events ORDER BY operation_id").all()).toEqual([
-      { plugin_id: "scalius.wishlist", operation_id: "dashboard.products.get_by_ids", outcome: "success" },
-      { plugin_id: "scalius.wishlist", operation_id: "dashboard.products.get_section", outcome: "success" },
+      { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_by_ids", outcome: "success" },
+      { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_section", outcome: "success" },
     ]);
 
-    expect((await call("/api/v1/plugins/scalius.wishlist/public/state?productId=p_linen", { headers: proxied("application/json") })).json)
+    expect((await call("/api/v1/plugins/acme.wishlist/public/state?productId=p_linen", { headers: proxied("application/json") })).json)
       .toEqual({ pressed: true, signedIn: true });
 
     // Their page, as the storefront draws it inside the store layout.
-    const page = await call("/api/v1/plugins/scalius.wishlist/public/wishlist", { headers: proxied("text/html") });
+    const page = await call("/api/v1/plugins/acme.wishlist/public/wishlist", { headers: proxied("text/html") });
     expect(page.json.page.title).toBe("Your wishlist");
-    const clean = sanitizePluginHtml(page.json.page.html, { pluginId: "scalius.wishlist", forms: true });
+    const clean = sanitizePluginHtml(page.json.page.html, { pluginId: "acme.wishlist", forms: true });
     expect(clean.ok && clean.html).toContain('href="/products/linen-panjabi"');
 
     // Staff: Most wished, as the dashboard renders it.
-    const mostWished = await call("/api/v1/plugins/scalius.wishlist/admin/most-wished", { headers: { cookie: staffCookie() } });
+    const mostWished = await call("/api/v1/plugins/acme.wishlist/admin/most-wished", { headers: { cookie: staffCookie() } });
     expect(mostWished.status).toBe(200);
     const document = parsePluginUiDocument(mostWished.json);
     expect(document.ok).toBe(true);
@@ -108,25 +110,25 @@ describe("scalius.wishlist end to end", { timeout: 30_000 }, () => {
     // A product edit reaches the app (its event handler re-reads the product).
     sqlite.prepare("UPDATE products SET name = 'Linen Panjabi (Eid)' WHERE id = 'p_linen'").run();
     const host = new PluginHost({ env, ctx: pluginTestCtx(), db });
-    const installation = await requirePluginInstallation(db, "scalius.wishlist");
+    const installation = await requirePluginInstallation(db, "acme.wishlist");
     expect(await host.invokeEvent(installation, {
       id: "evt_1", topic: "product.updated", apiVersion: "2026-10", occurredAt: new Date().toISOString(),
       resource: { type: "product", id: "p_linen" }, facts: { productId: "p_linen", revision: 2 },
     })).toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "scalius.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi (Eid)", wishes: 1 });
+    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi (Eid)", wishes: 1 });
 
     // Removing it without JavaScript: a navigation, redirected back to the product.
-    const removed = await call("/api/v1/plugins/scalius.wishlist/public/toggle", {
+    const removed = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { ...proxied("text/html"), "content-type": "application/x-www-form-urlencoded" },
       body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
     });
     expect(removed.json).toEqual({ redirect: "/products/linen-panjabi" });
-    expect(await getPluginRecord(db, "scalius.wishlist", "products", "p_linen")).toBeNull();
+    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toBeNull();
   });
 
   it("never lets a direct API call act as a buyer without the store's session", async () => {
-    const forged = await call("/api/v1/plugins/scalius.wishlist/public/toggle", {
+    const forged = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { "x-scalius-app-proxy": "1", accept: "application/json", "content-type": "application/json", cookie: "cs_tok=forged" },
       body: JSON.stringify({ productId: "p_linen" }),

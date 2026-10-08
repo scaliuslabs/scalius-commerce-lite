@@ -20,7 +20,7 @@ const cart = (subtotalMinor: number) => ({
   discountCodes: [],
 });
 
-describe("scalius.hello", () => {
+describe("acme.hello", () => {
   it("greets a paid order once and counts it", async () => {
     const harness = createPluginTestHarness(hello, {
       settings: { greeting: "Salam" },

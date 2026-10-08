@@ -96,7 +96,7 @@ describe("account owner receipt access", () => {
         ('alloc_ship', 'ORDEROWNED000001', NULL, 'promo_ship', 'eff_ship', 1, 1, 'code', 'Free delivery', 'SHIPFREE', 'free', 'shipping', 'BDT', 8000, 8000, NULL);
       -- An installed app's discount on top (an app_discount order fact, checkout/app-functions.ts).
       INSERT INTO order_events (id, order_id, kind, data) VALUES ('oev_app_bulk', 'ORDEROWNED000001', 'app_discount',
-        '{"pluginId":"scalius.bulk-discount","appName":"Bulk discount","title":"Bulk savings (5% off)","code":null,"target":"lines","currencyCode":"BDT","amountMinor":2000,"shippingAmountMinor":0,"lines":[{"orderItemId":"item_1","amountMinor":2000}]}');
+        '{"pluginId":"acme.bulk-discount","appName":"Bulk discount","title":"Bulk savings (5% off)","code":null,"target":"lines","currencyCode":"BDT","amountMinor":2000,"shippingAmountMinor":0,"lines":[{"orderItemId":"item_1","amountMinor":2000}]}');
     `);
     const proof = await ownerProof({ Authorization: service(), "X-Customer-Session": OWNER_SESSION });
     const { data } = await proof.json() as { data: { receiptToken: string } };
@@ -106,7 +106,7 @@ describe("account owner receipt access", () => {
     expect(order.discounts).toEqual([
       { promotionId: "promo_eid", appId: null, title: "Eid sale", code: "EID10", kind: "product", amount: 100, shippingAmount: 0 },
       { promotionId: "promo_ship", appId: null, title: "Free delivery", code: "SHIPFREE", kind: "shipping", amount: 0, shippingAmount: 80 },
-      { promotionId: null, appId: "scalius.bulk-discount", title: "Bulk savings (5% off)", code: null, kind: "product", amount: 20, shippingAmount: 0 },
+      { promotionId: null, appId: "acme.bulk-discount", title: "Bulk savings (5% off)", code: null, kind: "product", amount: 20, shippingAmount: 0 },
     ]);
     expect(order.notes).toBe("দয়া করে ফোন করুন");
 

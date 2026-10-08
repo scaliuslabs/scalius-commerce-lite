@@ -19,7 +19,7 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const manifest = {
-  id: "scalius.hello",
+  id: "acme.hello",
   name: "Hello",
   version: "0.4.0",
   apiVersion: PLUGIN_API_VERSION,
@@ -28,7 +28,6 @@ export const manifest = {
   tagline: "An example app that uses every app surface",
   categories: ["marketing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/hello",
   minPlatformVersion: "1.0.0",
   permissions: ["orders.view"],
   events: ["order.paid", "order.created"],

@@ -26,11 +26,11 @@ describe("app surfaces from the API", () => {
 
   it("keeps product blocks in order with their placement, and drops malformed ones", () => {
     const blocks = readProductAppBlocks([
-      { id: "heart", app: "scalius.wishlist/button", placement: "buy-box", html: "<form></form>", head: head() },
-      { id: "note", app: "scalius.hello/note", placement: "below", html: "<p>Note</p>", head: null },
-      { id: "nowhere", app: "scalius.hello/note", placement: "sidebar", html: "<p>x</p>" },
+      { id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<form></form>", head: head() },
+      { id: "note", app: "acme.hello/note", placement: "below", html: "<p>Note</p>", head: null },
+      { id: "nowhere", app: "acme.hello/note", placement: "sidebar", html: "<p>x</p>" },
       { id: "bad-app", app: "not an app", placement: "below", html: "<p>x</p>" },
-      { id: "blank", app: "scalius.hello/note", placement: "below", html: "" },
+      { id: "blank", app: "acme.hello/note", placement: "below", html: "" },
     ]);
     expect(blocks.map((block) => [block.id, block.placement])).toEqual([["heart", "buy-box"], ["note", "below"]]);
     expect(blocks[1]!.head).toEqual({ meta: [], jsonLd: [] });
@@ -85,7 +85,7 @@ describe("app scripts", () => {
     expect(storefrontAppPage("/checkout")).toBe("checkout");
     expect(storefrontAppPage("/checkout/quick")).toBe("checkout");
     expect(storefrontAppPage("/order-success")).toBe("order-success");
-    for (const path of ["/account", "/about-us", "/apps/scalius.wishlist/wishlist", "/blog"]) expect(storefrontAppPage(path), path).toBeNull();
+    for (const path of ["/account", "/about-us", "/apps/acme.wishlist/wishlist", "/blog"]) expect(storefrontAppPage(path), path).toBeNull();
   });
 
   it("loads only https scripts that name the page or all", () => {

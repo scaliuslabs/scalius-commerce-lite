@@ -10,7 +10,7 @@ import {
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { BUNDLED_PLUGINS } from "../bundled.gen";
-import { manifest as helloManifest } from "../../../../../plugins/hello/src/index";
+import { manifest as helloManifest } from "./apps/hello/src/index";
 
 export const PLUGIN_TEST_CREDENTIAL_KEY = "plugin-bundled-test-credential-key-0123456789";
 
@@ -36,15 +36,15 @@ export function pluginTestCtx(): ExecutionContext {
 
 export async function installHello(db: Database, sqlite: DatabaseSync): Promise<PluginInstallation> {
   sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
-  const bundled = BUNDLED_PLUGINS["scalius.hello"]!;
+  const bundled = BUNDLED_PLUGINS["acme.hello"]!;
   const installed = await installPlugin(db, { manifest: helloManifest, source: "bundled", bundleSha256: bundled.sha256, actorUserId: "owner" });
-  const configured = await writePluginSettings(db, "scalius.hello", {
+  const configured = await writePluginSettings(db, "acme.hello", {
     greeting: "Salam",
     discount_percent: 15,
     min_subtotal_minor: 100000,
     api_key: "hello-secret-api-key",
   }, { expectedRevision: installed.revision, credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY });
-  return activatePlugin(db, "scalius.hello", { actorUserId: "owner", expectedRevision: configured.revision });
+  return activatePlugin(db, "acme.hello", { actorUserId: "owner", expectedRevision: configured.revision });
 }
 
 export function testCart(subtotalMinor: number) {

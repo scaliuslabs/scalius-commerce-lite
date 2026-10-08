@@ -12,7 +12,7 @@
 import { adminContext, definePlugin, PLUGIN_API_VERSION, ui, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
-  id: "scalius.order-tagger",
+  id: "acme.order-tagger",
   name: "Order tagger",
   version: "0.1.3",
   apiVersion: PLUGIN_API_VERSION,
@@ -21,7 +21,6 @@ export const manifest = {
   tagline: "Tag paid orders so your team knows what to pack",
   categories: ["orders",  "operations"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/order-tagger",
   minPlatformVersion: "1.0.0",
   permissions: ["orders.view", "orders.edit"],
   events: ["order.paid"],

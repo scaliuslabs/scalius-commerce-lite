@@ -1,4 +1,4 @@
-// Scalius Loyalty (`scalius.loyalty`): a tiny points programme that proves an
+// Scalius Loyalty (`acme.loyalty`): a tiny points programme that proves an
 // app can hold money-like state without ever spending it twice.
 //
 // - Earn (`order.paid`): points for every 100 of the store currency paid,
@@ -20,7 +20,7 @@
 import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
-  id: "scalius.loyalty",
+  id: "acme.loyalty",
   name: "Loyalty points",
   version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
@@ -29,8 +29,6 @@ export const manifest = {
   tagline: "Points buyers earn on orders and spend at checkout",
   categories: ["loyalty",  "marketing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/loyalty/README.md",
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/loyalty",
   minPlatformVersion: "1.0.0",
   permissions: ["orders.view"],
   events: ["order.paid"],

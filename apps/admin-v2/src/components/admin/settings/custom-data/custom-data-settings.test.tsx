@@ -45,7 +45,7 @@ describe("custom data settings", () => {
     sdk.getApiV1AdminCustomFieldDefinitions.mockImplementation(() => ok({
       definitions: [
         definition("cfd_care", "product", "Care", { storefrontVisible: true, valueCount: 12, position: 0 }),
-        definition("cfd_points", "product", "Points", { namespace: "scalius.loyalty", type: "integer", position: 1 }),
+        definition("cfd_points", "product", "Points", { namespace: "acme.loyalty", type: "integer", position: 1 }),
         definition("cfd_vip", "customer", "VIP", { type: "boolean" }),
       ],
     }));
@@ -78,7 +78,7 @@ describe("custom data settings", () => {
     expect(rows[0]!.textContent).toContain("custom.care");
     expect(rows[0]!.textContent).toContain(t("storefront"));
     expect(rows[0]!.textContent).toContain(t("valueCount", { count: 12 }));
-    expect(rows[1]!.textContent).toContain(t("managedBy", { namespace: "scalius.loyalty" }));
+    expect(rows[1]!.textContent).toContain(t("managedBy", { namespace: "acme.loyalty" }));
     expect(container.textContent).not.toContain("VIP");
     // Only the merchant's own field has edit and delete.
     expect(container.querySelectorAll('button[aria-haspopup="menu"]')).toHaveLength(1);

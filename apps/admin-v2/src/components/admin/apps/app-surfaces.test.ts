@@ -18,7 +18,9 @@ import type { AppSurfaces } from "./ui/surfaces";
 
 /** The plugin's manifest, loaded at run time (the dashboard never bundles plugin code). */
 async function manifestOf(plugin: string): Promise<PluginManifest> {
-  const path = new URL(`../../../../../../plugins/${plugin}/src/index.ts`, import.meta.url).href;
+  // Test apps live in the API test tree; shipped apps in plugins/.
+  const dir = plugin === "hello" ? "apps/api/src/plugins/testing/apps/hello" : `plugins/${plugin}`;
+  const path = new URL(`../../../../../../${dir}/src/index.ts`, import.meta.url).href;
   const module = (await import(/* @vite-ignore */ path)) as { manifest: unknown };
   const parsed = parsePluginManifest(module.manifest);
   if (!parsed.ok) throw new Error(`${plugin}: ${JSON.stringify(parsed.issues)}`);
@@ -95,7 +97,7 @@ describe("where an app appears", () => {
     ]);
     expect(entries.find((entry) => entry.key === "card:greeting")).toMatchObject({ group: "resources", to: "/admin/orders", detail: { message: "card", target: "order" } });
     expect(entries.find((entry) => entry.key === "action:wave")).toMatchObject({ to: "/admin/products", detail: { message: "bulkAction", target: "product" } });
-    expect(entries.find((entry) => entry.key === "settings")).toMatchObject({ to: "/admin/apps/scalius.hello", search: { tab: "settings" } });
+    expect(entries.find((entry) => entry.key === "settings")).toMatchObject({ to: "/admin/apps/acme.hello", search: { tab: "settings" } });
   });
 
   it("names an inactive app's pages and sections without linking them; its providers still link", async () => {

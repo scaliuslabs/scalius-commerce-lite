@@ -1,5 +1,5 @@
 // Checkout app functions end to end on the real migrated schema: the bundled
-// scalius.bulk-discount (its real code through the bundled loader) prices and
+// acme.bulk-discount (its real code through the bundled loader) prices and
 // blocks a checkout; test apps (a fake loader) adjust delivery options and
 // payment methods, rate risk, and misbehave. Proves the stacking rules
 // against a platform promotion, the order's `app_discount` facts, refund
@@ -7,7 +7,9 @@
 // on throw/timeout/invalid output, per-request memoization, and that a store
 // with no app does no app work.
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
@@ -46,7 +48,7 @@ import type { PluginLoader } from "./loaders/types";
 import { createCheckoutAppFunctions } from "./checkout-functions";
 import { runOrderRiskChecks } from "./order-risk";
 import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
-import { manifest as bulkManifest } from "../../../../plugins/bulk-discount/src/index";
+import { manifest as bulkManifest } from "./testing/apps/bulk-discount/src/index";
 
 const ok = (value: unknown): PluginInvocationResult => ({ ok: true, value, error: null, logs: [], droppedLogs: 0 });
 
@@ -110,12 +112,12 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
   }
 
   async function installBulk(settings: Record<string, unknown>) {
-    const installed = await installPlugin(db, { manifest: bulkManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.bulk-discount"]!.sha256, actorUserId: "owner" });
-    const configured = await writePluginSettings(db, "scalius.bulk-discount", { title: "Bulk savings", ...settings }, {
+    const installed = await installPlugin(db, { manifest: bulkManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.bulk-discount"]!.sha256, actorUserId: "owner" });
+    const configured = await writePluginSettings(db, "acme.bulk-discount", { title: "Bulk savings", ...settings }, {
       expectedRevision: installed.revision,
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
-    await activatePlugin(db, "scalius.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
+    await activatePlugin(db, "acme.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
   }
 
   async function installTestApp(id: string, points: Array<{ point: string; priority?: number }>, limits = { cpuMs: 50, wallMs: 100 }) {
@@ -224,7 +226,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     const reviewed = await quote(data, runner);
     // Platform 10% of 2,300 = 230; the tea line (4 × 500 = 2,000, 200 off) keeps 1,800; 5% of it = 90.
     expect(reviewed.appDiscounts).toEqual([expect.objectContaining({
-      pluginId: "scalius.bulk-discount", appName: "Bulk discount", title: "Bulk savings (5% off)", target: "lines",
+      pluginId: "acme.bulk-discount", appName: "Bulk discount", title: "Bulk savings (5% off)", target: "lines",
       amountMinor: 9_000, shippingAmountMinor: 0, lines: [{ lineId: "cart:0:v_tea", amountMinor: 9_000 }],
     })]);
     expect(reviewed.taxQuote.discountMinor).toBe(23_000 + 9_000);
@@ -239,7 +241,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
 
     expect((await listOrderDiscountLines(db, result.orderId)).map((entry) => [entry.title, entry.appId, entry.amountMinor])).toEqual([
       ["Tea week", null, 23_000],
-      ["Bulk savings (5% off)", "scalius.bulk-discount", 9_000],
+      ["Bulk savings (5% off)", "acme.bulk-discount", 9_000],
     ]);
     await expect(readPromotionRefundSnapshot(db, { orderId: result.orderId, currencyCode: "BDT", orderDiscountAmountMinor: order.discount }))
       .resolves.toMatchObject({ totalDiscountMinor: 32_000, merchandiseDiscountMinor: 32_000 });

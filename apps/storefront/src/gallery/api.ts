@@ -160,12 +160,12 @@ function productApps(entry: GalleryEntry) {
     blocks: [
       {
         id: "wishlist",
-        app: "scalius.wishlist/button",
+        app: "acme.wishlist/button",
         placement: "buy-box",
-        html: '<form class="mt-3" action="/apps/scalius.wishlist/toggle" method="post" data-app-form><input type="hidden" name="productId" value="prod_0"><button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false"><span aria-hidden="true">&#9825;</span><span data-app-label>Save to wishlist</span></button><p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p></form>',
+        html: '<form class="mt-3" action="/apps/acme.wishlist/toggle" method="post" data-app-form><input type="hidden" name="productId" value="prod_0"><button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false"><span aria-hidden="true">&#9825;</span><span data-app-label>Save to wishlist</span></button><p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p></form>',
         head: { meta: [], jsonLd: [] },
       },
-      { id: "note", app: "scalius.hello/note", placement: "below", html: '<p class="text-sm text-muted-foreground">Packed with care in Dhaka.</p>', head: { meta: [], jsonLd: [] } },
+      { id: "note", app: "acme.hello/note", placement: "below", html: '<p class="text-sm text-muted-foreground">Packed with care in Dhaka.</p>', head: { meta: [], jsonLd: [] } },
     ],
   };
 }

@@ -78,7 +78,7 @@ describe("app safety", () => {
   it("stops every running third-party app and leaves first-party apps running", async () => {
     await installActive(db);
     await installActive(db, { id: "beta.reviews", name: "Beta Reviews" });
-    await installActive(db, { id: "scalius.wishlist", name: "Wishlist" }, "bundled");
+    await installActive(db, { id: "scalius.bkash", name: "bKash" }, "bundled");
     await installPlugin(db, { manifest: manifest({ id: "gamma.idle", name: "Idle" }), source: "upload", bundleSha256: SHA });
     expect(await stopThirdPartyPlugins(db, "Stopped with the emergency switch for all third-party apps.")).toEqual(["acme.loyalty", "beta.reviews"]);
     const statuses = sqlite.prepare("SELECT plugin_id, status FROM plugin_installations ORDER BY plugin_id").all();
@@ -86,7 +86,7 @@ describe("app safety", () => {
       { plugin_id: "acme.loyalty", status: "disabled" },
       { plugin_id: "beta.reviews", status: "disabled" },
       { plugin_id: "gamma.idle", status: "installed" },
-      { plugin_id: "scalius.wishlist", status: "active" },
+      { plugin_id: "scalius.bkash", status: "active" },
     ]);
   });
 

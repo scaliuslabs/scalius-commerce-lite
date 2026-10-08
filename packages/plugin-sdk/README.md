@@ -181,7 +181,7 @@ A function is pure: `(input, settings) => output`, with no I/O. The host stops i
 - **Snapshot and commit** (`checkout.discounts`). Declare `snapshot: { collection }`. The signed-in buyer's record in that collection (record id = customer id) arrives as `input.snapshot` (`{ revision, data } | null`).
   - The answer may carry `commit: { record }`, the next version of that record. The platform writes it in the order's own commit batch, at the revision you saw, and only when one of your discounts applied.
   - If the record changed meanwhile, the order fails with `APP_OFFER_CHANGED` and the buyer reviews it.
-  - Size the discount against `cart.lines[].lineTotalMinor`. `plugins/loyalty` is the worked example.
+  - Size the discount against `cart.lines[].lineTotalMinor`. The test app `apps/api/src/plugins/testing/apps/loyalty` is a worked example.
 - **Holds** (`order.risk`). The point runs after the order commits. Answer `{ level, reasons, hold: true }` to put the order on hold (one `order_holds` row per order and app). Staff release the hold before the order ships or moves on. Staff can still cancel it. The platform never cancels on its own.
 
 ## Routes and storefront surfaces

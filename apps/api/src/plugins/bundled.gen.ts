@@ -15,29 +15,9 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     sha256: "d95039c0b1daa851e17c5e276edcd7ebbfea1eee6d3bcd2de0ad81361137bd1d",
     load: () => import("../../../../plugins/bkash/src/index"),
   },
-  "scalius.bulk-discount": {
-    version: "0.1.2",
-    sha256: "9c7df57685b39fffb0cb72bdb2f426a45826afe624c1bd797aec846c63c4dc5a",
-    load: () => import("../../../../plugins/bulk-discount/src/index"),
-  },
-  "scalius.loyalty": {
-    version: "0.1.2",
-    sha256: "28e615653b57a30e6bcf582b7464d5060c0eb8146d6e4d7cf5b8c297aa47e92a",
-    load: () => import("../../../../plugins/loyalty/src/index"),
-  },
   "scalius.nagad": {
     version: "0.1.2",
     sha256: "e2dac744e78b60ec3b0e5d621712ed494f5d7a621f104b3fa5d92f250c6ebc91",
     load: () => import("../../../../plugins/nagad/src/index"),
-  },
-  "scalius.order-tagger": {
-    version: "0.1.3",
-    sha256: "6fe22aa8270643f2e26f694564449c381e312e7933e94ac728c2291dac19782c",
-    load: () => import("../../../../plugins/order-tagger/src/index"),
-  },
-  "scalius.wishlist": {
-    version: "0.1.2",
-    sha256: "27457bbc4f01d54c59b5b478922f356c20d5ec9d59433f631d4db7f3e42582eb",
-    load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

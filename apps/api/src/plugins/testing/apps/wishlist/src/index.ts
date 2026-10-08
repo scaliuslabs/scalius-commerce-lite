@@ -1,11 +1,11 @@
-// Scalius Wishlist (`scalius.wishlist`): a first-party app built only on the
+// Scalius Wishlist (`acme.wishlist`): a first-party app built only on the
 // public plugin contract.
 //
 // - Storefront: a heart button product block (buy box) drawn from settings
 //   alone, so it is cached with the product page and never per buyer; the
 //   buyer's state is fetched after load (`data-app-state`) and the button is
 //   a plain form, so it works without JavaScript. The wishlist page is
-//   `/apps/scalius.wishlist/wishlist`, drawn inside the store layout.
+//   `/apps/acme.wishlist/wishlist`, drawn inside the store layout.
 // - Identity: the storefront proxy tells public routes who is signed in
 //   (`request.customer.id`); the app never sees a cookie or token.
 // - Storage: `wishes` (one record per customer and product) and `products`
@@ -26,7 +26,7 @@ import {
 } from "@scalius/plugin-sdk";
 
 export const manifest = {
-  id: "scalius.wishlist",
+  id: "acme.wishlist",
   name: "Wishlist",
   version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
@@ -35,7 +35,6 @@ export const manifest = {
   tagline: "Buyers save products to buy later",
   categories: ["marketing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/wishlist",
   minPlatformVersion: "1.0.0",
   // Product names, links and images for the wishlist page and the dashboard.
   permissions: ["products.view"],

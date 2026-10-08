@@ -140,7 +140,7 @@ export const CUSTOM_FIELD_DESCRIPTION_MAX_LENGTH = 300;
 /** Definitions per owner type, all namespaces together. */
 export const CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX = 100;
 
-/** `custom` (the merchant) or a plugin id (`PLUGIN_ID_PATTERN`, e.g. `scalius.loyalty`). */
+/** `custom` (the merchant) or a plugin id (`PLUGIN_ID_PATTERN`, e.g. `acme.loyalty`). */
 export function isCustomFieldNamespace(value: unknown): value is string {
   return value === CUSTOM_FIELD_MERCHANT_NAMESPACE || (typeof value === "string" && PLUGIN_ID_PATTERN.test(value));
 }

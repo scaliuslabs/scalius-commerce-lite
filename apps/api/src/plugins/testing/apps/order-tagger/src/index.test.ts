@@ -18,7 +18,7 @@ function api(totalAmount = 1500) {
   };
 }
 
-describe("scalius.order-tagger", () => {
+describe("acme.order-tagger", () => {
   it("tags a paid order once: reads it, notes it on the timeline with an event-derived key, sets its tag field", async () => {
     const calls = api();
     const harness = createPluginTestHarness(tagger, { api: calls.answer, settings: { tag: "vip" } });

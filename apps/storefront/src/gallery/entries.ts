@@ -378,15 +378,15 @@ function appEntries(): GalleryEntry[] {
   const home = clone(base);
   home.pages.home = [
     contentSection("hero", "hero"),
-    { id: "app-greeting", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
+    { id: "app-greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
     contentSection("product-rail", "rail"),
   ];
   const product = clone(base);
   product.blocks.product = {
     ...product.blocks.product,
     apps: [
-      { id: "wishlist", app: "scalius.wishlist/button", values: { label: "Save to wishlist" } },
-      { id: "note", app: "scalius.hello/note", values: { note: "Packed with care in Dhaka." } },
+      { id: "wishlist", app: "acme.wishlist/button", values: { label: "Save to wishlist" } },
+      { id: "note", app: "acme.hello/note", values: { note: "Packed with care in Dhaka." } },
     ],
   };
   return [

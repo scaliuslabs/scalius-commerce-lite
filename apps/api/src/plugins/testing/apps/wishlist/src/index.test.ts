@@ -24,13 +24,13 @@ const productApi = async (operationId: string, input: unknown) => {
 const json = { accept: "application/json" };
 const html = { accept: "text/html" };
 
-describe("scalius.wishlist", () => {
+describe("acme.wishlist", () => {
   it("draws the same heart button for every buyer, from settings alone, and it survives sanitizing", async () => {
     const harness = createPluginTestHarness(wishlist);
     const drawn = (await harness.render("product-block", "button", { product, settings: { label: "Love it" } })).value as { body: { html: string } };
-    expect(drawn.body.html).toContain('action="/apps/scalius.wishlist/toggle"');
+    expect(drawn.body.html).toContain('action="/apps/acme.wishlist/toggle"');
     expect(drawn.body.html).toContain("Love it");
-    const clean = sanitizePluginHtml(drawn.body.html, { pluginId: "scalius.wishlist", forms: true });
+    const clean = sanitizePluginHtml(drawn.body.html, { pluginId: "acme.wishlist", forms: true });
     // Nothing is dropped (the heart entity is written out as its character).
     expect(clean.ok && clean.html).toBe(drawn.body.html.replace("&#9825;", "♡"));
     // Rendering may not read the wishes (the block declares no reads) or write anything.
@@ -65,7 +65,7 @@ describe("scalius.wishlist", () => {
     expect(harness.records.get("products")?.get("p_linen")).toMatchObject({ wishes: 1 });
     // Never an open redirect.
     expect((await harness.route("public", "toggle", { method: "POST", headers: html, body: { productId: "p_linen", returnTo: "//evil.com" }, customer })).value)
-      .toEqual({ body: { redirect: "/apps/scalius.wishlist/wishlist" } });
+      .toEqual({ body: { redirect: "/apps/acme.wishlist/wishlist" } });
   });
 
   it("shows the buyer's wishlist page inside the store, and a sign-in page to guests", async () => {
@@ -77,7 +77,7 @@ describe("scalius.wishlist", () => {
     expect(page.body.page.title).toBe("Your wishlist");
     expect(page.body.page.html).toContain('href="/products/linen-panjabi"');
     expect(page.body.page.html).toContain("Cotton Panjabi");
-    const clean = sanitizePluginHtml(page.body.page.html, { pluginId: "scalius.wishlist", forms: true });
+    const clean = sanitizePluginHtml(page.body.page.html, { pluginId: "acme.wishlist", forms: true });
     expect(clean.ok).toBe(true);
     const guest = (await harness.route("public", "wishlist", { headers: html })).value as { body: { page: { html: string } } };
     expect(guest.body.page.html).toContain("Sign in to see your wishlist");

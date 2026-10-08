@@ -175,7 +175,7 @@ describe("catalog actions on D1 storage", () => {
       INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type) VALUES
         ('cfd_care_guide', 'product', 'custom', 'care', 'Care', 'single_line_text'),
         ('cfd_fit_note', 'variant', 'custom', 'fit', 'Fit', 'single_line_text'),
-        ('cfd_loyalty_points', 'product', 'scalius.loyalty', 'points', 'Points', 'integer');
+        ('cfd_loyalty_points', 'product', 'acme.loyalty', 'points', 'Points', 'integer');
       INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES
         ('cfd_care_guide', 'product', '${source.id}', 'Hand wash'),
         ('cfd_loyalty_points', 'product', '${source.id}', '5'),

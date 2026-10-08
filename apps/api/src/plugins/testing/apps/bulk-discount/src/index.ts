@@ -10,7 +10,7 @@
 import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
-  id: "scalius.bulk-discount",
+  id: "acme.bulk-discount",
   name: "Bulk discount",
   version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
@@ -19,7 +19,6 @@ export const manifest = {
   tagline: "Bigger discounts for bigger orders",
   categories: ["pricing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bulk-discount",
   minPlatformVersion: "1.0.0",
   functions: [
     { point: "checkout.discounts", priority: 100 },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PLUGIN_HTML_MAX_ELEMENTS, PLUGIN_HTML_MAX_INPUT_BYTES, sanitizePluginHtml, sanitizePluginUrl } from "./html";
 import { parsePluginPageOutput, sanitizePluginHead, serializeJsonLd } from "./storefront";
 
-const options = { pluginId: "scalius.wishlist", forms: true };
+const options = { pluginId: "acme.wishlist", forms: true };
 function clean(html: string, overrides: Partial<typeof options> = {}): string {
   const result = sanitizePluginHtml(html, { ...options, ...overrides });
   if (!result.ok) throw new Error(`refused: ${result.reason}`);
@@ -49,19 +49,19 @@ describe("plugin storefront HTML", () => {
   });
 
   it("lets forms post only to the app's own proxy, and only with the proxy", () => {
-    expect(clean('<form action="/apps/scalius.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>'))
-      .toBe('<form action="/apps/scalius.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>');
+    expect(clean('<form action="/apps/acme.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>'))
+      .toBe('<form action="/apps/acme.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>');
     expect(clean('<form action="/apps/other.app/x" method="post"><button>Go</button></form>')).toBe('<button type="button">Go</button>');
     expect(clean('<form action="https://evil.com/steal"><input name="a"></form>')).toBe('<input name="a">');
-    expect(clean('<form action="/apps/scalius.wishlist/../../api/v1/x"><b>x</b></form>')).toBe("<b>x</b>");
-    expect(clean('<form action="/apps/scalius.wishlist/toggle"><b>x</b></form>', { forms: false })).toBe("<b>x</b>");
-    expect(clean('<form action="/apps/scalius.wishlist/a"><form action="/apps/scalius.wishlist/b"><b>x</b></form></form>'))
-      .toBe('<form action="/apps/scalius.wishlist/a" method="get"><b>x</b></form>');
+    expect(clean('<form action="/apps/acme.wishlist/../../api/v1/x"><b>x</b></form>')).toBe("<b>x</b>");
+    expect(clean('<form action="/apps/acme.wishlist/toggle"><b>x</b></form>', { forms: false })).toBe("<b>x</b>");
+    expect(clean('<form action="/apps/acme.wishlist/a"><form action="/apps/acme.wishlist/b"><b>x</b></form></form>'))
+      .toBe('<form action="/apps/acme.wishlist/a" method="get"><b>x</b></form>');
   });
 
   it("drops password, file and image inputs and the formaction attribute", () => {
-    expect(clean('<form action="/apps/scalius.wishlist/x"><input type="password" name="p"><input type="file" name="f"><button formaction="https://evil.com">Go</button></form>'))
-      .toBe('<form action="/apps/scalius.wishlist/x" method="get"><button type="button">Go</button></form>');
+    expect(clean('<form action="/apps/acme.wishlist/x"><input type="password" name="p"><input type="file" name="f"><button formaction="https://evil.com">Go</button></form>'))
+      .toBe('<form action="/apps/acme.wishlist/x" method="get"><button type="button">Go</button></form>');
   });
 
   it("escapes attribute values and text it keeps", () => {
@@ -124,7 +124,7 @@ describe("plugin head tags", () => {
 describe("proxy page answers", () => {
   it("reads pages and same-store redirects; anything else stays JSON", () => {
     expect(parsePluginPageOutput({ page: { title: "Wishlist", html: "<p>x</p>" } })).toEqual({ page: { title: "Wishlist", html: "<p>x</p>" } });
-    expect(parsePluginPageOutput({ redirect: "/apps/scalius.wishlist/wishlist" })).toEqual({ redirect: "/apps/scalius.wishlist/wishlist" });
+    expect(parsePluginPageOutput({ redirect: "/apps/acme.wishlist/wishlist" })).toEqual({ redirect: "/apps/acme.wishlist/wishlist" });
     expect(parsePluginPageOutput({ redirect: "//evil.com" })).toBeNull();
     expect(parsePluginPageOutput({ redirect: "https://evil.com" })).toBeNull();
     expect(parsePluginPageOutput({ redirect: "/\\evil.com" })).toBeNull();
