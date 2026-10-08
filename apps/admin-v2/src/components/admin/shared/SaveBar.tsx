@@ -33,7 +33,15 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
  * `lines` lists every problem for the save banner (one per field).
  */
 export class SaveNotCompleted extends Error {
-  constructor(message = translate(resourceMessages, "saveFailed"), readonly lines: string[] = [message]) {
+  /**
+   * `focus` maps a line to the control it is about: the banner turns that line
+   * into a link that moves focus there.
+   */
+  constructor(
+    message = translate(resourceMessages, "saveFailed"),
+    readonly lines: string[] = [message],
+    readonly focus: Record<string, () => void> = {},
+  ) {
     super(message);
     this.name = "SaveNotCompleted";
   }
@@ -117,6 +125,8 @@ const SaveStateContext = createContext<SaveScopeState | null>(null);
 interface SaveFailure {
   /** Problems that can't be shown next to a field. */
   errors: string[];
+  /** Banner line → moves focus to the control it names. */
+  focus: Record<string, () => void>;
   fieldErrors: Record<string, string>;
   /** Cards refused because someone else saved first, and their banner lines. */
   conflicts: Array<{ line: string; reload: () => Promise<unknown> }>;
@@ -129,7 +139,7 @@ interface SaveFailure {
    */
   reveal: number;
 }
-const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, conflicts: [], kind: null, attempt: 0, reveal: 0 };
+const NO_FAILURE: SaveFailure = { errors: [], focus: {}, fieldErrors: {}, conflicts: [], kind: null, attempt: 0, reveal: 0 };
 /** Kept apart from the registry so a failed save re-renders only the banner and marked fields. */
 const SaveErrorsContext = createContext<SaveFailure & {
   clearField: (id: string) => void;
@@ -271,6 +281,7 @@ export function SaveScope({
       }
       setSaving(true);
       const errors: string[] = [];
+      const focus: Record<string, () => void> = {};
       const fieldErrors: Record<string, string> = {};
       const conflicts: SaveFailure["conflicts"] = [];
       let kind: SaveFailure["kind"] = null;
@@ -285,6 +296,10 @@ export function SaveScope({
             failed = true;
             const lines = readFailure(entry, error, fieldErrors);
             errors.push(...lines);
+            if (error instanceof SaveNotCompleted) {
+              const prefix = entry.label ? `${entry.label}: ` : "";
+              for (const [line, move] of Object.entries(error.focus)) focus[prefix + line] = move;
+            }
             if (entry.reload && (error instanceof SaveConflict || readSettingsRevisionConflict(error))) {
               conflicts.push({ line: lines[0]!, reload: entry.reload });
             } else if (kind !== "validation") {
@@ -298,6 +313,7 @@ export function SaveScope({
       }
       setFailure((previous) => ({
         errors,
+        focus,
         fieldErrors,
         conflicts,
         kind,
@@ -337,6 +353,17 @@ export function useServerFieldError(id: string): { error: string | undefined; cl
   return { error: fieldErrors[id], clear: () => clearField(id), revealed: reveal > 0 };
 }
 
+/** A banner line; one that names a control is a link that moves focus to it (Shopify's "fix 2 problems"). */
+function ProblemLine({ line, focus }: { line: string; focus: Record<string, () => void> }) {
+  const move = focus[line];
+  if (!move) return <>{line}</>;
+  return (
+    <button type="button" className="text-start underline underline-offset-2 hover:no-underline" onClick={move}>
+      {line}
+    </button>
+  );
+}
+
 /**
  * Shopify's server-error banner: put it under the page (or dialog) title.
  * After a failed save it lists the problems and moves focus to the first
@@ -345,7 +372,7 @@ export function useServerFieldError(id: string): { error: string | undefined; cl
 export function SaveErrorBanner() {
   const t = useMessages(saveBarMessages);
   const failure = useContext(SaveErrorsContext);
-  const { errors, fieldErrors, conflicts, attempt, reveal, reloadConflicts } = failure;
+  const { errors, focus, fieldErrors, conflicts, attempt, reveal, reloadConflicts } = failure;
   const scope = useContext(SaveStateContext);
   const kind = failureKind(failure);
   const ref = useRef<HTMLDivElement>(null);
@@ -395,10 +422,10 @@ export function SaveErrorBanner() {
           {errors.length === 0 ? null : (
             <AlertDescription>
               {errors.length === 1 ? (
-                <p>{errors[0]}</p>
+                <p><ProblemLine line={errors[0]!} focus={focus} /></p>
               ) : (
                 <ul className="list-disc space-y-1 ps-4">
-                  {errors.map((error) => <li key={error}>{error}</li>)}
+                  {errors.map((error) => <li key={error}><ProblemLine line={error} focus={focus} /></li>)}
                 </ul>
               )}
               {conflicts.length === 0 ? null : (

@@ -57,7 +57,7 @@ export function SalesChannelsSettings() {
     const linked = activeLocations.filter((location) => channel.locationIds.includes(location.id)).length;
     return linked === activeLocations.length
       ? t("allLocations")
-      : t("someLocations", { count: formatNumber(linked), total: formatNumber(activeLocations.length) });
+      : t("someLocations", { count: linked, total: formatNumber(activeLocations.length) });
   };
 
   return (
@@ -84,7 +84,7 @@ export function SalesChannelsSettings() {
                       search={{ channel: channel.id } as never}
                       className="text-foreground hover:underline"
                     >
-                      {t("products", { count: formatNumber(channel.publishedProducts) })}
+                      {t("products", { count: channel.publishedProducts })}
                     </Link>
                     {locationSummary(channel) ? <> · {locationSummary(channel)}</> : null}
                   </p>

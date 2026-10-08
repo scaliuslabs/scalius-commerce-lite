@@ -161,7 +161,7 @@ describe("publishing card", () => {
     const values: Array<string[] | null> = [];
     await render(<PublishingHarness initial={null} onValue={(value) => values.push(value)} />);
     // On every channel, the card is one line until Change is pressed.
-    await vi.waitFor(() => expect(container.textContent).toContain(t("availableEverywhereNew", { count: "4" })));
+    await vi.waitFor(() => expect(container.textContent).toContain(t("availableEverywhereNew", { channels: "Online store, Google, Facebook and Instagram, and TikTok Shop" })));
     expect(container.querySelectorAll("button[role=checkbox]")).toHaveLength(0);
     act(() => button(t("changeChannels")).click());
     await vi.waitFor(() => expect(container.textContent).toContain(t("publishingNew")));

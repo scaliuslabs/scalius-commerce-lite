@@ -42,6 +42,18 @@ describe("dashboard messages", () => {
     expect(translate(plurals, "variants", { count: 1 })).toBe("১টি ভ্যারিয়েন্ট");
   });
 
+  it("never shows a plural raw: an exact choice, a numeric string and a pre-formatted count all read", () => {
+    const plurals = defineMessages({
+      en: { orders: "{count, plural, =0 {No orders} one {# order} other {# orders}}" },
+      bn: { orders: "{count}টি অর্ডার" },
+    });
+    expect(translate(plurals, "orders", { count: 0 })).toBe("No orders");
+    expect(translate(plurals, "orders", { count: 1 })).toBe("1 order");
+    expect(translate(plurals, "orders", { count: "1" })).toBe("1 order");
+    expect(translate(plurals, "orders", { count: "1,200" })).toBe("1,200 orders");
+    expect(translate(plurals, "orders", { count: "1,200+" })).toBe("1,200+ orders");
+  });
+
   it("writes numbers as the store's country does (CLDR), Bangla digits unchanged", () => {
     setStoreRegion("US");
     expect(formatNumber(1234567.5)).toBe("1,234,567.5");

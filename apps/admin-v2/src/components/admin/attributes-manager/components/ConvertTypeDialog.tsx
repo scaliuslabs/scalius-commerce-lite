@@ -65,7 +65,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
         setPreview(result);
         return;
       }
-      toast.success(result.skipped > 0 ? t("convertedPartly", { count: formatNumber(result.skipped) }) : t("converted"));
+      toast.success(result.skipped > 0 ? t("convertedPartly", { count: result.skipped }) : t("converted"));
       onConverted(valueType, result.unit);
       onClose();
     },
@@ -117,11 +117,11 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
           ) : null}
           {preview ? (
             <div className="space-y-1 rounded-lg border p-3 text-body" aria-live="polite">
-              <p>{t("previewRows", { rows: formatNumber(preview.rows), distinct: formatNumber(preview.distinctValues) })}</p>
-              {preview.newValues > 0 ? <p>{t("previewNewValues", { count: formatNumber(preview.newValues) })}</p> : null}
+              <p>{t("previewRows", { rows: preview.rows, distinct: formatNumber(preview.distinctValues) })}</p>
+              {preview.newValues > 0 ? <p>{t("previewNewValues", { count: preview.newValues })}</p> : null}
               {preview.unconvertibleCount > 0 ? (
                 <>
-                  <p className="text-destructive">{t("previewBlocked", { count: formatNumber(preview.unconvertibleCount) })}</p>
+                  <p className="text-destructive">{t("previewBlocked", { count: preview.unconvertibleCount })}</p>
                   <ul className="list-disc ps-5 text-muted-foreground">
                     {preview.unconvertibleSamples.map((sample) => <li key={sample} className="break-words">{sample}</li>)}
                   </ul>

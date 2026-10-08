@@ -256,7 +256,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       if (units === 0) continue;
       const breakdown = [...levels]
         .sort((a, b) => (order.get(a.locationId) ?? Infinity) - (order.get(b.locationId) ?? Infinity))
-        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? t("otherLocation"), count: formatNumber(level.onHand) }))
+        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? t("otherLocation"), count: level.onHand }))
         .join(" · ");
       const places = levels
         .filter((level) => level.locationId !== homeLocation.id)
@@ -300,7 +300,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       : simpleConversion && simpleElsewhere > 0
         ? {
             message: t("issueStockElsewhere", {
-              count: formatNumber(simpleElsewhere),
+              count: simpleElsewhere,
               locations: stockElsewhere.get(defaultSku!.id)!.places,
               home: homeLocation.name,
             }),
@@ -829,7 +829,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           {/* Limits show as the merchant nears them (from three quarters), never only at save. */}
           {validShape && combinationCount > MAX_COMBINATIONS * 0.75 ? (
             <span className={cn("tabular-nums", combinationCount > MAX_COMBINATIONS ? "text-destructive" : "text-muted-foreground")}>
-              {t("variantsLimitNear", { count: formatNumber(combinationCount), max: formatNumber(MAX_COMBINATIONS) })}
+              {t("variantsLimitNear", { count: combinationCount, max: formatNumber(MAX_COMBINATIONS) })}
             </span>
           ) : null}
           {options.length >= MAX_AXES ? (

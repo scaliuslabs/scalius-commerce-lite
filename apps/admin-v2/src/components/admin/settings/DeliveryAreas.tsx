@@ -78,7 +78,7 @@ function usePlacesUnder(country: string) {
     const parts = Object.entries(descendants)
       .filter(([, count]) => count > 0)
       .sort(([left], [right]) => Number(left) - Number(right))
-      .map(([level, count]) => t("levelCount", { count: formatNumber(count), name: names.word(Number(level), count) }));
+      .map(([level, count]) => t("levelCount", { count, name: names.word(Number(level), count) }));
     if (parts.length === 0) return null;
     return formatList(parts, getLocale());
   };
@@ -331,7 +331,7 @@ export function DeliveryAreasManager() {
   };
   const countryOptions = listed.map((code) => {
     const count = countries?.find((entry) => entry.countryCode === code)?.places ?? 0;
-    return { value: code, label: countryName(code), description: t("placeCount", { count: formatNumber(count) }), keywords: [code] };
+    return { value: code, label: countryName(code), description: t("placeCount", { count }), keywords: [code] };
   });
 
   return (

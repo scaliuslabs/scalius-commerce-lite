@@ -11,7 +11,8 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatNumber, useMessages } from "~/i18n";
+import { formatList } from "@scalius/shared/locale-words";
+import { getLocale, useMessages } from "~/i18n";
 import { salesChannelsMessages } from "~/i18n/sales-channels";
 import { salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import type { ProductFormValues } from "./types";
@@ -33,7 +34,7 @@ export function PublishingChannels({ form, readOnly }: {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-body text-muted-foreground">
-          {t(chosen === null ? "availableEverywhereNew" : "availableEverywhere", { count: formatNumber(channels.length) })}
+          {t(chosen === null ? "availableEverywhereNew" : "availableEverywhere", { channels: formatList(channels.map(salesChannelName), getLocale()) })}
         </p>
         {readOnly ? null : (
           <Button type="button" variant="outline" size="sm" onClick={() => setOpened(true)}>{t("changeChannels")}</Button>

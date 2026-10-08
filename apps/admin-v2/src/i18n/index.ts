@@ -94,20 +94,29 @@ export function defineMessages<K extends string>(catalog: MessageCatalog<K>): Me
 }
 
 /**
- * `{count, plural, one {# variant} other {# variants}}`: the choice is the
- * language's plural category of the number (CLDR, `pluralCategory`), `#` is
- * the number, and a choice may hold `{name}` variables. Bangla needs no
- * choices ("{count}টি ভ্যারিয়েন্ট").
+ * The one count syntax in every catalog: `{count, plural, one {# variant} other {# variants}}`.
+ * The choice is the language's CLDR plural category of the number
+ * (`Intl.PluralRules`), `=0 {…}` matches that exact number, `#` is the
+ * number, and a choice may hold `{name}` variables. Bangla needs no choices
+ * ("{count}টি ভ্যারিয়েন্ট").
+ *
+ * Pass the number itself, never `formatNumber(n)`: `t()` writes it in the
+ * store's format, and a pre-formatted string ("1,200") has no plural category.
+ * A string that is not a plain number still reads, in the `other` choice.
  */
-const PLURAL = /\{(\w+), plural, ((?:\w+ \{(?:[^{}]|\{\w+\})*\} ?)+)\}/g;
-const CHOICE = /(\w+) \{((?:[^{}]|\{\w+\})*)\}/g;
+const PLURAL = /\{(\w+), plural, ((?:=?\w+ \{(?:[^{}]|\{\w+\})*\} ?)+)\}/g;
+const CHOICE = /(=?\w+) \{((?:[^{}]|\{\w+\})*)\}/g;
 
 function expandPlurals(template: string, vars: Vars): string {
   return template.replace(PLURAL, (match, name: string, body: string) => {
-    const count = vars[name];
-    if (typeof count !== "number") return match;
+    const value = vars[name];
+    if (value === undefined) return match;
+    const count = typeof value === "number" ? value : /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : null;
     const choices = new Map(Array.from(body.matchAll(CHOICE), (choice) => [choice[1], choice[2]]));
-    const chosen = choices.get(pluralCategory(count, current)) ?? choices.get("other") ?? "";
+    const chosen =
+      (count === null ? undefined : choices.get(`=${count}`) ?? choices.get(pluralCategory(count, current))) ??
+      choices.get("other") ??
+      "";
     return chosen.replaceAll("#", `{${name}}`);
   });
 }
