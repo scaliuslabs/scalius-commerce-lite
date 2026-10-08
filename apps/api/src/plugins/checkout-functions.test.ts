@@ -332,6 +332,18 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     expect((await listPluginLogs(db, "acme.rates")).map((entry) => entry.message).join(" ")).toContain("m_invented");
   });
 
+  it("a platform fault fails closed at a point a blocking app holds, open elsewhere", async () => {
+    await installTestApp("acme.open", [{ point: "checkout.discounts" }]);
+    await installTestApp("acme.gate", [{ point: "cart.validate", onError: "block" } as { point: string }]);
+    const runner = await apps();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // An input the platform built wrong (a platform bug): the runner refuses it.
+    const broken = { cart: { lines: "not a cart" } } as never;
+    await expect(runner.run("checkout.discounts", broken)).resolves.toEqual([]);
+    await expect(runner.run("cart.validate", broken)).rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+    errors.mockRestore();
+  });
+
   it("apps see the order's destination country, never Bangladesh by default", async () => {
     sqlite.exec(`
       INSERT INTO delivery_zones (id, name) VALUES ('dz_us', 'United States'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('US', 'dz_us');

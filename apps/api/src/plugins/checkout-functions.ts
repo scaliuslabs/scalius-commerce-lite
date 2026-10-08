@@ -76,18 +76,24 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       if (!pending) {
         const forPoint = registrations.filter((registration) => registration.name === point);
         const names = new Map(forPoint.map((registration) => [registration.installation.pluginId, registration.installation.manifest.name]));
+        // An app the store approved as blocking here: no answer at all must stop checkout too.
+        const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.includes(point)
+          && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
           .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.
-            if (error instanceof PluginFunctionsBlockedError) {
+            if (!(error instanceof PluginFunctionsBlockedError)) {
+              console.error(`[plugins] checkout function ${point} could not run: ${error instanceof Error ? error.name : "error"}`);
+            }
+            // A blocking app stops checkout whether the app or the platform failed (fail closed).
+            if (error instanceof PluginFunctionsBlockedError || blocking) {
               throw new ValidationError(await readCheckoutCopy(options.db, "checkoutAppUnavailableText"), {
                 reason: CHECKOUT_APP_UNAVAILABLE_REASON,
               });
             }
-            // A platform fault here must not take checkout down: no app output (fail-open).
-            console.error(`[plugins] checkout function ${point} could not run: ${error instanceof Error ? error.name : "error"}`);
+            // Otherwise a platform fault must not take checkout down: no app output (fail-open).
             return [];
           });
         memo.set(key, pending);
