@@ -54,6 +54,7 @@ import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previ
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../theme-fields";
 import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
+import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
 import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
@@ -284,9 +285,11 @@ export function ThemeEditor({ workspace, refetch }: {
   // ── Preview ──────────────────────────────────────────────────────────────
   const [connectedAt, setConnectedAt] = useState(0);
   const [revealErrors, setRevealErrors] = useState(false);
+  const [themeReveal, setThemeReveal] = useState<ThemeRevealRequest | null>(null);
   const select = useCallback((id: string | null, from: "tree" | "preview" | "other" = "other") => {
     setSelected(id);
     setRevealErrors(false);
+    setThemeReveal(null);
     if (!id) return;
     setTab("sections");
     const sectionId = parseBlockId(id)?.sectionId ?? id;
@@ -477,9 +480,18 @@ export function ThemeEditor({ workspace, refetch }: {
     const part = draft.held[0];
     if (!part) return;
     if (!part.startsWith("section:")) {
-      setSelected(null);
-      setTab("theme");
-      if (!desktop) setDrawerOpen(true);
+      const target = themeProblemTarget(theme, part);
+      if (target.kind === "part") {
+        if (target.part === "page" && page.kind !== "home") setPageState({ kind: "home" });
+        select(target.part === "announcement" ? EDITOR_PARTS.announcement : EDITOR_PARTS.page, "tree");
+        setRevealErrors(true);
+      } else {
+        setSelected(null);
+        setTab("theme");
+        if (!desktop) setDrawerOpen(true);
+        if (target.kind === "group") setThemeReveal({ group: target.group, nonce: Date.now() });
+      }
+      if (target.kind !== "theme" && target.fieldId) focusWhenShown(target.fieldId);
       return;
     }
     const rest = part.slice("section:".length);
@@ -715,7 +727,7 @@ export function ThemeEditor({ workspace, refetch }: {
       <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
         <fieldset disabled={!canEdit} className="min-w-0">
           <Suspense fallback={null}>
-            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} />
+            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} reveal={themeReveal} />
           </Suspense>
         </fieldset>
       </TabsContent>

@@ -299,6 +299,28 @@ describe("theme editor: live preview and saving", () => {
     expect(container.querySelector("[data-save-status]")!.textContent).toContain("1 setting to fix");
   });
 
+  it("opens the tab and group of a theme setting to fix, and puts the cursor in the field", async () => {
+    render();
+    const tab = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find((each) => each.textContent === name)!;
+    const choose = (name: string) => act(() => tab(name).dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+    choose("Theme settings");
+    await vi.waitFor(() => expect([...document.querySelectorAll("h2 > button[aria-expanded]")].some((each) => each.textContent === "Colors")).toBe(true));
+    const colors = () => [...document.querySelectorAll<HTMLButtonElement>("h2 > button[aria-expanded]")].find((each) => each.textContent === "Colors")!;
+    act(() => colors().click());
+    await ready("#theme-color-background");
+    type(field("theme-color-background"), "bad-colour");
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    // Collapse the group and leave the tab, as the merchant did.
+    act(() => colors().click());
+    choose("Sections");
+    await vi.waitFor(() => expect(document.querySelector("#theme-color-background")).toBeNull());
+    act(() => button("1 setting to fix").click());
+    await ready("#theme-color-background");
+    await vi.waitFor(() => expect(document.activeElement).toBe(field("theme-color-background")));
+    expect(colors().getAttribute("aria-expanded")).toBe("true");
+    expect(field("theme-color-background-note").textContent).toContain("Use a color code");
+  });
+
   it("undoes and redoes across autosave", async () => {
     render();
     act(() => row("rail").focus());

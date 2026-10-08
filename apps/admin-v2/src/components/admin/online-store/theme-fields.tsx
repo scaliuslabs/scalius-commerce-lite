@@ -35,6 +35,7 @@ import {
   type ContrastProblem,
   type ThemeBlockSlot,
 } from "./theme-settings";
+import { useThemeReveal } from "./theme-reveal";
 
 export type Theme = StorefrontThemeDocument;
 export type SetTheme = (next: Theme | ((theme: Theme) => Theme)) => void;
@@ -69,8 +70,9 @@ function ColorField({
   const valid = isStorefrontThemeHexColor(value);
   const [left, setLeft] = useState(false);
   const server = useServerFieldError(id);
+  const asked = useThemeReveal() !== null;
   const errors = [
-    server.error ?? (!valid && (left || server.revealed) ? t("colorInvalid") : undefined),
+    server.error ?? (!valid && (left || server.revealed || asked) ? t("colorInvalid") : undefined),
     ...problems.map((problem) => t(problem.message, {
       ratio: formatRatio(problem.ratio),
       min: formatRatio(STOREFRONT_THEME_MIN_CONTRAST),
