@@ -91,7 +91,7 @@ function LayoutFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme })
       <SearchableSelect
         id={`theme-layout-${key}`}
         value={theme.tokens[key]}
-        options={values.map((value) => ({ value, label: t(`layout_${key}_${value}`) }))}
+        options={values.map((value) => ({ value, label: t(`layout_${key}_${value}` as Parameters<typeof t>[0]) }))}
         onValueChange={(value) => set(key, value as Theme["tokens"][Key])}
         triggerClassName="w-full"
       />

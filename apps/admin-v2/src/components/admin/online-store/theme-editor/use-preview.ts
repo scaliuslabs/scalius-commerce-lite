@@ -115,7 +115,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const refs = useRef(new Map<number, (element: HTMLIFrameElement | null) => void>());
   const outbox = useRef(new Map<string, Pending>());
   const seq = useRef(0);
-  const resendTimer = useRef(0);
+  // The global timer functions (not window.*), as test clocks replace them.
+  const resendTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   /** The page is behind the editor: a command had to be sent again. */
   const [behind, setBehind] = useState(false);
   const latest = useRef({ inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
@@ -150,11 +151,11 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   }, [post]);
 
   const watch = useCallback(() => {
-    if (resendTimer.current) return;
-    resendTimer.current = window.setInterval(() => {
+    if (resendTimer.current !== null) return;
+    resendTimer.current = setInterval(() => {
       if (outbox.current.size === 0) {
-        window.clearInterval(resendTimer.current);
-        resendTimer.current = 0;
+        clearInterval(resendTimer.current!);
+        resendTimer.current = null;
         setBehind(false);
         return;
       }
@@ -296,6 +297,11 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           break;
         case "ack": {
           for (const [key, pending] of outbox.current) if (pending.seq === message.seq && id === latest.current.activeId) outbox.current.delete(key);
+          if (outbox.current.size === 0 && resendTimer.current !== null) {
+            clearInterval(resendTimer.current);
+            resendTimer.current = null;
+            setBehind(false);
+          }
           if (message.marks && id === latest.current.activeId) setMarks(message.marks);
           break;
         }
@@ -337,7 +343,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
 
   useEffect(() => () => {
     window.clearTimeout(helloTimer.current);
-    window.clearInterval(resendTimer.current);
+    if (resendTimer.current !== null) clearInterval(resendTimer.current);
   }, []);
 
   /**

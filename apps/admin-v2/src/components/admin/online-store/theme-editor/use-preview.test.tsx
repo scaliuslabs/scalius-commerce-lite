@@ -109,6 +109,8 @@ async function connectFirstFrame() {
   expect(posted(frame)).toEqual([{ source: "scalius-theme-editor", type: "connect", inspector: true, scrollY: null }]);
   deliver(frame, { type: "ready", path: "/", marks: ["header", "hero", "faq"] });
   expect(handle.preview!.phase).toBe("ready");
+  // The page acknowledges what the editor queued before it connected (the inspector's state).
+  for (const message of posted(frame)) if (message.seq) deliver(frame, { type: "ack", seq: message.seq });
   return frame;
 }
 
@@ -202,7 +204,7 @@ describe("the preview channel", () => {
     windowOf(frame).postMessage.mockClear();
     deliver(frame, { type: "hello", path: "/collections/eid" });
     deliver(frame, { type: "ready", path: "/collections/eid", marks: ["header"] });
-    const again = posted(frame).filter((message) => message.type !== "connect");
+    const again = posted(frame).filter((message) => message.type !== "connect" && message.type !== "inspector");
     // The newest render and tokens, never a stale one; text patches chain, so the render carries the words.
     expect(again).toEqual([
       expect.objectContaining({ type: "render", body: expect.objectContaining({ n: 20 }) }),

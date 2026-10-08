@@ -453,6 +453,8 @@ export const themeEditorMessages = defineMessages({
     layout_buttonShape_radius: "Same as corners",
     layout_buttonShape_pill: "Pill",
     versionSame: "Same as the version before.",
+    otherPagesNote: "Account, order status and \"page not found\" pages have no sections: they use your theme’s colors, fonts, header and footer.",
+    closeSettings: "Close settings",
   },
   bn: {
     title: "থিম এডিটর",
@@ -896,5 +898,7 @@ export const themeEditorMessages = defineMessages({
     layout_buttonShape_radius: "কোণের মতো",
     layout_buttonShape_pill: "ক্যাপসুল",
     versionSame: "আগের সংস্করণের মতোই।",
+    otherPagesNote: "অ্যাকাউন্ট, অর্ডার স্ট্যাটাস ও \"পেজ পাওয়া যায়নি\" পেজে কোনো সেকশন নেই: এগুলো আপনার থিমের রং, ফন্ট, হেডার ও ফুটার ব্যবহার করে।",
+    closeSettings: "সেটিংস বন্ধ করুন",
   },
 });

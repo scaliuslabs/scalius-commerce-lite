@@ -348,7 +348,7 @@ describe("theme editor: sections and blocks", () => {
     expect(library).toBeTruthy();
     const hero = library.querySelector<HTMLButtonElement>("[data-library-item='hero']")!;
     expect(hero.disabled).toBe(true);
-    expect(hero.textContent).toContain("A page has one.");
+    expect(hero.textContent).toContain("This page already has one.");
     act(() => library.querySelector<HTMLButtonElement>("[data-library-item='newsletter']")!.click());
     expect(pageRows()).toEqual(["page-settings", "hero", "rail", "faq", "story", "newsletter", "add-section"]);
     expect(row("newsletter").getAttribute("aria-selected")).toBe("true");
@@ -415,8 +415,9 @@ describe("theme editor: AI drafts and publishing", () => {
     await ready("[data-section-library]");
     const ai = [...document.querySelectorAll<HTMLButtonElement>("[data-section-library] button")].find((each) => each.textContent?.startsWith("Draft with AI"))!;
     await act(async () => ai.click());
-    await vi.waitFor(() => expect(document.querySelector("[data-ai-draft]")?.textContent).toContain("Install an AI app"));
-    expect(document.querySelector("[data-ai-draft]")!.textContent).toContain("Connect an AI agent");
+    await vi.waitFor(() => expect(document.querySelector("[data-ai-draft]")?.textContent).toContain("Browse AI apps"));
+    // Staff who may not connect an agent are told who can.
+    expect(document.querySelector("[data-ai-draft]")!.textContent).toContain("Ask the store owner");
     expect(api.aiProviders).toHaveBeenCalledTimes(1);
   });
 
