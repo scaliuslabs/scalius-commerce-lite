@@ -225,6 +225,36 @@ describe("cart.transform (real schema, test apps)", () => {
     }));
   });
 
+  it("asks for a bundle quantity the components can fill, on the buyer's line", async () => {
+    await installBundles();
+    // 5 teas left at 2 per box: 2 boxes, never "update quantity to 5".
+    sqlite.exec("UPDATE product_variants SET stock = 5 WHERE id = 'v_tea'");
+    const buyerLines = [line("p_box", "v_box", 3, 900, "box")];
+    const runner = await apps();
+    const result = await validateStorefrontCartItems(db, buyerLines, {
+      currencyCode: "BDT", priceIncrementMinor: 100,
+      linePricer: createAppLinePricer(db, runner, context),
+      transformer: createCartTransformer(db, runner, context),
+    });
+    const expected = expect.objectContaining({
+      index: 0, cartKey: "box", productId: "p_box", variantId: "v_box",
+      code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity", requestedQuantity: 3, availableQuantity: 2,
+    });
+    expect(presentTransformedCartLines(result, result.transform!, buyerLines).cart.issues).toEqual([expected]);
+    const { reads } = await place(input(buyerLines));
+    expect(() => reads.authority()).toThrow(expect.objectContaining({ details: { itemIssues: [expected] } }));
+    // None left for a whole box: remove it.
+    sqlite.exec("UPDATE product_variants SET stock = 1 WHERE id = 'v_tea'");
+    const none = await validateStorefrontCartItems(db, buyerLines, {
+      currencyCode: "BDT", priceIncrementMinor: 100,
+      linePricer: createAppLinePricer(db, await apps(), context),
+      transformer: createCartTransformer(db, await apps(), context),
+    });
+    expect(presentTransformedCartLines(none, none.transform!, buyerLines).cart.issues).toEqual([
+      expect.objectContaining({ index: 0, action: "remove", availableQuantity: 0 }),
+    ]);
+  });
+
   it("merges lines into one bundle on the order, prices unchanged", async () => {
     await installApp("acme.merge", [{ point: "cart.transform" }]);
     answers["acme.merge"] = (_point, fn) => {

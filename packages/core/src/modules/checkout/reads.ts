@@ -23,7 +23,8 @@ import {
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsability } from "../payments";
 import { NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
 import type { AppLinePricer } from "./app-line-prices";
-import { presentTransformedCart, type CartTransformer, type TransformedCart } from "./cart-transform";
+import { issuesOnBuyerLines, presentTransformedCart, type CartTransformer, type TransformedCart } from "./cart-transform";
+import type { StorefrontCartItemIssue, StorefrontCartValidationItem } from "./cart-validation";
 import { ValidationError } from "@scalius/core/errors";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
@@ -117,7 +118,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
             try {
                 snapshot = again.authority();
             } catch (error) {
-                throw remapTransformedIssues(error, transform);
+                throw remapTransformedIssues(error, transform, buyerItems);
             }
             const buyerView = presentTransformedCart(snapshot.cartValidation, transform, buyerItems);
             if (!buyerView.valid) {
@@ -145,13 +146,13 @@ export interface StorefrontCheckoutReads<TResponse> {
 }
 
 /** Item issues of the rewritten lines, on the buyer's lines. */
-function remapTransformedIssues(error: unknown, transform: TransformedCart): unknown {
+function remapTransformedIssues(error: unknown, transform: TransformedCart, buyerItems: readonly StorefrontCartValidationItem[]): unknown {
     if (!(error instanceof ValidationError)) return error;
-    const details = error.details as { itemIssues?: Array<{ index: number }> } | undefined;
+    const details = error.details as { itemIssues?: StorefrontCartItemIssue[] } | undefined;
     if (!details || !Array.isArray(details.itemIssues)) return error;
     return new ValidationError(error.message, {
         ...details,
-        itemIssues: details.itemIssues.map((issue) => ({ ...issue, index: transform.items[issue.index]?.sourceIndex ?? issue.index })),
+        itemIssues: issuesOnBuyerLines(details.itemIssues, transform, buyerItems),
     });
 }
 
