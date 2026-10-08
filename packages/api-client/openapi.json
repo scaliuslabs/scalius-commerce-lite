@@ -10866,7 +10866,7 @@
           "publishedProducts": {
             "type": "integer",
             "minimum": 0,
-            "description": "Products published to it (trashed ones included)."
+            "description": "Products published to it (trashed ones left out)."
           }
         },
         "required": [

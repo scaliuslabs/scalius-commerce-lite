@@ -2349,7 +2349,7 @@ export type SalesChannel = {
      */
     locationIds: Array<string>;
     /**
-     * Products published to it (trashed ones included).
+     * Products published to it (trashed ones left out).
      */
     publishedProducts: number;
 };
