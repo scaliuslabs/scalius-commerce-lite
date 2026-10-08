@@ -223,6 +223,16 @@ describe("theme colors", () => {
     expect(themeContrastProblems(onCards).map((problem) => problem.message)).toEqual(["contrastButtonText", "contrastLinks"]);
   });
 
+  it("blocks saving a sale colour the cards cannot show, with the error-colour message on its field", () => {
+    // AA on the white page (4.83:1), 4.09:1 on a grey card: the card's sale price would be unreadable.
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+    theme.tokens.colors = { ...theme.tokens.colors, background: "#ffffff", card: "#ececec", destructive: "#dc2626" };
+    const problems = themeContrastProblems(theme);
+    expect(problems.map(({ message, role }) => ({ message, role }))).toEqual([{ message: "contrastError", role: "background" }]);
+    expect(problems[0]!.ratio).toBeLessThan(4.5);
+    expect(themeDraftInvalid(theme)).toBe(true);
+  });
+
   it("one message per problem, even when cards and popovers share it", () => {
     const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "text", "#d4d4d8");
     expect(themeContrastProblems(theme).map((problem) => problem.message)).toEqual(["contrastText"]);

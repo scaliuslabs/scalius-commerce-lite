@@ -13,7 +13,8 @@ import colorsV1 from "./fixtures/v1-colors.json";
 import {
   DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, STOREFRONT_THEME_DOCUMENT_VERSION, homeSectionRequests, homeSectionsShowDeliveryFacts,
   parseStoredStorefrontThemeDocument, resolveStorefrontTheme, storefrontSectionDefault, STOREFRONT_TEMPLATE_IDS,
-  storefrontThemeDocumentSchema, upgradeThemeDocument,
+  storefrontThemeDocumentSchema, upgradeThemeDocument, listStorefrontThemeDocumentContrastProblems, storefrontThemeContrast,
+  STOREFRONT_THEME_PALETTES, type StorefrontThemeDocument,
 } from "../storefront-theme";
 
 const goldenFixtures = [v1, v2, v3, v4, v5, v6, v7, v8, v9];
@@ -293,5 +294,62 @@ describe("tightened bounds inside a version", () => {
     const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
     expect(parsed).not.toBeNull();
     expect(parsed?.blocks.listing.filters?.rowPitch).toBe(24);
+  });
+});
+
+describe("a stored sale colour the v9 card cannot read on", () => {
+  // Saved before v9's card checked the sale colour on the card colour: AA on
+  // the page (4.83:1 on white), 4.09:1 on the grey card.
+  const failing = (doc: Record<string, any>) => {
+    doc.tokens.colors = { ...doc.tokens.colors, background: "#ffffff", card: "#ececec", destructive: "#dc2626", "destructive-foreground": "#ffffff" };
+    return doc;
+  };
+  const readable = (doc: StorefrontThemeDocument) => {
+    const { colors } = doc.tokens;
+    expect(storefrontThemeContrast(colors.destructive, colors.card)).toBeGreaterThanOrEqual(4.5);
+    expect(storefrontThemeContrast(colors.destructive, colors.background)).toBeGreaterThanOrEqual(4.5);
+    expect(storefrontThemeContrast(colors["destructive-foreground"], colors.destructive)).toBeGreaterThanOrEqual(4.5);
+    expect(listStorefrontThemeDocumentContrastProblems(doc)).toEqual([]);
+  };
+
+  it("fails the save schema, so the editor cannot save it", () => {
+    const doc = failing(structuredClone(v9) as Record<string, any>);
+    const result = storefrontThemeDocumentSchema.safeParse(doc);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => [issue.path.join("."), issue.message])).toContainEqual([
+      "tokens.colors.destructive",
+      expect.stringMatching(/^destructive on card has contrast 4\.0\d:1; it needs at least 4\.5:1\.$/),
+    ]);
+  });
+
+  for (const version of [8, 9] as const) {
+    it(`still reads a stored v${version} document, with the sale colour darkened until it reaches AA on the card`, () => {
+      const stored = failing(fixture(version));
+      if (version === 8) stored.blocks.card = { variant: "standard", settings: { hoverImage: false } };
+      const before = structuredClone(stored);
+      const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
+      expect(parsed).not.toBeNull();
+      expect(stored).toEqual(before);
+      readable(parsed!);
+      // Darker (the card is light), still red, and only as far as it needs to go.
+      expect(parsed!.tokens.colors.destructive).not.toBe("#dc2626");
+      expect(storefrontThemeContrast(parsed!.tokens.colors.destructive, "#ececec")).toBeLessThan(5.2);
+      // Nothing else moves.
+      const { destructive: _d, "destructive-foreground": _f, ...rest } = parsed!.tokens.colors;
+      const { destructive: _sd, "destructive-foreground": _sf, ...storedRest } = stored.tokens.colors;
+      expect(rest).toEqual(storedRest);
+    });
+  }
+
+  it("lightens the sale colour on a dark card", () => {
+    const stored = fixture(9);
+    stored.tokens.colors = { ...STOREFRONT_THEME_PALETTES.midnight, card: "#2a2a30", destructive: "#e05252" };
+    const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
+    expect(parsed).not.toBeNull();
+    readable(parsed!);
+  });
+
+  it("leaves a readable sale colour as stored", () => {
+    expect(upgradeThemeDocument(fixture(9)).tokens.colors).toEqual(fixture(9).tokens.colors);
   });
 });

@@ -6,6 +6,17 @@
 import { z } from "zod";
 import { STOREFRONT_BLOCK_REGISTRY } from "./blocks";
 import { STOREFRONT_SECTION_REGISTRY } from "./sections";
+import {
+  STOREFRONT_THEME_COLOR_KEYS,
+  STOREFRONT_THEME_MIN_CONTRAST,
+  isStorefrontThemeHexColor,
+  listStorefrontThemeContrastProblems,
+  listStorefrontThemeSemanticColorProblems,
+  storefrontThemeContrast,
+  storefrontThemeLuminance,
+  storefrontThemeMix,
+  type StorefrontThemeColors,
+} from "./contrast";
 
 type RecordValue = Record<string, unknown>;
 // Pre-v2 defaults were CSS colours, not the later retail palette.
@@ -370,7 +381,48 @@ function withTightenedBounds(doc: Record<string, unknown>): Record<string, unkno
   const filters = (doc.blocks as { listing?: { filters?: { rowPitch?: unknown } } } | undefined)?.listing?.filters;
   // WCAG 2.5.8 target size: filter rows are at least 24 px apart (was 16).
   if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
+  withReadableSaleColour(doc);
   return doc;
+}
+
+const SALE_PAIRS = [["destructive", "card"], ["destructive", "background"], ["destructive-foreground", "destructive"]] as const;
+
+/**
+ * v9's card draws a discounted price in the sale colour (`destructive`) on
+ * the card colour, a pair the editor now checks on save. A document saved
+ * before that check may fail it; on read, the stored sale colour moves toward
+ * black (or white on a dark card) just far enough to reach AA there, keeping
+ * its other pairs (and the sale badge's words, which take black or white when
+ * needed), so the store stays readable and the document still reads.
+ */
+function withReadableSaleColour(doc: Record<string, unknown>): void {
+  const tokens = doc.tokens as { colors?: Record<string, unknown>; headerTone?: unknown } | undefined;
+  const colors = tokens?.colors;
+  if (!colors || !STOREFRONT_THEME_COLOR_KEYS.every((key) => typeof colors[key] === "string" && isStorefrontThemeHexColor(colors[key] as string))) return;
+  const palette = colors as StorefrontThemeColors;
+  const failing = (candidate: StorefrontThemeColors) => listStorefrontThemeContrastProblems(candidate, SALE_PAIRS);
+  if (storefrontThemeContrast(palette.destructive, palette.card) >= STOREFRONT_THEME_MIN_CONTRAST) return;
+  const semantic = listStorefrontThemeSemanticColorProblems(palette).length;
+  const towards = storefrontThemeLuminance(palette.card) > 0.18 ? "#000000" : "#ffffff";
+  const readableOn = (surface: string) =>
+    storefrontThemeContrast("#ffffff", surface) >= storefrontThemeContrast("#000000", surface) ? "#ffffff" : "#000000";
+  let chosen: StorefrontThemeColors | null = null;
+  for (let step = 1; step <= 20 && !chosen; step += 1) {
+    const destructive = storefrontThemeMix(palette.destructive, towards, step / 20);
+    for (const candidate of [
+      { ...palette, destructive },
+      { ...palette, destructive, "destructive-foreground": readableOn(destructive) },
+    ]) {
+      if (failing(candidate).length === 0 && listStorefrontThemeSemanticColorProblems(candidate).length <= semantic) {
+        chosen = candidate;
+        break;
+      }
+    }
+  }
+  // Black or white always reaches AA on the card; its badge words take the other.
+  chosen ??= { ...palette, destructive: towards, "destructive-foreground": readableOn(towards) };
+  colors.destructive = chosen.destructive;
+  colors["destructive-foreground"] = chosen["destructive-foreground"];
 }
 
 /** CSS Color 4 conversions: https://www.w3.org/TR/css-color-4/#color-conversion-code */

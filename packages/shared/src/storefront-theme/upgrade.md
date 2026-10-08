@@ -7,7 +7,8 @@ Stored live, draft and version reads use it through `parseStoredStorefrontThemeD
 ## Purity
 
 - Every step is a pure structural conversion. It uses only literals frozen with the version it reads (variant names, choice maps, historical defaults), never today's block or section registries.
-- Today's registry defaults enter once, after the last step (`withCurrentDefaults`). Settings an upgraded document never stored take today's defaults, and stored values win. A document that is already current is returned as a copy, unchanged.
+- Today's registry defaults enter once, after the last step (`withCurrentDefaults`). Settings an upgraded document never stored take today's defaults, and stored values win. A document that is already current is returned as a copy, unchanged except for the next rule.
+- A document that was valid when saved always reads. Validation that can reject a saved choice belongs on write, where the editor shows it at the field. When a rule tightens, `withTightenedBounds` normalizes the stored value on every read, current documents included: filter rows below 24 px rise to 24, and a sale colour (`destructive`) below AA on the card colour (v9's card paints discounted prices there) moves toward black, or white on a dark card, just far enough to pass, keeping its page and badge pairs.
 - A variant or section type that today's registries no longer know stays as stored, so the strict parse rejects it. The upgrade never guesses.
 
 ## Versions and golden fixtures
