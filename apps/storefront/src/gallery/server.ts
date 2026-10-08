@@ -93,7 +93,9 @@ export interface GalleryIndexEntry {
   unanswered: string[];
 }
 
-export function galleryIndex(): GalleryIndexEntry[] {
+/** `origin` is the server's own: the cart seed's image URLs must point at it, not at the default port. */
+export function galleryIndex(origin?: string): GalleryIndexEntry[] {
+  if (origin) setFixtureOrigin(origin);
   return galleryEntries().map((entry) => {
     const resolved = resolveStorefrontTheme(entryTheme(entry), {
       productCount: 1000, skuCount: 1000, topCategoryCount: 18, categoryDepth: 3, categoryGroups: 7, menuTopItems: 18, menuDepth: 3, menuGroups: 7,

@@ -229,7 +229,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         return response.end(Buffer.from(await answered.arrayBuffer()));
       }
       if (url.pathname === `${GALLERY_PREFIX}/index.json`) {
-        return sendJson(response, 200, { entries: gallery.galleryIndex() });
+        return sendJson(response, 200, { entries: gallery.galleryIndex(origin) });
       }
       if (url.pathname === GALLERY_PREFIX || url.pathname === `${GALLERY_PREFIX}/`) {
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
