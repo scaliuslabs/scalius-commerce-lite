@@ -160,6 +160,19 @@ describe("the preview channel", () => {
     expect(new Set(sent.map((message) => message.seq)).size).toBe(COMMANDS.length);
   });
 
+  it("keeps the connection when React detaches and re-attaches the same frame (a real browser does this on re-renders)", async () => {
+    const frame = await connectFirstFrame();
+    // React calls a ref callback with null, then with the element again, when
+    // the iframe re-attaches. Before the fix the null forgot the connection and
+    // every later command was silently dropped (the owner's "edits never show").
+    const callback = handle.preview!.register(handle.preview!.activeId!);
+    act(() => { callback(null); callback(frame); });
+    rerender();
+    windowOf(frame).postMessage.mockClear();
+    for (const command of COMMANDS) send(command);
+    expect(posted(frame).map((message) => message.type)).toEqual(COMMANDS.map((command) => command.type));
+  });
+
   it("sends a command again until the page acknowledges it", async () => {
     const frame = await connectFirstFrame();
     vi.useFakeTimers();
