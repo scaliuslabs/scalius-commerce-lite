@@ -156,7 +156,8 @@ describe("Settings → Apps cards", () => {
     await click(button(translate(settingsMessages, "save")));
 
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Someone else changed these settings since you opened them.");
+    // The merge is tried first (it loads on demand); its retry meets the newer revision too.
+    await vi.waitFor(() => expect(dialog.textContent).toContain("Someone else changed these settings since you opened them."));
     expect(button("Reload and keep my edits")).toBeTruthy();
     expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("true");
   });
