@@ -303,7 +303,7 @@ describe("tightened bounds inside a version", () => {
       { id: "hero", type: "hero", version: 1, settings: { layout: "app-panel", slides: [slide] } },
       { id: "stories", type: "hero", version: 1, settings: { layout: "story-cards", slides: [slide] } },
     ];
-    stored.pages.landing = { offer: { sections: [{ id: "hero", type: "hero", version: 1, settings: { layout: "story-cards", slides: [slide] } }] } };
+    stored.pages.landing = { offer: { title: "Offer", description: "", sections: [{ id: "hero", type: "hero", version: 1, settings: { layout: "story-cards", slides: [slide] } }] } };
     const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
     expect(parsed).not.toBeNull();
     expect(parsed?.pages.home.map((each) => (each.settings as { layout?: string }).layout)).toEqual(["contained-banners", "full-bleed"]);

@@ -8,6 +8,7 @@
 // public (lib/recently-viewed-client.ts).
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontSectionOf<"recently-viewed">;
@@ -17,7 +18,6 @@ const { section } = Astro.props;
 const rootId = `home-${section.id}`;
 const headingId = `${rootId}-title`;
 const title = section.settings.title.trim() || "Recently viewed";
-import Container from "@/components/ui/Container.astro";
 ---
 
 <section id={rootId} class="home-section w-full" aria-labelledby={headingId} hidden data-recently-viewed>

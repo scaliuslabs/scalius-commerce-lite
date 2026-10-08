@@ -2,6 +2,7 @@
 // A builder-owned `rich_text` section: a heading and plain-text paragraphs
 // (blank lines split paragraphs). Plain text only; Astro escapes it.
 import { richTextParagraphs } from "@/lib/homepage-sections";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   id: string;
@@ -13,7 +14,6 @@ const { id, heading, body } = Astro.props;
 const title = heading.trim();
 const paragraphs = richTextParagraphs(body);
 const headingId = `home-section-${id}-title`;
-import Container from "@/components/ui/Container.astro";
 ---
 
 {(title || paragraphs.length > 0) && (

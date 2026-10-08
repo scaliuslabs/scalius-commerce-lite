@@ -13,6 +13,7 @@ import SectionHeader from "@/components/ui/SectionHeader.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import Icon from "@/components/icons/Icon.astro";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontSectionOf<"lookbook">;
@@ -34,7 +35,6 @@ const fashionPhoto = Boolean(photo) && section.settings.photo === "square";
 // Eight tiles at most: with more to see, the eighth is "View more".
 const viewMore = Boolean(href) && products.length >= 8;
 const shown = products.slice(0, viewMore ? 7 : 8);
-import Container from "@/components/ui/Container.astro";
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId}>

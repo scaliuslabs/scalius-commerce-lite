@@ -5,6 +5,7 @@
 import AppSurface from "@/components/apps/AppSurface.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontAppSection;
@@ -12,7 +13,6 @@ interface Props {
 }
 
 const { section, surface } = Astro.props;
-import Container from "@/components/ui/Container.astro";
 ---
 
 <section class="home-section w-full" data-app-section={section.settings.app}>

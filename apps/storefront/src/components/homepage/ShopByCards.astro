@@ -9,6 +9,10 @@ import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import SectionHeader from "@/components/ui/SectionHeader.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   sectionId: string;
   title: string;
@@ -17,14 +21,11 @@ interface Props {
 }
 
 const { sectionId, title, cards, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const headingId = `home-${sectionId}-title`;
 const heading = title.trim();
 const columns = cards.length >= 4 ? "lg:grid-cols-4" : cards.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : copy.shopBy}>

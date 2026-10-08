@@ -11,6 +11,10 @@ import SectionHeader from "@/components/ui/SectionHeader.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   sectionId: string;
   title: string;
@@ -21,16 +25,13 @@ interface Props {
 }
 
 const { sectionId, title, tabs, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const base = `home-${sectionId}`;
 const headingId = `${base}-title`;
 const heading = title.trim();
 const single = tabs.length === 1;
 const labelled = Boolean(heading) || single;
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section

@@ -6,18 +6,19 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import Icon from "@/components/icons/Icon.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"faq">;
 }
 
 const { section } = Astro.props;
-const heading = section.settings.heading.trim() || copy.questions;
-const headingId = `home-${section.id}-title`;
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).home;
+const heading = section.settings.heading.trim() || copy.questions;
+const headingId = `home-${section.id}-title`;
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId}>

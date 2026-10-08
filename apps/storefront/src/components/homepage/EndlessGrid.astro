@@ -10,6 +10,10 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import SectionHeader from "@/components/ui/SectionHeader.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"endless-grid">;
   title: string;
@@ -20,16 +24,13 @@ interface Props {
 }
 
 const { section, title, products, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const headingId = `home-${section.id}-title`;
 /** The listing's page size (lib/product-list-query.ts). */
 const LISTING_PAGE_SIZE = 20;
 const nextPage = Math.floor(products.length / LISTING_PAGE_SIZE) + 1;
 const nextHref = nextPage > 1 ? `/search?page=${nextPage}` : "/search";
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId} data-endless-grid>

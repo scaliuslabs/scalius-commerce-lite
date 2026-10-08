@@ -7,6 +7,7 @@ import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import NewsletterForm from "@/components/newsletter/NewsletterForm.astro";
 import type { NewsletterLanguage } from "@/lib/newsletter-copy";
 import { newsletterFormModel } from "@/lib/newsletter-form";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontSectionOf<"newsletter">;
@@ -16,7 +17,6 @@ interface Props {
 const { section, language } = Astro.props;
 const model = newsletterFormModel(section.settings, language);
 const headingId = `home-${section.id}-title`;
-import Container from "@/components/ui/Container.astro";
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId} data-newsletter-section>

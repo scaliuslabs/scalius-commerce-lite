@@ -362,7 +362,7 @@ describe("homepage section library", () => {
         expect(page.querySelectorAll('[data-hero-layout="split"] .hero-picture')).toHaveLength(3);
       } else {
         expect(page.querySelector(".desktop-carousel")).not.toBeNull();
-        const rounded = page.querySelector(".desktop-carousel")!.classList.contains("rounded-xl");
+        const rounded = ["rounded-xl", "rounded-2xl"].some((each) => page.querySelector(".desktop-carousel")!.classList.contains(each));
         expect(rounded).toBe(layout === "contained-banners" || layout === "wide-editorial");
       }
       // The slide's supporting text shows in every layout, beside its heading.
@@ -419,20 +419,20 @@ describe("homepage section library", () => {
   it("draws small and scrolling round categories from the section's style, in any template", async () => {
     const rounded = await render([tiles({ style: "round-small" })], store("large"));
     const roundedTile = rounded.querySelector('a[href="/categories/category-1"]')!;
-    expect(roundedTile.querySelector("span")!.classList.contains("size-14")).toBe(true);
+    expect(roundedTile.querySelector(".cat-round-small")).not.toBeNull();
     expect(roundedTile.querySelector("img")!.getAttribute("sizes")).toBe("56px");
 
     const classic = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("marketplace"));
     const classicTile = classic.querySelector('a[href="/categories/category-1"]')!;
-    expect(classicTile.querySelector("span")!.classList.contains("max-w-28")).toBe(true);
+    expect(classicTile.querySelector(".cat-round-photo")).not.toBeNull();
+    expect(classicTile.querySelector(".cat-round-small")).toBeNull();
     expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
 
     const retail = await render([tiles({ style: "round-row" })], store("large"));
     const retailRow = retail.querySelector("[data-home-section='category-tiles'] ul")!;
-    expect(retailRow.className).toContain("overflow-x-auto");
-    expect(retailRow.className).toContain("md:grid");
-    expect(retailRow.firstElementChild!.className).toContain("shrink-0");
-    expect(classic.querySelector("[data-home-section='category-tiles'] ul")!.className).not.toContain("overflow-x-auto");
+    // One scrolling row on phones (a grid from 640px); the plain round style is always a grid.
+    expect(retailRow.className).toContain("cat-round-row");
+    expect(classic.querySelector("[data-home-section='category-tiles'] ul")!.className).not.toContain("cat-round-row");
   });
 
   it("fills a product grid with columns x rows and caps its columns", async () => {
@@ -483,8 +483,9 @@ describe("homepage section library", () => {
     // The square photo is the section's setting, in any template.
     const source = { kind: "collection", collectionId: "col-eid" };
     const square = await render([section("lookbook", "look", { mediaId: "m-look", source, photo: "square" })], store("large"));
-    expect(square.querySelector("figure img")?.className).toContain("aspect-square");
-    expect(square.querySelector("figure img")?.className).not.toContain("lg:aspect-auto");
+    // The photo fills its cell: it is the frame that is square, then the grid's height from 1024px.
+    expect(square.querySelector("figure img")?.className).toContain("object-cover");
+    expect(square.querySelector("figure")?.className).toContain("aspect-square");
     expect(square.querySelector("figure")!.parentElement!.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]");
     expect(square.querySelectorAll("figure ~ div .product-card-link, figure + div .product-card-link")).toHaveLength(7);
     expect(square.querySelector("figure ~ div .product-card-link")?.textContent).toContain("Product");
@@ -494,7 +495,7 @@ describe("homepage section library", () => {
     expect(text(square.querySelector("figcaption h2"))).toBe("Eid edit");
 
     const tall = await render([section("lookbook", "look", { mediaId: "m-look", source })], store("large"));
-    expect(tall.querySelector("figure img")?.className).toContain("lg:aspect-auto");
+    expect(tall.querySelector("figure")?.className).toContain("lg:aspect-auto");
     expect(tall.querySelector("figure")!.parentElement!.className).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]");
 
     // Without its photo the lookbook is a headed grid of products.
@@ -515,9 +516,9 @@ describe("homepage section library", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.querySelectorAll('[data-home-section="banner"]')).toHaveLength(2);
     // Words over a photo sit on a 70% black band, white on it: AA over any photo.
-    const band = rows[0]!.querySelector("h2")!.parentElement!;
-    expect(band.className).toContain("bg-black/70");
-    expect(band.parentElement!.className).toContain("text-white");
+    const copy = rows[0]!.querySelector("h2")!.closest(".hero-copy")!;
+    expect(copy.getAttribute("data-tone")).toBe("band");
+    expect(copy.querySelector(".hero-copy-body")).not.toBeNull();
     // A banner without a photo is a colour banner in theme colours.
     expect(rows[1]!.querySelector("[data-home-section='banner']")!.className).toContain("bg-secondary");
   });
@@ -545,12 +546,18 @@ describe("homepage section library", () => {
     expect(text(page.querySelector("h2"))).toBe("More to explore");
   });
 
-  it("renders the ticker with a script-free pause and a hidden duplicate for the loop", async () => {
-    const page = await render([section("usp-strip", "notice", { style: "ticker", source: { kind: "custom", items: [{ title: "New branch in Sylhet", detail: "" }] } })], store("tiny"));
-    const tracks = page.querySelectorAll(".usp-ticker-track");
-    expect(tracks).toHaveLength(2);
-    expect(tracks[1]!.getAttribute("aria-hidden")).toBe("true");
-    expect(page.querySelector('input[type="checkbox"][aria-label="Pause notices"]')).not.toBeNull();
+  it("renders the ticker as one still line: nothing moves, so nothing needs a pause", async () => {
+    const page = await render([section("usp-strip", "notice", { style: "ticker", source: { kind: "custom", items: [{ title: "New branch in Sylhet", detail: "Open daily" }] } })], store("tiny"));
+    expect(page.querySelector(".usp-still")!.textContent).toContain("New branch in Sylhet: Open daily");
+    expect(page.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(page.querySelector("[aria-hidden='true'] li")).toBeNull();
+  });
+
+  it("hides the delivery-facts strip below two facts and centres one custom point", async () => {
+    const one: HomepageContent = { ...store("tiny"), deliveryFacts: [{ kind: "cod", title: "Cash on delivery", detail: "Pay when it arrives" }] };
+    expect(homepageSectionRenders(section("usp-strip", "usp"), one)).toBe(false);
+    const single = await render([section("usp-strip", "usp", { style: "icons", source: { kind: "custom", items: [{ title: "Free returns", detail: "" }] } })], store("tiny"));
+    expect(single.querySelector(".usp-single")!.textContent).toContain("Free returns");
   });
 
   it("keeps the photo category tiles for one category and the denser styles for two or more", async () => {
@@ -566,24 +573,28 @@ describe("homepage section library", () => {
     expect(text(quad.querySelector('a[href="/categories/category-0"] span'))).toBe("C");
     const square = await render([tiles({ style: "square" })], store("large"));
     expect(square.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
-    expect(square.querySelector('a[href="/categories/category-0"] span')?.classList.contains("aspect-square")).toBe(true);
+    expect(square.querySelector('a[href="/categories/category-0"] .cat-square-photo')).not.toBeNull();
     expect(text(square.querySelector('a[href="/categories/category-0"] > span:last-child'))).toBe("Category 0");
   });
 
-  it("shows photo departments as a grid while the photo rail and other styles keep their own shape", async () => {
-    const categories = tiles({ style: "photo" });
+  it("shows photo tiles as a scrolling row on phones and a balanced grid beside it, with one monogram placeholder", async () => {
     const heritage = await render([tiles({ style: "photo-grid" })], store("large"));
     const grid = heritage.querySelector("[data-heritage-departments]")!;
-    expect(grid.classList.contains("grid-cols-2")).toBe(true);
+    expect(grid.classList.contains("cat-photos")).toBe(true);
     expect(grid.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
-    expect(grid.querySelector('a[href="/categories/category-0"]')!.classList.contains("rounded-[var(--radius)]")).toBe(true);
-    expect(grid.querySelector("img")!.getAttribute("sizes")).toContain("/ 2");
+    // Twelve tiles: 3 across at 640px and 4 at 1024px, never 8 + 4.
+    expect(grid.getAttribute("style")).toContain("--cols-tablet:3");
+    expect(grid.getAttribute("style")).toContain("--cols-desktop:4");
+    // A category without a photo shows its letter, not a blank gradient.
+    expect(text(grid.querySelector('a[href="/categories/category-0"] .cat-monogram'))).toBe("C");
 
-    const classic = await render([categories], store("large"), storefrontTemplateTheme("boutique"));
+    const classic = await render([tiles({ style: "photo" })], store("large"), storefrontTemplateTheme("boutique"));
     expect(classic.querySelector("[data-heritage-departments]")).toBeNull();
-    expect(classic.querySelector(".homepage-category-scroll")).not.toBeNull();
+    expect(classic.querySelector(".cat-photos")!.getAttribute("style")).toContain("--cols-desktop:4");
     const merchantRound = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("boutique"));
     expect(merchantRound.querySelector("[data-heritage-departments]")).toBeNull();
+    // The section's title is a real heading with no stray "Explore by department" text.
+    expect(text(classic.querySelector('[data-home-section="category-tiles"]'))).not.toContain("Explore by department");
   });
 
   it("shortens only an image-only compact phone hero so departments appear sooner", async () => {

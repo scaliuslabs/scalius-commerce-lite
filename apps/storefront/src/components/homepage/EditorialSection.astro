@@ -8,6 +8,10 @@ import { richTextParagraphs } from "@/lib/homepage-sections";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import RichTextSection from "./RichTextSection.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"editorial">;
   photo: HomepageMediaAsset | null;
@@ -15,6 +19,8 @@ interface Props {
 }
 
 const { section, photo, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const settings = section.settings;
 const headingId = `home-section-${section.id}-title`;
 const heading = "heading" in settings ? settings.heading.trim() : "";
@@ -23,11 +29,6 @@ const columns = settings.layout === "multicolumn"
   : [];
 const quotes = settings.layout === "testimonial" ? settings.quotes : [];
 const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2 lg:grid-cols-4"][columns.length] ?? "";
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 {settings.layout === "rich-text" && <RichTextSection id={section.id} heading={settings.heading} body={settings.body} />}

@@ -6,17 +6,18 @@ import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import Icon from "@/components/icons/Icon.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"utility-cards">;
 }
 
 const { section } = Astro.props;
-const cards = section.settings.cards;
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).home;
+const cards = section.settings.cards;
 ---
 
 <section class="home-section w-full" aria-label={copy.storeServices}>

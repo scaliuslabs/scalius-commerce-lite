@@ -8,12 +8,18 @@ import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   tiles: Array<{ alt: string; href: string | null; photo: HomepageMediaAsset }>;
   aboveFold: boolean;
 }
 
 const { tiles, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const rest = tiles.length - 1;
 // Desktop placement of each small tile on the 2x2 area beside the large one.
 function smallSpan(index: number): string {
@@ -26,11 +32,6 @@ function phoneShape(index: number): string {
   // An odd one out on phones spans the row at 2:1 instead of leaving a hole.
   return rest % 2 === 1 && index === rest - 1 ? "col-span-2 aspect-[2/1]" : "aspect-square";
 }
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section class="home-section w-full" aria-label={copy.promotions}>

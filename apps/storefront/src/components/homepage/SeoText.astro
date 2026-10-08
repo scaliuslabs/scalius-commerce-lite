@@ -5,19 +5,20 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { seoTextBlocks } from "@/lib/homepage-sections";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"seo-text">;
 }
 
 const { section } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const heading = section.settings.heading.trim();
 const headingId = `home-${section.id}-title`;
 const blocks = seoTextBlocks(section.settings.body);
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : copy.aboutStore}>

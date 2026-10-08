@@ -10,20 +10,21 @@ import { homepageBrandHref } from "@/lib/homepage-sections";
 import { mediaImageUrl } from "@/lib/media-url";
 import SectionHeader from "@/components/ui/SectionHeader.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"brand-wall">;
   brands: readonly HomepageBrand[];
 }
 
 const { section, brands } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const headingId = `home-${section.id}-title`;
 const title = section.settings.title.trim() || copy.shopByBrand;
 const rail = section.settings.style === "rail";
-import Container from "@/components/ui/Container.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId} data-brand-wall>
