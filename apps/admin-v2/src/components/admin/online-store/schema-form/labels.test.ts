@@ -35,7 +35,8 @@ describe("theme setting labels", () => {
     expect(settingLabelKey(["s.product-rail"], "title")).toBe("f.title");
     expect(settingLabelKey(["b.card.standard", "b.card"], "facts")).toBe("b.card.facts");
     expect(settingLabelKey(["b.card.standard", "b.card"], "action", "quick-add")).toBe("b.card.action.quick-add");
-    expect(settingLabelKey(["b.buyBox.fashion", "b.buyBox"], "showBuyNow")).toBe("b.buyBox.showBuyNow");
+    expect(settingLabelKey(["b.buyBox.classic", "b.buyBox"], "features")).toBe("b.buyBox.features");
+    expect(settingLabelKey(["b.buyBox.classic", "b.buyBox"], "cta", "stack")).toBe("b.buyBox.cta.stack");
     expect(settingLabelKey(["s.product-tabs"], "tabs.source.kind", "on-sale")).toBe("f.source.kind.on-sale");
     expect(settingLabelKey(["s.hero"], "nothing.here")).toBeNull();
   });

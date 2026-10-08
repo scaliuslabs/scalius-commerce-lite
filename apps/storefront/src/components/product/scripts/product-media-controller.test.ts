@@ -111,6 +111,7 @@ function renderGallery(
           <div data-desktop-image-zoom>
             <img data-desktop-main-image src="/placeholder-product.svg" />
             <div data-desktop-zoom-layer></div>
+            <button type="button" data-zoom-trigger aria-label="Zoom photo"></button>
           </div>
         </div>
         <button data-image-stage="mobile" data-mobile-image-trigger>
@@ -684,6 +685,27 @@ describe("product gallery zoom", () => {
     expect(background.every((element) => !element.inert)).toBe(true);
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("clip");
+  });
+
+  it("opens the same zoom view from the computer zoom button, by keyboard, and returns focus to it", () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+
+    const trigger = root.querySelector<HTMLButtonElement>("[data-zoom-trigger]")!;
+    const modal = root.querySelector<HTMLElement>("[data-mobile-zoom-modal]")!;
+    const close = root.querySelector<HTMLButtonElement>("[data-close-mobile-zoom]")!;
+    // A button is reachable and works with Enter and Space (a click); hover alone reached no keyboard user.
+    expect(trigger.tabIndex).toBe(0);
+    trigger.focus();
+    trigger.click();
+    expect(root.querySelector<HTMLImageElement>("[data-fullscreen-image]")!.src).toBe(rendition("front", 1600));
+    expect(modal.getAttribute("aria-hidden")).toBe("false");
+    expect(document.activeElement).toBe(close);
+
+    modal.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(modal.getAttribute("aria-hidden")).toBe("true");
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("loads desktop zoom detail only after hover and restores the base image", async () => {

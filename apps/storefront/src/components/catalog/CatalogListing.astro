@@ -372,7 +372,7 @@ const bandTools = {
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
-        {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
+        {showViewToggle && !phoneChips && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
         {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
         {countLabel && boutiqueBar && <p class="catalog-band-count ms-auto shrink-0">{countLabel}</p>}
       </Fragment>
@@ -477,8 +477,9 @@ const bandTools = {
       hideSearch={specSearchShowsQuery}
     />}
 
+    {/* One chip row on phones: these choices are in the Filters sheet. */}
     {facetValueChips && (
-      <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap">
+      <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 max-lg:hidden lg:flex-wrap">
         <span class="shrink-0 text-sm font-medium text-muted-foreground">{facetValueChips.label}</span>
         <CatalogChipLinks label={`${facetValueChips.label} choices`} links={facetValueChips.links} inline />
       </div>

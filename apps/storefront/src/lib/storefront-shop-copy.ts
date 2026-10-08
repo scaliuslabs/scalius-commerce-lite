@@ -18,7 +18,6 @@ export interface ShopCopy {
     stock: { inStock: string; lowStock: string };
     showAllPhotos: (count: number) => string;
     zoomPhoto: string;
-    morePhotos: (count: number) => string;
   };
   cart: {
     popularNow: string;
@@ -38,7 +37,6 @@ const EN: ShopCopy = {
     stock: { inStock: "In stock", lowStock: "Low stock" },
     showAllPhotos: (count) => `Show all photos (${count})`,
     zoomPhoto: "Zoom photo",
-    morePhotos: (count) => `${count} more photos`,
   },
   cart: {
     popularNow: "Popular now",
@@ -58,7 +56,6 @@ const BN: ShopCopy = {
     stock: { inStock: "স্টকে আছে", lowStock: "স্টক কম" },
     showAllPhotos: (count) => `সব ছবি দেখুন (${count})`,
     zoomPhoto: "ছবি বড় করুন",
-    morePhotos: (count) => `আরও ${count}টি ছবি`,
   },
   cart: {
     popularNow: "এখন জনপ্রিয়",

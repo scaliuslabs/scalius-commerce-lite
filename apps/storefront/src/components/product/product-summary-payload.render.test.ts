@@ -97,7 +97,7 @@ const html = (markup: string) => {
 const request = (slug: string) => new Request(`https://shop.test/products/${slug}`);
 
 describe("product summary browser payload", () => {
-  it("places only saved key features between the title and price", async () => {
+  it("places only saved key features after the purchase buttons, so the price and buttons come first", async () => {
     const render = async (features: string[]) => {
       const product = {
         id: "prod_1", slug: "game-key", name: "Game key", price: 1200,
@@ -109,16 +109,16 @@ describe("product summary browser payload", () => {
       });
       return html(await container.renderToString(ProductSummary, {
         props: { product, category: null, variants: [], options: [], details: false, look: classic({ features: true, details: "below" }) },
-        slots: { "after-title": list }, request: request("game-key"),
+        slots: { "after-actions": list }, request: request("game-key"),
       }));
     };
     const populated = await render(["Redeem on a US account", "Delivery by email"]);
-    const title = populated.querySelector("h1")!;
-    const list = populated.querySelector('[data-product-features="list"]')!;
     const price = populated.querySelector(".buy-box-main-price")!;
+    const buttons = populated.querySelector(".buy-box-ctas")!;
+    const list = populated.querySelector('[data-product-features="list"]')!;
     expect(list.textContent).toContain("Redeem on a US account");
-    expect(title.compareDocumentPosition(list) & 4).toBe(4);
-    expect(list.compareDocumentPosition(price) & 4).toBe(4);
+    expect(price.compareDocumentPosition(buttons) & 4).toBe(4);
+    expect(buttons.compareDocumentPosition(list) & 4).toBe(4);
     expect(populated.querySelectorAll('[data-product-features="list"]')).toHaveLength(1);
     expect((await render([])).querySelector('[data-product-features="list"]')).toBeNull();
   });
