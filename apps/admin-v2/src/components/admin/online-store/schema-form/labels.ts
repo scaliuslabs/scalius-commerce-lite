@@ -1,8 +1,8 @@
 /**
  * Setting labels come from i18n keys derived from the registry: a section's
  * `title` reads `s.<type>.title`, then the shared `f.title`; a block
- * variant's `quickAction` reads `b.card.boutique.quickAction`, then
- * `b.card.quickAction`, then `f.quickAction`. Choices add the value
+ * variant's `emi` reads `b.buyBox.spec.emi`, then
+ * `b.buyBox.emi`, then `f.emi`. Choices add the value
  * (`s.hero.layout.split`), lists their item name (`.item`, "Slide {number}"),
  * optional choices their unset option (`.unset`), and any key may carry
  * help (`.help`). `labelRequirements` lists what a schema needs, so a test

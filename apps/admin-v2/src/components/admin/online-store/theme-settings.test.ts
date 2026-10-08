@@ -77,16 +77,16 @@ describe("templates", () => {
   });
 
   it("selecting a template sets the whole document, a valid one", () => {
-    const applied = applyTemplate("heritage-editorial", DEFAULT_STOREFRONT_THEME);
-    expect(applied).toEqual(storefrontTemplateTheme("heritage-editorial"));
+    const applied = applyTemplate("boutique", DEFAULT_STOREFRONT_THEME);
+    expect(applied).toEqual(storefrontTemplateTheme("boutique"));
     expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
   });
 
   it("keeps the merchant's content when another template replaces the look", () => {
     const current = withContent(storefrontTemplateTheme("department-mall"));
-    const applied = applyTemplate("fashion-value", current);
-    expect(selectedTemplate(applied)).toBe("fashion-value");
-    expect(applied.blocks.header).toEqual(storefrontTemplateTheme("fashion-value").blocks.header);
+    const applied = applyTemplate("daily-essentials", current);
+    expect(selectedTemplate(applied)).toBe("daily-essentials");
+    expect(applied.blocks.header).toEqual(storefrontTemplateTheme("daily-essentials").blocks.header);
     expect(applied.brand).toEqual(current.brand);
     expect(applied.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
     expect(applied.blocks.footer.settings).toMatchObject({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
@@ -102,7 +102,7 @@ describe("templates", () => {
   });
 
   it("lets a merchant change the purchase panel without changing the gallery", () => {
-    const theme = storefrontTemplateTheme("fashion-value");
+    const theme = storefrontTemplateTheme("boutique");
     const changed = setBlockVariant(theme, "buyBox", "heritage");
     expect(blockVariant(changed, "buyBox")).toBe("heritage");
     expect(changed.blocks.product.gallery).toEqual(theme.blocks.product.gallery);
@@ -193,12 +193,12 @@ describe("theme colors", () => {
     expect(retail.tokens.colors.background).toBe("#f0ebe3");
     expect(retail.tokens.colors.card).toBe("#f0ebe3");
     expect(retail.tokens.colors.popover).toBe("#f0ebe3");
-    // Boutique: linen cards on the same linen page stay equal as well; heritage's
-    // raised paper keeps its (+5, +7, +9) step.
-    const heritage = setThemeColor(storefrontTemplateTheme("heritage-editorial"), "background", "#f0ebe3");
-    expect(heritage.tokens.colors.card).not.toBe("#f0ebe3");
-    // Rounded tech now uses one continuous dark surface.
-    const midnight = setThemeColor(storefrontTemplateTheme("rounded-tech"), "background", "#101014");
+    // Boutique: linen cards on the same linen page stay equal as well. Every
+    // preset's card is its page, so the step is zero for all five.
+    const boutique = setThemeColor(storefrontTemplateTheme("boutique"), "background", "#f0ebe3");
+    expect(boutique.tokens.colors.card).toBe("#f0ebe3");
+    // Marketplace uses one continuous dark surface.
+    const midnight = setThemeColor(storefrontTemplateTheme("marketplace"), "background", "#101014");
     expect(midnight.tokens.colors.card).toBe("#101014");
     // A template whose card is its page keeps them equal.
     const fresh = setThemeColor(storefrontTemplateTheme("daily-essentials"), "background", "#fdfdf8");
@@ -216,9 +216,9 @@ describe("theme colors", () => {
     expect(themeDraftInvalid(DEFAULT_STOREFRONT_THEME)).toBe(false);
   });
 
-  it("keeps unreadable button and link colours blocked across card choices", () => {
-    const base = setBlockVariant(setThemeColor(storefrontTemplateTheme("rounded-tech"), "buttons", "#7a7a7a"), "card", "standard");
-    const onCards = setBlockVariant(base, "card", "spec");
+  it("keeps unreadable button and link colours blocked across card settings", () => {
+    const base = setThemeColor(storefrontTemplateTheme("department-mall"), "buttons", "#7a7a7a");
+    const onCards = { ...base, blocks: { ...base.blocks, card: { variant: "standard", settings: { facts: "key-specs", action: "quick-add", hoverImage: true } } } } as StorefrontThemeDocument;
     expect(themeContrastProblems(base).map((problem) => problem.message)).toEqual(["contrastButtonText", "contrastLinks"]);
     expect(themeContrastProblems(onCards).map((problem) => problem.message)).toEqual(["contrastButtonText", "contrastLinks"]);
   });
@@ -274,7 +274,7 @@ describe("typography", () => {
       const { typography, typeScale, headingCase } = theme.tokens;
       expect(templateTypeTokens(theme)).toEqual({ typography, typeScale, headingCase });
     }
-    const theme = storefrontTemplateTheme("heritage-editorial");
+    const theme = storefrontTemplateTheme("boutique");
     const changed = setTypeTokens(theme, { typography: "fresh", headingCase: "sentence" });
     expect(changed.tokens).toEqual({ ...theme.tokens, typography: "fresh", headingCase: "sentence" });
     expect(typeTokensAreTemplateDefault(changed)).toBe(false);
@@ -282,7 +282,7 @@ describe("typography", () => {
     expect(storefrontThemeDocumentSchema.safeParse(changed).success).toBe(true);
     const reset = resetTypeTokens(changed);
     expect(reset).toEqual(theme);
-    expect(selectedTemplate(reset)).toBe("heritage-editorial");
+    expect(selectedTemplate(reset)).toBe("boutique");
   });
 });
 

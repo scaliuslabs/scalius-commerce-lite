@@ -168,8 +168,10 @@ describe("listing pages", () => {
     expect(latest.tokens.density).toBe("dense");
   });
 
-  it("lets heritage stores move from category shelves to a list", () => {
-    renderPart(storefrontTemplateTheme("heritage-editorial"), EDITOR_PARTS.listing);
+  it("lets a store with category shelves move to a list", () => {
+    const shelves = storefrontTemplateTheme("boutique");
+    shelves.blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8, spacing: "airy" } };
+    renderPart(shelves, EDITOR_PARTS.listing);
     const control = container.querySelector("[data-listing-default]")!;
     expect(control.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toContain("Category shelves");
     click(radioIn(control, "list"));
@@ -208,7 +210,7 @@ describe("listing pages", () => {
   });
 
   it("replaces the filter drawer with a compact sidebar, which opens its groups", () => {
-    const retail = storefrontTemplateTheme("mass-retail");
+    const retail = storefrontTemplateTheme("showcase-landing");
     renderPart(retail, EDITOR_PARTS.listingFilters);
     const control = container.querySelector("[data-listing-filter-style]")!;
     expect(radioIn(control, "drawer").getAttribute("aria-checked")).toBe("true");
@@ -221,7 +223,7 @@ describe("listing pages", () => {
   });
 
   it("moves a sidebar's filters into a drawer on search results only", () => {
-    const theme = storefrontTemplateTheme("mass-retail");
+    const theme = storefrontTemplateTheme("showcase-landing");
     theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true, searchPlacement: "same", ruled: false };
     renderPart(theme, EDITOR_PARTS.listingFilters, { kind: "search" });
     click(field<HTMLButtonElement>("theme-listing-search-drawer"));
@@ -251,13 +253,15 @@ describe("product page", () => {
     expect(latest.blocks.product.gallery).toEqual({ variant: "thumbs-left", settings: { phoneSideThumbnails: true } });
   });
 
-  it.each(["fashion-value", "heritage-editorial"] as const)("adds a Buy now button to %s's purchase panel", (template) => {
-    renderPart(storefrontTemplateTheme(template), EDITOR_PARTS.productMain, { kind: "product" });
+  it.each(["fashion", "heritage"] as const)("adds a Buy now button to the %s purchase panel", (variant) => {
+    const theme = storefrontTemplateTheme("boutique");
+    theme.blocks.product.buyBox = { variant, settings: { showBuyNow: false } } as never;
+    renderPart(theme, EDITOR_PARTS.productMain, { kind: "product" });
     const buyNow = field<HTMLButtonElement>("theme-blocks-product-buyBox-settings-showBuyNow");
     expect(buyNow.getAttribute("aria-checked")).toBe("false");
     click(buyNow);
     const box = latest.blocks.product.buyBox;
-    expect(box.variant).toBe(template === "fashion-value" ? "fashion" : "heritage");
+    expect(box.variant).toBe(variant);
     expect((box.settings as { showBuyNow?: boolean }).showBuyNow).toBe(true);
   });
 
@@ -279,38 +283,52 @@ describe("product page", () => {
 });
 
 describe("theme settings", () => {
-  it("lets an essentials merchant restore the compact quick-add card", () => {
+  it("shows one card with a live sketch of its facts, buy action and hover photo", () => {
     const essentials = storefrontTemplateTheme("daily-essentials");
     renderThemeSettings(essentials, "Product cards");
-    expect(essentials.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
-    const groceryCard = radioIn(container, "quick-add");
-    expect(groceryCard.querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(2);
-    const quick = field<HTMLButtonElement>("theme-blocks-card-settings-fullAction");
-    expect(quick.getAttribute("aria-checked")).toBe("true");
-    click(quick);
-    expect(groceryCard.querySelectorAll("[data-card-sketch-round-action]")).toHaveLength(2);
-    expect(latest.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: false, showBuyNow: false } });
+    expect(essentials.blocks.card).toEqual({ variant: "standard", settings: { facts: "none", action: "quick-add", hoverImage: false } });
+    // There is one card, so no card style to choose.
+    expect(container.querySelector('[role=radio][value="standard"]')).toBeNull();
+    expect(container.textContent).toContain("Under the title");
+    expect(container.textContent).toContain("Buy action");
+    expect(container.textContent).toContain("Show the second photo on hover");
+    expect(field("theme-blocks-card-settings-action").textContent).toContain("Round add button on the photo");
+    expect(field("theme-blocks-card-settings-facts").textContent).toContain("Nothing more");
+    expect(container.querySelectorAll("[data-card-sketch-round-action]")).toHaveLength(2);
+    expect(container.querySelector("[data-card-sketch-full-action]")).toBeNull();
+    expect(container.querySelector("[data-card-sketch-facts]")).toBeNull();
   });
 
-  it("offers the quick action on the retail card without changing its default", () => {
-    const retail = storefrontTemplateTheme("mass-retail");
-    renderThemeSettings(retail, "Product cards");
-    expect(retail.blocks.card.variant).toBe("retail");
-    const quick = field<HTMLButtonElement>("theme-blocks-card-settings-quickAction");
-    expect(quick.getAttribute("aria-checked")).toBe("false");
-    click(quick);
-    expect(latest.blocks.card).toEqual({ variant: "retail", settings: { quickAction: true } });
+  it("changes the buy action, and the sketch follows", () => {
+    renderThemeSettings(storefrontTemplateTheme("daily-essentials"), "Product cards");
+    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-action"), "Full-width button under the price");
+    expect(latest.blocks.card).toEqual({ variant: "standard", settings: { facts: "none", action: "full", hoverImage: false } });
+    expect(container.querySelectorAll("[data-card-sketch-full-action]")).toHaveLength(2);
+    expect(container.querySelector("[data-card-sketch-round-action]")).toBeNull();
+    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-action"), "None: the whole card opens the product");
+    expect(latest.blocks.card.settings).toMatchObject({ action: "none" });
+    expect(container.querySelector("[data-card-sketch-full-action]")).toBeNull();
+    expect(container.querySelector("[data-card-sketch-round-action]")).toBeNull();
   });
 
-  it("previews and picks the Showcase card with a centered title and price action", () => {
+  it("changes the facts under the title, and the sketch shows the line", () => {
     renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Product cards");
-    const choice = radioIn(container, "showcase");
-    expect(choice.textContent).toContain("Showcase");
-    expect(choice.querySelectorAll("[data-card-sketch-showcase-action]")).toHaveLength(2);
-    expect(choice.querySelectorAll("[data-card-sketch-showcase-title]")).toHaveLength(2);
-    click(choice);
-    expect(latest.blocks.card.variant).toBe("showcase");
-    expect(field("theme-blocks-card-settings-quickAction")).toBeNull();
+    expect(latest.blocks.card.settings).toEqual({ facts: "none", action: "full", hoverImage: false });
+    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-facts"), "Delivery line");
+    expect(latest.blocks.card).toEqual({ variant: "standard", settings: { facts: "delivery", action: "full", hoverImage: false } });
+    expect(container.querySelectorAll('[data-card-sketch-facts="delivery"]')).toHaveLength(2);
+    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-facts"), "Colour swatches");
+    expect(container.querySelectorAll('[data-card-sketch-facts="swatches"]')).toHaveLength(2);
+    expect(storefrontThemeDocumentSchema.safeParse(latest).success).toBe(true);
+  });
+
+  it("turns the second photo on hover on and off", () => {
+    renderThemeSettings(storefrontTemplateTheme("boutique"), "Product cards");
+    const hover = field<HTMLButtonElement>("theme-blocks-card-settings-hoverImage");
+    expect(hover.getAttribute("aria-checked")).toBe("true");
+    click(hover);
+    expect(latest.blocks.card.settings).toMatchObject({ hoverImage: false });
+    expect(hover.getAttribute("aria-checked")).toBe("false");
   });
 
   it("names unreadable text in plain words, and the draft cannot be saved until it is readable", () => {
@@ -369,17 +387,17 @@ describe("theme settings", () => {
     });
 
     it("lists every pairing drawn in its own fonts, in Latin and Bangla, with the template's preselected", async () => {
-      renderThemeSettings(storefrontTemplateTheme("heritage-editorial"), "Typography");
-      expect(card().textContent).toContain("HeritageTemplate default");
-      expect(checked("Heading letters")).toBe("All capitals");
+      renderThemeSettings(storefrontTemplateTheme("boutique"), "Typography");
+      expect(card().textContent).toContain("EditorialTemplate default");
+      expect(checked("Heading letters")).toBe("Sentence case");
       click(button(card(), "Change")!);
       await flush();
       expect(pairings().map((item) => item.value)).toEqual(["retail", "market", "editorial", "fresh", "beauty", "heritage", "tech"]);
-      const heritage = pairings().find((item) => item.value === "heritage")!;
-      expect(heritage.getAttribute("aria-checked")).toBe("true");
+      const editorial = pairings().find((item) => item.value === "editorial")!;
+      expect(editorial.getAttribute("aria-checked")).toBe("true");
       expect(pairings().filter((item) => item.textContent?.includes("Template default"))).toHaveLength(1);
-      const sample = heritage.querySelector<HTMLElement>("[aria-hidden=true]")!;
-      expect(sample.style.getPropertyValue("--type-heading")).toMatch(/^"Preview Cormorant Garamond", "Preview Noto Serif Bengali"/);
+      const sample = editorial.querySelector<HTMLElement>("[aria-hidden=true]")!;
+      expect(sample.style.getPropertyValue("--type-heading")).toMatch(/^"Preview Instrument Serif", "Preview Noto Serif Bengali"/);
       expect(sample.querySelector("[lang=bn]")?.textContent).toMatch(/[ঀ-৿]/);
     });
 
