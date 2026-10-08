@@ -567,9 +567,8 @@ export type StorefrontThemeDocument = {
             phoneLayout: 'grid' | 'list-row';
             paging: 'numbered' | 'load-more' | 'infinite';
             surface: 'page' | 'muted';
-            gutter: 'inset' | 'flush';
             band: 'standard' | 'inline' | 'beside-filters';
-            phoneBar: 'standard' | 'pill-row' | 'split-sheet' | 'bottom';
+            phoneBar: 'standard' | 'pill-row' | 'split-sheet';
             links: 'chips' | 'tabs';
             phoneBanner: boolean;
             maxColumns: number | null;
@@ -609,16 +608,9 @@ export type StorefrontThemeDocument = {
             buyBox: {
                 variant: 'classic';
                 settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'spec';
-                settings: {
-                    emi: boolean;
-                };
-            } | {
-                variant: 'tech';
-                settings: {
+                    cta: 'row' | 'stack';
+                    features: boolean;
+                    details: 'buy-box' | 'below';
                     emi: boolean;
                     whatsapp: boolean;
                 };
@@ -627,48 +619,8 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
-            } | {
-                variant: 'retail';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'mall';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'essentials';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'boutique';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'showcase';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'fashion';
-                settings: {
-                    showBuyNow?: boolean;
-                };
-            } | {
-                variant: 'heritage';
-                settings: {
-                    showBuyNow?: boolean;
-                };
-            } | {
-                variant: 'digital';
-                settings: {
-                    [key: string]: never;
-                };
             };
-            below: Array<'frequently-bought-together' | 'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
+            below: Array<'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
             apps?: Array<{
                 id: string;
                 app: string;

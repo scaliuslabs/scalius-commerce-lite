@@ -243,7 +243,7 @@ describe("v8 to v9: one design system", () => {
     const stored = v8Document("fashion-value", { variant: "tech-rounded", settings: { hoverImage: false } });
     const upgraded = upgradeThemeDocument(stored);
     // v8's heritage buy box now reads as the classic one (see "retired product-page choices").
-    const withoutCard = ({ card: _card, product, ...blocks }: Record<string, any>) => ({ ...blocks, product: { ...product, buyBox: undefined } });
+    const withoutCard = ({ card: _card, product, listing, ...blocks }: Record<string, any>) => ({ ...blocks, listing: { ...listing, gutter: undefined }, product: { ...product, buyBox: undefined } });
     const withoutPhoto = ({ imageRatio: _ratio, imageFit: _fit, surface: _surface, ...tokens }: Record<string, unknown>) => tokens;
     expect(withoutCard(upgraded.blocks)).toEqual(withoutCard(stored.blocks));
     expect(withoutPhoto(upgraded.tokens)).toEqual(withoutPhoto(stored.tokens));
@@ -268,6 +268,7 @@ describe("retired product-page choices", () => {
     expect(storefrontThemeDocumentSchema.safeParse(upgraded).success).toBe(true);
     expect(upgraded.blocks.product.buyBox).toEqual({ variant: "classic", settings: { cta: "stack", features: false, details: "buy-box", emi: false, whatsapp: false } });
     expect(upgraded.blocks.listing.phoneBar).toBe("standard");
+    expect(upgraded.blocks.listing).not.toHaveProperty("gutter");
     expect(upgraded.blocks.product.below).toEqual(["description", "reviews", "related", "recently-viewed"]);
     // Everything else comes through unchanged.
     expect(upgraded.tokens).toEqual(v9Retired.tokens);

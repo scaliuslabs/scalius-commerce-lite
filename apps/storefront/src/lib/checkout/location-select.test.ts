@@ -208,10 +208,10 @@ describe("fetchLocationOptions", () => {
       () => new Response("{}", { status: 429 }),
       () => new Response(JSON.stringify({ success: true, data: ZONES }), { status: 200 }),
     ];
-    const fetchImpl = vi.fn(async () => answers.shift()!());
+    const fetchImpl = vi.fn(async (_url: unknown, _init?: RequestInit) => answers.shift()!());
     await expect(fetchLocationOptions("", "zones", "city_1", fetchImpl, [0, 0])).resolves.toEqual(ZONES);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    const cache = fetchImpl.mock.calls.map((call) => (call[1] as RequestInit).cache);
+    const cache = fetchImpl.mock.calls.map((call) => call[1]?.cache);
     expect(cache).toEqual([undefined, "reload", "reload"]);
   });
 

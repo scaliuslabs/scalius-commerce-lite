@@ -97,7 +97,6 @@
       "phoneLayout": "grid",
       "paging": "numbered",
       "surface": "muted",
-      "gutter": "flush",
       "band": "standard",
       "phoneBar": "standard",
       "links": "chips",

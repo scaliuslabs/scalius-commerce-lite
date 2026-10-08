@@ -139,6 +139,8 @@ const noScriptVariants = options.length > 0
   : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
 const stockAvailable = buyerStockSummary.tone === "available";
+// A price on each option value only when the values are priced differently.
+const onlyWhenDifferent = (prices: Map<string, number>) => new Set(prices.values()).size > 1 ? prices : new Map<string, number>();
 const stockLabel = (text: string) => text === "In Stock" ? stockWords.inStock : text === "Low Stock" ? stockWords.lowStock : pageCopy.unavailableText;
 // Nothing is buyable: no quantity to choose, and a way to keep shopping instead of a dead end.
 const allSoldOut = variants.length > 0 && !buyerStockSummary.canPurchaseAny;
@@ -333,7 +335,7 @@ function optionAriaLabel(
             )] as const] : [];
           }));
           // A price on each value only when the values are priced differently.
-          const optionPrices = new Set(pricedOptions.values()).size > 1 ? pricedOptions : new Map<string, number>();
+          const optionPrices = onlyWhenDifferent(pricedOptions);
           return (
             <div class="variant-option-panel">
               <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>

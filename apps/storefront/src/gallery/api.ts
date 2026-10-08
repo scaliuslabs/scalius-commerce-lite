@@ -12,6 +12,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import type { GalleryEntry } from "./entries";
+import { fixtureProductSoldOut } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
   FIXTURE_POLICIES,
