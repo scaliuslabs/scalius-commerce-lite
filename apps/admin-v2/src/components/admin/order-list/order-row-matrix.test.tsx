@@ -130,6 +130,32 @@ describe("orders list rows across the state matrix", () => {
     expect(shape(heldCell!)).toBe(shape(freeCell!));
   });
 
+  it("never hides a lone action in a menu: View order is a link, and a menu always offers it", async () => {
+    const actionsCell = (permissions: OrderActionPermissions) => {
+      const column = getOrderColumns({ ...handlers(), orderActions: permissions }).find((entry) => entry.id === "actions")!;
+      return column.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
+    };
+    const nothingElse = new Proxy({}, { get: () => false }) as OrderActionPermissions;
+    const base = rows[0]!.order;
+    // Shipped, cash on delivery, nothing collected: the one thing to do is collect it.
+    const shipped = { ...base, id: "ord_cod", status: "shipped", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, totalAmount: 500, archivedAt: null, onHold: false } as OrderListItem;
+    // Cancelled: nothing to do.
+    const delivered = { ...base, id: "ord_done", status: "cancelled", archivedAt: null, onHold: false } as OrderListItem;
+    await render(
+      <table><tbody><tr><td data-row="step">{actionsCell(nothingElse)({ row: { original: shipped } })}</td></tr>
+        <tr><td data-row="none">{actionsCell(nothingElse)({ row: { original: delivered } })}</td></tr></tbody></table>,
+    );
+    // An order with nothing to do has no menu, only a way in.
+    const none = host.querySelector('td[data-row="none"]')!;
+    expect(none.querySelector("[aria-haspopup=menu]")).toBeNull();
+    expect(none.querySelector("a")?.getAttribute("href")).toContain(delivered.id);
+    // An order with a next step keeps a menu, which also opens the order.
+    const step = host.querySelector('td[data-row="step"]')!;
+    expect(step.querySelector("[aria-haspopup=menu]")).not.toBeNull();
+    await act(async () => step.querySelector<HTMLButtonElement>("[aria-haspopup=menu]")!.click());
+    await vi.waitFor(() => expect(document.body.textContent).toContain("View order"));
+  });
+
   it.each(["en", "bn"] as const)("gives every row the same cells, one line each (%s)", async (locale) => {
     setLocale(locale);
     for (const archived of [false, true]) {

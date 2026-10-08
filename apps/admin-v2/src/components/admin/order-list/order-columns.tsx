@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Archive, CircleAlert, Undo } from "lucide-react";
+import { Archive, ChevronRight, CircleAlert, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
@@ -285,12 +286,12 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
   const locked = useStatusLockedReason(order, handlers);
   const canConfirm = step === "confirm" && !locked
     && getAdminOrderStatusOptions(order.status, order).some((option) => option.status === "confirmed" && option.block === null);
-  const actions = [
-    canConfirm
-      ? { label: t("nextStep.confirm"), onClick: () => handlers.onStatusUpdate(order, "confirmed") }
-      : step && step !== "confirm"
-        ? { label: t(`nextStep.${step}`), onClick: open }
-        : null,
+  const next = canConfirm
+    ? { label: t("nextStep.confirm"), onClick: () => handlers.onStatusUpdate(order, "confirmed") }
+    : step && step !== "confirm"
+      ? { label: t(`nextStep.${step}`), onClick: open }
+      : null;
+  const others = [
     !handlers.showArchived && handlers.orderActions.canDeleteOrders && !orderSkipReason(order, "archive")
       ? { label: t("archive"), icon: Archive, onClick: () => handlers.onArchive(order) }
       : null,
@@ -298,8 +299,20 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
       ? { label: t("unarchive"), icon: Undo, onClick: () => handlers.onRestore(order) }
       : null,
   ].filter((action) => action !== null);
-  // Every order has a menu: when nothing else is offered, it opens the order.
-  if (actions.length === 0) actions.push({ label: t("viewOrder"), onClick: open });
+  // The menu always lets you open the order. A menu of that one item is not a menu: it is a button.
+  if (!next && others.length === 0) {
+    const label = `${t("viewOrder")} ${orderName(order)}`;
+    return (
+      <span data-part="actions" className="block">
+        <Button variant="ghost" size="icon-sm" asChild>
+          <Link to="/admin/orders/$orderId" params={{ orderId: order.id }} aria-label={label} title={t("viewOrder")}>
+            <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+          </Link>
+        </Button>
+      </span>
+    );
+  }
+  const actions = [...(next ? [next] : []), { label: t("viewOrder"), onClick: open }, ...others];
   return (
     <span data-part="actions" className="block">
       <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />
