@@ -128,12 +128,15 @@ export function createCartTransformer(
         // The product of each component SKU, in one read (live SKUs only).
         const componentIds = [...new Set(results.flatMap((result) => result.output.operations
             .flatMap((operation) => (operation.op === "expand" ? operation.components.map((component) => component.variantId) : []))))];
-        const products = componentIds.length === 0
-            ? new Map<string, string>()
-            : new Map((await db.select({ id: productVariants.id, productId: productVariants.productId })
+        // D1 binds at most 100 parameters: read in sequential chunks of 90.
+        const products = new Map<string, string>();
+        for (let start = 0; start < componentIds.length; start += 90) {
+            const rows = await db.select({ id: productVariants.id, productId: productVariants.productId })
                 .from(productVariants)
-                .where(and(inArray(productVariants.id, componentIds.slice(0, 90)), isNull(productVariants.deletedAt)))
-                .all()).map((row) => [row.id, row.productId]));
+                .where(and(inArray(productVariants.id, componentIds.slice(start, start + 90)), isNull(productVariants.deletedAt)))
+                .all();
+            for (const row of rows) products.set(row.id, row.productId);
+        }
         return applyCartTransform(items, valid, lineIds, results, products, apps);
     };
 }
