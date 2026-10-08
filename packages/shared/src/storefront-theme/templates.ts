@@ -150,7 +150,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["standard", { facts: "none", action: "full" }],
       // No per-page: the default listing stays compact, without extra crawl variants.
       listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: "classic", buyBox: ["mall"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
+      product: { gallery: "classic", buyBox: ["classic", { cta: "row", features: true, details: "below" }], below: ["description", "reviews", "related"], sticky: BUY_BAR },
       footer: ["product-widgets"],
     }),
     home: [
@@ -187,7 +187,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       // The stacked gallery keeps its details column sticky.
       product: {
         gallery: "stacked",
-        buyBox: ["boutique"],
+        buyBox: ["classic", { cta: "stack" }],
         below: ["description", "content-blocks", "policies", "reviews", "related"],
         sticky: NO_STICKY,
       },
@@ -262,7 +262,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "cart", "search", "account"], drawer: "drill-in" }],
       card: ["standard", { facts: "none", action: "quick-add" }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
-      product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
+      product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["classic", { details: "below", whatsapp: true }], below: ["description", "related"], sticky: NO_STICKY },
       footer: ["directory"],
     }),
     home: [
@@ -296,7 +296,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         toolbar: ["subcategory-pills", "facet-value-chips", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
         links: "tabs",
       },
-      product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
+      product: { gallery: "stacked", buyBox: ["classic", { cta: "stack", whatsapp: true }], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: ["minimal-columns"],
     }),
     // A landing page opens on its offer: the hero, the store's own delivery

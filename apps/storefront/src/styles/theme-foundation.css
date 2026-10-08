@@ -174,7 +174,7 @@ body {
   /* Heading case (Theme -> Style): uppercase page and section titles, never
      product names. */
   .site-root[data-theme-heading-case="uppercase"]
-    :where(h1, h2, .section-heading):not([data-theme-component="product-card"] *) {
+    :where(h1, h2, .section-heading):not([data-theme-component="product-card"] *, [data-product-summary] *) {
     text-transform: uppercase;
     letter-spacing: var(--theme-label-tracking, 0.06em);
   }

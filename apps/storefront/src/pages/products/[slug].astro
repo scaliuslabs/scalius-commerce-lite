@@ -25,6 +25,7 @@ import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
+import Container from "@/components/ui/Container.astro";
 import ProductPageLayout from "@/components/product/ProductPageLayout.astro";
 import ProductSectionNav from "@/components/product/ProductSectionNav.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
@@ -40,7 +41,6 @@ import ProductSpecTable from "@/components/product/modules/ProductSpecTable.astr
 import ProductFeatureList from "@/components/product/modules/ProductFeatureList.astro";
 import ProductContentBlocks from "@/components/product/modules/ProductContentBlocks.astro";
 import ProductWarrantyModule from "@/components/product/modules/ProductWarrantyModule.astro";
-import ProductBoughtTogether from "@/components/product/modules/ProductBoughtTogether.astro";
 import ProductCompareSimilar from "@/components/product/modules/ProductCompareSimilar.astro";
 import ProductPolicies from "@/components/product/modules/ProductPolicies.astro";
 import ProductRecentlyViewed from "@/components/product/modules/ProductRecentlyViewed.astro";
@@ -51,7 +51,6 @@ import {
   compareSimilarProducts,
   descriptionInInfoColumn,
   featuresPlacement,
-  frequentlyBoughtTogether,
   productPageModules,
   publicSpecificationRows,
   renderedContentBlocks,
@@ -64,6 +63,7 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { resolveProductPageTheme } from "@/components/product/lib/product-page-theme";
 import { storeContactLinks } from "@/lib/store-contact";
+import { shopCopy } from "@/lib/storefront-shop-copy";
 import { productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "@/components/product/lib/gallery-media";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -160,6 +160,7 @@ const renderedApps = requestTheme.preview && requestTheme.previewToken
 const appBlocks = renderedApps.blocks;
 if (renderedApps.failed) markRenderUncacheable(Astro.response.headers);
 const productTemplate = requestTheme.resolved.pages.templates.product;
+const shop = shopCopy(requestTheme.language);
 const templateData = await templateSectionData("product", requestTheme);
 const appHeads = appBlocks.map((block) => block.head);
 
@@ -173,37 +174,24 @@ const resolvedTheme = resolveProductPageTheme(
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
 const buyBoxLook = themeLayout.buyBox.look;
-const mallBuyBox = resolvedTheme.blocks.product.buyBox.variant === "mall";
-const essentialsBuyBox = resolvedTheme.blocks.product.buyBox.variant === "essentials";
-const contactLinks = (essentialsBuyBox || resolvedTheme.blocks.product.buyBox.variant === "showcase")
+const factsColumn = buyBoxLook.facts === "column";
+// Call and WhatsApp links and the EMI line show only when the buy box's settings ask for them.
+const contactLinks = themeLayout.buyBox.whatsapp
   ? storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")
   : [];
-const wideProductSummary = buyBoxLook?.cta.layout === "stack" && buyBoxLook.cta.phoneLayout === "row";
-// The EMI line shows only in a buy box that asks for it (spec, tech); the
-// classic buy box has no such setting and stays as it is.
 const buyBoxShowsEmi = themeLayout.buyBox.emi;
 
 // Modules the product has data for, in the template's order (a module with
 // nothing to show is left out); the description stays in the buy box on
 // classic and Dawn. Every module reads data this page already has.
-const boughtTogether = frequentlyBoughtTogether(recommendations);
 const similarProducts = compareSimilarProducts({ id: product.id, categoryId: category?.id ?? product.categoryId ?? null }, recommendations);
 const storePolicies = layoutData.policies ?? [];
 const pageModules = productPageModules(resolvedTheme.blocks.product.below, product, {
   look: buyBoxLook,
   hasRelated: recommendations.products.length > 0,
-  boughtTogether: boughtTogether.length,
   similar: similarProducts.length,
   policies: storePolicies.length,
 });
-// The related list leaves out what the bundle strip already shows; what is
-// left is not all co-purchases, so it reads "You might also like".
-const relatedRecommendations = pageModules.includes("frequently-bought-together")
-  ? {
-      reason: "similar" as const,
-      products: recommendations.products.filter((item) => !boughtTogether.some((shown) => shown.id === item.id)),
-    }
-  : recommendations;
 const sticky = resolvedTheme.blocks.product.sticky;
 const detailAnchorIds: Record<string, string> = {
   "about-bullets": "about",
@@ -213,7 +201,7 @@ const detailAnchorIds: Record<string, string> = {
   "content-blocks": "content",
 };
 const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
-const exploreAnchorId = pageModules.includes("related") && relatedRecommendations.products.length > 0 ? "related-products" : null;
+const exploreAnchorId = pageModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
 const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
 const featuresAt = featuresPlacement(pageModules, buyBoxLook);
@@ -762,28 +750,25 @@ const productCategoryAnalytics = productCategory
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
-    <div class:list={["lg:pt-2", buyBoxLook?.facts === "column" && "hidden lg:block"]}>
+    <div class="lg:pt-2">
       <ProductBreadcrumbs product={product} category={productCategory} />
     </div>
 
-    <section
-      class:list={["mx-auto px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6", buyBoxLook?.facts === "column" ? "max-w-[1500px]" : essentialsBuyBox ? "max-w-[1120px]" : wideProductSummary ? "max-w-[1408px]" : "max-w-7xl"]}
+    <Container
+      as="section"
+      class="py-2 sm:py-4 lg:py-6"
+      style={factsColumn ? "max-inline-size: 87.5rem" : undefined}
       data-theme-section-id={editorMarks ? THEME_EDITOR_MARKS.productMain : undefined}
     >
-      {buyBoxLook?.facts === "column" && (
-        <div class="mb-3 lg:hidden">
-          {product.brand?.slug && <a href={`/brands/${encodeURIComponent(product.brand.slug)}`} class="text-sm text-primary">{product.brand.name}</a>}
-          <h1 class="mt-1 font-normal leading-snug text-foreground" style={`font-size: ${buyBoxLook.title.size.phone}px`}>{product.name}</h1>
-          <ReviewsSummary product={product} copy={reviewCopy} />
-        </div>
-      )}
-      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={buyBoxLook?.facts === "column"} wideSummary={wideProductSummary}>
+      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={factsColumn}>
         <ProductGallery
           product={product}
           media={media}
           layout={productPageLayout}
           initialProductMediaId={initialGalleryProductMediaId}
           playVideoLabel={productPageCopy.productPlayVideoText}
+          zoomLabel={shop.product.zoomPhoto}
+          showAllLabel={shop.product.showAllPhotos}
         />
         <ProductSummary
           product={product}
@@ -800,25 +785,17 @@ const productCategoryAnalytics = productCategory
           actionCopy={productPageCopy}
           fulfilmentBadge={fulfilmentBadge}
           look={buyBoxLook}
-          essentials={essentialsBuyBox}
+          stockWords={shop.product.stock}
+          soldOutCopy={{ note: shop.product.soldOutNote, similar: shop.product.seeSimilar }}
           details={detailsInBuyBox}
           detailsFeatures={featuresAt === "description"}
         >
           <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
-          {featuresAt === "buy-box" && buyBoxLook && buyBoxLook.features !== "none" && !buyBoxLook.factPills && (
+          {featuresAt === "buy-box" && (
             <ProductFeatureList
               slot="after-title"
-              features={buyBoxFeatures(product, mallBuyBox)}
-              variant={mallBuyBox ? "bullets" : buyBoxLook.features}
-              compact={mallBuyBox}
-              title={productPageCopy.productKeyFeaturesText}
-            />
-          )}
-          {featuresAt === "buy-box" && buyBoxLook?.factPills && buyBoxLook.features !== "none" && (
-            <ProductFeatureList
-              slot="after-price"
               features={buyBoxFeatures(product)}
-              variant={buyBoxLook.features}
+              variant="list"
               title={productPageCopy.productKeyFeaturesText}
             />
           )}
@@ -840,11 +817,11 @@ const productCategoryAnalytics = productCategory
           )}
           <ProductAppBlocks slot="after-actions" blocks={appBlocks} placement="buy-box" />
           <DigitalPromise slot="after-actions" product={product} fulfilment={pageFulfilment} />
-          <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
+          {buyerStockSummary.canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
           <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
         </ProductSummary>
       </ProductPageLayout>
-    </section>
+    </Container>
 
     <StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />
 
@@ -859,21 +836,6 @@ const productCategoryAnalytics = productCategory
     {/* The template's modules below the fold, in its order (each a preview mark in the theme editor). */}
     {pageModules.map((module) => <ThemeEditorMark id={editorMarks ? themeEditorModuleMark(module) : null}>{(() => {
       switch (module) {
-        case "frequently-bought-together":
-          return (
-            <ProductBoughtTogether
-              title="Frequently bought together"
-              current={{
-                name: product.name,
-                imageUrl: primaryImageUrl,
-                price: buyerDisplayedPrice,
-                startingAt: buyerPricePresentation.isStartingAt,
-              }}
-              products={boughtTogether}
-              currencySymbol={currencySymbol}
-              currencyCode={currencyCode}
-            />
-          );
         case "compare-similar":
           return (
             <ProductCompareSimilar
@@ -930,7 +892,7 @@ const productCategoryAnalytics = productCategory
         case "related":
           return (
             <RelatedProducts
-              recommendations={relatedRecommendations}
+              recommendations={recommendations}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
             />

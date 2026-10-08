@@ -642,7 +642,8 @@ export default function CartFlyout({ onReady }: Props) {
                     <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
                       {recommendationTitle(recommendations.reason)}
                     </h3>
-                    <ul className="flex gap-2 overflow-x-auto pb-1">
+                    {/* Padding inside the scroller gives the focus outline room: overflow clips it. */}
+                    <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
                       {recommendations.products.map((product) => (
                         <li key={product.id} className="w-28 shrink-0">
                           <a

@@ -127,179 +127,35 @@ export interface StorefrontGalleryRenderer {
   thumbnailSize: number | null;
 }
 
-export type StorefrontBuyBoxFacts = "list" | "column" | "tiles" | "rows";
-
 /**
- * A buy box's reference grammar: type scale (desktop / phone px), the two
- * buttons, where delivery facts sit and how quantity tiers read. Sources in
- * the comments on `STOREFRONT_BUY_BOX_LOOKS`.
+ * A buy box's arrangement. Its type scale, button height and shape come from
+ * the theme tokens, never from the box: only how the parts sit differs.
  */
 export interface StorefrontBuyBoxLook {
-  title: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight };
-  price: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight; tone: "foreground" | "primary" };
-  /**
-   * Height in px; `pill` or the theme radius; `row` side by side or `stack`
-   * full width up to `maxWidth`; which button comes first.
-   */
-  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; phoneLayout?: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now"; inlineQuantity?: boolean; showBuyNow?: boolean };
-  /**
-   * Delivery, cash on delivery, returns and warranty: a list under the
-   * buttons, a 284px column at the right (Daraz, Amazon), tiles (Target) or
-   * collapsible rows (Dawn).
-   */
-  facts: StorefrontBuyBoxFacts;
-  /** Price, status, product code and brand as pills over the price (Star Tech). */
-  factPills: boolean;
-  /** Key features under the title (Star Tech), chips (Target) or none. */
-  features: "list" | "chips" | "none";
-  /** Quantity tiers as chips (today) or selectable-looking rows with the saving (Daraz, Dawn). */
-  bundles: "chips" | "rows";
-  /** The buy box sits in a bordered card (Fabrilife). */
-  card: boolean;
+  /** The buttons side by side or one over the other (full width on phones). */
+  cta: { layout: "row" | "stack" };
+  /** Delivery, cash on delivery, returns and warranty: a list under the buttons or a column at the right (computers from 1280px). */
+  facts: "list" | "column";
+  /** Key features under the title, or none (they show once, below). */
+  features: "list" | "none";
+  /** The description tabs sit in the buy box, or the modules below the fold carry the description. */
+  details: "buy-box" | "below";
 }
 
-/** Each buy box's measured look; `classic` is null and keeps today's CSS. */
-export const STOREFRONT_BUY_BOX_LOOKS = {
-  mall: {
-    title: { size: { desktop: 25, phone: 20 }, weight: 500 },
-    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 55, shape: "pill", layout: "row", maxWidth: 302, first: "buy-now", inlineQuantity: true },
-    facts: "list",
-    factPills: false,
-    features: "list",
-    bundles: "chips",
-    card: false,
-  },
-  // Star Tech product page: h1 22/400, price pills, "Key Features" list,
-  // a 200×42 "Buy Now" beside the quantity.
-  spec: {
-    title: { size: { desktop: 22, phone: 20 }, weight: 400 },
-    price: { size: { desktop: 20, phone: 18 }, weight: 700, tone: "primary" },
-    cta: { height: 42, shape: "rect", layout: "row", maxWidth: 420, first: "buy-now" },
-    facts: "list",
-    factPills: true,
-    features: "list",
-    bundles: "rows",
-    card: false,
-  },
-  // Ghorer Bazar: restrained title and accent price with quantity and cart above direct buy.
-  essentials: {
-    title: { size: { desktop: 22, phone: 20 }, weight: 600 },
-    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "primary" },
-    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
-    facts: "list",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // Apple Gadgets: h1 28/600, price 24/700, twin 380×48 pills stacked, EMI
-  // and WhatsApp strips.
-  tech: {
-    title: { size: { desktop: 32, phone: 24 }, weight: 600 },
-    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 48, shape: "pill", layout: "stack", phoneLayout: "row", maxWidth: 380, first: "buy-now" },
-    facts: "list",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // Amazon: h1 18/400, price 30/400, stacked Add to Cart and Buy Now; the
-  // delivery and purchase facts sit in the right column.
-  "marketplace-3col": {
-    title: { size: { desktop: 18, phone: 14 }, weight: 400 },
-    price: { size: { desktop: 30, phone: 22 }, weight: 400, tone: "primary" },
-    cta: { height: 44, shape: "pill", layout: "stack", maxWidth: null, first: "add-to-cart" },
-    facts: "column",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // Target: h1 24/700, price 28/700, one full-width pill, fulfilment tiles,
-  // "at a glance" chips.
-  retail: {
-    title: { size: { desktop: 24, phone: 20 }, weight: 700 },
-    price: { size: { desktop: 28, phone: 24 }, weight: 700, tone: "foreground" },
-    cta: { height: 44, shape: "pill", layout: "stack", maxWidth: null, first: "add-to-cart" },
-    facts: "tiles",
-    factPills: false,
-    features: "chips",
-    bundles: "chips",
-    card: false,
-  },
-  // Dawn: h1 40/400 (30 on phones), price 18/400, a 345×47 outline "Add to
-  // cart" over a solid "Buy it now", collapsible rows.
-  boutique: {
-    title: { size: { desktop: 40, phone: 30 }, weight: 400 },
-    price: { size: { desktop: 18, phone: 16 }, weight: 400, tone: "foreground" },
-    cta: { height: 47, shape: "rect", layout: "stack", maxWidth: 345, first: "add-to-cart" },
-    facts: "rows",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // A focused landing page gives its hero product a stronger title.
-  showcase: {
-    title: { size: { desktop: 48, phone: 31 }, weight: 700 },
-    price: { size: { desktop: 18, phone: 16 }, weight: 400, tone: "foreground" },
-    cta: { height: 47, shape: "rect", layout: "stack", maxWidth: 345, first: "add-to-cart" },
-    facts: "rows",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // Fabrilife: a bordered card, h1 20/700, price 22/700, size boxes, a
-  // returns card under the buttons.
-  fashion: {
-    title: { size: { desktop: 20, phone: 18 }, weight: 700 },
-    price: { size: { desktop: 22, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 37, shape: "rect", layout: "row", maxWidth: 115, first: "add-to-cart", inlineQuantity: true, showBuyNow: false },
-    facts: "list",
-    factPills: false,
-    features: "none",
-    bundles: "chips",
-    card: true,
-  },
-  // Heritage editorial: a quiet price and one wide primary purchase action.
-  heritage: {
-    title: { size: { desktop: 30, phone: 24 }, weight: 500 },
-    price: { size: { desktop: 20, phone: 18 }, weight: 400, tone: "foreground" },
-    cta: { height: 39, shape: "rect", layout: "stack", maxWidth: 492, first: "add-to-cart", showBuyNow: false },
-    facts: "rows",
-    factPills: false,
-    features: "none",
-    bundles: "rows",
-    card: false,
-  },
-  // Game Ghor digital codes: h1 24/600, price 24/700, Buy Now first, the
-  // delivery promise bullets.
-  digital: {
-    title: { size: { desktop: 24, phone: 18 }, weight: 600 },
-    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
-    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "buy-now" },
-    facts: "list",
-    factPills: false,
-    features: "none",
-    bundles: "chips",
-    card: false,
-  },
-} as const satisfies Record<string, StorefrontBuyBoxLook>;
+/** The marketplace buy box: stacked buttons and a facts column from 1280px (below that it reads as the classic box). */
+export const STOREFRONT_MARKETPLACE_BUY_BOX_LOOK = {
+  cta: { layout: "stack" },
+  facts: "column",
+  features: "none",
+  details: "below",
+} as const satisfies StorefrontBuyBoxLook;
 
 export interface StorefrontBuyBoxRenderer {
-  /** null renders today's classic buy box, unchanged. */
-  look: StorefrontBuyBoxLook | null;
+  look: StorefrontBuyBoxLook;
   /** The "EMI from X/month" line under the price (when the product has a quote). */
   emi: boolean;
-  /** An "Order on WhatsApp" strip under the buttons (when the store has a WhatsApp number). */
+  /** Call and WhatsApp links under the buttons (when the store has a number). */
   whatsapp: boolean;
-}
-
-function buyBox(look: StorefrontBuyBoxLook | null, settings: { emi?: boolean; whatsapp?: boolean } = {}): StorefrontBuyBoxRenderer {
-  return { look, emi: settings.emi === true, whatsapp: settings.whatsapp === true };
 }
 
 // ─── Registries ───────────────────────────────────────────────────────────
@@ -670,7 +526,7 @@ export const STOREFRONT_LISTING_BANDS = ["standard", "inline", "beside-filters"]
  *   opening as a split sheet (facet names at the left, values at the right);
  * - `bottom` (Fabrilife): the row pinned to the bottom of the screen while the results scroll.
  */
-export const STOREFRONT_LISTING_PHONE_BARS = ["standard", "pill-row", "split-sheet", "bottom"] as const;
+export const STOREFRONT_LISTING_PHONE_BARS = ["standard", "pill-row", "split-sheet"] as const;
 /** Sub-listing links over the results: chips, or one tab strip that starts with "All" (outside search). */
 export const STOREFRONT_LISTING_LINK_STYLES = ["chips", "tabs"] as const;
 /** Most result columns on computers; null keeps the density's (the card may cap it too). */
@@ -698,56 +554,27 @@ export const STOREFRONT_GALLERY_VARIANTS = {
 };
 
 export const STOREFRONT_BUY_BOX_VARIANTS = {
-  // Today's product page (owner-protected).
-  classic: variant({ renders: buyBox(null) }),
-  // Star Tech: fact pills, key features, the EMI line (hidden without EMI plans).
-  spec: variant({
-    settings: { emi: z.boolean() },
-    defaults: { emi: true },
-    contrastPairs: [["accent-foreground", "accent"], ["secondary-foreground", "secondary"]],
-    renders: (settings) => buyBox(STOREFRONT_BUY_BOX_LOOKS.spec, settings),
+  // The product page (owner-protected): its parts in the order buyers read them.
+  classic: variant({
+    settings: {
+      cta: z.enum(["row", "stack"]),
+      features: z.boolean(),
+      details: z.enum(["buy-box", "below"]),
+      emi: z.boolean(),
+      whatsapp: z.boolean(),
+    },
+    defaults: { cta: "row", features: false, details: "buy-box", emi: false, whatsapp: false },
+    renders: (settings) => ({
+      look: { cta: { layout: settings.cta }, facts: "list", features: settings.features ? "list" : "none", details: settings.details },
+      emi: settings.emi,
+      whatsapp: settings.whatsapp,
+    } satisfies StorefrontBuyBoxRenderer),
   }),
-  // Apple Gadgets: option panels, twin pill CTAs, EMI and WhatsApp strips.
-  tech: variant({
-    settings: { emi: z.boolean(), whatsapp: z.boolean() },
-    defaults: { emi: true, whatsapp: true },
+  // Daraz/Amazon: delivery, cash on delivery, return and warranty column (from 1280px).
+  "marketplace-3col": variant({
     contrastPairs: [["foreground", "muted"]],
-    renders: (settings) => buyBox(STOREFRONT_BUY_BOX_LOOKS.tech, settings),
+    renders: { look: STOREFRONT_MARKETPLACE_BUY_BOX_LOOK, emi: false, whatsapp: false } satisfies StorefrontBuyBoxRenderer,
   }),
-  // Daraz/Amazon: delivery, cash on delivery, return and warranty column.
-  "marketplace-3col": variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"]) }),
-  // Target: fulfilment tiles, at-a-glance chips.
-  retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.retail) }),
-  mall: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.mall) }),
-  essentials: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.essentials) }),
-  // Dawn: outline Add to cart plus solid Buy it now, collapsible rows.
-  boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
-  showcase: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.showcase) }),
-  // Fabrilife: bordered card, size boxes, returns card.
-  fashion: variant({
-    settings: { showBuyNow: z.boolean().optional() },
-    defaults: { showBuyNow: false },
-    contrastPairs: [["foreground", "muted"]],
-    renders: (settings) => buyBox({
-      ...STOREFRONT_BUY_BOX_LOOKS.fashion,
-      cta: {
-        ...STOREFRONT_BUY_BOX_LOOKS.fashion.cta,
-        maxWidth: settings.showBuyNow ? null : 115,
-        inlineQuantity: !settings.showBuyNow,
-        showBuyNow: settings.showBuyNow ?? false,
-      },
-    }),
-  }),
-  heritage: variant({
-    settings: { showBuyNow: z.boolean().optional() },
-    defaults: { showBuyNow: false },
-    renders: (settings) => buyBox({
-      ...STOREFRONT_BUY_BOX_LOOKS.heritage,
-      cta: { ...STOREFRONT_BUY_BOX_LOOKS.heritage.cta, showBuyNow: settings.showBuyNow ?? false },
-    }),
-  }),
-  // Game Ghor: promise bullets (delivery time, where to redeem).
-  digital: variant({ requires: [has("hasDigitalLines")], fallback: "classic", renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.digital) }),
 };
 
 /**
@@ -759,8 +586,6 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
  * key spec: any attribute value is a specification row. Each module's data
  * is already in the product page's batch (or, for `recently-viewed`, in
  * this browser):
- * - `frequently-bought-together`: the recommendations when they are mostly
- *   real co-purchases (the co-bought products rank first);
  * - `compare-similar`: recommended products of the same category, beside
  *   this one, with a link into `/compare` (key specs side by side);
  * - `policies`: the store's published policy pages;
@@ -768,7 +593,6 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
  * Customer questions wait for a question model and are not a module yet.
  */
 export const STOREFRONT_PRODUCT_MODULES = {
-  "frequently-bought-together": { requires: [] },
   "key-attributes": { requires: [has("hasKeySpecs")] },
   "about-bullets": { requires: [] },
   "spec-table": { requires: [] },

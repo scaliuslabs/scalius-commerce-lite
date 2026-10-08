@@ -730,16 +730,16 @@ function bindScrollIndicator(
 }
 
 function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
-  const trigger = root.querySelector<HTMLElement>(
-    "[data-mobile-image-trigger]",
-  );
+  // The phone stage and the computer zoom button open the same view.
+  const triggers = Array.from(root.querySelectorAll<HTMLElement>("[data-mobile-image-trigger], [data-zoom-trigger]"));
+  let opener = triggers[0];
   const modal = root.querySelector<HTMLElement>("[data-mobile-zoom-modal]");
   const close = root.querySelector<HTMLButtonElement>(
     "[data-close-mobile-zoom]",
   );
   const image = root.querySelector<HTMLImageElement>("[data-fullscreen-image]");
   const container = root.querySelector<HTMLElement>("[data-panzoom-container]");
-  if (!trigger || !modal || !close || !image || !container) return;
+  if (!opener || !modal || !close || !image || !container) return;
 
   let scale = 1;
   let pointX = 0;
@@ -762,10 +762,12 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
   };
   const closeModal = () => {
     closeMobileZoom(root);
-    trigger.focus();
+    opener?.focus();
   };
-  const open = () => {
-    if (trigger.getAttribute("aria-disabled") === "true") return;
+  const open = (event: Event) => {
+    const clicked = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    if (clicked?.getAttribute("aria-disabled") === "true") return;
+    opener = clicked ?? opener;
     const active = root.dataset.activeMediaKey;
     if (!active?.startsWith("image:")) return;
     const current = root.querySelector<HTMLImageElement>(
@@ -788,7 +790,7 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
     close.focus();
   };
 
-  trigger.addEventListener("click", open, { signal });
+  for (const trigger of triggers) trigger.addEventListener("click", open, { signal });
   close.addEventListener("click", closeModal, { signal });
   signal.addEventListener("abort", () => closeMobileZoom(root), { once: true });
   modal.addEventListener(

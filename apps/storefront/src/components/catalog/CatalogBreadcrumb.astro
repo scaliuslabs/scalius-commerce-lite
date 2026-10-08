@@ -1,0 +1,28 @@
+---
+// The listing's trail: Home, the published ancestors, then the current page.
+// The separators are drawn by CSS between the items (none dangles after the
+// last), and the current page is the last item. When the template hides the
+// trail visually it stays in the page for assistive technology: it matches
+// the BreadcrumbList JSON-LD.
+interface Props {
+  crumbs: Array<{ label: string; href: string }>;
+  /** The current page's name (the listing's title). */
+  current: string;
+  /** Hide the trail visually (assistive technology still reads it). */
+  hidden?: boolean;
+  /** Show the current page's name as the last item; false keeps it for assistive technology only. */
+  showCurrent?: boolean;
+  class?: string;
+}
+
+const { crumbs, current, hidden = false, showCurrent = true, class: className } = Astro.props;
+---
+
+{crumbs.length > 0 && (
+  <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs", hidden && "sr-only", className]}>
+    <ol>
+      {crumbs.map((crumb) => <li><a href={crumb.href}>{crumb.label}</a></li>)}
+      <li class:list={[!showCurrent && "sr-only"]} aria-current="page">{current}</li>
+    </ol>
+  </nav>
+)}

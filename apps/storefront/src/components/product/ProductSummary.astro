@@ -30,6 +30,8 @@ import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 import { specificationValue } from "./lib/product-page-modules";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 
+const CLASSIC_LOOK: StorefrontBuyBoxLook = { cta: { layout: "row" }, facts: "list", features: "none", details: "buy-box" };
+
 interface Props {
   product: Product;
   category: Product["category"] | null;
@@ -47,10 +49,12 @@ interface Props {
   actionCopy?: Partial<ProductActionCopy & CheckoutLanguageData>;
   /** A fulfilment badge beside the stock badge ("No delivery needed" for services). */
   fulfilmentBadge?: string | null;
-  /** The template's buy-box look; null keeps today's classic buy box untouched. */
-  look?: StorefrontBuyBoxLook | null;
-  /** Grocery purchase actions use a quantity + cart row over the direct-buy button. */
-  essentials?: boolean;
+  /** The buy box's arrangement (buttons, facts column, key features, description). */
+  look?: StorefrontBuyBoxLook;
+  /** The stock line's words (the store's language); sold out is the checkout language's. */
+  stockWords?: { inStock: string; lowStock: string };
+  /** The sold-out view's words: a note and a link to similar items. */
+  soldOutCopy?: { note: string; similar: string };
   /** The description tabs sit in the buy box (classic, Dawn); false moves them below the fold. */
   details?: boolean;
   /** The key features show in the buy box or in "About this item": the tabs leave them out. */
@@ -70,29 +74,14 @@ const {
   quickBuyNotice = null,
   actionCopy: providedCopy = {},
   fulfilmentBadge = null,
-  look = null,
-  essentials = false,
+  look = CLASSIC_LOOK,
+  stockWords = { inStock: "In stock", lowStock: "Low stock" },
+  soldOutCopy = { note: "This item is sold out right now.", similar: "See similar items" },
   details = true,
   detailsFeatures = true,
 } = Astro.props;
 
-// A template's buy box: its reference type scale and buttons as CSS custom
-// properties read by the scoped rules below (none on classic).
-const lookStyle = look
-  ? [
-      `--bb-title-phone: ${look.title.size.phone}px`,
-      `--bb-title-desktop: ${look.title.size.desktop}px`,
-      `--bb-title-weight: ${look.title.weight}`,
-      `--bb-price-phone: ${look.price.size.phone}px`,
-      `--bb-price-desktop: ${look.price.size.desktop}px`,
-      `--bb-price-weight: ${look.price.weight}`,
-      `--bb-cta-height: ${look.cta.height}px`,
-      `--bb-cta-max: ${look.cta.maxWidth === null ? "none" : `${look.cta.maxWidth}px`}`,
-    ].join("; ")
-  : undefined;
-const factsColumn = look?.facts === "column";
-const factPills = look?.factPills === true;
-const plainDetails = details && look?.card === true;
+const factsColumn = look.facts === "column";
 const savedFacts = (product.attributes ?? []).filter((row) => row.name.trim() && row.value.trim() && row.name.trim().toLowerCase() !== "brand");
 const savedBrand = product.brand?.name?.trim();
 const compactFacts = factsColumn
@@ -149,6 +138,10 @@ const noScriptVariants = options.length > 0
   : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
 const stockAvailable = buyerStockSummary.tone === "available";
+const stockLabel = (text: string) => text === "In Stock" ? stockWords.inStock : text === "Low Stock" ? stockWords.lowStock : pageCopy.unavailableText;
+// Nothing is buyable: no quantity to choose, and a way to keep shopping instead of a dead end.
+const allSoldOut = variants.length > 0 && !buyerStockSummary.canPurchaseAny;
+const similarHref = category?.slug ? `/categories/${encodeURIComponent(category.slug)}` : "/search";
 
 const productPricing: ProductPricing = {
   basePrice: product.price,
@@ -238,18 +231,8 @@ function optionAriaLabel(
 <div
   class="lg:col-span-5 xl:col-span-6"
   data-product-summary
-  data-buy-box-look={look ? "" : undefined}
-  data-cta-shape={look?.cta.shape}
-  data-cta-layout={look?.cta.layout}
-  data-cta-phone-layout={look?.cta.phoneLayout}
-  data-cta-first={look?.cta.first}
-  data-quantity-inline={look?.cta.inlineQuantity ? "" : undefined}
-  data-price-tone={look?.price.tone}
-  data-buy-box-card={look?.card ? "" : undefined}
+  data-cta-layout={look.cta.layout}
   data-facts-column={factsColumn ? "" : undefined}
-  data-fact-pills={factPills ? "" : undefined}
-  data-essentials-buy-box={essentials ? "" : undefined}
-  style={lookStyle}
 >
   <div class="buy-box-body flex h-full flex-col">
     <div
@@ -259,6 +242,8 @@ function optionAriaLabel(
       data-unavailable-text={actionCopy.unavailableText}
       data-choose-option-text={actionCopy.chooseOptionText}
       data-quantity-limit-text={actionCopy.quantityLimitText}
+      data-stock-in-text={stockWords.inStock}
+      data-stock-low-text={stockWords.lowStock}
     >
     <div class="buy-box-main">
     <div class="mb-2 border-b border-border pb-2">
@@ -269,28 +254,18 @@ function optionAriaLabel(
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
       <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1">
         <div class="buy-box-price-fact">
-          {factPills && <span class="text-muted-foreground">Price:</span>}
-          <p class="product-price whitespace-nowrap text-xl font-semibold text-foreground lg:text-3xl" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
+          <p class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
             {showsStartingPrice
               ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
               : formatPrice(pricing.finalPrice)}
           </p>
         </div>
         <div class="buy-box-regular-fact">
-          {factPills && <span class="text-muted-foreground">Regular Price:</span>}
           <s class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
             {formatPrice(pricing.originalPrice)}
           </s>
         </div>
         <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
-        {factPills && (
-          <div id="product-stock-badge" class:list={["buy-box-fact-pill", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <span class="text-muted-foreground">Status:</span><span id="product-stock-text" class="font-semibold">{buyerStockSummary.text}</span>
-          </div>
-        )}
-        {factPills && fulfilmentBadge && <span class="buy-box-fact-pill" data-fulfilment-badge>{fulfilmentBadge}</span>}
-        {factPills && stableSku && <div class="buy-box-fact-pill"><span class="text-muted-foreground">Product Code:</span><span class="font-semibold">{stableSku}</span></div>}
-        {factPills && savedBrand && <div class="buy-box-fact-pill"><span class="text-muted-foreground">Brand:</span><span class="font-semibold">{savedBrand}</span></div>}
       </div>
       {bundleTiers.length > 0 ? (
         <ul class="mt-2 flex flex-wrap gap-1.5" data-product-bundles aria-label={bundleListLabel}>
@@ -303,10 +278,10 @@ function optionAriaLabel(
         </ul>
       ) : null}
       <slot name="after-price" />
-      {!factsColumn && !factPills && (
+      {!factsColumn && (
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -332,13 +307,13 @@ function optionAriaLabel(
 
     <div class="space-y-3 pt-1 lg:pt-2">
       <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
-        {initialUnavailableVariant ? `${unavailableLabel}: ${buyerStockSummary.text}` : ""}
+        {initialUnavailableVariant ? `${unavailableLabel}: ${stockLabel(buyerStockSummary.text)}` : ""}
       </div>
 
       {options.length > 0 && <div class="variant-option-panels">
         {options.map((option) => {
           const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
-          const optionPrices = new Map(option.values.flatMap((value) => {
+          const pricedOptions = new Map(option.values.flatMap((value) => {
             const variant = factsColumn
               ? pricedVariantForOption(variants, initialSelection, option.id, value.id, options.length)
               : null;
@@ -356,6 +331,8 @@ function optionAriaLabel(
               priceIncrementMinor,
             )] as const] : [];
           }));
+          // A price on each value only when the values are priced differently.
+          const optionPrices = new Set(pricedOptions.values()).size > 1 ? pricedOptions : new Map<string, number>();
           return (
             <div class="variant-option-panel">
               <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
@@ -457,13 +434,13 @@ function optionAriaLabel(
       {factsColumn && (
         <div class="flex flex-wrap items-center gap-2">
           <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
       )}
-      <div>
-        <label for="quantity" class:list={["mb-1 block text-sm font-medium text-foreground", look?.cta.inlineQuantity && "lg:sr-only"]}>{actionCopy.quantityLabelText}</label>
+      <div hidden={allSoldOut}>
+        <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
           <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
@@ -474,15 +451,19 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="buy-box-ctas flex gap-2 pt-1">
-        <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          {look?.cta.showBuyNow !== false && <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" />}<span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+        <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+          <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        {look?.cta.showBuyNow !== false && (
-          <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
-            <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
-          </button>
-        )}
+        <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+          <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
+        </button>
       </div>
+      {allSoldOut && (
+        <div class="space-y-2" data-product-sold-out>
+          <p class="text-sm text-muted-foreground">{soldOutCopy.note}</p>
+          <a href={similarHref} class="flex min-h-12 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{soldOutCopy.similar}</a>
+        </div>
+      )}
       {factsColumn && (
         <aside class="buy-box-facts">
           <slot name="after-actions" />
@@ -493,9 +474,8 @@ function optionAriaLabel(
     {!factsColumn && (
       <slot name="after-actions" />
     )}
-    {details && !plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} />}
+    {details && <ProductDetails product={product} features={detailsFeatures} />}
   </div>
-  {plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} plain />}
 </div>
 
 <style is:global>
@@ -546,244 +526,73 @@ function optionAriaLabel(
   /* Global, written as Astro scoped it: each `:not(.\#)` (always true) carries
      the weight of the scope attribute it replaces, so the cascade is unchanged
      and no element carries data-astro-cid-* (it repeated on every element). */
-  /* Template buy boxes (never classic): the reference type scale, button
-     shape, height, order and width, a bordered card, a facts column. */
+  /* The buy box has two arrangements. Settings choose how the buttons sit
+     (side by side, or stacked and full width). The marketplace box adds a
+     purchase column from 80rem; below that it reads as the classic box. */
   .buy-box-price-fact:not(.\#),
   .buy-box-regular-fact:not(.\#) {
     display: contents;
-  }
-  [data-fact-pills]:not(.\#) :is(.buy-box-price-fact, .buy-box-regular-fact, .buy-box-fact-pill):not(.\#) {
-    display: inline-flex;
-    max-width: 100%;
-    align-items: center;
-    gap: 0.25rem;
-    border-radius: 9999px;
-    background: var(--muted);
-    padding: 0.25rem 0.625rem;
-    font-size: 0.8125rem;
-    line-height: 1.25rem;
-  }
-  [data-fact-pills]:not(.\#) .buy-box-regular-fact:has(.product-original-price.hidden):not(.\#) {
-    display: none;
-  }
-  [data-buy-box-look][data-fact-pills]:not(.\#) .buy-box-main-price:not(.\#) .product-original-price:not(.\#) {
-    color: var(--foreground);
-    font-size: inherit;
-    font-weight: 600;
-    line-height: inherit;
-  }
-  [data-buy-box-look][data-fact-pills]:not(.\#) .buy-box-main-price:not(.\#) .product-original-price:not(.\#) {
-    text-decoration: none;
-  }
-  [data-buy-box-look]:not(.\#) h1:not(.\#) {
-    font-size: var(--bb-title-phone);
-    font-weight: var(--bb-title-weight);
-  }
-  [data-buy-box-look]:not(.\#) .product-price:not(.\#) {
-    font-size: var(--bb-price-phone);
-    font-weight: var(--bb-price-weight);
-  }
-  [data-buy-box-look][data-price-tone="primary"]:not(.\#) .product-price:not(.\#) {
-    color: var(--primary);
-  }
-  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) {
-    max-width: var(--bb-cta-max);
   }
   .buy-box-purchase:not(.\#) {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
-  [data-essentials-buy-box]:not(.\#) .buy-box-purchase:not(.\#) {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-items: end;
-    max-width: 380px;
-  }
-  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) {
-    display: contents;
-  }
-  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
-    grid-column: 2;
-  }
-  [data-essentials-buy-box]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
-    grid-column: 1 / -1;
-  }
-  [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
-    display: none;
-  }
-  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
-    min-height: var(--bb-cta-height);
-    font-size: 0.9375rem;
-  }
-  [data-buy-box-look]:not(.\#) .buy-box-ctas:not(.\#) > button:only-child:not(.\#) {
-    background: var(--primary);
-    color: var(--primary-foreground);
-  }
-  [data-cta-shape="pill"]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
-    border-radius: 9999px;
+  .buy-box-ctas:not(.\#) > button:not(.\#) {
+    font-size: var(--theme-text-sm, 0.875rem);
   }
   [data-cta-layout="stack"]:not(.\#) .buy-box-ctas:not(.\#) {
     flex-direction: column;
   }
-  @media (max-width: 39.999rem) {
-    [data-cta-phone-layout="row"]:not(.\#) .buy-box-ctas:not(.\#) {
-      flex-direction: row;
-    }
-  }
-  [data-cta-first="buy-now"]:not(.\#) .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
-    order: -1;
-  }
   .variant-option-panels:not(.\#) > *:not(.\#) + *:not(.\#) {
     margin-top: 0.75rem;
   }
-  [data-product-summary][data-facts-column] .variant-option-btn:not(.\#) {
-    flex-direction: column;
-    align-items: flex-start;
-    height: auto;
-    min-height: 2.75rem;
-    text-align: start;
+  [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
+    display: none;
   }
   [data-option-price]:not([hidden]):not(.\#) {
     font-size: 0.75rem;
     font-weight: 700;
-  }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panel:not(.\#) {
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem 1rem;
-  }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-btn:not(.\#) {
-    border-radius: 9999px;
-    max-width: 100%;
-    height: auto;
-    min-height: 2.75rem;
-    overflow-wrap: anywhere;
-    text-align: center;
-  }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-values[data-option-overflow]:not(.\#) {
-    max-height: 12rem;
-    overflow-y: auto;
-    padding: 2px;
-  }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) #quantity-minus:not(.\#) {
-    border-radius: 9999px 0 0 9999px;
-  }
-  [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) #quantity-plus:not(.\#) {
-    border-radius: 0 9999px 9999px 0;
-  }
-  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
-    order: -2;
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accent-foreground);
-  }
-  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="buy-now"]:not(.\#) {
-    border-color: var(--primary);
-    background: var(--primary);
-    color: var(--primary-foreground);
-  }
-  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > button:hover:not(:disabled):not(.\#) {
-    filter: brightness(0.95);
-  }
-  [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > button:disabled:not(.\#) {
-    border-color: var(--border);
-    background: var(--muted);
-    color: var(--muted-foreground);
-  }
-  [data-product-summary][data-facts-column][data-price-tone] .purchase-price:not(.\#) {
-    color: var(--foreground);
-    font-size: 1.5rem;
-  }
-  [data-buy-box-card]:not(.\#) > .buy-box-body:not(.\#) {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem;
-    height: auto;
-  }
-  @media (min-width: 64rem) {
-    [data-quantity-inline]:not(.\#) .buy-box-purchase:not(.\#) {
-      display: grid;
-      grid-template-columns: 140px minmax(0, 1fr);
-      align-items: end;
-      gap: 8px;
-      max-width: calc(148px + var(--bb-cta-max));
-    }
-    [data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) {
-      width: 100%;
-      padding-top: 0;
-    }
-    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-purchase:not(.\#) {
-      display: flex;
-      flex-flow: row wrap;
-      align-items: flex-end;
-      gap: 8px;
-      max-width: 100%;
-    }
-    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) {
-      flex: 0 1 auto;
-      width: max-content;
-      max-width: calc(100% - 148px);
-    }
-    [data-buy-box-card][data-quantity-inline]:not(.\#) .buy-box-ctas:not(.\#) > button:not(.\#) {
-      min-width: 115px;
-      overflow-wrap: anywhere;
-    }
-    [data-quantity-inline]:not(.\#) #quantity-minus:not(.\#),
-    [data-quantity-inline]:not(.\#) #quantity-plus:not(.\#),
-    [data-quantity-inline]:not(.\#) #quantity:not(.\#) {
-      height: 45px;
-    }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1rem;
-    }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) > *:not(.\#) + *:not(.\#) {
-      margin-top: 0;
-    }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .variant-option-panels:not(.\#) > :only-child:not(.\#) {
-      grid-column: 1 / -1;
-    }
-    [data-cta-layout="stack"][data-cta-phone-layout="row"]:not(.\#) .buy-box-ctas:not(.\#) {
-      flex-direction: row;
-      max-width: none;
-    }
-    [data-buy-box-look]:not(.\#) h1:not(.\#) {
-      font-size: var(--bb-title-desktop);
-    }
-    [data-buy-box-look]:not(.\#) .product-price:not(.\#) {
-      font-size: var(--bb-price-desktop);
-    }
-    [data-buy-box-card]:not(.\#) > .buy-box-body:not(.\#) {
-      padding: 1.5rem;
-    }
-  }
-  @media (max-width: 63.999rem) {
-    [data-product-summary][data-facts-column] .buy-box-title:not(.\#),
-    [data-product-summary][data-facts-column] .buy-box-main-price:not(.\#) {
-      display: none;
-    }
-    [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
-      display: block;
-    }
   }
   /* Keep the variant selectors in the detail column while the existing form,
      quantity buttons, purchase buttons and delivery facts share one card. */
   @media (min-width: 80rem) {
     [data-product-summary][data-facts-column] #product-actions:not(.\#) {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 15.25rem;
+      grid-template-columns: minmax(0, 1fr) 17.5rem;
       gap: 1.5rem;
       align-items: start;
     }
     [data-product-summary][data-facts-column] .buy-box-purchase:not(.\#) {
       border: 1px solid var(--border);
-      border-radius: 0.5rem;
+      border-radius: var(--radius);
       padding: 1rem;
     }
     [data-product-summary][data-facts-column] .purchase-price:not(.\#) {
       display: block;
+      color: var(--foreground);
+      font-size: var(--theme-text-2xl, 1.5rem);
+      font-weight: 700;
+    }
+    [data-product-summary][data-facts-column] .variant-option-btn:not(.\#) {
+      flex-direction: column;
+      align-items: flex-start;
+      height: auto;
+      min-height: 2.75rem;
+      text-align: start;
+    }
+    [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) {
+      flex-direction: column;
+    }
+    [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > [data-action="add-to-cart"]:not(.\#) {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-foreground);
+    }
+    [data-product-summary][data-facts-column] .buy-box-ctas:not(.\#) > button:disabled:not(.\#) {
+      border-color: var(--border);
+      background: var(--muted);
+      color: var(--muted-foreground);
     }
   }
 </style>

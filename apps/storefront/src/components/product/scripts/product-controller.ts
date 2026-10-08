@@ -368,6 +368,8 @@ function updateOptionButtons() {
         const variant = pricedVariantForOption(state.variants, state.selection, option.id, value.id, state.options.length);
         if (variant?.discountedPrice != null) optionPrices.set(value.id, variant.discountedPrice);
       }
+      // A price on each value only when the values are priced differently.
+      if (new Set(optionPrices.values()).size <= 1) optionPrices.clear();
     }
     for (const button of buttons) {
       const valueId = button.dataset.optionValueId!;
@@ -466,7 +468,13 @@ function updateStockAndActions() {
     cache.stockBadge.classList.toggle("text-primary", summary.tone === "available");
     cache.stockBadge.classList.toggle("text-destructive", summary.tone !== "available");
   }
-  if (cache.stockText) cache.stockText.textContent = summary.text;
+  if (cache.stockText) {
+    // The stock line speaks the store's language: sold out is the button's own word.
+    cache.stockText.textContent =
+      summary.text === "In Stock" ? copy?.stockInText || summary.text
+        : summary.text === "Low Stock" ? copy?.stockLowText || summary.text
+          : copy?.unavailableText || summary.text;
+  }
   setButton(
     cache.addButton,
     cache.addLabel,

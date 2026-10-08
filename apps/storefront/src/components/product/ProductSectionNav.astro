@@ -1,6 +1,6 @@
 ---
 // The product page's anchor bar (theme `product.sticky`: `phoneTop` and
-// `desktop` `anchor-bar`): Top, Details, Explore and Reviews stay pinned
+// `desktop` `anchor-bar`): Top, Details, Similar and Reviews stay pinned
 // under the header while the product's real below-fold sections pass
 // underneath (Amazon and Daraz on phones, Star Tech on computers). Every
 // link remains a native anchor; the script only marks the current section.
@@ -19,7 +19,7 @@ interface Props {
 const { detailsId = null, exploreId = null, reviewsId = null, phone = true, desktop = false } = Astro.props;
 const links = [
   detailsId && { id: detailsId, label: "Details" },
-  exploreId && { id: exploreId, label: "Explore" },
+  exploreId && { id: exploreId, label: "Similar" },
   reviewsId && { id: reviewsId, label: "Reviews" },
 ].filter((link): link is { id: string; label: string } => Boolean(link));
 ---

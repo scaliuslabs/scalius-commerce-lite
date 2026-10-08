@@ -5,6 +5,7 @@
 // A new document version adds one entry to THEME_UPGRADES.
 import { z } from "zod";
 import { STOREFRONT_BLOCK_REGISTRY } from "./blocks";
+import { retireProductPageChoices } from "./retired-product-blocks";
 import { STOREFRONT_SECTION_REGISTRY } from "./sections";
 import {
   STOREFRONT_THEME_COLOR_KEYS,
@@ -382,6 +383,8 @@ function withTightenedBounds(doc: Record<string, unknown>): Record<string, unkno
   // WCAG 2.5.8 target size: filter rows are at least 24 px apart (was 16).
   if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
   withReadableSaleColour(doc);
+  // Product-page and listing choices the redesign removed read as their replacements.
+  retireProductPageChoices(doc);
   return doc;
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_BLOCK_REGISTRY, STOREFRONT_MARKETPLACE_BUY_BOX_LOOK } from "@scalius/shared/storefront-theme";
+
+// A classic buy box with these settings (the one box; its arrangement is all that differs).
+const classic = (settings: Record<string, unknown> = {}) =>
+  STOREFRONT_BLOCK_REGISTRY.buyBox.classic.renders({ ...STOREFRONT_BLOCK_REGISTRY.buyBox.classic.defaults, ...settings } as never).look;
 import type { Product } from "@/lib/api";
 import {
   buyBoxFeatures,
@@ -58,22 +62,22 @@ describe("modules from data the page already has", () => {
 describe("product page modules", () => {
   it("keeps classic's order and leaves the description in the buy box", () => {
     const modules = productPageModules(["description", "reviews", "related"], product({ reviews: {} as Product["reviews"] }), {
-      look: null,
+      look: classic(),
       hasRelated: true,
     });
     expect(modules).toEqual(["reviews", "related"]);
-    expect(descriptionInInfoColumn(null)).toBe(true);
+    expect(descriptionInInfoColumn(classic())).toBe(true);
   });
 
-  it("keeps fashion description beside the gallery without a duplicate below", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.fashion;
+  it("keeps the description beside the gallery without a duplicate below", () => {
+    const look = classic({ cta: "stack" });
     expect(descriptionInInfoColumn(look)).toBe(true);
     expect(productPageModules(["description", "related"], product(), { look, hasRelated: true })).toEqual(["related"]);
   });
 
   it("follows the template list and drops modules this product has no data for", () => {
     const below = ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "related"] as const;
-    const look = STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"];
+    const look = STOREFRONT_MARKETPLACE_BUY_BOX_LOOK;
     expect(productPageModules(below, product(), { look, hasRelated: false })).toEqual([
       "about-bullets", "key-attributes", "spec-table", "description",
     ]);
@@ -83,15 +87,15 @@ describe("product page modules", () => {
   });
 
   it("shows key features once: in a buy box that lists them, never again below", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.retail;
+    const look = classic({ cta: "stack", features: true, details: "below" });
     const modules = productPageModules(["about-bullets", "description"], product(), { look, hasRelated: false });
     expect(modules).toEqual(["description"]);
     expect(featuresPlacement(modules, look)).toBe("buy-box");
-    expect(featuresPlacement(["description"], null)).toBe("description");
+    expect(featuresPlacement(["description"], classic())).toBe("description");
   });
 
   it("puts department-mall's saved highlights in the buy box", () => {
-    const look = STOREFRONT_BUY_BOX_LOOKS.mall;
+    const look = classic({ features: true, details: "below" });
     expect(look.features).toBe("list");
     const modules = productPageModules(["description", "reviews", "related"], product(), { look, hasRelated: false });
     expect(featuresPlacement(modules, look)).toBe("buy-box");
@@ -112,7 +116,7 @@ describe("product page modules", () => {
     ];
     expect(publicSpecificationRows(rows).map((row) => row.name)).toEqual(["Memory"]);
     expect(productPageModules(["key-attributes", "spec-table"], product({ attributes: rows.slice(0, 2) }), {
-      look: STOREFRONT_BUY_BOX_LOOKS.spec,
+      look: classic({ features: true, details: "below" }),
       hasRelated: false,
     })).toEqual([]);
   });

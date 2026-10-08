@@ -26,6 +26,9 @@ interface Props {
   initialProductMediaId?: string | null;
   /** "Play video: {title}" in the store's language. */
   playVideoLabel?: string;
+  /** The words of the computer zoom button, and of the stacked list's "show all" control. */
+  zoomLabel?: string;
+  showAllLabel?: (count: number) => string;
 }
 
 const {
@@ -34,6 +37,8 @@ const {
   layout = { gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null },
   initialProductMediaId = null,
   playVideoLabel = "Play video: {title}",
+  zoomLabel = "Zoom photo",
+  showAllLabel = (count: number) => `Show all photos (${count})`,
 } = Astro.props;
 const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
@@ -110,6 +115,9 @@ const listMedia =
       ? [initialMedia, ...galleryItems.filter((entry) => entry !== initialMedia)]
       : [];
 const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
+// A long list shows its first photos; the rest open with one control (no script).
+const LIST_VISIBLE = 6;
+const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
 ---
 
 <div
@@ -214,11 +222,15 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
                 aria-hidden="true"
               >
               </div>
-              <div
-                class="pointer-events-none absolute inset-e-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+              {/* The keyboard (and touch) way in to the zoom view: hover alone reached nobody else. */}
+              <button
+                type="button"
+                data-zoom-trigger
+                class="gallery-zoom-trigger absolute inset-e-3 bottom-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-reduce:transition-none"
+                aria-label={zoomLabel}
               >
-                Zoom
-              </div>
+                <Icon name="maximize-2" class="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           </div>
 
@@ -478,6 +490,9 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
     }
   </div>
 
+  {listMedia.length > 0 && listHidden > 0 && (
+    <input type="checkbox" id="gallery-show-all" class="gallery-show-all peer sr-only" aria-label={showAllLabel(listMedia.length)} />
+  )}
   {listMedia.length > 0 && (
     <ul class="gallery-list hidden gap-2 lg:grid" aria-label="Product media">
       {listMedia.map((entry, index) => {
@@ -485,7 +500,7 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
           ? responsiveImageSources(entry.url, mainSlot)
           : null;
         return (
-          <li class="relative aspect-square w-full overflow-hidden rounded-xl bg-muted" style={stageStyle}>
+          <li class:list={["relative aspect-square w-full overflow-hidden rounded-xl bg-muted", index >= LIST_VISIBLE && "gallery-extra"]} style={stageStyle}>
             {sources ? (
               <img
                 src={sources.src}
@@ -513,6 +528,11 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
         );
       })}
     </ul>
+  )}
+  {listMedia.length > 0 && listHidden > 0 && (
+    <label for="gallery-show-all" class="gallery-show-all-label hidden min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground lg:flex">
+      {showAllLabel(listMedia.length)}
+    </label>
   )}
 
   <div
@@ -738,6 +758,25 @@ const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
     }
     [data-gallery="grid"]:not(.\#) .gallery-list:not(.\#) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    [data-gallery="grid"]:not(.\#) .gallery-list:not(.\#) > li:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+    .gallery-list:not(.\#) .gallery-extra:not(.\#) {
+      display: none;
+    }
+    .gallery-show-all:checked:not(.\#) ~ .gallery-list:not(.\#) .gallery-extra:not(.\#) {
+      display: block;
+    }
+    .gallery-show-all:checked:not(.\#) ~ .gallery-show-all-label:not(.\#) {
+      display: none;
+    }
+    .gallery-show-all:focus-visible:not(.\#) ~ .gallery-show-all-label:not(.\#) {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+    .gallery-list:not(.\#) + .gallery-show-all-label:not(.\#) {
+      margin-top: 0.5rem;
     }
   }
   @media (max-width: 1023px) {
