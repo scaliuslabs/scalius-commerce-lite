@@ -1216,20 +1216,15 @@
           "version": {
             "type": "number",
             "enum": [
-              8
+              9
             ]
           },
           "template": {
             "type": "string",
             "enum": [
-              "boutique",
-              "heritage-editorial",
-              "fashion-value",
-              "spec-catalogue",
-              "rounded-tech",
-              "marketplace",
-              "mass-retail",
               "department-mall",
+              "boutique",
+              "marketplace",
               "daily-essentials",
               "showcase-landing"
             ]
@@ -2205,272 +2200,32 @@
                       "settings": {
                         "type": "object",
                         "properties": {
-                          "hoverImage": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "hoverImage"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "boutique"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "hoverImage": {
-                            "type": "boolean"
+                          "facts": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "key-specs",
+                              "swatches",
+                              "delivery"
+                            ]
                           },
-                          "quickAction": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "hoverImage"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "showcase"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "portrait"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "quick-add",
+                              "full"
+                            ]
+                          },
                           "hoverImage": {
                             "type": "boolean"
                           }
                         },
                         "required": [
+                          "facts",
+                          "action",
                           "hoverImage"
                         ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "fashion-value"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "spec"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "tech-rounded"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "retail"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "quickAction": {
-                            "type": "boolean"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "marketplace"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "quick-add"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "fullAction": {
-                            "type": "boolean"
-                          },
-                          "showBuyNow": {
-                            "type": "boolean"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "mall"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "detailed"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
                         "additionalProperties": false
                       }
                     },
