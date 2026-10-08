@@ -144,8 +144,13 @@ export type ProductDraftReader = () => {
   /** The draft as it stands (for the three-way merge). */
   values: ProductFormValues;
   prepareSectionsRebase: ReturnType<typeof useProductSections>["prepareRebase"];
-  /** Puts the latest saved values under the draft; `keep` names the changed fields to keep (all by default). */
-  rebase: (latest: ProductFormValues, keep?: ReadonlyArray<keyof ProductFormValues>) => void;
+  /**
+   * Puts the latest saved values under the draft; `keep` names the changed
+   * fields to keep (all by default). `restore` sets fields the draft did not
+   * change back to a value, as unsaved changes (a coupled group the merchant
+   * kept whole: the other save's part of it is undone too).
+   */
+  rebase: (latest: ProductFormValues, keep?: ReadonlyArray<keyof ProductFormValues>, restore?: Partial<ProductFormValues>) => void;
 };
 
 /** The one product page: add, edit, or view (without products.edit). */
@@ -280,13 +285,16 @@ function ProductEditor({
       changedSections: sections.dirtyHandles().map((handle) => handle.label),
       prepareSectionsRebase: sections.prepareRebase,
       values: form.getValues(),
-      rebase: (latest, keep) => {
+      rebase: (latest, keep, restore) => {
         const values = form.getValues();
         const changed = Object.keys(form.formState.dirtyFields) as Array<keyof ProductFormValues>;
         form.reset({ ...form.formState.defaultValues, ...latest });
         for (const key of changed) {
           if (keep && !keep.includes(key)) continue;
           form.setValue(key, values[key] as never, { shouldDirty: true });
+        }
+        for (const [key, value] of Object.entries(restore ?? {}) as Array<[keyof ProductFormValues, unknown]>) {
+          if (!changed.includes(key)) form.setValue(key, value as never, { shouldDirty: true });
         }
       },
       changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)
