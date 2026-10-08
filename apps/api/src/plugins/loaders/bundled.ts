@@ -35,6 +35,8 @@ const BRIDGE_METHODS = [
   "messagingEmail",
   "messagingSms",
   "messagingNotifyStaff",
+  "messagingPush",
+  "timelineAdd",
 ] as const satisfies ReadonlyArray<keyof PluginBridgeApi>;
 
 /** The in-process adapter: the host class behind an RPC-shaped, copy-in/copy-out facade. */

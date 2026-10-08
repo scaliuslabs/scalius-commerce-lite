@@ -507,6 +507,26 @@ export const PERMISSION_METADATA: Record<
     isSensitive: false,
   },
 
+  // Metaobjects
+  [PERMISSIONS.METAOBJECTS_VIEW]: {
+    name: PERMISSIONS.METAOBJECTS_VIEW,
+    displayName: "View Content Types",
+    description: "View content types (metaobjects) and their entries",
+    resource: "metaobjects",
+    action: "view",
+    category: "Pages",
+    isSensitive: false,
+  },
+  [PERMISSIONS.METAOBJECTS_EDIT]: {
+    name: PERMISSIONS.METAOBJECTS_EDIT,
+    displayName: "Edit Content Types",
+    description: "Create, change and delete content types and their entries",
+    resource: "metaobjects",
+    action: "edit",
+    category: "Pages",
+    isSensitive: false,
+  },
+
   // Media
   [PERMISSIONS.MEDIA_VIEW]: {
     name: PERMISSIONS.MEDIA_VIEW,

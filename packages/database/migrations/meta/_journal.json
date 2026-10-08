@@ -883,6 +883,13 @@
       "when": 1791408890563,
       "tag": "0125_plugin_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "6",
+      "when": 1791431265589,
+      "tag": "0126_plugin_seams",
+      "breakpoints": true
     }
   ]
 }

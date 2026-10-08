@@ -98,8 +98,9 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `markets` | Markets, their countries and URL presences, the presence matrix, the backup market's price increment and the store pricing currency, an order's market |
 | `media` | The Files library: uploads, usage index, permanent delete |
 | `media-references` | Stored-file key and URL projection, deleting-reference guard |
+| `metaobjects` | Content types (merchant and app) and their entries, the storefront section read |
 | `navigation` | Menus, publications, placements |
-| `notifications` | Channel rules and templates, order notification outbox, delivery receipts, provider health |
+| `notifications` | Channel rules and templates, order notification outbox, delivery receipts, provider health, Web Push subscriptions and delivery |
 | `order-kernel` | What every order writer shares: state machine, shipment claim lease, payment-session and refund-attempt locks, app facts |
 | `orders` | The order record: lists, manual orders, edits, status lifecycle, app holds, returns, invoices, receipts, payment recovery, account orders |
 | `pages` | CMS pages, articles, store policy pages |
@@ -132,7 +133,7 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 166 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
+The allowlist holds 169 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
 
 ```text
 L11  agent-storefront
@@ -143,7 +144,7 @@ L7   customer-marketing · payments · reviews
 L6   navigation · notifications
 L5   catalog · delivery · digital · product-admin
 L4   brands · categories · inventory · pages · price-lists · promotions · sales-channels
-L3   custom-fields · onboarding · products · tax
+L3   custom-fields · metaobjects · onboarding · products · tax
 L2   customers · markets · media · platform
 L1   plugins · settings
 L0   agent-access · attributes · collections · events · fraud-checker

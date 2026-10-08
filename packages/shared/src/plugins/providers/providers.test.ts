@@ -279,6 +279,40 @@ describe("provider declarations", () => {
     expect(parsed.ok && parsed.manifest.providers.map((provider) => provider.kind)).toEqual(["sms", "courier"]);
   });
 
+  it("declares the service ports: chat channels, address countries, and a stored chat provider re-parses as chat", () => {
+    const first = parsePluginManifest({
+      ...manifest,
+      providers: {
+        messaging: [{ id: "wa", name: "WhatsApp", channels: ["whatsapp", "messenger"], operations: ["deliveryStatus"] }],
+        push: [{ id: "push", name: "Push" }],
+        search: [{ id: "search", name: "Search" }],
+        address: [{ id: "places", name: "Places", countries: ["BD"] }],
+        fx: [{ id: "rates", name: "Rates", operations: ["testConnection"] }],
+        identity: [{ id: "google", name: "Google" }],
+      },
+    });
+    if (!first.ok) throw new Error(first.issues.map((issue) => issue.message).join("; "));
+    expect(first.manifest.providers.map((provider) => provider.kind)).toEqual(["messaging", "push", "search", "address", "fx", "identity"]);
+    const again = parsePluginManifest(JSON.parse(JSON.stringify(first.manifest)));
+    expect(again.ok && again.manifest.providers).toEqual(first.manifest.providers);
+    expect(parsePluginManifest({ ...manifest, providers: { messaging: [{ id: "wa", name: "WhatsApp" }] } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, providers: { messaging: [{ id: "wa", name: "WhatsApp", channels: ["fax"] }] } }).ok).toBe(false);
+  });
+
+  it("takes a chat message as text or a template, never both, and FX rates as exact decimals", () => {
+    const send = PROVIDER_PORTS.messaging.send.input;
+    expect(send.safeParse({ channel: "whatsapp", to: "+8801711111111", text: "Hi" }).success).toBe(true);
+    expect(send.safeParse({ channel: "whatsapp", to: "+8801711111111", template: { name: "order_update", language: "en_US", parameters: ["A"] } }).success).toBe(true);
+    expect(send.safeParse({ channel: "whatsapp", to: "+8801711111111" }).success).toBe(false);
+    expect(send.safeParse({ channel: "whatsapp", to: "+8801711111111", text: "Hi", template: { name: "x", language: "en" } }).success).toBe(false);
+    const rates = PROVIDER_PORTS.fx.rates.output;
+    expect(rates.safeParse({ rates: [{ currency: "USD", rate: "0.0084" }] }).success).toBe(true);
+    for (const rate of ["0", "-1", "1e3", "0.000", "1.2.3", 1.2]) {
+      expect(rates.safeParse({ rates: [{ currency: "USD", rate }] }).success).toBe(false);
+    }
+    expect(PROVIDER_PORTS.push.send.input.safeParse({ audience: "customer", recipients: ["cus_1"], notification: { title: "Shipped", url: "//evil.example" } }).success).toBe(false);
+  });
+
   it("requires what checkout and reconciliation rely on", () => {
     const wallet = { id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"] };
     const parses = (payment: unknown) => parsePluginManifest({ ...manifest, providers: { payment: [payment] } }).ok;

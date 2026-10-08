@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(187);
+      expect(d1Tables).toHaveLength(191);
+      // 0126: metaobjects, Web Push subscriptions and buyer identities.
+      for (const table of ["metaobject_definitions", "metaobject_entries", "push_subscriptions", "customer_identities"]) expect(d1Tables).toContain(table);
       // 0125: the data updates each app ran.
       expect(d1Tables).toContain("plugin_migrations");
       // 0124: the draft a theme restore or discard replaced.

@@ -9,7 +9,7 @@
 // block anyone from signing in.
 
 import { nanoid } from "nanoid";
-import { customerAddresses, customers, customerSessions, firstCustomerAddressId, orders } from "@scalius/database/schema";
+import { customerAddresses, customerIdentities, customers, customerSessions, firstCustomerAddressId, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -37,6 +37,7 @@ import {
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { isQualifiedProviderId, type IdentityExchangeOutput } from "@scalius/shared/plugins/providers";
 import {
     newAccountPhoneNeed,
     phoneOrNull,
@@ -586,6 +587,149 @@ export async function verifyOtp(
 
     const session = await createSessionForCustomer(db, row, address, input.sessionHashKey, statements);
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, address), isNewUser };
+}
+
+/** What `signInWithIdentity` takes: the app provider and the facts its `exchange` verified. */
+export interface IdentitySignInInput {
+    /** The app provider id (`<plugin id>:<provider id>`). */
+    providerId: string;
+    facts: Pick<IdentityExchangeOutput, "subject" | "email" | "emailVerified" | "phone" | "phoneVerified" | "name">;
+    sessionHashKey?: string;
+}
+
+export type IdentitySignInResult =
+    | {
+        /** A new account needs details the provider did not verify: the buyer uses the normal sign-in page. */
+        status: "needs_account_details";
+    }
+    | {
+        status: "signed_in";
+        session: CustomerSession;
+        customer: CustomerAuthProfile;
+        isNewUser: boolean;
+        /** `known`: the provider's subject was seen before; `linked`: a verified email/phone proved an existing account; `created`: a new account. */
+        via: "known" | "linked" | "created";
+    };
+
+/**
+ * Signs a buyer in with a verified identity from an app provider ("Continue
+ * with Google"). The provider's facts are trusted only as far as the provider
+ * verified them:
+ * - a known `(provider, subject)` signs in its customer;
+ * - else a VERIFIED email (then phone) that proves an existing account links
+ *   the identity to it and counts as that contact's proof;
+ * - else a new account, when the store's customer accounts policy accepts it
+ *   from the verified facts (a name, the email or phone the policy requires);
+ *   otherwise the buyer is asked for details on the normal sign-in page.
+ * An unverified email or phone never links an account and never creates one.
+ * The identity row, the proof and the session commit in one batch.
+ *
+ * @throws {ValidationError} for a closed account or a malformed provider id
+ */
+export async function signInWithIdentity(
+    db: Database,
+    input: IdentitySignInInput,
+): Promise<IdentitySignInResult> {
+    const subject = input.facts.subject.trim();
+    if (!isQualifiedProviderId(input.providerId) || !subject || subject.length > 255) {
+        throw new ValidationError("This way of signing in isn't available.");
+    }
+    const closed = () => new ValidationError("This account was closed. Contact the store to restore it.");
+    const now = new Date();
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    const identityRow = (customerId: string) => db.insert(customerIdentities).values({
+        providerId: input.providerId,
+        subject,
+        customerId,
+        createdAt: nowSeconds,
+        lastUsedAt: nowSeconds,
+    }) as SQLiteBatchItem;
+
+    const known = await db
+        .select({ customer: customers, address: customerAddresses })
+        .from(customerIdentities)
+        .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
+        .leftJoin(customerAddresses, joinDefaultAddress)
+        .where(and(eq(customerIdentities.providerId, input.providerId), eq(customerIdentities.subject, subject)))
+        .get();
+    if (known) {
+        if (known.customer.deletedAt) throw closed();
+        const row: CustomerRow = { ...known.customer, lastAuthenticatedAt: now };
+        const session = await createSessionForCustomer(db, row, known.address, input.sessionHashKey, [
+            db.update(customers)
+                .set({ lastAuthenticatedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                .where(eq(customers.id, row.id)) as SQLiteBatchItem,
+            db.update(customerIdentities)
+                .set({ lastUsedAt: nowSeconds })
+                .where(and(eq(customerIdentities.providerId, input.providerId), eq(customerIdentities.subject, subject))) as SQLiteBatchItem,
+        ]);
+        return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, known.address), isNewUser: false, via: "known" };
+    }
+
+    // Only what the provider verified counts; the rest is ignored.
+    const email = input.facts.emailVerified && input.facts.email && isValidEmailAddress(input.facts.email)
+        ? input.facts.email.trim().toLowerCase()
+        : null;
+    let phone: string | null = null;
+    if (input.facts.phoneVerified && input.facts.phone) {
+        try {
+            phone = validateAndFormatPhone(input.facts.phone);
+        } catch {
+            phone = null;
+        }
+    }
+
+    const candidates: Array<{ method: "email" | "phone"; identifier: string }> = [];
+    if (email) candidates.push({ method: "email", identifier: email });
+    if (phone) candidates.push({ method: "phone", identifier: phone });
+    for (const { method, identifier } of candidates) {
+        const owner = await resolveProofOwner(db, method, identifier);
+        if (owner.kind === "deleted") throw closed();
+        if (owner.kind !== "account") continue;
+        const row = markProven(owner.row, method, now);
+        const session = await createSessionForCustomer(db, row, owner.address, input.sessionHashKey, [
+            db.update(customers).set(proofUpdate(method)).where(eq(customers.id, row.id)) as SQLiteBatchItem,
+            identityRow(row.id),
+        ]);
+        return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, owner.address), isNewUser: false, via: "linked" };
+    }
+
+    // A new account: the same rules as a code sign-up, from verified facts only.
+    const name = input.facts.name?.trim();
+    const method: "email" | "phone" | null = email ? "email" : phone ? "phone" : null;
+    if (!name || !method) return { status: "needs_account_details" };
+    const { identity, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    let accountPhone: string | null = null;
+    if (phone) {
+        try {
+            accountPhone = validateAndFormatPhone(phone, phoneCountryPolicy);
+        } catch {
+            accountPhone = null;
+        }
+    }
+    if (!email && identity.email === "required") return { status: "needs_account_details" };
+    if (!accountPhone && newAccountPhoneNeed(identity, method) === "required") return { status: "needs_account_details" };
+
+    const values: CustomerInsertRow = {
+        id: `cust_${nanoid()}`,
+        name,
+        email,
+        phone: storedPhone(accountPhone),
+        origin: "account",
+        accountClaimedAt: now,
+        lastAuthenticatedAt: now,
+        emailVerifiedAt: email ? now : null,
+        phoneVerifiedAt: accountPhone ? now : null,
+        createdAt: now,
+        updatedAt: now,
+    };
+    const row = { totalOrders: 0, lastOrderAt: null, deletedAt: null, ...values } as CustomerRow;
+    const session = await createSessionForCustomer(db, row, null, input.sessionHashKey, [
+        db.insert(customers).values(values) as SQLiteBatchItem,
+        signedUpHistory(db, { accountId: row.id, via: method }) as SQLiteBatchItem,
+        identityRow(row.id),
+    ]);
+    return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, null), isNewUser: true, via: "created" };
 }
 
 /**

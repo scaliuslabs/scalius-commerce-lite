@@ -656,7 +656,10 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt, {
           nightly: isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env)),
         }));
-      const { bundled, cron } = plugins;
+      const { bundled, cron, fx } = plugins;
+      if (fx && fx.markets > 0) {
+        console.log(`[scheduled] Market FX refresh: markets=${fx.markets}, changed=${fx.changed}, failed=${fx.failed}`);
+      }
       if (bundled.installed.length > 0 || bundled.updated.length > 0 || bundled.failed.length > 0 || cron.due > 0 || cron.expired > 0) {
         console.log(
           `[scheduled] Plugins: installed=${bundled.installed.length}, updated=${bundled.updated.length}, ` +

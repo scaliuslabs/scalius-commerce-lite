@@ -53,7 +53,11 @@ export function getSetCookieHeaderValues(headers: Headers): string[] {
 }
 
 export function rewriteCustomerAuthSetCookie(cookie: string): string {
-  const withoutDomain = cookie.replace(/;\s*Domain=[^;]*/gi, "");
+  // The proxy serves the API's /api/v1/customer-auth/* at /api/customer-auth/*:
+  // a cookie scoped to the API path (the "Continue with" state) follows it.
+  const withoutDomain = cookie
+    .replace(/;\s*Domain=[^;]*/gi, "")
+    .replace(/;\s*Path=\/api\/v1\/customer-auth(?=\/|;|$)/i, "; Path=/api/customer-auth");
   if (/;\s*SameSite=/i.test(withoutDomain)) {
     return withoutDomain.replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
   }

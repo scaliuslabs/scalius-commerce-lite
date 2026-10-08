@@ -32,6 +32,7 @@ import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
+import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
@@ -61,10 +62,11 @@ const listRoute = createRoute({
             sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.string().optional().default("desc").openapi({ description: "Sort order" }),
             ...customerListFilterQuery,
+            ...appListQuerySchema,
         })
     },
     responses: {
-        200: { description: "Cursor-paginated customer list with a capped total", content: { "application/json": { schema: keysetPaginatedEnvelope("customers", customerSummarySchema) } } },
+        200: { description: "Cursor-paginated customer list with a capped total", content: { "application/json": { schema: keysetPaginatedEnvelope("customers", customerSummarySchema, { appValues: appListValuesSchema }) } } },
         ...errorResponses,
     }
 });
@@ -142,7 +144,10 @@ const customerHistoryPayloadSchema = z.object({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const q = c.req.valid("query");
+    // App columns and filters: nothing more is read unless the request names some.
+    const appList = await planAppList(db, "customer", customers.id, q);
     const result = await listCustomers(db, {
+        appCondition: appList.condition,
         page: q.page,
         limit: q.limit,
         after: q.after,
@@ -153,7 +158,8 @@ app.openapi(listRoute, async (c) => {
         order: q.order as "asc" | "desc" | undefined,
         filters: await customerListFiltersFromQuery(db, q),
     });
-    return ok(c, result);
+    const appValues = await appList.values(result.customers.map((customer) => customer.id));
+    return ok(c, { ...result, ...(appValues ? { appValues } : {}) });
 });
 
 // ── Create Customer ──

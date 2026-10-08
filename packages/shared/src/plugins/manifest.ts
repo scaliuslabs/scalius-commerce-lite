@@ -12,6 +12,8 @@ import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { PLUGIN_SETTING_KEY, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
+import { PLUGIN_BLOCK_TARGETS } from "./storefront";
+import { metaobjectDefinitionInputSchema } from "../metaobjects";
 import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
@@ -60,6 +62,8 @@ const description = z.string().trim().min(1).max(500);
 
 /** Synchronous decision points: pure input → output, strict limits (functions.ts). */
 export const PLUGIN_FUNCTION_POINTS = [
+  "cart.transform",
+  "cart.line_prices",
   "cart.validate",
   "checkout.discounts",
   "checkout.shipping_rates",
@@ -71,10 +75,18 @@ export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 /**
  * Points where an app may stop checkout when it cannot answer
  * (`onError: "block"`): a check the store relies on (address or stock
- * verification, payment eligibility). Elsewhere a failure only leaves the
- * app out.
+ * verification, payment eligibility), the lines a bundle store sells and
+ * the prices a B2B store agreed. Elsewhere a failure only leaves the app out.
  */
-export const PLUGIN_BLOCKING_FUNCTION_POINTS = ["cart.validate", "checkout.payment_methods"] as const satisfies readonly PluginFunctionPoint[];
+export const PLUGIN_BLOCKING_FUNCTION_POINTS = [
+  "cart.transform",
+  "cart.line_prices",
+  "cart.validate",
+  "checkout.payment_methods",
+] as const satisfies readonly PluginFunctionPoint[];
+
+/** Points whose function may read the signed-in buyer's record (`snapshot`); only checkout.discounts may commit it. */
+export const PLUGIN_SNAPSHOT_FUNCTION_POINTS = ["cart.line_prices", "checkout.discounts"] as const satisfies readonly PluginFunctionPoint[];
 
 /** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
 export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
@@ -126,6 +138,37 @@ const customFieldSchema = z.object({
 /** The most tabs one app page declares. */
 export const PLUGIN_PAGE_TABS_MAX = 8;
 
+/** Dashboard lists an app may add columns and filters to. */
+export const PLUGIN_LIST_RESOURCES = ["product", "order", "customer"] as const;
+export type PluginListResource = (typeof PLUGIN_LIST_RESOURCES)[number];
+/** How a list column shows its value (money: the app stores integer minor units; the list API shows major units). */
+export const PLUGIN_LIST_COLUMN_TYPES = ["text", "number", "money", "date", "boolean"] as const;
+export type PluginListColumnType = (typeof PLUGIN_LIST_COLUMN_TYPES)[number];
+/** The most app columns one list request asks for. */
+export const PLUGIN_LIST_COLUMNS_PER_REQUEST = 5;
+
+/**
+ * A column the app adds to a dashboard list (Shopify admin list columns),
+ * backed by real data: a field of the app's record whose id is the row's
+ * resource id, or one of its own custom fields on the resource. The list
+ * reads it in one bounded statement for the page shown. `filterable` adds an
+ * equality filter, only on a storage field that leads one of the
+ * collection's declared indexes, so the filter is an index match, never a
+ * scan. No app column sorts a list: no index orders the store's rows by an
+ * app's value.
+ */
+const listColumnSchema = z.object({
+  id: name,
+  resource: z.enum(PLUGIN_LIST_RESOURCES),
+  title,
+  type: z.enum(PLUGIN_LIST_COLUMN_TYPES),
+  source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("storage"), collection: name, field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/) }).strict(),
+    z.object({ kind: z.literal("customField"), key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
+  ]),
+  filterable: z.boolean().default(false),
+}).strict();
+
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
@@ -155,7 +198,16 @@ const adminSchema = z.object({
   }).strict()).max(20).default([]),
   /** Dashboard home widgets. */
   widgets: z.array(z.object({ id: name, title, route: name }).strict()).max(5).default([]),
+  /** Columns (and filters) on the products, orders and customers lists. */
+  listColumns: z.array(listColumnSchema).max(10).default([]),
 }).strict();
+
+/**
+ * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
+ * with the title staff see. Writing needs the `orders.edit` permission.
+ */
+const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
+  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
 const storefrontSchema = z.object({
   /** Theme sections the merchant can add in the theme editor/builder. */
@@ -179,6 +231,20 @@ const storefrontSchema = z.object({
     name: title,
     placement: z.enum(["buy-box", "below"]),
     settings: pluginSettingsSchemaSchema.default([]),
+    route: name,
+    /** As for sections. */
+    reads: z.array(name).max(20).default([]),
+  }).strict()).max(10).default([]),
+  /**
+   * Checkout and customer-account blocks (Shopify's UI extension targets):
+   * sanitized HTML the public `route` draws from the app's settings and the
+   * collections in `reads`, the same for every buyer, cached under
+   * dependency validation. They draw at their target while the app is active.
+   */
+  blocks: z.array(z.object({
+    type: name,
+    name: title,
+    target: z.enum(PLUGIN_BLOCK_TARGETS),
     route: name,
     /** As for sections. */
     reads: z.array(name).max(20).default([]),
@@ -299,6 +365,10 @@ const pluginTranslationSchema = z.object({
   salesChannels: z.record(name, title).optional(),
   actions: z.record(name, title).optional(),
   widgets: z.record(name, title).optional(),
+  /** List column titles by id. */
+  listColumns: z.record(name, title).optional(),
+  /** Order timeline entry titles by kind. */
+  timeline: z.record(name, title).optional(),
   /** Page tab titles: page id → tab id → title. */
   tabs: z.record(name, z.record(name, title)).optional(),
   /** Settings section titles and descriptions by group id. */
@@ -357,15 +427,16 @@ export const pluginManifestSchema = z.object({
     /**
      * What a throw, timeout or invalid answer does: `skip` leaves the app out
      * (fail open); `block` stops checkout with the store's buyer-safe message
-     * (cart.validate and checkout.payment_methods only).
+     * (PLUGIN_BLOCKING_FUNCTION_POINTS only).
      */
     onError: z.enum(["skip", "block"]).default("skip"),
     /**
-     * checkout.discounts only: the signed-in buyer's record in this
-     * collection (record id = customer id) is passed in as `snapshot`, and
-     * the answer may `commit` a new version of it, written with the order in
-     * the same atomic batch at the revision the function saw (a spent
-     * balance can never be spent twice).
+     * checkout.discounts and cart.line_prices: the signed-in buyer's record
+     * in this collection (record id = customer id) is passed in as
+     * `snapshot` (a B2B contract, a subscription, a points balance). A
+     * checkout.discounts answer may `commit` a new version of it, written
+     * with the order in the same atomic batch at the revision the function
+     * saw (a spent balance can never be spent twice).
      */
     snapshot: z.object({ collection: name }).strict().optional(),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
@@ -390,6 +461,15 @@ export const pluginManifestSchema = z.object({
     .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
   customFields: z.array(customFieldSchema).max(50).default([]),
   /**
+   * Content types the app defines (Shopify metaobjects), in its own
+   * namespace (`<app id>.<type>`): created or updated when the app is
+   * activated or updated; only the app changes them. Their entries are store
+   * content the merchant edits too (and the app through `ctx.api` with
+   * `metaobjects.edit`). Uninstalling with "delete data" removes them.
+   */
+  metaobjects: z.array(metaobjectDefinitionInputSchema).max(10).default([])
+    .refine((types) => new Set(types.map((type) => type.type)).size === types.length, "Metaobject types must be unique."),
+  /**
    * Versioned data updates of the app's own storage (`migrations` handlers,
    * keyed by version). The platform runs each one once, in order, before the
    * app's next run after an install or update, and records it per app; a
@@ -413,8 +493,9 @@ export const pluginManifestSchema = z.object({
   /** App-wide settings sections (`settings[].group`); additive, presentation only. */
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
-  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
-  storefront: storefrontSchema.default({ sections: [], productBlocks: [], head: false, scripts: [], proxy: false }),
+  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [] }),
+  timeline: timelineSchema,
+  storefront: storefrontSchema.default({ sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false }),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
 
@@ -450,13 +531,17 @@ export const pluginManifestSchema = z.object({
   for (const locale of PLUGIN_TRANSLATION_LOCALES) {
     const translation = manifest.translations?.[locale];
     if (!translation) continue;
-    for (const surface of ["pages", "cards", "actions", "widgets"] as const) {
+    for (const surface of ["pages", "cards", "actions", "widgets", "listColumns"] as const) {
       const declared = new Set(manifest.admin[surface].map((entry) => entry.id));
       for (const id of Object.keys(translation[surface] ?? {})) {
         if (!declared.has(id)) {
           context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
         }
       }
+    }
+    const timelineKinds = new Set(manifest.timeline.map((entry) => entry.kind));
+    for (const kind of Object.keys(translation.timeline ?? {})) {
+      if (!timelineKinds.has(kind)) context.addIssue({ code: "custom", path: ["translations", locale, "timeline", kind], message: `No timeline kind ${kind} to translate.` });
     }
     const salesChannelIds = new Set(manifest.salesChannels.map((channel) => channel.id));
     for (const id of Object.keys(translation.salesChannels ?? {})) {
@@ -490,6 +575,7 @@ export const pluginManifestSchema = z.object({
   const surfaces = [
     ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[] })),
     ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),
+    ...manifest.storefront.blocks.map((surface, index) => ({ surface: { ...surface, settings: [] }, path: ["storefront", "blocks", index] as (string | number)[] })),
   ];
   for (const { surface, path } of surfaces) {
     needPublicRoute([...path, "route"], surface.route);
@@ -532,10 +618,10 @@ export const pluginManifestSchema = z.object({
   }
   manifest.functions.forEach((fn, index) => {
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
-      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: "Only cart.validate and checkout.payment_methods may block checkout." });
+      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: `Only ${PLUGIN_BLOCKING_FUNCTION_POINTS.join(", ")} may block checkout.` });
     }
-    if (fn.snapshot && fn.point !== "checkout.discounts") {
-      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: "Only checkout.discounts reads a snapshot." });
+    if (fn.snapshot && !(PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: `Only ${PLUGIN_SNAPSHOT_FUNCTION_POINTS.join(" and ")} read a snapshot.` });
     }
     if (fn.snapshot && !collections.has(fn.snapshot.collection)) {
       context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "collection"], message: `Storage collection ${fn.snapshot.collection} is not declared.` });
@@ -572,8 +658,31 @@ export const pluginManifestSchema = z.object({
   });
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
+  unique(manifest.admin.listColumns.map((column) => `${column.resource}:${column.id}`), ["admin", "listColumns"], "List column ids");
+  manifest.admin.listColumns.forEach((column, index) => {
+    const path = ["admin", "listColumns", index];
+    if (column.source.kind === "customField") {
+      const key = column.source.key;
+      if (!manifest.customFields.some((field) => field.ownerType === column.resource && field.key === key)) {
+        context.addIssue({ code: "custom", path: [...path, "source", "key"], message: `Custom field ${column.resource}.${key} is not declared.` });
+      }
+      if (column.filterable) context.addIssue({ code: "custom", path: [...path, "filterable"], message: "Only a storage field an index leads can filter a list." });
+      return;
+    }
+    const collection = manifest.storage[column.source.collection];
+    if (!collection) {
+      context.addIssue({ code: "custom", path: [...path, "source", "collection"], message: `Storage collection ${column.source.collection} is not declared.` });
+      return;
+    }
+    const field = column.source.field;
+    const leads = collection.indexes.some((entry) => (Array.isArray(entry) ? entry[0] : entry) === field);
+    if (column.filterable && !leads) {
+      context.addIssue({ code: "custom", path: [...path, "filterable"], message: `Index ${field} first in collection ${column.source.collection} to filter by it.` });
+    }
+  });
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
+  unique(manifest.storefront.blocks.map((block) => block.type), ["storefront", "blocks"], "Block types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 
@@ -651,7 +760,8 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
-    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0 || manifest.storefront.head,
+    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
+      || manifest.storefront.blocks.length > 0 || manifest.storefront.head,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
   };
 }

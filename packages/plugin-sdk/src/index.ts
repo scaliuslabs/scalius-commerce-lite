@@ -175,3 +175,15 @@ export const defineTaxProvider = provider("tax");
 export const defineTranslationProvider = provider("translation");
 /** An AI provider (`generate`): structured generation against a JSON Schema, the platform's one AI port (first used by the theme editor's "Draft with AI"). The store's own model key lives in the app's settings. */
 export const defineAiProvider = provider("ai");
+/** Chat channels (`send` on WhatsApp, Messenger, …): declare the `channels` it carries. Core sends buyer messages on a channel through the provider the merchant chose. */
+export const defineMessagingProvider = provider("messaging");
+/** A push service with its own subscribers (`send` to Scalius staff or customer ids). Web Push is built in; this replaces it when the merchant chooses the app. */
+export const definePushProvider = provider("push");
+/** Product search (`search`: product ids, best first). Core reads, prices and filters the products; built-in search answers when the app fails. */
+export const defineSearchProvider = provider("search");
+/** Address autocomplete at checkout (`suggest`, then `resolve` into the canonical address fields). */
+export const defineAddressProvider = provider("address");
+/** Exchange rates (`rates`) for markets in their own currency, read on the scheduled tick; manual rates are the default. */
+export const defineFxProvider = provider("fx");
+/** Buyer sign-in with another account (`authorize`, `exchange`): OAuth 2.0 with PKCE; the platform owns state, nonce and the session. */
+export const defineIdentityProvider = provider("identity");

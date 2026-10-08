@@ -49,6 +49,7 @@ const app: AppSurfaces = {
     { id: "purge", target: "customer", label: "Forget customer", route: "purge", bulk: false, destructive: true },
   ],
   widgets: [{ id: "counts", title: "Acme counts", route: "widget" }],
+  listColumns: [],
   routes: [
     { name: "dashboard", methods: ["GET"] },
     { name: "order-card", methods: ["GET"] },

@@ -356,7 +356,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: normalizeAmount(item.price),
+      price: item.price === undefined ? null : normalizeAmount(item.price),
       productName: item.productName ?? null,
       variantLabel: item.variantLabel ?? null,
       // Absent for carts without buyer inputs, so pre-Wave A hashes are unchanged.

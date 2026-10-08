@@ -41,12 +41,14 @@ import {
   seoDocument,
 } from "../settings";
 import { getPublicPageBySlug, planPublicStorePolicies } from "../pages";
+import { planStorefrontMetaobjects } from "../metaobjects";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
 } from "../../settings-store";
 import {
   DEFAULT_STOREFRONT_THEME,
+  HOME_MAX_MEDIA,
   homeSectionRequests,
   parseStoredStorefrontThemeDocument,
   type HomeAppSectionRequest,
@@ -74,6 +76,7 @@ import {
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
+import { activePluginBlockPages, activePluginStorefrontServices } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
     NAME_FIELDS,
@@ -325,6 +328,7 @@ export async function getHomepageData(
   const promotionPlan = planHomePromotions(db, requests.promotionIds);
   const categoryPlan = planHomeCategories(db, requests.categoryIds, translation);
   const productPlan = planHomeProduct(db, requests.homeProductId, translation);
+  const metaobjectPlan = planStorefrontMetaobjects(db, requests.metaobjects ?? []);
   const statements: BatchItem[] = [
     ...collectionPlan.statements,
     ...listPlan.statements,
@@ -333,6 +337,7 @@ export async function getHomepageData(
     ...promotionPlan.statements,
     ...categoryPlan.statements,
     ...productPlan.statements,
+    ...metaobjectPlan.statements,
   ];
   const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements)] : [];
   const listOffset = collectionPlan.statements.length;
@@ -347,6 +352,14 @@ export async function getHomepageData(
   const promotionOffset = brandOffset + brandPlan.statements.length;
   const categoryOffset = promotionOffset + promotionPlan.statements.length;
   const productOffset = categoryOffset + categoryPlan.statements.length;
+  const metaobjectOffset = productOffset + productPlan.statements.length;
+  const metaobjects = metaobjectPlan.resolve(results, metaobjectOffset);
+  // Images the shown entries name and no section did: one more read, only then.
+  const extraMediaIds = metaobjects.mediaIds.filter((id) => !requests.mediaIds.includes(id)).slice(0, HOME_MAX_MEDIA);
+  const extraMediaPlan = planHomeMedia(db, extraMediaIds);
+  const extraMedia = extraMediaPlan.statements.length > 0
+    ? extraMediaPlan.resolve(await safeBatch(db, extraMediaPlan.statements), 0)
+    : [];
   const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market));
   const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market));
 
@@ -390,7 +403,7 @@ export async function getHomepageData(
     ...(options.pageSlug ? { landing } : {}),
     sections: {
       lists,
-      media: mediaPlan.resolve(results, mediaOffset),
+      media: [...mediaPlan.resolve(results, mediaOffset), ...extraMedia],
       brands: brandPlan.resolve(results, brandOffset),
       promotions: promotionPlan.resolve(results, promotionOffset),
       categories: categoryPlan.resolve(results, categoryOffset),
@@ -400,6 +413,9 @@ export async function getHomepageData(
       homeProduct: productPlan.resolve(results, productOffset),
       // App sections that drew something, by section id (sanitized HTML).
       apps: await appSections,
+      // The Metaobjects sections' content types with their published entries.
+      // Only a page with a Metaobjects section carries the key (other pages answer as before).
+      ...(metaobjects.types.length > 0 || (requests.metaobjects?.length ?? 0) > 0 ? { metaobjects: metaobjects.types } : {}),
     },
   };
 }
@@ -563,6 +579,7 @@ export async function getLayoutData(
     activePluginRows,
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
+  const activeApps = activePluginInstallationsFromRows(activePluginRows as PluginInstallationRow[]);
   const ctx = { encryptionKey: options.credentialEncryptionKey };
   const [currency, media, browserEventsEnabled, seo, business, security, policies] = await Promise.all([
     currencyDocument.fromRows(rows, ctx),
@@ -725,9 +742,12 @@ export async function getLayoutData(
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults as CheckoutCopyRow[], translation?.locale ?? null),
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
-    appScripts: activePluginStorefrontScripts(
-      activePluginInstallationsFromRows(activePluginRows as PluginInstallationRow[]).values(),
-    ),
+    appScripts: activePluginStorefrontScripts(activeApps.values()),
+    // The page groups where an active app draws a checkout or account block:
+    // only those pages read their blocks part (none: no read at all).
+    appBlockPages: activePluginBlockPages(activeApps.values()),
+    // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.
+    appServices: activePluginStorefrontServices(activeApps.values()),
   };
 }
 

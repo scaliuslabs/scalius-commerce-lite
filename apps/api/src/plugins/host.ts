@@ -122,6 +122,8 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
         ...(field.description ? { description: field.description } : {}),
         storefrontVisible: field.storefrontVisible,
       })),
+    appName: manifest.name,
+    timeline: manifest.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
   };
 }
 

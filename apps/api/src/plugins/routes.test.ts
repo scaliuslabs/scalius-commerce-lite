@@ -1,6 +1,6 @@
 // Plugin routes through the real runtime family (base app, admin auth, RBAC)
 // on the migrated schema, with plugins in the bundled loader: the reference
-// plugin (scalius.hello) and an echo plugin that returns the request it saw.
+// plugin (acme.hello) and an echo plugin that returns the request it saw.
 // Proves: only active plugins and declared routes/methods answer; admin
 // routes need a dashboard session with apps.view (+ apps.use to change);
 // public routes are rate-limited and body-capped; plugins never see cookies,
@@ -12,7 +12,7 @@ import { createHmac } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
-vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/hello-bundled")).withHelloBundled(await importOriginal()));
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withHelloBundled(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, deactivatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
@@ -162,7 +162,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
   });
 
   it("serves a public route of an active plugin as JSON, private by default and never storing cookies", async () => {
-    const greet = await call("/api/v1/plugins/scalius.hello/public/greet?name=Karim");
+    const greet = await call("/api/v1/plugins/acme.hello/public/greet?name=Karim");
     expect(greet.status).toBe(200);
     expect(greet.json).toEqual({ message: "Salam, Karim!", visits: 1 });
     expect(greet.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -170,28 +170,28 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect(greet.headers.get("content-security-policy")).toBe("default-src 'none'; frame-ancestors 'none'");
     expect(greet.headers.get("set-cookie")).toBeNull();
     // An exact, short public max-age is the only opt-in to caching.
-    const visits = await call("/api/v1/plugins/scalius.hello/public/visits");
+    const visits = await call("/api/v1/plugins/acme.hello/public/visits");
     expect(visits.headers.get("cache-control")).toBe("public, max-age=60");
   });
 
   it("parses JSON and form bodies, refuses bad JSON and oversized bodies", async () => {
-    const json = await call("/api/v1/plugins/scalius.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Rina" }) });
+    const json = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Rina" }) });
     expect(json).toMatchObject({ status: 201, json: { message: "Welcome, Rina!" } });
-    const form = await call("/api/v1/plugins/scalius.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "name=Tania" });
+    const form = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "name=Tania" });
     expect(form).toMatchObject({ status: 201, json: { message: "Welcome, Tania!" } });
-    const bad = await call("/api/v1/plugins/scalius.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
+    const bad = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
     expect(bad).toMatchObject({ status: 400, json: { error: { code: "INVALID_JSON" } } });
-    const huge = await call("/api/v1/plugins/scalius.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "x".repeat(300 * 1024) }) });
+    const huge = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "x".repeat(300 * 1024) }) });
     expect(huge.status).toBe(413);
   });
 
   it("answers only declared routes and methods of active plugins", async () => {
-    expect((await call("/api/v1/plugins/scalius.hello/public/nope")).status).toBe(404);
-    const wrongMethod = await call("/api/v1/plugins/scalius.hello/public/greet", { method: "DELETE" });
+    expect((await call("/api/v1/plugins/acme.hello/public/nope")).status).toBe(404);
+    const wrongMethod = await call("/api/v1/plugins/acme.hello/public/greet", { method: "DELETE" });
     expect(wrongMethod.status).toBe(405);
     expect(wrongMethod.headers.get("allow")).toBe("GET");
     expect((await call("/api/v1/plugins/acme.unknown/public/greet")).status).toBe(404);
-    expect((await call("/api/v1/plugins/scalius.hello/public/greet/..%2F..%2Fadmin")).status).toBe(404);
+    expect((await call("/api/v1/plugins/acme.hello/public/greet/..%2F..%2Fadmin")).status).toBe(404);
     const echo = await requirePluginInstallation(db, "acme.echo");
     await deactivatePlugin(db, "acme.echo", { expectedRevision: echo.revision });
     expect((await call("/api/v1/plugins/acme.echo/public/inspect")).status).toBe(404);
@@ -247,14 +247,14 @@ describe("plugin routes", { timeout: 30_000 }, () => {
 
   it("rate-limits public and webhook routes per client", async () => {
     limited = true;
-    const refused = await call("/api/v1/plugins/scalius.hello/public/greet");
+    const refused = await call("/api/v1/plugins/acme.hello/public/greet");
     expect(refused.status).toBe(429);
     expect(refused.headers.get("retry-after")).toBe("60");
     expect((await call("/api/v1/plugins/acme.echo/webhooks/hook", { method: "POST" })).status).toBe(429);
   });
 
   it("serves the storefront proxy only for plugins that declare it", async () => {
-    expect((await call("/api/v1/plugins/scalius.hello/public/greet", { headers: { "x-scalius-app-proxy": "1" } })).status).toBe(200);
+    expect((await call("/api/v1/plugins/acme.hello/public/greet", { headers: { "x-scalius-app-proxy": "1" } })).status).toBe(200);
     expect((await call("/api/v1/plugins/acme.echo/public/inspect", { headers: { "x-scalius-app-proxy": "1" } })).status).toBe(404);
   });
 
@@ -278,17 +278,17 @@ describe("plugin routes", { timeout: 30_000 }, () => {
   });
 
   it("guards admin routes with the dashboard session: apps.view to read, apps.use to change", async () => {
-    expect((await call("/api/v1/plugins/scalius.hello/admin/dashboard")).status).toBe(401);
-    expect((await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "clerk" })).status).toBe(403);
-    const page = await call("/api/v1/plugins/scalius.hello/admin/dashboard", { as: "viewer" });
+    expect((await call("/api/v1/plugins/acme.hello/admin/dashboard")).status).toBe(401);
+    expect((await call("/api/v1/plugins/acme.hello/admin/dashboard", { as: "clerk" })).status).toBe(403);
+    const page = await call("/api/v1/plugins/acme.hello/admin/dashboard", { as: "viewer" });
     expect(page.status).toBe(200);
     expect(page.json).toMatchObject({ version: 1, root: { type: "page", title: "Hello" } });
     expect(page.headers.get("cache-control")).toBe("private, no-store");
 
-    expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "viewer" })).status).toBe(403);
-    const reset = await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "operator", headers: { Origin: "https://admin.shop.test" } });
+    expect((await call("/api/v1/plugins/acme.hello/admin/reset", { method: "POST", as: "viewer" })).status).toBe(403);
+    const reset = await call("/api/v1/plugins/acme.hello/admin/reset", { method: "POST", as: "operator", headers: { Origin: "https://admin.shop.test" } });
     expect(reset).toMatchObject({ status: 200, json: { toast: { message: "Counters reset.", tone: "success" }, refresh: true } });
-    expect((await call("/api/v1/plugins/scalius.hello/admin/reset", { method: "POST", as: "owner", headers: { Origin: "https://evil.example" } })).status).toBe(403);
+    expect((await call("/api/v1/plugins/acme.hello/admin/reset", { method: "POST", as: "owner", headers: { Origin: "https://evil.example" } })).status).toBe(403);
 
     const seen = await call("/api/v1/plugins/acme.echo/admin/look?tab=1", { as: "owner", headers: { "X-Custom": "no" } });
     expect(seen.json).toMatchObject({ staffId: "owner", query: { tab: "1" }, headers: {} });

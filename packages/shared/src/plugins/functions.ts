@@ -1,10 +1,17 @@
 // Plugin functions (docs/platform/PLUGINS.md): synchronous decision points in
-// checkout. A function is pure: it receives the input below plus its plugin's
-// settings, does no I/O, and returns an output the platform validates and
-// applies. Inputs carry ids, quantities, money in integer minor units and
-// customer segments — never contact details. A function that throws, times
-// out or returns an invalid output is skipped (`fail open`) and the incident
-// is logged for the merchant; no plugin can take checkout down.
+// checkout (Shopify Functions). A function is pure: it receives the input
+// below plus its plugin's settings, does no I/O, and returns an output the
+// platform validates and applies. Inputs carry ids, quantities, money in
+// integer minor units and customer segments — never contact details. A
+// function that throws, times out or returns an invalid output is skipped
+// (`fail open`) and the incident is logged for the merchant; no plugin can
+// take checkout down. At points in PLUGIN_BLOCKING_FUNCTION_POINTS an app may
+// declare `onError: "block"` instead (fail closed).
+//
+// The order a checkout asks them in: cart.transform (the lines), then
+// cart.line_prices (their unit prices), then cart.validate,
+// checkout.discounts and checkout.shipping_rates together, then
+// checkout.payment_methods; order.risk after the order commits.
 // Part of the versioned plugin API.
 
 import { z } from "zod";
@@ -157,9 +164,87 @@ export const orderRiskOutputSchema = z.object({
   hold: z.boolean().default(false),
 }).strict();
 
+// ── cart.transform ────────────────────────────────────────────────────────
+
+/** The most component SKUs one expanded line becomes. */
+export const CART_TRANSFORM_COMPONENTS_MAX = 20;
+
+/**
+ * Shopify's cartTransform: what the cart's lines are, never what they cost.
+ *
+ * - `expand`: the line (a bundle SKU) is sold as these component SKUs, each
+ *   `quantity` per unit of the line. The components are the order's lines:
+ *   stock, tax and fulfilment follow them. Each is priced like any SKU (an
+ *   app sets bundle prices with `cart.line_prices` or a discount).
+ * - `merge`: the lines are one bundle on the order (shown under `title`);
+ *   prices and stock are unchanged.
+ *
+ * A line is in at most one operation; a later one naming it is skipped.
+ */
+export const cartTransformOutputSchema = z.object({
+  operations: z.array(z.discriminatedUnion("op", [
+    z.object({
+      op: z.literal("expand"),
+      lineId: id,
+      /** The bundle's name on the order (default: the line's title). */
+      title: label.optional(),
+      components: z.array(z.object({
+        variantId: id,
+        quantity: z.number().int().min(1).max(100),
+      }).strict()).min(1).max(CART_TRANSFORM_COMPONENTS_MAX),
+    }).strict(),
+    z.object({
+      op: z.literal("merge"),
+      lineIds: z.array(id).min(2).max(50),
+      title: label,
+    }).strict(),
+  ])).max(50),
+}).strict();
+
+// ── cart.line_prices ──────────────────────────────────────────────────────
+
+/** Where a line's unit price came from (`resolvePrice()`). */
+export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"] as const;
+
+/**
+ * Per line: where its price came from and the bundle it belongs to (an
+ * expanded line's components). Only lines priced at `fx` or `base` take an
+ * app price: sale, segment and market lists stay authoritative.
+ */
+export const functionLinePriceFactsSchema = z.object({
+  lineId: id,
+  source: z.enum(FUNCTION_PRICE_SOURCES),
+  bundle: z.object({ id, title: z.string().max(300) }).strict().nullable(),
+}).strict();
+
+/**
+ * Unit prices in the cart currency's minor units, before buyer-input
+ * surcharges (they are added on top). The platform rounds each half-up to
+ * the market's price increment. Several apps: the first in priority order
+ * that prices a line wins. A line not named keeps its price.
+ */
+export const cartLinePricesOutputSchema = z.object({
+  prices: z.array(z.object({
+    lineId: id,
+    unitPriceMinor: minor.positive(),
+  }).strict()).max(250),
+}).strict();
+
 // ── Registry ──────────────────────────────────────────────────────────────
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
+  "cart.transform": {
+    input: z.object({ cart: functionCartSchema }).strict(),
+    output: cartTransformOutputSchema,
+  },
+  "cart.line_prices": {
+    input: z.object({
+      cart: functionCartSchema,
+      lines: z.array(functionLinePriceFactsSchema).max(250),
+      snapshot: functionSnapshotSchema.optional(),
+    }).strict(),
+    output: cartLinePricesOutputSchema,
+  },
   "cart.validate": {
     input: z.object({ cart: functionCartSchema }).strict(),
     output: cartValidateOutputSchema,

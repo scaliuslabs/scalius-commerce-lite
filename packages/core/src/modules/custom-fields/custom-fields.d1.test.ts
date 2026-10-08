@@ -83,12 +83,12 @@ describe("custom field definitions", () => {
         expect((await rejection(define(db, { name: "Size", type: "integer", validations: { min: 5, max: 1 } }))).status).toBe(400);
         const hidden = await rejection(define(db, { ownerType: "customer", name: "VIP", type: "boolean", storefrontVisible: true }));
         expect(hidden).toBeInstanceOf(ValidationError);
-        const foreign = await rejection(define(db, { name: "Points", namespace: "scalius.loyalty", type: "integer" }));
+        const foreign = await rejection(define(db, { name: "Points", namespace: "acme.loyalty", type: "integer" }));
         expect(foreign).toBeInstanceOf(CustomFieldNamespaceError);
         expect(foreign).toMatchObject({ status: 403, code: "CUSTOM_FIELD_NAMESPACE_FORBIDDEN" });
         // A plugin writes its own namespace (its default) and never `custom`.
-        await expect(define(db, { name: "Points", type: "integer" }, plugin("scalius.loyalty"))).resolves.toMatchObject({ namespace: "scalius.loyalty", key: "points" });
-        expect(await rejection(define(db, { name: "Points", namespace: "custom", type: "integer" }, plugin("scalius.loyalty")))).toBeInstanceOf(CustomFieldNamespaceError);
+        await expect(define(db, { name: "Points", type: "integer" }, plugin("acme.loyalty"))).resolves.toMatchObject({ namespace: "acme.loyalty", key: "points" });
+        expect(await rejection(define(db, { name: "Points", namespace: "custom", type: "integer" }, plugin("acme.loyalty")))).toBeInstanceOf(CustomFieldNamespaceError);
     });
 
     it("edits and deletes under the revision, and only in the writer's namespace", async () => {
@@ -100,7 +100,7 @@ describe("custom field definitions", () => {
         expect(stale).toBeInstanceOf(CustomFieldRevisionConflictError);
         expect(stale.details).toMatchObject({ expectedRevision: 1, currentRevision: 2 });
 
-        const points = await define(db, { name: "Points", type: "integer" }, plugin("scalius.loyalty"));
+        const points = await define(db, { name: "Points", type: "integer" }, plugin("acme.loyalty"));
         expect(await rejection(updateCustomFieldDefinition(db, points.id, { expectedRevision: 1, name: "Mine" }, merchant))).toBeInstanceOf(CustomFieldNamespaceError);
         expect(await rejection(deleteCustomFieldDefinition(db, points.id, { expectedRevision: 1 }, merchant))).toBeInstanceOf(CustomFieldNamespaceError);
 
@@ -198,16 +198,16 @@ describe("custom field values", () => {
 
     it("lets a plugin write only its own namespace; the merchant reads every namespace", async () => {
         const db = database();
-        const points = await define(db, { ownerType: "customer", name: "Points", type: "integer" }, plugin("scalius.loyalty"));
+        const points = await define(db, { ownerType: "customer", name: "Points", type: "integer" }, plugin("acme.loyalty"));
         const note = await define(db, { ownerType: "customer", name: "Note", type: "multi_line_text" });
         expect(await rejection(setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: points.id, value: 10 }] }, merchant)))
             .toBeInstanceOf(CustomFieldNamespaceError);
-        expect(await rejection(setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: note.id, value: "x" }] }, plugin("scalius.loyalty"))))
+        expect(await rejection(setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: note.id, value: "x" }] }, plugin("acme.loyalty"))))
             .toBeInstanceOf(CustomFieldNamespaceError);
-        await setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: points.id, value: 10 }] }, plugin("scalius.loyalty"));
+        await setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: points.id, value: 10 }] }, plugin("acme.loyalty"));
         await setCustomFieldValues(db, "customer", "cus_a", { values: [{ definitionId: note.id, value: "Prefers COD" }] }, merchant);
         const read = await readCustomFieldValues(db, "customer", "cus_a");
-        expect(read.fields.map((field) => [field.definition.namespace, field.value])).toEqual([["scalius.loyalty", 10], ["custom", "Prefers COD"]]);
+        expect(read.fields.map((field) => [field.definition.namespace, field.value])).toEqual([["acme.loyalty", 10], ["custom", "Prefers COD"]]);
     });
 
     it("reads many owners in 90-id statements of one round trip", async () => {

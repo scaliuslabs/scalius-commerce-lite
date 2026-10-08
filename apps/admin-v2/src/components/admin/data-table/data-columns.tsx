@@ -1,20 +1,23 @@
+import { Badge } from "~/components/ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
-import { formatNumber } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
+import { appListColumnsMessages } from "~/i18n/app-list-columns";
 import { ListDate } from "./ListDate";
 import type { ColumnDef, TableRowData } from "./table-config";
 
 /**
  * A column backed by a value the list already read for each row, not by code
- * per row. Apps' custom fields marked as list columns become these (Wave 7):
- * the list reads the fields in its one bulk read and adds a column for each.
- * The column menu shows, hides and moves them like the list's own columns.
+ * per row. Apps' list columns become these: the list asks for them in its one
+ * bulk read (`appColumns`) and adds a column for each. The column menu shows,
+ * hides and moves them like the list's own columns.
  */
 export interface DataColumnSpec<TData> {
   /** Unique in the list, e.g. "app.loyalty.points". */
   id: string;
   /** The column's name, in the dashboard's language. */
   label: string;
-  kind: "text" | "number" | "money" | "date";
+  /** `money` is an amount of the store currency (major units, as the API sends it); `boolean` shows a Yes or No badge. */
+  kind: "text" | "number" | "money" | "date" | "boolean";
   /**
    * Higher stays longer when the table runs out of width: default 10, at
    * most `DATA_COLUMN_PRIORITY_MAX`, so an app's column steps aside before
@@ -28,11 +31,16 @@ export interface DataColumnSpec<TData> {
 export const DATA_COLUMN_PRIORITY_MAX = 35;
 
 /** Widest each kind's content gets (px); longer text is cut, whole on hover. */
-export const DATA_COLUMN_WIDTH = { text: 160, number: 80, money: 120, date: 168 } as const;
+export const DATA_COLUMN_WIDTH = { text: 160, number: 80, money: 120, date: 168, boolean: 72 } as const;
 
 function MoneyValue({ value }: { value: number }) {
   const { fmt } = useCurrency();
   return <span className="block whitespace-nowrap">{fmt(value)}</span>;
+}
+
+function BooleanValue({ value }: { value: boolean }) {
+  const t = useMessages(appListColumnsMessages);
+  return <Badge variant={value ? "success" : "secondary"}>{value ? t("yes") : t("no")}</Badge>;
 }
 
 function DataValue({ kind, value }: { kind: DataColumnSpec<unknown>["kind"]; value: unknown }) {
@@ -41,6 +49,7 @@ function DataValue({ kind, value }: { kind: DataColumnSpec<unknown>["kind"]; val
   }
   if (kind === "date") return <ListDate value={value as string | number | Date} className="block truncate" />;
   if (kind === "money" && typeof value === "number") return <MoneyValue value={value} />;
+  if (kind === "boolean" && typeof value === "boolean") return <BooleanValue value={value} />;
   const text = kind === "number" && typeof value === "number" ? formatNumber(value) : String(value);
   return <span className="block truncate" title={text}>{text}</span>;
 }

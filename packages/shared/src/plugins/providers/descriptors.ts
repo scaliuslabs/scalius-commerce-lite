@@ -22,6 +22,7 @@ import { providerAmountCodecsSchema } from "./amount";
 import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./kinds";
 import { paymentAmountLimitsSchema } from "./payment";
+import { MESSAGING_CHANNELS } from "./channels";
 
 const providerId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 const title = z.string().trim().min(1).max(80);
@@ -142,6 +143,19 @@ export const fraudProviderDescriptorSchema = z.object({
   countries: providerCountriesSchema.default("any"),
 }).strict();
 
+/** A messaging provider names the chat channels it carries. */
+export const messagingProviderDescriptorSchema = z.object({
+  ...base("messaging"),
+  channels: z.array(z.enum(MESSAGING_CHANNELS)).min(1).max(MESSAGING_CHANNELS.length)
+    .refine((channels) => new Set(channels).size === channels.length, "List each channel once."),
+}).strict();
+
+/** An address provider knows addresses of some countries (default `any`); checkout asks it only for those. */
+export const addressProviderDescriptorSchema = z.object({
+  ...base("address"),
+  countries: providerCountriesSchema.default("any"),
+}).strict();
+
 const PROVIDER_DESCRIPTOR_SCHEMAS = {
   payment: paymentProviderDescriptorSchema,
   courier: courierProviderDescriptorSchema,
@@ -151,11 +165,19 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   tax: plain("tax"),
   translation: plain("translation"),
   ai: plain("ai"),
+  messaging: messagingProviderDescriptorSchema,
+  push: plain("push"),
+  search: plain("search"),
+  address: addressProviderDescriptorSchema,
+  fx: plain("fx"),
+  identity: plain("identity"),
 } as const satisfies Record<ProviderKind, z.ZodType>;
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;
 export type CourierProviderDescriptor = z.output<typeof courierProviderDescriptorSchema>;
 export type FraudProviderDescriptor = z.output<typeof fraudProviderDescriptorSchema>;
+export type MessagingProviderDescriptor = z.output<typeof messagingProviderDescriptorSchema>;
+export type AddressProviderDescriptor = z.output<typeof addressProviderDescriptorSchema>;
 type PlainProviderDescriptor = z.output<ReturnType<typeof plain>>;
 
 /** One declared provider, flat, as the parsed manifest keeps it. */
@@ -163,23 +185,27 @@ export type PluginProviderDeclaration =
   | ({ kind: "payment" } & PaymentProviderDescriptor)
   | ({ kind: "courier" } & CourierProviderDescriptor)
   | ({ kind: "fraud" } & FraudProviderDescriptor)
-  | ({ kind: "sms" | "email" | "tax" | "translation" | "ai" } & PlainProviderDescriptor);
+  | ({ kind: "messaging" } & MessagingProviderDescriptor)
+  | ({ kind: "address" } & AddressProviderDescriptor)
+  | ({ kind: "sms" | "email" | "tax" | "translation" | "ai" | "push" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat
  * list (`[{ kind, ...descriptor }]`) is what a parsed manifest stores and
  * re-parses; it also accepts the first manifest shape, whose kinds were
- * named `shipping` (now `courier`) and `messaging` (now `sms`).
+ * named `shipping` (now `courier`) and `messaging` (now `sms`). Since the
+ * chat `messaging` kind, a flat entry named `messaging` is a chat provider
+ * only when it lists `channels`; without them it is the old SMS name.
  */
 export const pluginProvidersSchema = z.union([
   z.object(Object.fromEntries(PROVIDER_KINDS.map((kind) => [kind, z.array(PROVIDER_DESCRIPTOR_SCHEMAS[kind]).max(PLUGIN_PROVIDERS_MAX).optional()])) as {
     [K in ProviderKind]: z.ZodOptional<z.ZodArray<(typeof PROVIDER_DESCRIPTOR_SCHEMAS)[K]>>;
   }).strict().transform((groups) => PROVIDER_KINDS.flatMap((kind) =>
     (groups[kind] ?? []).map((descriptor) => ({ kind, ...descriptor }) as PluginProviderDeclaration))),
-  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping", "messaging"]) })).max(PLUGIN_PROVIDERS_MAX)
+  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping"]) })).max(PLUGIN_PROVIDERS_MAX)
     .transform((entries, context) => entries.map((entry, index) => {
       const { kind: named, ...descriptor } = entry;
-      const kind: ProviderKind = named === "shipping" ? "courier" : named === "messaging" ? "sms" : named;
+      const kind: ProviderKind = named === "shipping" ? "courier" : named === "messaging" && !("channels" in descriptor) ? "sms" : named;
       const parsed = PROVIDER_DESCRIPTOR_SCHEMAS[kind].safeParse(descriptor);
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {

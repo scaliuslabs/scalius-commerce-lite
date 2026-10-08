@@ -9,16 +9,20 @@ import {
   providerSettingKeys,
   type PluginManifest,
 } from "@scalius/shared/plugins";
-import { qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import type { AppDetail } from "~/lib/api-query-options/apps";
-import { PROVIDER_CAPABILITY, providerFromHash, providerHash } from "./app-capabilities";
+import { SETTINGS_NAV } from "../settings/settings-nav";
+import { SETTINGS_CARDS } from "../settings/settings-search";
+import { APP_PROVIDER_KINDS, PROVIDER_CAPABILITY, providerFromHash, providerHash } from "./app-capabilities";
 import { searchAppSurfaces } from "./app-search";
 import { appearsEntries } from "./AppWhereItAppears";
 import type { AppSurfaces } from "./ui/surfaces";
 
 /** The plugin's manifest, loaded at run time (the dashboard never bundles plugin code). */
 async function manifestOf(plugin: string): Promise<PluginManifest> {
-  const path = new URL(`../../../../../../plugins/${plugin}/src/index.ts`, import.meta.url).href;
+  // Test apps live in the API test tree; shipped apps in plugins/.
+  const dir = plugin === "hello" ? "apps/api/src/plugins/testing/apps/hello" : `plugins/${plugin}`;
+  const path = new URL(`../../../../../../${dir}/src/index.ts`, import.meta.url).href;
   const module = (await import(/* @vite-ignore */ path)) as { manifest: unknown };
   const parsed = parsePluginManifest(module.manifest);
   if (!parsed.ok) throw new Error(`${plugin}: ${JSON.stringify(parsed.issues)}`);
@@ -95,7 +99,7 @@ describe("where an app appears", () => {
     ]);
     expect(entries.find((entry) => entry.key === "card:greeting")).toMatchObject({ group: "resources", to: "/admin/orders", detail: { message: "card", target: "order" } });
     expect(entries.find((entry) => entry.key === "action:wave")).toMatchObject({ to: "/admin/products", detail: { message: "bulkAction", target: "product" } });
-    expect(entries.find((entry) => entry.key === "settings")).toMatchObject({ to: "/admin/apps/scalius.hello", search: { tab: "settings" } });
+    expect(entries.find((entry) => entry.key === "settings")).toMatchObject({ to: "/admin/apps/acme.hello", search: { tab: "settings" } });
   });
 
   it("names an inactive app's pages and sections without linking them; its providers still link", async () => {
@@ -103,6 +107,51 @@ describe("where an app appears", () => {
     expect(hello.filter((entry) => entry.key !== "settings").every((entry) => entry.to === null)).toBe(true);
     const pack = appearsEntries(detailOf(await manifestOf("bangladesh"), "installed"));
     expect(pack.filter((entry) => entry.key.startsWith("provider:")).every((entry) => entry.to !== null)).toBe(true);
+  });
+});
+
+describe("provider kinds", () => {
+  it("has a capability page and card for every kind the platform has", () => {
+    expect([...APP_PROVIDER_KINDS].sort()).toEqual([...PROVIDER_KINDS].sort());
+    for (const kind of APP_PROVIDER_KINDS) {
+      const capability = PROVIDER_CAPABILITY[kind];
+      expect(SETTINGS_NAV.some((item) => item.key === capability.page && item.to === capability.to), kind).toBe(true);
+      // The card is a settings card, so search and the setup-sheet link can find it.
+      expect(SETTINGS_CARDS.some((card) => card.page === capability.page && card.card === capability.card), kind).toBe(true);
+    }
+  });
+
+  it("puts each new kind where its capability is, not on the app's own page", () => {
+    expect(PROVIDER_CAPABILITY.messaging).toEqual({ page: "notifications", to: "/admin/settings/notifications", card: "chatApps" });
+    expect(PROVIDER_CAPABILITY.push).toEqual({ page: "notifications", to: "/admin/settings/notifications", card: "browserNotifications" });
+    expect(PROVIDER_CAPABILITY.fx).toEqual({ page: "markets", to: "/admin/settings/markets", card: "exchangeRates" });
+    expect(PROVIDER_CAPABILITY.address).toEqual({ page: "checkout", to: "/admin/settings/checkout", card: "addressAutocomplete" });
+    expect(PROVIDER_CAPABILITY.identity).toEqual({ page: "customerAccounts", to: "/admin/settings/customer-accounts", card: "otherSignIn" });
+    expect(PROVIDER_CAPABILITY.search).toEqual({ page: "integrations", to: "/admin/settings/integrations", card: "appSearch" });
+  });
+
+  it("opens a new kind's provider sheet on its capability page from dashboard search", () => {
+    const app: AppSurfaces = {
+      id: "acme.rates",
+      name: "Acme rates",
+      pages: [],
+      cards: [],
+      actions: [],
+      widgets: [],
+      listColumns: [],
+      routes: [],
+      providers: [{ id: "acme.rates:daily", providerId: "daily", kind: "fx", name: "Daily rates", icon: null }],
+      translations: null,
+    };
+    expect(searchAppSurfaces([app], "daily", () => true, (kind) => [kind])).toEqual([{
+      id: "provider:acme.rates:daily",
+      kind: "provider",
+      label: "Daily rates",
+      app: "Acme rates",
+      providerKind: "fx",
+      to: "/admin/settings/markets",
+      hash: providerHash("acme.rates:daily"),
+    }]);
   });
 });
 
@@ -142,6 +191,7 @@ describe("app surfaces in search", () => {
     cards: [],
     actions: [],
     widgets: [],
+    listColumns: [],
     routes: [],
     providers: [
       { id: "scalius.bangladesh:pathao", providerId: "pathao", kind: "courier", name: "Pathao", icon: null },

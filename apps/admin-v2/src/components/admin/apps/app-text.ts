@@ -37,5 +37,6 @@ export function localizedSurfaces(app: AppAdminSurfaces, locale: Locale): AppAdm
     cards: app.cards.map((card) => ({ ...card, title: text.cards?.[card.id] ?? card.title })),
     actions: app.actions.map((action) => ({ ...action, label: text.actions?.[action.id] ?? action.label })),
     widgets: app.widgets.map((widget) => ({ ...widget, title: text.widgets?.[widget.id] ?? widget.title })),
+    listColumns: app.listColumns.map((column) => ({ ...column, title: text.listColumns?.[column.id] ?? column.title })),
   };
 }

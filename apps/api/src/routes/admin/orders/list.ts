@@ -10,7 +10,7 @@ import { readStoreDecimalPlaces, readStoredCustomization } from "@scalius/core/m
 import { listProducts } from "@scalius/core/modules/product-admin";
 import { customizationViewSchema } from "../../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
-import { FulfillmentStatus, PaymentStatus, productVariants, products } from "@scalius/database/schema";
+import { FulfillmentStatus, PaymentStatus, orders, productVariants, products } from "@scalius/database/schema";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
@@ -33,6 +33,7 @@ import {
     ORDER_CSV_ARTIFACT_MAX_BYTES,
 } from "@scalius/core/modules/orders/browser";
 import { projectOrderListResult } from "../order-list-projection";
+import { appListQuerySchema, appListValuesSchema, planAppList } from "../../../plugins/list-columns";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -235,13 +236,14 @@ const listOrdersRoute = createRoute({
             endDate: z.string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
                 .optional()
-                .openapi({ description: "End date filter (YYYY-MM-DD, Bangladesh calendar day)" })
+                .openapi({ description: "End date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+            ...appListQuerySchema,
         })
     },
     responses: {
         200: {
             description: "Cursor-paginated order list with a capped total",
-            content: { "application/json": { schema: keysetPaginatedEnvelope("orders", orderSummarySchema) } },
+            content: { "application/json": { schema: keysetPaginatedEnvelope("orders", orderSummarySchema, { appValues: appListValuesSchema }) } },
         },
         ...errorResponses,
     }
@@ -252,7 +254,10 @@ app.openapi(listOrdersRoute, async (c) => {
     const query = c.req.valid("query");
     const effectiveSort: OrderListSort = query.sort
         ?? (query.search?.trim() ? "relevance" : "createdAt");
+    // App columns and filters: nothing more is read unless the request names some.
+    const app = await planAppList(db, "order", orders.id, query);
     const result = await listOrders(db, {
+        appCondition: app.condition,
         page: query.page,
         limit: query.limit,
         after: query.after,
@@ -274,7 +279,8 @@ app.openapi(listOrdersRoute, async (c) => {
         startDate: parseStoreDateOnlyBoundary(query.startDate, "start", storeTimeZoneOf(c.env)),
         endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env))
     });
-    return ok(c, projectOrderListResult(result));
+    const appValues = await app.values(result.orders.map((order) => order.id));
+    return ok(c, { ...projectOrderListResult(result), ...(appValues ? { appValues } : {}) });
 });
 
 // ─── GET /export (bounded CSV artifact) ────────────────────────────────────

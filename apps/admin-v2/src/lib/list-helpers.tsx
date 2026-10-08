@@ -120,6 +120,11 @@ export function normalizeOptionalSearchString(value: unknown): string | undefine
   return typeof value === "string" ? value : undefined;
 }
 
+/** An app filter from the URL: `<app id>/<column id>:<value>`, the API's own limit of 400 characters. */
+export function normalizeAppFilterSearchParam(value: unknown): string | undefined {
+  return typeof value === "string" && value.length <= 400 && /^[^/:\s]+\/[^:\s]+:[\s\S]+$/.test(value) ? value : undefined;
+}
+
 export function normalizeBooleanSearchParam(
   value: unknown,
   fallback = false,
@@ -224,6 +229,18 @@ const DEFAULT_PAGINATION: PaginationInfo = {
   totalPages: 0,
 };
 
+/** What an app's list column holds for one row. */
+export type AppListValue = string | number | boolean | null;
+/** A list row after `createDataSelector`: the values the list's one read returned for the apps' columns. */
+export interface AppValuesRow {
+  appValues?: Record<string, AppListValue>;
+}
+
+function withAppValues<T>(row: T, appValues: Record<string, Record<string, AppListValue>>): T {
+  const values = appValues[(row as { id?: string }).id ?? ""];
+  return values ? { ...row, appValues: values } : row;
+}
+
 /**
  * Creates a data selector function that extracts a typed array and
  * pagination info from the raw API response.
@@ -240,8 +257,10 @@ const DEFAULT_PAGINATION: PaginationInfo = {
 export function createDataSelector<T>(key: string) {
   return (raw: unknown) => {
     const data = raw as Record<string, unknown>;
+    const rows = (data[key] ?? []) as T[];
+    const appValues = data.appValues as Record<string, Record<string, AppListValue>> | undefined;
     return {
-      data: (data[key] ?? []) as T[],
+      data: appValues ? rows.map((row) => withAppValues(row, appValues)) : rows,
       pagination: (data.pagination ?? DEFAULT_PAGINATION) as PaginationInfo,
       pageInfo: data.pageInfo as PageInfo | undefined,
     };

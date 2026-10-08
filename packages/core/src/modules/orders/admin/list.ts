@@ -281,6 +281,8 @@ export async function listOrders(db: Database, options: {
     order?: "asc" | "desc";
     startDate?: Date;
     endDate?: Date;
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
 }) {
     const {
         search,
@@ -311,6 +313,7 @@ export async function listOrders(db: Database, options: {
     const whereConditions: SQL[] = [];
 
     whereConditions.push(sql`${orders.deletedAt} IS NULL`);
+    if (options.appCondition) whereConditions.push(options.appCondition);
     if (ids) {
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inArray(orders.id, ids) : sql`1 = 0`);

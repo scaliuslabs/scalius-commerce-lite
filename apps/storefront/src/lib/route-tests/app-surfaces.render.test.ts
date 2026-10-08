@@ -104,8 +104,8 @@ function theme(): StorefrontThemeDocument {
     pages: {
       ...document.pages,
       home: [
-        { id: "greeting", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { title: "Hi" } } },
-        { id: "silent", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: {} } },
+        { id: "greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { title: "Hi" } } },
+        { id: "silent", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: {} } },
         ...document.pages.home,
       ],
     },
@@ -197,12 +197,12 @@ function productData(noIndex: boolean) {
 const PRODUCT_BLOCKS = [
   {
     id: "heart",
-    app: "scalius.wishlist/button",
+    app: "acme.wishlist/button",
     placement: "buy-box",
-    html: '<form action="/apps/scalius.wishlist/toggle" method="post" data-app-form><button type="submit" aria-pressed="false">Save</button></form>',
+    html: '<form action="/apps/acme.wishlist/toggle" method="post" data-app-form><button type="submit" aria-pressed="false">Save</button></form>',
     head: head([["property", "product:retailer_item_id", "LIN-1"]], [thing("Wishlist")]),
   },
-  { id: "note", app: "scalius.hello/note", placement: "below", html: "<p>A note below</p>", head: head([]) },
+  { id: "note", app: "acme.hello/note", placement: "below", html: "<p>A note below</p>", head: head([]) },
 ];
 
 interface Stub {
@@ -281,7 +281,7 @@ describe("homepage app sections", () => {
 
     const sections = Array.from(page.querySelectorAll('[data-home-section="app"]'));
     expect(sections.map((node) => node.getAttribute("data-section-id"))).toEqual(["greeting"]);
-    expect(sections[0]!.querySelector('[data-app-section="scalius.hello/greeting"] .greeting')?.textContent).toBe("Hello from the app");
+    expect(sections[0]!.querySelector('[data-app-section="acme.hello/greeting"] .greeting')?.textContent).toBe("Hello from the app");
     expect(page.querySelector('[data-section-id="silent"]')).toBeNull();
 
     expect(page.head.querySelector('meta[name="hello-verify"]')?.getAttribute("content")).toBe("token-1");
@@ -316,11 +316,11 @@ describe("product page app blocks", () => {
     // Buy box: after the buy buttons, before the delivery and returns facts.
     const buyBox = page.querySelector('[data-app-blocks="buy-box"]')!;
     expect(buyBox).not.toBeNull();
-    expect(buyBox.querySelector('[data-app-surface="scalius.wishlist/button"] form[data-app-form]')).not.toBeNull();
+    expect(buyBox.querySelector('[data-app-surface="acme.wishlist/button"] form[data-app-form]')).not.toBeNull();
     const ctas = page.querySelector(".buy-box-ctas")!;
     expect(ctas.compareDocumentPosition(buyBox) & 4).toBeTruthy();
     expect(page.querySelector('[data-app-blocks="below"]')).not.toBeNull();
-    expect(page.querySelector('[data-app-blocks="buy-box"] [data-app-surface="scalius.hello/note"]')).toBeNull();
+    expect(page.querySelector('[data-app-blocks="buy-box"] [data-app-surface="acme.hello/note"]')).toBeNull();
 
     // Below: after every template module, inside a module container without a heading.
     const below = page.querySelector('[data-app-blocks="below"]')!;
@@ -382,15 +382,15 @@ describe("app proxy pages", () => {
         page: {
           title: "Your wishlist",
           description: "Products you saved",
-          html: '<h1>Fake</h1><script>alert(1)</script><p onclick="steal()" style="color:red" id="x">Saved items</p><a href="javascript:alert(1)">bad</a><form action="https://evil.example/x" method="post"><input name="a"></form><form action="/apps/scalius.wishlist/toggle" method="post" data-app-form><button type="submit">Remove</button></form>',
+          html: '<h1>Fake</h1><script>alert(1)</script><p onclick="steal()" style="color:red" id="x">Saved items</p><a href="javascript:alert(1)">bad</a><form action="https://evil.example/x" method="post"><input name="a"></form><form action="/apps/acme.wishlist/toggle" method="post" data-app-form><button type="submit">Remove</button></form>',
           head: { meta: [{ name: "wishlist-verify", content: "v1" }, { name: "robots", content: "index" }], jsonLd: [thing("List")] },
         },
       }),
     });
-    const request = new Request("https://shop.test/apps/scalius.wishlist/wishlist", {
+    const request = new Request("https://shop.test/apps/acme.wishlist/wishlist", {
       headers: { Accept: "text/html,application/xhtml+xml", Cookie: "_ga=1; cs_tok=tok_1" },
     });
-    const response = await render(ProxyPage, request, { pluginId: "scalius.wishlist", path: "wishlist" });
+    const response = await render(ProxyPage, request, { pluginId: "acme.wishlist", path: "wishlist" });
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     const html = await response.text();
@@ -404,7 +404,7 @@ describe("app proxy pages", () => {
     // Not indexed: no app JSON-LD.
     expect(page.querySelector('script[type="application/ld+json"][data-app-head]')).toBeNull();
 
-    const surface = page.querySelector('[data-app-page="scalius.wishlist"] [data-app-surface="scalius.wishlist"]')!;
+    const surface = page.querySelector('[data-app-page="acme.wishlist"] [data-app-surface="acme.wishlist"]')!;
     expect(page.querySelectorAll("h1")).toHaveLength(1);
     expect(page.querySelector("h1")?.textContent).toBe("Your wishlist");
     expect(surface.textContent).toContain("Saved items");
@@ -412,13 +412,13 @@ describe("app proxy pages", () => {
     expect(html).not.toContain("steal()");
     expect(html).not.toContain("evil.example");
     expect(surface.querySelector("[style], [id], [onclick]")).toBeNull();
-    expect(surface.querySelector('form[action="/apps/scalius.wishlist/toggle"][data-app-form]')).not.toBeNull();
+    expect(surface.querySelector('form[action="/apps/acme.wishlist/toggle"][data-app-form]')).not.toBeNull();
     // The store's chrome around it, and the "all" app script.
     expect(page.querySelector("header, #main-content")).not.toBeNull();
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js"]);
 
     // Only the session cookie reached the API.
-    expect(pluginCalls[0]!.url).toBe("/api/v1/plugins/scalius.wishlist/public/wishlist");
+    expect(pluginCalls[0]!.url).toBe("/api/v1/plugins/acme.wishlist/public/wishlist");
     expect(pluginCalls[0]!.headers.get("cookie")).toBe("cs_tok=tok_1");
   });
 
@@ -437,24 +437,24 @@ describe("app proxy pages", () => {
 
   it("answers a form post's redirect with a 303 to the same store", async () => {
     stubApi({ app: appJson({ redirect: "/products/linen" }) });
-    const request = new Request("https://shop.test/apps/scalius.wishlist/toggle", {
+    const request = new Request("https://shop.test/apps/acme.wishlist/toggle", {
       method: "POST",
       headers: { Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded", Origin: "https://shop.test", Cookie: "cs_tok=tok_1" },
       body: "productId=prod_linen&returnTo=%2Fproducts%2Flinen",
     });
-    const response = await render(ProxyPage, request, { pluginId: "scalius.wishlist", path: "toggle" });
+    const response = await render(ProxyPage, request, { pluginId: "acme.wishlist", path: "toggle" });
     expect(response.status).toBe(303);
     expect(response.headers.get("Location")).toBe("/products/linen");
   });
 
   it("passes JSON answers through unchanged", async () => {
     stubApi({ app: appJson({ pressed: true, message: "Saved to your wishlist." }) });
-    const request = new Request("https://shop.test/apps/scalius.wishlist/toggle", {
+    const request = new Request("https://shop.test/apps/acme.wishlist/toggle", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded", Origin: "https://shop.test" },
       body: "productId=prod_linen",
     });
-    const response = await render(ProxyPage, request, { pluginId: "scalius.wishlist", path: "toggle" });
+    const response = await render(ProxyPage, request, { pluginId: "acme.wishlist", path: "toggle" });
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/json");
     expect(await response.json()).toEqual({ pressed: true, message: "Saved to your wishlist." });

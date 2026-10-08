@@ -1,7 +1,7 @@
 // The files `pnpm plugin create` writes: a small plugin that touches the
 // surfaces most apps need (an event, a checkout function, a storefront
 // section, an admin page and a data update), with a test for each. Copy the
-// patterns from plugins/hello for the rest (settings, storage, cron, webhooks).
+// patterns in packages/plugin-sdk/README.md for the rest (settings, storage, cron, webhooks).
 
 export function scaffoldFiles(id, name) {
   const title = name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");

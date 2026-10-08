@@ -78,6 +78,8 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   sales_channel_locations: "0122_sales_channels",
   // A channel's sellable stock reads the levels at its unlinked locations.
   inventory_levels: "0122_sales_channels",
+  metaobject_definitions: "0126_plugin_seams",
+  metaobject_entries: "0126_plugin_seams",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's

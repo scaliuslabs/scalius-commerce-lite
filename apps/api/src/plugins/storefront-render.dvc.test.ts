@@ -6,7 +6,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 // The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
-vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/hello-bundled")).withHelloBundled(await importOriginal()));
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -24,7 +24,8 @@ import { createPublicPartReader, renderPublicRead } from "../public-read";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
 import { installHello, pluginTestEnv, PLUGIN_TEST_CREDENTIAL_KEY } from "./testing/fixtures";
-import { manifest as wishlistManifest } from "../../../../plugins/wishlist/src/index";
+import { manifest as wishlistManifest } from "./testing/apps/wishlist/src/index";
+import { manifest as notesManifest } from "./testing/apps/notes/src/index";
 
 class MemoryCache {
   readonly entries = new Map<string, Response>();
@@ -82,11 +83,11 @@ describe("storefront app output under dependency validation", () => {
     env = pluginTestEnv(binding, { CF_VERSION_METADATA: { id: "dvc-apps-version", tag: "", timestamp: "" } });
     cache = new MemoryCache();
     await installHello(db, sqlite);
-    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
-    await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
+    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.wishlist"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
     const theme = storefrontTemplateTheme("department-mall");
-    theme.pages.home = [{ id: "hello", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak" } } }];
-    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: { label: "Save it" } }];
+    theme.pages.home = [{ id: "hello", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak" } } }];
+    theme.blocks.product.apps = [{ id: "wish", app: "acme.wishlist/button", values: { label: "Save it" } }];
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)").run(JSON.stringify(theme));
     invoked = vi.spyOn(PluginHost.prototype, "invokeRoute");
   });
@@ -107,13 +108,13 @@ describe("storefront app output under dependency validation", () => {
     expect(appRuns()).toBe(1);
 
     // A write the section does not read (it declares no collections) changes nothing.
-    const hello = await requirePluginInstallation(db, "scalius.hello");
-    await putPluginRecord(db, "scalius.hello", "greetings", hello.manifest.storage.greetings!, "o1", { orderId: "o1", kind: "paid", createdAt: 1 });
+    const hello = await requirePluginInstallation(db, "acme.hello");
+    await putPluginRecord(db, "acme.hello", "greetings", hello.manifest.storage.greetings!, "o1", { orderId: "o1", kind: "paid", createdAt: 1 });
     expect((await read("/api/v1/storefront/homepage")).status).toBe("hit");
     expect(appRuns()).toBe(1);
 
     // The app's settings are part of what it draws.
-    await writePluginSettings(db, "scalius.hello", { greeting: "Hi", discount_percent: 5, min_subtotal_minor: 0 }, {
+    await writePluginSettings(db, "acme.hello", { greeting: "Hi", discount_percent: 5, min_subtotal_minor: 0 }, {
       expectedRevision: hello.revision,
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
@@ -122,7 +123,7 @@ describe("storefront app output under dependency validation", () => {
     expect((await read("/api/v1/storefront/homepage")).status).toBe("hit");
 
     // Deactivated: the section draws nothing, and the app is not asked.
-    await deactivatePlugin(db, "scalius.hello", { expectedRevision: (await requirePluginInstallation(db, "scalius.hello")).revision });
+    await deactivatePlugin(db, "acme.hello", { expectedRevision: (await requirePluginInstallation(db, "acme.hello")).revision });
     const off = await read("/api/v1/storefront/homepage");
     expect(off.status).toBe("refresh");
     expect((off.data.sections as { apps: unknown[] }).apps).toEqual([]);
@@ -134,17 +135,17 @@ describe("storefront app output under dependency validation", () => {
     expect(first.status).toBe("miss");
     expect(first.data.blocks).toEqual([expect.objectContaining({
       id: "wish",
-      app: "scalius.wishlist/button",
+      app: "acme.wishlist/button",
       placement: "buy-box",
-      html: expect.stringContaining('action="/apps/scalius.wishlist/toggle"'),
+      html: expect.stringContaining('action="/apps/acme.wishlist/toggle"'),
     })]);
     expect((first.data.blocks as Array<{ html: string }>)[0]!.html).toContain("Save it");
     expect(appRuns()).toBe(1);
     expect((await read("/api/v1/storefront/product-apps/linen-panjabi")).status).toBe("hit");
 
     // A buyer saving the product writes the app's storage; the block is the same for everyone.
-    const wishlist = await requirePluginInstallation(db, "scalius.wishlist");
-    await putPluginRecord(db, "scalius.wishlist", "wishes", wishlist.manifest.storage.wishes!, "c1:p_linen", { customerId: "c1", productId: "p_linen", addedAt: 1 });
+    const wishlist = await requirePluginInstallation(db, "acme.wishlist");
+    await putPluginRecord(db, "acme.wishlist", "wishes", wishlist.manifest.storage.wishes!, "c1:p_linen", { customerId: "c1", productId: "p_linen", addedAt: 1 });
     expect((await read("/api/v1/storefront/product-apps/linen-panjabi")).status).toBe("hit");
     expect(appRuns()).toBe(1);
 
@@ -173,7 +174,50 @@ describe("storefront app output under dependency validation", () => {
     expect(layout.data.appScripts).toEqual([]);
     expect((await read("/api/v1/storefront/layout")).status).toBe("hit");
     // Any installation change may change which scripts load.
-    await deactivatePlugin(db, "scalius.wishlist", { expectedRevision: (await requirePluginInstallation(db, "scalius.wishlist")).revision });
+    await deactivatePlugin(db, "acme.wishlist", { expectedRevision: (await requirePluginInstallation(db, "acme.wishlist")).revision });
     expect((await read("/api/v1/storefront/layout")).status).toBe("refresh");
+  });
+
+  it("draws checkout and account blocks once per page group: the layout says where, a hit runs no app code, only their keys refresh them", async () => {
+    // No app draws a block: the layout says so and pages read nothing more.
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual([]);
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).data.blocks).toEqual([]);
+
+    const notes = await installPlugin(db, { manifest: notesManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.notes"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.notes", { actorUserId: "owner", expectedRevision: notes.revision });
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual(["checkout", "account"]);
+
+    const runs = appRuns();
+    const checkout = await read("/api/v1/storefront/app-blocks/checkout");
+    expect(checkout.data.blocks).toEqual([{
+      id: "acme.notes/delivery",
+      app: "acme.notes",
+      target: "purchase.checkout.contact.render-after",
+      // A checkout block holds no form: the buyer's checkout form stays whole.
+      html: expect.not.stringContaining("<form"),
+    }]);
+    expect((checkout.data.blocks as Array<{ html: string }>)[0]!.html).toContain("Orders before 2 pm ship today.");
+    const account = await read("/api/v1/storefront/app-blocks/account");
+    expect((account.data.blocks as Array<{ target: string; html: string }>)).toEqual([expect.objectContaining({
+      target: "customer-account.order-index.block.render",
+      html: expect.stringContaining("action=\"/apps/acme.notes/join\""),
+    })]);
+    expect(appRuns()).toBe(runs + 2);
+
+    // Hits run no app code; a write to a collection only the account block reads refreshes only it.
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).status).toBe("hit");
+    expect((await read("/api/v1/storefront/app-blocks/account")).status).toBe("hit");
+    expect(appRuns()).toBe(runs + 2);
+    const installed = await requirePluginInstallation(db, "acme.notes");
+    await putPluginRecord(db, "acme.notes", "notes", installed.manifest.storage.notes!, "account", { text: "Double points this week." });
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).status).toBe("hit");
+    const refreshed = await read("/api/v1/storefront/app-blocks/account");
+    expect(refreshed.status).toBe("refresh");
+    expect(JSON.stringify(refreshed.data.blocks)).toContain("Double points this week.");
+
+    // Stopping the app removes its blocks everywhere.
+    await deactivatePlugin(db, "acme.notes", { expectedRevision: installed.revision });
+    expect((await read("/api/v1/storefront/app-blocks/checkout")).data.blocks).toEqual([]);
+    expect((await read("/api/v1/storefront/layout")).data.appBlockPages).toEqual([]);
   });
 });

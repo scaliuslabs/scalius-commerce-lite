@@ -131,6 +131,8 @@ export async function listCustomers(
         sort?: "name" | "totalOrders" | "totalSpent" | "lastOrderAt" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
         filters?: CustomerListFilters;
+        /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+        appCondition?: SQL;
     } = {},
 ) {
     const {
@@ -145,7 +147,7 @@ export async function listCustomers(
     } = options;
     const limit = Math.min(Math.max(rawLimit, 1), 100);
 
-    const whereConditions: (SQL | undefined)[] = [];
+    const whereConditions: (SQL | undefined)[] = options.appCondition ? [options.appCondition] : [];
     if (showTrashed) {
         // A retired guest record (all its orders joined an account) is merged, not trashed.
         whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`);

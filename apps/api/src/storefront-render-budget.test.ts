@@ -2,7 +2,7 @@
 import "@hono/zod-openapi";
 import { vi, beforeAll, describe, expect, it } from "vitest";
 // The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
-vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/hello-bundled")).withHelloBundled(await importOriginal()));
+vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { getDb } from "@scalius/database/client";
@@ -11,7 +11,7 @@ import { refreshProductRecommendations, refreshProductSalesStats } from "@scaliu
 import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
 import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
 import { installHello, PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
-import { manifest as wishlistManifest } from "../../../plugins/wishlist/src/index";
+import { manifest as wishlistManifest } from "./plugins/testing/apps/wishlist/src/index";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
@@ -278,21 +278,21 @@ async function renderPage(
   if (options.apps) {
     // Hello draws a homepage section; Wishlist draws a product block (both bundled, active).
     await installHello(db, sqlite);
-    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
-    await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
+    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.wishlist"]!.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
   }
   const sectionPage = page === "home" || page === "landing";
   const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
   if (sectionPage) {
     sqlite.exec(HOME_SEED);
-    if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak" } } });
+    if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak" } } });
     theme.pages.landing.eid = { title: "ঈদের বাছাই", description: "", sections: structuredClone(theme.pages.home) };
   } else if (page === "collection") {
     sqlite.exec(`INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
       ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"maxProducts":8}', 0)`);
   }
   if (options.apps && !sectionPage) {
-    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
+    theme.blocks.product.apps = [{ id: "wish", app: "acme.wishlist/button", values: {} }];
   }
   options.editTheme?.(theme);
   expect(storefrontThemeDocumentSchema.safeParse(theme).error?.issues ?? []).toEqual([]);

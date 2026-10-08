@@ -27,7 +27,7 @@ describe("GLOB to Postgres regex", () => {
   it("matches what SQLite GLOB matches", () => {
     const cases: Array<[string, string, boolean]> = [
       ["*.", "scalius.", true],
-      ["*.", "scalius.hello", false],
+      ["*.", "acme.hello", false],
       ["*[^0-9a-f]*", "abc123", false],
       ["*[^0-9a-f]*", "abcz", true],
       ["loc_?*", "loc_default", true],

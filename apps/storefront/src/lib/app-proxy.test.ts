@@ -119,7 +119,7 @@ describe("storefront app proxy pages", () => {
   const page = { page: { title: "Your wishlist", html: "<p>Saved</p>", index: false } };
 
   it("treats HTML GETs and plain form posts as navigations, never JSON or script calls", () => {
-    const at = "https://shop.test/apps/scalius.wishlist/toggle";
+    const at = "https://shop.test/apps/acme.wishlist/toggle";
     expect(isAppPageNavigation(new Request(at, { headers: { Accept: "text/html,application/xhtml+xml,*/*;q=0.8" } }))).toBe(true);
     expect(isAppPageNavigation(new Request(at, { headers: { Accept: "application/json" } }))).toBe(false);
     expect(isAppPageNavigation(new Request(at))).toBe(false);
@@ -132,7 +132,7 @@ describe("storefront app proxy pages", () => {
   });
 
   it("draws a page answer, keeping the app's status", async () => {
-    const navigation = new Request("https://shop.test/apps/scalius.wishlist/wishlist", { headers: { Accept: "text/html" } });
+    const navigation = new Request("https://shop.test/apps/acme.wishlist/wishlist", { headers: { Accept: "text/html" } });
     const answer = await resolveAppProxyAnswer(navigation, json(page));
     expect(answer).toEqual({ kind: "page", page: page.page, status: 200 });
     const missing = await resolveAppProxyAnswer(navigation, json(page, { status: 404 }));
@@ -140,7 +140,7 @@ describe("storefront app proxy pages", () => {
   });
 
   it("turns a redirect answer into a 303 to a path on this store only", async () => {
-    const post = new Request("https://shop.test/apps/scalius.wishlist/toggle", {
+    const post = new Request("https://shop.test/apps/acme.wishlist/toggle", {
       method: "POST",
       headers: { Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded" },
       body: "productId=p1",
@@ -167,7 +167,7 @@ describe("storefront app proxy pages", () => {
   });
 
   it("passes JSON, errors and non-navigation answers through byte for byte", async () => {
-    const navigation = new Request("https://shop.test/apps/scalius.wishlist/state", { headers: { Accept: "text/html" } });
+    const navigation = new Request("https://shop.test/apps/acme.wishlist/state", { headers: { Accept: "text/html" } });
     const body = JSON.stringify({ pressed: true });
     const plainJson = await resolveAppProxyAnswer(navigation, new Response(body, { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=30" } }));
     expect(plainJson.kind).toBe("response");
@@ -181,7 +181,7 @@ describe("storefront app proxy pages", () => {
     expect(await (failed as { response: Response }).response.text()).toBe(error);
 
     // A script asking for JSON gets the app's page JSON as it is.
-    const script = new Request("https://shop.test/apps/scalius.wishlist/wishlist", { headers: { Accept: "application/json" } });
+    const script = new Request("https://shop.test/apps/acme.wishlist/wishlist", { headers: { Accept: "application/json" } });
     const raw = json(page);
     expect(await resolveAppProxyAnswer(script, raw)).toEqual({ kind: "response", response: raw });
   });
@@ -189,8 +189,8 @@ describe("storefront app proxy pages", () => {
   it("proxies and reads a navigation in one call", async () => {
     const upstream = target(() => json(page));
     const answer = await answerAppProxyRequest(
-      new Request("https://shop.test/apps/scalius.wishlist/wishlist", { headers: { Accept: "text/html", Cookie: "cs_tok=tok_9" } }),
-      "scalius.wishlist",
+      new Request("https://shop.test/apps/acme.wishlist/wishlist", { headers: { Accept: "text/html", Cookie: "cs_tok=tok_9" } }),
+      "acme.wishlist",
       "wishlist",
       upstream.resolve,
     );

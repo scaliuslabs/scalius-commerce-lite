@@ -32,7 +32,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
 
   // Security: reject path traversal and restrict to safe characters.
   // Record ids ("cust_…", nanoid) use letters, digits, "_" and "-".
-  if (subpath.includes("..") || !/^[a-zA-Z0-9_/-]*$/.test(subpath)) {
+  // "Continue with <app>" names an app provider (`<plugin id>:<provider id>`, a dot and a colon).
+  const isIdentityFlow = /^identity\/[a-z0-9][a-z0-9.-]*:[a-z][a-z0-9-]*\/(start|callback)$/.test(subpath);
+  if (subpath.includes("..") || (!isIdentityFlow && !/^[a-zA-Z0-9_/-]*$/.test(subpath))) {
     return new Response("Bad request", { status: 400 });
   }
 

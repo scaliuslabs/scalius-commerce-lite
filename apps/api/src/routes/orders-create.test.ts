@@ -96,7 +96,13 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
     // The route reads attempt + authority in one batch; the mocks keep their
     // separate seams so each decision is still observable.
-    loadStorefrontCheckoutReads: async (db: unknown, identity: unknown, input: unknown, key: unknown) => {
+    loadStorefrontCheckoutReads: async (
+      db: unknown,
+      identity: unknown,
+      input: unknown,
+      key: unknown,
+      options?: { apps?: (registrations: never[]) => unknown },
+    ) => {
       const existingAttempt = await mocks.resolveExistingCheckoutAttempt(db, identity);
       let authority: Promise<unknown> | null = null;
       if (existingAttempt?.status !== "replay" && existingAttempt?.status !== "processing") {
@@ -109,6 +115,7 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
         existingAttempt,
         commitReads: PREFETCHED_COMMIT_READS,
         functionRegistrations: [],
+        apps: options?.apps?.([]) ?? actual.NO_CHECKOUT_APP_FUNCTIONS,
         // SSLCommerz is the Bangladesh pack's: these stores have it active (orders name it by its old id too).
         paymentProviders: await sslcommerzPackProviders(),
         authority: () => {

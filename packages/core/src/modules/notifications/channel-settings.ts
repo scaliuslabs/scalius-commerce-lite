@@ -4,6 +4,7 @@
 // while its provider is configured and not paused.
 
 import type { Database } from "@scalius/database/client";
+import { webPushSender } from "./web-push";
 import { ValidationError } from "@scalius/core/errors";
 import { isReady } from "@scalius/shared/readiness";
 import {
@@ -11,7 +12,7 @@ import {
     getNotificationProviderBlock,
     type NotificationProviderHealthChannel,
 } from "./notification-provider-health";
-import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import { resolveWhatsAppSender, type WhatsAppSender } from "../../integrations/whatsapp-sender";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
@@ -31,7 +32,7 @@ import {
 // Customer order notifications
 // ─────────────────────────────────────────
 
-const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp"] as const;
+const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 type CustomerChannel = (typeof CUSTOMER_CHANNELS)[number];
 
 export interface OrderWhatsAppTemplateSettings {
@@ -67,14 +68,16 @@ export async function updateNotificationChannels(
         expectedRevision?: number;
         /** The app providers a saved SMS or email choice may name. */
         appProviders?: AppProviders;
+        /** "" for Web Push, or an app push provider the caller checked is installed. */
+        pushProvider?: string;
     } = {},
 ): Promise<NotificationChannelRules> {
     const currentChannels = await getNotificationChannels(db);
-    const requested = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, null);
-    if (Object.values(requested).some((channels) => channels.includes("push"))) {
-        throw new ValidationError("Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications.");
-    }
     const channels = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, CUSTOMER_CHANNEL_ALLOWANCE);
+    // Web Push is built in: it needs only the master secret and an https store or dashboard address to sign with.
+    if (channelWasEnabled(channels, currentChannels, "push") && !(await webPushSender(env ?? {}))) {
+        throw new ValidationError("Browser notifications need your store's https web address. Add it in Settings → Store details → Web addresses.");
+    }
     const template = options.whatsappTemplate ? normalizeWhatsAppTemplate(options.whatsappTemplate) : null;
 
     if (channelWasEnabled(channels, currentChannels, "email")) {
@@ -103,14 +106,14 @@ export async function updateNotificationChannels(
     }
 
     if (channelWasEnabled(channels, currentChannels, "whatsapp")) {
-        if (!(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
-            throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
-        }
-        await assertNotificationProviderNotPaused(db, { channel: "whatsapp", provider: "whatsapp" });
+        const sender = await getWhatsAppSender(db, encryptionKey, options.appProviders);
+        if (!sender.ready) throw new ValidationError(sender.reason);
+        await assertNotificationProviderNotPaused(db, { channel: "whatsapp", provider: sender.provider });
     }
 
     const { value } = await notificationsDocument.write(db, {
         orderChannels: channels,
+        ...(options.pushProvider === undefined ? {} : { pushProvider: options.pushProvider }),
         ...(template
             ? { whatsappOrderTemplateName: template.templateName, whatsappOrderTemplateLanguage: template.languageCode }
             : {}),
@@ -136,12 +139,13 @@ async function assertNotificationProviderNotPaused(
     if (block) throw new ValidationError(describeNotificationProviderBlock(block));
 }
 
-export async function isWhatsAppCloudApiConfigured(
+/** The store's WhatsApp sender (built-in Meta Cloud API, or the app the merchant chose) and whether it can send now. */
+export function getWhatsAppSender(
     db: Database,
     encryptionKey?: string,
-): Promise<boolean> {
-    const config = await getWhatsAppCloudApiSettings(db, encryptionKey);
-    return Boolean(config.accessTokenConfigured && config.phoneNumberId);
+    appProviders?: AppProviders,
+): Promise<WhatsAppSender> {
+    return resolveWhatsAppSender(db, { encryptionKey, appProviders });
 }
 
 export async function getOrderWhatsAppTemplateSettings(

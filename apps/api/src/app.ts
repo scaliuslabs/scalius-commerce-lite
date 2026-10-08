@@ -9,6 +9,7 @@ import { collectionRoutes } from "./routes/collections";
 import { attributeRoutes } from "./routes/attributes";
 import { cacheControlRoutes } from "./routes/cache";
 import { searchRoutes } from "./routes/search";
+import { addressAutocompleteRoutes } from "./routes/address-autocomplete";
 import { navigationRoutes } from "./routes/navigation";
 import { pagesRoutes } from "./routes/pages";
 import { articleRoutes } from "./routes/articles";
@@ -59,6 +60,7 @@ import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations"
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminPriceListRoutes } from "./routes/admin/price-lists";
+import { adminMetaobjectRoutes } from "./routes/admin/metaobjects";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
 import { adminCustomerMarketingRoutes } from "./routes/admin/customer-marketing";
@@ -92,6 +94,7 @@ import { adminCatalogProjectionRoutes } from "./routes/admin/catalog-projections
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminReportRoutes } from "./routes/admin/reports";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
+import { adminWebPushRoutes } from "./routes/admin/web-push";
 import { adminTaxRoutes } from "./routes/admin/taxes";
 import { adminAgentAccessRoutes } from "./routes/admin/agent-access";
 import { adminReviewRoutes } from "./routes/admin/reviews";
@@ -160,6 +163,7 @@ app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/marketing", marketingRoutes);
 app.route("/locations", locationRoutes);
+app.route("/address-rules/autocomplete", addressAutocompleteRoutes);
 app.route("/address-rules", addressRuleRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 // SEO settings — used by storefront product/page routes for meta tags
@@ -246,6 +250,7 @@ app.use("/admin/*", adminAuthMiddleware);
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/price-lists", adminPriceListRoutes);
+app.route("/admin/metaobjects", adminMetaobjectRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
 // Static customer paths (tags, segments, export) before the /{id} routes.
 app.route("/admin/customers", adminCustomerMarketingRoutes);
@@ -289,6 +294,7 @@ app.route("/admin/gift-cards", adminGiftCardRoutes);
 app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
 app.route("/admin/import", adminImportRoutes);
 app.route("/admin/export", adminExportRoutes);
+app.route("/admin/web-push", adminWebPushRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);

@@ -70,7 +70,7 @@ const FIELDS = {
   fields: [
     { definition: definition("cfd_care", "Care", "single_line_text", { validations: { min: null, max: 10, regex: null, choices: null } }), value: "Hand wash", updatedAt: "" },
     { definition: definition("cfd_sizes", "Sizes", "list.integer"), value: [38, 40], updatedAt: "" },
-    { definition: definition("cfd_points", "Points", "integer", { namespace: "scalius.loyalty" }), value: 12, updatedAt: "" },
+    { definition: definition("cfd_points", "Points", "integer", { namespace: "acme.loyalty" }), value: 12, updatedAt: "" },
   ],
 };
 
@@ -133,7 +133,7 @@ describe("custom data card", () => {
     expect(input("custom-field-cfd_sizes").value).toBe("38");
     expect(input("custom-field-cfd_sizes-1").value).toBe("40");
     expect(input("custom-field-cfd_points").disabled).toBe(true);
-    expect(container.textContent).toContain(t("managedBy", { namespace: "scalius.loyalty" }));
+    expect(container.textContent).toContain(t("managedBy", { namespace: "acme.loyalty" }));
     expect(container.querySelector('a[href="/admin/settings/custom-data"]')?.textContent).toBe(t("manageFields"));
     // Nothing changed: no Save of its own.
     expect(button(t("saveCard"))).toBeUndefined();

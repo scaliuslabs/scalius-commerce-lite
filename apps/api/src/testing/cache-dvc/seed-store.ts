@@ -72,6 +72,8 @@ export function everySectionTheme() {
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
   set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
+  // A content type with storefront access: its published entries show; a change to the type or an entry must too.
+  set("metaobjects", { heading: "FAQ", definitionId: "mod_faq_000001", layout: "accordion", limit: 6 });
   theme.pages.home = sections;
   theme.pages.landing = {
     eid: { title: "ঈদের বাছাই", description: "", sections: structuredClone(sections) },
@@ -463,6 +465,23 @@ function seedSql(): string {
     ('cfd_origin_01', 'brand', 'custom', 'origin', 'Origin', 'single_line_text', '{}', 1, 0, ${T}, ${T}),
     ('cfd_hero_0001', 'page', 'custom', 'hero_colour', 'Hero colour', 'color', '{}', 1, 0, ${T}, ${T}),
     ('cfd_vip_00001', 'customer', 'custom', 'vip', 'VIP', 'boolean', '{}', 0, 0, ${T}, ${T});
+  -- Metaobjects: a public FAQ type (the homepage section reads it) and a private app type.
+  INSERT INTO metaobject_definitions (id, namespace, type, name, fields, display_field, storefront_access, revision, created_at, updated_at) VALUES
+    ('mod_faq_000001', 'custom', 'faq', 'FAQ', ${q([{ key: "question", name: "Question", type: "single_line_text", required: true }, { key: "answer", name: "Answer", type: "multi_line_text", required: false }])}, 'question', 1, 1, ${T}, ${T}),
+    ('mod_tiers_0001', 'acme.loyalty', 'tiers', 'Tiers', ${q([{ key: "label", name: "Label", type: "single_line_text", required: true }])}, 'label', 0, 1, ${T}, ${T}),
+    ('mod_sizes_0001', 'custom', 'size_chart', 'Size chart', ${q([{ key: "size", name: "Size", type: "single_line_text", required: true }, { key: "chest", name: "Chest", type: "integer", required: false }])}, 'size', 1, 1, ${T}, ${T}),
+    ('mod_shops_0001', 'custom', 'locations', 'Locations', ${q([{ key: "name", name: "Name", type: "single_line_text", required: true }])}, 'name', 1, 1, ${T}, ${T});
+  INSERT INTO metaobject_entries (id, definition_id, handle, status, fields, position, revision, created_at, updated_at) VALUES
+    ('moe_faq_000001', 'mod_faq_000001', 'returns', 'published', ${q({ question: "Returns?", answer: "Within 7 days." })}, 0, 1, ${T}, ${T}),
+    ('moe_faq_000002', 'mod_faq_000001', 'delivery', 'draft', ${q({ question: "Delivery?", answer: "Two days." })}, 1, 1, ${T}, ${T}),
+    ('moe_faq_000003', 'mod_faq_000001', 'sizes', 'published', ${q({ question: "Sizes?", answer: "S to XXL." })}, 2, 1, ${T}, ${T}),
+    ('moe_tiers_0001', 'mod_tiers_0001', 'gold', 'published', ${q({ label: "Gold" })}, 0, 1, ${T}, ${T}),
+    ('moe_tiers_0002', 'mod_tiers_0001', 'silver', 'published', ${q({ label: "Silver" })}, 1, 1, ${T}, ${T}),
+    ('moe_tiers_0003', 'mod_tiers_0001', 'bronze', 'draft', ${q({ label: "Bronze" })}, 2, 1, ${T}, ${T}),
+    ('moe_sizes_0001', 'mod_sizes_0001', 'm', 'published', ${q({ size: "M", chest: "40" })}, 0, 1, ${T}, ${T}),
+    ('moe_sizes_0002', 'mod_sizes_0001', 'l', 'published', ${q({ size: "L", chest: "42" })}, 1, 1, ${T}, ${T}),
+    ('moe_shops_0001', 'mod_shops_0001', 'dhanmondi', 'published', ${q({ name: "Dhanmondi" })}, 0, 1, ${T}, ${T}),
+    ('moe_shops_0002', 'mod_shops_0001', 'gulshan', 'published', ${q({ name: "Gulshan" })}, 1, 1, ${T}, ${T});
   INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value, updated_at) VALUES
     ('cfd_care_0001', 'product', 'p_linen', 'Hand wash cold.', ${T}),
     ('cfd_care_0001', 'product', 'p_cotton', 'Machine wash.', ${T}),

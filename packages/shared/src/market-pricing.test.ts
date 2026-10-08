@@ -133,6 +133,26 @@ describe("resolvePrice", () => {
     expect(resolvePrice({ ...plain, fx, prices: [market, segment, sale] })).toMatchObject({ source: "sale", amountMinor: 97_000, priceListId: "pl_x" });
   });
 
+  it("places an app price below every list and above FX and base (cart.line_prices)", () => {
+    const app = { amountMinor: 85_049, pluginId: "acme.b2b" };
+    // Above base: rounds half-up to the increment, struck against the price without it.
+    expect(resolvePrice({ ...plain, app })).toEqual({ amountMinor: 85_000, compareAtMinor: 120_000, source: "app", priceListId: null });
+    // Above FX.
+    expect(resolvePrice({ ...plain, fx: usd(), incrementMinor: 1, app: { amountMinor: 800, pluginId: "acme.b2b" } }))
+      .toMatchObject({ amountMinor: 800, compareAtMinor: 1_092, source: "app" });
+    // Every list outranks it: market and price-list rules stay authoritative.
+    const market = price({ priceListId: "pl_m", kind: "market", amountMinor: 90_000 });
+    expect(resolvePrice({ ...plain, prices: [market], app })).toMatchObject({ source: "market", amountMinor: 90_000 });
+    const sale = price({ priceListId: "pl_x", kind: "sale", amountMinor: 97_000 });
+    // A sale without its own compare-at compares against the price without sales, never an app price.
+    expect(resolvePrice({ ...plain, prices: [sale], app }).compareAtMinor).toBe(100_000);
+    // A surcharge price is allowed; a price never reaches zero; a broken one is ignored.
+    expect(resolvePrice({ ...plain, app: { amountMinor: 130_000, pluginId: "acme.b2b" } })).toMatchObject({ amountMinor: 130_000, compareAtMinor: null });
+    expect(resolvePrice({ ...plain, app: { amountMinor: 10, pluginId: "acme.b2b" } }).amountMinor).toBe(100);
+    expect(resolvePrice({ ...plain, app: { amountMinor: 0, pluginId: "acme.b2b" } }).source).toBe("base");
+    expect(resolvePrice({ ...plain, app: { amountMinor: 1.5, pluginId: "acme.b2b" } }).source).toBe("base");
+  });
+
   it("breaks ties by priority, then the lowest amount, then the list id", () => {
     const low = price({ priceListId: "pl_b", kind: "market", amountMinor: 80_000, priority: 1 });
     const high = price({ priceListId: "pl_a", kind: "market", amountMinor: 90_000, priority: 5 });

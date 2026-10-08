@@ -25,6 +25,7 @@ import type {
   HomepageBrand,
   HomepageCategory,
   HomepageMediaAsset,
+  HomepageMetaobject,
   HomepageProduct,
   HomepageProductList,
   HomepageSectionData,
@@ -53,6 +54,8 @@ export interface HomepageContent {
   homeProduct: HomepageProduct | null;
   /** What app sections drew (sanitized by the API), by section id; absent or missing: nothing. */
   apps?: ReadonlyMap<string, HomepageAppSurface>;
+  /** The Metaobjects sections' content types, by definition id; absent or missing: nothing. */
+  metaobjects?: ReadonlyMap<string, HomepageMetaobject>;
 }
 
 export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = {
@@ -80,6 +83,7 @@ export function homepageContent(
     promotionEnds: new Map((data?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
     homeProduct: data?.homeProduct ?? null,
     apps: readHomepageAppSurfaces(data?.apps),
+    metaobjects: new Map((data?.metaobjects ?? []).map((type) => [type.id, type])),
   };
 }
 
@@ -89,6 +93,21 @@ export function homepageAppSurface(
   content: Pick<HomepageContent, "apps">,
 ): HomepageAppSurface | null {
   return section.type === "app" ? content.apps?.get(section.id) ?? null : null;
+}
+
+/**
+ * A Metaobjects section's content type and the entries it shows (the first
+ * `limit`), or null when the type is unset, private, gone or has no entries
+ * (the section then renders nothing).
+ */
+export function homepageMetaobject(
+  section: StorefrontSection,
+  content: Pick<HomepageContent, "metaobjects">,
+): HomepageMetaobject | null {
+  if (section.type !== "metaobjects" || !section.settings.definitionId) return null;
+  const type = content.metaobjects?.get(section.settings.definitionId);
+  const entries = type?.entries.slice(0, section.settings.limit) ?? [];
+  return type && entries.length > 0 ? { ...type, entries } : null;
 }
 
 /** The head tags of the app sections that render, in page order (the homepage head carries them). */
@@ -365,6 +384,8 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
       return section.settings.cards.length > 0;
     case "seo-text":
       return seoTextBlocks(section.settings.body).length > 0;
+    case "metaobjects":
+      return homepageMetaobject(section, content) !== null;
     // The signup form reads no store data: it always has its form and words.
     case "newsletter":
       return true;

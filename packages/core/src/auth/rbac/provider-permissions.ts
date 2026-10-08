@@ -31,6 +31,15 @@ export const PROVIDER_PORT_PERMISSIONS: Readonly<Record<ProviderKind, ProviderPo
   translation: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
   // Online store → theme editor, Draft with AI: /settings/theme/ai-draft.
   ai: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  // Settings → Notifications, chat channels and push: the notification channel rules.
+  messaging: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT] },
+  push: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT] },
+  // Settings → Checkout (address autocomplete), Customer accounts (sign-in), Online store (search).
+  search: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  address: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  identity: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  // Settings → Markets, exchange rates: /settings/markets.
+  fx: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
 };
 
 /** Whether these permissions read (`view`) or test (`manage`) a port's providers. */

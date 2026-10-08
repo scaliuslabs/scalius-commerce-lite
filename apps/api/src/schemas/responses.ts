@@ -72,12 +72,13 @@ export const cappedPaginationSchema = paginationSchema.extend({
  * Envelope of a keyset-paged list: the items, the capped `pagination` counts
  * and the `pageInfo` cursors. Additive to `paginatedEnvelope`.
  */
-export const keysetPaginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeAny) =>
+export const keysetPaginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeAny, extra: z.ZodRawShape = {}) =>
   successEnvelope(
     z.object({
       [itemsKey]: z.array(itemSchema),
       pagination: cappedPaginationSchema,
       pageInfo: pageInfoSchema,
+      ...extra,
     }),
   );
 

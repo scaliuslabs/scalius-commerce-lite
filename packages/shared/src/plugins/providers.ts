@@ -14,6 +14,9 @@ import { PAYMENT_PORT } from "./providers/payment";
 import { TAX_PORT } from "./providers/tax";
 import { TRANSLATION_PORT } from "./providers/translation";
 import { AI_PORT } from "./providers/ai";
+import { MESSAGING_PORT, PUSH_PORT } from "./providers/channels";
+import { ADDRESS_PORT, FX_PORT, SEARCH_PORT } from "./providers/storefront-services";
+import { IDENTITY_PORT } from "./providers/identity";
 
 export * from "./providers/kinds";
 export * from "./providers/common";
@@ -25,6 +28,9 @@ export * from "./providers/fraud";
 export * from "./providers/tax";
 export * from "./providers/translation";
 export * from "./providers/ai";
+export * from "./providers/channels";
+export * from "./providers/storefront-services";
+export * from "./providers/identity";
 export * from "./providers/descriptors";
 
 /** Every port answers whether its saved credentials authenticate. */
@@ -40,6 +46,12 @@ export const PROVIDER_PORTS = {
   tax: { ...TAX_PORT, testConnection: TEST_CONNECTION },
   translation: { ...TRANSLATION_PORT, testConnection: TEST_CONNECTION },
   ai: { ...AI_PORT, testConnection: TEST_CONNECTION },
+  messaging: { ...MESSAGING_PORT, testConnection: TEST_CONNECTION },
+  push: { ...PUSH_PORT, testConnection: TEST_CONNECTION },
+  search: { ...SEARCH_PORT, testConnection: TEST_CONNECTION },
+  address: { ...ADDRESS_PORT, testConnection: TEST_CONNECTION },
+  fx: { ...FX_PORT, testConnection: TEST_CONNECTION },
+  identity: { ...IDENTITY_PORT, testConnection: TEST_CONNECTION },
 } as const;
 
 type Ports = typeof PROVIDER_PORTS;

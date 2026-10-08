@@ -17,6 +17,7 @@ import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { createApiUrl } from "@/lib/api/transport";
 import { normalizeSearchQuery } from "@/lib/search-query";
 import { currentPresence, pagePath } from "@/lib/presence-url";
+import { pageLocale, searchProvider } from "@/lib/app-services";
 
 interface SearchResultItem {
   id: string;
@@ -219,6 +220,13 @@ export default function CommandPalette() {
         // A presence page's market prices the hits (MARKETS-DESIGN D5).
         const presence = currentPresence();
         if (presence) params.set("presence", presence);
+        // The store's search app ranks the hits; the API falls back to built-in
+        // search by itself, so nothing changes without one.
+        const provider = searchProvider();
+        if (provider) {
+          params.set("provider", provider);
+          params.set("locale", pageLocale());
+        }
 
         const res = await fetch(createApiUrl(`/search?${params}`), {
           signal: controller.signal,

@@ -12,6 +12,9 @@ import {
   type CheckoutLanguageData,
 } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import AppBlocks from "@/components/apps/AppBlocks.astro";
+import { getAppBlocks } from "@/lib/api/app-blocks";
+import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -23,6 +26,8 @@ const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all
   getCheckoutConfig(),
   getActiveCheckoutLanguage(),
 ]);
+// Apps' checkout blocks: read only when the layout says an active app draws one.
+const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
 const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   id: "fallback",
   name: "English (Fallback)",
@@ -148,6 +153,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
           <div class="h-16 animate-pulse rounded-xl border border-border bg-muted/50" aria-hidden="true"></div>
           <span class="sr-only" role="status">{copy.loadingPaymentMethodsText}</span>
         </div>
+        <AppBlocks blocks={appBlocks} target="purchase.checkout.payment-method-list.render-after" class="mt-4" />
+        <AppBlocks blocks={appBlocks} target="purchase.checkout.actions.render-before" class="mt-4" />
 
         <div id="paymentActionParking" class="hidden">
           <div

@@ -23,7 +23,9 @@ import {
     assertStorefrontGiftCardTenderReviewed,
     buildCheckoutAttemptIdentity,
     commitStorefrontOrderPayload,
+    createAppLinePricer,
     createAtomicCheckoutAttempt,
+    createCartTransformer,
     createStorefrontOrder,
     createTrustedStorefrontCheckoutPolicySnapshot,
     resolveExistingCheckoutAttempt,
@@ -459,6 +461,15 @@ app.openapi(createOrderRoute, async (c) => {
 
   try {
     const attemptIdentity = await buildCheckoutAttemptIdentity(data);
+    const sessionCustomerId = lazySessionCustomerId(c, (token) =>
+      getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
+    // What the apps' line prices and cart transforms see besides the cart.
+    const appContext = {
+      channel: "online_store" as const,
+      customerId: sessionCustomerId,
+      destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+      discountCodes: data.discountCodes,
+    };
     // One read round trip: idempotency row, checkout authority, and the rows
     // the commit needs. A committed request replays before any policy check.
     const checkoutReads = await loadStorefrontCheckoutReads<CheckoutCreatedPayload>(
@@ -488,12 +499,24 @@ app.openapi(createOrderRoute, async (c) => {
         // The order's market prices the lines (MARKETS-DESIGN D5); the
         // session is read only when a segment price list applies.
         billingCountryCode: data.billingCountryCode,
-        customerId: lazySessionCustomerId(c, (token) =>
-          getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))),
+        customerId: sessionCustomerId,
       },
       getCredentialEncryptionKey(c.env as Record<string, unknown>),
-      // App payment providers join from the registrations the read batch carries.
-      { paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations) },
+      {
+        // App payment providers join from the registrations the read batch carries.
+        paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations),
+        // The apps' checkout functions, from the registrations the read batch
+        // carried: none means no app work. Placement runs them again (it never
+        // trusts the quote's app outcome; the fingerprint compares the totals).
+        apps: (registrations) => createCheckoutAppFunctions({
+          env: c.env,
+          ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+          db,
+          registrations,
+        }),
+        linePricer: (apps) => createAppLinePricer(db, apps, appContext),
+        transformer: (apps) => createCartTransformer(db, apps, appContext),
+      },
     );
     const existingAttempt = checkoutReads.existingAttempt;
     const paymentProviders = checkoutReads.paymentProviders;
@@ -520,15 +543,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
-    // The apps' checkout functions, from the registrations the read batch
-    // carried: none means no app work. Placement runs them again (it never
-    // trusts the quote's app outcome; the fingerprint compares the totals).
-    const apps = createCheckoutAppFunctions({
-      env: c.env,
-      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
-      db,
-      registrations: checkoutReads.functionRegistrations,
-    });
+    const apps = checkoutReads.apps;
     diagnostics?.mark("authority");
 
     const {
@@ -555,7 +570,22 @@ app.openapi(createOrderRoute, async (c) => {
 
     const result = await createStorefrontOrder(
       db,
-      data,
+      // Apps that rewrote the lines (`cart.transform`): the order holds the rewritten lines.
+      checkoutReads.transform
+        ? {
+          ...data,
+          items: checkoutReads.transform.items.map((item) => ({
+            cartKey: item.cartKey ?? undefined,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            ...(typeof item.price === "number" ? { price: item.price } : {}),
+            ...(item.productName ? { productName: item.productName } : {}),
+            ...(item.variantLabel ? { variantLabel: item.variantLabel } : {}),
+            ...(item.properties !== undefined ? { properties: item.properties as typeof data.items[number]["properties"] } : {}),
+          })),
+        }
+        : data,
       requestUrl,
       {
         orderId: checkoutAttempt.orderId,

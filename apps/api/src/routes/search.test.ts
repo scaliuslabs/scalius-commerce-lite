@@ -7,6 +7,12 @@ const mocks = vi.hoisted(() => ({
   search: vi.fn(),
   nativeRateLimit: vi.fn(),
   getClientIp: vi.fn(() => "203.0.113.24"),
+  appSearch: vi.fn(),
+  resolve: vi.fn(),
+}));
+
+vi.mock("../plugins/providers/app-providers", () => ({
+  requestAppProviders: () => ({ resolve: mocks.resolve }),
 }));
 
 vi.mock("@scalius/core/search", () => ({
@@ -193,5 +199,29 @@ describe("public search route", () => {
 
     expect(response.status).toBe(429);
     expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it("lets the store's search app rank the products, and keeps built-in search when it fails", async () => {
+    mocks.resolve.mockResolvedValue({ provider: { id: "acme.search:search", label: "Acme Search", search: mocks.appSearch }, issue: null });
+    mocks.appSearch.mockResolvedValueOnce({ productIds: ["prod_9", "prod_1"] });
+    const { app, db } = createTestApp();
+    const ranked = await app.request("/api/v1/search?q=hilsa&provider=acme.search%3Asearch&locale=bn", {}, createSearchEnv());
+    expect(ranked.status).toBe(200);
+    expect(mocks.resolve).toHaveBeenCalledWith("search", "acme.search:search");
+    expect(mocks.appSearch).toHaveBeenCalledWith(
+      { query: "hilsa", locale: "bn", marketId: "mkt_backup", limit: 10 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(mocks.search).toHaveBeenLastCalledWith(db, "hilsa", expect.objectContaining({ productIds: ["prod_9", "prod_1"], correctTypos: false }));
+
+    mocks.appSearch.mockRejectedValueOnce(new Error("down"));
+    await app.request("/api/v1/search?q=hilsa&provider=acme.search%3Asearch", {}, createSearchEnv());
+    expect(mocks.search).toHaveBeenLastCalledWith(db, "hilsa", expect.objectContaining({ correctTypos: true }));
+    expect(mocks.search.mock.lastCall?.[2]).not.toHaveProperty("productIds");
+
+    // Without the layout's provider, no app is asked at all.
+    mocks.resolve.mockClear();
+    await app.request("/api/v1/search?q=hilsa", {}, createSearchEnv());
+    expect(mocks.resolve).not.toHaveBeenCalled();
   });
 });

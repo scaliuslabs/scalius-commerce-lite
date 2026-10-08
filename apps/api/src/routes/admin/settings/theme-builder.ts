@@ -131,6 +131,7 @@ const SECTION_PURPOSE: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], str
   "endless-grid": "A long grid of the newest products that keeps loading.",
   "seo-text": "Long copy below everything, for search engines and readers.",
   "recently-viewed": "The products this buyer viewed (filled in their browser).",
+  metaobjects: "The published entries of one content type (an FAQ, a size chart, store locations): a content type id from Content types; leave it empty when you have none.",
   newsletter: "A signup: phone always, e-mail as chosen, optional WhatsApp.",
 };
 

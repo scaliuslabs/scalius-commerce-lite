@@ -86,7 +86,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
-  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[] };
+  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[] };
 
   const collection = (name: string) => records.get(name) ?? refuse("storage.undeclared_collection", `Collection "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, whereFields: string[], orderField: string | undefined) => {
@@ -234,6 +234,18 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     messagingEmail: async (input) => (sent.emails.push(copy(input)), { queued: true }),
     messagingSms: async (input) => (sent.sms.push(copy(input)), { queued: true }),
     messagingNotifyStaff: async (input) => void sent.notices.push(copy(input)),
+    messagingPush: async (input) => {
+      if (!manifest.permissions.includes("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the customers.view permission.");
+      sent.pushes.push(copy(input));
+      return { delivered: true };
+    },
+    timelineAdd: async (input) => {
+      const entry = copy(input) as { kind?: unknown };
+      if (!manifest.permissions.includes("orders.edit")) refuse("timeline.not_allowed", "Writing to order timelines needs the orders.edit permission.");
+      if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline.undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
+      sent.timeline.push(entry);
+      return { id: `oev_test${sent.timeline.length}` };
+    },
   };
 
   const seed: PluginContextSeed = {
@@ -329,7 +341,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const notAllowed = async () => refuse("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
       const result = await run(
         { kind: "provider", provider: providerId, operation, input: checked.data },
-        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed },
+        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed, messagingPush: notAllowed },
       );
       if (!result.ok) return result;
       const answer = schemas.output.safeParse(result.value);
@@ -354,22 +366,27 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
     }),
     /**
-     * Draws a theme section or product block the way the platform does:
-     * `request.render` with the merchant's settings resolved against the
-     * manifest, and a bridge that refuses everything but reads of the
-     * collections the section declares in `reads`.
+     * Draws a theme section, product block or checkout/account block the way
+     * the platform does: `request.render` with the merchant's settings
+     * resolved against the manifest (blocks have none: they read the app's
+     * settings), and a bridge that refuses everything but reads of the
+     * collections the surface declares in `reads`.
      */
     render: (
-      kind: "section" | "product-block",
+      kind: "section" | "product-block" | "block",
       type: string,
       input: { settings?: Record<string, unknown>; product?: PluginRenderContext["product"]; instanceId?: string } = {},
     ) => {
+      const block = kind === "block" ? manifest.storefront.blocks.find((entry) => entry.type === type) : undefined;
       const surface = kind === "section"
         ? manifest.storefront.sections.find((entry) => entry.type === type)
-        : manifest.storefront.productBlocks.find((entry) => entry.type === type);
+        : kind === "product-block"
+          ? manifest.storefront.productBlocks.find((entry) => entry.type === type)
+          : block ? { ...block, settings: [] } : undefined;
       if (!surface) throw new Error(`The manifest declares no ${kind} of type ${type}.`);
       const render: PluginRenderContext = {
         kind,
+        ...(block ? { target: block.target } : {}),
         type,
         instanceId: input.instanceId ?? `${type}-1`,
         settings: resolvePluginSettingValues(surface.settings, input.settings ?? {}),

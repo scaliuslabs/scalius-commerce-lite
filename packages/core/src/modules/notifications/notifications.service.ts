@@ -12,11 +12,10 @@ import type { AppProviders } from "../../integrations/provider-port";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { readFirebaseServiceAccountJson } from "../../integrations/firebase/settings";
 import {
-    getWhatsAppCloudApiSettings,
     normalizeWhatsAppRecipient,
-    sendWhatsAppTemplateMessage,
     type SendWhatsAppTemplateMessageResult,
 } from "../../integrations/whatsapp";
+import { resolveWhatsAppSender, type WhatsAppSender } from "../../integrations/whatsapp-sender";
 import {
     claimOrderNotificationDeliveryReceipt,
     createOrderNotificationDeliveryTarget,
@@ -44,6 +43,8 @@ import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMe
 import { notificationsDocument } from "./documents";
 import { getNotificationChannels, getOrderWhatsAppTemplateSettings } from "./channel-settings";
 import { getNotificationTemplates } from "./notification-templates.service";
+import { deliverWebPush, readPushSubscriptions, sendAppPush, sendWebPushNotification, webPushPayload, webPushSender } from "./web-push";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
 /** An order notification passes `orderId`; other subjects pass their type and id. */
 export interface DeliveryReceiptSubject {
@@ -108,7 +109,7 @@ const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
 
 const MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS = 8;
 
-const CUSTOMER_CHANNELS = new Set(["email", "sms", "whatsapp"]);
+const CUSTOMER_CHANNELS = new Set(["email", "sms", "whatsapp", "push"]);
 
 /** The skipped-receipt reason when every customer channel is off for the event. */
 export const NOTIFICATION_TURNED_OFF = "notification_turned_off";
@@ -277,9 +278,35 @@ export interface AdminPushSpec {
 /**
  * A best-effort system notice pushed to every active admin device (no
  * outbox row, so no per-token receipts): for facts with no order subject,
- * such as a webhook endpoint turned off after sustained failure.
+ * such as a webhook endpoint turned off after sustained failure. Firebase
+ * devices and Web Push browsers both get it; either may be absent.
  */
 export async function sendAdminPushNotice(
+    db: Database,
+    env: Env,
+    notice: { title: string; body: string; link: string | null; data: Record<string, string> },
+): Promise<void> {
+    await Promise.all([
+        sendAdminFcmNotice(db, env, notice),
+        sendStaffWebPushNotice(db, env, notice).catch(() => undefined),
+    ]);
+}
+
+async function sendStaffWebPushNotice(
+    db: Database,
+    env: Env,
+    notice: { title: string; body: string; link: string | null; data: Record<string, string> },
+): Promise<void> {
+    const sender = await webPushSender(env);
+    if (!sender) return;
+    await sendWebPushNotification(db, sender, { audience: "staff" }, {
+        title: notice.title.slice(0, 120),
+        body: notice.body.slice(0, 500),
+        ...(notice.link ? { url: notice.link } : {}),
+    });
+}
+
+async function sendAdminFcmNotice(
     db: Database,
     env: Env,
     notice: { title: string; body: string; link: string | null; data: Record<string, string> },
@@ -319,11 +346,67 @@ export function resolveDashboardLink(env: object | undefined, path: string): str
 }
 
 /**
- * Sends one push to every active admin device. When an outbox id is
- * provided, each FCM token is guarded by a durable delivery receipt so
- * retries skip tokens already accepted by FCM.
+ * Sends one push to every active admin device: Firebase devices and Web
+ * Push browsers. When an outbox id is provided, each device is guarded by a
+ * durable delivery receipt so retries skip devices that already took it.
  */
 export async function sendAdminPush(
+    db: Database,
+    env: Env,
+    spec: AdminPushSpec,
+): Promise<OrderNotificationDispatchResult> {
+    const [fcm, web] = await Promise.all([sendAdminFcmPush(db, env, spec), sendStaffWebPush(db, env, spec)]);
+    return buildDispatchResult([...fcm.outcomes, ...web]);
+}
+
+/**
+ * The Web Push part of a staff push: one receipt per browser (keyed by its
+ * subscription id) when the push has an outbox row. Without a master secret
+ * or an https dashboard origin, or without a subscribed browser, nothing.
+ */
+async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec): Promise<OrderNotificationChannelOutcome[]> {
+    try {
+        // A Worker that cannot sign reads nothing.
+        const sender = await webPushSender(env);
+        if (!sender) return [];
+        const subscriptions = await readPushSubscriptions(db, { audience: "staff" });
+        if (subscriptions.length === 0) return [];
+        const payload = webPushPayload({
+            title: spec.title.slice(0, 120),
+            body: spec.body.slice(0, 500),
+            ...(spec.link ? { url: spec.link } : {}),
+        });
+        const outcomes: OrderNotificationChannelOutcome[] = [];
+        const receiptFields = { ...spec.receipt, channel: "push" as const, provider: "webpush" };
+        for (const subscription of subscriptions) {
+            const masked = `web-push-${subscription.id.slice(4, 10)}`;
+            if (!spec.outboxId) {
+                const outcome = await deliverWebPush(db, sender, subscription, payload);
+                outcomes.push({ channel: "push", provider: "webpush", recipientMasked: masked, status: outcome === "sent" ? "accepted" : "skipped", retryable: false });
+                continue;
+            }
+            const target = await createOrderNotificationDeliveryTarget({ outboxId: spec.outboxId, ...receiptFields, recipient: subscription.id, recipientMasked: masked });
+            const claim = await claimOrderNotificationDeliveryReceipt(db, target);
+            if (!claim.claimed) {
+                outcomes.push(outcomeFromUnclaimedReceipt(target, claim.reason));
+                continue;
+            }
+            const outcome = await deliverWebPush(db, sender, subscription, payload);
+            const result = { provider: "webpush", providerStatus: outcome, rawResponse: outcome };
+            outcomes.push(outcome === "sent"
+                ? await markAcceptedOutcome(db, target, claim.receipt, { success: true, ...result })
+                : outcome === "retry"
+                    ? await markFailedOutcome(db, target, claim.receipt, new Error("web_push_retry"), result)
+                    : await markSkippedOutcome(db, target, claim.receipt, `web_push_${outcome}`, result));
+        }
+        return outcomes;
+    } catch (error: unknown) {
+        console.error(`[Notifications] Web Push failed for ${spec.logLabel}:`, error instanceof Error ? error.name : "unknown");
+        return [];
+    }
+}
+
+async function sendAdminFcmPush(
     db: Database,
     env: Env,
     spec: AdminPushSpec,
@@ -938,10 +1021,11 @@ export async function sendOrderNotificationEmail(
                 }
 
                 if (whatsappRecipient) {
-                    const sendConfig = db
-                        ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey)
+                    const sender = db
+                        ? await resolveWhatsAppSender(db, { encryptionKey: options.encryptionKey, appProviders: options.appProviders })
                         : null;
-                    if (!sendConfig) {
+                    if (!sender?.ready) {
+                        const providerName = sender?.provider ?? "whatsapp";
                         if (receiptDb && outboxId) {
                             outcomes.push(await recordSkippedDelivery({
                                 db: receiptDb,
@@ -949,22 +1033,26 @@ export async function sendOrderNotificationEmail(
                                 orderId,
                                 notificationType: type,
                                 channel: "whatsapp",
-                                provider: "whatsapp",
+                                provider: providerName,
                                 recipient: `whatsapp:${whatsappRecipient}`,
                                 recipientMasked: maskPhone(customerPhone),
-                                reason: "missing_whatsapp_credentials",
+                                reason: providerName === "whatsapp" ? "missing_whatsapp_credentials" : "whatsapp_provider_not_ready",
                             }));
                         } else {
-                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} but Meta credentials are not configured`);
+                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} but the sender is not ready: ${compactProviderLogDetail(sender?.reason ?? "no database connection")}`);
                         }
                     } else {
-                        const send = async (): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
-                            config: sendConfig,
+                        const providerName = sender.provider;
+                        const orderTemplate = await getOrderWhatsAppTemplateSettings(db);
+                        const send = async (clientReference?: string): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
+                            sender,
+                            template: orderTemplate,
                             orderNumber: (await context()).variables.order_number ?? `#${orderId}`,
                             notificationType: type,
                             customerName: name,
                             customerPhone,
                             data,
+                            clientReference,
                         });
 
                         if (receiptDb && outboxId) {
@@ -974,7 +1062,7 @@ export async function sendOrderNotificationEmail(
                                 orderId,
                                 notificationType: type,
                                 channel: "whatsapp",
-                                provider: "whatsapp",
+                                provider: providerName,
                                 recipient: `whatsapp:${whatsappRecipient}`,
                                 recipientMasked: maskPhone(customerPhone),
                             });
@@ -987,10 +1075,10 @@ export async function sendOrderNotificationEmail(
                                     orderId,
                                     notificationType: type,
                                     channel: "whatsapp",
-                                    provider: "whatsapp",
+                                    provider: providerName,
                                     recipient: `whatsapp:${whatsappRecipient}`,
                                     recipientMasked: maskPhone(customerPhone),
-                                    send,
+                                    send: async (target) => send(createProviderClientReference(target)),
                                 }));
                             }
                         } else if (db) {
@@ -1038,7 +1126,116 @@ export async function sendOrderNotificationEmail(
         }
     }
 
+    if (enabledChannels.includes("push") && db) {
+        outcomes.push(...await sendOrderWebPush({
+            db,
+            env: options.env,
+            appProviders: options.appProviders,
+            orderId,
+            type,
+            receipt: receiptDb && outboxId ? { outboxId } : null,
+            message: async () => {
+                const message = await context();
+                return {
+                    title: (message.variables.store_name || ORDER_NOTIFICATION_LABELS[type] || "Order update").slice(0, 120),
+                    body: (await smsMessage()).slice(0, 500),
+                };
+            },
+        }));
+    }
+
     return buildDispatchResult(outcomes);
+}
+
+/**
+ * A buyer's order notification as a push: the order's page as the link, the
+ * SMS text (the store's language and template) as the words. With Web Push
+ * (the default): every browser the order's customer subscribed on their
+ * account page, one receipt each; a buyer without a subscribed browser, or a
+ * Worker that cannot sign, sends nothing and records nothing. With an app
+ * push provider: one send to the customer id, one receipt. A guest order has
+ * no push.
+ */
+async function sendOrderWebPush(options: {
+    db: Database;
+    env: OrderNotificationOptions["env"];
+    appProviders: AppProviders | undefined;
+    orderId: string;
+    type: OrderNotificationType;
+    receipt: { outboxId: string } | null;
+    message: () => Promise<{ title: string; body: string }>;
+}): Promise<OrderNotificationChannelOutcome[]> {
+    const { db, orderId, type } = options;
+    try {
+        const order = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.id, orderId)).get();
+        if (!order?.customerId) return [];
+        const customerId = order.customerId;
+        const { pushProvider } = await notificationsDocument.read(db);
+        if (isQualifiedProviderId(pushProvider)) {
+            const notification = { ...await options.message(), url: `/account/orders/${encodeURIComponent(orderId)}` };
+            const send = async (clientReference?: string): Promise<DeliverySendResult> => {
+                const result = await sendAppPush(options.appProviders, pushProvider, { audience: "customer", recipients: [customerId], notification, ...(clientReference ? { clientReference } : {}) });
+                return { success: result.success, provider: pushProvider, providerMessageId: result.providerRef, providerStatus: result.rawStatus, rawResponse: result.rawStatus, retryable: result.retryable };
+            };
+            if (!options.receipt) {
+                await send();
+                return [];
+            }
+            return [await dispatchWithReceipt({
+                db,
+                outboxId: options.receipt.outboxId,
+                orderId,
+                notificationType: type,
+                channel: "push",
+                provider: pushProvider,
+                recipient: `push-app:${customerId}`,
+                recipientMasked: "push-app",
+                send: async (target) => send(createProviderClientReference(target)),
+            })];
+        }
+        const subscriptions = await readPushSubscriptions(db, { audience: "customer", customerIds: [customerId] });
+        if (subscriptions.length === 0) return [];
+        const sender = await webPushSender((options.env ?? {}) as Record<string, unknown>);
+        if (!sender) return [];
+        const payload = webPushPayload({
+            ...await options.message(),
+            url: `/account/orders/${encodeURIComponent(orderId)}`,
+            tag: `order:${orderId}`.slice(0, 64),
+        });
+        const outcomes: OrderNotificationChannelOutcome[] = [];
+        for (const subscription of subscriptions) {
+            const masked = `web-push-${subscription.id.slice(4, 10)}`;
+            if (!options.receipt) {
+                await deliverWebPush(db, sender, subscription, payload, { urgency: "high" });
+                continue;
+            }
+            const target = await createOrderNotificationDeliveryTarget({
+                outboxId: options.receipt.outboxId,
+                orderId,
+                notificationType: type,
+                channel: "push",
+                provider: "webpush",
+                recipient: subscription.id,
+                recipientMasked: masked,
+            });
+            const claim = await claimOrderNotificationDeliveryReceipt(db, target);
+            if (!claim.claimed) {
+                outcomes.push(outcomeFromUnclaimedReceipt(target, claim.reason));
+                continue;
+            }
+            const outcome = await deliverWebPush(db, sender, subscription, payload, { urgency: "high" });
+            const result = { provider: "webpush", providerStatus: outcome, rawResponse: outcome };
+            outcomes.push(outcome === "sent"
+                ? await markAcceptedOutcome(db, target, claim.receipt, { success: true, ...result })
+                : outcome === "retry"
+                    ? await markFailedOutcome(db, target, claim.receipt, new Error("web_push_retry"), result)
+                    : await markSkippedOutcome(db, target, claim.receipt, `web_push_${outcome}`, result));
+        }
+        return outcomes;
+    } catch (error: unknown) {
+        console.error(`[Notifications] Web Push failed for ${type} (order ${orderId}):`, error instanceof Error ? error.name : "unknown");
+        return [];
+    }
 }
 
 /**
@@ -1100,48 +1297,24 @@ export async function sendStaffOrderEmails(
 }
 
 async function sendOrderWhatsAppTemplate(options: {
-    config: OrderWhatsAppSendConfig;
+    sender: Extract<WhatsAppSender, { ready: true }>;
+    template: { templateName: string; languageCode: string };
     orderNumber: string;
     notificationType: OrderNotificationType;
     customerName: string;
     customerPhone: string;
     data?: Record<string, unknown>;
+    clientReference?: string;
 }): Promise<DeliverySendResult> {
-    const result = await sendWhatsAppTemplateMessage({
-        accessToken: options.config.accessToken,
-        phoneNumberId: options.config.phoneNumberId,
+    const result = await options.sender.sendTemplate({
         to: options.customerPhone,
-        templateName: options.config.templateName,
-        languageCode: options.config.languageCode,
+        templateName: options.template.templateName,
+        languageCode: options.template.languageCode,
         bodyParameters: buildOrderWhatsAppBodyParameters(options),
+        ...(options.clientReference ? { clientReference: options.clientReference } : {}),
     });
 
-    return whatsAppResultToDeliveryResult(result);
-}
-
-interface OrderWhatsAppSendConfig {
-    accessToken: string;
-    phoneNumberId: string;
-    templateName: string;
-    languageCode: string;
-}
-
-async function resolveOrderWhatsAppSendConfig(
-    db: Database,
-    encryptionKey?: string,
-): Promise<OrderWhatsAppSendConfig | null> {
-    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey);
-    if (!whatsapp.accessToken || !whatsapp.phoneNumberId) {
-        return null;
-    }
-
-    const template = await getOrderWhatsAppTemplateSettings(db);
-    return {
-        accessToken: whatsapp.accessToken,
-        phoneNumberId: whatsapp.phoneNumberId,
-        templateName: template.templateName,
-        languageCode: template.languageCode,
-    };
+    return whatsAppResultToDeliveryResult(result, options.sender.provider);
 }
 
 function buildOrderWhatsAppBodyParameters(options: {
@@ -1159,10 +1332,10 @@ function buildOrderWhatsAppBodyParameters(options: {
     ];
 }
 
-function whatsAppResultToDeliveryResult(result: SendWhatsAppTemplateMessageResult): DeliverySendResult {
+function whatsAppResultToDeliveryResult(result: SendWhatsAppTemplateMessageResult, provider: string): DeliverySendResult {
     return {
         success: result.success,
-        provider: "whatsapp",
+        provider,
         providerMessageId: result.providerRef,
         providerStatus: result.rawStatus,
         rawResponse: result.rawResponse ?? result.rawStatus,

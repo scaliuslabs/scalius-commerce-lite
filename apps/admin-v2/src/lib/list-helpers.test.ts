@@ -6,6 +6,7 @@ import {
   createListSearchValidator,
   getCanonicalPageForPagination,
   isPagingRefusal,
+  normalizeAppFilterSearchParam,
   normalizeCursorSearchParam,
   normalizeOptionalEnumSearchParam,
   normalizeListPositiveInteger,
@@ -112,5 +113,30 @@ describe("cursor paging URL state", () => {
     expect(selected.pageInfo).toEqual(pageInfo);
     expect(selected.pagination).toMatchObject({ totalIsCapped: true, offset: 0 });
     expect(createDataSelector("orders")({}).pageInfo).toBeUndefined();
+  });
+
+  it("puts the apps' values on their rows, and leaves the rows alone without any", () => {
+    const rows = [{ id: "o1" }, { id: "o2" }];
+    const none = createDataSelector<{ id: string }>("orders")({ orders: rows });
+    // Without app columns the very same rows come back.
+    expect(none.data).toBe(rows);
+    const withValues = createDataSelector<{ id: string; appValues?: unknown }>("orders")({
+      orders: rows,
+      appValues: { o1: { "acme.crm/tier": "gold", "acme.crm/vip": false } },
+    });
+    expect(withValues.data).toEqual([
+      { id: "o1", appValues: { "acme.crm/tier": "gold", "acme.crm/vip": false } },
+      { id: "o2" },
+    ]);
+    // The response's rows are not changed.
+    expect(rows[0]).toEqual({ id: "o1" });
+  });
+
+  it("reads an app filter from the URL only in its own shape", () => {
+    expect(normalizeAppFilterSearchParam("acme.crm/tier:gold")).toBe("acme.crm/tier:gold");
+    expect(normalizeAppFilterSearchParam("acme.crm/note:a:b c")).toBe("acme.crm/note:a:b c");
+    for (const bad of ["", "tier:gold", "acme.crm/tier", "acme.crm/tier:", "/tier:gold", "a b/tier:x", `a/b:${"x".repeat(400)}`, 5, undefined, ["a/b:c"]]) {
+      expect(normalizeAppFilterSearchParam(bad), String(bad)).toBeUndefined();
+    }
   });
 });

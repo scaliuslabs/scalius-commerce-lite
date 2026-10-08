@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import {
   NO_CURSOR,
   createListSearchValidator,
+  normalizeAppFilterSearchParam,
   normalizeOptionalEnumSearchParam,
   normalizeOptionalSearchString,
   type SearchValidatorInput,
@@ -38,6 +39,8 @@ import {
 import { ProductBulkActions } from "~/components/admin/product-list/ProductBulkActions";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
+import { useAppListColumns } from "~/components/admin/apps/ui/list-columns";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
@@ -56,12 +59,19 @@ function validateProductSearch(search: SearchValidatorInput) {
     // Sales channels (MARKETS-DESIGN D6): on (or not on) one channel.
     channel: normalizeOptionalSearchString(search.channel),
     channelState: normalizeOptionalEnumSearchParam(search.channelState, CHANNEL_STATES),
+    // An app column and its exact value: `<app id>/<column id>:<value>`.
+    appFilter: normalizeAppFilterSearchParam(search.appFilter),
   };
 }
 
 type ProductSearch = ReturnType<typeof validateProductSearch>;
 
-function listQuery(search: ProductSearch, term: string) {
+/**
+ * `app` is what the active apps ask of the list (their columns and the filter
+ * their columns allow); the route's loader runs before they are known and
+ * reads the URL's filter as it is.
+ */
+function listQuery(search: ProductSearch, term: string, app?: { columnsParam?: string; filterParam?: string }) {
   // A numbered page (older links) or a cursor, never both.
   const cursor = search.after ? { after: search.after } : search.before ? { before: search.before } : null;
   return productsQueryOptions({
@@ -76,8 +86,13 @@ function listQuery(search: ProductSearch, term: string) {
     salesChannel: search.channel || undefined,
     salesChannelState: search.channel ? search.channelState : undefined,
     view: "compact",
+    appFilter: app ? app.filterParam : search.appFilter,
+    appColumns: app?.columnsParam,
   });
 }
+
+// Loads only when an active app has a column to filter by.
+const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter").then((module) => ({ default: module.AppListFilter })));
 
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: validateProductSearch,
@@ -114,9 +129,10 @@ function ProductsPage() {
     [channelData, showChannels, c],
   );
 
+  const app = useAppListColumns<ProductListItem>("product", search.appFilter);
   const columns = useMemo(
-    () => getProductColumns({ trashed: search.trashed, fmt, rowTo, channels: channelNames }),
-    [search.trashed, fmt, channelNames],
+    () => getProductColumns({ trashed: search.trashed, fmt, rowTo, channels: channelNames, extra: app.extra }),
+    [search.trashed, fmt, channelNames, app.extra],
   );
   const channelFilter = search.channel ? `${search.channelState ?? "published"}:${search.channel}` : "all";
 
@@ -142,8 +158,8 @@ function ProductsPage() {
           </>
         }
         search={search}
-        query={listQuery(search, term)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term)}
+        query={listQuery(search, term, app)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term, { filterParam: app.filterParam })}
         cursorPaging
         dataKey="products"
         columns={columns}
@@ -155,7 +171,7 @@ function ProductsPage() {
         ] }}
         searchPlaceholder={t("searchPlaceholder")}
         countLabel={(count) => t("productsCount", { count })}
-        filterParams={["category", "channel", "channelState"]}
+        filterParams={["category", "channel", "channelState", "appFilter"]}
         filters={
           <>
           <SearchableSelect
@@ -204,6 +220,18 @@ function ProductsPage() {
             ariaLabel={c("filterChannel")}
             triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-44"
           />
+          ) : null}
+          {app.filterable.length > 0 ? (
+            <Suspense fallback={<Skeleton className="h-9 w-full sm:w-80" />}>
+              <AppListFilter
+                resource="product"
+                value={search.appFilter}
+                onChange={(appFilter) => void navigate({
+                  to: "/admin/products",
+                  search: ((prev: Record<string, unknown>) => ({ ...prev, appFilter, page: 1, ...NO_CURSOR })) as never,
+                })}
+              />
+            </Suspense>
           ) : null}
           </>
         }

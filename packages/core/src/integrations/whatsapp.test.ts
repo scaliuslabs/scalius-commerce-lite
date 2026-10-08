@@ -211,6 +211,7 @@ describe("WhatsApp Cloud API integration", () => {
       accessTokenConfigured: true,
       phoneNumberId: "109876543210987",
       authTemplateName: "auth_otp",
+      provider: "",
     });
     // An encrypted token is never used without the dedicated key.
     await expect(getWhatsAppCloudApiSettings(db)).resolves.toMatchObject({
@@ -226,6 +227,7 @@ describe("WhatsApp Cloud API integration", () => {
       accessTokenConfigured: false,
       phoneNumberId: undefined,
       authTemplateName: "",
+      provider: "",
     });
   });
 });

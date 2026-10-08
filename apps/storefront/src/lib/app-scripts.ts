@@ -6,6 +6,10 @@
  * `connect-src`. Layout.astro and the middleware both decide from the same
  * two inputs (the layout payload and the URL path), so a page's CSP names
  * exactly the app scripts the page loads.
+ *
+ * "all" means every page except the buyer's checkout, order and account
+ * pages: an app's JavaScript runs there only where it names the page
+ * ("checkout", "order-success"); none ever runs on account pages.
  */
 
 /** The page kinds an app script can name (besides "all"). */
@@ -20,9 +24,13 @@ export interface StorefrontAppScript {
   pages: Array<StorefrontAppPage | "all">;
 }
 
+/** Pages where no app script loads unless it names the page (account pages: none at all). */
+const BUYER_PAGES = new Set<string>(["checkout", "order-success", "account"]);
+
 /** Which kind of page a storefront path renders (null: a page only "all" scripts load on). */
-export function storefrontAppPage(pathname: string): StorefrontAppPage | null {
+export function storefrontAppPage(pathname: string): StorefrontAppPage | "account" | null {
   const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/account" || path.startsWith("/account/")) return "account";
   if (path === "/") return "home";
   if (/^\/products\/[^/]+$/.test(path)) return "product";
   if (/^\/(?:categories|brands|collections)\/[^/]+$/.test(path) || /^\/(?:categories|collections|search)$/.test(path)) {
@@ -62,10 +70,12 @@ export function readAppScripts(value: unknown): StorefrontAppScript[] {
 }
 
 /** The scripts a page of this kind loads: those naming it or "all", each URL once. */
-export function appScriptsForPage(value: unknown, page: StorefrontAppPage | null): StorefrontAppScript[] {
+export function appScriptsForPage(value: unknown, page: StorefrontAppPage | "account" | null): StorefrontAppScript[] {
   const seen = new Set<string>();
+  const allApplies = page === null || !BUYER_PAGES.has(page);
   return readAppScripts(value).filter((script) => {
-    if (!script.pages.includes("all") && !(page && script.pages.includes(page))) return false;
+    const named = page !== null && page !== "account" && script.pages.includes(page);
+    if (!named && !(allApplies && script.pages.includes("all"))) return false;
     if (seen.has(script.src)) return false;
     seen.add(script.src);
     return true;

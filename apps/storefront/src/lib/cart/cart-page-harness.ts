@@ -16,6 +16,7 @@ import { formatMoney } from "@scalius/shared/currency";
 import { getCustomerSession } from "../api/customer-auth";
 import { browserApiUrl } from "../api/browser-url";
 import { pagePath } from "../presence-url";
+import { addressAutocompleteService, pageLocale } from "../app-services";
 import { storefrontSourcePath } from "../test-source-paths";
 import {
   cartHasFreeDeliveryItem,
@@ -82,6 +83,7 @@ import {
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
   BILLING_ADDRESS_FIELDS,
+  addressAutocompleteService,
   applyCheckoutContactNeeds,
   applyCheckoutDeliveryMode,
   browserApiUrl,
@@ -113,6 +115,7 @@ const realImports: Record<string, unknown> = {
   initCheckoutPhoneField,
   isDiscountValidationPending,
   loadCheckoutPhoneValidator,
+  pageLocale,
   pagePath,
   phoneHintCopy,
   readCheckoutDeliveryMode,

@@ -19,7 +19,7 @@ import {
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import type { AppProviders } from "../../integrations/provider-port";
-import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import { resolveWhatsAppSender } from "../../integrations/whatsapp-sender";
 import { selectSettingsDocuments } from "../../settings-store";
 import { checkoutDocument, customerAuthDocument } from "../settings";
 
@@ -77,8 +77,7 @@ export async function isCustomerAuthChannelReady(
             return isReady(await getEmailProviderReadiness({ db, encryptionKey: options.encryptionKey, env: options.runtimeEnv, appProviders: options.appProviders }));
         }
         if (channel === "sms") return isReady(await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders));
-        const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
-        return Boolean(whatsapp.accessToken && whatsapp.phoneNumberId);
+        return (await resolveWhatsAppSender(db, { encryptionKey: options.encryptionKey, appProviders: options.appProviders })).ready;
     } catch {
         return false;
     }

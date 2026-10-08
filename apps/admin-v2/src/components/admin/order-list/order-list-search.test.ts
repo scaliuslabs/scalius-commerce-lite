@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLEARED_ORDER_FILTERS,
   countOrderFilters,
   orderFilterQuery,
   orderListQuery,
@@ -35,6 +36,20 @@ describe("order list search", () => {
     }
     // An old link's SSLCommerz filters by the Bangladesh pack's provider (the API matches both ids).
     expect(validateOrderSearch({ paymentMethod: "sslcommerz" }).paymentMethod).toBe("scalius.bangladesh:sslcommerz");
+  });
+
+  it("filters by an app's column, counts it, and clears it with the other filters", () => {
+    const search = validateOrderSearch({ appFilter: "acme.crm/tier:gold" });
+    expect(search.appFilter).toBe("acme.crm/tier:gold");
+    expect(orderListQuery(search, "").appFilter).toBe("acme.crm/tier:gold");
+    expect(orderFilterQuery(search, "").appFilter).toBe("acme.crm/tier:gold");
+    expect(countOrderFilters(search)).toBe(1);
+    expect(CLEARED_ORDER_FILTERS).toHaveProperty("appFilter", undefined);
+    expect(orderViewUpdates("unpaid")).toHaveProperty("appFilter", undefined);
+    // A malformed filter never reaches the API, and no filter sends no parameter.
+    expect(validateOrderSearch({ appFilter: "gold" }).appFilter).toBeUndefined();
+    expect(orderListQuery(base, "").appFilter).toBeUndefined();
+    expect(orderListQuery(base, "")).not.toHaveProperty("appColumns");
   });
 
   it("filters by sales channel and counts it, dropping unknown channels", () => {

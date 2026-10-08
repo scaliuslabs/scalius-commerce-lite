@@ -32,6 +32,7 @@ import { qualifiedSettingLabel } from "@scalius/shared/plugins/settings-layout";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { PluginHost, type PluginHostOptions } from "./host";
 import { handOffRetiredProviders } from "./provider-handoff";
+import { syncPluginMetaobjects } from "./metaobjects";
 
 export interface LifecycleContext {
   db: Database;
@@ -63,6 +64,9 @@ export async function activatePluginWithHooks(
     console.warn(`[plugins] ${pluginId} could not take over retired providers (${error instanceof Error ? error.name : typeof error})`);
     handoffError = `${installation.manifest.name} could not move the keys saved before it. Activate it again, or enter them in its settings.`;
   }
+  // The app's content types (manifest.metaobjects), created or updated in its namespace.
+  const typeProblems = await syncPluginMetaobjects(context.db, installation);
+  if (typeProblems) handoffError = handoffError ? `${handoffError} ${typeProblems}` : typeProblems;
   const host = hostFor(context);
   // Approving an update that waited for more access: the new code loads and
   // its data updates run now, and a failure puts back the release it replaced.
@@ -137,7 +141,10 @@ export async function updatePluginToRelease(
   }
   const host = hostFor(context);
   const failure = await startNewRelease(host, updated);
-  if (!failure) return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: null };
+  if (!failure) {
+    const typeProblems = await syncPluginMetaobjects(context.db, updated);
+    return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: typeProblems };
+  }
   const latest = await requirePluginInstallation(context.db, current.pluginId);
   const restored = await restorePluginRelease(context.db, current, {
     expectedRevision: latest.revision,

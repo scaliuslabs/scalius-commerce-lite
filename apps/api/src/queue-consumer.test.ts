@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   recordPaymentWebhookDlqEvidence: vi.fn(),
   readStoreIdentity: vi.fn(),
   renderMissingMediaVariants: vi.fn(),
+  appProviders: { current: null as unknown },
 }));
 
 vi.mock("@scalius/core/modules/media", () => ({
@@ -102,6 +103,17 @@ vi.mock("@scalius/core/integrations/whatsapp", () => ({
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
   sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
 }));
+
+// A test that names an app WhatsApp sender supplies its lookup here; every
+// other test keeps the real (lazy, built-in-only) detached lookup.
+vi.mock("./plugins/providers/app-providers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./plugins/providers/app-providers")>();
+  return {
+    ...actual,
+    detachedAppProviders: (...args: Parameters<typeof actual.detachedAppProviders>) =>
+      (mocks.appProviders.current as ReturnType<typeof actual.detachedAppProviders> | null) ?? actual.detachedAppProviders(...args),
+  };
+});
 
 vi.mock("@scalius/shared/currency", async (importOriginal) => ({
   // Inventory now loads the catalogue projections, whose money helpers read
@@ -224,6 +236,7 @@ function createOtpChallengeDb(row: {
 describe("handleQueueBatch payment confirmation retries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.appProviders.current = null;
     mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -2224,6 +2237,140 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(cache.delete).toHaveBeenCalledWith("auth_otp:accepted:otp_delivery_dlq_accepted");
     expect(message.retry).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  describe("WhatsApp OTP through a chat app", () => {
+    const APP_ID = "acme.chat:whatsapp";
+    const appSend = vi.fn();
+    const otpMessage = (deliveryKey: string) => createMessage({
+      type: "auth.send_otp",
+      deliveryKey,
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "whatsapp_otp",
+      channel: "whatsapp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+    } as const);
+
+    function chooseApp(provider: { channels: readonly string[] } | null = { channels: ["whatsapp"] }, issue = "Acme Chat needs its access token.") {
+      mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+        accessToken: undefined,
+        accessTokenConfigured: false,
+        phoneNumberId: undefined,
+        authTemplateName: "otp_login",
+        provider: APP_ID,
+      });
+      mocks.appProviders.current = {
+        resolve: vi.fn(async () => (provider
+          ? { provider: { id: APP_ID, label: "Acme Chat", ...provider, send: appSend }, issue: null }
+          : { provider: null, issue })),
+      };
+    }
+
+    it("sends the code as a template through the app, with the platform reference, and records the app as provider", async () => {
+      chooseApp();
+      appSend.mockResolvedValue({ success: true, providerRef: "acme-otp-1", rawStatus: "queued" });
+      const message = otpMessage("otp_delivery_wa_app_1");
+
+      await handleQueueBatch(createBatch([message]), {} as Env);
+
+      expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+      expect(mocks.getNotificationProviderBlock).toHaveBeenCalledWith({ id: "db" }, { channel: "whatsapp", provider: APP_ID });
+      expect(appSend).toHaveBeenCalledWith({
+        channel: "whatsapp",
+        to: "+8801712345678",
+        template: { name: "otp_login", language: "en_US", parameters: ["654321"] },
+        clientReference: "otpclientref1",
+      }, {});
+      expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
+        { id: "db" },
+        expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+        expect.objectContaining({ provider: APP_ID, providerMessageId: "acme-otp-1", providerStatus: "queued" }),
+      );
+      const logs = [
+        ...vi.mocked(console.log).mock.calls,
+        ...vi.mocked(console.warn).mock.calls,
+        ...vi.mocked(console.error).mock.calls,
+      ].map(([entry]) => String(entry)).join("\n");
+      expect(logs).not.toContain("654321");
+      expect(logs).not.toContain("+8801712345678");
+      expect(message.ack).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips and pauses only the app when it declines the message for good", async () => {
+      chooseApp();
+      appSend.mockResolvedValue({ success: false, rawStatus: "Acme Chat is not configured: missing token", retryable: false });
+      const message = otpMessage("otp_delivery_wa_app_2");
+
+      await handleQueueBatch(createBatch([message]), {} as Env);
+
+      expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(
+        { id: "db" },
+        expect.objectContaining({ channel: "whatsapp", provider: APP_ID }),
+      );
+      expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalled();
+      expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+      expect(message.retry).not.toHaveBeenCalled();
+      expect(message.ack).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries a send the app says may succeed later", async () => {
+      chooseApp();
+      appSend.mockResolvedValue({ success: false, rawStatus: "temporarily unavailable", retryable: true });
+      const message = otpMessage("otp_delivery_wa_app_3");
+
+      await handleQueueBatch(createBatch([message]), {} as Env);
+
+      expect(mocks.markAuthOtpDeliveryReceiptFailed).toHaveBeenCalled();
+      expect(mocks.markAuthOtpDeliveryReceiptSkipped).not.toHaveBeenCalled();
+      expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    });
+
+    it("skips while the app is paused until its settings are saved, without calling it", async () => {
+      chooseApp();
+      mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+        channel: "whatsapp",
+        provider: APP_ID,
+        reason: "Acme Chat is not configured: missing token",
+        blockedAt: 1_800,
+      });
+      const message = otpMessage("otp_delivery_wa_app_4");
+
+      await handleQueueBatch(createBatch([message]), {} as Env);
+
+      expect(appSend).not.toHaveBeenCalled();
+      expect(mocks.markNotificationProviderBlocked).not.toHaveBeenCalled();
+      expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+        { id: "db" },
+        expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+        "provider_blocked_until_settings_save: Acme Chat is not configured: missing token",
+        expect.objectContaining({ provider: APP_ID, providerStatus: "provider_blocked_until_settings_save" }),
+      );
+      expect(message.retry).not.toHaveBeenCalled();
+    });
+
+    it("skips and pauses the app when it is not ready (not installed, inactive, or no WhatsApp channel)", async () => {
+      chooseApp(null);
+      const message = otpMessage("otp_delivery_wa_app_5");
+
+      await handleQueueBatch(createBatch([message]), {} as Env);
+
+      expect(appSend).not.toHaveBeenCalled();
+      expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+      expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(
+        { id: "db" },
+        expect.objectContaining({ channel: "whatsapp", provider: APP_ID }),
+      );
+      expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+        { id: "db" },
+        expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+        "provider_not_ready",
+        expect.objectContaining({ provider: APP_ID, providerStatus: "provider_not_ready" }),
+      );
+      expect(message.retry).not.toHaveBeenCalled();
+    });
   });
 
   it("records WhatsApp OTP message IDs after resolving encrypted Meta credentials", async () => {

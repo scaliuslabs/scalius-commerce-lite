@@ -5,7 +5,6 @@ import { isTemplatedNotificationType, type NotificationType } from "@scalius/cor
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,
-  getApiV1AdminSettingsNotificationChannels,
   getApiV1AdminSettingsSms,
   postApiV1AdminSettingsAuth,
   postApiV1AdminSettingsEmail,
@@ -52,18 +51,18 @@ import {
   buildCustomerNotificationConfig,
   serializeAdminNotificationConfig,
   serializeCustomerNotificationConfig,
+  type CustomerRules,
   type NotificationEventGroup,
 } from "./notification-channel-policy";
 import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 export const MASKED_VALUE = "••••••••••••";
 
-/** The notifications document: customer rules, staff alerts, readiness. */
-type CustomerRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannels>;
 type EmailSettings = ApiResult<typeof getApiV1AdminSettingsEmail>;
 type SmsSettings = ApiResult<typeof getApiV1AdminSettingsSms>;
 type AuthSettings = ApiResult<typeof getApiV1AdminSettingsAuth>;
@@ -187,7 +186,11 @@ export function CustomerNotificationsCard() {
   if (isLoadError) return <SettingsLoadFailure title={t("loadRules")} onRetry={refetch} />;
   if (!values.channels) return <SettingsCardLoading />;
   const config = buildCustomerNotificationConfig(values.channels);
-  const columns = CUSTOMER_NOTIFICATION_CHANNELS.map((key) => ({ key, label: t(key), ready: isReady(values[key]) }));
+  // Browser notifications are ready by their own rule (Web Push or the chosen app), not by a sending setup.
+  const columns = CUSTOMER_NOTIFICATION_CHANNELS.map((key) =>
+    key === "push"
+      ? { key, label: t("browser"), ready: isReady(values.customerPush) }
+      : { key, label: t(key), ready: isReady(values[key]) });
   const unready = columns.filter((column) => !column.ready).map((column) => column.key);
   return (
     <SettingsCard id="customerNotifications" title={t("customerTitle")} description={t("customerDescription")}>
@@ -205,7 +208,11 @@ export function CustomerNotificationsCard() {
           }))}
       />
       {unready.map((channel) => (
-        <p key={channel} className="text-body text-muted-foreground">{t("notReady", { channel: t(channel) })}</p>
+        <p key={channel} className="text-body text-muted-foreground">
+          {channel === "push"
+            ? values.customerPush?.issues[0]?.message ?? t("browserNotReady")
+            : t("notReady", { channel: t(channel) })}
+        </p>
       ))}
     </SettingsCard>
   );
@@ -269,6 +276,7 @@ export function StaffNotificationsCard() {
       {!pushReady ? (
         <p className="text-body text-muted-foreground">{t("notReady", { channel: t("push") })}</p>
       ) : null}
+      <ThisDeviceNotifications />
       <div className="space-y-3 border-t border-border pt-4">
         <div className="space-y-1">
           <h3 className="text-heading-sm">{t("staffEmails")}</h3>
@@ -650,6 +658,7 @@ function PushFields() {
   const accountValid = isServiceAccount(values.serviceAccount);
   return (
     <>
+      <p className="text-body text-muted-foreground">{t("firebaseOptional")}</p>
       <SettingsField
         id="push-service-account"
         label={t("serviceAccount")}

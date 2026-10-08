@@ -190,6 +190,9 @@ function pageChecks({ focus, locale, dir }) {
     // A focus target (a skip link's <main tabindex="-1">) is not a control.
     if (!element.matches("a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=radio],[role=switch],[role=option],[role=combobox],[role=slider]")) return false;
     if (element.matches(":disabled,[aria-disabled='true']")) return false;
+    // An option of a list a combobox drives (aria-activedescendant): the combobox keeps the focus.
+    const listbox = element.matches("[role=option]") ? element.closest("[role=listbox]") : null;
+    if (listbox?.id && document.querySelector(`[role=combobox][aria-controls~="${CSS.escape(listbox.id)}"]`)) return false;
     // A roving tab stop: one sibling takes Tab, arrows move between them.
     const roving = element.parentElement?.querySelector(":scope > [tabindex='0']");
     if (roving) return false;
@@ -406,6 +409,14 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       });
       page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error.message ?? error).slice(0, 200)}`));
       await page.setViewportSize({ width, height: VIEWPORT_HEIGHT });
+      // Browser storage the entry starts with (a saved cart), set before the page's own scripts run.
+      if (entry.storage && Object.keys(entry.storage).length > 0) {
+        await page.addInitScript((storage) => {
+          for (const [key, value] of Object.entries(storage)) {
+            try { localStorage.setItem(key, value); } catch { /* storage blocked: the page renders without it */ }
+          }
+        }, entry.storage);
+      }
       const response = await page.goto(result.url, { waitUntil: "load", timeout: 60_000 });
       if (!response || response.status() >= 400) {
         const status = response?.status() ?? 0;
@@ -416,8 +427,15 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       await page.evaluate(() => document.fonts?.ready).catch(() => {});
       for (const action of entry.interact ?? []) {
         if (action.maxWidth && width >= action.maxWidth) continue;
-        const target = page.locator(action.click).first();
-        if ((await target.count()) && (await target.isVisible())) await target.click({ timeout: 5_000 }).catch(() => {});
+        const target = page.locator(action.click ?? action.select ?? action.type).first();
+        if (!(await target.count()) || !(await target.isVisible())) continue;
+        if (action.click !== undefined) await target.click({ timeout: 5_000 }).catch(() => {});
+        else if (action.select !== undefined) await target.selectOption(action.value, { timeout: 5_000 }).catch(() => {});
+        else {
+          await target.click({ timeout: 5_000 }).catch(() => {});
+          await target.pressSequentially(action.text, { delay: 30 }).catch(() => {});
+          await page.waitForTimeout(action.wait ?? 600);
+        }
       }
       await page.waitForTimeout(400);
       const cls = await page.evaluate(() => ({ value: window.__galleryCls ?? 0, sources: window.__galleryShifts ?? [] }));

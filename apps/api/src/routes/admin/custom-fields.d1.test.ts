@@ -66,7 +66,7 @@ describe("custom field definition routes", () => {
     expect(taken.body.error.code).toBe("CUSTOM_FIELD_KEY_TAKEN");
     const badType = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Flags", type: "list.boolean" });
     expect(badType.status).toBe(400);
-    const pluginNamespace = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Points", namespace: "scalius.loyalty", type: "integer" });
+    const pluginNamespace = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Points", namespace: "acme.loyalty", type: "integer" });
     expect(pluginNamespace.status).toBe(403);
     expect(pluginNamespace.body.error.code).toBe("CUSTOM_FIELD_NAMESPACE_FORBIDDEN");
 
@@ -127,13 +127,13 @@ describe("custom field value routes", () => {
     const points = await createCustomFieldDefinition(
       db,
       createCustomFieldDefinitionSchema.parse({ ownerType: "customer", name: "Points", type: "integer" }),
-      { writer: { kind: "plugin", pluginId: "scalius.loyalty" } },
+      { writer: { kind: "plugin", pluginId: "acme.loyalty" } },
     );
     const refused = await call("PUT", "/custom-fields/customer/cus_a", { values: [{ definitionId: points.id, value: 10 }] });
     expect(refused.status).toBe(403);
     expect(refused.body.error.code).toBe("CUSTOM_FIELD_NAMESPACE_FORBIDDEN");
     const read = await call("GET", "/custom-fields/customer/cus_a");
-    expect(read.body.data.fields).toEqual([expect.objectContaining({ definition: expect.objectContaining({ namespace: "scalius.loyalty" }), value: null })]);
+    expect(read.body.data.fields).toEqual([expect.objectContaining({ definition: expect.objectContaining({ namespace: "acme.loyalty" }), value: null })]);
   });
 });
 

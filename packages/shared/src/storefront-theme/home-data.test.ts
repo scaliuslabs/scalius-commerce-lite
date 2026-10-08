@@ -99,7 +99,7 @@ describe("homepage section data requests", () => {
   it("flags sections whose own words or photos are missing, never data-driven ones", () => {
     const needs = STOREFRONT_SECTION_TYPES.filter((type) => storefrontSectionNeedsContent(storefrontSectionDefault(type, "x")));
     // A hero without slides and category tiles without categories have nothing to show either.
-    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "category-tiles", "editorial", "faq", "hero", "seo-text", "shop-by", "utility-cards"]);
+    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "category-tiles", "editorial", "faq", "hero", "metaobjects", "seo-text", "shop-by", "utility-cards"]);
     expect(storefrontSectionNeedsContent(section({ id: "b", type: "banner", version: 1, settings: { layout: "full", heading: "Eid", text: "", mediaId: null, cta: null } }))).toBe(false);
   });
 

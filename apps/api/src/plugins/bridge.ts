@@ -33,6 +33,9 @@ export interface PluginBridgeAuthority {
   collections: Record<string, PluginCollectionDeclaration>;
   /** Declared custom fields (owner type + key), all in the plugin's own namespace. */
   customFields: Array<{ ownerType: string; key: string; name: string; type: string; description?: string; storefrontVisible: boolean }>;
+  /** The app's name and the order timeline entry kinds it declares (`manifest.timeline`). */
+  appName?: string;
+  timeline?: Array<{ kind: string; title: string }>;
 }
 
 export interface PluginBridgeProps {
@@ -103,6 +106,10 @@ export interface PluginBridgeApi {
   messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
+  /** A push to one buyer (`customers.view`): Web Push or the store's app push provider. */
+  messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
+  /** A typed line on an order's timeline (`orders.edit`, a declared kind). */
+  timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }>;
 }
 
 /** Where the bridge runs: the Worker env and context of the current request. */
@@ -442,6 +449,51 @@ export class PluginBridgeHost implements PluginBridgeApi {
     return this.guard("messagingNotifyStaff", async () => {
       const { notifyPluginStaff } = await import("./messaging");
       await notifyPluginStaff(this.messagingContext(), input);
+    });
+  }
+
+  async messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }> {
+    return this.guard("messagingPush", async () => {
+      const { pushPluginCustomer } = await import("./messaging");
+      return pushPluginCustomer(this.messagingContext(), input);
+    });
+  }
+
+  // ── order timeline ─────────────────────────────────────────────────────
+
+  async timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }> {
+    return this.guard("timelineAdd", async () => {
+      if (!this.props.authority.permissions.includes("orders.edit")) {
+        fail("timeline.not_allowed", "Writing to order timelines needs the orders.edit permission.");
+      }
+      if (!isRecord(input) || typeof input.orderId !== "string" || input.orderId.length < 1 || input.orderId.length > 128) {
+        fail("timeline.invalid", "orderId is an order id.");
+      }
+      const declared = (this.props.authority.timeline ?? []).find((entry) => entry.kind === input.kind);
+      if (!declared) fail("timeline.undeclared", `Timeline kind ${String(input.kind).slice(0, 48)} is not declared in the manifest.`);
+      if (typeof input.message !== "string") fail("timeline.invalid", "message is text.");
+      if (input.fields !== undefined && !isRecord(input.fields)) fail("timeline.invalid", "fields is an object.");
+      const key = input.idempotencyKey;
+      if (key !== undefined && (typeof key !== "string" || key.length < 1 || key.length > 200)) fail("timeline.invalid", "idempotencyKey is text of 1 to 200 characters.");
+      const { addOrderAppEvent } = await import("@scalius/core/modules/orders");
+      const { ValidationError, NotFoundError } = await import("@scalius/core/errors");
+      try {
+        const id = await addOrderAppEvent(this.runtime.db(), {
+          orderId: input.orderId,
+          pluginId: this.pluginId,
+          appName: this.props.authority.appName ?? this.pluginId,
+          kind: declared.kind,
+          title: declared.title,
+          message: input.message,
+          ...(input.fields ? { fields: input.fields } : {}),
+          ...(key ? { requestKey: key } : {}),
+        });
+        return { id };
+      } catch (error) {
+        if (error instanceof NotFoundError) fail("timeline.not_found", "The order was not found.");
+        if (error instanceof ValidationError) fail("timeline.invalid", error.message);
+        throw error;
+      }
     });
   }
 

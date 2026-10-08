@@ -36,7 +36,15 @@ export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppGrant, AppListin
 export type AppCategory = AppSummary["categories"][number];
 
 /** The checkout points an app can implement, in the order checkout reaches them. */
-export const APP_FUNCTION_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "order.risk"] as const;
+export const APP_FUNCTION_POINTS = [
+  "cart.transform",
+  "cart.line_prices",
+  "cart.validate",
+  "checkout.discounts",
+  "checkout.shipping_rates",
+  "checkout.payment_methods",
+  "order.risk",
+] as const;
 export type AppFunctionPoint = (typeof APP_FUNCTION_POINTS)[number];
 
 /** A checkout function the app implements; at one point, lower priority runs first. */

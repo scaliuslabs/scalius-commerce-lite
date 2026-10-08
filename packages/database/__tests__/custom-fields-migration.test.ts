@@ -45,7 +45,7 @@ describe("0104_custom_fields", () => {
       ).run(id, ownerType, namespace, key);
       define("cfd_product01", "product", "custom", "care_guide");
       // The same key is free in another namespace or owner type, never twice in one.
-      define("cfd_plugin001", "product", "scalius.hello", "care_guide");
+      define("cfd_plugin001", "product", "acme.hello", "care_guide");
       define("cfd_plugin002", "product", "a-b.c", "care_guide");
       define("cfd_variant01", "variant", "custom", "care_guide");
       expect(() => define("cfd_product02", "product", "custom", "care_guide")).toThrow(/UNIQUE/);

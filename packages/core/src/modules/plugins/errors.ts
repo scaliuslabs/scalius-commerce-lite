@@ -50,6 +50,11 @@ export type PluginErrorCode =
   | "messaging.not_allowed"
   | "messaging.invalid"
   | "messaging.unavailable"
+  /** Order timeline entries (`ctx.timeline.add`). */
+  | "timeline.not_allowed"
+  | "timeline.undeclared"
+  | "timeline.invalid"
+  | "timeline.not_found"
   /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
   | "render.not_allowed"
   | "rate_limited"
@@ -91,6 +96,10 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "http.failed": 502,
   "messaging.not_allowed": 403,
   "messaging.unavailable": 503,
+  "timeline.not_allowed": 403,
+  "timeline.undeclared": 403,
+  "timeline.invalid": 422,
+  "timeline.not_found": 404,
   "render.not_allowed": 403,
   rate_limited: 429,
   "quota.storage": 507,

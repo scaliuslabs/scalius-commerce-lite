@@ -93,6 +93,28 @@ describe("search palette keyboard (WAI-ARIA combobox)", () => {
     expect(document.body.textContent).toContain("No results for “kettel”. Showing results for “kettle”.");
   });
 
+  it("asks the store's search app (provider and page language) only when the layout names one", async () => {
+    searchResponse({ products: [product("p1", "linen-shirt")] });
+    await type("shirtplain");
+    const plain = new URL((vi.mocked(fetch).mock.calls[0]![0] as string), "https://shop.example");
+    expect(plain.searchParams.has("provider")).toBe(false);
+    expect(plain.searchParams.has("locale")).toBe(false);
+
+    window.__SEARCH_PROVIDER__ = "acme.search/semantic";
+    document.documentElement.lang = "bn-BD";
+    try {
+      searchResponse({ products: [product("p2", "linen-kurta")] });
+      await type("kurtaranked");
+      const ranked = new URL((vi.mocked(fetch).mock.calls[0]![0] as string), "https://shop.example");
+      expect(ranked.searchParams.get("provider")).toBe("acme.search/semantic");
+      expect(ranked.searchParams.get("locale")).toBe("bn");
+      expect(ranked.searchParams.get("q")).toBe("kurtaranked");
+    } finally {
+      delete window.__SEARCH_PROVIDER__;
+      document.documentElement.lang = "";
+    }
+  });
+
   it("shows a calm no-results state with a way to keep browsing", async () => {
     searchResponse({});
     await type("zzzz");

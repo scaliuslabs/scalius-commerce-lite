@@ -21,6 +21,7 @@ import {
   homepageCollectionsFallback,
   homepageHero,
   homepageMedia,
+  homepageMetaobject,
   homepageMosaicTiles,
   homepagePhoneSections,
   homepageRenderUnits,
@@ -40,6 +41,7 @@ import Lookbook from "./Lookbook.astro";
 import BannerRow from "./BannerRow.astro";
 import EditorialSection from "./EditorialSection.astro";
 import FaqSection from "./FaqSection.astro";
+import MetaobjectsSection from "./MetaobjectsSection.astro";
 import UtilityCards from "./UtilityCards.astro";
 import EndlessGrid from "./EndlessGrid.astro";
 import SeoText from "./SeoText.astro";
@@ -114,6 +116,7 @@ const root = only
     const lead = section.id === leadSectionId;
     const list = homepageSectionProducts(section, content);
     const appSurface = homepageAppSurface(section, content);
+    const metaobject = homepageMetaobject(section, content);
     const headingId = `home-${section.id}-title`;
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id} data-theme-section-id={marks ? section.id : undefined}>
@@ -227,6 +230,10 @@ const root = only
         )}
 
         {section.type === "faq" && <FaqSection section={section} />}
+
+        {section.type === "metaobjects" && metaobject && (
+          <MetaobjectsSection section={section} metaobject={metaobject} media={content.media} {...money} {language} />
+        )}
 
         {section.type === "utility-cards" && <UtilityCards section={section} />}
 

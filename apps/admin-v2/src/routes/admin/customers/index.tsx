@@ -19,6 +19,7 @@ import { warmRouteQuery } from "~/lib/route-query-warming";
 import { customersQueryOptions } from "~/lib/api-query-options/customers";
 import { useCurrency } from "~/hooks/use-currency";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
+import { useAppListColumns } from "~/components/admin/apps/ui/list-columns";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
@@ -41,7 +42,12 @@ type Customer = CustomerListItem;
 /** The list's own search key per tab ("customers", "customers.subscribers", "customers.trash"). */
 const searchKey = (search: CustomerListSearch) => listSearchKey("customers", search, "view");
 
-function listQuery(search: CustomerListSearch, term: string) {
+/**
+ * `app` is what the active apps ask of the list (their columns and the filter
+ * their columns allow); the route's loader runs before they are known and
+ * reads the URL's filter as it is.
+ */
+function listQuery(search: CustomerListSearch, term: string, app?: { columnsParam?: string; filterParam?: string }) {
   // A numbered page (older links) or a cursor, never both.
   const cursor = search.after ? { after: search.after } : search.before ? { before: search.before } : null;
   return customersQueryOptions({
@@ -52,6 +58,8 @@ function listQuery(search: CustomerListSearch, term: string) {
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
     ...customerListFilters(search),
+    appFilter: app ? app.filterParam : search.appFilter,
+    appColumns: app?.columnsParam,
   });
 }
 
@@ -93,12 +101,13 @@ function CustomersPage() {
   const [exporting, setExporting] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
   const exportLoaded = useOpenedOnce(exporting.open);
   // Same query as the table (shared cache): the export dialog names how many match.
-  const { data: listed } = useQuery(listQuery(search, term));
+  const app = useAppListColumns<Customer>("customer", search.appFilter);
+  const { data: listed } = useQuery(listQuery(search, term, app));
 
   const columns = useMemo(
-    () => getCustomerColumns({ t, fmt, rowTo: (row) => (search.trashed ? undefined : openTo(row)) }),
+    () => getCustomerColumns({ t, fmt, rowTo: (row) => (search.trashed ? undefined : openTo(row)), extra: app.extra }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `openTo` only builds a path from the row.
-    [t, fmt, search.trashed],
+    [t, fmt, search.trashed, app.extra],
   );
 
   return (
@@ -117,8 +126,8 @@ function CustomersPage() {
         search={search}
         list="customers"
         appActions="customer"
-        query={listQuery(search, term)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term)}
+        query={listQuery(search, term, app)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term, { filterParam: app.filterParam })}
         cursorPaging
         dataKey="customers"
         columns={columns}
@@ -171,8 +180,8 @@ function CustomersPage() {
             filters={customerListFilters(search)}
             selectedIds={exporting.ids}
             // A capped count is a lower bound: the dialog then names the filters, not a number.
-            total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
-            searchActive={Boolean(term)}
+            total={term || app.filterParam || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
+            searchActive={Boolean(term) || app.filterParam !== undefined}
           />
         </Suspense>
       ) : null}

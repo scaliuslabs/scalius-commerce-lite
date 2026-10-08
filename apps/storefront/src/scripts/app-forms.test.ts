@@ -18,9 +18,9 @@ afterEach(() => {
 
 describe("app forms enhancer guards", () => {
   it("posts only to this store's /apps/ proxy", () => {
-    expect(appProxyUrl("/apps/scalius.wishlist/toggle", ORIGIN)).toBe("https://shop.test/apps/scalius.wishlist/toggle");
-    expect(appProxyUrl("https://shop.test/apps/scalius.wishlist/state?productId=p1", ORIGIN))
-      .toBe("https://shop.test/apps/scalius.wishlist/state?productId=p1");
+    expect(appProxyUrl("/apps/acme.wishlist/toggle", ORIGIN)).toBe("https://shop.test/apps/acme.wishlist/toggle");
+    expect(appProxyUrl("https://shop.test/apps/acme.wishlist/state?productId=p1", ORIGIN))
+      .toBe("https://shop.test/apps/acme.wishlist/state?productId=p1");
     for (const value of [
       "https://evil.example/apps/x.y/toggle",
       "//evil.example/apps/x.y/toggle",
@@ -57,7 +57,7 @@ describe("app forms enhancer guards", () => {
 
 function wishlistForm(): HTMLFormElement {
   document.body.innerHTML = [
-    '<form action="/apps/scalius.wishlist/toggle" method="post" data-app-form data-app-state="/apps/scalius.wishlist/state?productId=p1">',
+    '<form action="/apps/acme.wishlist/toggle" method="post" data-app-form data-app-state="/apps/acme.wishlist/state?productId=p1">',
     '<button type="submit" aria-pressed="false" data-app-label-on="Saved" data-app-label-off="Save"><span data-app-label>Save</span></button>',
     '<p role="status" data-app-message></p>',
     "</form>",
@@ -93,7 +93,7 @@ describe("app forms enhancer DOM updates", () => {
     vi.stubGlobal("fetch", fetch);
     await loadAppStates(document);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0]![0]).toBe(`${window.location.origin}/apps/scalius.wishlist/state?productId=p1`);
+    expect(fetch.mock.calls[0]![0]).toBe(`${window.location.origin}/apps/acme.wishlist/state?productId=p1`);
     for (const each of Array.from(document.querySelectorAll("form"))) {
       expect(each.querySelector("button")!.getAttribute("aria-pressed")).toBe("true");
     }

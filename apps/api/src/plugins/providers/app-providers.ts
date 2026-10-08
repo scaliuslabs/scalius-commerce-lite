@@ -1,5 +1,6 @@
 // The app providers core may reach for SMS, email, the fraud check, tax,
-// machine translation and AI drafting
+// machine translation, AI drafting, chat messaging, push, search, address
+// autocomplete, exchange rates and buyer sign-in
 // (`AppProviders`, @scalius/core/integrations/provider-port). Core asks only
 // when the merchant's saved choice is an app id (`<plugin id>:<provider id>`),
 // so a store on built-in providers reads no plugin table. One answer per id
@@ -26,8 +27,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { appFraudProvider } from "./fraud";
 import { appEmailProvider, appSmsProvider } from "./messaging";
 import { appTaxProvider } from "./tax";
-import { appTranslationProvider } from "./translation";
-import { appAiProvider } from "./ai";
+import { appPortProvider } from "./port";
 import {
   createAppProviderRuntime,
   readAppProviderSettings,
@@ -43,11 +43,30 @@ const ADAPTERS: Record<AppProviderKind, Adapter> = {
   email: appEmailProvider as Adapter,
   fraud: appFraudProvider as Adapter,
   tax: appTaxProvider as Adapter,
-  translation: appTranslationProvider as Adapter,
-  ai: appAiProvider as Adapter,
+  translation: appPortProvider("translation") as Adapter,
+  ai: appPortProvider("ai") as Adapter,
+  messaging: appPortProvider("messaging") as Adapter,
+  push: appPortProvider("push") as Adapter,
+  search: appPortProvider("search") as Adapter,
+  address: appPortProvider("address") as Adapter,
+  fx: appPortProvider("fx") as Adapter,
+  identity: appPortProvider("identity") as Adapter,
 };
 
-const PORT_NAMES: Record<AppProviderKind, string> = { sms: "SMS", email: "email", fraud: "fraud check", tax: "tax", translation: "translation", ai: "AI" };
+const PORT_NAMES: Record<AppProviderKind, string> = {
+  sms: "SMS",
+  email: "email",
+  fraud: "fraud check",
+  tax: "tax",
+  translation: "translation",
+  ai: "AI",
+  messaging: "messaging",
+  push: "push",
+  search: "search",
+  address: "address autocomplete",
+  fx: "exchange rate",
+  identity: "sign-in",
+};
 
 async function resolveChoice(
   runtime: AppProviderRuntime,

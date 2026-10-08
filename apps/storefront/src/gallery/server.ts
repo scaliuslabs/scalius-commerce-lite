@@ -82,6 +82,8 @@ export interface GalleryIndexEntry {
   path: string;
   focus: GalleryEntry["focus"];
   interact: NonNullable<GalleryEntry["interact"]>;
+  /** `localStorage` the audit seeds before the page loads (a saved cart). */
+  storage: Record<string, string>;
   /** Variants the resolver replaced for the fixture store (should be none). */
   fallbacks: string[];
   /** Reads the fixture API could not answer when the entry last rendered. */
@@ -104,6 +106,7 @@ export function galleryIndex(): GalleryIndexEntry[] {
       path: `/__gallery/e/${entry.id}`,
       focus: entry.focus,
       interact: entry.interact ?? [],
+      storage: entry.scenario.storage ?? {},
       fallbacks: resolved.fallbacks.map((fallback) => `${fallback.kind} ${fallback.key}: ${fallback.requested} -> ${fallback.resolved ?? "left out"}`),
       unanswered: [...(unansweredReads.get(entry.id) ?? [])],
     };

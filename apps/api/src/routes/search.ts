@@ -11,6 +11,11 @@ import {
 } from "../utils/public-search-query";
 import { marketPresenceQueryField } from "../schemas/markets";
 import { uncachedMarketPricing } from "../utils/public-market";
+import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
+import { marketPriceContextOf } from "@scalius/core/modules/price-lists";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { BACKUP_MARKET_ID } from "@scalius/database/schema";
+import { requestAppProviders } from "../plugins/providers/app-providers";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -72,7 +77,11 @@ const searchQuerySchema = z.object({
     .optional()
     .default("true")
     .transform((val) => val === "true")
-    .openapi({ description: "Include categories in search results" })
+    .openapi({ description: "Include categories in search results" }),
+  provider: z.string().max(160).optional().openapi({
+    description: "The store's search app (`layout.appServices.search`): it ranks the product hits; built-in search answers when it is not ready, slow or failing.",
+  }),
+  locale: z.string().regex(/^[a-z]{2}$/).optional().openapi({ description: "The page's language, for the search app." }),
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&
@@ -141,7 +150,9 @@ app.openapi(searchRoute, async (c) => {
     maxPrice,
     limit,
     searchPages,
-    searchCategories
+    searchCategories,
+    provider,
+    locale,
   } = params;
   const query = normalizePublicFtsSearchQuery(q);
 
@@ -165,6 +176,9 @@ app.openapi(searchRoute, async (c) => {
 
   // Set up timeout for search (5 seconds)
   const db = c.get("db");
+  const pricing = uncachedMarketPricing(c);
+  // A search app ranks the products; any failure keeps built-in search.
+  const productIds = provider ? await appRankedProductIds(c, provider, { query, locale: locale ?? "en", pricing, limit }) : null;
   const searchPromise = search(db, query, {
     categoryId,
     minPrice,
@@ -172,9 +186,10 @@ app.openapi(searchRoute, async (c) => {
     limit,
     searchPages,
     searchCategories,
-    correctTypos: true,
+    correctTypos: productIds === null,
+    ...(productIds ? { productIds } : {}),
     // The page's market prices the hits (an uncached read: no cache key carries it).
-    pricing: uncachedMarketPricing(c),
+    pricing,
   });
 
   // Set timeout for the search operation
@@ -203,6 +218,38 @@ app.openapi(searchRoute, async (c) => {
     timestamp: new Date().toISOString()
   });
 });
+
+/** How long predictive search waits for a search app before it answers by itself. */
+const SEARCH_APP_WAIT_MS = 1_500;
+
+/**
+ * The product ids a search app ranked for the words, or null to use built-in
+ * search (no such ready app, a timeout, a failure). Unknown or hidden ids are
+ * dropped by the catalog read, which also prices them.
+ */
+async function appRankedProductIds(
+  c: Parameters<typeof requestAppProviders>[0],
+  providerId: string,
+  input: { query: string; locale: string; pricing: ReturnType<typeof uncachedMarketPricing>; limit: number },
+): Promise<string[] | null> {
+  if (!isQualifiedProviderId(providerId)) return null;
+  const choice = await resolveAppProvider(requestAppProviders(c), "search", providerId).catch(() => null);
+  if (!choice?.provider) return null;
+  const marketId = (await marketPriceContextOf(input.pricing).catch(() => null))?.marketId ?? BACKUP_MARKET_ID;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEARCH_APP_WAIT_MS);
+  try {
+    const answer = await choice.provider.search(
+      { query: input.query.slice(0, 120), locale: input.locale, marketId, limit: Math.min(input.limit, 50) },
+      { signal: controller.signal },
+    );
+    return answer.productIds;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Export the search routes
 export { app as searchRoutes };

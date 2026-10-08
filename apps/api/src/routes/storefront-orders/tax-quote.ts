@@ -19,6 +19,10 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
+    createAppLinePricer,
+    createCartTransformer,
+    presentTransformedCartLines,
+    ruleErrorsOnBuyerLines,
     assertStorefrontLineFulfilment,
     presentCheckoutRateOptions,
     priceStorefrontCheckout,
@@ -246,6 +250,12 @@ app.openapi(taxQuoteRoute, async (c) => {
   });
   // App payment methods join only when an app provides payment (then one more read).
   const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
+  const appContext = {
+    channel: "online_store" as const,
+    customerId: sessionCustomer?.customerId ?? null,
+    destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
+    discountCodes: data.discountCodes,
+  };
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.code,
@@ -257,10 +267,16 @@ app.openapi(taxQuoteRoute, async (c) => {
       billingCountryCode: data.billingCountryCode,
       customerId: sessionCustomer?.customerId ?? null,
     },
+    // The apps' lines and line prices (bundles, B2B contracts), as the order sees them.
+    linePricer: createAppLinePricer(db, apps, appContext),
+    transformer: createCartTransformer(db, apps, appContext),
   });
-  if (!cartValidation.valid) {
+  // Apps that rewrote the lines (`cart.transform`): issues and the listed
+  // lines are the buyer's; tax and discounts are the rewritten lines'.
+  const buyerView = cartValidation.transform ? presentTransformedCartLines(cartValidation, cartValidation.transform, data.items) : null;
+  if (!cartValidation.valid || (buyerView && !buyerView.cart.valid)) {
     throw new ValidationError("Some items in your cart need attention.", {
-      itemIssues: cartValidation.issues,
+      itemIssues: buyerView ? buyerView.cart.issues : cartValidation.issues,
     });
   }
   const delivery = await validateStorefrontDeliveryPreflight(db, {
@@ -301,7 +317,7 @@ app.openapi(taxQuoteRoute, async (c) => {
       postalCode: data.shippingPostalCode,
     },
   });
-  assertNoCheckoutRuleErrors(pricing.ruleErrors);
+  assertNoCheckoutRuleErrors(ruleErrorsOnBuyerLines(pricing.ruleErrors, cartValidation));
   const quote = pricing.taxQuote;
   const discount = pricing.discount;
   const bundleDiscountMinor = pricing.bundleDiscountMinor;
@@ -375,7 +391,9 @@ app.openapi(taxQuoteRoute, async (c) => {
       discountType: bundle.discountType,
       label: bundle.label,
     })),
-    items: cartValidation.items.map((item, position) => ({
+    items: (buyerView ? buyerView.cart.items : cartValidation.items).map((item, listed) => {
+      const position = buyerView ? buyerView.positions[listed]! : listed;
+      return {
       cartKey: item.cartKey ?? null,
       productId: item.productId,
       variantId: item.variantId,
@@ -390,7 +408,8 @@ app.openapi(taxQuoteRoute, async (c) => {
       })),
       propertiesPriceMinor: item.propertiesPriceMinor,
       propertiesHash: linePropertiesHashes[position]!,
-    })),
+      };
+    }),
   });
 });
 

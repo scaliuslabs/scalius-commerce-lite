@@ -12,6 +12,9 @@ import MarketingConsentField from "@/components/checkout/MarketingConsentField.a
 import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
 import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
 import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
+import AppBlocks from "@/components/apps/AppBlocks.astro";
+import { getAppBlocks } from "@/lib/api/app-blocks";
+import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import {
   LOCATION_COUNTRY,
   defaultShippingCountry,
@@ -73,6 +76,8 @@ const [
   getActiveCheckoutLanguage(),
   getCheckoutConfig(),
 ]);
+// Apps' checkout blocks: read only when the layout says an active app draws one.
+const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
 const cities = citiesResponse ?? [];
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
 // A failed read renders the fail-closed page (checkout unavailable, English
@@ -622,6 +627,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 }
               </div>
             </section>
+            <AppBlocks blocks={appBlocks} target="purchase.checkout.contact.render-after" />
 
             {/* Nothing physical in the cart (services): no delivery section. */}
             <p
@@ -748,6 +754,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 goneText={copy.deliveryOptionGoneText}
               />
             </section>
+            <AppBlocks blocks={appBlocks} target="purchase.checkout.shipping-option-list.render-after" />
 
             {/* The billing address (Shopify's rule): asked when nothing ships, or when the merchant requires one. */}
             <BillingAddressFields
@@ -989,6 +996,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </div>
         </section>
+        <AppBlocks blocks={appBlocks} target="purchase.checkout.cart-line-list.render-after" class="mt-4" />
       </div>
     </div>
   </div>
@@ -1069,6 +1077,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
   import { shippingCountryName } from "@/lib/checkout/shipping-country";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
+  import { addressAutocompleteService, pageLocale } from "@/lib/app-services";
   import {
     checkoutInformationFields,
     enhanceCheckoutFields,
@@ -2136,4 +2145,23 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   // The chosen country's rules hide the fields it doesn't use and mark the
   // required ones (the form already works without this).
   enhanceShippingCountry(document, { signal: cartPageSignal });
+
+  // ── Address autocomplete ──
+  // Only when an active app completes addresses (the layout names it): the
+  // code loads then and not otherwise. The street line suggests addresses for
+  // the countries the app serves; the form is the same without it.
+  const addressApp = addressAutocompleteService();
+  const streetLine = document.getElementById("shippingAddress");
+  if (addressApp && (streetLine instanceof HTMLTextAreaElement || streetLine instanceof HTMLInputElement)) {
+    void import("@/lib/checkout/address-autocomplete").then(({ apiPost, enhanceAddressAutocomplete }) => {
+      enhanceAddressAutocomplete({
+        root: document,
+        input: streetLine,
+        service: addressApp,
+        locale: pageLocale(),
+        post: apiPost(browserApiUrl),
+        signal: cartPageSignal,
+      });
+    });
+  }
 </script>

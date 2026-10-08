@@ -547,6 +547,12 @@ export interface WhatsAppSettings {
   phoneNumberId: string;
   /** Empty means the default `auth_otp` template. */
   authTemplateName: string;
+  /**
+   * Who sends WhatsApp messages: "" for the built-in Meta Cloud API (the three
+   * fields above), or an app messaging provider id (`<plugin id>:<provider id>`)
+   * that carries the `whatsapp` channel.
+   */
+  provider: string;
 }
 
 export const whatsappDocument = defineSettingsDocument<WhatsAppSettings>({
@@ -555,8 +561,9 @@ export const whatsappDocument = defineSettingsDocument<WhatsAppSettings>({
     accessToken: z.string().max(8_192),
     phoneNumberId: z.string(),
     authTemplateName: z.string(),
+    provider: z.string().max(160),
   }),
-  defaults: { accessToken: "", phoneNumberId: "", authTemplateName: "" },
+  defaults: { accessToken: "", phoneNumberId: "", authTemplateName: "", provider: "" },
   secretFields: { accessToken: "WhatsApp Cloud API access token" },
 });
 

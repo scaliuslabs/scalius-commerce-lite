@@ -20,6 +20,7 @@ import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/com
 import { appActionMessages } from "~/i18n/app-actions";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useAppListColumns } from "~/components/admin/apps/ui/list-columns";
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
@@ -85,7 +86,10 @@ export function OrderList({
   const exportDialog = useOrderExportDialog();
   const showArchived = search.archived;
   const dateField = search.sort === "updatedAt" ? "updatedAt" : "createdAt";
-  const filters = useMemo(() => orderFilterQuery(search, term), [search, term]);
+  // Apps' columns and filter: asked for only when an active app has them.
+  const appList = useAppListColumns<OrderListItem>("order", search.appFilter);
+  const { columnsParam: appColumns, filterParam: appFilter, extra: appExtra } = appList;
+  const filters = useMemo(() => ({ ...orderFilterQuery(search, term), appFilter }), [search, term, appFilter]);
   const filtersKey = JSON.stringify(filters);
   const [allMatchingKey, setAllMatchingKey] = useState<string | null>(null);
   const selection = useRef<OrderSelection>({ rows: [], clear: () => {}, deselect: () => {} });
@@ -108,10 +112,10 @@ export function OrderList({
         onStatusUpdate: changeStatus,
         onShipmentRefreshed: () => void refetchRef.current(),
         label: (key) => translate(orderListMessages, key),
-      }),
+      }, appExtra),
     // The locale re-labels the columns for the column menu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus, locale],
+    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus, locale, appExtra],
   );
 
   const cursored = Boolean(search.after || search.before);
@@ -120,7 +124,7 @@ export function OrderList({
     selectedRows, selectedIds, clearSelection, deselectIds,
   } = useServerTable({
     columns,
-    queryOptions: ordersQueryOptions(orderListQuery(search, term)),
+    queryOptions: ordersQueryOptions({ ...orderListQuery(search, term), appFilter, appColumns }),
     dataSelector: selectOrders,
     currentPage: cursored ? 1 : search.page,
     currentLimit: search.limit,
@@ -345,6 +349,7 @@ export function OrderList({
               onChange(sortUpdates, { replace: true });
             }}
             onChange={onChange}
+            appFilterable={appList.filterable.length > 0}
             selectedCount={selectedRows.length}
             live={{ ...live, pause: refreshPause }}
             bulkActions={
@@ -422,6 +427,7 @@ export function OrderList({
             open={exportDialog.open}
             onOpenChange={exportDialog.setOpen}
             filters={filters}
+            appFilterActive={appFilter !== undefined}
             pageIds={pageRows.map((row) => row.original.id)}
             selectedIds={selectedIds}
             allSelected={allSelected}

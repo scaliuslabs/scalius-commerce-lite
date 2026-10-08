@@ -7,7 +7,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("../../plugins/bundled.gen", async (importOriginal) => (await import("../../plugins/testing/hello-bundled")).withHelloBundled(await importOriginal()));
+vi.mock("../../plugins/bundled.gen", async (importOriginal) => (await import("../../plugins/testing/fixture-apps")).withHelloBundled(await importOriginal()));
 const sandbox = vi.hoisted(() => ({ available: false }));
 vi.mock("../../plugins/loaders/sandbox-availability", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../plugins/loaders/sandbox-availability")>()),

@@ -56,6 +56,8 @@ export interface WhatsAppCloudApiSettings {
   accessTokenConfigured: boolean;
   phoneNumberId?: string;
   authTemplateName: string;
+  /** "" sends through the built-in Meta Cloud API; else an app messaging provider id (`<plugin id>:<provider id>`). */
+  provider: string;
 }
 
 const PLACEHOLDER_EXACT_VALUES = new Set([
@@ -118,6 +120,7 @@ export async function getWhatsAppCloudApiSettings(
       : looksLikeWhatsAppPlaceholderCredential(rawTemplateName)
         ? ""
         : rawTemplateName,
+    provider: stored.provider,
   };
 }
 

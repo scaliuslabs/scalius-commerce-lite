@@ -38,9 +38,11 @@ import {
     MARKET_PRICE_ADJUSTMENT_MAX_BPS,
     MARKET_PRICE_ADJUSTMENT_MIN_BPS,
     isMarketPriceMode,
+    MANUAL_FX_RATE_SOURCE_ID,
     marketFxPolicyIssue,
     type MarketPriceMode,
 } from "@scalius/shared/market-pricing";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { isFxRate } from "@scalius/shared/money-chain";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
@@ -98,8 +100,13 @@ export interface MarketRecord {
      * rounded up to its step and ending). The backup market is always fixed.
      */
     priceMode: MarketPriceMode;
-    /** The manual exchange rate; null: the rate source ("1" while it sells the shop currency). */
+    /** The exchange rate; null: none yet ("1" while it sells the shop currency). */
     fxRate: string | null;
+    /**
+     * Who sets `fxRate`: `manual` (the merchant) or an app FX provider
+     * (`<plugin id>:<provider id>`) whose rate the scheduled tick stores.
+     */
+    fxRateSource: string;
     /** Percentage adjustment of FX-derived prices, in basis points. */
     priceAdjustmentBps: number;
     /** FX-derived prices round up to this step (minor units); null: the price increment. */
@@ -158,6 +165,12 @@ export interface MarketUpdate extends MarketPricingUpdate {
     currencyCode?: string | null;
     /** Minutes a placed order keeps its rate (5 to 1,440). */
     fxLockMinutes?: number;
+    /**
+     * `manual` or an app FX provider id, for a market in its own currency.
+     * The caller checks that the app provides it and sends the app's current
+     * rate as `fxRate` in the same update.
+     */
+    fxRateSource?: string;
 }
 
 const KNOWN_COUNTRIES: ReadonlySet<string> = new Set(getCountries());
@@ -202,6 +215,7 @@ async function loadRecords(db: Database, ids?: readonly string[]): Promise<Marke
             pricesIncludeTax: Boolean(row.pricesIncludeTax),
             priceMode: (row.priceMode === "fx" ? "fx" : "fixed") as MarketPriceMode,
             fxRate: row.fxRate,
+            fxRateSource: row.fxRateSource ?? MANUAL_FX_RATE_SOURCE_ID,
             priceAdjustmentBps: row.priceAdjustmentBps,
             priceRoundingMinor: row.priceRoundingMinor,
             priceEndingMinor: row.priceEndingMinor,
@@ -443,6 +457,7 @@ export async function updateMarket(
 
     const currency = cleanCurrency(current, update, currencyPolicy);
     const pricing = cleanPricing(current, update, currency);
+    const fxRateSource = cleanFxRateSource(current, update, currency);
     if (update.fxLockMinutes !== undefined) {
         if (current.isBackup) throw new ValidationError("The backup market sells in the shop currency, so it locks no rate.");
         if (!Number.isSafeInteger(update.fxLockMinutes) || update.fxLockMinutes < MIN_FX_LOCK_MINUTES || update.fxLockMinutes > MAX_FX_LOCK_MINUTES) {
@@ -492,6 +507,7 @@ export async function updateMarket(
         // The rate's as-of time: a new manual rate is set now.
         ...("fxRate" in pricing && pricing.fxRate !== current.fxRate ? { fxRateAsOf: pricing.fxRate === null ? null : sql`unixepoch()` } : {}),
         ...(update.fxLockMinutes === undefined ? {} : { fxLockMinutes: update.fxLockMinutes }),
+        ...(fxRateSource === current.fxRateSource ? {} : { fxRateSource }),
         revision: sql`${markets.revision} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(eq(markets.id, id)));
@@ -587,6 +603,25 @@ function cleanPricing(current: MarketRecord, update: MarketPricingUpdate, curren
     if (issue === "ending") throw new ValidationError("A price ending needs a rounding step, and is above zero and below the step, in whole price increments.");
     if (issue === "rate") throw new ValidationError(`Enter the exchange rate: how many ${currency.code} one ${shop} buys.`);
     return Object.fromEntries(named.map((field) => [field, next[field]])) as MarketPricingUpdate;
+}
+
+/**
+ * Who sets the market's rate after this update. Only a market in its own
+ * currency takes an app source; a market that goes back to the shop currency
+ * goes back to `manual` (its rate is 1).
+ */
+function cleanFxRateSource(current: MarketRecord, update: MarketUpdate, currency: CleanCurrency): string {
+    const requested = update.fxRateSource?.trim();
+    if (requested === undefined || requested === current.fxRateSource) return currency.own ? current.fxRateSource : MANUAL_FX_RATE_SOURCE_ID;
+    if (requested === MANUAL_FX_RATE_SOURCE_ID) return requested;
+    if (!isQualifiedProviderId(requested)) throw new ValidationError("Choose manual rates or an exchange rate app.");
+    if (!currency.own) {
+        throw new ValidationError(`This market sells in ${current.shopCurrencyCode}, the shop currency, so it needs no exchange rate.`);
+    }
+    if (update.fxRate === undefined || update.fxRate === null) {
+        throw new ValidationError("The exchange rate app has not given a rate yet. Try again.");
+    }
+    return requested;
 }
 
 /** The currencies markets sell in besides the shop currency (a shop currency change waits until none). */

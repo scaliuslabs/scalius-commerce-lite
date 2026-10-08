@@ -6,6 +6,9 @@
 // Every edit is a plain POST handled here (Post/Redirect/Get), so it works
 // without JavaScript; with it, the thana and area lists follow the city and
 // another country's fields follow its rules. Only an outcome flag enters a URL.
+import AppBlocks from "@/components/apps/AppBlocks.astro";
+import { getAppBlocks } from "@/lib/api/app-blocks";
+import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
@@ -33,6 +36,7 @@ import {
   readAccountMarketingForm,
 } from "@/lib/account-marketing";
 import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
+import { accountPushCopy } from "@/lib/account-push-copy";
 import {
   addressBookInput,
   addressDraftOf,
@@ -146,9 +150,13 @@ const [layoutData, read, summary, marketingRead, addressesRead] = await Promise.
   readAccountMarketing(Astro.request),
   readAccountAddresses(Astro.request),
 ]);
+// Apps' account blocks: read only when the layout says an active app draws one.
+const appBlocks = layoutHasAppBlocks(layoutData, "account") ? await getAppBlocks("account") : [];
 // News and offers speaks the store's language (the rest of the account is English today).
 const marketingLanguage = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
 const marketingCopy = newsletterCopy(marketingLanguage).account;
+// Browser notifications speak the same language; the section stays hidden until the script finds the browser and store can do it.
+const pushCopy = accountPushCopy(marketingLanguage);
 const marketing = marketingRead.ok ? marketingRead.data : null;
 const marketingFlag = posted || marketingFailure ? null : readAccountMarketingFlag(Astro.url.searchParams);
 if (!read.ok && read.reason === "unavailable") Astro.response.status = 503;
@@ -382,6 +390,16 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
           </div>
         </section>
 
+        <section id="notifications" class={ui.card} aria-labelledby="pushHeading" lang={marketingLanguage} data-account-push data-copy={JSON.stringify(pushCopy)} hidden>
+          <h2 id="pushHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{pushCopy.heading}</h2>
+          <div class={ui.cardBody}>
+            <p class={ui.muted}>{pushCopy.text}</p>
+            <p class="mt-3 text-sm font-medium text-foreground" role="status" aria-live="polite" data-push-status></p>
+            <p class={`${ui.muted} mt-1`} data-push-hint hidden></p>
+            <button type="button" class={`${ui.secondaryButton} mt-3`} data-push-toggle></button>
+          </div>
+        </section>
+
         {!nameFailed && (
           <AccountDialog id="editName" title="Edit name">
             <form method="post" action="/account/profile" class="space-y-4" novalidate>
@@ -399,6 +417,7 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
         )}
       </div>
     )}
+    <AppBlocks blocks={appBlocks} target="customer-account.profile.block.render" class="mt-8" />
   </AccountShell>
 </Layout>
 
@@ -418,5 +437,18 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
       });
     }
     enhanceShippingCountry(form);
+  }
+
+  // Browser notifications: the section stays hidden unless this browser can
+  // receive pushes and the store can send them.
+  const pushSection = document.querySelector<HTMLElement>("[data-account-push]");
+  if (pushSection && "serviceWorker" in navigator && "PushManager" in window) {
+    void import("@/lib/account-push").then(({ browserPushDeps, initPushControl }) => {
+      try {
+        void initPushControl(pushSection, JSON.parse(pushSection.dataset.copy ?? ""), browserPushDeps(window));
+      } catch {
+        // Unreadable words: the section stays hidden.
+      }
+    });
   }
 </script>

@@ -45,7 +45,7 @@ function bodyFor(path: string): { status: number; body: string } {
     };
   }
   if (path === "/api/v1/storefront/product-apps/linen") {
-    return { status: 200, body: envelope({ blocks: [{ id: "heart", app: "scalius.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] }) };
+    return { status: 200, body: envelope({ blocks: [{ id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] }) };
   }
   if (path === "/api/v1/storefront/product-apps/broken") return { status: 500, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/missing")) return { status: 404, body: JSON.stringify({ success: false }) };
@@ -141,7 +141,7 @@ describe("page render API budget", () => {
     expect(product.state).toBe("found");
     expect(shipping).toEqual([{ id: "s1" }]);
     expect(config.gateways).toEqual([{ id: "cod" }]);
-    expect(apps).toEqual({ failed: false, blocks: [{ id: "heart", app: "scalius.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] });
+    expect(apps).toEqual({ failed: false, blocks: [{ id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] });
   });
 
   it("proves a product page whose app blocks part answered, and none whose part failed", async () => {

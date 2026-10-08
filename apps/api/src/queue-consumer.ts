@@ -56,7 +56,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { detachedAppProviders } from "./plugins/providers/app-providers";
-import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
+import { resolveWhatsAppSender } from "@scalius/core/integrations/whatsapp-sender";
 import {
   deriveCustomerAuthOtpDeliveryCode,
   claimAuthOtpDeliveryReceipt,
@@ -1440,19 +1440,26 @@ async function sendAuthOtpEmail(
 async function sendAuthOtpWhatsApp(
   payload: ResolvedAuthOtpQueueMessage,
   code: string,
-  target: { deliveryKey: string; identifierHash: string },
+  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
+  // The built-in Meta Cloud API, or the app messaging provider the merchant
+  // chose. An app runs on a detached context: queue work has no request.
+  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
+  const sender = await resolveWhatsAppSender(db, {
+    encryptionKey,
+    appProviders: detachedAppProviders(env, db, encryptionKey),
+  });
   const block = await getNotificationProviderBlock(db, {
     channel: "whatsapp",
-    provider: "whatsapp",
+    provider: sender.provider,
   });
   if (block) {
     throw createAuthOtpDeliveryError(
       buildAuthOtpProviderBlockedReason(block.reason),
       {
-        provider: "whatsapp",
+        provider: sender.provider,
         providerStatus: "provider_blocked_until_settings_save",
         rawResponse: block.reason,
       },
@@ -1460,33 +1467,35 @@ async function sendAuthOtpWhatsApp(
     );
   }
 
-  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const config = await getWhatsAppCloudApiSettings(db, encryptionKey);
-  if (!config.accessToken || !config.phoneNumberId) {
-    throw createAuthOtpDeliveryError("WhatsApp credentials are not configured", {
-      provider: "whatsapp",
-      providerStatus: "missing_credentials",
-    }, {
-      terminal: true,
-      blockProvider: {
-        channel: "whatsapp",
-        provider: "whatsapp",
-        reason: "missing_credentials",
+  if (!sender.ready) {
+    const builtIn = sender.provider === "whatsapp";
+    throw createAuthOtpDeliveryError(
+      builtIn ? "WhatsApp credentials are not configured" : "The WhatsApp provider is not ready",
+      {
+        provider: sender.provider,
+        providerStatus: builtIn ? "missing_credentials" : "provider_not_ready",
       },
-    });
+      {
+        terminal: true,
+        blockProvider: {
+          channel: "whatsapp",
+          provider: sender.provider,
+          reason: builtIn ? "missing_credentials" : `not configured: ${redactAuthOtpLogText(sender.reason)}`,
+        },
+      },
+    );
   }
 
-  const result = await sendWhatsAppTemplateMessage({
-    accessToken: config.accessToken,
-    phoneNumberId: config.phoneNumberId,
+  const result = await sender.sendTemplate({
     to: payload.identifier,
-    templateName: config.authTemplateName,
+    templateName: sender.authTemplateName,
     languageCode: "en_US",
     bodyParameters: [code],
+    clientReference: createAuthOtpProviderClientReference(target),
   });
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {
-    provider: "whatsapp",
+    provider: sender.provider,
     providerMessageId: result.providerRef,
     providerStatus: result.rawStatus,
     rawResponse: result.rawResponse,
@@ -1494,7 +1503,7 @@ async function sendAuthOtpWhatsApp(
 
   if (!result.success) {
     throw createAuthOtpDeliveryError(`WhatsApp OTP delivery failed: ${result.rawStatus}`, {
-      provider: "whatsapp",
+      provider: sender.provider,
       providerMessageId: result.providerRef,
       providerStatus: result.rawStatus,
       rawResponse: result.rawResponse,
@@ -1502,7 +1511,7 @@ async function sendAuthOtpWhatsApp(
       terminal: result.retryable === false || isAuthOtpNonRetryableStatus(`${result.rawStatus} ${result.rawResponse ?? ""}`),
       blockProvider: {
         channel: "whatsapp",
-        provider: "whatsapp",
+        provider: sender.provider,
         reason: `${result.rawStatus} ${result.rawResponse ?? ""}`.trim(),
       },
     });

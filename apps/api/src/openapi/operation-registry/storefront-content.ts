@@ -23,6 +23,11 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
     limits: { request: 16_384 },
     reason: "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data.",
   },
+  "storefront.app_blocks.get": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "Rendering infrastructure: apps' sanitized checkout and account HTML, not structured agent data.",
+  },
   "storefront.layout.get": { limits: { request: 16_384 } },
   "storefront.markets.get": { limits: { request: 16_384 } },
   "storefront.meta_events.events": {

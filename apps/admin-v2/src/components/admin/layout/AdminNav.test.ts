@@ -91,7 +91,7 @@ describe("admin sidebar", () => {
   describe("apps' pages", () => {
     const pages = [
       { placement: "products", title: "Most wished", to: "/admin/apps/acme.wish/pages/most-wished" },
-      { placement: "apps", title: "Hello", to: "/admin/apps/scalius.hello/pages/overview" },
+      { placement: "apps", title: "Hello", to: "/admin/apps/acme.hello/pages/overview" },
       { placement: "marketing", title: "Campaigns", to: "/admin/apps/acme.mail/pages/campaigns" },
       { placement: "analytics", title: "Reports", to: "/admin/apps/acme.stats/pages/reports" },
       { placement: "orders", title: "Pick lists", to: "/admin/apps/acme.pick/pages/lists" },
@@ -106,7 +106,7 @@ describe("admin sidebar", () => {
       // Marketing pages sit with Discounts; analytics (no section here) with Apps.
       expect(children("discounts")).toEqual([["Campaigns", "/admin/apps/acme.mail/pages/campaigns"]]);
       expect(children("apps")).toEqual([
-        ["Hello", "/admin/apps/scalius.hello/pages/overview"],
+        ["Hello", "/admin/apps/acme.hello/pages/overview"],
         ["Reports", "/admin/apps/acme.stats/pages/reports"],
       ]);
     });
@@ -125,7 +125,7 @@ describe("admin sidebar", () => {
 
       expect(isSectionActive("/admin/apps/acme.wish/pages/most-wished", products)).toBe(true);
       expect(isSectionActive("/admin/apps/acme.wish/pages/most-wished", apps)).toBe(false);
-      expect(isSectionActive("/admin/apps/scalius.hello/pages/overview", apps)).toBe(true);
+      expect(isSectionActive("/admin/apps/acme.hello/pages/overview", apps)).toBe(true);
       expect(isSectionActive("/admin/apps/acme.wish", apps)).toBe(true);
     });
   });

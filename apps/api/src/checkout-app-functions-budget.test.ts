@@ -12,13 +12,15 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
 import { errorResponseFromError } from "./utils/api-response";
 import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
 import { PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
-import { manifest as bulkManifest } from "../../../plugins/bulk-discount/src/index";
+import { manifest as bulkManifest } from "./plugins/testing/apps/bulk-discount/src/index";
 
 const mocks = vi.hoisted(() => ({ skipRegistrationRead: false }));
 
@@ -138,12 +140,12 @@ describe("checkout route D1 budget with app checkout functions", () => {
 
   async function installBulk() {
     const db = getDb({ DB: binding } as unknown as Env);
-    const installed = await installPlugin(db, { manifest: bulkManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.bulk-discount"]!.sha256, actorUserId: "owner" });
-    const configured = await writePluginSettings(db, "scalius.bulk-discount", { title: "Bulk savings", tier1_quantity: 3, tier1_percent: 5 }, {
+    const installed = await installPlugin(db, { manifest: bulkManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.bulk-discount"]!.sha256, actorUserId: "owner" });
+    const configured = await writePluginSettings(db, "acme.bulk-discount", { title: "Bulk savings", tier1_quantity: 3, tier1_percent: 5 }, {
       expectedRevision: installed.revision,
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
-    await activatePlugin(db, "scalius.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
+    await activatePlugin(db, "acme.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
   }
 
   async function meter(path: string, body: unknown) {
@@ -196,7 +198,7 @@ describe("checkout route D1 budget with app checkout functions", () => {
     expect(after.status).toBe(200);
     expect(after.json.data).toMatchObject({
       discountMinor: 10_000,
-      discounts: [expect.objectContaining({ promotionId: null, appId: "scalius.bulk-discount", title: "Bulk savings (5% off)", amount: 100 })],
+      discounts: [expect.objectContaining({ promotionId: null, appId: "acme.bulk-discount", title: "Bulk savings (5% off)", amount: 100 })],
       shippingRates: null,
       paymentMethods: null,
     });

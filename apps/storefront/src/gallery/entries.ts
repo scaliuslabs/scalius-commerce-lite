@@ -56,16 +56,26 @@ export interface GalleryScenario {
   listing?: "large" | "empty" | "small";
   /** App sections and product blocks draw something. */
   apps?: boolean;
+  /** `localStorage` the browser starts with (a saved cart); the quality audit seeds it before the page loads. */
+  storage?: Record<string, string>;
+  /** An app draws blocks at the checkout targets (the layout lists the `checkout` page). */
+  checkoutBlocks?: boolean;
+  /** The store sells to the United Kingdom too, and an address app completes its street lines (the layout names it). */
+  addressApp?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
 }
 
 /** A click the audit makes before it checks (a closed drawer has nothing to check). */
-export interface GalleryInteraction {
-  click: string;
-  /** Only below this viewport width (phones and tablets). */
-  maxWidth?: number;
-}
+export type GalleryInteraction =
+  | {
+      click: string;
+      /** Only below this viewport width (phones and tablets). */
+      maxWidth?: number;
+    }
+  | { select: string; value: string }
+  /** Types into a field one key at a time, then waits (a debounced suggestion list needs it). */
+  | { type: string; text: string; wait?: number };
 
 export interface GalleryEntry {
   id: string;
@@ -408,23 +418,45 @@ function tokenEntries(): GalleryEntry[] {
   return entries;
 }
 
+/** A saved cart with two lines, so the checkout steps (and the targets apps draw at) are visible. */
+const GALLERY_CART = JSON.stringify({
+  items: {
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", value: "Bottle green" }] },
+    "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "cotton-panjabi", name: "Cotton Panjabi", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
+  },
+});
+
 function appEntries(): GalleryEntry[] {
   const base = baseTheme();
   const home = clone(base);
   home.pages.home = [
     contentSection("hero", "hero"),
-    { id: "app-greeting", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
+    { id: "app-greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
     contentSection("product-rail", "rail"),
   ];
   const product = clone(base);
   product.blocks.product = {
     ...product.blocks.product,
     apps: [
-      { id: "wishlist", app: "scalius.wishlist/button", values: { label: "Save to wishlist" } },
-      { id: "note", app: "scalius.hello/note", values: { note: "Packed with care in Dhaka." } },
+      { id: "wishlist", app: "acme.wishlist/button", values: { label: "Save to wishlist" } },
+      { id: "note", app: "acme.hello/note", values: { note: "Packed with care in Dhaka." } },
     ],
   };
   return [
+    { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
+    {
+      id: entryId("app", "address-autocomplete"),
+      family: "app:address-autocomplete",
+      title: "Address autocomplete: suggestions under the street line (cart page, United Kingdom)",
+      page: "cart",
+      theme: clone(base),
+      focus: MAIN,
+      scenario: { addressApp: true, storage: { "cart:v3": GALLERY_CART } },
+      interact: [
+        { select: "#checkout-country", value: "GB" },
+        { type: "#shippingAddress", text: "10 Down", wait: 900 },
+      ],
+    },
     { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },
     { id: entryId("app", "section", "empty"), family: "app:section", title: "App section that drew nothing", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { apps: false } },
     { id: entryId("app", "product-blocks"), family: "app:product-block", title: "App product blocks (buy box and below)", page: "product", theme: product, focus: MAIN, scenario: { apps: true, product: "fashion" } },

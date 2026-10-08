@@ -33,6 +33,7 @@ import {
   productDetail,
   productScenarioOf,
 } from "./fixtures";
+import { fixtureMetaobject, metaobjectMediaIds } from "./metaobjects";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -79,6 +80,10 @@ function storeShape() {
 }
 
 function markets(entry: GalleryEntry) {
+  // A store that also delivers to the United Kingdom: the checkout offers the country and its free-text fields.
+  if (entry.scenario.addressApp) {
+    return { markets: [{ id: "mkt_backup", handle: "bangladesh", name: "Bangladesh and United Kingdom", isBackup: true, countries: ["BD", "GB"], presences: [{ value: "", locale: "en" }] }] };
+  }
   if (entry.scenario.locale === "bn") {
     return { markets: [{ id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "bn" }, { value: "en", locale: "en" }] }] };
   }
@@ -114,13 +119,46 @@ function layout(entry: GalleryEntry) {
     // browser reads (the cart's delivery rates) have an API to call.
     platform: { apiUrl: fixtureOrigin(), storefrontUrl: fixtureOrigin() },
     policies: FIXTURE_POLICIES,
+    ...(entry.scenario.checkoutBlocks ? { appBlockPages: ["checkout"] } : {}),
+    ...(entry.scenario.addressApp ? { appServices: { search: null, address: { id: ADDRESS_APP_ID, countries: ["GB"] }, signIn: [] } } : {}),
   };
+}
+
+/** The address app the gallery store has installed (the layout names it; the checkout suggests through it). */
+export const ADDRESS_APP_ID = "acme.addresses/lookup";
+const ADDRESS_SUGGESTIONS = [
+  { id: "addr_1", text: "10 Downing Street", secondaryText: "Westminster, London SW1A 2AA" },
+  { id: "addr_2", text: "10 Downing Place", secondaryText: "Cambridge CB2 3NY" },
+  { id: "addr_3", text: "10 Downing Road", secondaryText: "Manchester M11 4JT" },
+];
+const RESOLVED_ADDRESSES: Record<string, Record<string, string>> = {
+  addr_1: { countryCode: "GB", line1: "10 Downing Street", dependentLocality: "Westminster", locality: "London", adminArea: "England", postalCode: "SW1A 2AA" },
+  addr_2: { countryCode: "GB", line1: "10 Downing Place", locality: "Cambridge", adminArea: "England", postalCode: "CB2 3NY" },
+  addr_3: { countryCode: "GB", line1: "10 Downing Road", locality: "Manchester", adminArea: "England", postalCode: "M11 4JT" },
+};
+
+/**
+ * The POSTs the checkout page makes from the browser: the discount preview and
+ * abandoned-checkout capture (nothing to apply or save in the gallery), and the
+ * address app's suggest and resolve. null for any other request.
+ */
+async function browserPostAnswer(entry: GalleryEntry, path: string, request: Request): Promise<unknown | null> {
+  if (request.method !== "POST") return null;
+  if (path === "/api/v1/discounts/validate") return { totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
+  if (path === "/api/v1/abandoned-checkouts") return { saved: true };
+  if (!entry.scenario.addressApp) return null;
+  const body = (await request.json().catch(() => ({}))) as { id?: string };
+  if (path === "/api/v1/address-rules/autocomplete/suggest") return { suggestions: ADDRESS_SUGGESTIONS };
+  if (path === "/api/v1/address-rules/autocomplete/resolve") return { address: RESOLVED_ADDRESSES[body.id ?? ""] ?? null };
+  return null;
 }
 
 /** The section data a list of sections reads (homepage, landing and template parts). */
 function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]) {
   const requests = homeSectionRequests(sections);
   const bangla = entry.scenario.locale === "bn";
+  // A type that is private or gone is missing, as the API leaves it out.
+  const metaobjects = (requests.metaobjects ?? []).flatMap((request) => fixtureMetaobject(request.definitionId, request.limit) ?? []);
   return {
     lists: requests.lists.map((list, index) => ({
       key: list.key,
@@ -128,12 +166,13 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
       category: list.source.kind === "category" ? { id: list.source.categoryId, name: "Sarees", slug: "sarees", canonicalPath: null } : null,
       collection: list.source.kind === "collection" ? { id: list.source.collectionId, title: "Eid edit" } : null,
     })),
-    media: requests.mediaIds.map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
+    media: [...new Set([...requests.mediaIds, ...metaobjectMediaIds(metaobjects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
     brands: requests.brandLimit > 0 ? fixtureBrands(requests.brandLimit) : [],
     promotions: requests.promotionIds.map((id) => ({ id, endsAt: "2026-12-31T18:00:00.000Z" })),
     categories: requests.categoryIds.map(homeCategory),
     collections: requests.collectionIds.map((id, index) => fixtureCollection(id, index % 2 === 0 ? "carousel" : "grid")),
     homeProduct: null,
+    metaobjects,
     ...(entry.scenario.apps === undefined ? {} : {
       apps: entry.scenario.apps
         ? (requests.apps ?? []).map((app) => ({
@@ -165,12 +204,43 @@ function productApps(entry: GalleryEntry) {
     blocks: [
       {
         id: "wishlist",
-        app: "scalius.wishlist/button",
+        app: "acme.wishlist/button",
         placement: "buy-box",
-        html: '<form class="mt-3" action="/apps/scalius.wishlist/toggle" method="post" data-app-form><input type="hidden" name="productId" value="prod_0"><button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false"><span aria-hidden="true">&#9825;</span><span data-app-label>Save to wishlist</span></button><p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p></form>',
+        html: '<form class="mt-3" action="/apps/acme.wishlist/toggle" method="post" data-app-form><input type="hidden" name="productId" value="prod_0"><button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false"><span aria-hidden="true">&#9825;</span><span data-app-label>Save to wishlist</span></button><p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p></form>',
         head: { meta: [], jsonLd: [] },
       },
-      { id: "note", app: "scalius.hello/note", placement: "below", html: '<p class="text-sm text-muted-foreground">Packed with care in Dhaka.</p>', head: { meta: [], jsonLd: [] } },
+      { id: "note", app: "acme.hello/note", placement: "below", html: '<p class="text-sm text-muted-foreground">Packed with care in Dhaka.</p>', head: { meta: [], jsonLd: [] } },
+    ],
+  };
+}
+
+/** The blocks apps draw at the checkout targets (sanitized HTML: content and links, no forms or scripts). */
+function checkoutApps(entry: GalleryEntry) {
+  if (!entry.scenario.checkoutBlocks) return { blocks: [] };
+  const head = { meta: [], jsonLd: [] };
+  return {
+    blocks: [
+      {
+        id: "acme.delivery/promise",
+        app: "acme.delivery/promise",
+        target: "purchase.checkout.contact.render-after",
+        html: '<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"><p><strong>Delivery promise.</strong> Order before 12 pm and it arrives today inside Dhaka, or tomorrow everywhere else.</p><p class="mt-1"><a class="font-medium underline underline-offset-4" href="/pages/delivery">See delivery times by district</a></p></div>',
+        head,
+      },
+      {
+        id: "acme.trust/returns",
+        app: "acme.trust/returns",
+        target: "purchase.checkout.shipping-option-list.render-after",
+        html: '<ul class="space-y-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"><li><strong>7-day returns.</strong> Free pickup from your door in Dhaka.</li><li><strong>Official warranty</strong> on every phone and laptop.</li><li><strong>Cash on delivery</strong> checked before you pay.</li></ul>',
+        head,
+      },
+      {
+        id: "acme.loyalty/points",
+        app: "acme.loyalty/points",
+        target: "purchase.checkout.cart-line-list.render-after",
+        html: '<p class="rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">You will earn <strong>120 Nakshi points</strong> with this order. <a class="underline underline-offset-4" href="/account/rewards">View your rewards</a></p>',
+        head,
+      },
     ],
   };
 }
@@ -193,6 +263,8 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   }
   if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
   if (path === "/api/v1/checkout/config") return { gateways: [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
+  const checkoutApp = /^\/api\/v1\/storefront\/app-blocks\/(checkout)$/.exec(path);
+  if (checkoutApp) return checkoutApps(entry);
   const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
   if (productApp) return productApps(entry);
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
@@ -265,6 +337,8 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
     });
     return new Response(envelope({ parts }), { headers: json });
   }
+  const posted = await browserPostAnswer(entry, url.pathname, request);
+  if (posted !== null) return new Response(envelope(posted), { headers: json });
   const data = answer(entry, url.pathname, url.searchParams);
   if (data === undefined) {
     record(entry, `${request.method} ${url.pathname}`);

@@ -86,6 +86,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "pages", to: "/admin/pages" },
       { key: "blogPosts", to: "/admin/articles" },
       { key: "files", to: "/admin/media" },
+      { key: "metaobjects", to: "/admin/metaobjects" },
       { key: "translations", to: "/admin/translations" },
     ],
   },

@@ -121,6 +121,12 @@ interface Window {
   __CURRENCY_PRICE_INCREMENT__?: number;
   __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
   __TIKTOK_PIXEL_ENABLED__?: boolean;
+  /** The store search app the predictive search asks (layout `appServices.search`). */
+  __SEARCH_PROVIDER__?: string;
+  /** The address autocomplete app (layout `appServices.address`). */
+  __ADDRESS_AUTOCOMPLETE__?: { id: string; countries: "any" | string[] };
+  /** The sign-in apps ("Continue with <app>", layout `appServices.signIn`). */
+  __SIGN_IN_APPS__?: Array<{ id: string; name: string }>;
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
   __CHECKOUT_LANGUAGE__?: unknown;

@@ -80,7 +80,7 @@ describe("the storefront gallery", () => {
       for (const value of values) expect(ids.has(entryId("product", "sticky", `${position}=${value}`)), `${position}=${value}`).toBe(true);
     }
     for (const palette of STOREFRONT_THEME_PALETTE_KEYS) expect(families.has(`palette:${palette}`), palette).toBe(true);
-    for (const family of ["app:section", "app:product-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
+    for (const family of ["app:section", "app:product-block", "app:checkout-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
   });
 
   it("uses a large fixture store: a 1,000+ link menu and 50+ facets", () => {

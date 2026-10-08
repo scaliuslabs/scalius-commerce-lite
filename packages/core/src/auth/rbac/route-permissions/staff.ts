@@ -35,6 +35,19 @@ export const STAFF_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/fcm-token": {
     POST: { allowAnyAdmin: true },
   },
+  // Web Push: each staff member subscribes and removes only their own browsers.
+  "/api/v1/admin/web-push": {
+    GET: { allowAnyAdmin: true },
+  },
+  "/api/v1/admin/web-push/subscriptions": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/admin/web-push/subscriptions/remove": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/admin/web-push/devices/*": {
+    DELETE: { allowAnyAdmin: true },
+  },
   "/api/v1/admin/fcm-token-cleanup": {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },

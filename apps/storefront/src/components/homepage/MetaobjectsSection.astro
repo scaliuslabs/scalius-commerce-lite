@@ -1,0 +1,132 @@
+---
+// A metaobject content type's published entries (Shopify's metaobject
+// sections): an FAQ, a size chart, store locations. Each entry is its title
+// and its fields, as a list, cards in a grid, or questions that open
+// (`<details>`, so it works without script). Field values are drawn by type
+// (MetaobjectFieldValue); everything is escaped text, a checked link or a
+// store photo. Nothing renders while the type is unset, private or empty
+// (lib/homepage-sections.ts decides).
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageMediaAsset, HomepageMetaobject } from "@/lib/api/storefront";
+import { metaobjectFieldIsPhotos, metaobjectFieldViews } from "@/lib/metaobject-fields";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import type { NewsletterLanguage } from "@/lib/newsletter-copy";
+import Icon from "@/components/icons/Icon.astro";
+import MetaobjectFieldValue from "./MetaobjectFieldValue.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"metaobjects">;
+  /** The content type with the entries to show (already limited). */
+  metaobject: HomepageMetaobject;
+  media: ReadonlyMap<string, HomepageMediaAsset>;
+  currencySymbol: string;
+  currencyCode: string;
+  language: NewsletterLanguage;
+}
+
+const { section, metaobject, media, currencySymbol, currencyCode, language } = Astro.props;
+const layout = section.settings.layout;
+const heading = section.settings.heading.trim() || metaobject.name;
+const headingId = `home-${section.id}-title`;
+const context = { media, currencySymbol, currencyCode, language };
+const entries = metaobject.entries.map((entry) => {
+  const views = metaobjectFieldViews(entry.fields, context);
+  // A card leads with its first single photo (the showroom, the designer), full width.
+  const cover = layout === "grid"
+    ? views.find((view) => metaobjectFieldIsPhotos(view) && view.parts.length === 1 && view.parts[0]!.kind === "image")
+    : undefined;
+  const coverAsset = cover?.parts[0]?.kind === "image" ? cover.parts[0].asset : null;
+  return { handle: entry.handle, title: entry.title, cover: coverAsset, fields: views.filter((view) => view !== cover) };
+});
+---
+
+<section class="home-section w-full" aria-labelledby={headingId}>
+  <div class:list={["mx-auto px-4 sm:px-6 lg:px-8", layout === "grid" ? "max-w-7xl" : "max-w-3xl"]}>
+    <h2 id={headingId} class="section-heading mb-3 text-foreground [overflow-wrap:anywhere] md:mb-5">{heading}</h2>
+
+    {layout === "list" && (
+      <ul class="divide-y divide-border rounded-xl border border-border bg-card">
+        {entries.map((entry) => (
+          <li class="px-4 py-4 md:px-5">
+            <h3 class="text-base font-semibold text-foreground [overflow-wrap:anywhere]">{entry.title}</h3>
+            {entry.fields.length > 0 && (
+              <dl class="mt-2 space-y-2 text-sm">
+                {entry.fields.map((view) => (
+                  <div class="grid gap-0.5 sm:grid-cols-[minmax(6rem,12rem)_minmax(0,1fr)] sm:gap-x-6">
+                    <dt class="text-muted-foreground [overflow-wrap:anywhere]">{view.name}</dt>
+                    <dd class="text-foreground"><MetaobjectFieldValue view={view} title={entry.title} /></dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {layout === "grid" && (
+      <ul class="grid gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-3">
+        {entries.map((entry) => (
+          <li class="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
+            {entry.cover && (
+              <img
+                src={mediaImageUrl(entry.cover.url, 640)}
+                srcset={mediaImageSrcSet(entry.cover.url)}
+                sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 400px"
+                alt={entry.cover.alt || entry.title}
+                width={entry.cover.width ?? 640}
+                height={entry.cover.height ?? 480}
+                loading="lazy"
+                decoding="async"
+                class="aspect-[4/3] w-full bg-muted object-cover"
+              />
+            )}
+            <div class="flex-1 p-4 md:p-5">
+              <h3 class="text-base font-semibold text-foreground [overflow-wrap:anywhere]">{entry.title}</h3>
+              {entry.fields.length > 0 && (
+                <dl class="mt-2 space-y-2 text-sm">
+                  {entry.fields.map((view) => (
+                    <div class="grid gap-0.5">
+                      <dt class="text-muted-foreground [overflow-wrap:anywhere]">{view.name}</dt>
+                      <dd class="text-foreground"><MetaobjectFieldValue view={view} title={entry.title} /></dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {layout === "accordion" && (
+      <div class="divide-y divide-border rounded-xl border border-border bg-card">
+        {entries.map((entry) => (
+          entry.fields.length > 0 ? (
+            <details class="group">
+              <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-base font-semibold text-foreground [overflow-wrap:anywhere] md:px-5 [&::-webkit-details-marker]:hidden">
+                {entry.title}
+                <span class="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true"><Icon name="chevron-down" class="size-4" /></span>
+              </summary>
+              {entry.fields.length === 1 ? (
+                // A question with one answer field: the answer alone, no label.
+                <div class="px-4 pb-4 text-sm leading-relaxed text-muted-foreground md:px-5"><MetaobjectFieldValue view={entry.fields[0]!} title={entry.title} /></div>
+              ) : (
+                <dl class="space-y-2 px-4 pb-4 text-sm md:px-5">
+                  {entry.fields.map((view) => (
+                    <div class="grid gap-0.5 sm:grid-cols-[minmax(6rem,12rem)_minmax(0,1fr)] sm:gap-x-6">
+                      <dt class="text-muted-foreground [overflow-wrap:anywhere]">{view.name}</dt>
+                      <dd class="text-foreground"><MetaobjectFieldValue view={view} title={entry.title} /></dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </details>
+          ) : (
+            <p class="min-h-11 px-4 py-3 text-base font-semibold text-foreground [overflow-wrap:anywhere] md:px-5">{entry.title}</p>
+          )
+        ))}
+      </div>
+    )}
+  </div>
+</section>

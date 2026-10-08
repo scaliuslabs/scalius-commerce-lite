@@ -82,6 +82,10 @@ export interface PluginRuntimeBridge {
   messagingEmail(input: unknown): Promise<{ queued: boolean }>;
   messagingSms(input: unknown): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: unknown): Promise<void>;
+  /** Optional on older hosts: a clear refusal. */
+  messagingPush?(input: unknown): Promise<{ delivered: boolean }>;
+  /** Optional on older hosts: an app built for this SDK on an older platform gets a clear refusal. */
+  timelineAdd?(input: unknown): Promise<{ id: string }>;
 }
 
 const MAX_LOGS = 100;
@@ -253,6 +257,16 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
       email: (input: unknown) => call(() => bridge.messagingEmail(input)),
       sms: (input: unknown) => call(() => bridge.messagingSms(input)),
       notifyStaff: (input: unknown) => call(() => bridge.messagingNotifyStaff(input)),
+      pushCustomer: (input: unknown) => call(() => {
+        if (!bridge.messagingPush) throw new Error("[messaging.unavailable] This platform does not send pushes to buyers yet.");
+        return bridge.messagingPush(input);
+      }),
+    }),
+    timeline: Object.freeze({
+      add: (input: unknown) => call(() => {
+        if (!bridge.timelineAdd) throw new Error("[timeline.not_allowed] This platform does not take order timeline entries yet.");
+        return bridge.timelineAdd(input);
+      }),
     }),
     log: Object.freeze({ debug: log("debug"), info: log("info"), warn: log("warn"), error: log("error") }),
   }) as unknown as PluginContext;

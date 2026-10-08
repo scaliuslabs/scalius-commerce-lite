@@ -29,8 +29,9 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
           productName: item.productName,
           variantLabel: item.variantLabel,
           // The same buyer inputs again; the store re-checks and re-prices them.
-          ...(item.properties?.length
-            ? { properties: item.properties.map(({ key, value }) => ({ key, value })) }
+          // Keys starting "_" are the platform's (an app bundle), never inputs.
+          ...(item.properties?.some(({ key }) => !key.startsWith("_"))
+            ? { properties: item.properties.filter(({ key }) => !key.startsWith("_")).map(({ key, value }) => ({ key, value })) }
             : {}),
         })),
         // Today's price in the page's market (MARKETS-DESIGN D5).

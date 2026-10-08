@@ -5,7 +5,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
     return "dashboard";
   }
   const segment = pathname.slice("/api/v1/admin/".length).split("/", 1)[0] ?? "";
-  if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup"].includes(segment)) {
+  if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup", "web-push"].includes(segment)) {
     return "dashboard";
   }
   if (["categories", "brands", "price-lists", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {
@@ -14,7 +14,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
   if (["customers", "discounts", "shipments", "orders", "conversations", "taxes", "gift-cards", "warranty-claims"].includes(segment)) {
     return "sales";
   }
-  if (["pages", "navigation", "translations", "settings", "custom-field-definitions", "custom-fields"].includes(segment)) return "content";
+  if (["pages", "navigation", "translations", "settings", "custom-field-definitions", "custom-fields", "metaobjects"].includes(segment)) return "content";
   if (["rbac", "auth", "agent-access", "webhooks", "events", "apps"].includes(segment)) return "access";
   return null;
 }

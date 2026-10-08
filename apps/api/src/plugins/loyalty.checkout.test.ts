@@ -1,11 +1,13 @@
-// scalius.loyalty end to end through the real storefront checkout routes on
+// acme.loyalty end to end through the real storefront checkout routes on
 // the migrated schema (bundled loader): the buyer's balance is the
 // function's snapshot, the redemption is committed with the order in the
 // same batch at the revision the function saw, and two orders racing for the
 // same points never both get them.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import { getDb, type Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
@@ -20,7 +22,7 @@ import { errorResponseFromError } from "../utils/api-response";
 import { orderRoutes } from "../routes/storefront-orders";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PLUGIN_TEST_CREDENTIAL_KEY } from "./testing/fixtures";
-import { manifest as loyaltyManifest } from "../../../../plugins/loyalty/src/index";
+import { manifest as loyaltyManifest } from "./testing/apps/loyalty/src/index";
 
 const SESSION_KEY = "loyalty-checkout-session-key-0123456789";
 const SESSION = "loyalty-buyer-session";
@@ -75,16 +77,16 @@ describe("loyalty points through storefront checkout", () => {
     const installed = await installPlugin(db, {
       manifest: loyaltyManifest,
       source: "bundled",
-      bundleSha256: BUNDLED_PLUGINS["scalius.loyalty"]!.sha256,
+      bundleSha256: BUNDLED_PLUGINS["acme.loyalty"]!.sha256,
       actorUserId: "owner",
     });
-    const configured = await writePluginSettings(db, "scalius.loyalty", { title: "Loyalty points", code: "POINTS", min_redeem: 10 }, {
+    const configured = await writePluginSettings(db, "acme.loyalty", { title: "Loyalty points", code: "POINTS", min_redeem: 10 }, {
       expectedRevision: installed.revision,
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
-    await activatePlugin(db, "scalius.loyalty", { actorUserId: "owner", expectedRevision: configured.revision });
+    await activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: configured.revision });
     // 300 points, worth 300 BDT.
-    await putPluginRecord(db, "scalius.loyalty", "balances", BALANCES, "cust_1", { points: 300, earned: 300, spent: 0 });
+    await putPluginRecord(db, "acme.loyalty", "balances", BALANCES, "cust_1", { points: 300, earned: 300, spent: 0 });
   });
   afterEach(() => sqlite.close());
 
@@ -136,7 +138,7 @@ describe("loyalty points through storefront checkout", () => {
     const placed = await call("/orders", order(String(quoted.json.data.quoteFingerprint)));
     expect(placed.status, JSON.stringify(placed.json)).toBe(201);
     expect(placed.json.data).toMatchObject({ totalAmountMinor: 100_000 + 6_000 - 30_000 });
-    expect(await getPluginRecordVersion(db, "scalius.loyalty", "balances", "cust_1"))
+    expect(await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
       .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2 });
 
     // Spent: the next quote has no points to offer, and an order on the old quote is refused.
@@ -156,7 +158,7 @@ describe("loyalty points through storefront checkout", () => {
     const refused = results.find((result) => result.status !== 201)!;
     // Lost the race at the commit (the guard), or saw the spent balance while pricing.
     expect(refused.json.error?.details?.reason ?? refused.json.error?.message).toBeTruthy();
-    expect(await getPluginRecordVersion(db, "scalius.loyalty", "balances", "cust_1"))
+    expect(await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
       .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 1 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'app_discount'").get()).toEqual({ n: 1 });
@@ -176,7 +178,7 @@ describe("loyalty points through storefront checkout", () => {
           return (query: string) => {
             if (!bumped && /insert into "orders"/i.test(query)) {
               bumped = true;
-              sqlite.prepare("UPDATE plugin_records SET revision = revision + 1, data_json = '{\"points\":5,\"earned\":300,\"spent\":295}' WHERE plugin_id = 'scalius.loyalty'").run();
+              sqlite.prepare("UPDATE plugin_records SET revision = revision + 1, data_json = '{\"points\":5,\"earned\":300,\"spent\":295}' WHERE plugin_id = 'acme.loyalty'").run();
             }
             return target.prepare(query);
           };
@@ -191,6 +193,6 @@ describe("loyalty points through storefront checkout", () => {
       details: { reason: "APP_OFFER_CHANGED" },
     });
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 0 });
-    expect((await getPluginRecordVersion(db, "scalius.loyalty", "balances", "cust_1"))?.data).toEqual({ points: 5, earned: 300, spent: 295 });
+    expect((await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))?.data).toEqual({ points: 5, earned: 300, spent: 295 });
   });
 });

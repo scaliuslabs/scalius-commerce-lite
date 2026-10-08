@@ -119,6 +119,11 @@ export const CACHE_DEP_KINDS = [
    * default locale, and which languages are published.
    */
   "tr",
+  /**
+   * `mo:<definitionId>`: one metaobject definition (its fields, storefront
+   * access) and its entries; `mo:*`: any definition.
+   */
+  "mo",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -212,6 +217,10 @@ export const cacheDep = {
   localizedSlugSpace: (resourceType: string) => `tr:slugs:${resourceType}`,
   /** The locale and market of each presence, the default locale and the published languages. */
   translationLocales: () => "tr:locales",
+  /** One metaobject definition and its entries. */
+  metaobjects: (definitionId: string) => `mo:${definitionId}`,
+  /** Any metaobject definition (which types exist, by handle). */
+  anyMetaobjects: () => `mo:${CACHE_DEP_ANY}`,
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -842,6 +851,19 @@ const CACHE_DEP_TABLE_RULES = {
     note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
     rules: everyChange(own("plg", "plugin_id")),
   },
+  // --- Metaobjects (0126; docs/platform/PLUGINS.md, "Metaobjects") ---------------
+  metaobject_definitions: {
+    kinds: ["mo"],
+    noise: ["revision", "created_at", "updated_at"],
+    note: "A section that shows a definition's entries declares `mo:<id>`; a read that finds a definition by its handle declares `mo:*`.",
+    rules: everyChange(own("mo")),
+  },
+  metaobject_entries: {
+    kinds: ["mo"],
+    noise: ["revision", "created_at", "updated_at"],
+    note: "An entry belongs to its definition's key: a section declares one key per definition it shows, never one per entry.",
+    rules: everyChange([{ prefix: "mo:", columns: ["definition_id"] }]),
+  },
   plugin_records: {
     kinds: ["plgs"],
     noise: ["revision", "created_at", "updated_at", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2"],
@@ -860,7 +882,8 @@ const CACHE_DEP_TABLE_RULES = {
     // order (its rate's as-of time and lock), which checkout reads under the
     // fence. `currency_code` is visible: a presence's prices, the matrix
     // (the market selector shows it) and the checkout config show it.
-    noise: ["revision", "created_at", "updated_at", "prices_include_tax", "fx_rate_as_of", "fx_lock_minutes", ...MARKET_PRICING_COLUMNS],
+    // `fx_rate_source` (0126) says who writes `fx_rate`; the rate itself advances `pl:`.
+    noise: ["revision", "created_at", "updated_at", "prices_include_tax", "fx_rate_as_of", "fx_lock_minutes", "fx_rate_source", ...MARKET_PRICING_COLUMNS],
     note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue. A market's price mode and FX policy advance `pl:<id>`, which its keyed catalogue reads declare.",
     rules: [
       ...everyChange(own("mk")),
@@ -1056,6 +1079,8 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   delivery_shipments: PRIVATE,
   order_discount_allocations: PRIVATE,
   admin_fcm_tokens: PRIVATE,
+  push_subscriptions: PRIVATE,
+  customer_identities: PRIVATE,
   abandoned_checkouts: PRIVATE,
   checkout_attempts: PRIVATE,
   admin_order_create_attempts: PRIVATE,

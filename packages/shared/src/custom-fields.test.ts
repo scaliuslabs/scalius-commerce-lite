@@ -71,7 +71,7 @@ describe("custom field vocabulary", () => {
     expect(isCustomFieldKey("care_guide")).toBe(true);
     for (const bad of ["Care", "care-guide", "_care", "care__guide", "c", "9lives"]) expect(isCustomFieldKey(bad), bad).toBe(false);
     // `custom`, or a plugin id (`vendor.name`).
-    for (const good of ["custom", "scalius.hello", "a-b.c", "acme.loyalty-points", "9shop.x1"]) expect(isCustomFieldNamespace(good), good).toBe(true);
+    for (const good of ["custom", "acme.hello", "a-b.c", "acme.loyalty-points", "9shop.x1"]) expect(isCustomFieldNamespace(good), good).toBe(true);
     for (const bad of ["Custom", "a.b.c", ".a", "a.", "A.b", "loyalty", "a-.b", "a.-b", "a_b.c", "", "custom.", `${"a".repeat(41)}.b`]) {
       expect(isCustomFieldNamespace(bad), bad).toBe(false);
     }
@@ -79,10 +79,10 @@ describe("custom field vocabulary", () => {
 
   it("lets the merchant write only `custom` and a plugin only its own namespace", () => {
     expect(canWriteCustomFieldNamespace(MERCHANT_CUSTOM_FIELD_WRITER, "custom")).toBe(true);
-    expect(canWriteCustomFieldNamespace(MERCHANT_CUSTOM_FIELD_WRITER, "scalius.loyalty")).toBe(false);
-    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "scalius.loyalty" }, "scalius.loyalty")).toBe(true);
-    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "scalius.loyalty" }, "scalius.hello")).toBe(false);
-    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "scalius.loyalty" }, "custom")).toBe(false);
+    expect(canWriteCustomFieldNamespace(MERCHANT_CUSTOM_FIELD_WRITER, "acme.loyalty")).toBe(false);
+    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "acme.loyalty" }, "acme.loyalty")).toBe(true);
+    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "acme.loyalty" }, "acme.hello")).toBe(false);
+    expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "acme.loyalty" }, "custom")).toBe(false);
     expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "custom" }, "custom")).toBe(false);
     expect(canWriteCustomFieldNamespace({ kind: "plugin", pluginId: "A.b" }, "A.b")).toBe(false);
   });

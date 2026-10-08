@@ -28,6 +28,8 @@ export const ORDER_EVENT_KINDS = [
     "unarchived",
     "invoice_issued",
     "fulfillment_location_changed",
+    /** An app's typed entry (docs/platform/PLUGINS.md, "Order timeline"): `data` names the app and its kind. */
+    "app_event",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 
@@ -178,6 +180,67 @@ export async function addOrderComment(
     }).onConflictDoNothing({ target: orderEvents.id });
     const events = await listOrderTimeline(db, orderId, actorId);
     return events.find((event) => event.id === id)!;
+}
+
+/** The most fields one app timeline entry carries. */
+export const ORDER_APP_EVENT_FIELDS_MAX = 10;
+export const ORDER_APP_EVENT_MESSAGE_MAX_LENGTH = 500;
+
+export interface AddOrderAppEventInput {
+    orderId: string;
+    pluginId: string;
+    appName: string;
+    /** The entry kind the app declares (`manifest.timeline[].kind`) and its title. */
+    kind: string;
+    title: string;
+    /** Plain text for staff. */
+    message: string;
+    /** Small typed facts (`points: 120`, `tier: "gold"`), shown as written. */
+    fields?: Record<string, string | number | boolean>;
+    /** A repeat with the same key adds nothing (the app's idempotency key). */
+    requestKey?: string | null;
+}
+
+/**
+ * An app's typed line on the order timeline (`ctx.timeline.add`). It shows
+ * in the dashboard's timeline and the agent API with the app's name; it
+ * changes nothing on the order and emits no event, so an app reacting to
+ * order events cannot loop on its own lines. Returns the line's id.
+ */
+export async function addOrderAppEvent(db: Database, input: AddOrderAppEventInput): Promise<string> {
+    const message = input.message.trim();
+    if (!message) throw new ValidationError("Write a message for the timeline entry.");
+    if (message.length > ORDER_APP_EVENT_MESSAGE_MAX_LENGTH) {
+        throw new ValidationError(`Keep timeline messages under ${ORDER_APP_EVENT_MESSAGE_MAX_LENGTH} characters.`);
+    }
+    const fields = Object.entries(input.fields ?? {});
+    if (fields.length > ORDER_APP_EVENT_FIELDS_MAX) throw new ValidationError(`A timeline entry carries at most ${ORDER_APP_EVENT_FIELDS_MAX} fields.`);
+    for (const [key, value] of fields) {
+        if (!/^[a-z][a-zA-Z0-9_]{0,39}$/.test(key)) throw new ValidationError(`Field ${key.slice(0, 40)} needs a short camelCase or snake_case name.`);
+        const ok = typeof value === "boolean"
+            || (typeof value === "number" && Number.isFinite(value))
+            || (typeof value === "string" && value.length <= 200);
+        if (!ok) throw new ValidationError(`Field ${key} is a number, a boolean or text of at most 200 characters.`);
+    }
+    const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, input.orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+    const id = await orderEventId(input.orderId, "app_event", input.requestKey ? `${input.pluginId}\0${input.requestKey}` : null);
+    await db.insert(orderEvents).values({
+        id,
+        orderId: input.orderId,
+        kind: "app_event",
+        body: message,
+        data: JSON.stringify({
+            pluginId: input.pluginId,
+            appName: input.appName,
+            kind: input.kind,
+            title: input.title,
+            fields: Object.fromEntries(fields),
+        }),
+        actorId: null,
+        createdAt: sql`unixepoch()`,
+    }).onConflictDoNothing({ target: orderEvents.id });
+    return id;
 }
 
 /** Staff may delete their own comments; every other line is a record of what happened. */

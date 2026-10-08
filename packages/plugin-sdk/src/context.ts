@@ -149,6 +149,31 @@ export interface PluginMessaging {
   sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
+  /**
+   * A browser notification to one signed-in buyer (needs `customers.view`):
+   * Web Push to the browsers they subscribed on their account page, or the
+   * store's app push provider. `url` is a store path (`/account/orders`).
+   * `delivered: false` when the buyer has no subscribed browser.
+   */
+  pushCustomer(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
+}
+
+/** Typed lines on order timelines (needs `orders.edit`; each kind declared in `manifest.timeline`). */
+export interface PluginTimeline {
+  /**
+   * Adds a line staff see on the order (and agents read): your app's name,
+   * the kind's title and `message` (plain text, 500 characters), with up to
+   * 10 small typed `fields`. Never put buyer contact data in it. The same
+   * `idempotencyKey` (an event id) adds the line once. It changes nothing on
+   * the order and emits no event.
+   */
+  add(input: {
+    orderId: string;
+    kind: string;
+    message: string;
+    fields?: Record<string, string | number | boolean>;
+    idempotencyKey?: string;
+  }): Promise<{ id: string }>;
 }
 
 export interface PluginLogger {
@@ -169,6 +194,7 @@ export interface PluginContext {
   http: PluginHttp;
   customFields: PluginCustomFields;
   messaging: PluginMessaging;
+  timeline: PluginTimeline;
   log: PluginLogger;
 }
 

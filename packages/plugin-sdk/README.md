@@ -2,7 +2,24 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. The package is private to this monorepo.
 
-Reference apps in `plugins/`: `hello` (a sample that no store bundles; the platform tests run it: events, routes, cron, storage, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic storage and order commits), `bkash` and `nagad` (payment providers), `bangladesh` (SMS and fraud providers, place seeding). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
+Real apps in `plugins/`: `bkash` and `nagad` (payment providers) and `bangladesh` (SMS, fraud, courier and payment providers, place seeding). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, storage, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic storage and order commits), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (checkout and account blocks). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
+
+## Extension points
+
+| Point | Declare | Implement |
+| --- | --- | --- |
+| Events | `events` | `events[topic](event, ctx)` |
+| Checkout functions | `functions: [{ point, … }]` | `functions[point](input, settings)` |
+| Providers (14 ports) | `providers.<port>` | `define<Port>Provider({ … })` |
+| Admin routes, pages, cards, actions, widgets | `routes.admin`, `admin.*` | `routes.admin[name]` with `ui.*` |
+| Admin list columns and filters | `admin.listColumns` | storage records or your custom fields (no code) |
+| Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
+| Custom fields, metaobjects | `customFields`, `metaobjects` | `ctx.customFields`, `ctx.api` (`dashboard.metaobjects.*`) |
+| Theme sections, product blocks, checkout and account blocks | `storefront.sections`, `productBlocks`, `blocks` | a public route that answers `{ html }` |
+| Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
+| Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
+| Cron, data updates, lifecycle | `cron`, `migrations` | `cron[name]`, `migrations[version]`, `lifecycle.*` |
+| Sales channels | `salesChannels` | read your channel's products with `ctx.api` |
 
 ## A minimal app
 
@@ -86,6 +103,8 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `allowedHosts` (20): hosts `ctx.http` may reach, exact or `*.example.com`. `host:port` names one non-default port. No IP literals or localhost. Empty means no network.
 - `events` (40): topics, `<resource>.*` or `*`.
 - `functions` (5): `{ point, priority, onError, snapshot }`.
+- `timeline` (10): `{ kind, title }`, the kinds of order timeline entries the app writes.
+- `metaobjects` (10): content types in the app's namespace (`<plugin id>.<type>`), with custom-field typed fields. They sync on activation and update; the merchant writes their entries.
 - `providers` (24 in all): provider declarations, grouped by port. A regional pack (`plugins/bangladesh`) bundles a country's integrations in one app.
 - `routes`: `admin` (40) and `public` (20) entries `{ name, methods }`; `webhooks` (10) names.
 - `cron` (10): `{ name, schedule }`.
@@ -93,8 +112,8 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `customFields` (50): fields in the app's namespace on a product, variant, customer, order, category, collection, brand or page.
 - `salesChannels` (3): sales channels the app sells through (`{ id, name }`), Shopify's sales-channel apps. Each becomes the channel `<plugin id>:<id>`, active while the app is. Merchants publish products to it; the app pages them from `GET /api/v1/admin/settings/sales-channels/<channel id>/products` (`products.view`) and follows `product.publication_changed`.
 - `settings` (40): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
-- `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5). Each names an admin route.
-- `storefront`: `sections` (20), `productBlocks` (10), `scripts` (5, https; their hosts join the storefront CSP), `head` and `proxy` flags.
+- `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5), each naming an admin route; `listColumns` (see "List columns").
+- `storefront`: `sections` (20), `productBlocks` (10), `blocks` (checkout and account targets), `scripts` (5, https; their hosts join the storefront CSP), `head` and `proxy` flags.
 - `limits`: `cpuMs` 5-200 (default 50), `wallMs` 100-30,000 (default 10,000).
 - `translations.bn`: Bangla text for `name`, `tagline`, `description` and the admin titles.
 
@@ -130,7 +149,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - `functions["checkout.discounts"]`: `(input, settings)`. Pure, no `ctx`.
 - `routes.admin.<name>`, `routes.public.<name>`, `routes.webhooks.<name>`: `(request, ctx) => { status?, headers?, body? }`.
 - `cron.<name>`: `(ctx, { name, scheduledAt })`.
-- `providers.<id>`: `definePaymentProvider`, `defineCourierProvider`, `defineSmsProvider`, `defineEmailProvider`, `defineFraudProvider` or `defineTaxProvider`.
+- `providers.<id>`: `definePaymentProvider`, `defineCourierProvider`, `defineSmsProvider`, `defineEmailProvider`, `defineFraudProvider`, `defineTaxProvider`, `defineTranslationProvider`, `defineAiProvider`, `defineMessagingProvider`, `definePushProvider`, `defineSearchProvider`, `defineAddressProvider`, `defineFxProvider` or `defineIdentityProvider`.
 - `lifecycle.install`, `activate`, `deactivate`, `uninstall`: `(ctx)`. `uninstall` also gets `{ keepData }`. No declaration needed.
 - `migrations["1"]`, `["2"]`: `(ctx)`. One for each `manifest.migrations[].version` (see "Data updates").
 
@@ -148,7 +167,8 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - `api.call(operationId, input)`: calls a `/api/v1` dashboard operation by id (`dashboard.orders.get`) with the dashboard's validation, RBAC and audit. Returns `{ ok, status, data, error }`. A mutating call needs `idempotencyKey` (8-200 characters). 60 calls a minute.
 - `http.fetch(url, init)`: https only, to `allowedHosts`. Each redirect hop (at most 5) is checked again. Request and response are at most 1 MiB. `timeoutMs` is 1-30,000 (default 10,000). 60 requests a minute. `Set-Cookie` is dropped.
 - `customFields` (`get`, `set`): values of the app's declared fields on one resource. The approved grant must cover the owner type.
-- `messaging`: `email` and `sms` through the store's providers (need `customers.view`), and `notifyStaff`. With `marketing: true` and a `customerId`, only a subscribed customer gets the message, with the unsubscribe footer. 60 messages a minute.
+- `messaging`: `email`, `sms` and `pushCustomer` through the store's providers (need `customers.view`), and `notifyStaff` (Firebase devices and Web Push browsers). `pushCustomer({ customerId, title, body?, url?, tag? })` reaches the browsers the buyer subscribed on the account page (or the store's push app); `url` is a store path. With `marketing: true` and a `customerId`, only a subscribed customer gets an email or SMS, with the unsubscribe footer. 60 messages a minute.
+- `timeline.add({ orderId, kind, message, fields?, idempotencyKey? })`: a line on the order timeline with your app's name (needs `orders.edit` and a declared kind). `message` is plain text (500 characters), `fields` at most 10. The same `idempotencyKey` adds it once.
 - `log`: `debug`, `info`, `warn`, `error`. The platform keeps the newest 500 lines per app and masks secrets, e-mail addresses and phone numbers.
 - `storage`, `kv`: see Storage.
 
@@ -175,13 +195,16 @@ await ctx.storage.balances.put(customerId, next, { expectedRevision: current?.re
 
 ## Checkout functions
 
-A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points: `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`, `order.risk`. They run for the online store, staff orders and buyer agents (`cart.channel`). `cart.customer.tags` is always empty.
+A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points, in checkout order: `cart.transform`, `cart.line_prices`, `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`, then `order.risk` after the commit. They run for the online store and buyer agents; staff orders run all but `cart.transform` and `cart.line_prices` (staff set lines and prices). `cart.customer.tags` is always empty.
+
+- **`cart.transform`** answers `{ operations: [{ expand: { lineId, title?, components: [{ variantId, quantity }] } } | { merge: { lineIds, title } }] }`. A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at their summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
+- **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }] }` for B2B, tiered or member prices (with `snapshot`). It prices a line only when no price list does: sale > segment > market list > your price > FX > base. The first app by priority wins a line.
 
 - **Failure policy.** A function that throws, times out or answers invalidly is left out (`onError: "skip"`). Only `cart.validate` and `checkout.payment_methods` may use `onError: "block"`. Checkout then stops with the store's buyer-safe text (Settings > Checkout, "Apps at checkout").
 - **Snapshot and commit** (`checkout.discounts`). Declare `snapshot: { collection }`. The signed-in buyer's record in that collection (record id = customer id) arrives as `input.snapshot` (`{ revision, data } | null`).
   - The answer may carry `commit: { record }`, the next version of that record. The platform writes it in the order's own commit batch, at the revision you saw, and only when one of your discounts applied.
   - If the record changed meanwhile, the order fails with `APP_OFFER_CHANGED` and the buyer reviews it.
-  - Size the discount against `cart.lines[].lineTotalMinor`. `plugins/loyalty` is the worked example.
+  - Size the discount against `cart.lines[].lineTotalMinor`. The test app `apps/api/src/plugins/testing/apps/loyalty` is a worked example.
 - **Holds** (`order.risk`). The point runs after the order commits. Answer `{ level, reasons, hold: true }` to put the order on hold (one `order_holds` row per order and app). Staff release the hold before the order ships or moves on. Staff can still cancel it. The platform never cancels on its own.
 
 ## Routes and storefront surfaces
@@ -196,13 +219,14 @@ A function is pure: `(input, settings) => output`, with no I/O. The host stops i
 - Responses are JSON. An app cannot set cookies, CSP, CORS, `content-type` or redirect headers. A public or webhook response is `no-store` unless it sets exactly `cache-control: public, max-age=N` with N at most 300.
 - Admin pages, cards and widgets answer with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. `adminContext(request)` reads the request, including the dashboard language.
 - A theme section or product block route gets `request.render` and answers `{ body: { html, head? } }`. The platform sanitizes and caches the HTML. A render reads only the app's settings and the collections its section lists in `reads`, and stops after 1.5 s. A homepage shows at most 8 app sections and a product page at most 10 app blocks.
+- A checkout or account block (`storefront.blocks: [{ type, name, target, route, reads }]`) renders like a section at its Shopify target (`purchase.checkout.contact.render-after`, `customer-account.order-status.block.render`, …). No forms on checkout targets and no head tags. A page shows at most 12 app blocks.
 - With `storefront.proxy`, `/apps/<id>/*` on the storefront reaches the public routes. `request.customer` holds the signed-in customer's id, never a cookie. Answer `{ page }` or `{ redirect }` for a page navigation.
 
 ## Providers
 
 An app can fill a **port**, the typed interface the platform's own adapters implement (`@scalius/shared/plugins/providers`). A provider's store id is `<plugin id>:<provider id>`. Declare providers in the manifest by port and implement each with the matching `define*Provider`.
 
-Each port has required operations, and optional ones that you list in `operations` (`PROVIDER_OPERATIONS` in `@scalius/shared/plugins/providers`). Required: `payment` needs `createSession` and `verifyWebhook`, `courier` needs `createShipment` and `trackShipment`, `sms` and `email` need `send`, `fraud` needs `check`, and `tax` needs `calculate`. The platform calls every operation you declare, except courier `quote`, `cancelShipment` and `reconcileCod`, sms and email `deliveryStatus`, and all `tax` operations (tax is contract only). The merchant picks a provider in Settings > Payments, Shipping and delivery, Notifications (SMS and email) or Integrations (fraud).
+Each port has required operations, and optional ones that you list in `operations` (`PROVIDER_OPERATIONS` in `@scalius/shared/plugins/providers`). Required: `payment` needs `createSession` and `verifyWebhook`, `courier` needs `createShipment` and `trackShipment`, `sms`, `email`, `messaging` and `push` need `send`, `fraud` needs `check`, `tax` needs `calculate`, `translation` needs `translate`, `ai` needs `generate`, `search` needs `search`, `address` needs `suggest` and `resolve`, `fx` needs `rates`, and `identity` needs `authorize` and `exchange`. The platform calls every operation you declare, except courier `quote`, `cancelShipment` and `reconcileCod`, sms and email `deliveryStatus`, and all `tax` operations (tax is contract only). The merchant picks a provider in Settings > Payments, Shipping and delivery, Notifications (SMS and email) or Integrations (fraud).
 
 The host validates every input and output on both sides. A provider runs only when it is ready: the app is active, approved for the port and runnable here, with complete settings and readable secrets. The dashboard shows readiness and, if you declare `testConnection`, a connection test. A setting named `environment` with the values `sandbox` or `live` marks the provider as test or live.
 
@@ -261,6 +285,19 @@ Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, ope
 
 - **SMS and email.** Implement `send`. Never send twice for one idempotency key (`clientReference` for SMS, `idempotencyKey` for email). Answer `{ success, providerRef?, rawStatus?, retryable? }`. Set `retryable: false` for errors a retry cannot fix.
 - **Fraud.** Implement `check({ phone, orderId? })`. The merchant reads the answer on the order page as advice. It never blocks automatically. An app that must stop fulfilment answers `order.risk` with `hold: true`.
+
+### Service ports
+
+- **Messaging.** Declare `channels` (`whatsapp`, `messenger`, `instagram`, `telegram`, `viber`). `send({ channel, to, text | template, clientReference? })` answers like SMS. A WhatsApp app replaces the built-in Meta sender when the merchant chooses it.
+- **Push.** `send({ audience, recipients, notification, clientReference? })`: `recipients` are Scalius staff or customer ids; map them to your own subscribers. Web Push is built in; your app replaces it for buyers when chosen.
+- **Search.** `search({ query, locale, marketId, limit })` answers `{ productIds, correctedQuery? }`, best first. The platform reads, prices and filters the products itself and uses built-in search when you fail or take more than 1.5 s. Keep your index current from `product.*` events.
+- **Address.** `suggest({ query, country, locale, sessionToken })` answers up to 8 suggestions; `resolve({ id, … })` answers the canonical address fields. Declare `countries`. The form still validates the address.
+- **FX.** `rates({ base, quotes })` answers exact decimal rates (`"0.0084"`). The scheduled tick asks; buyers never wait on you; a failure keeps the last rate.
+- **Identity.** `authorize({ state, nonce, codeChallenge, redirectUri, locale })` answers the provider's https sign-in URL; `exchange({ code, codeVerifier, nonce, redirectUri })` checks the ID token and answers `{ subject, email?, emailVerified, phone?, phoneVerified, name? }`. Set `emailVerified` only when the provider verified it: only verified facts link to an existing account.
+
+## List columns
+
+`admin.listColumns: [{ id, resource, title, type, filterable?, source }]` adds columns to the orders, products or customers list. `type` is `text`, `number`, `money` (store integer minor units; the list shows the amount), `date` or `boolean`. `source` is `{ kind: "storage", collection, field }` (the record whose id is the row's id) or `{ kind: "customField", key }` (your field on that resource). `filterable` needs a declared index that starts with the field. Merchants pick the columns; a list shows at most 5.
 
 ## Data updates
 

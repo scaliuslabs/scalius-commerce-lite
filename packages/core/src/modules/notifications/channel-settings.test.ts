@@ -67,19 +67,20 @@ describe("notification channel settings", () => {
             provider: "cloudflare",
         });
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+            accessToken: "wa_token",
             accessTokenConfigured: true,
             phoneNumberId: "12345",
         });
         mocks.getNotificationProviderBlock.mockResolvedValue(null);
     });
 
-    it("strips legacy customer push from reads", async () => {
+    it("keeps customer push (Web Push) on reads", async () => {
         const db = createSettingsDb(JSON.stringify({
             order_created: ["email", "push"],
         }));
 
         await expect(getNotificationChannels(db.db)).resolves.toMatchObject({
-            order_created: ["email"],
+            order_created: ["email", "push"],
         });
     });
 
@@ -111,7 +112,7 @@ describe("notification channel settings", () => {
         });
     });
 
-    it("rejects customer push notification saves until customer push exists end to end", async () => {
+    it("turns customer push on only while Web Push can sign (a master secret and an https address)", async () => {
         const db = createSettingsDb();
         const before = storedOrderChannels(db);
 
@@ -119,11 +120,14 @@ describe("notification channel settings", () => {
             order_created: ["email", "push"],
         })).rejects.toMatchObject({
             name: "ValidationError",
-            message: "Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications.",
+            message: expect.stringContaining("https web address"),
         });
-
         expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
         expect(storedOrderChannels(db)).toEqual(before);
+
+        const env = { SCALIUS_SECRET: "a-master-secret-for-web-push-tests-0123456789abcdef", STOREFRONT_URL: "https://shop.example" };
+        await expect(updateNotificationChannels(db.db, { order_created: ["email", "push"] }, undefined, env))
+            .resolves.toMatchObject({ order_created: ["email", "push"] });
     });
 
     it("rejects SMS notification saves before the active provider is ready", async () => {

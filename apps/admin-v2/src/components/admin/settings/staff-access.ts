@@ -33,6 +33,7 @@ const GROUP_BY_RESOURCE: Record<string, PermissionGroup> = {
   customers: "customers",
   discounts: "discounts",
   pages: "content",
+  metaobjects: "content",
   media: "content",
   analytics: "tracking",
   settings: "settings",

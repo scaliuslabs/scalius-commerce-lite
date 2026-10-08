@@ -103,6 +103,17 @@ describe("settings search", () => {
     expect(searchSettings("hmac").cards).toEqual([{ page: "webhooks", card: "webhooks" }]);
   });
 
+  it("finds the cards of the app provider kinds, in either language", () => {
+    expect(firstCard("exchange rate")).toEqual({ page: "markets", card: "exchangeRates" });
+    expect(firstCard("এক্সচেঞ্জ রেট")).toEqual({ page: "markets", card: "exchangeRates" });
+    expect(firstCard("autocomplete")).toEqual({ page: "checkout", card: "addressAutocomplete" });
+    expect(firstCard("oauth")).toEqual({ page: "customerAccounts", card: "otherSignIn" });
+    expect(firstCard("browser notifications")).toEqual({ page: "notifications", card: "browserNotifications" });
+    expect(firstCard("ব্রাউজার")).toEqual({ page: "notifications", card: "browserNotifications" });
+    expect(firstCard("telegram")).toEqual({ page: "notifications", card: "chatApps" });
+    expect(firstCard("typesense")).toEqual({ page: "integrations", card: "appSearch" });
+  });
+
   it("keeps everyday matches", () => {
     for (const query of ["cod", "courier", "bkash", "vat", "sms", "কুরিয়ার", "বিকাশ"]) {
       expect(searchSettings(query).cards.length, query).toBeGreaterThan(0);

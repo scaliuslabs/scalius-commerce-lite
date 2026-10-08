@@ -5,6 +5,7 @@ import {
   STAFF_EVENT_GROUPS,
   buildAdminNotificationConfig,
   buildCustomerNotificationConfig,
+  pushProviderBody,
   serializeAdminNotificationConfig,
   serializeCustomerNotificationConfig,
 } from "./notification-channel-policy";
@@ -16,7 +17,7 @@ describe("notification channel policy", () => {
       order_confirmed: ["sms"],
     });
 
-    expect(config.order_created).toEqual({ email: true, sms: true, whatsapp: true });
+    expect(config.order_created).toEqual({ email: true, sms: true, whatsapp: true, push: false });
     expect(serializeCustomerNotificationConfig(config).order_confirmed).toEqual(["sms"]);
   });
 
@@ -31,7 +32,7 @@ describe("notification channel policy", () => {
   it("defaults every customer event to email, including the support request acknowledgement", () => {
     const config = buildCustomerNotificationConfig(undefined);
 
-    expect(config.support_request_submitted).toEqual({ email: true, sms: false, whatsapp: false });
+    expect(config.support_request_submitted).toEqual({ email: true, sms: false, whatsapp: false, push: false });
     expect(Object.values(config).every((channels) => channels.email)).toBe(true);
     expect(serializeCustomerNotificationConfig(config).support_request_submitted).toEqual(["email"]);
   });
@@ -61,7 +62,7 @@ describe("notification channel policy", () => {
 
   it("never offers WhatsApp for codes, keys or review links, and keeps staff email to the alerts that allow it", () => {
     const customer = buildCustomerNotificationConfig({ gift_card_issued: ["email", "whatsapp"], review_request: ["whatsapp"] });
-    expect(customer.gift_card_issued).toEqual({ email: true, sms: false, whatsapp: false });
+    expect(customer.gift_card_issued).toEqual({ email: true, sms: false, whatsapp: false, push: false });
     expect(serializeCustomerNotificationConfig(customer).review_request).toEqual([]);
 
     const staff = buildAdminNotificationConfig({ review_pending: ["push", "email"], order_created: ["push", "email"] });
@@ -72,5 +73,30 @@ describe("notification channel policy", () => {
   it("serializes channels in a stable order whatever order they were toggled in", () => {
     const config = buildCustomerNotificationConfig({ order_shipped: ["whatsapp", "email"] });
     expect(serializeCustomerNotificationConfig(config).order_shipped).toEqual(["email", "whatsapp"]);
+  });
+
+  it("adds the Browser column for buyers: kept as saved, and only where the event allows it", () => {
+    const config = buildCustomerNotificationConfig({
+      order_shipped: ["email", "push"],
+      // Codes, keys and review links never go to a browser.
+      gift_card_issued: ["email", "push"],
+      conversation_reply: ["push"],
+    });
+    expect(config.order_shipped).toEqual({ email: true, sms: false, whatsapp: false, push: true });
+    expect(config.gift_card_issued.push).toBe(false);
+    expect(config.conversation_reply.push).toBe(false);
+    const saved = serializeCustomerNotificationConfig(config);
+    expect(saved.order_shipped).toEqual(["email", "push"]);
+    expect(saved.gift_card_issued).toEqual(["email"]);
+  });
+
+  it("saves the push provider with every rule as it is, under the loaded revision", () => {
+    const body = pushProviderBody({ order_created: ["email", "push"], order_shipped: ["sms"] }, "acme.push:acme", 7);
+    expect(body).toMatchObject({ pushProvider: "acme.push:acme", expectedRevision: 7 });
+    expect(body.channels.order_created).toEqual(["email", "push"]);
+    expect(body.channels.order_shipped).toEqual(["sms"]);
+    expect(body.channels.order_delivered).toEqual(["email"]);
+    // Back to the built-in sender is an empty id, not a missing field.
+    expect(pushProviderBody(undefined, "", 1)).toMatchObject({ pushProvider: "", expectedRevision: 1 });
   });
 });

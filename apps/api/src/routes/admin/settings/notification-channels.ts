@@ -10,14 +10,16 @@ import {
     getNotificationSettings,
     updateNotificationChannels,
     updateAdminNotificationChannels,
-    isWhatsAppCloudApiConfigured,
+    getWhatsAppSender,
     STAFF_EMAIL_RECIPIENTS_MAX,
 } from "@scalius/core/modules/notifications";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { getEmailProviderReadiness } from "@scalius/core/integrations/email";
 import type { AppProviders } from "@scalius/core/integrations/provider-port";
-import { requestAppProviders } from "../../../plugins/providers/app-providers";
+import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
+import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
+import { webPushSender } from "@scalius/core/modules/notifications";
 import {
     clearNotificationProviderBlocks,
     describeNotificationProviderBlock,
@@ -88,15 +90,20 @@ const notificationSettingsSchema = z.object({
     email: readinessSchema,
     sms: readinessSchema,
     push: readinessSchema,
+    /** Buyers' browser notifications: Web Push (built in, ready when the Worker can sign) or the chosen app push provider. */
+    customerPush: readinessSchema,
+    pushProvider: z.string(),
     revision: z.number().int().nonnegative(),
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
     channels: notificationEventsSchema(
-        z.enum(["email", "sms", "whatsapp"]),
+        z.enum(["email", "sms", "whatsapp", "push"]),
         extraEvents(["conversation_reply", ...RESOLVED_NOTIFICATION_TYPES], z.enum(["email", "sms"])),
     ),
     whatsappTemplate: whatsappTemplateSchema.optional(),
+    /** Who delivers buyers' browser notifications: "" for Web Push, or an app push provider (`GET /admin/settings/providers?kind=push`). */
+    pushProvider: z.string().max(160).optional(),
     expectedRevision: expectedRevisionSchema,
 }).strict();
 
@@ -129,10 +136,12 @@ async function readNotificationSettings(db: Database, env: Env, appProviders: Ap
             templateName: settings.whatsappOrderTemplateName,
             languageCode: settings.whatsappOrderTemplateLanguage,
         },
-        whatsapp: await getWhatsAppNotificationReadiness(db, encryptionKey),
+        whatsapp: await getWhatsAppNotificationReadiness(db, encryptionKey, appProviders),
         email: await getEmailNotificationReadiness(db, encryptionKey, env, appProviders),
         sms: await getSmsNotificationReadiness(db, encryptionKey, appProviders),
-        push: await getPushNotificationReadiness(db, encryptionKey),
+        push: await getPushNotificationReadiness(db, encryptionKey, env),
+        customerPush: await customerPushReadiness(settings.pushProvider, env, appProviders),
+        pushProvider: settings.pushProvider,
         revision: settings.revision,
     };
 }
@@ -161,10 +170,12 @@ app.openapi(createRoute({
 }), async (c) => {
     const db = c.get("db");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const { channels, whatsappTemplate, expectedRevision } = c.req.valid("json");
+    const { channels, whatsappTemplate, pushProvider, expectedRevision } = c.req.valid("json");
+    if (pushProvider) await assertAppProviderInstalled(db, "push", pushProvider);
     await updateNotificationChannels(db, channels, encryptionKey, c.env as Record<string, unknown>, {
         whatsappTemplate,
         expectedRevision,
+        ...(pushProvider === undefined ? {} : { pushProvider }),
         appProviders: requestAppProviders(c),
     });
     // A new order template is the fix for a paused Meta template.
@@ -191,7 +202,7 @@ app.openapi(createRoute({
     const newlyPushed = Object.entries(channels).some(([event, enabled]) =>
         enabled.includes("push") && !current.adminChannels[event]?.includes("push"));
     if (newlyPushed) {
-        const push = await getPushNotificationReadiness(db, encryptionKey);
+        const push = await getPushNotificationReadiness(db, encryptionKey, c.env);
         if (!isReady(push)) {
             throw new ValidationError(
                 push.issues[0]?.message
@@ -242,18 +253,34 @@ async function getSmsNotificationReadiness(db: Database, encryptionKey: string |
     return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
-async function getWhatsAppNotificationReadiness(db: Database, encryptionKey: string | undefined): Promise<Readiness> {
-    if (!(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
-        return readiness.incomplete([readinessIssue(
-            NOTIFICATION_READINESS_CODES.whatsapp,
-            "Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.",
-        )]);
+async function getWhatsAppNotificationReadiness(db: Database, encryptionKey: string | undefined, appProviders: AppProviders): Promise<Readiness> {
+    // The built-in Meta Cloud API, or the app the merchant chose; a pause is keyed by whichever sends.
+    const sender = await getWhatsAppSender(db, encryptionKey, appProviders);
+    if (!sender.ready) {
+        return readiness.incomplete([readinessIssue(NOTIFICATION_READINESS_CODES.whatsapp, sender.reason)]);
     }
-    const block = await getNotificationProviderBlock(db, { channel: "whatsapp", provider: "whatsapp" });
+    const block = await getNotificationProviderBlock(db, { channel: "whatsapp", provider: sender.provider });
     return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
-async function getPushNotificationReadiness(db: Database, encryptionKey: string | undefined): Promise<Readiness> {
+/** Buyers' push: the chosen app provider's readiness, else whether Web Push can sign. */
+async function customerPushReadiness(pushProvider: string, env: Env, appProviders: AppProviders): Promise<Readiness> {
+    if (pushProvider) {
+        const choice = await resolveAppProvider(appProviders, "push", pushProvider);
+        return choice.provider ? readiness.ready() : readiness.incomplete([readinessIssue("push_provider_not_ready", choice.issue)]);
+    }
+    return await webPushSender(env) ? readiness.ready() : readiness.incomplete([readinessIssue(
+        "web_push_unavailable",
+        "Browser notifications need your store's https web address. Add it in Settings → Store details → Web addresses.",
+    )]);
+}
+
+/**
+ * Staff push is ready with Web Push (built in: a master secret and an https
+ * dashboard origin to sign with) or with a configured Firebase project.
+ */
+async function getPushNotificationReadiness(db: Database, encryptionKey: string | undefined, env: Env): Promise<Readiness> {
+    if (await webPushSender(env)) return readiness.ready();
     const providerReadiness = await getFirebaseServiceAccountReadiness(db, encryptionKey);
     if (!isReady(providerReadiness)) return bareReadiness(providerReadiness);
     const block = await getNotificationProviderBlock(db, { channel: "push", provider: "fcm" });
