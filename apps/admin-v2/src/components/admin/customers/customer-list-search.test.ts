@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MARKETING_CHANNELS, normalizeCustomerTag } from "@scalius/shared/customer-marketing";
 import {
   CUSTOMER_CHANNELS,
+  CUSTOMER_FILTER_PARAMS,
   customerListFilters,
   isCustomerSegmentId,
   normalizeTagParam,
@@ -32,6 +33,14 @@ describe("customers list URL state", () => {
     });
     // A channel narrows only the Subscribers tab.
     expect(validate({ channel: "email" }).channel).toBeUndefined();
+  });
+
+  it("reads an app filter and treats it as a filter the list can clear", () => {
+    expect(validate({ appFilter: "acme.crm/tier:gold" }).appFilter).toBe("acme.crm/tier:gold");
+    expect(validate({ appFilter: "gold" }).appFilter).toBeUndefined();
+    expect(CUSTOMER_FILTER_PARAMS).toContain("appFilter");
+    // The CSV export has no app filter: the list's own request carries it.
+    expect(customerListFilters(validate({ appFilter: "acme.crm/tier:gold" }))).toEqual({});
   });
 
   it("knows a segment id when it sees one", () => {

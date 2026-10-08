@@ -25,13 +25,14 @@ const MANIFEST: PluginManifestInput = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Member tiers and points.",
   author: { name: "Acme" },
-  storage: { members: { indexes: ["tier", ["points", "tier"]] } },
+  storage: { members: { indexes: ["tier", ["points", "tier"], "wallet"] } },
   customFields: [{ ownerType: "order", key: "pack_note", name: "Pack note", type: "single_line_text" }],
   admin: {
     listColumns: [
       { id: "points", resource: "customer", title: "Points", type: "number", source: { kind: "storage", collection: "members", field: "points" } },
       { id: "tier", resource: "customer", title: "Tier", type: "text", filterable: true, source: { kind: "storage", collection: "members", field: "tier" } },
       { id: "vip", resource: "customer", title: "VIP", type: "boolean", source: { kind: "storage", collection: "members", field: "vip" } },
+      { id: "wallet", resource: "customer", title: "Wallet", type: "money", filterable: true, source: { kind: "storage", collection: "members", field: "wallet" } },
       { id: "pack", resource: "order", title: "Pack note", type: "text", source: { kind: "customField", key: "pack_note" } },
     ],
   },
@@ -56,8 +57,8 @@ beforeEach(async () => {
   await activatePlugin(db, "acme.members", { actorUserId: "owner", expectedRevision: 1 });
   const installation = await requirePluginInstallation(db, "acme.members");
   const declaration = installation.manifest.storage.members!;
-  await putPluginRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true });
-  await putPluginRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false });
+  await putPluginRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true, wallet: 25050 });
+  await putPluginRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false, wallet: 0 });
   await setPluginCustomFieldValues(db, "acme.members", pluginBridgeAuthority(installation).customFields, "order", "ord_1", { pack_note: "Gift wrap" });
 });
 afterEach(() => sqlite.close());
@@ -118,6 +119,14 @@ describe("app list columns and filters", () => {
     expect(gold.body.data.pagination.total).toBe(1);
     const index = queries.find((query) => query.includes("plugin_records") && query.includes("idx1"));
     expect(index).toBeDefined();
+  });
+
+  it("shows and filters money in major units: the app stores minor units", async () => {
+    const page = await get("/customers?limit=10&appColumns=acme.members/wallet&appFilter=acme.members/wallet:250.50");
+    expect(page.status, JSON.stringify(page.body)).toBe(200);
+    expect(page.body.data.customers.map((customer: { id: string }) => customer.id)).toEqual(["cus_a"]);
+    expect(page.body.data.appValues).toEqual({ cus_a: { "acme.members/wallet": 250.5 } });
+    expect((await get("/customers?appFilter=acme.members/wallet:lots")).status).toBe(400);
   });
 
   it("refuses unknown, foreign and inactive columns and a filter on an unindexed field", async () => {

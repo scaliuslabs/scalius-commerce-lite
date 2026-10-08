@@ -26,9 +26,13 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminCollections: vi.fn(async () => ({ collections: [{ id: "col_eid", name: "Eid picks" }], pagination: { page: 1, totalPages: 1 } })),
   getApiV1AdminCollectionsByIds: vi.fn(async () => ({ collections: [{ id: "col_eid", name: "Eid picks" }] })),
   getApiV1AdminCategoriesFormOptions: vi.fn(async () => ({ categories: [{ id: "cat_honey", name: "Honey", status: "published" }] })),
+  getApiV1AdminMetaobjectsDefinitions: vi.fn(async () => ({ items: [] })),
   getApiV1AdminDiscounts: vi.fn(async () => ({
     discounts: [{ id: "promo_eid", name: "Eid", title: null, status: "active", deletedAtEpochSeconds: null, endsAtEpochSeconds: Date.now() / 1000 + 86_400 }],
   })),
+}));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => <a href={to} {...props}>{children}</a>,
 }));
 const files = vi.hoisted(() => ({ next: [] as Array<{ id: string; url: string; altText?: string }> }));
 vi.mock("~/components/admin/media-manager", () => ({

@@ -49,7 +49,7 @@ function Harness({ width }: { width: number }) {
   );
 }
 
-vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (amount: number) => `৳${amount}` }) }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (amount: number) => `৳${amount}`, code: "BDT" }) }));
 
 /** A list with apps' data-backed columns and a stand-in for two of its own. */
 function AppColumnsHarness({ width }: { width: number }) {

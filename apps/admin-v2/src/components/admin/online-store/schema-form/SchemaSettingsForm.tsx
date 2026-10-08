@@ -32,6 +32,7 @@ import {
   type VariantsSpec,
 } from "./introspect";
 import { settingHelpKey, settingLabelKey, type LabelScope } from "./labels";
+import { MetaobjectDefinitionWidget } from "./MetaobjectDefinitionWidget";
 import {
   CategoryPicks,
   CategorySelect,
@@ -168,6 +169,7 @@ const KEY_WIDGETS: Readonly<Record<string, SettingWidget>> = {
       onChange={onChange}
     />
   ),
+  definitionId: MetaobjectDefinitionWidget,
   promotionId: ({ id, label, help, value, onChange, error }) => (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>

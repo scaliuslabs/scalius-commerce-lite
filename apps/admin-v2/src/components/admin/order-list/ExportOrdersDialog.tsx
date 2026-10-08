@@ -27,6 +27,8 @@ interface ExportOrdersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   filters: Omit<OrdersQuery, "page" | "limit">;
+  /** An app filter narrows the list; the export cannot apply it, so "every matching order" is not offered. */
+  appFilterActive?: boolean;
   pageIds: readonly string[];
   selectedIds: readonly string[];
   /** Every order matching the filters is selected ("Select all N orders"). */
@@ -41,6 +43,7 @@ export function ExportOrdersDialog({
   open,
   onOpenChange,
   filters,
+  appFilterActive = false,
   pageIds,
   selectedIds,
   allSelected,
@@ -54,9 +57,10 @@ export function ExportOrdersDialog({
   const [format, setFormat] = useState<OrderExportFormat>("summary");
   const [busy, setBusy] = useState(false);
   const canSelectScope = selectedIds.length > 0 && !allSelected;
-  const scope = chosenScope && (chosenScope !== "selected" || canSelectScope)
+  const canExportAll = !appFilterActive;
+  const scope = chosenScope && (chosenScope !== "selected" || canSelectScope) && (chosenScope !== "all" || canExportAll)
     ? chosenScope
-    : allSelected ? "all" : canSelectScope ? "selected" : "page";
+    : allSelected && canExportAll ? "all" : canSelectScope ? "selected" : "page";
   const close = () => {
     setScope(null);
     onOpenChange(false);
@@ -81,12 +85,12 @@ export function ExportOrdersDialog({
   const options: Array<{ value: OrderExportScope; label: string }> = [
     ...(canSelectScope ? [{ value: "selected" as const, label: t("exportScope.selected", { count: selectedIds.length }) }] : []),
     { value: "page", label: t("exportScope.page", { count: pageIds.length }) },
-    {
-      value: "all",
+    ...(canExportAll ? [{
+      value: "all" as const,
       label: totalIsCapped
         ? t("exportScope.allCapped", { count: ORDER_EXPORT_MAX_ROWS })
         : t(total === 1 ? "exportScope.allOne" : "exportScope.all", { count: total }),
-    },
+    }] : []),
   ];
 
   return (

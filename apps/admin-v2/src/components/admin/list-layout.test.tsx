@@ -60,8 +60,8 @@ import { getCustomerColumns, CUSTOMER_COLUMN_LAYOUT, type CustomerListItem } fro
 
 const money = (symbol: string) => (amount: number) =>
   `${symbol}${formatNumber(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳") }) }));
-vi.mock("@/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳") }) }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳"), code: "BDT" }) }));
+vi.mock("@/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳"), code: "BDT" }) }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissions: () => ({ canViewFraudCheck: true }) }));
 
 const LOCALES = ["en", "bn"] as const;
@@ -81,7 +81,9 @@ function pluginColumns<TData extends TableRowData>(): ColumnDef<TData, unknown>[
     { id: "app.loyalty.tier", label: "Loyalty tier for the current membership year", kind: "text", value: () => "Platinum Plus Lifetime Member — Dhaka North" },
     // An app asking for more than a list's working columns gets less.
     { id: "app.loyalty.points", label: "Points", kind: "number", priority: 99, value: () => 1_234_567 },
-    { id: "app.wallet.balance", label: "Wallet balance", kind: "money", value: () => 9_999_999.99 },
+    // Minor units: 999,999,999 is ৳9,999,999.99.
+    { id: "app.wallet.balance", label: "Wallet balance", kind: "money", value: () => 999_999_999 },
+    { id: "app.loyalty.vip", label: "VIP member", kind: "boolean", value: () => true },
     { id: "app.crm.followUp", label: "Follow up", kind: "date", value: () => new Date("2025-09-30T17:48:00Z") },
   ];
   return dataColumns(specs);
@@ -258,7 +260,7 @@ describe("list layout with the most and the least data", () => {
       const all = fitList(list.columns(), tableWidth(1280)).shown;
       expect(all.filter((id) => !id.startsWith("app."))).toEqual(own);
       // They show where there is room.
-      expect(fitList(list.columns(), 4000).shown.filter((id) => id.startsWith("app."))).toHaveLength(4);
+      expect(fitList(list.columns(), 4000).shown.filter((id) => id.startsWith("app."))).toHaveLength(5);
     });
   });
 

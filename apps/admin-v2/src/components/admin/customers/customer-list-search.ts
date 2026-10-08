@@ -5,6 +5,7 @@
 // terms never go in the URL (list-search.ts); a tag or segment id may.
 import {
   createListSearchValidator,
+  normalizeAppFilterSearchParam,
   normalizeOptionalEnumSearchParam,
   type ListSearchParams,
   type SearchValidatorInput,
@@ -15,7 +16,7 @@ export const CUSTOMER_VIEWS = ["subscribers"] as const;
 export const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp"] as const;
 export type CustomerChannel = (typeof CUSTOMER_CHANNELS)[number];
 /** URL params set by the list's filters ("Clear filters" resets them). */
-export const CUSTOMER_FILTER_PARAMS = ["tag", "segmentId", "channel"] as const;
+export const CUSTOMER_FILTER_PARAMS = ["tag", "segmentId", "channel", "appFilter"] as const;
 
 const TAG_MAX_LENGTH = 40;
 const SEGMENT_ID = /^seg_[A-Za-z0-9_-]{1,64}$/;
@@ -45,6 +46,8 @@ export function validateCustomerSearch(search: SearchValidatorInput) {
     channel: view ? normalizeOptionalEnumSearchParam(search.channel, CUSTOMER_CHANNELS) : undefined,
     tag: normalizeTagParam(search.tag),
     segmentId: isCustomerSegmentId(search.segmentId) ? search.segmentId : undefined,
+    /** An app column and its exact value: `<app id>/<column id>:<value>`. */
+    appFilter: normalizeAppFilterSearchParam(search.appFilter),
   };
 }
 

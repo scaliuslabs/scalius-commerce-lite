@@ -101,6 +101,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Pages
   "/admin/pages": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/metaobjects": { permission: PERMISSIONS.METAOBJECTS_VIEW },
+  "/admin/metaobjects/new": { permission: PERMISSIONS.METAOBJECTS_EDIT },
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
   "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
@@ -288,6 +289,18 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/customers\/segments\/seg_[^/]+$/,
     config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+
+  // Content types: one type's entries, its fields and one entry open read-only
+  // for view roles (saving needs metaobjects.edit, checked inside and by the API);
+  // adding an entry is a write.
+  {
+    pattern: /^\/admin\/metaobjects\/[^/]+\/entries\/new$/,
+    config: { permission: PERMISSIONS.METAOBJECTS_EDIT },
+  },
+  {
+    pattern: /^\/admin\/metaobjects\/[^/]+(?:\/settings|\/entries\/[^/]+)?$/,
+    config: { permission: PERMISSIONS.METAOBJECTS_VIEW },
   },
 
   // Discounts (one editor; saving still needs discounts.edit)

@@ -4,6 +4,7 @@ import { retiredPaymentMethod } from "~/lib/bangladesh-pack";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   createListSearchValidator,
+  normalizeAppFilterSearchParam,
   normalizeBooleanSearchParam,
   normalizeDateSearchParam,
   normalizeOptionalEnumSearchParam,
@@ -52,6 +53,8 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   paymentRecovery?: (typeof PAYMENT_RECOVERY_STATES)[number];
   startDate?: string;
   endDate?: string;
+  /** An app column and its exact value: `<app id>/<column id>:<value>`. */
+  appFilter?: string;
 };
 
 const baseSearchValidator = createListSearchValidator(ORDER_SORTS, { limit: 10, sort: "createdAt" });
@@ -85,6 +88,7 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     paymentRecovery: normalizeOptionalEnumSearchParam(search.paymentRecovery, PAYMENT_RECOVERY_STATES),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
+    appFilter: normalizeAppFilterSearchParam(search.appFilter),
   };
 }
 
@@ -106,6 +110,7 @@ export function orderFilterQuery(search: OrderListSearch, term: string): Omit<Or
     archived: search.archived ? "true" : undefined,
     startDate: search.startDate || undefined,
     endDate: search.endDate || undefined,
+    appFilter: search.appFilter,
   };
 }
 
@@ -129,6 +134,7 @@ export const CLEARED_ORDER_FILTERS: Partial<OrderListSearch> = {
   paymentRecovery: undefined,
   startDate: undefined,
   endDate: undefined,
+  appFilter: undefined,
   openRequest: false,
   archived: false,
   page: 1,
@@ -164,6 +170,7 @@ export function countOrderFilters(search: OrderListSearch): number {
     search.channel,
     search.paymentRecovery,
     search.startDate || search.endDate,
+    search.appFilter,
     search.openRequest,
     search.archived,
   ].filter(Boolean).length;

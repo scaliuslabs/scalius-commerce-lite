@@ -4,6 +4,7 @@ import type { DateRange } from "react-day-picker";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
+import { Skeleton } from "~/components/ui/skeleton";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
@@ -40,6 +41,9 @@ const DateRangePickerWithPresets = lazy(() =>
   })),
 );
 
+// The app filter field loads when the filters open and an app has a column to filter by.
+const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter").then((module) => ({ default: module.AppListFilter })));
+
 const ANY = "any";
 const SORT_OPTIONS = [
   "createdAt:desc",
@@ -56,6 +60,8 @@ interface OrderListToolbarProps {
   term: string;
   onSearch: (term: string) => void;
   onChange: (updates: Partial<OrderListSearch>) => void;
+  /** An active app has a column to filter by (loads the app filter field). */
+  appFilterable?: boolean;
   selectedCount: number;
   bulkActions: ReactNode;
   autoRefresh: { enabled: boolean; toggle: () => void; pause: OrderRefreshPause | null };
@@ -155,6 +161,7 @@ export function OrderListToolbar({
   term,
   onSearch,
   onChange,
+  appFilterable = false,
   selectedCount,
   bulkActions,
   autoRefresh,
@@ -259,6 +266,11 @@ export function OrderListToolbar({
               onChange={(range) =>
                 filter({ startDate: formatDateOnly(range?.from), endDate: formatDateOnly(range?.to) })}
             />
+            {appFilterable ? (
+              <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+                <AppListFilter labelled resource="order" value={search.appFilter} onChange={(appFilter) => filter({ appFilter })} />
+              </Suspense>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

@@ -141,7 +141,7 @@ export const PLUGIN_PAGE_TABS_MAX = 8;
 /** Dashboard lists an app may add columns and filters to. */
 export const PLUGIN_LIST_RESOURCES = ["product", "order", "customer"] as const;
 export type PluginListResource = (typeof PLUGIN_LIST_RESOURCES)[number];
-/** How a list column shows its value (money: integer minor units of the store currency). */
+/** How a list column shows its value (money: the app stores integer minor units; the list API shows major units). */
 export const PLUGIN_LIST_COLUMN_TYPES = ["text", "number", "money", "date", "boolean"] as const;
 export type PluginListColumnType = (typeof PLUGIN_LIST_COLUMN_TYPES)[number];
 /** The most app columns one list request asks for. */

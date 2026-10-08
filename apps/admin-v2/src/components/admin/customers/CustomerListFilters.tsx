@@ -1,7 +1,9 @@
-import { useCallback } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
+import { Skeleton } from "~/components/ui/skeleton";
+import { useAppResourceColumns } from "~/components/admin/apps/ui/list-columns";
 import { fetchCustomerTags, customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { NO_CURSOR } from "~/lib/list-helpers";
@@ -10,6 +12,9 @@ import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
 
 const TRIGGER = "w-full shrink-0 sm:w-auto sm:min-w-40";
+
+// Loads only when an active app has a column to filter by.
+const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter").then((module) => ({ default: module.AppListFilter })));
 
 /**
  * The customers list's filters: a tag (searched on the server), a saved
@@ -20,7 +25,9 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
   const t = useMessages(customersMessages);
   const navigate = useNavigate();
   const segments = useQuery(customerSegmentsQueryOptions());
-  const set = (updates: Partial<Record<"tag" | "segmentId" | "channel", string | undefined>>) =>
+  const { all: appColumns } = useAppResourceColumns("customer");
+  const appFilterable = appColumns.some((column) => column.filterable);
+  const set = (updates: Partial<Record<"tag" | "segmentId" | "channel" | "appFilter", string | undefined>>) =>
     void navigate({
       to: "/admin/customers",
       search: ((prev: Record<string, unknown>) => ({ ...prev, ...updates, page: 1, ...NO_CURSOR })) as never,
@@ -79,6 +86,11 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
         clearable
         triggerClassName={TRIGGER}
       />
+      {appFilterable ? (
+        <Suspense fallback={<Skeleton className="h-9 w-full sm:w-80" />}>
+          <AppListFilter resource="customer" value={search.appFilter} onChange={(appFilter) => set({ appFilter })} />
+        </Suspense>
+      ) : null}
     </>
   );
 }

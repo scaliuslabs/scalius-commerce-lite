@@ -144,6 +144,7 @@ describe("app surfaces in search", () => {
     cards: [],
     actions: [],
     widgets: [],
+    listColumns: [],
     routes: [],
     providers: [
       { id: "scalius.bangladesh:pathao", providerId: "pathao", kind: "courier", name: "Pathao", icon: null },
