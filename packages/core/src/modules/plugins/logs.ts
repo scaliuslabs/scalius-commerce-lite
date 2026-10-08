@@ -74,9 +74,22 @@ export function maskPluginLogFields(fields: Record<string, unknown> | undefined,
   return new TextEncoder().encode(json).byteLength <= PLUGIN_LOG_FIELDS_MAX_BYTES ? masked : { truncated: true };
 }
 
-function logId(timestamp: number, sequence: number): string {
+// Ids sort in write order: the newest list reads `id` descending. Lines written
+// in the same millisecond by separate calls (a host error, then its quota
+// breach) keep their order through a per-isolate counter; the random tail only
+// keeps ids unique across isolates. Not merchant state: a clock tie-breaker.
+let lastLogTimestamp = 0;
+let logCounter = 0;
+
+function logId(timestamp: number): string {
+  if (timestamp > lastLogTimestamp) {
+    lastLogTimestamp = timestamp;
+    logCounter = 0;
+  } else {
+    logCounter += 1;
+  }
   const random = Array.from(crypto.getRandomValues(new Uint8Array(4)), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `plg_${String(timestamp).padStart(13, "0")}${(sequence % 0x10000).toString(16).padStart(4, "0")}${random}`;
+  return `plg_${String(lastLogTimestamp).padStart(13, "0")}${(logCounter % 0x10000).toString(16).padStart(4, "0")}${random}`;
 }
 
 function normalizeEntry(entry: PluginLogInput, secrets: readonly string[]) {
@@ -104,8 +117,8 @@ export async function writePluginLogs(
     kept.push({ level: "warn", source: "host", message: `${entries.length - kept.length} more log lines from this run were dropped.` });
   }
   const now = Date.now();
-  const rows = kept.map((entry, index) => ({
-    id: logId(now, index),
+  const rows = kept.map((entry) => ({
+    id: logId(now),
     pluginId,
     ...normalizeEntry(entry, secrets),
     createdAt: Math.floor(now / 1000),
