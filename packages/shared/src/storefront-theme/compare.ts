@@ -38,16 +38,22 @@ const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
 };
 
+/**
+ * Equal as stored JSON: a key whose value is undefined is the same as no key
+ * (an editor's working document has them; the saved one never does), so the
+ * publish summary lists only what really changes.
+ */
 function equal(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) && Array.isArray(right)) {
     return left.length === right.length && left.every((value, index) => equal(value, right[index]));
   }
-  if (left && right && typeof left === "object" && typeof right === "object") {
+  if (left && right && typeof left === "object" && typeof right === "object" && !Array.isArray(left) && !Array.isArray(right)) {
     const a = left as Record<string, unknown>;
     const b = right as Record<string, unknown>;
-    const keys = Object.keys(a);
-    return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && equal(a[key], b[key]));
+    const keys = (record: Record<string, unknown>) => Object.keys(record).filter((key) => record[key] !== undefined);
+    const own = keys(a);
+    return own.length === keys(b).length && own.every((key) => equal(a[key], b[key]));
   }
   return false;
 }
@@ -72,6 +78,7 @@ function compareSections(page: string, before: readonly SectionLike[], after: re
 
 function areas(before: Record<string, unknown>, after: Record<string, unknown>, map: Record<string, ThemeChangeArea>, fallback: ThemeChangeArea): ThemeChangeArea[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  // Each key is judged alone: a colour change never names fonts.
   return [...keys].filter((key) => !equal(before[key], after[key])).map((key) => map[key] ?? fallback);
 }
 

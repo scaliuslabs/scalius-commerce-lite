@@ -197,6 +197,8 @@ export const STOREFRONT_SECTION_REGISTRY = {
     settings: z.object({
       carousel: z.enum(["large", "compact"]),
       collectionIds: idList(STOREFRONT_COLLECTIONS_LIMIT, "collection"),
+      // The heading over the newest products shown until collections are chosen (each collection has its own name).
+      title: title.optional(),
     }).strict(),
     defaults: { carousel: "large", collectionIds: [] },
   }),

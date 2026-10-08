@@ -122,7 +122,11 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
   const shown = error ?? server.error;
   const preview = mediaId ? previews.get(mediaId) : undefined;
   return (
-    <div id={id} role="group" aria-labelledby={`${id}-label`} className="flex items-center gap-3">
+    // The label sits above, as every other field's does; the image and its buttons below it.
+    <div id={id} role="group" aria-labelledby={`${id}-label`} className="space-y-1.5">
+      <p id={`${id}-label`} className="text-body font-medium">{label}</p>
+      {help ? <p className="text-body text-muted-foreground">{help}</p> : null}
+      <div className="flex items-center gap-3">
       <div className="grid h-16 w-24 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted">
         {preview ? (
           <img
@@ -135,8 +139,6 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
         )}
       </div>
       <div className="min-w-0 flex-1 space-y-1">
-        <p id={`${id}-label`} className="text-body font-medium">{label}</p>
-        {help ? <p className="text-body text-muted-foreground">{help}</p> : null}
         <div className="flex flex-wrap gap-2">
           <MediaManager
             capability="image"
@@ -171,6 +173,7 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
           ) : null}
         </div>
         {shown ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p> : null}
+      </div>
       </div>
     </div>
   );

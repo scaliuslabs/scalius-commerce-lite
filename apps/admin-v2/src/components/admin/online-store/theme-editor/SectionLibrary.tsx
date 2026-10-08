@@ -8,12 +8,12 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, X } from "lucide-react";
 import { STOREFRONT_SECTION_RENDERERS, type StorefrontSectionType, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Input } from "~/components/ui/input";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -168,12 +168,17 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
     && (!needle || `${entry.name} ${entry.description} ${entry.app?.name ?? ""}`.toLowerCase().includes(needle)));
   const categories: Category[] = ["all", "banners", "products", "text", ...(entries.some((entry) => entry.category === "apps") ? ["apps" as const] : [])];
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl" data-section-library>
-        <DialogHeader>
-          <DialogTitle>{t("libraryTitle")}</DialogTitle>
-          <DialogDescription>{t("libraryHelp")}</DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="left" className="flex flex-col gap-3 p-4 sm:max-w-md" data-section-library>
+        <div className="flex items-start gap-2">
+          <SheetHeader className="min-w-0 flex-1">
+            <SheetTitle>{t("libraryTitle")}</SheetTitle>
+            <SheetDescription>{t("libraryHelp")}</SheetDescription>
+          </SheetHeader>
+          <SheetClose asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")}><X aria-hidden="true" /></Button>
+          </SheetClose>
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           {/* eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field */}
@@ -196,9 +201,9 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
             </Button>
           ))}
         </div>
-        <div className="h-96 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {shown.length === 0 ? <p className="p-4 text-center text-body text-muted-foreground">{t("libraryEmpty")}</p> : null}
-          <ul className="grid gap-3 sm:grid-cols-3">
+          <ul className="grid grid-cols-2 gap-3">
             {shown.map((entry) => (
               <li key={entry.key}>
                 <button
@@ -229,7 +234,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
             ))}
           </ul>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

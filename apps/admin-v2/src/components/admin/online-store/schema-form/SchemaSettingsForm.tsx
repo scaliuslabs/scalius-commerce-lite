@@ -261,7 +261,21 @@ function NumberSetting({ id, label, help, error, value, spec, onChange }: {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor={id}>{label}</Label>
-          <span className="text-body tabular-nums text-muted-foreground">{formatNumber(number)}</span>
+          {/* The exact value can be typed too; the slider shows its range. */}
+          <Input
+            type="number"
+            inputMode="numeric"
+            aria-label={label}
+            min={spec.min}
+            max={spec.max}
+            step={spec.int ? 1 : "any"}
+            value={number}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              if (event.target.value !== "" && Number.isFinite(next)) onChange(clamp(next));
+            }}
+            className="w-20"
+          />
         </div>
         <input
           id={id}
@@ -274,6 +288,10 @@ function NumberSetting({ id, label, help, error, value, spec, onChange }: {
           className="h-11 w-full accent-primary sm:h-6"
           {...described(id, help, error)}
         />
+        <div className="flex justify-between text-caption tabular-nums text-muted-foreground" aria-hidden="true">
+          <span>{formatNumber(spec.min)}</span>
+          <span>{formatNumber(spec.max)}</span>
+        </div>
         <Note id={id} help={help} error={error} />
       </div>
     );

@@ -191,12 +191,13 @@ export function PreviewResource({ kind, resource, loading, failed, onChange }: {
 }) {
   const t = useMessages(themeEditorMessages);
   return (
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3" data-preview-resource={kind}>
-      <p className="min-w-0 flex-1 text-body">
+    // One line, the same height as every page's strip (the tree below never moves between pages).
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4" data-preview-resource={kind}>
+      <p className="min-w-0 flex-1 truncate text-body">
         {resource ? (
           <>
-            <span className="block text-muted-foreground">{t("previewing")}</span>
-            <span className="block truncate font-medium">{resource.name}</span>
+            <span className="text-muted-foreground">{t("previewing")}: </span>
+            <span className="font-medium">{resource.name}</span>
           </>
         ) : (
           <span className="text-muted-foreground">{t(loading ? "previewLoading" : failed ? "resourceFailed" : `resourceNone_${kind}`)}</span>
@@ -211,4 +212,9 @@ export function PreviewResource({ kind, resource, loading, failed, onChange }: {
       />
     </div>
   );
+}
+
+/** The strip above the tree on a page previewed without a chosen record: what the page is, at the same height as PreviewResource. */
+export function PageStrip({ text }: { text: string }) {
+  return <p className="flex h-12 shrink-0 items-center truncate border-b border-border px-4 text-body text-muted-foreground" data-page-strip>{text}</p>;
 }

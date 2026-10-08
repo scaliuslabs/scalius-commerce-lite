@@ -4,7 +4,8 @@
  * announcement bar and menus) and the footer are rows of every page's tree;
  * their settings are here too, for the editor's settings panel.
  */
-import type { ReactNode } from "react";
+import { createContext, useContext, useId, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import {
   HEADER_LOGO_WIDTH_MAX,
@@ -12,16 +13,23 @@ import {
   HEADER_LOGO_WIDTH_STEP,
 } from "@scalius/shared/brand-presentation";
 import {
+  STOREFRONT_CONTAINERS,
   STOREFRONT_NAVIGATION_SOURCES,
+  STOREFRONT_THEME_BUTTON_SHAPES,
+  STOREFRONT_THEME_RADII,
+  failedFitConditions,
   storefrontBlockVariants,
+  storefrontVariantSpec,
   type ResolvedStorefrontTheme,
   type ResolvedStorefrontThemeLayout,
   type StorefrontNavigationSource,
 } from "@scalius/shared/storefront-theme";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
+import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { themeEditorMessages } from "~/i18n/theme-editor";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
@@ -30,24 +38,71 @@ import { TypographyCard } from "../TypographyCard";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
-/** One group of settings in a panel: a heading, then its fields. */
-function SettingsGroup({ title, description, action, children }: {
+/** Theme settings' groups close all but one (no panel taller than the screen); null where groups stay open. */
+const OpenGroup = createContext<{ open: string | null | undefined; toggle: (id: string) => void } | null>(null);
+
+/** One group of settings in a panel: a heading (a toggle in Theme settings), what it is for, then its fields. */
+function SettingsGroup({ title, description, action, defaultOpen = false, children }: {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
+  /** Open until the merchant opens another group. */
+  defaultOpen?: boolean;
   children?: ReactNode;
 }) {
+  const id = useId();
+  const groups = useContext(OpenGroup);
+  const open = groups === null || groups.open === id || (groups.open === undefined && defaultOpen);
   return (
-    <section className="space-y-4 border-b border-border px-4 py-4 last:border-b-0">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 className="text-heading-sm">{title}</h2>
+    <section className="border-b border-border last:border-b-0">
+      {groups ? (
+        <h2>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={`${id}-body`}
+            onClick={() => groups.toggle(open ? "" : id)}
+            className="flex h-12 w-full items-center justify-between gap-2 px-4 text-start text-heading-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          >
+            {title}
+            <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground", open && "rotate-180")} aria-hidden="true" />
+          </button>
+        </h2>
+      ) : <h2 className="px-4 pt-4 text-heading-sm">{title}</h2>}
+      {open ? (
+        <div id={`${id}-body`} className={cn("space-y-4 px-4 pb-4", groups === null && "pt-1")}>
           {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
+          {action ? <div>{action}</div> : null}
+          {children}
         </div>
-        {action}
-      </div>
-      {children}
+      ) : null}
     </section>
+  );
+}
+
+/** Page width, corners and buttons: the store's layout tokens. */
+function LayoutFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+  const t = useMessages(themeEditorMessages);
+  const set = <Key extends "container" | "radius" | "buttonShape">(key: Key, value: Theme["tokens"][Key]) =>
+    setDraft((current) => ({ ...current, tokens: { ...current.tokens, [key]: value } }));
+  const select = <Key extends "container" | "radius" | "buttonShape">(key: Key, values: readonly Theme["tokens"][Key][]) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={`theme-layout-${key}`}>{t(`layout_${key}`)}</Label>
+      <SearchableSelect
+        id={`theme-layout-${key}`}
+        value={theme.tokens[key]}
+        options={values.map((value) => ({ value, label: t(`layout_${key}_${value}`) }))}
+        onValueChange={(value) => set(key, value as Theme["tokens"][Key])}
+        triggerClassName="w-full"
+      />
+    </div>
+  );
+  return (
+    <>
+      {select("container", STOREFRONT_CONTAINERS)}
+      {select("radius", STOREFRONT_THEME_RADII)}
+      {select("buttonShape", STOREFRONT_THEME_BUTTON_SHAPES)}
+    </>
   );
 }
 
@@ -56,12 +111,19 @@ function useBlockChoice(theme: Theme, resolved: ResolvedStorefrontTheme, setDraf
   const t = useMessages(onlineStoreMessages);
   const option = (key: string) => t(key as MessageKey);
   const fitReason = useFitReason(resolved.facts);
+  // Header, menu and footer layouts this store cannot show yet say why (card styles depend on other blocks: their note stays below).
+  const unavailable = (slot: ThemeBlockSlot, value: string): string | undefined => {
+    if (slot !== "header" && slot !== "desktopNav" && slot !== "mobileNav" && slot !== "footer") return undefined;
+    const failed = failedFitConditions(storefrontVariantSpec(slot, value).requires ?? [], { facts: resolved.facts, blocks: {} });
+    return failed.length > 0 ? fitReason({ failed }) : undefined;
+  };
   return {
     options: <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render, variant: string) => ReactNode, help = false) =>
       storefrontBlockVariants(slot).map((value) => ({
         value,
         label: option(`${prefix}_${value}`),
         help: help ? option(`${prefix}_${value}Help`) : undefined,
+        unavailable: unavailable(slot, value),
         sketch: sketch(variantRenders<Render>(slot, value), value),
       })),
     set: (slot: ThemeBlockSlot) => (variant: string) => setDraft((current) => setBlockVariant(current, slot, variant)),
@@ -124,13 +186,19 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
   setDraft: SetTheme;
 }) {
   const t = useMessages(onlineStoreMessages);
+  const editor = useMessages(themeEditorMessages);
   const block = useBlockChoice(theme, resolved, setDraft, media);
+  // One group open at a time; the panel opens as a short list of its groups.
+  const [open, setOpen] = useState<string | null>(null);
   return (
-    <div>
+    <OpenGroup.Provider value={{ open, toggle: (id) => setOpen(id || null) }}>
       <SettingsGroup title={t("colors")}>
         <ColorFields theme={theme} setDraft={setDraft} />
       </SettingsGroup>
       <TypographyCard theme={theme} setDraft={setDraft} frame={SettingsGroup} />
+      <SettingsGroup title={editor("layoutGroup")}>
+        <LayoutFields theme={theme} setDraft={setDraft} />
+      </SettingsGroup>
       <SettingsGroup title={t("logo")}>
         <BrandFields theme={theme} media={media} setDraft={setDraft} />
       </SettingsGroup>
@@ -146,7 +214,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
         />
         {block.fields("card")}
       </SettingsGroup>
-    </div>
+    </OpenGroup.Provider>
   );
 }
 
@@ -179,10 +247,13 @@ export function AnnouncementSettings({ theme, resolved, media, setDraft }: { the
 export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
   const t = useMessages(onlineStoreMessages);
   const fitReason = useFitReason(resolved.facts);
+  const editor = useMessages(themeEditorMessages);
   const block = useBlockChoice(theme, resolved, setDraft, media);
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
   return (
-    <div className="space-y-5">
-      <div className="space-y-3">
+    <OpenGroup.Provider value={{ open, toggle: (id) => setOpen(id || null) }}>
+      <div className="-mx-4 -mt-4">
+      <SettingsGroup title={editor("headerLayoutGroup")} defaultOpen>
         <VisualChoice
           label={t("header")}
           value={theme.blocks.header.variant}
@@ -192,15 +263,11 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
         />
         {block.fitNote("header", "header")}
         {block.fields("header")}
-      </div>
-      <div className="space-y-3 border-t border-border pt-4">
-        <div className="space-y-1">
-          <p className="text-body font-medium">{t("menuStyle")}</p>
-          <p className="text-body text-muted-foreground">
-            {t("menuStyleHelp")}{" "}
-            <Link to="/admin/online-store/navigation" className="text-link hover:underline">{t("editMenus")}</Link>
-          </p>
-        </div>
+      </SettingsGroup>
+      <SettingsGroup
+        title={t("menuStyle")}
+        description={<>{t("menuStyleHelp")} <Link to="/admin/online-store/navigation" className="text-link hover:underline">{t("editMenus")}</Link></>}
+      >
         <div className="space-y-1.5">
           <Label htmlFor="theme-navigation-source">{t("menuSource")}</Label>
           <SearchableSelect
@@ -233,17 +300,19 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
         />
         {block.fitNote("desktopNav", "navigation")}
         {block.fields("desktopNav")}
+      </SettingsGroup>
+      <SettingsGroup title={t("menuStylePhone")}>
         <VisualChoice
           label={t("menuStylePhone")}
-          showLabel
           value={theme.blocks.mobileNav.variant}
           className="grid-cols-2"
           options={block.options<ResolvedStorefrontThemeLayout["mobileNavigation"]>("mobileNav", "mobileNavigation", (kind) => <MobileNavigationSketch kind={kind} />, true)}
           onChange={block.set("mobileNav")}
         />
         {block.fields("mobileNav")}
+      </SettingsGroup>
       </div>
-    </div>
+    </OpenGroup.Provider>
   );
 }
 

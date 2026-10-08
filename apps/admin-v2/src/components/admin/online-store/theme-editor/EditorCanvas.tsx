@@ -2,8 +2,11 @@
  * The canvas: the real storefront in a frame at a true device width,
  * scaled to fit (canvas-geometry.ts), with the selection chrome in an
  * overlay above it (research P1, P3, P9). Hover is a dashed outline with a
- * name; the selection is a solid outline with its name, a toolbar (move up
- * and down, duplicate, hide, remove) and "+" on its top and bottom edges.
+ * name; the selection is a solid outline with its name and a toolbar (move
+ * up and down, duplicate, hide, remove) inside its top edge, so they never
+ * cover the part above it (the store's header), and "+" on its top and
+ * bottom edges. When the part's top is scrolled out of view, the name and
+ * toolbar stay at the top of the part's visible area.
  * Nothing here ever changes the frame's box: only the canvas size, the
  * device, the width and the zoom do. Notices overlay the top of the canvas
  * instead of pushing the frame down.
@@ -42,6 +45,8 @@ function Outline({ box, rect, tone, dashed, label, children }: {
   children?: ReactNode;
 }) {
   const [x, y, width, height] = rect;
+  // The chrome sticks to the part's visible top (never below its bottom).
+  const chromeTop = Math.max(0, Math.min(-y, height - 32)) * box.scale;
   return (
     <div
       // Positions are measured pixels from the frame's start edge (runtime values as custom properties).
@@ -50,6 +55,7 @@ function Outline({ box, rect, tone, dashed, label, children }: {
         "--oy": `${y * box.scale}px`,
         "--ow": `${width * box.scale}px`,
         "--oh": `${height * box.scale}px`,
+        "--ct": `${chromeTop}px`,
       } as CSSProperties}
       data-outline={dashed ? "hover" : "selected"}
       className={cn(
@@ -60,9 +66,8 @@ function Outline({ box, rect, tone, dashed, label, children }: {
     >
       <span
         className={cn(
-          "absolute -top-6 flex h-6 max-w-full items-center gap-1 truncate rounded-t-md px-2 text-caption font-medium",
+          "absolute start-0 top-(--ct) flex h-6 max-w-[45%] items-center gap-1 truncate rounded-ee-md px-2 text-caption font-medium",
           tone === "shared" ? "bg-success text-success-foreground" : "bg-ring text-primary-foreground",
-          "start-0",
         )}
       >
         {label}
@@ -72,7 +77,11 @@ function Outline({ box, rect, tone, dashed, label, children }: {
   );
 }
 
-export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, onRetry, onScaleChange }: {
+/** Whether a selection has any toolbar action (a part that cannot move or change shows only its name). */
+const hasToolbar = (actions: SelectionActions) =>
+  Boolean(actions.onMoveUp || actions.onMoveDown || actions.onDuplicate || actions.onToggleHidden || actions.onRemove);
+
+export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, behind = false, onRetry, onScaleChange }: {
   device: PreviewDevice;
   desktopWidth: DesktopWidth;
   zoom: PreviewZoom;
@@ -88,6 +97,8 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
   actions: SelectionActions | null;
   /** A notice over the top of the canvas (conflict, failed save, version preview). */
   notice?: ReactNode;
+  /** The page has not confirmed the latest edits yet (it is slow or reconnecting). */
+  behind?: boolean;
   onRetry: () => void;
   onScaleChange: (box: FrameBox) => void;
 }) {
@@ -125,7 +136,8 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
       aria-label={t("canvas")}
       data-editor-canvas
       // The frame keeps its true width; at 100% wider than the canvas, the canvas scrolls sideways.
-      className="relative min-h-0 min-w-0 overflow-x-auto overflow-y-hidden bg-muted"
+      // A frame wider than the canvas (100% of a wide width) scrolls sideways, with a scrollbar that stays visible.
+      className="relative min-h-0 min-w-0 overflow-x-auto overflow-y-hidden bg-muted [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
     >
       <div
         data-preview-box
@@ -173,29 +185,31 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           ) : null}
           {selectedRect && actions ? (
             <Outline box={box} rect={selectedRect} tone={actions.shared ? "shared" : "selection"} label={actions.name}>
-              <div
-                role="toolbar"
-                aria-label={t("selectionToolbar", { name: actions.name })}
-                className="pointer-events-auto absolute -top-9 end-0 flex items-center gap-0.5 rounded-lg bg-card p-0.5 shadow-popover"
-              >
-                {actions.onMoveUp ? (
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveUp")} disabled={!actions.canMoveUp} onClick={actions.onMoveUp}><ArrowUp aria-hidden="true" /></Button>
-                ) : null}
-                {actions.onMoveDown ? (
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveDown")} disabled={!actions.canMoveDown} onClick={actions.onMoveDown}><ArrowDown aria-hidden="true" /></Button>
-                ) : null}
-                {actions.onDuplicate ? (
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t("duplicate")} onClick={actions.onDuplicate}><Copy aria-hidden="true" /></Button>
-                ) : null}
-                {actions.onToggleHidden ? (
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t(actions.hidden ? "show" : "hide")} onClick={actions.onToggleHidden}>
-                    {actions.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-                  </Button>
-                ) : null}
-                {actions.onRemove ? (
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t("remove")} onClick={actions.onRemove}><Trash2 aria-hidden="true" /></Button>
-                ) : null}
-              </div>
+              {hasToolbar(actions) ? (
+                <div
+                  role="toolbar"
+                  aria-label={t("selectionToolbar", { name: actions.name })}
+                  className="pointer-events-auto absolute end-1 top-[calc(var(--ct)+0.25rem)] flex items-center gap-0.5 rounded-lg bg-card p-0.5 shadow-popover"
+                >
+                  {actions.onMoveUp ? (
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveUp")} disabled={!actions.canMoveUp} onClick={actions.onMoveUp}><ArrowUp aria-hidden="true" /></Button>
+                  ) : null}
+                  {actions.onMoveDown ? (
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveDown")} disabled={!actions.canMoveDown} onClick={actions.onMoveDown}><ArrowDown aria-hidden="true" /></Button>
+                  ) : null}
+                  {actions.onDuplicate ? (
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t("duplicate")} onClick={actions.onDuplicate}><Copy aria-hidden="true" /></Button>
+                  ) : null}
+                  {actions.onToggleHidden ? (
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t(actions.hidden ? "show" : "hide")} onClick={actions.onToggleHidden}>
+                      {actions.hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+                    </Button>
+                  ) : null}
+                  {actions.onRemove ? (
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t("remove")} onClick={actions.onRemove}><Trash2 aria-hidden="true" /></Button>
+                  ) : null}
+                </div>
+              ) : null}
               {actions.onAddAbove ? (
                 <Button type="button" variant="outline" size="icon-sm" aria-label={t("addSectionAbove")} onClick={actions.onAddAbove} className="pointer-events-auto absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <Plus aria-hidden="true" />
@@ -210,6 +224,9 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           ) : null}
         </div>
       ) : null}
+      <p role="status" className={cn("pointer-events-none absolute end-6 bottom-6 z-10 rounded-full bg-card px-3 py-1 text-caption text-muted-foreground shadow-popover", !(ready && behind) && "invisible")}>
+        {t("previewUpdating")}
+      </p>
       {notice ? (
         <div className="pointer-events-none absolute inset-x-4 top-6 z-10 flex justify-center">
           <div className="pointer-events-auto max-w-xl rounded-lg shadow-popover">{notice}</div>

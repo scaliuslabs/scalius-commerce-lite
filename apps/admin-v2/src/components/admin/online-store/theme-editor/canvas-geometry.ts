@@ -1,14 +1,17 @@
 /**
- * The preview frame's geometry (research P1-P3): the storefront always lays
- * out at a real device width and is scaled to fit the canvas with a CSS
- * transform, so the page never re-lays out when the editor's panels change.
- * The frame's box depends only on the canvas size, the device, the width
- * and the zoom: never on what is selected, hovered or saved.
+ * The preview frame's geometry (research P1-P3). By default a computer
+ * preview fills the canvas at 100% and the store reflows to it, as the store
+ * does in a browser window that size; a fixed width (1280, 1440, 1920 px)
+ * lays out at that width and is scaled to fit. Panels open over the sidebar,
+ * so the canvas keeps its size: the frame's box depends only on the canvas
+ * size, the device, the width and the zoom, never on what is selected,
+ * hovered or saved.
  */
 
 export type PreviewDevice = "desktop" | "phone";
 /** Computer widths (Webflow's large breakpoints); a phone is 390 px. */
-export const DESKTOP_WIDTHS = [1280, 1440, 1920] as const;
+export const DESKTOP_WIDTHS = ["fill", 1280, 1440, 1920] as const;
+/** `fill`: the canvas width at 100%. */
 export type DesktopWidth = (typeof DESKTOP_WIDTHS)[number];
 export const PHONE_WIDTH = 390;
 /** Space around the frame inside the canvas, each side. */
@@ -32,15 +35,17 @@ export interface FrameBox {
 
 /** The frame for a canvas of this size. */
 export function frameBox(canvas: { width: number; height: number }, device: PreviewDevice, desktopWidth: DesktopWidth, zoom: PreviewZoom): FrameBox {
-  const width = device === "phone" ? PHONE_WIDTH : desktopWidth;
   const room = Math.max(1, canvas.width - 2 * CANVAS_GUTTER);
-  const fit = Math.min(1, room / width);
+  const width = device === "phone" ? PHONE_WIDTH : desktopWidth === "fill" ? Math.max(320, room) : desktopWidth;
+  // Two decimals: the scaled frame then measures whole pixels (no blurred outline edges).
+  const fit = Math.floor(Math.min(1, room / width) * 100) / 100;
   const scale = zoom === "actual" ? 1 : Math.max(0.1, fit);
   const screenWidth = Math.round(width * scale);
   const screenHeight = Math.max(1, canvas.height - 2 * CANVAS_GUTTER);
   return {
     width,
-    height: Math.round(screenHeight / scale),
+    // Unrounded: at this scale the frame is exactly the canvas height.
+    height: screenHeight / scale,
     scale,
     // Centred while it fits; at 100% wider than the canvas it starts at the gutter and the canvas scrolls sideways.
     offsetX: screenWidth <= room ? Math.round(CANVAS_GUTTER + (room - screenWidth) / 2) : CANVAS_GUTTER,

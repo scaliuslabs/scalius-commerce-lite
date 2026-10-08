@@ -12,6 +12,11 @@
  * draws outlines in its own overlay. Every message is read only from the
  * active frame's window at the storefront's exact origin (Platform
  * settings) and sent only to that origin.
+ *
+ * Commands are never lost: each carries a sequence number, and the latest
+ * command of each kind (per section or region) stays in an outbox until the
+ * page acknowledges it. It is sent again when the shown frame connects (a
+ * navigation, a reload swap) and when its ack is late.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiV1Platform, postApiV1AdminSettingsThemePreviewSession } from "@scalius/api-client/sdk";
@@ -28,14 +33,39 @@ import { isSafeThemePreviewContinuation } from "../theme-preview";
 
 /** How long a page has to say hello before it counts as lost. */
 export const PREVIEW_HELLO_TIMEOUT_MS = 15_000;
+/** A command not acknowledged by then is sent again (a render or paint has longer: it waits on the server). */
+export const PREVIEW_ACK_TIMEOUT_MS = 600;
+export const PREVIEW_RENDER_ACK_TIMEOUT_MS = 3_000;
+/** After this many unanswered sends the page loads again (from the saved draft, then the unsaved edits). */
+export const PREVIEW_MAX_SENDS = 5;
 
 /** The browser continuation relay's handshake (lib/browser-continuation-relay.ts in the storefront). */
 const RELAY_READY = "scalius-continuation-ready-v1";
 const RELAY_FIELDS = "scalius-continuation-fields-v1";
 const RELAY_ACCEPTED = "scalius-continuation-accepted-v1";
 
-type Outgoing<Message> = Message extends { source: string } ? Omit<Message, "source"> : never;
-export type PreviewCommand = Outgoing<ThemeEditorMessage>;
+type Outgoing<Message> = Message extends { source: string } ? Omit<Message, "source" | "seq"> : never;
+export type PreviewCommand = Exclude<Outgoing<ThemeEditorMessage>, { type: "connect" }>;
+
+/** The outbox key of a command: its latest one replaces an older one with the same key (text patches chain, so they are not kept). */
+export function previewCommandKey(command: PreviewCommand): string | null {
+  switch (command.type) {
+    case "text": return null;
+    case "arrange": return `arrange:${command.region}`;
+    case "render": {
+      const only = (command.body as { only?: unknown } | null)?.only;
+      return typeof only === "string" ? `render:${only}` : "render:regions";
+    }
+    default: return command.type;
+  }
+}
+
+interface Pending {
+  seq: number;
+  command: PreviewCommand;
+  sentAt: number;
+  sends: number;
+}
 
 export type PreviewPhase = "connecting" | "ready" | "failed" | "blocked" | "no-url";
 
@@ -82,21 +112,70 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const helloTimer = useRef(0);
   const pendingFields = useRef<{ frame: number; fields: { continuationCode: string; path: string; device: string } } | null>(null);
   const connected = useRef(new Set<number>());
+  const refs = useRef(new Map<number, (element: HTMLIFrameElement | null) => void>());
+  const outbox = useRef(new Map<string, Pending>());
+  const seq = useRef(0);
+  const resendTimer = useRef(0);
+  /** The page is behind the editor: a command had to be sent again. */
+  const [behind, setBehind] = useState(false);
   const latest = useRef({ inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
   latest.current = { inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision };
 
   const frameWindow = (id: number | null) => (id === null ? null : elements.current.get(id)?.contentWindow ?? null);
 
-  const post = useCallback((id: number, command: PreviewCommand) => {
+  const originRef = useRef(origin);
+  originRef.current = origin;
+  const post = useCallback((id: number | null, command: PreviewCommand, number: number) => {
     const target = frameWindow(id);
-    if (!target || !origin || !connected.current.has(id)) return;
-    target.postMessage({ source: THEME_EDITOR_SOURCE, ...command }, origin);
-  }, [origin]);
+    const to = originRef.current;
+    if (id === null || !target || !to || !connected.current.has(id)) return false;
+    target.postMessage({ source: THEME_EDITOR_SOURCE, ...command, seq: number }, to);
+    return true;
+  }, []);
 
-  /** Sends to the shown frame (dropped until it connects). */
-  const send = useCallback((command: PreviewCommand) => {
-    if (latest.current.activeId !== null) post(latest.current.activeId, command);
+  /** Unacknowledged commands again, to the shown frame (or a frame that just became it). */
+  const flush = useCallback((id: number | null, onlyLate: boolean) => {
+    const now = Date.now();
+    let lost = false;
+    for (const pending of outbox.current.values()) {
+      const wait = pending.command.type === "render" || pending.command.type === "paint" ? PREVIEW_RENDER_ACK_TIMEOUT_MS : PREVIEW_ACK_TIMEOUT_MS;
+      if (onlyLate && now - pending.sentAt < wait) continue;
+      if (post(id, pending.command, pending.seq)) {
+        pending.sentAt = now;
+        pending.sends += 1;
+        if (pending.sends > PREVIEW_MAX_SENDS) lost = true;
+      }
+    }
+    return lost;
   }, [post]);
+
+  const watch = useCallback(() => {
+    if (resendTimer.current) return;
+    resendTimer.current = window.setInterval(() => {
+      if (outbox.current.size === 0) {
+        window.clearInterval(resendTimer.current);
+        resendTimer.current = 0;
+        setBehind(false);
+        return;
+      }
+      setBehind([...outbox.current.values()].some((pending) => pending.sends > 1));
+      if (flush(latest.current.activeId, true)) {
+        // The page answers nothing: load it again; it then gets the unsaved edits on connect.
+        outbox.current.clear();
+        if (latest.current.path) loadRef.current(latest.current.path);
+      }
+    }, 200);
+  }, [flush]);
+
+  /** Sends to the shown frame; kept until acknowledged, and sent again on connect or when late. */
+  const send = useCallback((command: PreviewCommand) => {
+    const number = ++seq.current;
+    const sent = post(latest.current.activeId, command, number);
+    const key = previewCommandKey(command);
+    if (!key) return;
+    outbox.current.set(key, { seq: number, command, sentAt: sent ? Date.now() : 0, sends: sent ? 1 : 0 });
+    watch();
+  }, [post, watch]);
 
   const expectHello = useCallback((onLost: () => void) => {
     window.clearTimeout(helloTimer.current);
@@ -146,6 +225,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     });
   }, [origin, open]);
 
+  const loadRef = useRef(load);
+  loadRef.current = load;
   const reload = useCallback(() => {
     if (latest.current.path) load(latest.current.path);
   }, [load]);
@@ -199,16 +280,25 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
         }
         case "ready":
           if (id !== active) {
-            // Swap: the new frame shows; the old one goes.
+            // Swap: the new frame shows; the old one goes. Its outlines wait for its own layout.
+            latest.current.activeId = id;
             setActiveId(id);
             setFrames((current) => current.filter((each) => each.id === id || each.id > id));
             for (const old of connected.current) if (old < id) connected.current.delete(old);
+            setLayout(EMPTY_LAYOUT);
           }
           setShownPath(message.path);
           setMarks(message.marks);
           setPhase("ready");
+          // A (re)connected page gets every command it has not acknowledged, then the unsaved edits.
+          flush(id, false);
           latest.current.onConnected();
           break;
+        case "ack": {
+          for (const [key, pending] of outbox.current) if (pending.seq === message.seq && id === latest.current.activeId) outbox.current.delete(key);
+          if (message.marks && id === latest.current.activeId) setMarks(message.marks);
+          break;
+        }
         case "layout":
           if (id === active || active === null) setLayout({ rects: message.rects, scrollY: message.scrollY, height: message.height });
           break;
@@ -232,7 +322,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [origin, open, load]);
+  }, [origin, open, load, flush]);
 
   // The first frame of a session becomes the shown one when its relay hands over.
   useEffect(() => {
@@ -245,14 +335,31 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     if (!inspector) setHovered(null);
   }, [inspector, send]);
 
-  useEffect(() => () => window.clearTimeout(helloTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(helloTimer.current);
+    window.clearInterval(resendTimer.current);
+  }, []);
 
-  const register = useCallback((id: number) => (element: HTMLIFrameElement | null) => {
-    if (element) elements.current.set(id, element);
-    else {
-      elements.current.delete(id);
-      connected.current.delete(id);
+  /**
+   * One ref callback per frame for its whole life: React calls it with null
+   * only when the frame leaves (a new callback each render would detach and
+   * forget the connected frame on every re-render).
+   */
+  const register = useCallback((id: number) => {
+    let callback = refs.current.get(id);
+    if (!callback) {
+      callback = (element: HTMLIFrameElement | null) => {
+        if (element) {
+          elements.current.set(id, element);
+          return;
+        }
+        elements.current.delete(id);
+        connected.current.delete(id);
+        refs.current.delete(id);
+      };
+      refs.current.set(id, callback);
     }
+    return callback;
   }, []);
 
   return {
@@ -264,6 +371,9 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     hovered,
     marks,
     shownPath,
+    behind,
+    /** A page loads in a hidden frame to replace the shown one. */
+    loading: frames.some((frame) => frame.id !== activeId),
     send,
     reload,
     retry: () => void open(),

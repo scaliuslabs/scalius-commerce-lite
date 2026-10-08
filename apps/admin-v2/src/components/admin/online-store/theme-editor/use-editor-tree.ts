@@ -130,7 +130,6 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
   const sectionNote = (section: Section): Pick<TreeItemModel, "note" | "noteTone"> => {
     const held = heldSections.get(section.id);
     if (held) return { note: held, noteTone: "critical" };
-    if (section.hidden) return { note: t("hidden") };
     if (isStorefrontAppSection(section)) {
       const entry = appSections.get(section.settings.app);
       if (!entry) return { note: t("appInactive") };
@@ -160,7 +159,6 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
             id: blockId({ sectionId: section.id, path: list.path, index }),
             name: blockName(section, list.path, index, block),
             hidden,
-            note: hidden ? t("hidden") : undefined,
             move: editable ? { list: `blocks:${section.id}:${list.path}`, index, count: blocks.length } : undefined,
             onToggleHidden: editable ? () => handlers.toggleBlock(section.id, list.path, index) : undefined,
             onDuplicate: editable && newBlock(section, list.path) !== null ? () => handlers.duplicateBlock(section.id, list.path, index) : undefined,
@@ -208,16 +206,16 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
             move: editable ? { list: "modules", index: at, count: below.length } : undefined,
             onToggleHidden: editable ? () => handlers.toggleModule(module) : undefined,
           })),
-          ...PRODUCT_MODULES.filter((module) => !below.includes(module)).map((module) => ({
-            id: moduleId(module),
-            name: t(`module_${module}`),
-            hidden: true,
-            note: t("hidden"),
-            onToggleHidden: editable ? () => handlers.toggleModule(module) : undefined,
-          })),
         ];
+        const hiddenModules = PRODUCT_MODULES.filter((module) => !below.includes(module)).map((module) => ({
+          id: moduleId(module),
+          name: t(`module_${module}`),
+          hidden: true,
+          onToggleHidden: editable ? () => handlers.toggleModule(module) : undefined,
+        }));
+        // Modules that are off sit in one closed group: the list stays short.
+        if (hiddenModules.length > 0) modules.push({ id: "modules-hidden", name: t("hiddenModules", { count: hiddenModules.length }), hidden: true, children: hiddenModules });
         return part(EDITOR_PARTS.productMain, ShoppingBag, t("productMain"), {
-          note: t("fixedPartNote"),
           move,
           children: [...modules, part(EDITOR_PARTS.productApps, Puzzle, t("appBlocks"))],
         });
@@ -226,7 +224,6 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
       case "category":
       case "search":
         return part(EDITOR_PARTS.listing, LayoutGrid, t("listingMain"), {
-          note: page.kind === "search" ? undefined : t("fixedPartNote"),
           move,
           children: [
             part(EDITOR_PARTS.listingToolbar, SlidersHorizontal, t("listingToolbar")),
@@ -234,9 +231,9 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
           ],
         });
       case "cart":
-        return part(EDITOR_PARTS.cart, ShoppingCart, t("cartMain"), { note: t("fixedPartNote"), move });
+        return part(EDITOR_PARTS.cart, ShoppingCart, t("cartMain"), { move });
       default:
-        return part(EDITOR_PARTS.pageContent, FileText, t("pageContent"), { note: t("fixedPartNote"), move });
+        return part(EDITOR_PARTS.pageContent, FileText, t("pageContent"), { move });
     }
   };
 
@@ -271,7 +268,8 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
     {
       id: "page",
       label: pageName,
-      note: homeIsProduct ? t("homeIsProduct") : page.kind === "search" ? t("searchNoSections") : pageTemplate(page) ? t("templateNote", { page: pageName }) : undefined,
+      treeLabel: t("treeSections", { page: pageName }),
+      note: homeIsProduct ? t("homeIsProduct") : page.kind === "search" ? t("searchNoSections") : pageTemplate(page) ? t("templateNote", { pages: t(`templateName_${pageTemplate(page)!}`) }) : undefined,
       items: pageRows,
     },
     ...(shared ? [{

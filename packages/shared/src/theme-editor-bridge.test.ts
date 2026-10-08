@@ -57,6 +57,21 @@ describe("theme editor messages", () => {
     }
   });
 
+  it("numbers commands and reads their acknowledgements", () => {
+    expect(readThemeEditorMessage(editor({ type: "reveal", id: "faq", seq: 4 }))).toEqual(editor({ type: "reveal", id: "faq", seq: 4 }));
+    expect(readThemeEditorMessage(editor({ type: "reveal", id: "faq" }))).toEqual(editor({ type: "reveal", id: "faq" }));
+    for (const bad of [
+      editor({ type: "reveal", id: "faq", seq: 0 }),
+      editor({ type: "reveal", id: "faq", seq: 1.5 }),
+      editor({ type: "reveal", id: "faq", seq: "1" }),
+      editor({ type: "connect", inspector: true, scrollY: null, seq: 1 }),
+    ]) expect(readThemeEditorMessage(bad)).toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "ack", seq: 3 }))).toEqual(preview({ type: "ack", seq: 3 }));
+    expect(readThemePreviewMessage(preview({ type: "ack", seq: 3, marks: ["faq"] }))).toEqual(preview({ type: "ack", seq: 3, marks: ["faq"] }));
+    expect(readThemePreviewMessage(preview({ type: "ack", seq: -1 }))).toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "ack", seq: 3, marks: ["Bad"] }))).toBeNull();
+  });
+
   it("trusts an event only from the expected window at the exact origin", () => {
     const frame = {};
     expect(isTrustedThemeEditorEvent({ origin: "https://shop.test", source: frame }, { origin: "https://shop.test", source: frame })).toBe(true);
