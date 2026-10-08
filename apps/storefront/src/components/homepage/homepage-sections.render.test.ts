@@ -33,6 +33,7 @@ import {
   homepageSectionRenders,
   type HomepageContent,
 } from "@/lib/homepage-sections";
+import type { HomepageMetaobject } from "@/lib/api/storefront";
 import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
 import { cardPhotoSizes } from "@/components/cards/card-model";
 
@@ -175,6 +176,36 @@ const HERO_SLIDES = [
 
 const media = (id: string) => ({ id, url: image(id), alt: `Photo ${id}`, width: 1600, height: 1000 });
 
+/** A content type with every field kind the section draws (and ones it must not). */
+const METAOBJECT_STORES: HomepageMetaobject = {
+  id: "mo-stores",
+  name: "Store locations",
+  entries: [
+    {
+      handle: "dhanmondi",
+      title: "Dhanmondi showroom",
+      fields: [
+        { key: "address", name: "Address", type: "multi_line_text", value: "House 12, Road 5\nDhanmondi, Dhaka <b>1205</b>" },
+        { key: "website", name: "Website", type: "url", value: "https://nakshibazar.example/dhanmondi" },
+        { key: "map", name: "Map", type: "url", value: "/pages/stores" },
+        { key: "evil", name: "Evil", type: "url", value: "javascript:alert(1)" },
+        { key: "brand", name: "Brand colour", type: "color", value: "#1f5f4a" },
+        { key: "deposit", name: "Deposit", type: "money", value: "125000" },
+        { key: "parking", name: "Parking", type: "boolean", value: "true" },
+        { key: "opened", name: "Opened", type: "date", value: "2019-04-14" },
+        { key: "photo", name: "Photo", type: "media_reference", value: "m-story" },
+        { key: "gone", name: "Missing photo", type: "media_reference", value: "m-missing" },
+        { key: "services", name: "Services", type: "list.single_line_text", value: JSON.stringify(["Alterations", "Gift wrap"]) },
+        { key: "extra", name: "Extra photos", type: "list.media_reference", value: JSON.stringify(["m-tile-1", "m-tile-2"]) },
+        { key: "raw", name: "Raw", type: "json", value: "{\"a\":1}" },
+        { key: "product", name: "Product", type: "product_reference", value: "prod_1" },
+      ],
+    },
+    { handle: "uttara", title: BANGLA, fields: [{ key: "address", name: "Address", type: "single_line_text", value: "Sector 7, Uttara" }] },
+    { handle: "online", title: "Online only", fields: [{ key: "json", name: "Raw", type: "json", value: "{}" }] },
+  ],
+};
+
 function store(size: "tiny" | "large"): HomepageContent {
   const count = size === "tiny" ? 3 : 36;
   const products = Array.from({ length: count }, (_, index) => card(index + 1));
@@ -218,6 +249,7 @@ function store(size: "tiny" | "large"): HomepageContent {
       logo: index % 2 === 0 ? { mediaId: `m-logo-${index}`, url: image(`logo-${index}`), alt: "", width: 240, height: 120 } : null,
     })),
     promotionEnds: new Map([["promo-eid", new Date(Date.now() + 86_400_000 * 2).toISOString()]]),
+    metaobjects: new Map([["mo-stores", METAOBJECT_STORES]]),
   };
 }
 
@@ -274,6 +306,7 @@ const EVERY_SECTION: StorefrontSection[] = [
   section("faq", "faq", { heading: "", items: [{ question: "Do you deliver outside Dhaka?", answer: BANGLA }] }),
   section("utility-cards", "utility", { cards: [{ title: "Track order", text: "Where is my parcel", href: "/track-order" }, { title: "Stores", text: "", href: "/pages/stores" }] }),
   section("endless-grid", "endless", { title: "", pageSize: 24 }),
+  section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "list", limit: 12 }),
   section("seo-text", "seo", { heading: "About us", body: "## Sarees in Bangladesh\nHandwoven.\n\nMore text." }),
   section("newsletter", "news", { heading: "", text: "", email: "optional", whatsapp: true }),
 ];
@@ -660,6 +693,63 @@ describe("homepage section library", () => {
     expect(island.hasAttribute("hidden")).toBe(true);
     expect(island.querySelectorAll("li")).toHaveLength(0);
     expect(page.querySelector("script")!.textContent).toContain("localStorage");
+  });
+
+  it("draws a metaobject type's entries by field type, escaped, in all three layouts", async () => {
+    const list = await render([section("metaobjects", "meta", { heading: "Visit us", definitionId: "mo-stores", layout: "list", limit: 12 })], store("large"));
+    const root = list.querySelector('[data-section-id="meta"]')!;
+    expect(text(root.querySelector("h2"))).toBe("Visit us");
+    expect(Array.from(root.querySelectorAll("h3")).map(text)).toEqual(["Dhanmondi showroom", BANGLA, "Online only"]);
+    const first = root.querySelector("li")!;
+    const rows = new Map(Array.from(first.querySelectorAll("dl > div")).map((row) => [text(row.querySelector("dt")), row.querySelector("dd")!]));
+    // Text escapes and keeps its breaks; nothing becomes markup.
+    expect(rows.get("Address")!.innerHTML).toContain("&lt;b&gt;1205&lt;/b&gt;");
+    expect(first.querySelector("b")).toBeNull();
+    expect(rows.get("Address")!.textContent).toContain("\n");
+    // Links: https opens safely elsewhere, a store path stays, anything else is text.
+    const site = rows.get("Website")!.querySelector("a")!;
+    expect(site.getAttribute("href")).toBe("https://nakshibazar.example/dhanmondi");
+    expect(site.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(rows.get("Map")!.querySelector("a")!.getAttribute("href")).toBe("/pages/stores");
+    expect(rows.get("Map")!.querySelector("a")!.hasAttribute("rel")).toBe(false);
+    expect(rows.get("Evil")!.querySelector("a")).toBeNull();
+    expect(first.querySelector('a[href^="javascript"]')).toBeNull();
+    expect(text(rows.get("Brand colour")!)).toBe("#1f5f4a");
+    expect(rows.get("Brand colour")!.querySelector("[style]")!.getAttribute("style")).toContain("#1f5f4a");
+    expect(text(rows.get("Deposit")!)).toBe("৳1,250");
+    expect(text(rows.get("Parking")!)).toBe("Yes");
+    expect(text(rows.get("Opened")!)).toBe("14 April 2019");
+    expect(text(rows.get("Services")!)).toBe("Alterations, Gift wrap");
+    expect(rows.get("Photo")!.querySelector("img")!.getAttribute("alt")).toBe("Photo m-story");
+    expect(rows.get("Extra photos")!.querySelectorAll("img")).toHaveLength(2);
+    // A photo that did not resolve, JSON and references are not shown.
+    for (const name of ["Missing photo", "Raw", "Product"]) expect(rows.has(name), name).toBe(false);
+
+    const grid = await render([section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "grid", limit: 12 })], store("large"));
+    expect(text(grid.querySelector("h2"))).toBe("Store locations"); // the type's name when the section has no heading
+    expect(grid.querySelectorAll('[data-section-id="meta"] ul > li')).toHaveLength(3);
+    // The card leads with its first single photo; the photo is not repeated as a row.
+    expect(grid.querySelector('[data-section-id="meta"] li > img')!.getAttribute("alt")).toBe("Photo m-story");
+
+    const accordion = await render([section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "accordion", limit: 12 })], store("large"));
+    expect(accordion.querySelectorAll("details")).toHaveLength(2);
+    expect(text(accordion.querySelector("details summary"))).toBe("Dhanmondi showroom");
+    // A question with one answer field shows the answer alone; an entry with nothing to open is a plain row.
+    expect(accordion.querySelectorAll("details")[1]!.querySelector("dl")).toBeNull();
+    expect(text(accordion.querySelectorAll("details")[1]!.querySelector("div"))).toBe("Sector 7, Uttara");
+    expect(text(accordion.querySelector('[data-section-id="meta"] p'))).toBe("Online only");
+  });
+
+  it("limits the entries and renders nothing for an unset, unknown or empty type", async () => {
+    const one = await render([section("metaobjects", "meta", { definitionId: "mo-stores", layout: "list", limit: 1 })], store("large"));
+    expect(one.querySelectorAll('[data-section-id="meta"] h3')).toHaveLength(1);
+    for (const definitionId of ["", "mo-gone"]) {
+      const page = await render([section("metaobjects", "meta", { definitionId, layout: "list", limit: 12 })], store("large"));
+      expect(page.querySelector('[data-section-id="meta"]'), definitionId).toBeNull();
+    }
+    const content = store("large");
+    const empty: HomepageContent = { ...content, metaobjects: new Map([["mo-stores", { id: "mo-stores", name: "Stores", entries: [] }]]) };
+    expect((await render([section("metaobjects", "meta", { definitionId: "mo-stores" })], empty)).querySelector('[data-section-id="meta"]')).toBeNull();
   });
 
   it("maps each registry type to its own renderer", () => {

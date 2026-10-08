@@ -506,6 +506,7 @@ export const STOREFRONT_SECTION_RENDERERS = [
   "endless-grid",
   "seo-text",
   "recently-viewed",
+  "metaobjects",
   "newsletter",
 ] as const satisfies readonly StorefrontSectionType[];
 export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
@@ -562,6 +563,9 @@ export function storefrontSectionNeedsContent(section: StorefrontSection): boole
       return each.settings.cards.length === 0;
     case "seo-text":
       return !filled(each.settings.body);
+    // Nothing to show until a content type is picked; its entries are store data.
+    case "metaobjects":
+      return !each.settings.definitionId;
     // A signup always has its form and the storefront's default words.
     case "newsletter":
       return false;

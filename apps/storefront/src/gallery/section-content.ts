@@ -166,6 +166,14 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
     },
   },
   "recently-viewed": { settings: { title: "Recently viewed" } },
+  metaobjects: {
+    settings: { heading: "Visit our stores", definitionId: "mo-locations", layout: "grid", limit: 12 },
+    alternatives: {
+      "type=faq": { heading: "Frequently asked questions", definitionId: "mo-faq", layout: "accordion" },
+      "type=size-chart": { heading: "Size chart", definitionId: "mo-size-chart", layout: "list" },
+      "limit=2": { limit: 2 },
+    },
+  },
   newsletter: {
     settings: { heading: "Get Eid offers first", text: "SMS and email, twice a month. Unsubscribe any time.", email: "optional", whatsapp: false, buttonLabel: "Subscribe" },
   },

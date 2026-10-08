@@ -95,6 +95,22 @@ export interface HomepageProduct {
   slug: string;
 }
 
+/** One field of a metaobject entry as a section shows it: the stored canonical text of a custom-field type. */
+export interface HomepageMetaobjectField {
+  key: string;
+  name: string;
+  /** A custom-field type id (`single_line_text`, `money`, `list.media_reference`...). */
+  type: string;
+  value: string;
+}
+
+/** A Metaobjects section's content type with its published entries (only types with storefront access are sent). */
+export interface HomepageMetaobject {
+  id: string;
+  name: string;
+  entries: Array<{ handle: string; title: string; fields: HomepageMetaobjectField[] }>;
+}
+
 /**
  * Everything the theme's homepage sections name (`homeSectionRequests`):
  * the published theme's in the homepage read, a draft's behind a preview
@@ -116,6 +132,12 @@ export interface HomepageSectionData {
    * An app section missing here renders nothing. Absent from an older API.
    */
   apps?: HomepageAppSurface[];
+  /**
+   * The Metaobjects sections' content types and entries, by definition id.
+   * A type that is private, unknown or without entries is missing, and its
+   * section renders nothing. Absent from an older API.
+   */
+  metaobjects?: HomepageMetaobject[];
 }
 
 // =============================================
@@ -159,6 +181,11 @@ export interface LayoutData {
   /** The footer menus (Online store -> Navigation), in order. */
   footerMenus?: FooterMenu[];
   currency?: CurrencyData;
+  /**
+   * The page groups an active app draws blocks on (`lib/app-surfaces`
+   * `layoutHasAppBlocks`); absent from an older API: none.
+   */
+  appBlockPages?: Array<"checkout" | "order" | "account">;
   /**
    * Every active market with its countries and subfolder presences (backup
    * first): hreflang, the market selector and the presence a page renders.

@@ -54,6 +54,10 @@ export interface GalleryScenario {
   listing?: "large" | "empty" | "small";
   /** App sections and product blocks draw something. */
   apps?: boolean;
+  /** `localStorage` the browser starts with (a saved cart); the quality audit seeds it before the page loads. */
+  storage?: Record<string, string>;
+  /** An app draws blocks at the checkout targets (the layout lists the `checkout` page). */
+  checkoutBlocks?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
 }
@@ -373,6 +377,14 @@ function tokenEntries(): GalleryEntry[] {
   return entries;
 }
 
+/** A saved cart with two lines, so the checkout steps (and the targets apps draw at) are visible. */
+const GALLERY_CART = JSON.stringify({
+  items: {
+    "line:v3:prod_0:variant:var_0:p:none": { id: "prod_0", slug: "handwoven-jamdani-saree", name: "Handwoven Dhakai Jamdani Saree", price: 6500, quantity: 1, variantId: "var_0", propertiesHash: "none", options: [{ name: "Colour", value: "Bottle green" }] },
+    "line:v3:prod_1:variant:var_1:p:none": { id: "prod_1", slug: "cotton-panjabi", name: "Cotton Panjabi", price: 1490, quantity: 2, variantId: "var_1", propertiesHash: "none" },
+  },
+});
+
 function appEntries(): GalleryEntry[] {
   const base = baseTheme();
   const home = clone(base);
@@ -390,6 +402,7 @@ function appEntries(): GalleryEntry[] {
     ],
   };
   return [
+    { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
     { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },
     { id: entryId("app", "section", "empty"), family: "app:section", title: "App section that drew nothing", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { apps: false } },
     { id: entryId("app", "product-blocks"), family: "app:product-block", title: "App product blocks (buy box and below)", page: "product", theme: product, focus: MAIN, scenario: { apps: true, product: "fashion" } },

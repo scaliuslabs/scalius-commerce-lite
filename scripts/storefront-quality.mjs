@@ -404,6 +404,14 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       });
       page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error.message ?? error).slice(0, 200)}`));
       await page.setViewportSize({ width, height: VIEWPORT_HEIGHT });
+      // Browser storage the entry starts with (a saved cart), set before the page's own scripts run.
+      if (entry.storage && Object.keys(entry.storage).length > 0) {
+        await page.addInitScript((storage) => {
+          for (const [key, value] of Object.entries(storage)) {
+            try { localStorage.setItem(key, value); } catch { /* storage blocked: the page renders without it */ }
+          }
+        }, entry.storage);
+      }
       const response = await page.goto(result.url, { waitUntil: "load", timeout: 60_000 });
       if (!response || response.status() >= 400) {
         const status = response?.status() ?? 0;

@@ -32,6 +32,7 @@ import {
   productDetail,
   productScenarioOf,
 } from "./fixtures";
+import { fixtureMetaobject, metaobjectMediaIds } from "./metaobjects";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -109,6 +110,7 @@ function layout(entry: GalleryEntry) {
     seo: { socialImage: "" },
     timeZone: "Asia/Dhaka",
     policies: FIXTURE_POLICIES,
+    ...(entry.scenario.checkoutBlocks ? { appBlockPages: ["checkout"] } : {}),
   };
 }
 
@@ -116,6 +118,8 @@ function layout(entry: GalleryEntry) {
 function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]) {
   const requests = homeSectionRequests(sections);
   const bangla = entry.scenario.locale === "bn";
+  // A type that is private or gone is missing, as the API leaves it out.
+  const metaobjects = (requests.metaobjects ?? []).flatMap((request) => fixtureMetaobject(request.definitionId, request.limit) ?? []);
   return {
     lists: requests.lists.map((list, index) => ({
       key: list.key,
@@ -123,12 +127,13 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
       category: list.source.kind === "category" ? { id: list.source.categoryId, name: "Sarees", slug: "sarees", canonicalPath: null } : null,
       collection: list.source.kind === "collection" ? { id: list.source.collectionId, title: "Eid edit" } : null,
     })),
-    media: requests.mediaIds.map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
+    media: [...new Set([...requests.mediaIds, ...metaobjectMediaIds(metaobjects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
     brands: requests.brandLimit > 0 ? fixtureBrands(requests.brandLimit) : [],
     promotions: requests.promotionIds.map((id) => ({ id, endsAt: "2026-12-31T18:00:00.000Z" })),
     categories: requests.categoryIds.map(homeCategory),
     collections: requests.collectionIds.map((id, index) => fixtureCollection(id, index % 2 === 0 ? "carousel" : "grid")),
     homeProduct: null,
+    metaobjects,
     ...(entry.scenario.apps === undefined ? {} : {
       apps: entry.scenario.apps
         ? (requests.apps ?? []).map((app) => ({
@@ -170,6 +175,37 @@ function productApps(entry: GalleryEntry) {
   };
 }
 
+/** The blocks apps draw at the checkout targets (sanitized HTML: content and links, no forms or scripts). */
+function checkoutApps(entry: GalleryEntry) {
+  if (!entry.scenario.checkoutBlocks) return { blocks: [] };
+  const head = { meta: [], jsonLd: [] };
+  return {
+    blocks: [
+      {
+        id: "acme.delivery/promise",
+        app: "acme.delivery/promise",
+        target: "purchase.checkout.contact.render-after",
+        html: '<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"><p><strong>Delivery promise.</strong> Order before 12 pm and it arrives today inside Dhaka, or tomorrow everywhere else.</p><p class="mt-1"><a class="font-medium underline underline-offset-4" href="/pages/delivery">See delivery times by district</a></p></div>',
+        head,
+      },
+      {
+        id: "acme.trust/returns",
+        app: "acme.trust/returns",
+        target: "purchase.checkout.shipping-option-list.render-after",
+        html: '<ul class="space-y-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"><li><strong>7-day returns.</strong> Free pickup from your door in Dhaka.</li><li><strong>Official warranty</strong> on every phone and laptop.</li><li><strong>Cash on delivery</strong> checked before you pay.</li></ul>',
+        head,
+      },
+      {
+        id: "acme.loyalty/points",
+        app: "acme.loyalty/points",
+        target: "purchase.checkout.cart-line-list.render-after",
+        html: '<p class="rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">You will earn <strong>120 Nakshi points</strong> with this order. <a class="underline underline-offset-4" href="/account/rewards">View your rewards</a></p>',
+        head,
+      },
+    ],
+  };
+}
+
 /** Recorded reads nothing answered (gallery index "missing reads"). */
 export const unansweredReads = new Map<string, Set<string>>();
 
@@ -188,6 +224,8 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   }
   if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
   if (path === "/api/v1/checkout/config") return { gateways: [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
+  const checkoutApp = /^\/api\/v1\/storefront\/app-blocks\/(checkout)$/.exec(path);
+  if (checkoutApp) return checkoutApps(entry);
   const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
   if (productApp) return productApps(entry);
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
