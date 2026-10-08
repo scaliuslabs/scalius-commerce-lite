@@ -153,7 +153,8 @@ describe("block variant matrix", () => {
     FACTORS.forEach((first, a) => FACTORS.forEach((second, b) => { if (b > a) expected += first.values.length * second.values.length; }));
     expect(covered.size).toBe(expected);
     // Far fewer than the full product of choices, but at least the largest pair.
-    expect(rows.length).toBeGreaterThanOrEqual(9 * 8);
+    const sizes = FACTORS.map((factor) => factor.values.length).sort((x, y) => y - x);
+    expect(rows.length).toBeGreaterThanOrEqual(sizes[0]! * sizes[1]!);
     expect(rows.length).toBeLessThan(200);
   });
 
