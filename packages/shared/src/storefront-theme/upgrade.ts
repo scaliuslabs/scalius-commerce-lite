@@ -414,8 +414,29 @@ const HEADER_LAYOUTS: Record<string, { variant: string; search: string; rowTone:
   "grocery-shell": { variant: "search-first", search: "field", rowTone: "page", cartTotal: true },
 };
 
+/**
+ * Seven footers as three: columns (with a tone), centered-compact and the
+ * directory. The words (tagline, about, copyright) stay; `support-dark` reads
+ * as columns in the header colours, `brand-black` as columns on the ink
+ * surface, `minimal-columns` and `product-widgets` as plain columns and
+ * `newsletter-grey` as centered-compact on the muted surface.
+ */
+const FOOTER_LAYOUTS: Record<string, { variant: string; tone: string }> = {
+  "minimal-columns": { variant: "columns", tone: "page" },
+  "product-widgets": { variant: "columns", tone: "page" },
+  "support-dark": { variant: "columns", tone: "header" },
+  "brand-black": { variant: "columns", tone: "ink" },
+  "newsletter-grey": { variant: "centered-compact", tone: "muted" },
+};
+
 function withConsolidatedChrome(doc: Record<string, unknown>): void {
-  const blocks = doc.blocks as { header?: HeaderChoice; desktopNav?: HeaderChoice; mobileNav?: HeaderChoice; topBar?: HeaderChoice } | undefined;
+  const blocks = doc.blocks as { header?: HeaderChoice; desktopNav?: HeaderChoice; mobileNav?: HeaderChoice; topBar?: HeaderChoice; footer?: HeaderChoice } | undefined;
+  const footer = blocks?.footer;
+  const footerLayout = footer && typeof footer.variant === "string" ? FOOTER_LAYOUTS[footer.variant] : undefined;
+  if (blocks && footer && footerLayout) {
+    const stored = footer.settings && typeof footer.settings === "object" ? footer.settings : {};
+    blocks.footer = { variant: footerLayout.variant, settings: { tagline: "", about: "", copyright: "", ...stored, tone: footerLayout.tone } };
+  }
   const header = blocks?.header;
   const layout = header && typeof header.variant === "string" ? HEADER_LAYOUTS[header.variant] : undefined;
   if (blocks && header && layout) {
@@ -438,6 +459,14 @@ function withConsolidatedChrome(doc: Record<string, unknown>): void {
   }
   const topBar = blocks?.topBar;
   if (topBar && topBar.variant === "app-banner") topBar.variant = "announcement";
+  // The header always carries the cart and the search on phones: the bottom
+  // bar's Cart and Search tabs read as nothing, and a bar left with fewer than
+  // three tabs takes Offers, then Compare, so it stays a bar.
+  if (mobile && mobile.variant === "bottom-tabs" && Array.isArray(mobile.settings?.tabs)) {
+    const kept = (mobile.settings.tabs as unknown[]).filter((tab) => tab !== "cart" && tab !== "search");
+    for (const filler of ["offers", "compare"]) if (kept.length < 3 && !kept.includes(filler)) kept.push(filler);
+    mobile.settings = { ...mobile.settings, tabs: kept };
+  }
 }
 
 const SALE_PAIRS = [["destructive", "card"], ["destructive", "background"], ["destructive-foreground", "destructive"]] as const;

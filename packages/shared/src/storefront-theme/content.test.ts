@@ -14,7 +14,7 @@ function withContent(): StorefrontThemeDocument {
   const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
   theme.brand = { logo: "media_logo", logoWidth: 200, footerLogo: "media_footer_logo", favicon: "media_icon" };
   theme.blocks.topBar = { variant: "utility", settings: { text: "Cash on delivery everywhere", link: "/delivery" } };
-  theme.blocks.footer = { variant: "product-widgets", settings: { tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." } };
+  theme.blocks.footer = { variant: "columns", settings: { tone: "page", tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." } };
   theme.pages.homeMode = { kind: "product", productId: "prod_1" };
   theme.pages.home = theme.pages.home.map((section) => {
     if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: [slide] } };
@@ -47,10 +47,12 @@ describe("theme content", () => {
   });
 
   it("keeps the footer's words through a fit fallback", () => {
-    // product-widgets needs 6 products; the empty store falls back to minimal columns.
-    const resolved = resolveStorefrontTheme(withContent(), EMPTY_STORE_SHAPE);
-    expect(resolved.blocks.footer.variant).toBe("minimal-columns");
-    expect(resolved.blocks.footer.settings).toEqual({ tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." });
+    // The directory needs 8 top categories; the empty store falls back to columns.
+    const theme = withContent();
+    theme.blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." } };
+    const resolved = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE);
+    expect(resolved.blocks.footer.variant).toBe("columns");
+    expect(resolved.blocks.footer.settings).toEqual({ tone: "page", tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." });
     expect(resolved.brand.logo).toBe("media_logo");
     expect(resolved.pages.homeMode).toEqual({ kind: "product", productId: "prod_1" });
   });

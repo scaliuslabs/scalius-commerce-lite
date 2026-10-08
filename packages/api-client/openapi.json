@@ -1576,41 +1576,6 @@
                       "settings"
                     ],
                     "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "app-banner"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "text": {
-                            "type": "string",
-                            "maxLength": 160
-                          },
-                          "link": {
-                            "type": "string",
-                            "nullable": true,
-                            "maxLength": 2048
-                          }
-                        },
-                        "required": [
-                          "text",
-                          "link"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
                   }
                 ]
               },
@@ -2002,13 +1967,11 @@
                                 "home",
                                 "categories",
                                 "offers",
-                                "search",
                                 "compare",
-                                "cart",
                                 "account"
                               ]
                             },
-                            "minItems": 4,
+                            "minItems": 3,
                             "maxItems": 5
                           },
                           "drawer": {
@@ -2911,12 +2874,21 @@
                       "variant": {
                         "type": "string",
                         "enum": [
-                          "minimal-columns"
+                          "columns"
                         ]
                       },
                       "settings": {
                         "type": "object",
                         "properties": {
+                          "tone": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "muted",
+                              "header",
+                              "ink"
+                            ]
+                          },
                           "tagline": {
                             "type": "string",
                             "maxLength": 160
@@ -2931,6 +2903,7 @@
                           }
                         },
                         "required": [
+                          "tone",
                           "tagline",
                           "about",
                           "copyright"
@@ -2950,12 +2923,21 @@
                       "variant": {
                         "type": "string",
                         "enum": [
-                          "support-dark"
+                          "centered-compact"
                         ]
                       },
                       "settings": {
                         "type": "object",
                         "properties": {
+                          "tone": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "muted",
+                              "header",
+                              "ink"
+                            ]
+                          },
                           "tagline": {
                             "type": "string",
                             "maxLength": 160
@@ -2970,84 +2952,7 @@
                           }
                         },
                         "required": [
-                          "tagline",
-                          "about",
-                          "copyright"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "brand-black"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "tagline": {
-                            "type": "string",
-                            "maxLength": 160
-                          },
-                          "about": {
-                            "type": "string",
-                            "maxLength": 1000
-                          },
-                          "copyright": {
-                            "type": "string",
-                            "maxLength": 120
-                          }
-                        },
-                        "required": [
-                          "tagline",
-                          "about",
-                          "copyright"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "newsletter-grey"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "tagline": {
-                            "type": "string",
-                            "maxLength": 160
-                          },
-                          "about": {
-                            "type": "string",
-                            "maxLength": 1000
-                          },
-                          "copyright": {
-                            "type": "string",
-                            "maxLength": 120
-                          }
-                        },
-                        "required": [
+                          "tone",
                           "tagline",
                           "about",
                           "copyright"
@@ -3095,45 +3000,6 @@
                         },
                         "required": [
                           "style",
-                          "tagline",
-                          "about",
-                          "copyright"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "product-widgets"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {
-                          "tagline": {
-                            "type": "string",
-                            "maxLength": 160
-                          },
-                          "about": {
-                            "type": "string",
-                            "maxLength": 1000
-                          },
-                          "copyright": {
-                            "type": "string",
-                            "maxLength": 120
-                          }
-                        },
-                        "required": [
                           "tagline",
                           "about",
                           "copyright"

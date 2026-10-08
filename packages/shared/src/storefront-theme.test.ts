@@ -149,7 +149,7 @@ describe("storefront theme document v9", () => {
     expect(issues(theme).join("\n")).toMatch(/^tokens\.colors\.destructive: destructive on card has contrast/);
     expect(issues({ ...theme, tokens: { ...theme.tokens, colors: { ...STOREFRONT_THEME_PALETTES.midnight } } })).toEqual([]);
     expect(storefrontVariantChain("header", "inline-nav")).toEqual(["inline-nav"]);
-    expect(storefrontVariantChain("footer", "directory")).toEqual(["directory", "minimal-columns"]);
+    expect(storefrontVariantChain("footer", "directory")).toEqual(["directory", "columns"]);
   });
 
   it("derives header bands that keep the header's text readable in every palette and tone", () => {
@@ -219,7 +219,7 @@ describe("storefront theme document v9", () => {
     repeatedPiece.blocks.listing.toolbar = ["sort", "sort"];
     expect(issues(repeatedPiece).join()).toMatch(/appears once/);
     const tabs = clone();
-    tabs.blocks.mobileNav = { variant: "bottom-tabs", settings: { tabs: ["home", "home", "cart", "account"], drawer: "accordion" } };
+    tabs.blocks.mobileNav = { variant: "bottom-tabs", settings: { tabs: ["home", "home", "offers", "account"], drawer: "accordion" } };
     expect(issues(tabs).join()).toMatch(/appears once/);
     // Version 3 documents are not read at all.
     expect(issues({

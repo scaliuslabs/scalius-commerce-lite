@@ -62,6 +62,36 @@ describe("the three header layouts", () => {
     expect(banner!.blocks.topBar).toEqual({ variant: "announcement", settings: { text: "Free delivery", link: null } });
   });
 
+  it.each([
+    ["minimal-columns", "columns", "page"],
+    ["product-widgets", "columns", "page"],
+    ["support-dark", "columns", "header"],
+    ["brand-black", "columns", "ink"],
+    ["newsletter-grey", "centered-compact", "muted"],
+  ])("reads a stored %s footer as %s with the %s tone, keeping its words", (old, layout, tone) => {
+    const words = { tagline: "Since 1998", about: "Family shop.", copyright: "Acme Ltd." };
+    const doc = read({ footer: { variant: old, settings: words } });
+    expect(doc!.blocks.footer).toEqual({ variant: layout, settings: { ...words, tone } });
+    expect(storefrontThemeDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("drops the bottom bar's Cart and Search tabs: the header always has them", () => {
+    const tabs = (stored: string[]) => {
+      const doc = read({ mobileNav: { variant: "bottom-tabs", settings: { tabs: stored, drawer: "accordion" } } });
+      expect(storefrontThemeDocumentSchema.safeParse(doc).success).toBe(true);
+      return (doc!.blocks.mobileNav.settings as { tabs: string[] }).tabs;
+    };
+    expect(tabs(["home", "categories", "search", "cart", "account"])).toEqual(["home", "categories", "account"]);
+    expect(tabs(["home", "categories", "offers", "compare", "cart"])).toEqual(["home", "categories", "offers", "compare"]);
+    // A bar left with fewer than three tabs takes Offers, then Compare.
+    expect(tabs(["home", "search", "cart", "account"])).toEqual(["home", "account", "offers"]);
+  });
+
+  it("keeps a directory footer as it is", () => {
+    const settings = { style: "bands", tagline: "", about: "", copyright: "" };
+    expect(read({ footer: { variant: "directory", settings } })!.blocks.footer).toEqual({ variant: "directory", settings });
+  });
+
   it("resolves every layout and setting combination, with each desktop menu, on an empty store", () => {
     const base = read({})!;
     for (const variant of Object.keys(STOREFRONT_HEADER_VARIANTS)) {

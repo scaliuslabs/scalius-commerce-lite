@@ -1,7 +1,7 @@
 ---
 // The `bottom-tabs` phone navigation: a bottom tab bar below `lg` with the
 // tabs the theme chose (4-5 of Home, Categories, Offers, Search, Compare,
-// Cart, Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare
+// Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare
 // shows only where the store's card offers "Add to Compare" (the spec card):
 // elsewhere nothing fills the comparison, so the tab is left out rather than
 // opening an empty page. It links to /compare (the empty state explains
@@ -9,7 +9,7 @@
 // (header.astro binds `[data-mobile-menu-open]` and `[data-cart-open]`,
 // HeaderLayout binds `[data-search-open]` and `[data-account-link]`), and
 // each is a real link first (the menu drawer's :target, /search, /cart), so
-// the bar works before hydration. The cart badge is `#mobile-cart-count`.
+// the bar works before hydration. The header always has the cart and the search, so the bar never repeats them.
 // The page reserves the bar's height in CSS, so nothing sits under it. On
 // product pages the phone buy bar replaces the tab bar while it shows.
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
@@ -25,9 +25,9 @@ interface Props {
   compare?: boolean;
 }
 
-const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "search", "cart", "account"];
+const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "offers", "account"];
 /** Tabs with a page to go to today. */
-const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "search", "cart", "account"]);
+const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "account"]);
 const OFFERS_HREF = "/search?hasDiscount=true";
 
 const { tabs = DEFAULT_TABS, compare = false } = Astro.props;
@@ -39,7 +39,6 @@ const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") =
 const active = {
   home: path === "/",
   categories: /^\/(categories|collections)\//.test(path),
-  search: !offers && (path === "/search" || path.startsWith("/search/")),
   offers,
   compare: path === "/compare",
   account: path === "/account" || path.startsWith("/account/"),
@@ -95,35 +94,6 @@ const active = {
                 <path d="M4 6h10M4 12h16M4 18h10M18 4v4M16 6h4" />
               </svg>
               <span>{copy.tabs.compare}</span>
-            </a>
-          )}
-          {tab === "search" && (
-            <a
-              href="/search"
-              role="button"
-              class="mobile-tab"
-              aria-current={active.search ? "true" : undefined}
-              aria-haspopup="dialog"
-              data-search-open
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <span>{copy.tabs.search}</span>
-            </a>
-          )}
-          {tab === "cart" && (
-            <a href="/cart" role="button" class="mobile-tab" aria-haspopup="dialog" data-cart-open data-astro-prefetch="false">
-              <span class="mobile-tab-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="8" cy="21" r="1" />
-                  <circle cx="19" cy="21" r="1" />
-                  <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-                </svg>
-                <span id="mobile-cart-count" class="mobile-tab-badge scale-0 opacity-0"></span>
-              </span>
-              <span>{copy.tabs.cart}</span>
             </a>
           )}
           {tab === "account" && (

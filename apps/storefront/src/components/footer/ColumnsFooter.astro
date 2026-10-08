@@ -19,7 +19,10 @@ const {
   brandName,
   tagline,
   phoneHref,
+  chatHref,
   storePhone,
+  storeEmail,
+  storeAddress,
   about,
   menus,
 } = Astro.props.model;
@@ -58,13 +61,28 @@ const copy = storefrontCopy(language).chrome;
     }
 
     {
-      phoneHref && (
-        <p class="mt-3 text-base">
-          {copy.footer.callUs}{" "}
-          <a href={phoneHref} class="font-semibold underline underline-offset-4">
-            <bdi dir="ltr">{storePhone}</bdi>
-          </a>
-        </p>
+      (phoneHref || chatHref || storeEmail || storeAddress) && (
+        <ul class="mt-3 flex flex-col gap-1 text-base" data-footer-contact>
+          {phoneHref && (
+            <li>
+              {copy.footer.callUs}{" "}
+              <a href={phoneHref} class="font-semibold underline underline-offset-4">
+                <bdi dir="ltr">{storePhone}</bdi>
+              </a>
+            </li>
+          )}
+          {chatHref && (
+            <li>
+              <a href={chatHref} target="_blank" rel="noopener noreferrer" class="font-semibold underline underline-offset-4">{copy.footer.whatsapp}</a>
+            </li>
+          )}
+          {storeEmail && (
+            <li>
+              <a href={`mailto:${storeEmail}`} class="underline underline-offset-4">{storeEmail}</a>
+            </li>
+          )}
+          {storeAddress && <li><address class="not-italic">{storeAddress}</address></li>}
+        </ul>
       )
     }
 

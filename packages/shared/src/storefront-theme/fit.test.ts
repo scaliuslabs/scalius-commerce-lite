@@ -124,7 +124,7 @@ describe("fallback resolution", () => {
     // The digital buy box needs digital lines; the directory footer needs categories.
     const digital = withBlock(base, (blocks) => { blocks.product.buyBox = { variant: "digital", settings: {} }; blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "", about: "", copyright: "" } }; });
     expect(resolve(digital).blocks.product.buyBox.variant).toBe("classic");
-    expect(resolve(digital).blocks.footer.variant).toBe("minimal-columns");
+    expect(resolve(digital).blocks.footer.variant).toBe("columns");
     // Modules and toolbar pieces without data are left out; nothing renders an empty box.
     const market = storefrontTemplateTheme("marketplace");
     const resolvedMarket = resolve(market);
@@ -148,7 +148,7 @@ describe("fallback resolution", () => {
     const essentials = resolveStorefrontTheme(storefrontTemplateTheme("daily-essentials"), TINY);
     expect(essentials.blocks.listing.layout.variant).toBe("grid");
     expect(essentials.pages.home.map((section) => section.type)).toContain("category-tiles");
-    expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("product-widgets");
+    expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("columns");
   });
 
   it("keeps the merchant's chosen header on a big catalogue and every rich block", () => {

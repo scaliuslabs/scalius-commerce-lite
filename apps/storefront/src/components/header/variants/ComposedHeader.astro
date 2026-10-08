@@ -193,7 +193,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
             {spec.cartTotal ? (
               <>
                 <small>{copy.header.cart}</small>
-                <bdi dir="ltr"><strong id="cart-total-display" class="tabular-nums">0</strong></bdi>
+                <bdi dir="ltr"><strong id="cart-total-display" class="tabular-nums" data-pending>&nbsp;</strong></bdi>
               </>
             ) : (
               copy.header.cart
@@ -427,6 +427,16 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     border-radius: var(--radius);
   }
 
+  /* The badge's room is reserved (it is positioned on the icon); the total
+     keeps its width and stays invisible until the cart's real value is known. */
+  .hdr-cart-count:empty {
+    visibility: hidden;
+  }
+
+  #cart-total-display[data-pending] {
+    visibility: hidden;
+  }
+
   .hdr-cart-count {
     position: absolute;
     top: 0.25rem;
@@ -612,6 +622,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       clip-path: none;
       display: flex;
       flex-direction: column;
+      min-inline-size: 4.5rem;
       padding-inline-end: 0.5rem;
       line-height: 1.15;
     }

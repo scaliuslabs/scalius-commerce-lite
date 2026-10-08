@@ -92,11 +92,9 @@ const {
     }
   }
 
-  /* Bottom tabs carry cart and account on phones (mix rule 5). */
+  /* Bottom tabs carry the account on phones; the cart and the search never leave the header. */
   @media (max-width: 63.99rem) {
-    #main-header[data-phone-drop~="account"] [data-header-account],
-    #main-header[data-phone-drop~="cart"] [data-header-cart],
-    #main-header[data-phone-drop~="account"][data-phone-drop~="cart"] [data-header-action-group] {
+    #main-header[data-phone-drop~="account"] [data-header-account] {
       display: none;
     }
   }

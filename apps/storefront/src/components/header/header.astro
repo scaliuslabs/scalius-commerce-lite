@@ -174,7 +174,7 @@ const noScriptFit = inlineRowPx !== null && plan.allCategories
 
 const flyouts = desktopSettings.flyouts === "cascading" ? "cascading" : "dropdown";
 const departments = tree.filter((item) => item.href).slice(0, navigation.maxTopItems);
-const phoneDrop = tabs ? tabs.filter((tab) => tab === "cart" || tab === "account").join(" ") : "";
+const phoneDrop = tabs?.includes("account") ? "account" : "";
 const drawerTitle = treeSourced ? copy.nav.shopByDepartment : copy.nav.menu;
 
 // A menu row of its own stays when the top row scrolls away.
@@ -452,6 +452,8 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
 
     hydrateCartFromStorage();
 
+    // The first update only reveals what the cart holds: no pop, no flash.
+    let cartKnown = false;
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
       const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
@@ -461,7 +463,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
       });
 
       const countElements = document.querySelectorAll(
-        "#cart-count, #mobile-cart-count",
+        "#cart-count",
       );
       countElements.forEach((el) => {
         if (el instanceof HTMLElement) {
@@ -474,10 +476,12 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
           );
           if (totalItems > 0) {
             el.classList.add("scale-100", "opacity-100");
-            requestAnimationFrame(() => {
-              el.style.transform = "scale(1.2)";
-              setTimeout(() => (el.style.transform = "scale(1)"), 150);
-            });
+            if (cartKnown) {
+              requestAnimationFrame(() => {
+                el.style.transform = "scale(1.2)";
+                setTimeout(() => (el.style.transform = "scale(1)"), 150);
+              });
+            }
           } else {
             el.classList.add("scale-0", "opacity-0");
           }
@@ -487,7 +491,9 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
       const totalDisplay = document.getElementById("cart-total-display");
       if (totalDisplay) {
         totalDisplay.textContent = formattedTotal;
+        totalDisplay.removeAttribute("data-pending");
       }
+      cartKnown = true;
     }
 
     updateCartDisplay();

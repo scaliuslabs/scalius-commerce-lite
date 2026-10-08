@@ -132,8 +132,9 @@
       }
     },
     "footer": {
-      "variant": "newsletter-grey",
+      "variant": "centered-compact",
       "settings": {
+        "tone": "muted",
         "tagline": "",
         "about": "",
         "copyright": ""

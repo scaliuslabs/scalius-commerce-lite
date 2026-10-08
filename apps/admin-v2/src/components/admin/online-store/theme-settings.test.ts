@@ -143,15 +143,15 @@ describe("templates", () => {
     const banner = setBlockVariant(theme, "topBar", "announcement");
     expect(banner.blocks.topBar).toEqual({ variant: "announcement", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
     expect(setBlockVariant(banner, "topBar", "none").blocks.topBar).toEqual({ variant: "none", settings: {} });
-    const footer = setBlockVariant(theme, "footer", "brand-black");
-    expect(footer.blocks.footer.settings).toEqual({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
+    const footer = setBlockVariant(theme, "footer", "centered-compact");
+    expect(footer.blocks.footer.settings).toEqual({ tone: "page", tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
   });
 
   it("switches a block to another variant at its default settings", () => {
     const theme = setBlockVariant(DEFAULT_STOREFRONT_THEME, "mobileNav", "bottom-tabs");
     expect(theme.blocks.mobileNav).toEqual({
       variant: "bottom-tabs",
-      settings: { tabs: ["home", "categories", "search", "cart", "account"], drawer: "accordion" },
+      settings: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" },
     });
     expect(blockVariant(setBlockVariant(theme, "gallery", "stacked"), "gallery")).toBe("stacked");
   });

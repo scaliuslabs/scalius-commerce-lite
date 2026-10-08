@@ -399,12 +399,6 @@ export type StorefrontThemeDocument = {
                 text: string;
                 link: string | null;
             };
-        } | {
-            variant: 'app-banner';
-            settings: {
-                text: string;
-                link: string | null;
-            };
         };
         header: {
             variant: 'inline-nav';
@@ -477,7 +471,7 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'bottom-tabs';
             settings: {
-                tabs: Array<'home' | 'categories' | 'offers' | 'search' | 'compare' | 'cart' | 'account'>;
+                tabs: Array<'home' | 'categories' | 'offers' | 'compare' | 'account'>;
                 drawer: 'accordion' | 'drill-in';
             };
         };
@@ -644,29 +638,17 @@ export type StorefrontThemeDocument = {
             };
         };
         footer: {
-            variant: 'minimal-columns';
+            variant: 'columns';
             settings: {
+                tone: 'page' | 'muted' | 'header' | 'ink';
                 tagline: string;
                 about: string;
                 copyright: string;
             };
         } | {
-            variant: 'support-dark';
+            variant: 'centered-compact';
             settings: {
-                tagline: string;
-                about: string;
-                copyright: string;
-            };
-        } | {
-            variant: 'brand-black';
-            settings: {
-                tagline: string;
-                about: string;
-                copyright: string;
-            };
-        } | {
-            variant: 'newsletter-grey';
-            settings: {
+                tone: 'page' | 'muted' | 'header' | 'ink';
                 tagline: string;
                 about: string;
                 copyright: string;
@@ -675,13 +657,6 @@ export type StorefrontThemeDocument = {
             variant: 'directory';
             settings: {
                 style: 'columns' | 'bands';
-                tagline: string;
-                about: string;
-                copyright: string;
-            };
-        } | {
-            variant: 'product-widgets';
-            settings: {
                 tagline: string;
                 about: string;
                 copyright: string;

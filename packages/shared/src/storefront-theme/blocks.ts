@@ -408,20 +408,24 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
   }),
 };
 
-export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "search", "compare", "cart", "account"] as const;
+/**
+ * The bottom bar's shortcuts. The header always carries the cart and the
+ * search on phones, so the bar never repeats them: no Cart and no Search tab.
+ */
+export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "compare", "account"] as const;
 
 export const STOREFRONT_MOBILE_NAV_VARIANTS = {
   "accordion-drawer": variant({ renders: "drawer" }),
   // One level at a time.
   "drill-in-drawer": variant({ renders: "drawer" }),
-  // 56-61px, 4-5 items; cart and account move from the header to the tabs.
+  // 56-61px, 3-5 items; the account moves from the header to the tabs. The cart and the search stay in the header.
   "bottom-tabs": variant({
     settings: {
-      tabs: z.array(z.enum(STOREFRONT_MOBILE_TABS)).min(4).max(5)
+      tabs: z.array(z.enum(STOREFRONT_MOBILE_TABS)).min(3).max(5)
         .refine((tabs) => new Set(tabs).size === tabs.length, "Each tab appears once."),
       drawer: z.enum(["accordion", "drill-in"]),
     },
-    defaults: { tabs: ["home", "categories", "search", "cart", "account"], drawer: "accordion" },
+    defaults: { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" },
     renders: "tabs",
   }),
 };
@@ -827,33 +831,37 @@ const footerContent = {
 };
 const NO_FOOTER_CONTENT = { tagline: "", about: "", copyright: "" };
 
+/** The surface a footer sits on: the page, the muted surface, the header colours or the page's ink. Each is an AA pair. */
+export const STOREFRONT_FOOTER_TONES = ["page", "muted", "header", "ink"] as const;
+export type StorefrontFooterTone = (typeof STOREFRONT_FOOTER_TONES)[number];
+const footerTone = { tone: z.enum(STOREFRONT_FOOTER_TONES) };
+
 export const STOREFRONT_FOOTER_VARIANTS = {
-  // Dawn: quick links, info, email signup, payment icons.
-  "minimal-columns": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "columns" }),
-  // Star Tech: the header's dark colour, a large phone-number card.
-  "support-dark": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "contact" }),
-  // Apple Gadgets: branches and policy columns.
-  "brand-black": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "contact" }),
-  // Fabrilife: policy links, newsletter, hotline, app badges.
-  "newsletter-grey": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, contrastPairs: [["foreground", "muted"]], renders: "compact" }),
-  // Daraz/Amazon: a curated directory of categories (about 60 links).
-  // `style: bands` is Amazon's: "Back to top", a narrow centred directory with
-  // the store's identity, and a deeper band for the bottom row, all in the
-  // header's tone (its AA pair is in the base set; the deeper and raised
-  // bands are derived from it with the same or better contrast, tokens.ts).
+  // The logo, words and contact details, then one group of links per menu
+  // (columns on computers, accordions on phones).
+  columns: variant({
+    settings: { ...footerTone, ...footerContent },
+    defaults: { tone: "page", ...NO_FOOTER_CONTENT },
+    contrastPairs: [["foreground", "muted"]],
+    renders: "columns",
+  }),
+  // One centred stack: the logo, the newsletter signup, grouped links, the hotline.
+  "centered-compact": variant({
+    settings: { ...footerTone, ...footerContent },
+    defaults: { tone: "muted", ...NO_FOOTER_CONTENT },
+    contrastPairs: [["foreground", "muted"]],
+    renders: "compact",
+  }),
+  // A curated directory of categories (about 60 links). `style: bands` is a
+  // "Back to top" band, a narrow centred directory with the store's identity
+  // and a deeper band for the bottom row, all in the header's tone (its AA
+  // pair is in the base set; the deeper and raised bands are derived from it
+  // with the same or better contrast, tokens.ts).
   directory: variant({
     settings: { style: z.enum(["columns", "bands"]), ...footerContent },
     defaults: { style: "columns", ...NO_FOOTER_CONTENT },
     requires: [atLeast("topCategoryCount", 8)],
-    fallback: "minimal-columns",
-    renders: "columns",
-  }),
-  // Game Ghor: three columns of small product lists.
-  "product-widgets": variant({
-    settings: footerContent,
-    defaults: NO_FOOTER_CONTENT,
-    requires: [atLeast("productCount", 6)],
-    fallback: "minimal-columns",
+    fallback: "columns",
     renders: "columns",
   }),
 };

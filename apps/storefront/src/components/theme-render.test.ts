@@ -671,7 +671,7 @@ describe("storefront theme render matrix", () => {
     expect(resolved.blocks.header).toMatchObject({ variant: "search-first", settings: { search: "scoped", cartTotal: true } });
     expect(resolved.blocks.desktopNav).toMatchObject({ variant: "mega-panel" });
     expect(resolved.blocks.mobileNav.variant).toBe("accordion-drawer");
-    expect(["product-widgets", "minimal-columns"]).toContain(resolved.blocks.footer.variant);
+    expect(resolved.blocks.footer.variant).toBe("columns");
   });
 
   it("renders the default search-first header with its scoped search, and the other two layouts", async () => {
@@ -787,15 +787,13 @@ function assertFooter(page: Document, variant: string, options: { business: bool
   expect(headings).not.toContain("Need help ordering?");
   const tone = footer.getAttribute("data-footer-tone");
   const toneByVariant: Record<string, string | null> = {
-    "support-dark": "header",
-    "brand-black": "ink",
-    "newsletter-grey": "muted",
+    "centered-compact": "muted",
   };
   // Amazon's banded directory (`style: bands`) wears the header's tone.
   const banded = footer.hasAttribute("data-footer-marketplace");
   expect(tone).toBe(banded ? "header" : toneByVariant[variant] ?? null);
 
-  if (variant === "newsletter-grey") {
+  if (variant === "centered-compact") {
     // Every link, grouped under its heading; the policies are a group of it, not below.
     const band = footer.querySelector('nav[aria-label="Footer"]')!;
     const links = Array.from(band.querySelectorAll("a"));
@@ -807,7 +805,7 @@ function assertFooter(page: Document, variant: string, options: { business: bool
     // The identity column is titled with the store (or "Contact us"), never a second "Customer care".
     expect(footer.querySelector("#footer-care-title")!.textContent!.trim()).not.toBe("Customer care");
     expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
-  } else if (variant === "product-widgets" || variant === "minimal-columns") {
+  } else if (variant === "columns") {
     // Link groups: columns on computers, accordions on phones; open in the markup.
     const menus = Array.from(footer.querySelectorAll("details.footer-menu"));
     expect(menus).toHaveLength(FOOTER_MENUS.length);
@@ -816,7 +814,6 @@ function assertFooter(page: Document, variant: string, options: { business: bool
   } else {
     expect(headings).toEqual(expect.arrayContaining(FOOTER_MENUS.map((menu) => menu.title)));
   }
-  if (variant === "brand-black") expect(headings).toContain("Policies");
 
   if (!options.business) {
     expect(tel).toHaveLength(0);
@@ -830,10 +827,9 @@ function assertFooter(page: Document, variant: string, options: { business: bool
     return;
   }
   expect(tel.length).toBeGreaterThan(0);
-  const columns = variant === "minimal-columns" || variant === "product-widgets";
-  expect(whatsapp.length).toBe(["support-dark", "newsletter-grey", "directory"].includes(variant) ? 1 : 0);
-  expect(Boolean(footer.querySelector('a[href^="mailto:"]'))).toBe(!columns && variant !== "newsletter-grey");
-  expect(Boolean(footer.querySelector("address"))).toBe(variant === "support-dark" || variant === "brand-black");
+  expect(whatsapp.length).toBe(1);
+  expect(Boolean(footer.querySelector('a[href^="mailto:"]'))).toBe(variant !== "centered-compact");
+  expect(Boolean(footer.querySelector("address"))).toBe(variant === "columns");
 }
 
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
@@ -1259,8 +1255,10 @@ describe("navigation", () => {
       expect(tabs.querySelector('a[href="/"]')!.hasAttribute("aria-current")).toBe(false);
       const drop = header.getAttribute("data-phone-drop") ?? "";
       expect(drop.includes("account")).toBe(chosen.includes("account"));
-      expect(drop.includes("cart")).toBe(chosen.includes("cart"));
-      if (chosen.includes("cart")) expect(tabs.querySelector("[data-cart-open] #mobile-cart-count")).not.toBeNull();
+      // One rule: the cart and the search stay in the header, so the bar repeats neither.
+      expect(drop.includes("cart")).toBe(false);
+      expect(tabs.querySelector("[data-cart-open], [data-search-open]")).toBeNull();
+      expect(header.querySelector("#cart-button")).not.toBeNull();
     } else {
       expect(page.querySelector("#mobile-cart-count")).toBeNull();
       expect(header.hasAttribute("data-phone-drop")).toBe(false);
@@ -1268,13 +1266,13 @@ describe("navigation", () => {
   });
 
   it("shows the Compare tab the merchant chose, linking to the comparison", async () => {
-    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" });
+    const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "account"], drawer: "accordion" });
     const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: HEADERS[2]! });
     const page = await renderNavigationPage(theme);
     expect(page.querySelector("#mobile-tab-bar a[href='/compare'][data-compare-tab]")).not.toBeNull();
   });
 
-  it("keeps Cart in the spec phone header unless the merchant puts it in the tabs", async () => {
+  it("keeps the cart and the search in the phone header, whatever the tabs", async () => {
     const theme = specHeaderTheme();
     const pageFor = async () => parse(await render("/src/layouts/Layout.astro", theme, {
       title: "Home", layoutData: layoutData({ business: true }),
@@ -1287,10 +1285,11 @@ describe("navigation", () => {
 
     const mobileNav = theme.blocks.mobileNav;
     if (mobileNav.variant !== "bottom-tabs") throw new Error("The spec catalogue uses bottom tabs.");
-    mobileNav.settings.tabs = ["home", "categories", "compare", "cart", "account"];
+    mobileNav.settings.tabs = ["home", "categories", "compare", "account"];
     const merchantPage = await pageFor();
-    expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("cart account");
-    expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open]")).not.toBeNull();
+    expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("account");
+    expect(merchantPage.querySelector("#main-header #cart-button")).not.toBeNull();
+    expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open], #mobile-tab-bar [data-search-open]")).toBeNull();
   });
 
   it("gives search-first a sticky phone search row and the other layouts a search icon, on every page", async () => {
@@ -1552,11 +1551,11 @@ describe("theme brand and words", () => {
     expect(utility.querySelector('a[href^="tel:"]')).not.toBeNull();
   });
 
-  it("puts the newsletter signup in the newsletter-grey footer, once per page, in the store's language", async () => {
+  it("puts the newsletter signup in the centered-compact footer, once per page, in the store's language", async () => {
     // A home page with no newsletter section (the mall's) and one that ends with it (the boutique's).
     const footerForm = async (home: "mall" | "boutique", url: string, languageCode = "en") => {
       const theme = storefrontTemplateTheme(home === "mall" ? "department-mall" : "boutique");
-      theme.blocks.footer = storefrontBlockDefault("footer", "newsletter-grey") as never;
+      theme.blocks.footer = storefrontBlockDefault("footer", "centered-compact") as never;
       const page = parse(await render(
         "/src/layouts/Layout.astro",
         withStoreContent(theme),
@@ -1583,8 +1582,8 @@ describe("theme brand and words", () => {
   it("writes the footer block's words, its about text as escaped paragraphs and the © name", async () => {
     const theme = withStoreContent(storefrontTemplateTheme("boutique"));
     theme.blocks.footer = {
-      variant: "minimal-columns",
-      settings: { tagline: "Handmade in Bangladesh", about: "Woven in Tangail.\n\nEvery saree takes <b>two weeks</b>.", copyright: "" },
+      variant: "columns",
+      settings: { tone: "page", tagline: "Handmade in Bangladesh", about: "Woven in Tangail.\n\nEvery saree takes <b>two weeks</b>.", copyright: "" },
     };
     const year = new Date().getFullYear();
     const page = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
@@ -1600,7 +1599,7 @@ describe("theme brand and words", () => {
     expect(copyright()).toBe(`© ${year} Nakshi Ghor. All rights reserved.`);
 
     // The footer's own name after ©, in every variant; without words, no about block.
-    for (const variant of ["support-dark", "brand-black", "newsletter-grey", "directory"]) {
+    for (const variant of ["columns", "centered-compact", "directory"]) {
       const named = structuredClone(theme);
       const footer = storefrontBlockDefault("footer", variant);
       named.blocks.footer = { ...footer, settings: { ...footer.settings, copyright: "Nakshi Ghor Limited" } } as never;
