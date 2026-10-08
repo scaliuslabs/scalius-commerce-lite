@@ -4,9 +4,6 @@ import { defineMessages } from "./index";
 export const digitalMessages = defineMessages({
   en: {
     // Product editor
-    title: "Digital delivery",
-    description: "Buyers get these once they pay, on their order page and by message.",
-    saveFirst: "Save the product to add files or licence keys.",
     files: "Files",
     filesEmpty: "No files yet. Add the file buyers download.",
     addFile: "Add file",
@@ -57,8 +54,6 @@ export const digitalMessages = defineMessages({
     fileUploaded: "File uploaded",
     tooBig: "Files can be at most 2 GB.",
     loadFailed: "Couldn't load digital items.",
-    notDigital: "For digital products: files and licence keys buyers get after they pay.",
-    notDigitalHelp: "Set Shipping to Digital to add files or licence keys.",
 
     // The Inventory card and the variant table: a digital SKU's stock is its keys or files, never typed in.
     stockKeys: "{count} licence keys available",
@@ -131,9 +126,6 @@ export const digitalMessages = defineMessages({
     accessEnded: "Access ended",
   },
   bn: {
-    title: "ডিজিটাল ডেলিভারি",
-    description: "পেমেন্ট করার পর ক্রেতা এগুলো অর্ডার পেজে ও মেসেজে পান।",
-    saveFirst: "ফাইল বা লাইসেন্স কী যোগ করতে আগে প্রোডাক্টটি সেভ করুন।",
     files: "ফাইল",
     filesEmpty: "এখনো কোনো ফাইল নেই। ক্রেতা যে ফাইল ডাউনলোড করবেন সেটি যোগ করুন।",
     addFile: "ফাইল যোগ করুন",
@@ -184,8 +176,6 @@ export const digitalMessages = defineMessages({
     fileUploaded: "ফাইল আপলোড হয়েছে",
     tooBig: "ফাইল সর্বোচ্চ ২ GB হতে পারে।",
     loadFailed: "ডিজিটাল আইটেম লোড করা যায়নি।",
-    notDigital: "ডিজিটাল প্রোডাক্টের জন্য: পেমেন্টের পর ক্রেতা যে ফাইল ও লাইসেন্স কী পান।",
-    notDigitalHelp: "ফাইল বা লাইসেন্স কী যোগ করতে ডেলিভারিতে ডিজিটাল বাছাই করুন।",
 
     stockKeys: "{count}টি লাইসেন্স কী আছে",
     stockNoKeys: "এখনো কোনো লাইসেন্স কী নেই",

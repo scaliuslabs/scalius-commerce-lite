@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { digitalMessages } from "~/i18n/digital";
+import { digitalCardMessages } from "~/i18n/digital-card";
 import type { ProductFormValues } from "./types";
 
 const sdk = vi.hoisted(() => ({ createAsset: vi.fn(), importKeys: vi.fn() }));
@@ -26,6 +27,7 @@ import { digitalAssetsKey } from "./digital-stock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = digitalMessages.en;
+const card = digitalCardMessages.en;
 
 function setText(textarea: HTMLTextAreaElement, value: string) {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, value);
@@ -54,8 +56,8 @@ describe("digital delivery", () => {
     }
     await act(async () => root.render(<Harness values={{ fulfillmentKind: "physical", isGiftCard: false }} />));
     // Always findable by title, closed, saying what it is for; nothing digital is loaded.
-    expect(host.textContent).toContain(en.title);
-    expect(host.textContent).toContain(en.notDigital);
+    expect(host.textContent).toContain(card.title);
+    expect(host.textContent).toContain(card.notDigital);
     expect(host.querySelector('button[aria-expanded="false"]')).not.toBeNull();
     expect(sdk.createAsset).not.toHaveBeenCalled();
     await act(async () => root.render(<Harness key="gift" values={{ fulfillmentKind: "digital", isGiftCard: true }} />));

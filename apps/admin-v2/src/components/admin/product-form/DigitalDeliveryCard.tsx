@@ -2,7 +2,7 @@ import React from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
-import { digitalMessages } from "~/i18n/digital";
+import { digitalCardMessages } from "~/i18n/digital-card";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { DIGITAL_CARD_ID } from "./digital-stock";
 import type { ProductFormValues } from "./types";
@@ -23,7 +23,7 @@ export function DigitalDeliveryCard({ form, productId, readOnly }: {
   productId: string | undefined;
   readOnly: boolean;
 }) {
-  const t = useMessages(digitalMessages);
+  const t = useMessages(digitalCardMessages);
   const [mode, isGiftCard] = useWatch({ control: form.control, name: ["fulfillmentKind", "isGiftCard"] });
   if (isGiftCard) return null;
   const digital = mode === "digital" || mode === "mixed";
