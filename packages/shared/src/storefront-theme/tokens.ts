@@ -83,25 +83,66 @@ export interface StorefrontDensitySpec extends StorefrontGridSpec {
   section: { phone: string; desktop: string };
 }
 
+// ─── Scales ("Scalius Base") ──────────────────────────────────────────────
+// One system for every block: these scales are the only numbers components
+// use (as Tailwind's own 4px steps and text sizes, or the CSS variables
+// below). No component carries its own px radius, type size or colour.
+
+/** The spacing scale in px: 4px steps. Tailwind's spacing unit is the same 4px. */
+export const STOREFRONT_SPACE_SCALE = [4, 8, 12, 16, 24, 32, 48, 64, 96] as const;
+
 /**
- * Measured steps (SYNTHESIS.md section 3). Card minimums are grid minimums,
- * not the measured card widths: an auto-fill grid stretches cards above the
- * minimum, and two cards must fit a 360px phone. Body text never drops
- * below 14px on phones (Bangla legibility), so `dense` shares compact's
- * type scale and differs in gaps, card minimums and control height.
+ * One modular type scale (about 1.2) in px, named like Tailwind's text
+ * sizes. Body text is 16 (phones and Bangla never below 14). Product cards:
+ * title 14/500 in two lines, price 16/600. Section titles 24, then 30 on
+ * computers. Uppercase only for labels of three words or fewer.
+ */
+export const STOREFRONT_TYPE_STEPS = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, "2xl": 24, "3xl": 30, "4xl": 36, "5xl": 48 } as const;
+
+/** Page gutters in px: phone (below 640), tablet (640-1023) and computer. Header, sections, listing, product page and footer share them. */
+export const STOREFRONT_GUTTERS = { phone: 16, tablet: 24, desktop: 32 } as const;
+
+/** Inner padding of a card-like surface in px, phone and from 640 wide. */
+export const STOREFRONT_SURFACE_PADDING = { phone: 12, desktop: 16 } as const;
+
+/** Motion in ms: hovers and presses (fast), panels and fades (base). Reduced motion turns both off. */
+export const STOREFRONT_MOTION_MS = { fast: 150, base: 250 } as const;
+
+/**
+ * The "in stock" dot. Decorative (the words always say it), so it is one
+ * constant like the rating amber, never a merchant colour.
+ */
+export const STOREFRONT_SUCCESS_COLOR = "#15803d";
+
+/**
+ * Elevation, one rule for every card-like surface (product cards, facet
+ * groups, buy-box panels, tiles): flat has no edge, hairline a 1px border,
+ * raised a soft shadow. Never a border and a shadow together.
+ */
+export const STOREFRONT_ELEVATION = {
+  flat: { border: "0 solid transparent", shadow: "none" },
+  hairline: { border: "1px solid var(--border)", shadow: "none" },
+  raised: {
+    border: "0 solid transparent",
+    shadow: "0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent), 0 8px 24px -12px color-mix(in oklab, var(--foreground) 18%, transparent)",
+  },
+} as const satisfies Record<StorefrontThemeSurface, { border: string; shadow: string }>;
+
+/**
+ * Density steps, on the spacing scale. Card minimums are grid minimums, not
+ * card widths: an auto-fill grid stretches cards above the minimum, and two
+ * cards must fit a 360px phone. Sections are 32px apart on phones; density
+ * picks 48, 64 or 96 on computers. Body text never drops below 14px on
+ * phones (Bangla legibility), so `dense` shares compact's type scale.
  */
 export const STOREFRONT_DENSITY_SPECS = {
-  // Daraz, Star Tech: hairline gaps, many columns.
   dense: {
     cardMin: { phone: "9.25rem", tablet: "10.5rem", desktop: "11.75rem" },
-    // 12px on computers: the top of the measured 0-12px, and the smallest
-    // gap that keeps columns from dropping when the page gutter grows at 1024px.
-    gap: { phone: "0.0625rem", desktop: "0.75rem" },
+    gap: { phone: "0.5rem", desktop: "0.75rem" },
     scale: "0.92",
     control: "2.25rem",
-    section: { phone: "1.5rem", desktop: "2rem" },
+    section: { phone: "2rem", desktop: "3rem" },
   },
-  // Game Ghor, Fabrilife, Amazon.
   compact: {
     cardMin: { phone: "9.25rem", tablet: "11rem", desktop: "12.5rem" },
     gap: { phone: "0.5rem", desktop: "1rem" },
@@ -109,21 +150,19 @@ export const STOREFRONT_DENSITY_SPECS = {
     control: "2.5rem",
     section: { phone: "2rem", desktop: "3rem" },
   },
-  // Apple Gadgets, Target.
   comfortable: {
     cardMin: { phone: "9.75rem", tablet: "13rem", desktop: "15rem" },
     gap: { phone: "0.75rem", desktop: "1.5rem" },
     scale: "1",
     control: "2.75rem",
-    section: { phone: "2.5rem", desktop: "4rem" },
+    section: { phone: "2rem", desktop: "4rem" },
   },
-  // Dawn, Aarong: small gaps between cards, large space between sections.
   airy: {
-    cardMin: { phone: "9.75rem", tablet: "13rem", desktop: "16.25rem" },
-    gap: { phone: "0.25rem", desktop: "0.5rem" },
+    cardMin: { phone: "9.75rem", tablet: "13rem", desktop: "16rem" },
+    gap: { phone: "0.75rem", desktop: "1.5rem" },
     scale: "1",
-    control: "2.9375rem",
-    section: { phone: "4rem", desktop: "6rem" },
+    control: "3rem",
+    section: { phone: "2rem", desktop: "6rem" },
   },
 } as const satisfies Record<StorefrontDensity, StorefrontDensitySpec>;
 
@@ -143,18 +182,6 @@ const CONTAINER_TOKENS = {
   full: "160rem",
 } as const satisfies Record<StorefrontContainer, string>;
 const IMAGE_RATIO_TOKENS = { square: "1 / 1", portrait: "3 / 4", landscape: "4 / 3" } as const satisfies Record<StorefrontImageRatio, string>;
-/** The radius tokens in CSS px (at a 16px root), for looks that need a number. */
-export const STOREFRONT_RADIUS_PX = { square: 0, subtle: 6.4, rounded: 12, soft: 20 } as const satisfies Record<StorefrontThemeRadius, number>;
-/** The photo ratio tokens as width / height. */
-export const STOREFRONT_IMAGE_RATIO_VALUES = { square: 1, portrait: 0.75, landscape: 4 / 3 } as const satisfies Record<StorefrontImageRatio, number>;
-
-/** The ratio token nearest a width / height (portrait below 0.9, landscape above 1.15). */
-export function storefrontNearestImageRatio(ratio: number): StorefrontImageRatio {
-  if (ratio < 0.9) return "portrait";
-  if (ratio > 1.15) return "landscape";
-  return "square";
-}
-
 // ─── Fonts ────────────────────────────────────────────────────────────────
 
 /**
@@ -271,17 +298,6 @@ export const STOREFRONT_THEME_PALETTES = {
     accent: "#fff1e6", "accent-foreground": "#7a2e0e",
     destructive: "#b12704", "destructive-foreground": "#ffffff",
     border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
-  }),
-  // Marketplace purchase hierarchy with its own ink, terracotta and warm
-  // gold defaults. Merchants can still edit every colour in the dashboard.
-  marketplaceAmazon: palette({
-    background: "#ffffff", foreground: "#1c2530", card: "#ffffff", "card-foreground": "#1c2530",
-    primary: "#b84724", "primary-foreground": "#ffffff",
-    secondary: "#f2f4f5", "secondary-foreground": "#0f1111",
-    muted: "#f2f4f5", "muted-foreground": "#565959",
-    accent: "#f1c65a", "accent-foreground": "#1c2530",
-    destructive: "#b12704", "destructive-foreground": "#ffffff",
-    border: "#e3e6e6", input: "#c7cccc", ring: "#b84724",
   }),
   // COS/Aesop/Ssense: linen page, espresso ink, no colour at all; hierarchy
   // comes from type and space.
@@ -413,7 +429,20 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-header-foreground": tokens.colors[header.foreground],
     "theme-header-deep": bands.deep,
     "theme-header-raised": bands.raised,
+    // Colour roles beyond the palette: sale is the error colour (discounted
+    // prices and the sale badge only), rating and success are constants.
+    "theme-sale": tokens.colors.destructive,
     "theme-rating": STOREFRONT_RATING_COLOR,
+    "theme-success": STOREFRONT_SUCCESS_COLOR,
+    "theme-surface-border": STOREFRONT_ELEVATION[tokens.surface].border,
+    "theme-surface-shadow": STOREFRONT_ELEVATION[tokens.surface].shadow,
+    "theme-surface-pad-phone": `${STOREFRONT_SURFACE_PADDING.phone / 16}rem`,
+    "theme-surface-pad-desktop": `${STOREFRONT_SURFACE_PADDING.desktop / 16}rem`,
     "theme-container-width": CONTAINER_TOKENS[tokens.container],
+    "theme-gutter-phone": `${STOREFRONT_GUTTERS.phone / 16}rem`,
+    "theme-gutter-tablet": `${STOREFRONT_GUTTERS.tablet / 16}rem`,
+    "theme-gutter-desktop": `${STOREFRONT_GUTTERS.desktop / 16}rem`,
+    "theme-duration-fast": `${STOREFRONT_MOTION_MS.fast}ms`,
+    "theme-duration-base": `${STOREFRONT_MOTION_MS.base}ms`,
   };
 }
