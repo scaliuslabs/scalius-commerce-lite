@@ -94,7 +94,7 @@ interface Probe {
 }
 
 /** The page's wiring as the Add and Edit routes do it: the editor reports its draft up and the page stores it. */
-function Page({ edit, probe }: { edit: boolean; probe: Probe }) {
+function Page({ edit, probe, saved = savedValues }: { edit: boolean; probe: Probe; saved?: typeof savedValues }) {
   const costs = useSkuCostDraft();
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
   const [createComposition, setCreateComposition] = useState<ProductCreateComposition | null>(null);
@@ -104,7 +104,7 @@ function Page({ edit, probe }: { edit: boolean; probe: Probe }) {
     <SkuCostProvider store={costs}>
       <ProductForm
         categories={[]}
-        defaultValues={edit ? savedValues : newValues}
+        defaultValues={edit ? saved : newValues}
         isEdit={edit}
         aggregateRevision={edit ? 1 : undefined}
         matrixRef={matrixRef}
@@ -147,11 +147,11 @@ function Reader({ probe }: { probe: Probe }) {
   return null;
 }
 
-async function mount(edit: boolean): Promise<Probe> {
+async function mount(edit: boolean, saved?: typeof savedValues): Promise<Probe> {
   const probe: Probe = { renders: 0, dirty: false, form: null };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
-    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin><Page edit={edit} probe={probe} /></PermissionProvider></QueryClientProvider></StrictMode>);
+    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin><Page edit={edit} probe={probe} saved={saved} /></PermissionProvider></QueryClientProvider></StrictMode>);
   });
   await new Promise((resolve) => setTimeout(resolve, 300));
   await act(async () => {});
@@ -182,6 +182,19 @@ describe("a product page nobody has edited", () => {
     expect(container.textContent).toContain("৳100");
     expect(changedFromLoad(probe)).toEqual([]);
     expect(probe.dirty).toBe(false);
+  });
+});
+
+describe("an empty description", () => {
+  it("is one value: a saved empty paragraph or two is no change, and clearing back to empty is none either", async () => {
+    for (const stored of ["<p></p>", "<p></p><p></p>"]) {
+      const probe = await mount(true, { ...savedValues, description: stored } as never);
+      expect(probe.form!.getValues("description")).toBeNull();
+      expect(changedFromLoad(probe)).toEqual([]);
+      expect(probe.dirty).toBe(false);
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
   });
 });
 

@@ -88,6 +88,7 @@ import type {
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -248,6 +249,8 @@ function ProductEditor({
       brandId: null,
       customizationSchema: [],
       ...defaultValues,
+      // Empty is one value: a saved "<p></p>" is not a change from nothing.
+      description: richTextOrNull(defaultValues?.description),
     },
   });
 

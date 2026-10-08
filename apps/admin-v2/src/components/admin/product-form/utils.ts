@@ -3,6 +3,7 @@ import type { CreateProductInput } from "@/lib/api-query-options/products";
 import { customizationInput } from "./buyer-inputs";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 /** What the merchant calls each product field (save banner, conflict dialog). */
 const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
@@ -89,7 +90,7 @@ export function formatFormValuesForSubmission(
     ...(sendWarranty ? { warrantyPolicyId: values.warrantyPolicyId } : {}),
     ...(sendBrand ? { brandId: values.brandId } : {}),
     name: values.name,
-    description: values.description,
+    description: richTextOrNull(values.description),
     price: values.price ?? 0,
     categoryId: values.categoryId || null,
     isActive: values.isActive,

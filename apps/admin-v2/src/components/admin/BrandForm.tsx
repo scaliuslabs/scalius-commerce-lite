@@ -31,6 +31,7 @@ import { brandMessages } from "~/i18n/brands";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 /** The saved brand as editor values (the logo as the file picker's value). */
 export function brandFormValues(brand: BrandDetail): BrandFormInput {
@@ -39,7 +40,7 @@ export function brandFormValues(brand: BrandDetail): BrandFormInput {
     revision: brand.revision,
     status: brand.status,
     name: brand.name,
-    description: brand.description,
+    description: richTextOrNull(brand.description),
     slug: brand.slug,
     logo: brand.logo
       ? {
@@ -193,7 +194,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
-                        onChange={field.onChange}
+                        onChange={(html) => field.onChange(richTextOrNull(html))}
                         placeholder={t("descriptionPlaceholder")}
                         ariaLabel={t("description")}
                         compact

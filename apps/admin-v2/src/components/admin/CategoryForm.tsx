@@ -41,6 +41,7 @@ import { categoryFormMessages } from "~/i18n/category-form";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -101,6 +102,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       parentId: null,
       listingTemplate: null,
       ...defaultValues,
+      description: richTextOrNull(defaultValues?.description),
+      content: richTextOrNull(defaultValues?.content),
     },
   });
 
@@ -219,7 +222,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
-                        onChange={field.onChange}
+                        onChange={(html) => field.onChange(richTextOrNull(html))}
                         placeholder={t("descriptionPlaceholder")}
                         ariaLabel={t("description")}
                         compact
@@ -247,7 +250,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
-                        onChange={field.onChange}
+                        onChange={(html) => field.onChange(richTextOrNull(html))}
                         placeholder={t("belowProductsPlaceholder")}
                         ariaLabel={t("belowProducts")}
                         compact

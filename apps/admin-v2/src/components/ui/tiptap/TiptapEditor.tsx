@@ -10,6 +10,7 @@ import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
+import { richTextOrEmpty } from "~/lib/rich-text-value";
 import { reconcileExternalTiptapContent } from "./tiptap-content-sync";
 import {
   isolateRichTextFullscreenBackground,
@@ -45,6 +46,8 @@ export function TiptapEditor({
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const lastExternalContentRef = useRef(content);
   const pendingLocalContentsRef = useRef<string[]>([]);
+  /** What the form last heard from this editor (or was given), so empty-to-empty is silent. */
+  const lastEmittedRef = useRef(richTextOrEmpty(content));
   const editorViewportHeight = compact ? "200px" : "300px";
   const hasInitialContent = hasRenderableHtmlContent(content);
   const sanitizedInitialContent = useMemo(() => sanitizeHtml(content), [content]);
@@ -152,7 +155,11 @@ export function TiptapEditor({
     extensions,
     content,
     onUpdate: ({ editor }) => {
-      const nextContent = editor.getHTML();
+      // An emptied editor is "" whatever its markup (<p></p>, two empty paragraphs), and
+      // saying "still empty" again is no change.
+      const nextContent = richTextOrEmpty(editor.getHTML());
+      if (nextContent === lastEmittedRef.current) return;
+      lastEmittedRef.current = nextContent;
       const pendingLocalContents = pendingLocalContentsRef.current;
       if (pendingLocalContents.at(-1) !== nextContent) {
         pendingLocalContents.push(nextContent);
@@ -186,6 +193,7 @@ export function TiptapEditor({
       editorInstance.commands.setContent(content, { emitUpdate: false });
     }
     lastExternalContentRef.current = content;
+    lastEmittedRef.current = richTextOrEmpty(content);
   }, [content, editorInstance]);
 
   useEffect(() => {

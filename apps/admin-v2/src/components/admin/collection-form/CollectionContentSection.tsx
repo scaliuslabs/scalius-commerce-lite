@@ -8,6 +8,7 @@ import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEdito
 import { useMessages } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
 import type { CollectionFormInput, CollectionFormValues } from "./types";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 interface CollectionContentSectionProps {
   form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
@@ -63,7 +64,7 @@ export function CollectionContentSection({ form, readOnly = false }: CollectionC
                       <FormControl>
                         <DeferredTiptapEditor
                           content={field.value || ""}
-                          onChange={field.onChange}
+                          onChange={(html) => field.onChange(richTextOrNull(html))}
                           placeholder={editor.placeholder}
                           ariaLabel={`${t("description")}: ${editor.tab}`}
                           compact
