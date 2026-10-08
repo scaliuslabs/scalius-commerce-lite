@@ -21,7 +21,7 @@ export function useSegmentLabel(names: Map<string, string>): (ids: string[]) => 
     const labels = ids.map((id) => names.get(id) ?? t("segmentDeleted"));
     return labels.length <= 2
       ? labels.join(", ")
-      : t("namesMore", { names: labels.slice(0, 2).join(", "), count: formatNumber(labels.length - 2) });
+      : t("namesMore", { names: labels.slice(0, 2).join(", "), count: labels.length - 2 });
   };
 }
 

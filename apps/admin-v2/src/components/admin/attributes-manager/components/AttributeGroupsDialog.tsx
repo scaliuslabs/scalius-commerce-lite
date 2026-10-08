@@ -19,7 +19,7 @@ import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { attributeGroupsQueryOptions, type AttributeGroupDto } from "~/lib/api-query-options/attributes";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
 
 /**
@@ -110,7 +110,7 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
                     <>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-body font-medium">{group.name}</p>
-                        <p className="text-body text-muted-foreground">{t("attributesInGroup", { count: formatNumber(group.attributeCount) })}</p>
+                        <p className="text-body text-muted-foreground">{t("attributesInGroup", { count: group.attributeCount })}</p>
                       </div>
                       {canEdit ? (
                         <>

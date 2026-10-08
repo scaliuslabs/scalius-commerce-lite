@@ -62,7 +62,7 @@ export function accountGiftCardStatus(card: Pick<AccountGiftCard, "status" | "ex
 }
 
 export function giftCardStatusTone(status: GiftCardBalanceStatus): string {
-  return status === "active" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground";
+  return status === "active" ? "bg-primary/10 text-primary-ink" : "bg-muted text-muted-foreground";
 }
 
 /** "•••• 7K2Q" */

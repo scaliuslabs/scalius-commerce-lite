@@ -213,7 +213,7 @@ export function PriceGridSheet({ open, onOpenChange, list, onSaved }: {
           <SheetFooter className="items-center">
             {dirty ? (
               <p className={tooMany ? "me-auto text-body text-destructive" : "me-auto text-body text-muted-foreground"}>
-                {tooMany ? t("tooManyChanges", { count: WRITE_MAX }) : t("changes", { count: formatNumber(changeCount) })}
+                {tooMany ? t("tooManyChanges", { count: WRITE_MAX }) : t("changes", { count: changeCount })}
               </p>
             ) : null}
             <Button type="button" variant="outline" disabled={save.isPending} onClick={requestClose}>{dirty ? t("discard") : t("close")}</Button>

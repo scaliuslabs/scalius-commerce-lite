@@ -842,7 +842,7 @@ describe("filter styles (fidelity slice 3)", () => {
     const document = await renderListing(theme, { ...plain(), facets: [FOURTEEN, ...FACETS.slice(0, 1)] }, TREE_STORE_SHAPE);
     const column = document.querySelector("#filter-section")!;
     expect(column.getAttribute("data-placement")).toBe("sidebar");
-    expect(column.getAttribute("style")).toBe("--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px");
+    expect(column.getAttribute("style")).toBe("--catalog-filter-column:262px;--catalog-filter-row:24px;--catalog-filter-label:14px");
     const form = column.querySelector("form")!;
     expect(form.getAttribute("data-filter-style")).toBe("sidebar-dense");
     // No in-listing search field in the dense column (the header searches).

@@ -45,6 +45,8 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
         const title = heading.trim();
         const body = text.trim();
         const Frame = cta ? "a" : "div";
+        // A linked banner is named by its own words (heading, text, button),
+        // so the name always holds the visible text (WCAG 2.5.3).
         const headingId = `home-${section.id}-title`;
         const external = cta?.href.startsWith("https://");
         return (
@@ -57,8 +59,6 @@ const columns = { full: "", "two-up": "sm:grid-cols-2", "four-up": "grid-cols-2 
               "group relative block overflow-hidden rounded-xl",
               photo ? `${RATIO[layout]} bg-muted` : "flex min-h-40 flex-col justify-center bg-secondary p-6 text-secondary-foreground md:min-h-56 md:p-10",
             ]}
-            aria-labelledby={title ? headingId : undefined}
-            aria-label={!title && cta ? cta.label : undefined}
             data-home-section={grouped ? "banner" : undefined}
             data-section-id={grouped ? section.id : undefined}
             data-theme-section-id={grouped && previewMarks ? section.id : undefined}

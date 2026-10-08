@@ -4,7 +4,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { toast } from "~/lib/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
-import { formatFormValuesForSubmission, productSubmitChanges } from "../utils";
+import { formatFormValuesForSubmission, problemLine, productSubmitChanges } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import {
   postApiV1AdminProducts,
@@ -216,7 +216,7 @@ export function useProductSubmit({
         const field = path.split(".")[0] as keyof ProductFormValues;
         if (field in FIELD_LABELS) {
           form.setError(field, { type: "server", message });
-          return `${t(FIELD_LABELS[field]!)}: ${message}`;
+          return problemLine(t(FIELD_LABELS[field]!), message);
         }
         return onVariantIssue?.(path, message) ?? message;
       });

@@ -15,7 +15,7 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   discountType: "discount",
   discountPercentage: "discount",
   discountAmount: "discount",
-  compareAtProblem: "compareAtLabel",
+  compareAtProblem: "compareAtName",
   freeDelivery: "freeDelivery",
   metaTitle: "searchListing",
   metaDescription: "searchListing",
@@ -53,6 +53,15 @@ export function productSubmitChanges(dirty: Partial<Record<keyof ProductFormValu
 
 export function productFieldLabel(field: keyof ProductFormValues): string {
   return translate(productMessages, FIELD_LABELS[field] ?? "product");
+}
+
+/**
+ * A banner line for a field's problem: "Title: Use at least 3 characters."
+ * A message that already names the field ("Title can't be blank.") stands
+ * alone instead of repeating the name.
+ */
+export function problemLine(label: string, message: string): string {
+  return message.toLowerCase().startsWith(label.toLowerCase()) ? message : `${label}: ${message}`;
 }
 
 /**

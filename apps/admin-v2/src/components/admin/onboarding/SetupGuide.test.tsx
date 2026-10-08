@@ -59,6 +59,11 @@ describe("setup guide steps", () => {
     expect(withPack.find((step) => step.key === "payments")?.body).toBe("paymentsBodyBd");
   });
 
+  it("never shows a regional step for another country, whatever the data holds", () => {
+    const steps = setupGuideSteps(guide({ countryCode: "US", bangladeshPack: { active: false } }), everything);
+    expect(steps.some((step) => step.key === "pack")).toBe(false);
+  });
+
   it("opens the new-store setup while it still applies, and Settings after", () => {
     expect(setupGuideSteps(guide({ setupNeeded: true }), everything)[0]?.to).toBe("/admin/welcome");
     expect(setupGuideSteps(guide(), everything)[0]?.to).toBe("/admin/settings/store");
@@ -107,6 +112,21 @@ describe("setup guide card", () => {
     const details = container.querySelector("button[aria-controls=setup-step-details]") as HTMLButtonElement;
     act(() => details.click());
     expect(container.querySelector("button[aria-expanded=true][aria-controls^=setup-step]")?.textContent).toContain(t("details"));
+  });
+
+  it("on a phone shows only the next step until asked for the rest", () => {
+    (window as unknown as { happyDOM: { setViewport: (size: { width: number; height: number }) => void } }).happyDOM.setViewport({ width: 390, height: 844 });
+    try {
+      show(guide({ steps: { details: true, product: true } }));
+      expect(container.querySelectorAll("button[aria-controls^=setup-step]")).toHaveLength(1);
+      expect(container.querySelector("button[aria-controls^=setup-step]")?.textContent).toContain(t("theme"));
+      const more = [...container.querySelectorAll("button")].find((button) => button.textContent === t("showAllSteps", { count: 7 }))!;
+      act(() => more.click());
+      expect(container.querySelectorAll("button[aria-controls^=setup-step]")).toHaveLength(7);
+      expect(container.textContent).toContain(t("showFewerSteps"));
+    } finally {
+      (window as unknown as { happyDOM: { setViewport: (size: { width: number; height: number }) => void } }).happyDOM.setViewport({ width: 1024, height: 768 });
+    }
   });
 
   it("says the store is ready when every step is done", () => {

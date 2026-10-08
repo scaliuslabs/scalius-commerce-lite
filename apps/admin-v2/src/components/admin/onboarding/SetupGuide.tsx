@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminDashboardSetupGuideDismiss } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { useMediaQuery } from "~/hooks/use-media-query";
 import { formatNumber, useMessages } from "~/i18n";
 import { setupGuideMessages } from "~/i18n/setup-guide";
 import { apiData, type ApiResult } from "~/lib/api";
@@ -57,7 +58,8 @@ export function setupGuideSteps(guide: SetupGuideData, canOpen: (to: string) => 
       body: countryCode === "BD" ? "paymentsBodyBd" : "paymentsBody",
     },
     { key: "shipping", done: steps.shipping, to: "/admin/settings/shipping", access: "/admin/settings/shipping", body: "shippingBody" },
-    ...(bangladeshPack
+    // Regional steps show for their country only, whatever else the data says.
+    ...(bangladeshPack && countryCode === "BD"
       ? [{ key: "pack" as const, done: bangladeshPack.active, to: "/admin/apps/$pluginId", params: { pluginId: BANGLADESH_PACK_ID }, access: "/admin/apps", body: "packBody" as const }]
       : []),
     { key: "domain", done: steps.domain, to: "/admin/settings/store", access: "/admin/settings/store", body: "domainBody" },
@@ -73,6 +75,9 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
   const done = steps.filter((step) => step.done).length;
   const complete = steps.length > 0 && done === steps.length;
   const [expanded, setExpanded] = useState(true);
+  // On a phone eight steps fill the first screen: show the step to do next, the rest on request.
+  const phone = useMediaQuery("(max-width: 639px)");
+  const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(() => steps.find((step) => !step.done)?.key ?? "");
 
   const dismiss = useMutation({
@@ -84,6 +89,9 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
   });
 
   if (steps.length === 0) return null;
+  const nextIndex = Math.max(0, steps.findIndex((step) => !step.done));
+  const collapsed = phone && !showAll && steps.length > 1;
+  const shown = collapsed ? [steps[nextIndex]!] : steps;
   return (
     <Card>
       <CardHeader className="gap-3 pb-3">
@@ -125,7 +133,7 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
       </CardHeader>
       {expanded ? (
         <ul className="border-t px-4">
-          {steps.map((step) => {
+          {shown.map((step) => {
             const isOpen = open === step.key;
             return (
               <li key={step.key} className="border-b last:border-b-0">
@@ -158,6 +166,13 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
               </li>
             );
           })}
+          {phone && steps.length > 1 ? (
+            <li className="py-2">
+              <Button type="button" variant="ghost" size="sm" aria-expanded={!collapsed} onClick={() => setShowAll((current) => !current)}>
+                {collapsed ? t("showAllSteps", { count: steps.length }) : t("showFewerSteps")}
+              </Button>
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </Card>

@@ -182,6 +182,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   // other request leaves nothing (the gallery is hermetic).
   const currentEntry = new AsyncLocalStorage();
   const apiPrefix = `${origin}${gallery.GALLERY_API_PREFIX}`;
+  const apiRoot = `${origin}/api/v1/`;
   /** The entry a fixture API URL names (`/__gallery/api/<id>/...`), or the Referer's entry. */
   const apiEntry = (url, referer) => {
     const named = decodeURIComponent(url.slice(apiPrefix.length).split("/")[0] ?? "");
@@ -196,6 +197,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       const entry = apiEntry(request.url, null) ?? rendering;
       return entry ? gallery.answerFixtureApi(entry, request) : new Response("{}", { status: 404 });
     }
+    // The layout names the origin as the API (Platform settings take an origin
+    // only): a render's own read of `<origin>/api/v1/...` is its entry's fixture.
+    if (request.url.startsWith(apiRoot) && rendering) {
+      return gallery.answerFixtureApi(rendering, new Request(`${apiPrefix}${encodeURIComponent(rendering.id)}${request.url.slice(origin.length)}`, request));
+    }
     if (rendering) return new Response("{}", { status: 404 });
     return realFetch(input, init);
   };
@@ -209,6 +215,16 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         if (!entry) return sendJson(response, 404, { error: "unknown entry" });
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
         const answered = await gallery.answerFixtureApi(entry, new Request(url.href, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
+        response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        return response.end(Buffer.from(await answered.arrayBuffer()));
+      }
+      if (url.pathname.startsWith("/api/v1/")) {
+        // A browser read of the API the layout names (the origin): the Referer's entry answers.
+        const entry = apiEntry(`${apiPrefix}${REFERER_ENTRY}`, request.headers.referer);
+        if (!entry) return sendJson(response, 404, { error: "unknown entry" });
+        const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
+        const target = `${apiPrefix}${encodeURIComponent(entry.id)}${url.pathname}${url.search}`;
+        const answered = await gallery.answerFixtureApi(entry, new Request(target, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
         response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         return response.end(Buffer.from(await answered.arrayBuffer()));
       }
@@ -242,8 +258,19 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         let html = await rendered.text();
         const resolved = await vite.moduleGraph.getModuleByUrl(plan.page, true);
         const styles = collectStyles(vite, resolved?.id ?? plan.page);
-        const links = styles.map((href) => `<link rel="stylesheet" href="${href}${href.includes("?") ? "&" : "?"}direct">`).join("");
+        // Inline, like the production build: a linked sheet can arrive after the
+        // first paint in the dev server and shift the page (a CLS the shop never has).
+        const sheets = await Promise.all(styles.map(async (href) => {
+          const transformed = await vite.transformRequest(`${href}${href.includes("?") ? "&" : "?"}direct`);
+          return transformed?.code ?? "";
+        }));
+        const links = sheets.map((css) => `<style data-gallery-css>${css.replaceAll("</style", "<\\/style")}</style>`).join("");
         html = html.includes("</head>") ? html.replace("</head>", `${links}</head>`) : `${links}${html}`;
+        // The dev page is large (every component sheet inline, unminified), so the
+        // browser may paint it half parsed: the footer grows as its markup arrives,
+        // a layout shift no shopper sees. Hold the first paint until the whole page
+        // is parsed, as the production page's single small chunk is.
+        html = html.replace("</head>", '<link rel="expect" href="#gallery-page-end" blocking="render"></head>').replace("</body>", '<span id="gallery-page-end" hidden></span></body>');
         response.writeHead(rendered.status === 200 ? 200 : rendered.status, {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",

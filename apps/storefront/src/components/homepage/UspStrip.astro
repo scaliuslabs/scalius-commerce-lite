@@ -104,15 +104,27 @@ const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
     to { transform: translateX(-100%); }
   }
 
-  /* Still under reduced motion: the notices scroll by hand instead. */
+  /* Still under reduced motion: the notices wrap and stay in view (no
+     scroll region to reach by keyboard). */
   @media (prefers-reduced-motion: reduce) {
+    .usp-ticker {
+      height: auto;
+      min-height: 2.5rem;
+      border-radius: 1.25rem;
+    }
+
     .usp-ticker-window {
-      overflow-x: auto;
-      scrollbar-width: none;
+      overflow: visible;
     }
 
     .usp-ticker-track {
       animation: none;
+      flex-shrink: 1;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.125rem 2.5rem;
+      padding-block: 0.5rem;
+      white-space: normal;
     }
 
     .usp-ticker-copy,

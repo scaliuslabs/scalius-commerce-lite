@@ -646,7 +646,8 @@
   }
 
   .catalog-filter-form:is([data-placement="sidebar"], [data-placement="bar"]) {
-    --catalog-row: var(--catalog-filter-row, 1.75rem);
+    /* Never under 24px: the row is the check box's clear space (WCAG 2.5.8). */
+    --catalog-row: max(1.5rem, var(--catalog-filter-row, 1.75rem));
     --catalog-label: var(--catalog-filter-label, 0.875rem);
     overflow: visible;
   }

@@ -25,6 +25,7 @@ import {
   fixtureFacets,
   fixtureFooterMenus,
   fixtureMenu,
+  fixtureOrigin,
   fixturePage,
   fixtureShippingMethods,
   homeCategory,
@@ -108,6 +109,10 @@ function layout(entry: GalleryEntry) {
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
     seo: { socialImage: "" },
     timeZone: "Asia/Dhaka",
+    // The Platform settings take origins: the gallery server answers `/api/v1`
+    // on its own origin (by the page's Referer in the browser), so the page's
+    // browser reads (the cart's delivery rates) have an API to call.
+    platform: { apiUrl: fixtureOrigin(), storefrontUrl: fixtureOrigin() },
     policies: FIXTURE_POLICIES,
   };
 }

@@ -19,7 +19,7 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
 import {
   collectionPickerOptionsQueryOptions,
@@ -72,12 +72,12 @@ export function useScopeLabel(): (scope: Scope, items: Map<string, Option>) => s
     if (names.length < scope.ids.length) {
       const count = scope.ids.length;
       return scope.kind === "products"
-        ? count === 1 ? t("countProduct") : t("countProducts", { count: formatNumber(count) })
-        : count === 1 ? t("countCollection") : t("countCollections", { count: formatNumber(count) });
+        ? count === 1 ? t("countProduct") : t("countProducts", { count })
+        : count === 1 ? t("countCollection") : t("countCollections", { count });
     }
     return names.length <= 2
       ? names.join(", ")
-      : t("namesMore", { names: names.slice(0, 2).join(", "), count: formatNumber(names.length - 2) });
+      : t("namesMore", { names: names.slice(0, 2).join(", "), count: names.length - 2 });
   };
 }
 
@@ -230,7 +230,7 @@ export function ScopeField({
           </div>
           <DialogFooter className="sm:items-center">
             <p className="text-body text-muted-foreground sm:me-auto" aria-live="polite">
-              {t("selectedCount", { count: formatNumber(staged.size) })}
+              {t("selectedCount", { count: staged.size })}
             </p>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button>
             <Button

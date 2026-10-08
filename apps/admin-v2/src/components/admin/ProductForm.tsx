@@ -61,7 +61,7 @@ import { PublishingCard } from "./product-form/PublishingCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { ProductSectionsProvider, useProductSections } from "./product-form/merchandising/product-sections";
 import { LoadingFallback } from "./shared/LoadingFallback";
-import { productFieldLabel } from "./product-form/utils";
+import { problemLine, productFieldLabel } from "./product-form/utils";
 import { autoHandleFor } from "./search-listing/SearchListingCard";
 import {
   DEFAULT_PRODUCT_CONDITION,
@@ -229,6 +229,8 @@ function ProductEditor({
       media: [],
       slugEdited: false,
       variantPriced: false,
+      // Set back to "none" by the Pricing card whenever it changes: without a default that is a change from the load.
+      compareAtProblem: null,
       attributes: [],
       additionalInfo: [],
       fulfillmentKind: "physical",
@@ -306,19 +308,24 @@ function ProductEditor({
     // A Save is one write of the whole page (fields, variants, sections, costs): every part
     // is checked first, and all of it saves or none of it does.
     let fieldLines: string[] = [];
+    let fieldFocus: Record<string, () => void> = {};
     let values = await new Promise<ProductFormValues | null>((resolve) => {
       void form.handleSubmit(resolve, (errors) => {
         fieldLines = invalidLines(errors, (field) => {
           const message = errors[field]?.message;
-          return `${productFieldLabel(field)}: ${typeof message === "string" ? message : s("fixErrors")}`;
+          return problemLine(productFieldLabel(field), typeof message === "string" ? message : s("fixErrors"));
         });
+        // Each line is a link to its field.
+        fieldFocus = Object.fromEntries(
+          Object.keys(errors).map((field, index) => [fieldLines[index]!, () => form.setFocus(field as keyof ProductFormValues)]),
+        );
         resolve(null);
       })();
     });
     if (!values || matrixBlocks || sectionProblems.length > 0) {
       if (matrixBlocks) matrixRef.current?.reveal();
       const lines = [...fieldLines, ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
-      throw new SaveNotCompleted(lines[0], lines);
+      throw new SaveNotCompleted(lines[0], lines, fieldFocus);
     }
     const composition = isEdit && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
     const sectionChanges = Object.assign({}, ...pending.map((handle) => handle.changes()));

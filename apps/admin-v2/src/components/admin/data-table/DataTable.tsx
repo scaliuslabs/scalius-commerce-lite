@@ -198,7 +198,7 @@ export function DataTable<TData extends TableRowData>({
           <TableRow key={headerGroup.id}>
             {includeDragColumn && <TableHead className="w-[40px]" />}
             {columns.map((column) => (
-              <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} />
+              <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} holdWidth={!showError && !hasRows && !showInitialLoading} />
             ))}
           </TableRow>
         ))}

@@ -193,6 +193,8 @@ export function TaxCollectionCard() {
   const groups = config?.classes ?? [];
 
   const appService = services.providers.find((provider) => provider.id === values.providerId) ?? null;
+  // Everything below the switch is about collecting tax: it waits, unchanged in place, until the switch is on.
+  const settled = canEdit && values.enabled;
   return (
     <SettingsCard id="taxCollection" title={t("collectionTitle")}>
       <SwitchRow
@@ -208,7 +210,7 @@ export function TaxCollectionCard() {
             id="tax-service"
             aria-describedby="tax-service-note"
             value={values.providerId}
-            disabled={!canEdit}
+            disabled={!settled}
             onValueChange={(value) => {
               setValue("providerId", value);
               // An app tax service not set up yet opens its own setup.
@@ -230,7 +232,7 @@ export function TaxCollectionCard() {
           id="tax-default-group"
           aria-describedby="tax-default-group-note"
           value={values.defaultTaxClassId ?? NONE}
-          disabled={!canEdit}
+          disabled={!settled}
           onValueChange={(value) => setValue("defaultTaxClassId", value === NONE ? null : value)}
           options={[{ value: NONE, label: t("none") }, ...groups.map((group) => ({ value: group.id, label: groupName(group) }))]}
           ariaLabel={t("defaultGroup")}
@@ -240,7 +242,7 @@ export function TaxCollectionCard() {
       <SwitchRow
         label={t("taxDelivery")}
         checked={values.taxShipping}
-        disabled={!canEdit}
+        disabled={!settled}
         onCheckedChange={(on) => setValue("taxShipping", on)}
       />
       {values.taxShipping ? (
@@ -249,7 +251,7 @@ export function TaxCollectionCard() {
             id="tax-delivery-group"
             aria-describedby="tax-delivery-group-note"
             value={values.shippingTaxClassId ?? NONE}
-            disabled={!canEdit}
+            disabled={!settled}
             onValueChange={(value) => setValue("shippingTaxClassId", value === NONE ? null : value)}
             options={[{ value: NONE, label: t("sameAsDefault") }, ...groups.map((group) => ({ value: group.id, label: groupName(group) }))]}
             ariaLabel={t("deliveryGroup")}
@@ -261,7 +263,8 @@ export function TaxCollectionCard() {
         <Input
           id="tax-label"
           maxLength={80}
-          disabled={!canEdit}
+          // A blank name still blocks the save, so it can always be fixed.
+          disabled={!canEdit || (!values.enabled && issue?.field !== "label")}
           value={values.displayLabel}
           aria-describedby="tax-label-note"
           onChange={(event) => setValue("displayLabel", event.target.value)}

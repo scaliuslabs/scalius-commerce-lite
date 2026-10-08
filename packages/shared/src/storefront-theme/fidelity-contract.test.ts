@@ -207,9 +207,9 @@ describe("listing filters", () => {
       // Star Tech: price first, and searches open their facets from a drawer.
       "spec-catalogue": { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14, order: priceFirst, searchPlacement: "drawer", ruled: false },
       "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16, order: priceFirst, ...plain }, // Apple Gadgets
-      marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14, ...plain }, // Amazon
+      marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14, ...plain }, // Amazon
       "mass-retail": { style: "drawer", openByDefault: false, ...plain }, // full-width retail grid; merchants can choose a sidebar
-      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14, ...plain }, // compact department rail
+      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14, ...plain }, // compact department rail
       "daily-essentials": { style: "sidebar-comfortable", openByDefault: true, ...plain }, // Ghorer Bazar shop
       "showcase-landing": { style: "drawer", openByDefault: false, ...plain },
     });
@@ -232,10 +232,10 @@ describe("listing filters", () => {
 
   it("resolves a template's own column, row pitch and label over its style's, within bounds", () => {
     const spec = (template: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(template), LIVE_SMALL).blocks.listing.filters.spec;
-    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 22, label: 14 });
+    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 24, label: 14 });
     expect(spec("spec-catalogue")).toMatchObject({ placement: "sidebar", column: 225, rowPitch: 32, label: 14 });
     expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
-    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 21, label: 14 });
+    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 24, label: 14 });
     // No override: the style's own numbers.
     expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS.drawer);
     const theme = storefrontTemplateTheme("marketplace");

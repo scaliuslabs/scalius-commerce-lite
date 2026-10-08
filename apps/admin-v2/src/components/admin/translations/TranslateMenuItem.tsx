@@ -5,7 +5,7 @@
 // into the query cache, so this page asks the API nothing and downloads no
 // translation code; translate & adapt picks the store's first other language.
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useMessages } from "~/i18n";
@@ -17,8 +17,9 @@ export function useTranslateMenuItem(type: TranslationEditorType, id: string | u
   const r = useMessages(resourceMessages);
   const { data: hasSecondLanguage } = useQuery({
     queryKey: STORE_LANGUAGES_QUERY_KEY,
-    // Never fetches here: the probe fills this key.
-    enabled: false,
+    // Never fetches here: the probe fills this key. `skipToken` says so to the library; a query with
+    // neither a function nor a token logged "No queryFn was passed" on every render of every page that uses this.
+    queryFn: skipToken,
     select: (languages: readonly unknown[]) => languages.length > 1,
   });
   if (!id || !hasSecondLanguage) return null;

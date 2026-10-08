@@ -23,6 +23,8 @@ export interface Props {
 
 const { summary, copy, slug, selectedRating = null } = Astro.props;
 const average = formatReviewAverage(summary.average);
+// The bar's name is its visible text ("5 star 40%"); the sentence is its description.
+const descriptionId = `reviews-bar-${slug.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 ---
 
 <div class="product-reviews-summary">
@@ -39,17 +41,20 @@ const average = formatReviewAverage(summary.average);
       return (
         <li>
           {row.count > 0 ? (
+            <>
             <a
               href={productReviewsPageHref(slug, { rating: selected ? null : row.rating })}
               class:list={["product-reviews-bar", selected && "is-selected"]}
               data-review-rating={row.rating}
-              aria-label={share}
+              aria-describedby={`${descriptionId}-${row.rating}`}
               aria-current={selected ? "true" : undefined}
             >
               <span class="product-reviews-bar-label">{label}</span>
               <span class="product-reviews-bar-track" aria-hidden="true"><span style={`width:${row.percent}%`}></span></span>
-              <span class="product-reviews-bar-share" aria-hidden="true">{row.percent}%</span>
+              <span class="product-reviews-bar-share">{row.percent}%</span>
             </a>
+            <span id={`${descriptionId}-${row.rating}`} hidden>{share}</span>
+            </>
           ) : (
             <span class="product-reviews-bar is-empty">
               <span class="product-reviews-bar-label">{label}</span>

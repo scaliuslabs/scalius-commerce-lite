@@ -2641,7 +2641,7 @@
                       },
                       "rowPitch": {
                         "type": "integer",
-                        "minimum": 16,
+                        "minimum": 24,
                         "maximum": 36
                       },
                       "label": {

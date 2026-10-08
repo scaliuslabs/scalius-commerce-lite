@@ -51,6 +51,13 @@ export const policies = [
     sample: 'const total = new Intl.NumberFormat("en-IN").format(amount);',
   },
   {
+    rule: "a count handed to a dashboard message is the number, never formatNumber(count)",
+    why: "t() writes a number in the store's format and picks the plural word from it; a pre-formatted string ('1,200') has no plural category and the dashboard once printed the raw plural text (apps/admin-v2/src/i18n/index.ts)",
+    paths: ["apps/admin-v2/src"],
+    forbid: [/\b(?:count|rows|images|skus|units|variants):\s*formatNumber\(\s*[^(),]+\)/],
+    sample: 't("products", { count: formatNumber(total) })',
+  },
+  {
     rule: "storefront never imports server-only packages (@scalius/core, @scalius/database)",
     why: "the storefront Worker must not bundle domain services or database credentials",
     paths: [storefront],

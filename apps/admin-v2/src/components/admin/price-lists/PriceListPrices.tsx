@@ -96,7 +96,7 @@ export function PriceListPrices({ list, canEdit, onEdit }: { list: PriceList; ca
                         ) : (
                           <ul>
                             {breaks.map((price) => (
-                              <li key={price.minQuantity}>{t("fromUnits", { count: formatNumber(price.minQuantity), price: fmt(price.amount) })}</li>
+                              <li key={price.minQuantity}>{t("fromUnits", { count: price.minQuantity, price: fmt(price.amount) })}</li>
                             ))}
                           </ul>
                         )}

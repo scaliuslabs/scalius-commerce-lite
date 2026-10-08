@@ -981,13 +981,15 @@ export function LocalPickupCard() {
   const summary = useRateSummary();
   const { data } = useQuery({ ...deliveryZonesQuery, enabled: canView });
   if (!canView || !data) return null;
+  // Say what is true now: with no pickup point, nobody is offered pickup.
+  const description = t(data.pickup.rates.length ? "pickupDescription" : "pickupDescriptionOff");
   return (
     <SettingsCard
       id="localPickup"
       title={t("pickupTitle")}
-      description={t("pickupDescription")}
+      description={description}
       rows={
-        <SettingsDialog title={t("editPickup")} description={t("pickupDescription")} trigger={
+        <SettingsDialog title={t("editPickup")} description={description} trigger={
           <SettingsRow
             disabled={!canEdit}
             label={t("pickupTitle")}
