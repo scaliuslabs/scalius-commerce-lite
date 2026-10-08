@@ -1156,6 +1156,110 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    describe("WhatsApp through a chat app", () => {
+        const APP_ID = "acme.chat:whatsapp";
+        const appSend = vi.fn();
+
+        function chooseApp(provider: { channels?: readonly string[] } | null = { channels: ["whatsapp"] }, issue = "Acme Chat is not ready.") {
+            mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
+                accessToken: undefined,
+                accessTokenConfigured: false,
+                phoneNumberId: undefined,
+                authTemplateName: "auth_otp",
+                provider: APP_ID,
+            });
+            return {
+                resolve: vi.fn(async () => (provider
+                    ? { provider: { id: APP_ID, label: "Acme Chat", ...provider, send: appSend }, issue: null }
+                    : { provider: null, issue })),
+            };
+        }
+
+        it("sends the order template through the app with the receipt's reference, under the app's provider id", async () => {
+            const db = createDb();
+            appSend.mockResolvedValue({ success: true, providerRef: "acme-msg-1", rawStatus: "queued" });
+            mocks.getNotificationChannels.mockResolvedValue({ order_shipped: ["whatsapp"] });
+
+            const result = await sendOrderNotificationEmail(
+                undefined,
+                "WhatsApp Customer",
+                "order_wa_app_1",
+                "order_shipped",
+                { trackingId: "TRACK123" },
+                db,
+                { encryptionKey: "credential-key", outboxId: "outbox_wa_app_1", appProviders: chooseApp() as never },
+            );
+
+            expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+            expect(mocks.getNotificationProviderBlock).toHaveBeenCalledWith(db, { channel: "whatsapp", provider: APP_ID });
+            expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(
+                expect.objectContaining({ channel: "whatsapp", provider: APP_ID, recipient: "whatsapp:8801700000000" }),
+            );
+            expect(appSend).toHaveBeenCalledWith({
+                channel: "whatsapp",
+                to: "+8801700000000",
+                template: {
+                    name: "order_status_update",
+                    language: "en_US",
+                    parameters: ["WhatsApp Customer", "#order_wa_app_1", "Order Shipped", "TRACK123"],
+                },
+                clientReference: "client_ref_1",
+            }, {});
+            expect(mocks.markOrderNotificationDeliveryReceiptAccepted).toHaveBeenCalledWith(
+                db,
+                expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+                expect.objectContaining({ provider: APP_ID, providerMessageId: "acme-msg-1", providerStatus: "queued" }),
+            );
+            expect(result.outcomes).toEqual([expect.objectContaining({ channel: "whatsapp", provider: APP_ID, status: "accepted" })]);
+            expect(result.hasRetryableFailure).toBe(false);
+        });
+
+        it("skips with the app's provider id when the app cannot be used, and sends nothing", async () => {
+            const db = createDb();
+            mocks.getNotificationChannels.mockResolvedValue({ order_created: ["whatsapp"] });
+
+            const result = await sendOrderNotificationEmail(
+                undefined,
+                "WhatsApp Customer",
+                "order_wa_app_2",
+                "order_created",
+                {},
+                db,
+                { outboxId: "outbox_wa_app_2", appProviders: chooseApp(null) as never },
+            );
+
+            expect(appSend).not.toHaveBeenCalled();
+            expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+                db,
+                expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+                "whatsapp_provider_not_ready",
+                expect.objectContaining({ provider: APP_ID }),
+            );
+            expect(result.hasRetryableFailure).toBe(false);
+        });
+
+        it("records a declined send as a skipped receipt and pauses only the app's provider", async () => {
+            const db = createDb();
+            appSend.mockResolvedValue({ success: false, rawStatus: "template rejected", retryable: false });
+            mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
+            mocks.getNotificationChannels.mockResolvedValue({ order_created: ["whatsapp"] });
+
+            const result = await sendOrderNotificationEmail(
+                undefined,
+                "WhatsApp Customer",
+                "order_wa_app_3",
+                "order_created",
+                {},
+                db,
+                { outboxId: "outbox_wa_app_3", appProviders: chooseApp() as never },
+            );
+
+            expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, expect.objectContaining({ channel: "whatsapp", provider: APP_ID }));
+            expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalled();
+            expect(result.hasRetryableFailure).toBe(false);
+        });
+    });
+
     it("records skipped WhatsApp receipts without sending when Meta credentials are missing", async () => {
         const db = createDb();
         mocks.getWhatsAppCloudApiSettings.mockResolvedValueOnce({

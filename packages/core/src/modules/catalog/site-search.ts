@@ -155,6 +155,12 @@ type SearchOptions = {
   searchCategories?: boolean;
   /** Buyer search: when nothing matches, retry once with the closest catalog words. */
   correctTypos?: boolean;
+  /**
+   * Product ids an app search provider ranked for the words (best first): the
+   * product hits are these, in this order, still only public, buyable and
+   * priced by core; pages and categories match the words as usual.
+   */
+  productIds?: readonly string[];
 };
 
 type SearchResults = {
@@ -201,7 +207,10 @@ async function runSearch(
     // Build Product Query
     // Set conditions (search hits, category) also scope the pricing projection.
     const setConditions: SQL[] = [];
-    if (hasValidQuery) {
+    const ranked = options?.productIds ? JSON.stringify(options.productIds.slice(0, 50)) : null;
+    if (ranked) {
+      setConditions.push(sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ranked}))`);
+    } else if (hasValidQuery) {
       const cond = or(ftsMatch(db, "products_fts", "products", query), productCategoryNameMatch(db, query));
       if (cond) setConditions.push(cond);
     }
@@ -267,11 +276,13 @@ async function runSearch(
         ...publicCategoryConditions(),
       ))
       .$dynamic();
-    const rankJoin = hasValidQuery ? productSearchRankJoin(db, query) : undefined;
+    const rankJoin = hasValidQuery && !ranked ? productSearchRankJoin(db, query) : undefined;
     if (rankJoin) productQuery.leftJoin(rankJoin.table, rankJoin.on);
     productQuery
       .where(and(...productConditions))
-      .orderBy(...(hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]))
+      .orderBy(...(ranked
+        ? [sql`(SELECT CAST(ranked_id.key AS INTEGER) FROM json_each(${ranked}) AS ranked_id WHERE CAST(ranked_id.value AS TEXT) = ${products.id})`]
+        : hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]))
       .limit(limit);
 
     // Build Pages Query

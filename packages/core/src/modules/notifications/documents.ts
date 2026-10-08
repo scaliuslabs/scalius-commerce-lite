@@ -113,6 +113,12 @@ export interface NotificationSettings {
   staffEmailRecipients: string[];
   whatsappOrderTemplateName: string;
   whatsappOrderTemplateLanguage: string;
+  /**
+   * Who delivers buyers' browser notifications: "" for Web Push (built in),
+   * or an app push provider (`<plugin id>:<provider id>`) with its own
+   * subscribers. Staff pushes always use Web Push and Firebase.
+   */
+  pushProvider: string;
 }
 
 export const notificationsDocument = defineSettingsDocument<NotificationSettings>({
@@ -131,6 +137,7 @@ export const notificationsDocument = defineSettingsDocument<NotificationSettings
     staffEmailRecipients: z.array(z.string().max(254)).max(STAFF_EMAIL_RECIPIENTS_MAX),
     whatsappOrderTemplateName: z.string(),
     whatsappOrderTemplateLanguage: z.string(),
+    pushProvider: z.string().max(160),
   }),
   defaults: {
     orderChannels: DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
@@ -138,6 +145,7 @@ export const notificationsDocument = defineSettingsDocument<NotificationSettings
     staffEmailRecipients: [],
     whatsappOrderTemplateName: "order_status_update",
     whatsappOrderTemplateLanguage: "en_US",
+    pushProvider: "",
   },
 });
 

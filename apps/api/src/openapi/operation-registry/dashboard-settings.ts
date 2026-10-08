@@ -106,6 +106,26 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
+  // Web Push: a browser subscribes itself (its own endpoint and keys); an agent has no browser.
+  "dashboard.web_push.get": {
+    exposure: "excluded",
+    reason: "A staff member's own browsers and the VAPID key a dashboard browser subscribes with; an agent has no browser.",
+  },
+  "dashboard.web_push.subscribe": {
+    exposure: "device",
+    risk: "security",
+    limits: { request: 8_192, response: 8_192 },
+  },
+  "dashboard.web_push.unsubscribe": {
+    exposure: "device",
+    risk: "security",
+    limits: { request: 8_192, response: 8_192 },
+  },
+  "dashboard.web_push.device_delete": {
+    exposure: "excluded",
+    risk: "destructive",
+    reason: "Removes one of the signed-in staff member's own browsers from the dashboard; an agent has no browser.",
+  },
   "dashboard.notifications.fcm_token_cleanup": {
     exposure: "excluded",
     risk: "destructive",

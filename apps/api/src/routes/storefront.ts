@@ -387,6 +387,16 @@ const layoutDataSchema = z.object({
   appBlockPages: z.array(z.enum(PLUGIN_BLOCK_PAGES)).openapi({
     description: "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.",
   }),
+  appServices: z.object({
+    search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),
+    address: z.object({
+      id: z.string(),
+      countries: z.union([z.literal("any"), z.array(z.string())]),
+    }).nullable().openapi({ description: "The address autocomplete app checkout uses for these countries; null: none." }),
+    signIn: z.array(z.object({ id: z.string(), name: z.string() })).openapi({
+      description: "Sign-in apps the sign-in page offers (\"Continue with <name>\"), started at /customer-auth/identity/{id}/start.",
+    }),
+  }),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;
 

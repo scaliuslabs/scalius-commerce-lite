@@ -86,7 +86,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
-  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], timeline: [] as unknown[] };
+  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[] };
 
   const collection = (name: string) => records.get(name) ?? refuse("storage.undeclared_collection", `Collection "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, whereFields: string[], orderField: string | undefined) => {
@@ -234,6 +234,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     messagingEmail: async (input) => (sent.emails.push(copy(input)), { queued: true }),
     messagingSms: async (input) => (sent.sms.push(copy(input)), { queued: true }),
     messagingNotifyStaff: async (input) => void sent.notices.push(copy(input)),
+    messagingPush: async (input) => {
+      if (!manifest.permissions.includes("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the customers.view permission.");
+      sent.pushes.push(copy(input));
+      return { delivered: true };
+    },
     timelineAdd: async (input) => {
       const entry = copy(input) as { kind?: unknown };
       if (!manifest.permissions.includes("orders.edit")) refuse("timeline.not_allowed", "Writing to order timelines needs the orders.edit permission.");
@@ -336,7 +341,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const notAllowed = async () => refuse("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
       const result = await run(
         { kind: "provider", provider: providerId, operation, input: checked.data },
-        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed },
+        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed, messagingPush: notAllowed },
       );
       if (!result.ok) return result;
       const answer = schemas.output.safeParse(result.value);

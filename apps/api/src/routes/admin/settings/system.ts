@@ -16,6 +16,8 @@ import {
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
+import { assertMessagingProviderCarries } from "../../../plugins/providers/channels";
+import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
     CUSTOMER_AUTH_OTP_CHANNELS,
@@ -88,6 +90,7 @@ const PROVIDER_STATUS_ERROR_MAX_LENGTH = 1_000;
 const WHATSAPP_ACCESS_TOKEN_MAX_LENGTH = 2_048;
 const WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH = 128;
 const WHATSAPP_TEMPLATE_NAME_MAX_LENGTH = 128;
+const WHATSAPP_PROVIDER_MAX_LENGTH = 160;
 const EMAIL_API_KEY_MAX_LENGTH = 512;
 const EMAIL_SENDER_MAX_LENGTH = 320;
 
@@ -420,6 +423,9 @@ const authSettingsResponseSchema = z.object({
     whatsappAccessToken: z.string().max(MASKED.length),
     whatsappPhoneNumberId: z.string().max(WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
     whatsappTemplateName: z.string().max(WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
+    whatsappProvider: z.string().max(WHATSAPP_PROVIDER_MAX_LENGTH).openapi({
+        description: "Who sends WhatsApp messages: an empty string for the built-in Meta WhatsApp Cloud API, or an installed app's messaging provider that carries WhatsApp (`<plugin id>:<provider id>`).",
+    }),
 });
 
 const getAuthRoute = createRoute({
@@ -449,6 +455,7 @@ app.openapi(getAuthRoute, async (c) => {
         whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
         whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(0, WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
         whatsappTemplateName: (whatsapp.authTemplateName || "").slice(0, WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
+        whatsappProvider: (whatsapp.provider || "").slice(0, WHATSAPP_PROVIDER_MAX_LENGTH),
     });
 });
 
@@ -465,6 +472,12 @@ const saveAuthSchema = z.object({
         .string()
         .max(WHATSAPP_TEMPLATE_NAME_MAX_LENGTH)
         .nullable()
+        .optional(),
+    /** "" sends through the built-in Meta Cloud API; else an installed app's messaging provider that carries WhatsApp. */
+    whatsappProvider: z
+        .string()
+        .max(WHATSAPP_PROVIDER_MAX_LENGTH)
+        .refine((value) => value === "" || isQualifiedProviderId(value), "Name an app provider as <plugin id>:<provider id>.")
         .optional(),
 }).strict();
 
@@ -515,8 +528,11 @@ app.openapi(saveAuthRoute, async (c) => {
         accessToken: incomingWhatsAppAccessToken,
         phoneNumberId: body.whatsappPhoneNumberId === undefined ? undefined : body.whatsappPhoneNumberId ?? "",
         authTemplateName: body.whatsappTemplateName === undefined ? undefined : body.whatsappTemplateName ?? "",
+        provider: body.whatsappProvider,
     };
     const whatsappProviderTouched = Object.values(whatsappPatch).some((value) => value !== undefined);
+    // An app sender must be installed and carry WhatsApp.
+    if (body.whatsappProvider) await assertMessagingProviderCarries(db, body.whatsappProvider, "whatsapp");
 
     const requestedIdentity: CustomerIdentitySettings | undefined = body.customerIdentity
         ? { ...body.customerIdentity, channels: [...new Set(body.customerIdentity.channels)] }
@@ -535,13 +551,21 @@ app.openapi(saveAuthRoute, async (c) => {
     }
     if (effectiveIdentity.channels.includes("whatsapp") && (requestedIdentity || whatsappProviderTouched)) {
         const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
-        const nextAccessToken = whatsappPatch.accessToken === undefined
-            ? whatsapp.accessToken
-            : whatsappPatch.accessToken || undefined;
-        const nextPhoneNumberId = whatsappPatch.phoneNumberId === undefined
-            ? whatsapp.phoneNumberId?.trim() || undefined
-            : whatsappPatch.phoneNumberId.trim() || undefined;
-        if (!nextAccessToken || !nextPhoneNumberId) throw new ValidationError(CHANNEL_NOT_READY.whatsapp);
+        const nextProvider = (body.whatsappProvider ?? whatsapp.provider ?? "").trim();
+        if (nextProvider) {
+            // An app sender: it must be able to run here and carry WhatsApp.
+            const choice = await resolveAppProvider(requestAppProviders(c), "messaging", nextProvider);
+            if (!choice.provider) throw new ValidationError(choice.issue);
+            if (!choice.provider.channels?.includes("whatsapp")) throw new ValidationError(CHANNEL_NOT_READY.whatsapp);
+        } else {
+            const nextAccessToken = whatsappPatch.accessToken === undefined
+                ? whatsapp.accessToken
+                : whatsappPatch.accessToken || undefined;
+            const nextPhoneNumberId = whatsappPatch.phoneNumberId === undefined
+                ? whatsapp.phoneNumberId?.trim() || undefined
+                : whatsappPatch.phoneNumberId.trim() || undefined;
+            if (!nextAccessToken || !nextPhoneNumberId) throw new ValidationError(CHANNEL_NOT_READY.whatsapp);
+        }
     }
 
     // Credentials and policy commit together (or not at all), each at the

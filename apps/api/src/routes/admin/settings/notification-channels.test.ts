@@ -112,7 +112,7 @@ describe("notification settings routes", () => {
     });
 
     it("saves customer rules and the WhatsApp template in one revisioned write", async () => {
-        mocks.getWhatsAppCloudApiSettings.mockResolvedValue({ accessTokenConfigured: true, phoneNumberId: "123" });
+        mocks.getWhatsAppCloudApiSettings.mockResolvedValue({ accessToken: "wa_token", accessTokenConfigured: true, phoneNumberId: "123" });
         const { request, stored } = createTestApp();
 
         const { status, body } = await request("", "PUT", {

@@ -124,3 +124,15 @@ describe("public search relevance and correction", () => {
     expect(await search(db, "zzzzqqq", { correctTypos: true })).toMatchObject({ products: [], correctedQuery: null });
   });
 });
+
+describe("search ranked by a search app", () => {
+  it("shows the app's products in its order, only public and buyable, and matches pages by the words", async () => {
+    const db = relevanceDb();
+    const ranked = await search(db, "anything", { productIds: ["p_kettle", "p_unknown", "p_tote", "p_mouse"] });
+    expect(ranked.products.map((product) => product.id)).toEqual(["p_kettle", "p_tote", "p_mouse"]);
+    expect(ranked.products[0]).toMatchObject({ discountedPrice: 10, availableForSale: true });
+    expect((await search(db, "bag", { productIds: [] })).products).toEqual([]);
+    const { db: hidden } = setup();
+    expect((await search(hidden, "runner", { productIds: ["p_hidden", "p_runner"] })).products.map((product) => product.id)).toEqual(["p_runner"]);
+  });
+});

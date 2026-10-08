@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     runScheduledEventMaintenance: vi.fn(),
     runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
     runScheduledPluginMaintenance: vi.fn(),
+    refreshAppFxRates: vi.fn(async () => ({ markets: 0, changed: 0, failed: 0 })),
   };
 });
 
@@ -117,6 +118,10 @@ vi.mock("./events/dispatch", () => ({
 
 vi.mock("./plugins/scheduled", () => ({
   runScheduledPluginMaintenance: mocks.runScheduledPluginMaintenance,
+}));
+
+vi.mock("./plugins/providers/fx", () => ({
+  refreshAppFxRates: mocks.refreshAppFxRates,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({

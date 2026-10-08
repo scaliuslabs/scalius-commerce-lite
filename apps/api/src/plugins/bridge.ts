@@ -106,6 +106,8 @@ export interface PluginBridgeApi {
   messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
+  /** A push to one buyer (`customers.view`): Web Push or the store's app push provider. */
+  messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
   /** A typed line on an order's timeline (`orders.edit`, a declared kind). */
   timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }>;
 }
@@ -447,6 +449,13 @@ export class PluginBridgeHost implements PluginBridgeApi {
     return this.guard("messagingNotifyStaff", async () => {
       const { notifyPluginStaff } = await import("./messaging");
       await notifyPluginStaff(this.messagingContext(), input);
+    });
+  }
+
+  async messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }> {
+    return this.guard("messagingPush", async () => {
+      const { pushPluginCustomer } = await import("./messaging");
+      return pushPluginCustomer(this.messagingContext(), input);
     });
   }
 

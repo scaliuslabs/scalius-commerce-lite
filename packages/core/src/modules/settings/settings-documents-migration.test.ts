@@ -234,6 +234,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       accessTokenConfigured: true,
       phoneNumberId: "109876543210987",
       authTemplateName: "otp_login",
+      provider: "",
     });
     expect(await getAllowedCountries(db)).toEqual({ allowedCountries: ["BD", "IN"], allowedCountriesMode: "exclude" });
     // The pre-accounts sign-in shape is not carried over: Customer accounts starts from its defaults.

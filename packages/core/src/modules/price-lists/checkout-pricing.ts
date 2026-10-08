@@ -64,6 +64,7 @@ export function marketPricingMatrixSql(): SQL<string | null> {
             'e', CAST(pricing_row.price_ending_minor AS TEXT),
             'cu', pricing_row.currency_code,
             'ao', CAST(pricing_row.fx_rate_as_of AS TEXT),
+            'fs', pricing_row.fx_rate_source,
             'lk', CAST(pricing_row.fx_lock_minutes AS TEXT),
             'c', (SELECT group_concat(pricing_country.country_code, ',') FROM market_countries AS pricing_country WHERE pricing_country.market_id = pricing_row.id),
             'p', (SELECT group_concat(pricing_presence.value, ',') FROM market_presences AS pricing_presence WHERE pricing_presence.market_id = pricing_row.id AND pricing_presence.kind = 'subfolder' AND pricing_presence.value <> '')
@@ -80,7 +81,7 @@ export function checkoutListPricesSql(variantId: SQL = sql.raw('"product_variant
 
 interface MatrixEntry {
     id?: unknown; b?: unknown; m?: unknown; r?: unknown; a?: unknown; d?: unknown; e?: unknown; c?: unknown; p?: unknown;
-    cu?: unknown; ao?: unknown; lk?: unknown;
+    cu?: unknown; ao?: unknown; lk?: unknown; fs?: unknown;
 }
 
 function nullableNumber(value: unknown): number | null {
@@ -127,7 +128,15 @@ export function parseMarketPricingMatrix(value: unknown, currency: { code: strin
             ? { ...shopPresentment(shop), ...(lockMinutes === null ? {} : { lockMinutes }) }
             : fx === null
                 ? null
-                : marketPresentment({ shop, currencyCode: own, rate: fx.policy.rate, fxAsOf: nullableNumber(entry.ao), lockMinutes });
+                : marketPresentment({
+                    shop,
+                    currencyCode: own,
+                    rate: fx.policy.rate,
+                    // The order records who set the rate: the merchant (`manual`) or the app (`<plugin>:<provider>`).
+                    ...(typeof entry.fs === "string" && entry.fs ? { fxSource: entry.fs } : {}),
+                    fxAsOf: nullableNumber(entry.ao),
+                    lockMinutes,
+                });
         return [{
             id: entry.id,
             isBackup,

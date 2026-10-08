@@ -2,7 +2,8 @@
 // typed error every port raises (docs/platform/PLUGINS.md, "Providers").
 //
 // A port is one interface per kind (payment, courier, sms, email, fraud,
-// tax, translation, ai). The platform's own adapters (COD, Stripe, the email providers) and
+// tax, translation, ai, messaging, push, search, address, fx, identity).
+// The platform's own adapters (COD, Stripe, the email providers, Web Push) and
 // app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and
 // fraud checkers; bKash; Nagad) implement the same port; core code resolves a provider by id and
 // never asks which kind of implementation it got. Ports are part of the
@@ -11,7 +12,10 @@
 //
 // Kept free of zod: the sandbox wrapper and the SDK root bundle this file.
 
-export const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai"] as const;
+export const PROVIDER_KINDS = [
+  "payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai",
+  "messaging", "push", "search", "address", "fx", "identity",
+] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
 /**
@@ -36,6 +40,18 @@ export const PROVIDER_OPERATIONS = {
   translation: { required: ["translate"], optional: ["testConnection"] },
   // AI drafting (the theme editor's "Draft with AI"): no built-in provider or key, apps only.
   ai: { required: ["generate"], optional: ["testConnection"] },
+  // Chat channels (WhatsApp, Messenger, …): the built-in WhatsApp sender or an app's.
+  messaging: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
+  // A push service with its own subscribers; Web Push (VAPID) is built in.
+  push: { required: ["send"], optional: ["testConnection"] },
+  // Product ids for a buyer's words; built-in full-text search is the fallback.
+  search: { required: ["search"], optional: ["testConnection"] },
+  // Address suggestions as the buyer types.
+  address: { required: ["suggest", "resolve"], optional: ["testConnection"] },
+  // Exchange rates for markets in their own currency; manual rates are the default.
+  fx: { required: ["rates"], optional: ["testConnection"] },
+  // Buyer sign-in with another account (OAuth 2.0 code with PKCE).
+  identity: { required: ["authorize", "exchange"], optional: ["testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 export type ProviderOperationName<K extends ProviderKind> =

@@ -11500,7 +11500,11 @@
             "type": "string",
             "nullable": true,
             "format": "date-time",
-            "description": "When the manual rate was last set."
+            "description": "When the rate was last set: by the merchant, or taken from the exchange rate app."
+          },
+          "fxRateSource": {
+            "type": "string",
+            "description": "Who sets the rate: `manual` (the merchant) or an exchange rate app provider (`<plugin id>:<provider id>`), whose rate is refreshed on the scheduled tick."
           },
           "fxLockMinutes": {
             "type": "integer",
@@ -11551,6 +11555,7 @@
           "priceMode",
           "fxRate",
           "fxRateAsOf",
+          "fxRateSource",
           "fxLockMinutes",
           "priceAdjustmentPercent",
           "priceRounding",
@@ -13193,7 +13198,13 @@
               "fraud",
               "tax",
               "translation",
-              "ai"
+              "ai",
+              "messaging",
+              "push",
+              "search",
+              "address",
+              "fx",
+              "identity"
             ]
           },
           "name": {
@@ -15341,6 +15352,41 @@
           "reason",
           "createdAt"
         ]
+      },
+      "WebPushSubscription": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "keys": {
+            "type": "object",
+            "properties": {
+              "p256dh": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "auth": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "p256dh",
+              "auth"
+            ]
+          },
+          "deviceLabel": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "description": "The browser's `PushSubscription.toJSON()`, with a short device label."
       }
     },
     "parameters": {}
@@ -19131,6 +19177,28 @@
             "required": false,
             "description": "Include categories in search results",
             "name": "searchCategories",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 160,
+              "description": "The store's search app (`layout.appServices.search`): it ranks the product hits; built-in search answers when it is not ready, slow or failing."
+            },
+            "required": false,
+            "description": "The store's search app (`layout.appServices.search`): it ranks the product hits; built-in search answers when it is not ready, slow or failing.",
+            "name": "provider",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$",
+              "description": "The page's language, for the search app."
+            },
+            "required": false,
+            "description": "The page's language, for the search app.",
+            "name": "locale",
             "in": "query"
           }
         ],
@@ -24415,6 +24483,70 @@
                             ]
                           },
                           "description": "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}."
+                        },
+                        "appServices": {
+                          "type": "object",
+                          "properties": {
+                            "search": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "The search app predictive search passes as `provider` to /search; null: built-in search."
+                            },
+                            "address": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "countries": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "any"
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "countries"
+                              ],
+                              "description": "The address autocomplete app checkout uses for these countries; null: none."
+                            },
+                            "signIn": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ]
+                              },
+                              "description": "Sign-in apps the sign-in page offers (\"Continue with <name>\"), started at /customer-auth/identity/{id}/start."
+                            }
+                          },
+                          "required": [
+                            "search",
+                            "address",
+                            "signIn"
+                          ]
                         }
                       },
                       "required": [
@@ -24437,7 +24569,8 @@
                         "policies",
                         "storefrontCopy",
                         "appScripts",
-                        "appBlockPages"
+                        "appBlockPages",
+                        "appServices"
                       ]
                     }
                   },
@@ -44559,6 +44692,478 @@
         "security": []
       }
     },
+    "/api/v1/customer-auth/push/state": {
+      "post": {
+        "operationId": "storefront.customer_auth_push.state",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Web Push for this account and browser",
+        "description": "POST so the browser's endpoint stays out of URLs and logs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Web Push state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "publicKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "subscribed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "publicKey",
+                        "available",
+                        "subscribed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Customer-cookie Web Push state for the hosted account page and this browser."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/push/subscribe": {
+      "post": {
+        "operationId": "storefront.customer_auth_push.subscribe",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Get this account's notifications in this browser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "keys": {
+                    "type": "object",
+                    "properties": {
+                      "p256dh": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "auth": {
+                        "type": "string",
+                        "maxLength": 40
+                      }
+                    },
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ]
+                  },
+                  "deviceLabel": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "endpoint",
+                  "keys"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "subscribed": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "subscribed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The buyer subscribes their own browser (its push endpoint and keys) on the hosted account page."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/push/unsubscribe": {
+      "post": {
+        "operationId": "storefront.customer_auth_push.unsubscribe",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Stop this account's notifications in this browser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "endpoint"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unsubscribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "subscribed": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        }
+                      },
+                      "required": [
+                        "subscribed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The buyer removes their own browser on the hosted account page."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/checkout-languages/active": {
       "get": {
         "operationId": "storefront.checkout_language.get_active",
@@ -46645,6 +47250,393 @@
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/address-rules/autocomplete/suggest": {
+      "post": {
+        "operationId": "storefront.address_autocomplete.suggest",
+        "tags": [
+          "Address autocomplete"
+        ],
+        "summary": "Address suggestions for what the buyer typed",
+        "description": "Empty when the store has no ready address app for the country, or it is slow or failing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "description": "The store's address app (`layout.appServices.address.id`)."
+                  },
+                  "country": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}$",
+                    "default": "en"
+                  },
+                  "sessionToken": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{16,64}$",
+                    "description": "Random per address form; groups one buyer's calls for the provider."
+                  },
+                  "query": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "provider",
+                  "country",
+                  "sessionToken",
+                  "query"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "suggestions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "secondaryText": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "text"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "suggestions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Checkout typing aid backed by the store's address app; agents submit complete addresses through checkout."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/address-rules/autocomplete/resolve": {
+      "post": {
+        "operationId": "storefront.address_autocomplete.resolve",
+        "tags": [
+          "Address autocomplete"
+        ],
+        "summary": "One suggestion as address fields",
+        "description": "The canonical address fields of the chosen suggestion; null when the app cannot answer. The form validates them by the country's rules.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "description": "The store's address app (`layout.appServices.address.id`)."
+                  },
+                  "country": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}$",
+                    "default": "en"
+                  },
+                  "sessionToken": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{16,64}$",
+                    "description": "Random per address form; groups one buyer's calls for the provider."
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                },
+                "required": [
+                  "provider",
+                  "country",
+                  "sessionToken",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "countryCode": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "type": "string"
+                            },
+                            "dependentLocality": {
+                              "type": "string"
+                            },
+                            "locality": {
+                              "type": "string"
+                            },
+                            "adminArea": {
+                              "type": "string"
+                            },
+                            "postalCode": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "countryCode"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "address"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Checkout typing aid backed by the store's address app; agents submit complete addresses through checkout."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -79433,10 +80425,10 @@
                   "maxItems": 3
                 }
               ],
-              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
             },
             "required": false,
-            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.",
             "name": "appFilter",
             "in": "query"
           }
@@ -79682,7 +80674,7 @@
                               ]
                             }
                           },
-                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -126143,6 +127135,11 @@
                         "whatsappTemplateName": {
                           "type": "string",
                           "maxLength": 128
+                        },
+                        "whatsappProvider": {
+                          "type": "string",
+                          "maxLength": 160,
+                          "description": "Who sends WhatsApp messages: an empty string for the built-in Meta WhatsApp Cloud API, or an installed app's messaging provider that carries WhatsApp (`<plugin id>:<provider id>`)."
                         }
                       },
                       "required": [
@@ -126150,7 +127147,8 @@
                         "customerIdentity",
                         "whatsappAccessToken",
                         "whatsappPhoneNumberId",
-                        "whatsappTemplateName"
+                        "whatsappTemplateName",
+                        "whatsappProvider"
                       ]
                     }
                   },
@@ -126337,6 +127335,10 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 128
+                  },
+                  "whatsappProvider": {
+                    "type": "string",
+                    "maxLength": 160
                   }
                 },
                 "required": [
@@ -131732,7 +132734,13 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 25,
-                    "description": "The manual exchange rate: units of the market currency per shop currency unit (a market in the shop currency converts at 1)."
+                    "description": "The manual exchange rate: units of the market currency per shop currency unit (a market in the shop currency converts at 1). Ignored while an app sets the rate."
+                  },
+                  "fxRateSource": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "description": "Non-backup markets in their own currency: `manual`, or an exchange rate app provider (`<plugin id>:<provider id>`, from `GET /admin/settings/providers?kind=fx`). Choosing an app asks it for the rate now; the save fails when it cannot answer."
                   },
                   "priceAdjustmentPercent": {
                     "type": "number",
@@ -138531,6 +139539,47 @@
                             "issues"
                           ]
                         },
+                        "customerPush": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ready",
+                                "incomplete",
+                                "error"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "fix": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "issues"
+                          ]
+                        },
+                        "pushProvider": {
+                          "type": "string"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -138545,6 +139594,8 @@
                         "email",
                         "sms",
                         "push",
+                        "customerPush",
+                        "pushProvider",
                         "revision"
                       ]
                     }
@@ -138671,7 +139722,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138682,7 +139734,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138693,7 +139746,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138704,7 +139758,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138715,7 +139770,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138726,7 +139782,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138737,7 +139794,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138748,7 +139806,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138759,7 +139818,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138770,7 +139830,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138781,7 +139842,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138792,7 +139854,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138803,7 +139866,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138814,7 +139878,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138825,7 +139890,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138836,7 +139902,8 @@
                           "enum": [
                             "email",
                             "sms",
-                            "whatsapp"
+                            "whatsapp",
+                            "push"
                           ]
                         }
                       },
@@ -138931,6 +139998,10 @@
                       "templateName",
                       "languageCode"
                     ]
+                  },
+                  "pushProvider": {
+                    "type": "string",
+                    "maxLength": 160
                   },
                   "expectedRevision": {
                     "type": "integer",
@@ -139160,6 +140231,47 @@
                             "issues"
                           ]
                         },
+                        "customerPush": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ready",
+                                "incomplete",
+                                "error"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "fix": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "issues"
+                          ]
+                        },
+                        "pushProvider": {
+                          "type": "string"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -139174,6 +140286,8 @@
                         "email",
                         "sms",
                         "push",
+                        "customerPush",
+                        "pushProvider",
                         "revision"
                       ]
                     }
@@ -139737,6 +140851,47 @@
                             "issues"
                           ]
                         },
+                        "customerPush": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ready",
+                                "incomplete",
+                                "error"
+                              ]
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "fix": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "issues"
+                          ]
+                        },
+                        "pushProvider": {
+                          "type": "string"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -139751,6 +140906,8 @@
                         "email",
                         "sms",
                         "push",
+                        "customerPush",
+                        "pushProvider",
                         "revision"
                       ]
                     }
@@ -142089,7 +143246,13 @@
                 "fraud",
                 "tax",
                 "translation",
-                "ai"
+                "ai",
+                "messaging",
+                "push",
+                "search",
+                "address",
+                "fx",
+                "identity"
               ]
             },
             "required": true,
@@ -142132,7 +143295,13 @@
                                   "fraud",
                                   "tax",
                                   "translation",
-                                  "ai"
+                                  "ai",
+                                  "messaging",
+                                  "push",
+                                  "search",
+                                  "address",
+                                  "fx",
+                                  "identity"
                                 ]
                               },
                               "pluginId": {
@@ -150424,10 +151593,10 @@
                   "maxItems": 3
                 }
               ],
-              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
             },
             "required": false,
-            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.",
             "name": "appFilter",
             "in": "query"
           }
@@ -151060,7 +152229,7 @@
                               ]
                             }
                           },
-                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -165592,10 +166761,10 @@
                   "maxItems": 3
                 }
               ],
-              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3)."
+              "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
             },
             "required": false,
-            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3).",
+            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.",
             "name": "appFilter",
             "in": "query"
           }
@@ -165856,7 +167025,7 @@
                               ]
                             }
                           },
-                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id>. Absent when no app column was asked for."
+                          "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
                         }
                       },
                       "required": [
@@ -208343,6 +209512,540 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/web-push": {
+      "get": {
+        "operationId": "dashboard.web_push.get",
+        "tags": [
+          "Admin - Web Push"
+        ],
+        "summary": "Web Push for this staff member",
+        "description": "The VAPID public key browsers subscribe with, whether this Worker can send (a master secret and an https dashboard address), and the browsers this staff member subscribed.",
+        "responses": {
+          "200": {
+            "description": "Web Push state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "publicKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "devices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "deviceLabel": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "lastSuccessAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "deviceLabel",
+                              "lastSuccessAt",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "publicKey",
+                        "available",
+                        "devices"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "A staff member's own browsers and the VAPID key a dashboard browser subscribes with; an agent has no browser."
+        },
+        "x-scalius-rbac": {
+          "type": "allowAnyAdmin"
+        }
+      }
+    },
+    "/api/v1/admin/web-push/subscriptions": {
+      "post": {
+        "operationId": "dashboard.web_push.subscribe",
+        "tags": [
+          "Admin - Web Push"
+        ],
+        "summary": "Subscribe this browser to staff notifications",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebPushSubscription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "device",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 8192,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "allowAnyAdmin"
+        }
+      }
+    },
+    "/api/v1/admin/web-push/subscriptions/remove": {
+      "post": {
+        "operationId": "dashboard.web_push.unsubscribe",
+        "tags": [
+          "Admin - Web Push"
+        ],
+        "summary": "Unsubscribe this browser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "endpoint"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "device",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 8192,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "allowAnyAdmin"
+        }
+      }
+    },
+    "/api/v1/admin/web-push/devices/{id}": {
+      "delete": {
+        "operationId": "dashboard.web_push.device_delete",
+        "tags": [
+          "Admin - Web Push"
+        ],
+        "summary": "Remove one of this staff member's browsers",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Removes one of the signed-in staff member's own browsers from the dashboard; an agent has no browser."
+        },
+        "x-scalius-rbac": {
+          "type": "allowAnyAdmin"
         }
       }
     },

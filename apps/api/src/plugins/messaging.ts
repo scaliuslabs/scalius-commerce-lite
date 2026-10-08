@@ -1,4 +1,4 @@
-// `ctx.messaging`: e-mail and SMS through the store's configured providers
+// `ctx.messaging`: e-mail, SMS and buyer pushes through the store's configured providers
 // (the same core integrations order notifications use) and staff pushes
 // through the staff notice path. Contact details are resolved here from the
 // customer id when the plugin passes one; sending to customers needs the
@@ -178,5 +178,37 @@ export async function notifyPluginStaff(
     body: body ?? "",
     link: url ? resolveDashboardLink(env, url) : null,
     data: { pluginId: context.pluginId, notificationType: "plugin_notice" },
+  });
+}
+
+/**
+ * A browser notification to one buyer through the store's push delivery
+ * (Web Push, or the merchant's app push provider). It reaches a customer, so
+ * it needs `customers.view`; the link is a store path, never another site.
+ */
+export async function pushPluginCustomer(
+  context: PluginMessagingContext,
+  input: { customerId: string; title: string; body?: string; url?: string; tag?: string },
+): Promise<{ delivered: boolean }> {
+  requireContactAccess(context);
+  if (typeof input?.customerId !== "string" || input.customerId.length < 1 || input.customerId.length > 128) {
+    throw new PluginError("messaging.invalid", "customerId is a customer id.");
+  }
+  const title = text(input.title, "title", 120)!;
+  const body = text(input.body, "body", 500, false);
+  const url = input.url;
+  if (url !== undefined && (typeof url !== "string" || !/^\/(?!\/)[^\s\\]{0,1999}$/.test(url) || url.startsWith("/admin"))) {
+    throw new PluginError("messaging.invalid", "url is a store path starting with /.");
+  }
+  const tag = input.tag;
+  if (tag !== undefined && (typeof tag !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(tag))) {
+    throw new PluginError("messaging.invalid", "tag is 1 to 64 lowercase letters, digits, dots, colons, dashes or underscores.");
+  }
+  await requireRate(context);
+  const { env, db, appProviders } = await messagingRuntime(context);
+  const { sendCustomerPush } = await import("@scalius/core/modules/notifications");
+  return sendCustomerPush(db, env as never, appProviders, {
+    customerId: input.customerId,
+    notification: { title, body: body ?? "", ...(url ? { url } : {}), ...(tag ? { tag: `${context.pluginId}:${tag}`.slice(0, 64) } : {}) },
   });
 }

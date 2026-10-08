@@ -133,7 +133,8 @@ export const ORDER_NOTIFICATION_LABELS: Record<OrderNotificationType, string> = 
  * to registered devices, email to the staff recipients). WhatsApp templates
  * are order-shaped, so thread replies never use them.
  */
-export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
+/** `push`: Web Push to the browsers a signed-in buyer subscribed (account page). */
+export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 export const ADMIN_NOTIFICATION_CHANNELS = ["push", "email"] as const;
 export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
 export type AdminNotificationChannel = (typeof ADMIN_NOTIFICATION_CHANNELS)[number];

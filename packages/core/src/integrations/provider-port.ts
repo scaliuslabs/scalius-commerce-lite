@@ -1,4 +1,5 @@
-// The SMS, email, fraud, tax, translation and AI ports as core calls them (docs/platform/PLUGINS.md,
+// The SMS, email, fraud, tax, translation, AI, messaging, push, search,
+// address, FX and identity ports as core calls them (docs/platform/PLUGINS.md,
 // "Providers"). Every provider a merchant can choose, built in (an adapter in
 // this package bound to its saved settings) or an app's
 // (`<plugin id>:<provider id>`), is one `BoundProvider` of its port: callers
@@ -32,6 +33,8 @@ export type BoundProvider<K extends ProviderKind> = ProviderPort<K, ProviderCall
   readonly label: string;
   /** The countries it serves (a fraud checker's buyers); absent means any. */
   readonly countries?: ProviderCountries;
+  /** The chat channels a messaging provider carries (`whatsapp`, ...); absent for other ports. */
+  readonly channels?: readonly string[];
 };
 
 /** A built-in call: the adapter's saved settings travel with the call. */
@@ -61,7 +64,8 @@ export function bindProvider<K extends ProviderKind, S>(kind: K, adapter: BuiltI
   return bound as BoundProvider<K>;
 }
 
-export type AppProviderKind = "sms" | "email" | "fraud" | "tax" | "translation" | "ai";
+/** The ports core reaches through `AppProviders` (payments and couriers have their own registries). */
+export type AppProviderKind = Exclude<ProviderKind, "payment" | "courier">;
 
 /**
  * Whether a saved choice names an app provider (`<plugin id>:<provider id>`)

@@ -105,6 +105,40 @@ export function activePluginBlockPages(installations: Iterable<PluginInstallatio
   return PLUGIN_BLOCK_PAGES.filter((page) => pages.has(page));
 }
 
+/** The buyer-facing services active apps provide, as the layout tells the storefront. */
+export interface PluginStorefrontServices {
+  /** The search app that ranks predictive search (`<plugin id>:<provider id>`), or null for built-in search. */
+  search: string | null;
+  /** The address autocomplete app at checkout, with the countries it knows. */
+  address: { id: string; countries: "any" | string[] } | null;
+  /** Sign-in apps the sign-in page offers ("Continue with …"), in app id order. */
+  signIn: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Which buyer services active apps approved for those ports provide, from
+ * active installations already read (no read of its own). The first app by
+ * id answers search and address; every sign-in app is offered. Readiness
+ * (settings) is checked where the service is used: search then falls back
+ * to built-in search, address gives no suggestions, sign-in returns to the
+ * sign-in page.
+ */
+export function activePluginStorefrontServices(installations: Iterable<PluginInstallation>): PluginStorefrontServices {
+  const services: PluginStorefrontServices = { search: null, address: null, signIn: [] };
+  const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+  for (const installation of sorted) {
+    const approved = installation.grant?.providers ?? [];
+    for (const provider of installation.manifest.providers) {
+      if (!approved.includes(provider.kind)) continue;
+      const id = `${installation.pluginId}:${provider.id}`;
+      if (provider.kind === "search") services.search ??= id;
+      else if (provider.kind === "address") services.address ??= { id, countries: provider.countries === "any" ? "any" : [...provider.countries] };
+      else if (provider.kind === "identity" && services.signIn.length < 6) services.signIn.push({ id, name: provider.name });
+    }
+  }
+  return services;
+}
+
 /**
  * What drawing one page group's blocks reads, in one batch: every active
  * installation (`plg:*`: an app that starts or stops drawing changes the

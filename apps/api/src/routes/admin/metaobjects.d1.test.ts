@@ -59,7 +59,7 @@ const FAQ = {
     { key: "question", name: "Question", type: "single_line_text", required: true },
     { key: "answer", name: "Answer", type: "multi_line_text", required: true },
     { key: "fee", name: "Fee", type: "money" },
-  ],
+  ] as Array<{ key: string; name: string; type: "single_line_text" | "multi_line_text" | "money" | "integer"; required?: boolean }>,
   storefrontAccess: true,
 };
 

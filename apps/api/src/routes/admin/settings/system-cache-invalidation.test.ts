@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   saveCheckoutFlowSettingsDocument: vi.fn(),
   getActivePaymentMethods: vi.fn(),
   readFirebaseSettings: vi.fn(),
+  assertMessagingProviderCarries: vi.fn(),
+  appProviders: { current: null as unknown },
 }));
 
 vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
@@ -55,6 +57,20 @@ vi.mock("@scalius/core/integrations/whatsapp", () => ({
 vi.mock("@scalius/core/integrations/sms", () => ({
   getSmsProviderReadiness: mocks.getSmsProviderReadiness,
 }));
+
+// The chat-channel check reads the installed apps; a test names the answer.
+vi.mock("../../../plugins/providers/channels", () => ({
+  assertMessagingProviderCarries: mocks.assertMessagingProviderCarries,
+}));
+
+vi.mock("../../../plugins/providers/app-providers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../plugins/providers/app-providers")>();
+  return {
+    ...actual,
+    requestAppProviders: (...args: Parameters<typeof actual.requestAppProviders>) =>
+      (mocks.appProviders.current as ReturnType<typeof actual.requestAppProviders> | null) ?? actual.requestAppProviders(...args),
+  };
+});
 
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
   normalizeFirebaseServiceAccountJson: mocks.normalizeFirebaseServiceAccountJson,
@@ -639,6 +655,114 @@ describe("system settings write behavior", () => {
     expect(JSON.stringify(whatsapp)).not.toContain("EAAG_meta_token");
     // The provider pause is cleared in the same write.
     expect(providerBlocks(database)).toEqual([]);
+  });
+
+  describe("WhatsApp through a chat app", () => {
+    const APP_ID = "acme.chat:whatsapp";
+
+    function appLookup(provider: { channels: readonly string[] } | null, issue = "Acme Chat needs its access token.") {
+      mocks.appProviders.current = {
+        resolve: vi.fn(async () => (provider
+          ? { provider: { id: APP_ID, label: "Acme Chat", ...provider }, issue: null }
+          : { provider: null, issue })),
+      };
+    }
+
+    afterEach(() => {
+      mocks.appProviders.current = null;
+    });
+
+    it("saves an installed app that carries WhatsApp and clears the WhatsApp provider pause in the same write", async () => {
+      mocks.assertMessagingProviderCarries.mockResolvedValue(undefined);
+      const { app, env, executionCtx, database } = await createTestApp(({ sqlite }) => {
+        sqlite.exec(`INSERT INTO settings (id, key, value, type, category)
+          VALUES ('health', 'whatsapp:whatsapp', '{}', 'json', 'notification_provider_health')`);
+      });
+
+      const response = await requestJson(app, env, executionCtx, "/auth", { whatsappProvider: APP_ID });
+
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(mocks.assertMessagingProviderCarries).toHaveBeenCalledWith(expect.anything(), APP_ID, "whatsapp");
+      expect(stored(database, "whatsapp")).toMatchObject({ provider: APP_ID });
+      expect(providerBlocks(database)).toEqual([]);
+    });
+
+    it("returns the saved provider, and an empty one for the built-in sender", async () => {
+      mocks.getWhatsAppCloudApiSettings.mockResolvedValueOnce({
+        accessToken: undefined,
+        accessTokenConfigured: false,
+        phoneNumberId: "",
+        authTemplateName: "auth_otp",
+        provider: APP_ID,
+      });
+      const { app, env, executionCtx } = await createTestApp();
+
+      const body = await (await requestGet(app, env, executionCtx, "/auth")).json() as { data: { whatsappProvider: string } };
+      expect(body.data.whatsappProvider).toBe(APP_ID);
+
+      const builtIn = await (await requestGet(app, env, executionCtx, "/auth")).json() as { data: { whatsappProvider: string } };
+      expect(builtIn.data.whatsappProvider).toBe("");
+    });
+
+    it("refuses an app that is not installed or does not carry WhatsApp, and stores nothing", async () => {
+      mocks.assertMessagingProviderCarries.mockRejectedValue(new ValidationError("This app does not send on WhatsApp. Choose a provider that does."));
+      const { app, env, executionCtx, database } = await createTestApp();
+
+      const response = await requestJson(app, env, executionCtx, "/auth", { whatsappProvider: APP_ID });
+
+      expect(response.status, await response.clone().text()).toBe(400);
+      expect(stored(database, "whatsapp")).toBeNull();
+    });
+
+    it("refuses a provider id that is not <plugin id>:<provider id> before reading any app", async () => {
+      const { app, env, executionCtx, database } = await createTestApp();
+
+      const response = await requestJson(app, env, executionCtx, "/auth", { whatsappProvider: "not-an-app-id" });
+
+      expect(response.status, await response.clone().text()).toBe(400);
+      expect(mocks.assertMessagingProviderCarries).not.toHaveBeenCalled();
+      expect(stored(database, "whatsapp")).toBeNull();
+    });
+
+    it("switches back to the built-in sender with an empty provider, without asking an app", async () => {
+      const { app, env, executionCtx, database } = await createTestApp();
+
+      const response = await requestJson(app, env, executionCtx, "/auth", { whatsappProvider: "" });
+
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(mocks.assertMessagingProviderCarries).not.toHaveBeenCalled();
+      expect(stored(database, "whatsapp")).toMatchObject({ provider: "" });
+    });
+
+    it("lets WhatsApp codes be turned on when the chosen app can send them, without Meta credentials", async () => {
+      mocks.assertMessagingProviderCarries.mockResolvedValue(undefined);
+      appLookup({ channels: ["whatsapp"] });
+      const { app, env, executionCtx, database } = await createTestApp();
+
+      const response = await requestJson(app, env, executionCtx, "/auth", {
+        customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
+        whatsappProvider: APP_ID,
+      });
+
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(stored(database, "customer_auth")).toMatchObject({ channels: ["whatsapp"] });
+      expect(stored(database, "whatsapp")).toMatchObject({ provider: APP_ID });
+    });
+
+    it("keeps WhatsApp codes off when the chosen app cannot run, and stores nothing", async () => {
+      mocks.assertMessagingProviderCarries.mockResolvedValue(undefined);
+      appLookup(null);
+      const { app, env, executionCtx, database } = await createTestApp();
+
+      const response = await requestJson(app, env, executionCtx, "/auth", {
+        customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
+        whatsappProvider: APP_ID,
+      });
+
+      expect(response.status, await response.clone().text()).toBe(400);
+      expect(stored(database, "customer_auth")).toBeNull();
+      expect(stored(database, "whatsapp")).toBeNull();
+    });
   });
 
   it("rejects clearing WhatsApp credentials while the saved sign-in policy still uses WhatsApp", async () => {

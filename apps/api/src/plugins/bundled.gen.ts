@@ -7,17 +7,17 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.bangladesh": {
     version: "1.3.0",
-    sha256: "c67ed67423c5f1a13fb597e970b86f46e988cf5c5209d5a00a432018d7d1a3f2",
+    sha256: "5163859a39b9a8da7187ab4d2c1371d716535c3c1236e7a7a99f2faed644a50e",
     load: () => import("../../../../plugins/bangladesh/src/index"),
   },
   "scalius.bkash": {
     version: "0.1.2",
-    sha256: "d95039c0b1daa851e17c5e276edcd7ebbfea1eee6d3bcd2de0ad81361137bd1d",
+    sha256: "100fb1984187c9fad48b950f7c215c6de5fc9b22e3b4d0675491c2f01e2da262",
     load: () => import("../../../../plugins/bkash/src/index"),
   },
   "scalius.nagad": {
     version: "0.1.2",
-    sha256: "e2dac744e78b60ec3b0e5d621712ed494f5d7a621f104b3fa5d92f250c6ebc91",
+    sha256: "b4bef5f7f6dfc8119a4e964691b5dcf02849595fa8c551c2e778e608d2accea0",
     load: () => import("../../../../plugins/nagad/src/index"),
   },
 };

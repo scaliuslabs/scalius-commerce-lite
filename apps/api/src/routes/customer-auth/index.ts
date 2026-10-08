@@ -12,6 +12,7 @@ import { customerOrderListRoutes } from "./order-list";
 import { customerOrderRoutes } from "./orders";
 import { customerPhoneRoutes } from "./phone";
 import { customerProfileRoutes } from "./profile";
+import { customerPushRoutes } from "./push";
 import { customerReviewRoutes } from "./reviews";
 import { customerSessionRoutes } from "./session";
 import { customerWarrantyRoutes } from "./warranties";
@@ -31,5 +32,6 @@ app.route("/", customerGiftCardRoutes);
 app.route("/", customerWarrantyRoutes);
 app.route("/", customerMarketingRoutes);
 app.route("/", customerAddressRoutes);
+app.route("/", customerPushRoutes);
 
 export { app as customerAuthRoutes };

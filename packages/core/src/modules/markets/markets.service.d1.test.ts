@@ -15,6 +15,7 @@ import { readMarketMatrix, readPresenceMarketWithDocuments } from "./matrix";
 import { addStoreLanguage, setStoreLanguagePublished } from "../translations/store-languages.service";
 import { orderMarketId, orderMarketIdSql } from "./order-market";
 import { readStoreCurrency } from "./pricing";
+import { refreshMarketFxRates } from "./fx-refresh";
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -212,5 +213,38 @@ describe("the presence matrix", () => {
         const [none] = await db.select({ id: orderMarketIdSql(null) }).from(sql`(SELECT 1 AS one) AS probe`);
         expect(none!.id).toBe("mkt_backup");
         expect(orderMarketId(await readMarketMatrix(db), null)).toBe("mkt_backup");
+    });
+});
+
+describe("exchange rates from an app", () => {
+    it("takes an app source only for a market in its own currency, and the tick stores its answers", async () => {
+        const india = await createMarket(db, { name: "India", status: "active", countries: ["IN"], presence: null });
+        await expect(updateMarket(db, india.id, { expectedRevision: 1, fxRateSource: "acme.rates:rates", fxRate: "1" }))
+            .rejects.toThrow(/shop currency/);
+        const own = (await updateMarket(db, india.id, { expectedRevision: 1, currencyCode: "INR", fxRate: "0.7" }, { chargeable: "any" })).market;
+        expect(own.fxRateSource).toBe("manual");
+        await expect(updateMarket(db, india.id, { expectedRevision: own.revision, fxRateSource: "acme.rates:rates" }))
+            .rejects.toThrow(/not given a rate/);
+        await expect(updateMarket(db, india.id, { expectedRevision: own.revision, fxRateSource: "not an id", fxRate: "0.7" }))
+            .rejects.toThrow(ValidationError);
+        const app = (await updateMarket(db, india.id, { expectedRevision: own.revision, fxRateSource: "acme.rates:rates", fxRate: "0.71" })).market;
+        expect(app).toMatchObject({ fxRateSource: "acme.rates:rates", fxRate: "0.71" });
+
+        const asked: string[] = [];
+        const answer = { rate: "0.72", asOf: new Date("2026-10-08T00:00:00Z") };
+        const sourceOf = async (id: string) => id === "acme.rates:rates"
+            ? { id, rate: async (from: string, to: string) => (asked.push(`${from}->${to}`), answer) }
+            : null;
+        expect(await refreshMarketFxRates(db, sourceOf)).toEqual({ markets: 1, changed: 1, failed: 0 });
+        expect(asked).toEqual(["BDT->INR"]);
+        expect(await getMarket(db, india.id)).toMatchObject({ fxRate: "0.72", fxRateAsOf: answer.asOf, revision: app.revision });
+        // A failing source keeps the last rate.
+        const failing = async () => ({ id: "x", rate: async (): Promise<null> => { throw new Error("down"); } });
+        expect(await refreshMarketFxRates(db, failing)).toEqual({ markets: 1, changed: 0, failed: 1 });
+        expect((await getMarket(db, india.id)).fxRate).toBe("0.72");
+        // Back to manual: the tick leaves it alone.
+        const manual = (await updateMarket(db, india.id, { expectedRevision: app.revision, fxRateSource: "manual", fxRate: "0.8" })).market;
+        expect(manual).toMatchObject({ fxRateSource: "manual", fxRate: "0.8" });
+        expect(await refreshMarketFxRates(db, sourceOf)).toEqual({ markets: 0, changed: 0, failed: 0 });
     });
 });

@@ -21,6 +21,22 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
     principals: ["customer"],
     reason: "Marketing consent is the buyer's own choice, made in the hosted account page; agents never change it for them.",
   },
+  // A browser subscribes itself on the hosted account page; an agent has no browser to subscribe.
+  "storefront.customer_auth_push.state": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason: "Customer-cookie Web Push state for the hosted account page and this browser.",
+  },
+  "storefront.customer_auth_push.subscribe": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason: "The buyer subscribes their own browser (its push endpoint and keys) on the hosted account page.",
+  },
+  "storefront.customer_auth_push.unsubscribe": {
+    exposure: "excluded",
+    principals: ["customer"],
+    reason: "The buyer removes their own browser on the hosted account page.",
+  },
   "storefront.marketing.subscribe": {
     exposure: "excluded",
     openWorld: true,

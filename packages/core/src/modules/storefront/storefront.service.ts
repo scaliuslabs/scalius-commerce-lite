@@ -76,7 +76,7 @@ import {
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
-import { activePluginBlockPages } from "./app-render";
+import { activePluginBlockPages, activePluginStorefrontServices } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
     NAME_FIELDS,
@@ -745,6 +745,8 @@ export async function getLayoutData(
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     appBlockPages: activePluginBlockPages(activeApps.values()),
+    // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.
+    appServices: activePluginStorefrontServices(activeApps.values()),
   };
 }
 

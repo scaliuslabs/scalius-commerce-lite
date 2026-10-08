@@ -75,4 +75,15 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
       "Legacy variant aggregate duplicates storefront.products.list plus storefront.products.get_section.",
   },
   "storefront.search.predict": { limits: { request: 16_384, response: 32_768 } },
+  // A checkout form's typing aid; an agent sends the address it already has.
+  "storefront.address_autocomplete.suggest": {
+    exposure: "excluded",
+    openWorld: true,
+    reason: "Checkout typing aid backed by the store's address app; agents submit complete addresses through checkout.",
+  },
+  "storefront.address_autocomplete.resolve": {
+    exposure: "excluded",
+    openWorld: true,
+    reason: "Checkout typing aid backed by the store's address app; agents submit complete addresses through checkout.",
+  },
 } satisfies Record<string, OperationRegistryEntry>;

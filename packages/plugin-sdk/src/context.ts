@@ -149,6 +149,13 @@ export interface PluginMessaging {
   sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
+  /**
+   * A browser notification to one signed-in buyer (needs `customers.view`):
+   * Web Push to the browsers they subscribed on their account page, or the
+   * store's app push provider. `url` is a store path (`/account/orders`).
+   * `delivered: false` when the buyer has no subscribed browser.
+   */
+  pushCustomer(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
 }
 
 /** Typed lines on order timelines (needs `orders.edit`; each kind declared in `manifest.timeline`). */

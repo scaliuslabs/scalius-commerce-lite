@@ -187,6 +187,16 @@ export interface LayoutData {
    */
   appBlockPages?: Array<"checkout" | "order" | "account">;
   /**
+   * Buyer services active apps provide: the search app predictive search
+   * passes to /search, the address autocomplete app at checkout, and the
+   * sign-in apps. Absent from an older API: none.
+   */
+  appServices?: {
+    search: string | null;
+    address: { id: string; countries: "any" | string[] } | null;
+    signIn: Array<{ id: string; name: string }>;
+  };
+  /**
    * Every active market with its countries and subfolder presences (backup
    * first): hreflang, the market selector and the presence a page renders.
    * Absent from an older API: the store has its root presence only.

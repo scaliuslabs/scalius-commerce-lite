@@ -82,10 +82,13 @@ export function isMarketPriceMode(value: unknown): value is MarketPriceMode {
 // ---------------------------------------------------------------------------
 
 /**
- * Where a market's exchange rate comes from. Step 4a ships the manual source
- * only: the merchant's rate on the market (or "1" while the market sells the
- * shop currency). A rate provider (ECB, an app) implements this port later
- * (`docs/MARKETS-DESIGN.md`, "Step 4a implemented", left for later).
+ * Where a market's exchange rate comes from (`markets.fx_rate_source`). The
+ * default is the manual source: the merchant's rate on the market (or "1"
+ * while the market sells the shop currency). An app FX provider
+ * (`<plugin id>:<provider id>`, the `fx` provider port) is the other: the
+ * scheduled tick asks it and stores the answer on the market
+ * (`refreshMarketFxRates`), so a page or a checkout never waits on it and an
+ * order records the source and time of its rate.
  */
 export interface FxRateSource {
   readonly id: string;
@@ -93,7 +96,7 @@ export interface FxRateSource {
   rate(from: string, to: string): Promise<{ rate: string; asOf: Date | null } | null>;
 }
 
-/** The only source in step 4a: the market's manual rate. */
+/** The default source: the market's manual rate. */
 export const MANUAL_FX_RATE_SOURCE_ID = "manual";
 
 /**

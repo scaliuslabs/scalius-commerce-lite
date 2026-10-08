@@ -10,6 +10,10 @@ import type { Context } from "hono";
 import { createMarket, deleteMarket, getMarket, listMarkets, listOwnMarketCurrencies, readStoreCurrency, updateMarket } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { MANUAL_FX_RATE_SOURCE_ID } from "@scalius/shared/market-pricing";
+import { ValidationError } from "../../../utils/api-error";
+import { appFxRateSource } from "../../../plugins/providers/fx";
+import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import { created, ok } from "../../../utils/api-response";
@@ -124,15 +128,21 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   noStore(c);
-  const { priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding, ...body } = c.req.valid("json");
+  const { priceMode, fxRate: manualRate, priceAdjustmentPercent, priceRounding, priceEnding, ...body } = c.req.valid("json");
   const db = c.get("db");
   const id = c.req.valid("param").id;
   // Pricing amounts arrive in major units of the currency the market will sell in.
   const amounts = priceRounding !== undefined || priceEnding !== undefined;
-  const current = amounts || body.currencyCode ? await getMarket(db, id) : null;
+  const appSource = body.fxRateSource !== undefined && body.fxRateSource !== MANUAL_FX_RATE_SOURCE_ID;
+  const current = amounts || body.currencyCode || appSource || manualRate !== undefined ? await getMarket(db, id) : null;
   const currencyCode = body.currencyCode !== undefined
     ? normalizeSupportedCurrencyCode(body.currencyCode) ?? current?.shopCurrencyCode ?? "BDT"
     : current?.currencyCode ?? "BDT";
+  // An app sets the rate: it is asked now (the save fails without an answer), and a typed rate is ignored.
+  const nextSource = body.fxRateSource ?? current?.fxRateSource ?? MANUAL_FX_RATE_SOURCE_ID;
+  const fxRate = appSource && current
+    ? await appFxRateNow(c, body.fxRateSource!, current.shopCurrencyCode, currencyCode)
+    : nextSource === MANUAL_FX_RATE_SOURCE_ID ? manualRate : undefined;
   const pricing = marketPricingInput({ priceMode, fxRate, priceAdjustmentPercent, priceRounding, priceEnding }, currencyCode);
   // A market's own currency must be one an active payment method charges.
   const chargeable = body.currencyCode
@@ -147,6 +157,17 @@ app.openapi(createRoute({
   }
   return ok(c, { market: presentMarket(market) });
 });
+
+/** The exchange rate app's rate for the market currency now, or the merchant-facing reason it has none. */
+async function appFxRateNow(c: Context<{ Bindings: Env }>, sourceId: string, shopCurrencyCode: string, currencyCode: string): Promise<string> {
+  await assertAppProviderInstalled(c.get("db"), "fx", sourceId);
+  const source = await appFxRateSource(requestAppProviders(c), sourceId);
+  if ("issue" in source) throw new ValidationError(source.issue);
+  if (currencyCode === shopCurrencyCode) throw new ValidationError(`This market sells in ${shopCurrencyCode}, the shop currency, so it needs no exchange rate.`);
+  const answer = await source.rate(shopCurrencyCode, currencyCode).catch(() => null);
+  if (!answer) throw new ValidationError(`${source.label} gave no ${currencyCode} rate. Check the app's settings, or keep manual rates.`);
+  return answer.rate;
+}
 
 app.openapi(createRoute({
   operationId: "dashboard.markets.delete",
