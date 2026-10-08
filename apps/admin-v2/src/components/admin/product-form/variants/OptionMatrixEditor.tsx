@@ -120,13 +120,17 @@ type OptionMatrixEditorProps = {
   fulfilmentMode?: ProductFulfilmentMode;
 };
 
+// One array for "none saved": a default of `[]` is a new array on every render, which made the memos below and the draft effect run on every render (and, with a parent that stores the draft, loop).
+const NO_OPTIONS: ProductOptionDefinition[] = [];
+const NO_VARIANTS: ProductVariant[] = [];
+
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
   productId,
   productName,
   productPrice,
   requirePositivePrice = false,
-  options: savedOptions = [],
-  variants: savedVariants = [],
+  options: savedOptions = NO_OPTIONS,
+  variants: savedVariants = NO_VARIANTS,
   images,
   aggregateRevision,
   onAggregateRevisionChange,

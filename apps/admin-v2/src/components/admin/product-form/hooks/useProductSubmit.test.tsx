@@ -48,6 +48,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../utils", async (importOriginal) => ({
   productSubmitChanges: (await importOriginal<typeof import("../utils")>()).productSubmitChanges,
+  problemLine: (await importOriginal<typeof import("../utils")>()).problemLine,
   formatFormValuesForSubmission: (values: unknown, changed: unknown) => {
     mocks.formatted(values, changed);
     return values;

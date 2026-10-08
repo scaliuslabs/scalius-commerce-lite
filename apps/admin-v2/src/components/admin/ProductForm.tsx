@@ -229,6 +229,8 @@ function ProductEditor({
       media: [],
       slugEdited: false,
       variantPriced: false,
+      // Set back to "none" by the Pricing card whenever it changes: without a default that is a change from the load.
+      compareAtProblem: null,
       attributes: [],
       additionalInfo: [],
       fulfillmentKind: "physical",
