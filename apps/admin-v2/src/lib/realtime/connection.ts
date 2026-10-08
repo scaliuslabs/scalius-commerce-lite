@@ -145,6 +145,14 @@ export class RealtimeConnection {
   private open(): void {
     if (this.stopped) return;
     this.clearTimers();
+    // One socket at a time: a socket still opening is dropped, never doubled.
+    const previous = this.socket;
+    this.socket = null;
+    try {
+      previous?.close(1000);
+    } catch {
+      // Already gone.
+    }
     this.setStatus("connecting");
     let socket: SocketLike;
     try {
@@ -283,4 +291,44 @@ export class RealtimeConnection {
     this.pingTimer = null;
     this.pongTimer = null;
   }
+}
+
+/**
+ * The tab's one connection. Holders share it; the last release stops it on
+ * the next task, so a remount (React's StrictMode replay, the frame switching
+ * layout) takes the same socket over instead of opening a second one. A new
+ * `key` (another user, other permissions) replaces it: the hub proves who the
+ * socket is at the upgrade only.
+ */
+let shared: { key: string; connection: RealtimeConnection; holders: number } | null = null;
+
+export function acquireRealtimeConnection(
+  key: string,
+  create: () => RealtimeConnection = () => new RealtimeConnection(),
+): { connection: RealtimeConnection; release(): void } {
+  if (shared && shared.key !== key) {
+    shared.connection.stop();
+    shared = null;
+  }
+  if (!shared) {
+    shared = { key, connection: create(), holders: 0 };
+    shared.connection.start();
+  }
+  const entry = shared;
+  entry.holders += 1;
+  let released = false;
+  return {
+    connection: entry.connection,
+    release() {
+      if (released) return;
+      released = true;
+      entry.holders -= 1;
+      if (entry.holders > 0) return;
+      setTimeout(() => {
+        if (entry.holders > 0) return;
+        entry.connection.stop();
+        if (shared === entry) shared = null;
+      }, 0);
+    },
+  };
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RealtimeConnection } from "./connection";
+import { acquireRealtimeConnection, RealtimeConnection } from "./connection";
 
 class FakeSocket {
   static all: FakeSocket[] = [];
@@ -111,5 +111,60 @@ describe("RealtimeConnection", () => {
     expect(FakeSocket.all).toHaveLength(3);
     window.dispatchEvent(new Event("online"));
     expect(FakeSocket.all).toHaveLength(4);
+  });
+});
+
+describe("acquireRealtimeConnection: one socket per tab", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    FakeSocket.all = [];
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const create = () => new RealtimeConnection({
+    createSocket: (url) => new FakeSocket(url) as unknown as WebSocket,
+    url: () => "wss://admin.shop.test/api/realtime",
+    random: () => 1,
+  });
+
+  it("a remount (StrictMode replay, a layout switch) takes the same socket over", () => {
+    const first = acquireRealtimeConnection("usr_1", create);
+    first.release();
+    const second = acquireRealtimeConnection("usr_1", create);
+    vi.advanceTimersByTime(0);
+    expect(second.connection).toBe(first.connection);
+    expect(FakeSocket.all).toHaveLength(1);
+    expect(FakeSocket.all[0]!.closedWith).toBeNull();
+    // Two holders at once share it too.
+    const third = acquireRealtimeConnection("usr_1", create);
+    expect(third.connection).toBe(first.connection);
+    second.release();
+    third.release();
+    vi.advanceTimersByTime(0);
+    expect(FakeSocket.all[0]!.closedWith).toBe(1000);
+    expect(FakeSocket.all).toHaveLength(1);
+  });
+
+  it("another user or other permissions replace the socket", () => {
+    const first = acquireRealtimeConnection("usr_1", create);
+    const other = acquireRealtimeConnection("usr_2", create);
+    expect(other.connection).not.toBe(first.connection);
+    expect(FakeSocket.all[0]!.closedWith).toBe(1000);
+    expect(FakeSocket.all).toHaveLength(2);
+    first.release();
+    vi.advanceTimersByTime(0);
+    expect(FakeSocket.all[1]!.closedWith).toBeNull();
+    other.release();
+    vi.advanceTimersByTime(0);
+  });
+
+  it("never holds two sockets while one is still opening", () => {
+    const { connection, release } = acquireRealtimeConnection("usr_3", create);
+    // The pong timeout path and a wake can both ask to open: the opening socket is dropped first.
+    (connection as unknown as { open(): void }).open();
+    expect(FakeSocket.all).toHaveLength(2);
+    expect(FakeSocket.all[0]!.closedWith).toBe(1000);
+    release();
+    vi.advanceTimersByTime(0);
   });
 });
