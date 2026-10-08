@@ -31,6 +31,8 @@ export const HOME_COLLECTIONS_FALLBACK_LIMIT = 8;
 export const HOME_BRAND_LIMIT = 24;
 /** Promotions whose end times the deal countdowns read. */
 export const HOME_MAX_PROMOTIONS = 4;
+/** Metaobject content types the Metaobjects sections of one page read. */
+export const HOME_MAX_METAOBJECT_TYPES = 4;
 
 export interface HomeProductListRequest {
   /** `storefrontProductSourceKey(source)`. */
@@ -54,6 +56,14 @@ export interface HomeSectionRequests {
   homeProductId: string | null;
   /** App sections in document order (`PLUGIN_HOME_SECTIONS_MAX` at most); the API asks each app to draw its own. */
   apps?: HomeAppSectionRequest[];
+  /** The Metaobjects sections' content types, each with the most entries any of its sections shows. */
+  metaobjects?: HomeMetaobjectRequest[];
+}
+
+/** One content type a Metaobjects section shows, and how many entries. */
+export interface HomeMetaobjectRequest {
+  definitionId: string;
+  limit: number;
 }
 
 /** One app section the homepage shows: which app and type, and the merchant's values. */
@@ -147,6 +157,7 @@ export function homeSectionRequests(
   const collectionIds = new Set<string>();
   const promotionIds = new Set<string>();
   const apps: HomeAppSectionRequest[] = [];
+  const metaobjects = new Map<string, HomeMetaobjectRequest>();
   let brandLimit = 0;
   for (const shown of sections) {
     if (shown.hidden) continue;
@@ -176,6 +187,13 @@ export function homeSectionRequests(
       for (const id of section.settings.collectionIds) if (collectionIds.size < HOME_MAX_COLLECTIONS) collectionIds.add(id);
     }
     if (section.type === "brand-wall") brandLimit = HOME_BRAND_LIMIT;
+    if (section.type === "metaobjects" && section.settings.definitionId) {
+      const existing = metaobjects.get(section.settings.definitionId);
+      if (existing) existing.limit = Math.max(existing.limit, section.settings.limit);
+      else if (metaobjects.size < HOME_MAX_METAOBJECT_TYPES) {
+        metaobjects.set(section.settings.definitionId, { definitionId: section.settings.definitionId, limit: section.settings.limit });
+      }
+    }
     if (section.type === "deal-block" && section.settings.promotionId && promotionIds.size < HOME_MAX_PROMOTIONS) {
       promotionIds.add(section.settings.promotionId);
     }
@@ -189,6 +207,7 @@ export function homeSectionRequests(
     promotionIds: [...promotionIds],
     homeProductId: homeMode.kind === "product" ? homeMode.productId : null,
     apps,
+    metaobjects: [...metaobjects.values()],
   };
 }
 
@@ -197,5 +216,6 @@ export function homeSectionRequestsEmpty(requests: HomeSectionRequests): boolean
   return requests.lists.length === 0 && requests.mediaIds.length === 0
     && requests.categoryIds.length === 0 && requests.collectionIds.length === 0
     && requests.brandLimit === 0 && requests.promotionIds.length === 0
-    && requests.homeProductId === null && (requests.apps ?? []).length === 0;
+    && requests.homeProductId === null && (requests.apps ?? []).length === 0
+    && (requests.metaobjects ?? []).length === 0;
 }

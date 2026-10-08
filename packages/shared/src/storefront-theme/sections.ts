@@ -377,6 +377,24 @@ export const STOREFRONT_SECTION_REGISTRY = {
     defaults: { title: "" },
   }),
   /**
+   * A metaobject content type's published entries (Shopify's metaobject
+   * sections): an FAQ, a size chart, designers, store locations. The
+   * merchant picks the content type (it must allow storefront access); the
+   * section shows up to `limit` entries in their order, each its display
+   * field and the rest of its fields, as a list, cards or questions that
+   * open. Nothing shows while the type is unset, gone or private.
+   */
+  metaobjects: section({
+    type: "metaobjects",
+    settings: z.object({
+      heading,
+      definitionId: z.string().trim().max(64),
+      layout: z.enum(["list", "grid", "accordion"]),
+      limit: z.number().int().min(1).max(24),
+    }).strict(),
+    defaults: { heading: "", definitionId: "", layout: "list", limit: 12 },
+  }),
+  /**
    * The newsletter signup (Dawn's email signup, Fabrilife's band): the
    * phone always (customer identity; it subscribes to SMS), the e-mail as
    * `email` says, and with `whatsapp` a box that adds WhatsApp for the same

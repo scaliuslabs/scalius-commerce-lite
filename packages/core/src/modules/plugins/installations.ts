@@ -7,6 +7,7 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   customFieldDefinitions,
+  metaobjectDefinitions,
   pluginCronRuns,
   pluginEventDeliveries,
   pluginInstallations,
@@ -649,6 +650,8 @@ export async function uninstallPlugin(
           db.delete(pluginMigrations).where(eq(pluginMigrations.pluginId, pluginId)),
           // Plugin namespaces are plugin ids (COMMERCE-HOOKS H4); values cascade.
           db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
+          // Its content types and, by cascade, their entries.
+          db.delete(metaobjectDefinitions).where(eq(metaobjectDefinitions.namespace, pluginId)),
         ]),
     ] as never);
   } catch (error) {

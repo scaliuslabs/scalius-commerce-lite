@@ -13,6 +13,7 @@ import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { PLUGIN_SETTING_KEY, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
+import { metaobjectDefinitionInputSchema } from "../metaobjects";
 import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
@@ -459,6 +460,15 @@ export const pluginManifestSchema = z.object({
   storage: z.record(name, storageCollectionSchema).default({})
     .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
   customFields: z.array(customFieldSchema).max(50).default([]),
+  /**
+   * Content types the app defines (Shopify metaobjects), in its own
+   * namespace (`<app id>.<type>`): created or updated when the app is
+   * activated or updated; only the app changes them. Their entries are store
+   * content the merchant edits too (and the app through `ctx.api` with
+   * `metaobjects.edit`). Uninstalling with "delete data" removes them.
+   */
+  metaobjects: z.array(metaobjectDefinitionInputSchema).max(10).default([])
+    .refine((types) => new Set(types.map((type) => type.type)).size === types.length, "Metaobject types must be unique."),
   /**
    * Versioned data updates of the app's own storage (`migrations` handlers,
    * keyed by version). The platform runs each one once, in order, before the

@@ -197,6 +197,22 @@ const homepageSectionsSchema = z.object({
   apps: z.array(appSurfaceRenderSchema.extend({ sectionId: z.string() })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
     description: "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.",
   }),
+  metaobjects: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    entries: z.array(z.object({
+      handle: z.string(),
+      title: z.string(),
+      fields: z.array(z.object({
+        key: z.string(),
+        name: z.string(),
+        type: z.string(),
+        value: z.string().openapi({ description: "The stored canonical text: money in integer minor units, a media reference its media id (in media), a list a JSON array." }),
+      })),
+    })),
+  })).optional().openapi({
+    description: "The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id.",
+  }),
 }).openapi("StorefrontHomepageSections");
 const homepageDataSchema = z.object({
   seo: z.object({

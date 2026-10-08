@@ -100,6 +100,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
 
   // Pages
   "/admin/pages": { permission: PERMISSIONS.PAGES_VIEW },
+  "/admin/metaobjects": { permission: PERMISSIONS.METAOBJECTS_VIEW },
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
   "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
