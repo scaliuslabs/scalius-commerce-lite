@@ -181,13 +181,11 @@ const pills = navigation
     font-weight: 600;
   }
 
+  /* The ring is the link's own (the shared focus ring), rounded like the pill
+     and drawn inside the 44px target so the scrolling list never clips it. */
   .pill-nav-link:focus-visible {
-    outline: none;
-  }
-
-  .pill-nav-link:focus-visible > span {
-    outline: 2px solid var(--foreground);
-    outline-offset: 2px;
+    border-radius: 9999px;
+    outline-offset: -2px;
   }
 
   @media (prefers-reduced-motion: reduce) {

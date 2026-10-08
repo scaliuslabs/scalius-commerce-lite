@@ -532,7 +532,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     {
       !hideFooter && (
-        <div class="storefront-deferred-region" data-theme-section-id={isThemePreview ? THEME_EDITOR_MARKS.footer : undefined}>
+        <div data-theme-section-id={isThemePreview ? THEME_EDITOR_MARKS.footer : undefined}>
           <Footer
             menus={layoutData?.footerMenus ?? []}
             storeName={storeDisplayName}
@@ -606,9 +606,3 @@ const pageStoreTimeZone = storeTimeZone();
   </body>
 </html>
 
-<style is:global>
-  .storefront-deferred-region {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 480px;
-  }
-</style>

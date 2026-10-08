@@ -282,7 +282,7 @@ function optionAriaLabel(
             {formatPrice(pricing.originalPrice)}
           </s>
         </div>
-        <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
+        <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
         {factPills && (
           <div id="product-stock-badge" class:list={["buy-box-fact-pill", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
             <span class="text-muted-foreground">Status:</span><span id="product-stock-text" class="font-semibold">{buyerStockSummary.text}</span>

@@ -25,7 +25,7 @@ const merchantName = resolveStoreName(layoutData?.business) || copy.pageTitle;
       href="/"
       data-astro-prefetch={getStorefrontPrefetchAttribute("/", Astro.url)}
       class="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      aria-label={copy.homeAriaLabel}
+      aria-label={logoSrc ? copy.homeAriaLabel : undefined}
     >
       {
         logoSrc ? (

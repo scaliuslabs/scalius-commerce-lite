@@ -358,7 +358,7 @@ export default function OrderSuccessButtons({
 
       <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-start">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink">
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
@@ -394,7 +394,7 @@ export default function OrderSuccessButtons({
                   type="button"
                   className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
                     selectedSupportType === action.type
-                      ? "border-primary bg-primary/10 text-primary"
+                      ? "border-primary bg-primary/10 text-primary-ink-ink"
                       : action.eligible
                         ? "border-border bg-muted/20 text-foreground hover:border-primary/40"
                         : "border-border bg-muted/10 text-muted-foreground"

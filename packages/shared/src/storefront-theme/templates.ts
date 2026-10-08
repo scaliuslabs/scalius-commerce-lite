@@ -356,7 +356,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["detailed"],
       // Amazon: searches as rows, the phone's chip row with a split facet sheet.
       listing: {
-        layout: ["grid"], searchLayout: "list", filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
+        layout: ["grid"], searchLayout: "list", filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14 },
         toolbar: ["aspect-chips", "result-count", "sort", "applied-chips", "grid-list-toggle"],
         phoneLayout: "grid",
         paging: "numbered",
@@ -437,7 +437,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["accordion-drawer"],
       card: ["mall"],
       // No per-page: the default listing stays compact, without extra crawl variants.
-      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["mall"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
       footer: ["product-widgets"],
     }),
