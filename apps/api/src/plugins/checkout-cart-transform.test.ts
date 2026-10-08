@@ -255,6 +255,35 @@ describe("cart.transform (real schema, test apps)", () => {
     ]);
   });
 
+  it("shows the transform the same cart on the cart page and at placement: catalogue prices, before app prices", async () => {
+    await installApp("acme.both", [{ point: "cart.transform" }, { point: "cart.line_prices" }]);
+    const seen: number[] = [];
+    let linePriceCalls = 0;
+    answers["acme.both"] = (point, fn) => {
+      const cart = fn.cart as { lines: Array<{ lineId: string; unitPriceMinor: number }> };
+      if (point === "cart.transform") {
+        seen.push(cart.lines[0]!.unitPriceMinor);
+        return ok({ operations: [] });
+      }
+      linePriceCalls += 1;
+      return ok({ prices: cart.lines.map((entry) => ({ lineId: entry.lineId, unitPriceMinor: 40_000 })) });
+    };
+    const lines = [line("p_tea", "v_tea", 1, 400)];
+    const runner = await apps();
+    const cart = await validateStorefrontCartItems(db, lines, {
+      currencyCode: "BDT", priceIncrementMinor: 100,
+      linePricer: createAppLinePricer(db, runner, context),
+      transformer: createCartTransformer(db, runner, context),
+    });
+    expect(cart.valid).toBe(true);
+    linePriceCalls = 0;
+    const { reads } = await place(input(lines));
+    expect(reads.authority().cartValidation.items.map((item) => item.unitPriceMinor)).toEqual([40_000]);
+    expect(seen).toEqual([50_000, 50_000]);
+    // Placement prices the lines once, after the transform.
+    expect(linePriceCalls).toBe(1);
+  });
+
   it("merges lines into one bundle on the order, prices unchanged", async () => {
     await installApp("acme.merge", [{ point: "cart.transform" }]);
     answers["acme.merge"] = (_point, fn) => {

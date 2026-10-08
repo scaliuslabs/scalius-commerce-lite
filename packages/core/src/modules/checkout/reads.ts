@@ -85,7 +85,10 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     const reads = await readCheckoutOnce<TResponse>(db, identity, authorityInput, credentialEncryptionKey, options, (apps) => {
         linePricer = options.linePricer?.(apps);
         transformer = options.transformer?.(apps);
-        return { linePricer: () => linePricer, deferSubmittedPriceCheck: () => transformer !== undefined };
+        // With a transform the first pass is what the transform sees: catalogue
+        // prices, as on the cart page (`validateStorefrontCartItems`). The
+        // apps price the lines once, as the order holds them.
+        return { linePricer: () => (transformer ? undefined : linePricer), deferSubmittedPriceCheck: () => transformer !== undefined };
     });
     // A replayed or in-flight attempt resolves nothing new.
     const status = reads.existingAttempt?.status;
