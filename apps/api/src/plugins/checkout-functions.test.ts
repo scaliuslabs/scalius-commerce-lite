@@ -27,6 +27,7 @@ import {
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
+  checkStorefrontCartRules,
   priceStorefrontCheckout,
   resolveAppPaymentMethods,
   type CheckoutAppFunctions,
@@ -329,6 +330,35 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       details: { reason: "delivery_rate_unavailable", shippingRates: [expect.objectContaining({ id: "m_pick" }), expect.objectContaining({ id: "m_std", amountMinor: 8_000 })] },
     });
     expect((await listPluginLogs(db, "acme.rates")).map((entry) => entry.message).join(" ")).toContain("m_invented");
+  });
+
+  it("apps see the order's destination country, never Bangladesh by default", async () => {
+    sqlite.exec(`
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_us', 'United States'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('US', 'dz_us');
+      INSERT INTO shipping_methods (id, name, fee_minor, kind, sort_order, zone_id) VALUES ('m_us', 'US post', 9000, 'delivery', 3, 'dz_us');
+    `);
+    await installTestApp("acme.where", [{ point: "checkout.discounts" }, { point: "cart.validate" }]);
+    const seen: unknown[] = [];
+    answers["acme.where"] = (point, payload) => {
+      seen.push((payload.cart as { destination: unknown }).destination);
+      return ok(point === "cart.validate" ? { errors: [] } : { discounts: [] });
+    };
+    const data = input([line("p_tea", "v_tea", 1, 500)], { shippingMethodId: "m_us", city: null, zone: null });
+    const read = await loadStorefrontCheckoutAuthority(db, {
+      items: data.items, inventoryPool: data.inventoryPool, shippingCountryCode: "US", shippingAdminArea: "CA", shippingPostalCode: "94103",
+      shippingMethodId: "m_us", customerPhone: data.customerPhone,
+    });
+    const runner = await apps();
+    await priceStorefrontCheckout(db, {
+      cartValidation: read.cartValidation, delivery: read.deliveryPreflight, discountCodes: [], customerPhone: data.customerPhone,
+      currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 }, taxAuthority: read.taxAuthority, apps: runner, channel: "online_store",
+    });
+    await checkStorefrontCartRules(db, {
+      cartValidation: read.cartValidation, delivery: read.deliveryPreflight, apps: runner,
+      currency: { code: "BDT", decimalPlaces: 2 }, channel: "online_store",
+    });
+    // Both points of the quote; the cart page's rule check is the same input (memoized).
+    expect(seen).toEqual([{ country: "US", city: null, zone: null }, { country: "US", city: null, zone: null }]);
   });
 
   it("payment methods: an app narrows and presents the allowed methods, and placement refuses a hidden one", async () => {
