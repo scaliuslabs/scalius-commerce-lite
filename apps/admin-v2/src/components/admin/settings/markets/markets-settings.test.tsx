@@ -18,6 +18,7 @@ const sdk = vi.hoisted(() => ({
   deleteApiV1AdminSettingsMarketsById: vi.fn(),
   getApiV1AdminSettingsMarketsCurrencies: vi.fn(),
   getApiV1AdminSettingsLanguages: vi.fn(),
+  getApiV1AdminSettingsProviders: vi.fn(),
 }));
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -53,10 +54,16 @@ const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data 
 const backup = {
   id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", status: "active" as const, isBackup: true, revision: 3,
   countries: ["BD"], presence: { value: "", locale: "bn" }, currencyCode: "BDT", shopCurrencyCode: "BDT", ownCurrency: false, priceIncrementMinor: 100,
-  fxRateAsOf: null as string | null, fxLockMinutes: 30,
+  fxRateAsOf: null as string | null, fxLockMinutes: 30, fxRateSource: "manual",
   priceIncrementInherited: false, pricesIncludeTax: true, hasOrders: true,
   priceMode: "fixed" as "fixed" | "fx", fxRate: null as string | null, priceAdjustmentPercent: 0, priceRounding: null as number | null, priceEnding: null as number | null,
   createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
+};
+/** An exchange rate app's provider, as `GET /admin/settings/providers?kind=fx` lists it. */
+const dailyRates = {
+  id: "acme.rates:daily", kind: "fx", pluginId: "acme.rates", appName: "Acme rates", appIcon: null, icon: null, name: "Daily rates",
+  operations: ["rates"], canTestConnection: false,
+  readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] }, environment: "unknown",
 };
 const india = {
   ...backup, id: "mkt_in", handle: "india", name: "India", status: "draft" as const, isBackup: false, revision: 1,
@@ -111,6 +118,23 @@ describe("market form", () => {
     expect(marketUpdateBody({ ...form, currencyCode: "BDT" }, 1)).toMatchObject({ currencyCode: null, fxRate: null });
   });
 
+  it("lets an exchange rate app set the rate: its id is sent, a typed rate is not, and no typed rate is needed", () => {
+    const own = { ...marketForm(india), currencyCode: "GBP", fxRate: "0.0068", priceMode: "fx" as const };
+    // Manual (the default) keeps sending the typed rate, with the source it came from.
+    expect(marketForm(india).fxRateSource).toBe("manual");
+    expect(marketUpdateBody(own, 1)).toMatchObject({ currencyCode: "GBP", fxRate: "0.0068", fxRateSource: "manual" });
+    const app = { ...own, fxRateSource: "acme.rates:daily", fxRate: null };
+    expect(marketFormProblems(app)).toEqual({});
+    const body = marketUpdateBody(app, 1);
+    expect(body).toMatchObject({ currencyCode: "GBP", fxRateSource: "acme.rates:daily", priceMode: "fx" });
+    expect(body).not.toHaveProperty("fxRate");
+    // A market in the shop currency has no source to send; the API returns it to manual.
+    expect(marketUpdateBody({ ...app, currencyCode: "BDT" }, 1)).not.toHaveProperty("fxRateSource");
+    expect(marketForm({ ...india, fxRateSource: "acme.rates:daily" })).toMatchObject({
+      fxRateSource: "acme.rates:daily", savedFxRateSource: "acme.rates:daily",
+    });
+  });
+
   it("names what blocks a save", () => {
     const form = marketForm(india);
     expect(marketFormProblems(form)).toEqual({});
@@ -145,6 +169,7 @@ describe("markets settings", () => {
       { locale: "bn", published: true, isDefault: true, presences: [""], translatedResources: 0 },
       { locale: "en", published: true, isDefault: false, presences: [], translatedResources: 4 },
     ] }));
+    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers: [] }));
     sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [backup, { ...india, presence: { value: "en-in", locale: "en" } }] }));
     sdk.getApiV1AdminSettingsMarketsById.mockImplementation(({ path: { id } }: { path: { id: string } }) =>
       envelope({ market: id === "mkt_backup" ? backup : india }));
@@ -298,6 +323,65 @@ describe("markets settings", () => {
     expect(saved).toBe(true);
     expect(sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body).toMatchObject({
       priceMode: "fx", priceAdjustmentPercent: 10, priceRounding: null, priceEnding: null,
+    });
+  });
+
+  describe("exchange rate source", () => {
+    const ownGbp = {
+      ...india, id: "mkt_gb", handle: "uk", name: "United Kingdom", countries: ["GB"],
+      currencyCode: "GBP", priceMode: "fx" as const, fxRate: "0.0068", fxRateAsOf: "2026-10-01T09:00:00.000Z", fxRateSource: "manual",
+    };
+
+    async function openEditor(market: typeof ownGbp, providers: unknown[]) {
+      sdk.getApiV1AdminSettingsMarketsById.mockImplementation(() => envelope({ market }));
+      sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers }));
+      await render(<MarketEditor marketId={market.id} />);
+      await vi.waitFor(() => expect(container.querySelector("#market-currency")).not.toBeNull());
+    }
+
+    it("offers no source to choose from while no exchange rate app is installed", async () => {
+      await openEditor(ownGbp, []);
+      await vi.waitFor(() => expect(container.querySelector("#market-rate")).not.toBeNull());
+      expect(container.querySelector("#market-rate-source")).toBeNull();
+    });
+
+    it("lets an app take over: the typed rate goes, and the save sends the app, not a rate", async () => {
+      await openEditor(ownGbp, [dailyRates]);
+      await vi.waitFor(() => expect(container.querySelector("#market-rate-source")).not.toBeNull());
+      expect(container.querySelector("#market-rate")).not.toBeNull();
+      await act(async () => container.querySelector<HTMLButtonElement>("#market-rate-source")!.click());
+      await vi.waitFor(() => expect(document.querySelectorAll('[role="option"]')).toHaveLength(2));
+      const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+      expect(options.map((option) => option.textContent)).toEqual([
+        expect.stringContaining("Manual"),
+        expect.stringContaining("Daily rates"),
+      ]);
+      expect(options[1]!.textContent).toContain("by Acme rates");
+      await act(async () => options[1]!.click());
+      await vi.waitFor(() => expect(container.querySelector("#market-rate")).toBeNull());
+      expect(container.textContent).toContain("Daily rates sets the rate when you save.");
+
+      let saved = false;
+      await act(async () => { saved = await scope!.saveAll(); });
+      expect(saved).toBe(true);
+      const body = sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body;
+      expect(body).toMatchObject({ expectedRevision: 1, currencyCode: "GBP", fxRateSource: "acme.rates:daily" });
+      expect(body).not.toHaveProperty("fxRate");
+    });
+
+    it("shows an app's rate as one sentence with its age and the app, and no rate field", async () => {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+      await openEditor({ ...ownGbp, fxRate: "0.0084", fxRateAsOf: fiveMinutesAgo, fxRateSource: "acme.rates:daily" }, [dailyRates]);
+      await vi.waitFor(() => expect(container.textContent).toContain("1 BDT = 0.0084 GBP · updated 5 min ago by Daily rates"));
+      expect(container.querySelector("#market-rate")).toBeNull();
+      expect(container.querySelector("#market-lock")).not.toBeNull();
+    });
+
+    it("hides the source for a market that sells in the shop currency", async () => {
+      sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers: [dailyRates] }));
+      await render(<MarketEditor marketId="mkt_in" />);
+      await vi.waitFor(() => expect(container.textContent).toContain("Prices include tax"));
+      expect(container.querySelector("#market-rate-source")).toBeNull();
     });
   });
 });

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AiAccessCard } from "~/components/admin/agent-access/AiAccessCard";
+import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { AiDraftingCard } from "~/components/admin/agent-access/AiDraftingCard";
 import {
   FacebookCard,
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/admin/settings/integrations")({
       queryClient.ensureQueryData(appProvidersQuery("fraud")),
       queryClient.ensureQueryData(aiAccessQuery),
       queryClient.ensureQueryData(appProvidersQuery("ai")),
+      queryClient.ensureQueryData(appProvidersQuery("search")),
     ]),
   head: () => settingsHead("integrations"),
   errorComponent: RouteErrorComponent,
@@ -52,6 +54,7 @@ function IntegrationsPage() {
         <ScannerCard />
         <AiAccessCard />
         <AiDraftingCard />
+        <AppKindCard kind="search" />
       </SettingsPage>
     </AppProviderSheetHost>
   );

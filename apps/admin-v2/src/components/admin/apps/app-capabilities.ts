@@ -6,7 +6,10 @@
 // of the settings pages, so search and the app page link here cheaply.
 import type { SettingsNavKey } from "../settings/settings-nav";
 
-export const APP_PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai"] as const;
+export const APP_PROVIDER_KINDS = [
+  "payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai",
+  "messaging", "push", "search", "address", "fx", "identity",
+] as const;
 export type AppProviderKind = (typeof APP_PROVIDER_KINDS)[number];
 
 /** The settings page and card each kind lives on. */
@@ -19,6 +22,12 @@ export const PROVIDER_CAPABILITY: Readonly<Record<AppProviderKind, { page: Setti
   tax: { page: "taxes", to: "/admin/settings/taxes", card: "taxCollection" },
   translation: { page: "languages", to: "/admin/settings/languages", card: "machineTranslation" },
   ai: { page: "integrations", to: "/admin/settings/integrations", card: "aiDrafting" },
+  messaging: { page: "notifications", to: "/admin/settings/notifications", card: "chatApps" },
+  push: { page: "notifications", to: "/admin/settings/notifications", card: "browserNotifications" },
+  search: { page: "integrations", to: "/admin/settings/integrations", card: "appSearch" },
+  address: { page: "checkout", to: "/admin/settings/checkout", card: "addressAutocomplete" },
+  fx: { page: "markets", to: "/admin/settings/markets", card: "exchangeRates" },
+  identity: { page: "customerAccounts", to: "/admin/settings/customer-accounts", card: "otherSignIn" },
 };
 
 const PREFIX = "app-provider=";

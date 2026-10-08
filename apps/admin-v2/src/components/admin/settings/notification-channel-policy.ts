@@ -1,8 +1,9 @@
 import type {
+  getApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
 } from "@scalius/api-client/sdk";
-import type { ApiBody } from "~/lib/api";
+import type { ApiBody, ApiResult } from "~/lib/api";
 import {
   CUSTOMER_NOTIFICATION_TYPES,
   STAFF_NOTIFICATION_TYPES,
@@ -12,7 +13,8 @@ import {
   type OrderNotificationType,
 } from "./notification-event-types";
 
-export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
+// `push`: browser notifications to signed-in buyers (shown as "Browser").
+export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 export const ADMIN_NOTIFICATION_CHANNELS = ["push", "email"] as const;
 
 const ORDER_EVENT_GROUPS = [
@@ -138,6 +140,7 @@ export function buildCustomerNotificationConfig(
       email: selected.includes("email") && customerChannelAllowed(event, "email"),
       sms: selected.includes("sms") && customerChannelAllowed(event, "sms"),
       whatsapp: selected.includes("whatsapp") && customerChannelAllowed(event, "whatsapp"),
+      push: selected.includes("push") && customerChannelAllowed(event, "push"),
     };
   }
   return config;
@@ -158,8 +161,15 @@ export function buildAdminNotificationConfig(
   return config;
 }
 
+/**
+ * The notification rules document: `customerPush` is browser notifications'
+ * readiness, `pushProvider` is "" for built-in Web Push or an app push provider id.
+ */
+export type CustomerRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannels>;
+
 /** The saved shapes: every order event, plus the other events each audience may use. */
 export type CustomerRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannels>["channels"];
+export type CustomerRulesSave = ApiBody<typeof putApiV1AdminSettingsNotificationChannels>;
 export type AdminRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannelsAdminChannels>["channels"];
 
 export function serializeCustomerNotificationConfig(config: CustomerNotificationConfig): CustomerRulesBody {
@@ -177,4 +187,17 @@ export function serializeAdminNotificationConfig(config: AdminNotificationConfig
     result[event] = ADMIN_NOTIFICATION_CHANNELS.filter((channel) => config[event]?.[channel] && adminChannelAllowed(event, channel));
   }
   return result as AdminRulesBody;
+}
+
+/** The save that changes who sends buyers' browser notifications and leaves every rule as it is. */
+export function pushProviderBody(
+  channels: Record<string, string[]> | undefined,
+  pushProvider: string,
+  expectedRevision: number,
+): CustomerRulesSave {
+  return {
+    channels: serializeCustomerNotificationConfig(buildCustomerNotificationConfig(channels)),
+    pushProvider,
+    expectedRevision,
+  };
 }

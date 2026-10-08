@@ -18,6 +18,7 @@ import {
   priceIncrementChoices,
   resolvePriceIncrementMinor,
 } from "@scalius/shared/currency-policy";
+import { MANUAL_FX_RATE_SOURCE_ID } from "@scalius/shared/market-pricing";
 import { MARKET_HANDLE_MAX_LENGTH, MARKET_NAME_MAX_LENGTH } from "@scalius/shared/markets";
 import { toast } from "~/lib/toast";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
@@ -43,6 +44,7 @@ import { marketCurrenciesQueryOptions, marketWriteInvalidations, marketsQueryOpt
 import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
 import { SettingsAdvanced } from "../SettingsAdvanced";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
+import { ExchangeRateSource } from "./ExchangeRateSource";
 import { MarketCountryPicker } from "./MarketCountryPicker";
 import {
   EMPTY_MARKET_FORM,
@@ -88,7 +90,7 @@ export function MarketEditor({ marketId }: { marketId: string }) {
     canEdit,
     errorMessage: common("saveFailed"),
     label: t("detailsTitle"),
-    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix", currencyCode: "market-currency", fxRate: "market-rate", fxLockMinutes: "market-lock", priceAdjustmentPercent: "market-adjustment", priceRounding: "market-rounding", priceEnding: "market-ending" },
+    fields: { name: "market-name", handle: "market-handle", countries: "market-countries", presence: "market-suffix", currencyCode: "market-currency", fxRate: "market-rate", fxRateSource: "market-rate-source", fxLockMinutes: "market-lock", priceAdjustmentPercent: "market-adjustment", priceRounding: "market-rounding", priceEnding: "market-ending" },
   });
   const back = { to: "/admin/settings/markets" as const, label: nav("markets") };
 
@@ -286,22 +288,25 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
       {own ? (
         <>
           <p className="text-body text-muted-foreground">{t("ownCurrencyNote", { currency: values.currencyCode, shop })}</p>
+          <ExchangeRateSource values={values} canEdit={canEdit} setValues={setValues} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <SettingsField id="market-rate" label={t("exchangeRate")} help={t("exchangeRateHelp", { currency: values.currencyCode, shop })} error={rateError}>
-              <Input
-                id="market-rate"
-                inputMode="decimal"
-                autoComplete="off"
-                spellCheck={false}
-                value={values.fxRate ?? ""}
-                disabled={!canEdit}
-                className="max-w-48"
-                onChange={(event) => {
-                  const fxRate = event.target.value.trim();
-                  setValues((draft) => ({ ...draft, fxRate: fxRate || null }));
-                }}
-              />
-            </SettingsField>
+            {values.fxRateSource === MANUAL_FX_RATE_SOURCE_ID ? (
+              <SettingsField id="market-rate" label={t("exchangeRate")} help={t("exchangeRateHelp", { currency: values.currencyCode, shop })} error={rateError}>
+                <Input
+                  id="market-rate"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={values.fxRate ?? ""}
+                  disabled={!canEdit}
+                  className="max-w-48"
+                  onChange={(event) => {
+                    const fxRate = event.target.value.trim();
+                    setValues((draft) => ({ ...draft, fxRate: fxRate || null }));
+                  }}
+                />
+              </SettingsField>
+            ) : null}
             <SettingsField id="market-lock" label={t("rateLock")} help={t("rateLockHelp")} error={lockError}>
               <NumberInput
                 id="market-lock"
@@ -312,7 +317,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
               />
             </SettingsField>
           </div>
-          {values.fxRate && !rateError ? (
+          {values.fxRateSource === MANUAL_FX_RATE_SOURCE_ID && values.fxRate && !rateError ? (
             <p className="text-body">
               {t("exchangeRateLine", { shop, rate: values.fxRate, currency: values.currencyCode })}
               {values.fxRateAsOf && values.currencyCode === savedCurrency

@@ -7,6 +7,8 @@ export const notificationsMessages = defineMessages({
     sms: "SMS",
     whatsapp: "WhatsApp",
     push: "Push",
+    browser: "Browser",
+    browserNotReady: "Browser notifications aren't ready. Check Browser notifications below.",
     event: "Event",
     customerTitle: "Customer notifications",
     customerDescription: "Messages customers get when their order changes. Select a message to edit it.",
@@ -53,6 +55,7 @@ export const notificationsMessages = defineMessages({
     loadWhatsApp: "WhatsApp",
 
     pushTitle: "Push notifications",
+    firebaseOptional: "Optional. Staff alerts reach browsers without Firebase. Add it only if you use it.",
     serviceAccount: "Service account JSON",
     serviceAccountHelp: "From Firebase → Project settings → Service accounts.",
     serviceAccountSaved: "A key is saved. Paste new JSON to replace it.",
@@ -107,6 +110,8 @@ export const notificationsMessages = defineMessages({
     sms: "এসএমএস",
     whatsapp: "হোয়াটসঅ্যাপ",
     push: "পুশ",
+    browser: "ব্রাউজার",
+    browserNotReady: "ব্রাউজার নোটিফিকেশন প্রস্তুত নয়। নিচে ব্রাউজার নোটিফিকেশন দেখুন।",
     event: "ইভেন্ট",
     customerTitle: "কাস্টমার নোটিফিকেশন",
     customerDescription: "অর্ডারের অবস্থা বদলালে কাস্টমার যে মেসেজ পায়। বদলাতে কোনো মেসেজে ক্লিক করুন।",
@@ -153,6 +158,7 @@ export const notificationsMessages = defineMessages({
     loadWhatsApp: "হোয়াটসঅ্যাপ",
 
     pushTitle: "পুশ নোটিফিকেশন",
+    firebaseOptional: "ঐচ্ছিক। Firebase ছাড়াই স্টাফ অ্যালার্ট ব্রাউজারে পৌঁছায়। ব্যবহার করলেই যোগ করুন।",
     serviceAccount: "সার্ভিস অ্যাকাউন্ট JSON",
     serviceAccountHelp: "Firebase → Project settings → Service accounts থেকে নিন।",
     serviceAccountSaved: "একটি কী সেভ করা আছে। বদলাতে নতুন JSON পেস্ট করুন।",

@@ -5,7 +5,7 @@
 // it, a market in its own currency (step 6) uses that currency's.
 import { queryOptions } from "@tanstack/react-query";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { fxPriceMinor, marketFxPolicyIssue, type FxConversion } from "@scalius/shared/market-pricing";
+import { MANUAL_FX_RATE_SOURCE_ID, fxPriceMinor, marketFxPolicyIssue, type FxConversion } from "@scalius/shared/market-pricing";
 import { MARKET_HANDLE_PATTERN } from "@scalius/shared/markets";
 import { isFxRate } from "@scalius/shared/money-chain";
 import { DEFAULT_FX_LOCK_MINUTES, MAX_FX_LOCK_MINUTES, MIN_FX_LOCK_MINUTES } from "@scalius/shared/presentment";
@@ -38,8 +38,10 @@ export interface MarketForm {
   priceRoundingMinor: number | null;
   /** End rounded prices in this amount within the step (minor units); null: none. */
   priceEndingMinor: number | null;
-  /** The manual exchange rate (units of its currency per shop unit); 1 in the shop currency. */
+  /** The exchange rate (units of its currency per shop unit); 1 in the shop currency. Typed, or an app's. */
   fxRate: string | null;
+  /** Who sets the rate: "manual" (typed here) or an exchange rate app provider id. */
+  fxRateSource: string;
   /** The currency buyers pay in: the shop currency, or its own (MARKETS-DESIGN step 6). */
   currencyCode: string;
   /** Minutes a placed order keeps its rate; NaN or null while the typed text is refused. */
@@ -51,6 +53,8 @@ export interface MarketForm {
   shopCurrencyCode: string;
   /** When the saved rate was set (ISO), or null. */
   fxRateAsOf: string | null;
+  /** The source the saved rate came from. */
+  savedFxRateSource: string;
 }
 
 export const EMPTY_MARKET_FORM: MarketForm = {
@@ -68,6 +72,7 @@ export const EMPTY_MARKET_FORM: MarketForm = {
   priceRoundingMinor: null,
   priceEndingMinor: null,
   fxRate: null,
+  fxRateSource: MANUAL_FX_RATE_SOURCE_ID,
   currencyCode: "BDT",
   fxLockMinutes: DEFAULT_FX_LOCK_MINUTES,
   isBackup: false,
@@ -75,6 +80,7 @@ export const EMPTY_MARKET_FORM: MarketForm = {
   hasOrders: false,
   shopCurrencyCode: "BDT",
   fxRateAsOf: null,
+  savedFxRateSource: MANUAL_FX_RATE_SOURCE_ID,
 };
 
 /** True when the market sells in its own currency, not the shop's. */
@@ -101,6 +107,7 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
     priceRoundingMinor: market.priceRounding === null ? null : toMinor(market.priceRounding, getDecimalPlaces(market.currencyCode)),
     priceEndingMinor: market.priceEnding === null ? null : toMinor(market.priceEnding, getDecimalPlaces(market.currencyCode)),
     fxRate: market.fxRate,
+    fxRateSource: market.fxRateSource,
     currencyCode: market.currencyCode,
     fxLockMinutes: market.fxLockMinutes,
     isBackup: market.isBackup,
@@ -108,6 +115,7 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
     hasOrders: market.hasOrders,
     shopCurrencyCode: market.shopCurrencyCode,
     fxRateAsOf: market.fxRateAsOf,
+    savedFxRateSource: market.fxRateSource,
     revision: market.revision,
   };
 }
@@ -142,7 +150,8 @@ export function marketFormProblems(form: MarketForm): MarketFormProblems {
   if (!form.isBackup && form.subfolder && !SUFFIX_PATTERN.test(form.suffix.trim().toLowerCase())) problems.suffix = "suffixInvalid";
   const own = sellsOwnCurrency(form);
   if (!form.isBackup && (own || form.priceMode === "fx") && adjustmentBps(form) === null) problems.adjustment = "adjustmentInvalid";
-  if (own && !(form.fxRate !== null && isFxRate(form.fxRate.trim()))) problems.rate = "exchangeRateInvalid";
+  // An app sets its own rate, so nothing typed here can be wrong.
+  if (own && form.fxRateSource === MANUAL_FX_RATE_SOURCE_ID && !(form.fxRate !== null && isFxRate(form.fxRate.trim()))) problems.rate = "exchangeRateInvalid";
   if (own && (form.fxLockMinutes === null || !Number.isInteger(form.fxLockMinutes) || form.fxLockMinutes < MIN_FX_LOCK_MINUTES || form.fxLockMinutes > MAX_FX_LOCK_MINUTES)) {
     problems.lock = "rateLockInvalid";
   }
@@ -174,7 +183,9 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
     pricesIncludeTax: form.pricesIncludeTax,
     // Its own currency converts at its rate (`fx`); the shop currency at 1.
     currencyCode: own ? form.currencyCode : null,
-    fxRate: own ? form.fxRate?.trim() ?? null : null,
+    // While an app sets the rate, the typed one is not sent (the API ignores it).
+    ...(own && form.fxRateSource !== MANUAL_FX_RATE_SOURCE_ID ? {} : { fxRate: own ? form.fxRate?.trim() ?? null : null }),
+    ...(own ? { fxRateSource: form.fxRateSource } : {}),
     ...(own && form.fxLockMinutes !== null ? { fxLockMinutes: form.fxLockMinutes } : {}),
     priceMode: own ? "fx" : form.priceMode,
     priceAdjustmentPercent: (adjustmentBps(form) ?? 0) / 100,
