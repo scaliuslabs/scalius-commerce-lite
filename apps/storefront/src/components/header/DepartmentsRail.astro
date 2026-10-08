@@ -54,20 +54,26 @@ const copy = storefrontCopy(language).chrome;
     position: relative;
   }
 
+  /* A bordered button, not a slab: the row holds it with the store's own links. */
   .drail-tab {
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    width: 16.875rem;
-    height: 2.75rem;
-    padding-inline: 1rem;
-    border-radius: var(--radius) var(--radius) 0 0;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font-size: 0.875rem;
-    font-weight: 700;
+    min-width: 13rem;
+    height: 2.5rem;
+    padding-inline: 0.75rem;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: var(--radius);
+    color: var(--nav-ink, var(--foreground));
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
     list-style: none;
     cursor: pointer;
+  }
+
+  .drail-tab:hover,
+  .drail-menu[open] .drail-tab {
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
 
   .drail-tab::-webkit-details-marker {
@@ -102,16 +108,15 @@ const copy = storefrontCopy(language).chrome;
     outline-offset: 2px;
   }
 
-  /* The list hangs from the tab, the tab's width, over the page (the hero on home). */
+  /* The list hangs from the button over the page, only while it is open. */
   .drail-panel {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 0.25rem);
     inset-inline-start: 0;
     z-index: 60;
-    width: 16.875rem;
+    width: 17rem;
     border: 1px solid var(--border);
-    border-top: 0;
-    border-radius: 0 0 var(--radius) var(--radius);
+    border-radius: var(--radius);
     background: var(--popover);
     color: var(--popover-foreground);
     box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.25);
@@ -140,20 +145,6 @@ const copy = storefrontCopy(language).chrome;
   .drail-all:focus-visible {
     background: var(--accent);
     color: var(--accent-foreground);
-  }
-
-  /* The open-on-home list hangs over the page, so the page is at least as tall
-     as the list: it never covers the footer's links (WCAG 2.5.8 target space). */
-  @media (min-width: 64rem) {
-    body:has(.drail-menu[data-menu-home-open][open]) #main-content {
-      min-height: 28rem;
-    }
-  }
-
-  /* Scrolled past the hero: the open-on-home list steps aside (HeaderLayout
-     also closes it, so its state stays truthful). */
-  #main-header.is-scrolled .drail-menu[data-menu-home-open] > .drail-panel {
-    display: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

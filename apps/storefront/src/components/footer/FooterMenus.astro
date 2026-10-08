@@ -108,7 +108,8 @@ const { menus, label } = Astro.props;
       pointer-events: none;
     }
 
-    .footer-menu > summary::after {
+    .footer-menu > summary::after,
+    .footer-menu[open] > summary::after {
       content: none;
     }
   }

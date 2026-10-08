@@ -128,17 +128,17 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     padding-inline: 0.75rem;
     border-radius: var(--radius);
     color: inherit;
-    font-size: 0.9375rem;
+    font-size: 1rem;
     text-align: start;
     overflow-wrap: anywhere;
     list-style: none;
     cursor: pointer;
   }
 
-  /* Amazon and Target list departments in regular weight (the "All" rows and the back bar stand out). */
+  /* Departments read in the same medium weight as the accordion drawer's rows (the "All" rows and the back bar stand out). */
   .drill-list[data-depth="0"] > li > :is(.drill-link, :where(a)):not(.drill-link--all),
   .drill-list[data-depth="0"] > li > .drill-node:not([open]) > .drill-next {
-    font-weight: 400;
+    font-weight: 500;
   }
 
   .drill-link--all {

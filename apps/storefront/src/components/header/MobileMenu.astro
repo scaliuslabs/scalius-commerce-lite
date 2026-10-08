@@ -11,6 +11,7 @@ import Icon from "@/components/icons/Icon.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
+import { socialGlyph, socialGlyphMarkup } from "../footer/social-icons";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import NavTree from "./NavTree.astro";
@@ -144,7 +145,8 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
         <div class="mt-4 flex flex-wrap gap-2 border-t border-border px-3 pt-4">
           {social.map((item) => {
             if (!item.url) return null;
-            const displayTitle = item.label || copy.nav.social;
+            const glyph = socialGlyph(item.url, item.label);
+            const displayTitle = item.label || (glyph ? glyph.charAt(0).toUpperCase() + glyph.slice(1) : copy.nav.social);
             const href = item.url.startsWith("http")
               ? item.url
               : `https://${item.url}`;
@@ -173,6 +175,8 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
                     decoding="async"
                     fetchpriority="low"
                   />
+                ) : glyph ? (
+                  <svg class="h-5 w-5 fill-none stroke-current stroke-[1.6]" viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round" set:html={socialGlyphMarkup(glyph)} />
                 ) : (
                   <span
                     aria-hidden="true"
