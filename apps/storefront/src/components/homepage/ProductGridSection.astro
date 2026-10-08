@@ -39,14 +39,16 @@ const {
   collection,
   maxColumns,
 } = Astro.props;
+// One or two products fill two capped columns, not a row of empty tracks.
+const sparse = products.length <= 2;
 ---
 
 {products.length > 0 && (
   <section class="home-section w-full" aria-labelledby={headingId}>
     <Container>
       <SectionHeader id={headingId} title={title} subtitle={collection?.subtitle || null} href={href} linkLabel={hrefLabel} />
-      <div class:list={[maxColumns && "home-grid-capped", collection && "home-grid-phone-cap"]} style={maxColumns ? `--home-grid-columns: ${maxColumns};` : undefined}>
-        <ProductGrid>
+      <div class:list={[maxColumns && !sparse && "home-grid-capped", collection && "home-grid-phone-cap"]} style={maxColumns && !sparse ? `--home-grid-columns: ${maxColumns};` : undefined}>
+        <ProductGrid sparse={sparse}>
           {products.map((product, index) => (
             <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} maxColumns={maxColumns} />
           ))}

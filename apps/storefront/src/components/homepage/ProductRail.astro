@@ -6,7 +6,11 @@
 //   and 5 across).
 // - `shelf`: a section rail: 2.2 cards on a phone so the next card peeks in,
 //   then exactly 3, 4 and 5 across inside the container. Fewer than 4 cards
-//   are not a rail: they render as a static grid.
+//   are not a rail: they render as a static grid. A large (collection) rail
+//   with one or two cards does the same. One or two cards sit in the shared
+//   sparse grid (ProductGrid `sparse`), never in a row of empty tracks.
+// - Arrows show only when cards overflow: more than 4 across from 1024px,
+//   more than 5 from 1280px (the widths in the styles below).
 import type { Product } from "@/lib/api";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
@@ -49,13 +53,15 @@ const {
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).home;
 const shelf = width === "shelf";
+// Cards that fit one row need no scrolling: a static grid (shelf: under 4, collection: 1-2).
+const staticGrid = products.length > 0 && products.length < (shelf ? 4 : 3);
 const itemClass = shelf
   ? "home-shelf-item shrink-0 snap-start"
   : "w-[72%] shrink-0 snap-start sm:w-[calc((100%_-_2rem)/3)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]";
 ---
 
 {bare && (
-  <div class="home-rail-track flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden">
+  <div data-h-rail class="home-rail-track -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden">
     {products.map((product, index) => (
       <div class={itemClass}>
         <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} context="shelf" index={index} aboveFold={aboveFold} />
@@ -64,11 +70,11 @@ const itemClass = shelf
   </div>
 )}
 
-{!bare && shelf && products.length > 0 && products.length < 4 && (
+{!bare && staticGrid && (
   <section class="home-section w-full" aria-labelledby={headingId}>
     <Container>
       <SectionHeader id={headingId} title={title} href={href} linkLabel={hrefLabel} />
-      <ProductGrid>
+      <ProductGrid sparse={products.length <= 2}>
         {products.map((product, index) => (
           <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
         ))}
@@ -78,13 +84,13 @@ const itemClass = shelf
 )}
 
 {
-  !bare && products.length >= (shelf ? 4 : 1) && (
+  !bare && products.length > 0 && !staticGrid && (
     <section class="home-section w-full overflow-hidden" aria-labelledby={headingId} data-product-rail>
       <Container>
         <SectionHeader id={headingId} title={title} href={href} linkLabel={hrefLabel}>
           <Fragment slot="actions">
             {products.length > 1 && (
-              <div class="hidden items-center gap-2 lg:flex">
+              <div class="home-rail-arrows items-center gap-2" data-fits-lg={products.length <= 4 ? "" : undefined} data-fits-xl={products.length <= 5 ? "" : undefined}>
                 <button type="button" data-rail-direction="previous" class="home-rail-arrow" aria-label={copy.previousProducts(title)}>
                   <Icon name="chevron-left" class="h-4 w-4" />
                 </button>
@@ -99,7 +105,8 @@ const itemClass = shelf
         <div class="-mx-4 px-4 sm:mx-0 sm:px-0">
           <div
             data-product-rail-track
-            class="home-rail-track flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
+            data-h-rail
+            class="home-rail-track -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
           >
             {products.map((product, index) => (
               <div class={itemClass}>
@@ -177,6 +184,19 @@ const itemClass = shelf
 
   @media (min-width: 80rem) {
     .home-shelf-item { width: calc((100% - 4 * var(--rail-gap)) / 5); }
+  }
+
+  /* From 1024px, only when the cards overflow the row. */
+  .home-rail-arrows {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .home-rail-arrows:not([data-fits-lg]) { display: flex; }
+  }
+
+  @media (min-width: 80rem) {
+    .home-rail-arrows[data-fits-xl] { display: none; }
   }
 
   .home-rail-arrow {

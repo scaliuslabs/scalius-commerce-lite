@@ -83,8 +83,9 @@ describe("the three header layouts", () => {
     };
     expect(tabs(["home", "categories", "search", "cart", "account"])).toEqual(["home", "categories", "account"]);
     expect(tabs(["home", "categories", "offers", "compare", "cart"])).toEqual(["home", "categories", "offers", "compare"]);
-    // A bar left with fewer than three tabs takes Offers, then Compare.
+    // A bar left with fewer than three tabs takes Offers, then Categories, then Home; never Compare.
     expect(tabs(["home", "search", "cart", "account"])).toEqual(["home", "account", "offers"]);
+    expect(tabs(["search", "cart", "account"])).toEqual(["account", "offers", "categories"]);
   });
 
   it("keeps a directory footer as it is", () => {

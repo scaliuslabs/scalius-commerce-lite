@@ -768,17 +768,20 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
     const clicked = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     if (clicked?.getAttribute("aria-disabled") === "true") return;
     opener = clicked ?? opener;
+    // A photo of the stacked and grid lists carries its own zoom file and alt text.
+    const ownUrl = clicked?.dataset.zoomUrl;
     const active = root.dataset.activeMediaKey;
-    if (!active?.startsWith("image:")) return;
+    if (!ownUrl && !active?.startsWith("image:")) return;
     const current = root.querySelector<HTMLImageElement>(
       "[data-mobile-main-image]",
     );
     const detailUrl =
-      root.dataset.activeMediaZoomUrl || current?.currentSrc || current?.src;
+      ownUrl || root.dataset.activeMediaZoomUrl || current?.currentSrc || current?.src;
     if (!detailUrl) return;
+    const alt = ownUrl ? clicked?.dataset.zoomAlt : current?.alt;
     image.src = detailUrl;
-    image.alt = current?.alt
-      ? `${current.alt} — zoomed view`
+    image.alt = alt
+      ? `${alt} — zoomed view`
       : "Zoomed product image";
     reset();
     bodyOverflowBeforeMobileZoom = document.body.style.overflow;

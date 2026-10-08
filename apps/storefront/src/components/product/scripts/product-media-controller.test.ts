@@ -708,6 +708,25 @@ describe("product gallery zoom", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it("opens a stacked-list photo's own zoom view from its button, and returns focus to it", () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    // The stacked and grid lists draw one zoom button per photo, each with its own file and alt text.
+    const list = document.createElement("ul");
+    list.innerHTML = `<li><button type="button" data-zoom-trigger data-zoom-url="${rendition("side", 1600)}" data-zoom-alt="Side view" aria-label="Zoom photo 2 of 3"></button></li>`;
+    root.append(list);
+    initProductMediaGallery(root);
+    const trigger = list.querySelector<HTMLButtonElement>("[data-zoom-trigger]")!;
+    trigger.focus();
+    trigger.click();
+    const image = root.querySelector<HTMLImageElement>("[data-fullscreen-image]")!;
+    expect(image.src).toBe(rendition("side", 1600));
+    expect(image.alt).toBe("Side view — zoomed view");
+    root.querySelector<HTMLElement>("[data-mobile-zoom-modal]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("loads desktop zoom detail only after hover and restores the base image", async () => {
     const root = renderGallery("pmed_front");
     renderSsrImage(root, "front");

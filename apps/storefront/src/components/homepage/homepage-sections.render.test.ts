@@ -435,6 +435,32 @@ describe("homepage section library", () => {
     expect(tiny.querySelector('a[href^="/search"]')).toBeNull();
   });
 
+  it("puts one or two products in a capped two-column grid, and shows rail arrows only when the cards overflow", async () => {
+    // One or two cards are never stretched across the row or left beside empty tracks.
+    const two = await render([section("product-grid", "grid", { title: "", source: { kind: "newest" }, columns: 2, rows: 1 })], store("large"));
+    expect(two.querySelectorAll(".product-grid > *")).toHaveLength(2);
+    expect(two.querySelector(".product-grid-frame[data-sparse]")).not.toBeNull();
+    expect(two.querySelector(".home-grid-capped")).toBeNull();
+    const full = await render([section("product-grid", "grid", { title: "", source: { kind: "newest" }, columns: 5, rows: 2 })], store("large"));
+    expect(full.querySelector("[data-sparse]")).toBeNull();
+    const pair = await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 2 })], store("large"));
+    expect(pair.querySelector("[data-product-rail-track]")).toBeNull();
+    expect(pair.querySelector(".product-grid-frame[data-sparse]")).not.toBeNull();
+    // Three or more are the normal grid.
+    const tiny = await render([section("product-rail", "rail", { title: "", source: { kind: "popular" }, limit: 12 })], store("tiny"));
+    expect(tiny.querySelector("[data-sparse]")).toBeNull();
+    // Arrows: none for four cards (they fit from 1024px), xl-only hidden for five, always for twelve.
+    const arrows = async (limit: number) => (await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit })], store("large"))).querySelector(".home-rail-arrows");
+    expect(await arrows(4)).not.toBeNull();
+    expect((await arrows(4))!.hasAttribute("data-fits-lg")).toBe(true);
+    expect((await arrows(5))!.hasAttribute("data-fits-lg")).toBe(false);
+    expect((await arrows(5))!.hasAttribute("data-fits-xl")).toBe(true);
+    expect((await arrows(12))!.hasAttribute("data-fits-xl")).toBe(false);
+    // Every rail track is marked for focus reveal.
+    const rail = await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 })], store("large"));
+    expect(rail.querySelector("[data-product-rail-track]")!.hasAttribute("data-h-rail")).toBe(true);
+  });
+
   it("sizes compact collection carousels as shelves without changing collection presentations", async () => {
     // The compact shelf is the section's setting, in any template.
     const compact = [section("collections", "collections", { carousel: "compact", collectionIds: COLLECTION_IDS })];

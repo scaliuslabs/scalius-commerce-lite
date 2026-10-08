@@ -108,6 +108,8 @@ const phoneTree: "accordion" | "drill" =
     : "accordion";
 const tabs =
   mobileNav.variant === "bottom-tabs" ? (mobileSettings.tabs as ReadonlyArray<(typeof STOREFRONT_MOBILE_TABS)[number]>) : null;
+// Compare has somewhere to start only where the product page lists compare-similar.
+const comparable = resolved.blocks.product.below.includes("compare-similar");
 const desktopDrill = hasNavigation && desktopKind === "drill-in-drawer";
 // One drawer serves both screens when both drill in.
 const sharedDrawer = desktopDrill && phoneTree === "drill";
@@ -306,7 +308,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
     )
   }
 
-  {tabs && <MobileTabBar tabs={tabs} compare />}
+  {tabs && <MobileTabBar tabs={tabs} compare={comparable} />}
 
   {/* Without JavaScript, menu rows wrap instead of fitting into "More" (never clipped), and a "More" that needs the script gives way to "All categories". */}
   <noscript><style is:inline>[data-nav-overflow]{flex-wrap:wrap!important;opacity:1!important;animation:none!important}[data-nav-overflow]>[data-nav-nojs-hidden]{display:none!important}[data-nav-overflow]>[data-nav-nojs-only]{display:flex!important}[data-nav-overflow]>.desktop-nav-more{display:none!important}</style></noscript>
