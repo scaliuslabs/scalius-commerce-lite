@@ -382,7 +382,8 @@ const bandTools = {
 
 {!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
-<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
+{/* One chip row on phones: the sub-categories. Popular filters are in the Filters sheet (Target's own phone bar carries them). */}
+<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1 max-lg:hidden"} />
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={ruledRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
   {showFilters && (

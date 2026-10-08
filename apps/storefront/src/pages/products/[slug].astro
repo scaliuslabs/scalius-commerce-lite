@@ -64,6 +64,7 @@ import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-cont
 import { resolveProductPageTheme } from "@/components/product/lib/product-page-theme";
 import { storeContactLinks } from "@/lib/store-contact";
 import { shopCopy } from "@/lib/storefront-shop-copy";
+import { galleryStageRatio } from "@/components/product/lib/gallery-images";
 import { productGalleryMainSlot } from "@/components/product/lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "@/components/product/lib/gallery-media";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
@@ -173,6 +174,8 @@ const resolvedTheme = resolveProductPageTheme(
 );
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
+// The photo box follows the theme's photo ratio, so a tall photo never sits in a square box with bars.
+const galleryLayout = { ...productPageLayout, stageRatio: galleryStageRatio(productPageLayout, requestTheme.theme.tokens.imageRatio) };
 const buyBoxLook = themeLayout.buyBox.look;
 const factsColumn = buyBoxLook.facts === "column";
 // Call and WhatsApp links and the EMI line show only when the buy box's settings ask for them.
@@ -764,7 +767,7 @@ const productCategoryAnalytics = productCategory
         <ProductGallery
           product={product}
           media={media}
-          layout={productPageLayout}
+          layout={galleryLayout}
           initialProductMediaId={initialGalleryProductMediaId}
           playVideoLabel={productPageCopy.productPlayVideoText}
           zoomLabel={shop.product.zoomPhoto}

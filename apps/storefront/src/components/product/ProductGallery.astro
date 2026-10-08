@@ -7,7 +7,6 @@ import { responsiveImageSources } from "@/lib/responsive-image";
 import {
   GALLERY_IMAGE_WIDTHS,
   productGalleryMainSlot,
-  productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
   type ProductGalleryLayout,
 } from "./lib/gallery-images";
@@ -104,8 +103,6 @@ const mainImagePriority = videoFirst ? "low" : "high";
 // stage keeps today's classes untouched.
 const stageStyle = layout.stageRatio === 1 ? undefined : `aspect-ratio: ${layout.stageRatio};`;
 const railStyle = layout.thumbnailSize === null ? "" : ` --gallery-thumb: ${layout.thumbnailSize}px;`;
-// The portrait gallery's desktop cap: the same number its main `sizes` uses.
-const portraitMaxPx = productGalleryPortraitMaxPx(layout);
 // Stacked (Dawn) and grid (Target): every photo in the wide column on
 // computers, the featured one first; phones keep the stage and the strip.
 const listMedia =
@@ -130,8 +127,6 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
   data-fallback-alt={product.imageAlt?.trim() || product.name}
   data-thumbnails={thumbnails}
   data-gallery={layout.gallery}
-  data-portrait-stage={portraitMaxPx === null ? undefined : ""}
-  style={portraitMaxPx === null ? undefined : `--gallery-portrait-max: ${portraitMaxPx}px;`}
   data-phone-thumbnails={layout.phoneSideThumbnails ? "beside" : undefined}
   data-mobile-swipe={mobileSwipe ? "" : undefined}
   class="group/gallery relative w-full lg:col-span-7 xl:col-span-6"
@@ -732,10 +727,6 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
     display: none;
   }
   @media (min-width: 64rem) {
-    #product-gallery[data-portrait-stage]:not(.\#) {
-      max-width: var(--gallery-portrait-max);
-      justify-self: center;
-    }
     [data-thumbnails="below"]:not(.\#) .gallery-layout:not(.\#) {
       display: flex;
       flex-direction: column;

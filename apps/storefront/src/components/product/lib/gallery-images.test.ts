@@ -4,9 +4,8 @@ import { STOREFRONT_GALLERY_VARIANTS } from "@scalius/shared/storefront-theme";
 
 import {
   GALLERY_IMAGE_WIDTHS,
-  PORTRAIT_GALLERY_MAX_PX,
   productGalleryMainSlot,
-  productGalleryPortraitMaxPx,
+  galleryStageRatio,
   productGalleryThumbnailSlot,
   type ProductGalleryLayout,
 } from "./gallery-images";
@@ -66,8 +65,7 @@ function renderedMainWidth(
   if (layout.gallery === "grid") return (content - (xl ? 480 : 400) - 40 - 8) / 2;
   const span = xl ? 6 * column + 5 * 40 : 7 * column + 6 * 40;
   // ProductGallery's CSS cap (--gallery-portrait-max) is this same number.
-  const portraitMax = productGalleryPortraitMaxPx(layout);
-  const galleryWidth = portraitMax === null ? span : Math.min(span, portraitMax);
+  const galleryWidth = span;
   if (!railBeside) return galleryWidth;
   return galleryWidth - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);
 }
@@ -112,18 +110,17 @@ describe("product gallery image slots", () => {
     expect(evaluateSizes(sizes, 1440)).toBe(468);
   });
 
-  it("advertises the capped portrait width to the gallery and its LCP preload", () => {
+  it("never narrows a tall stage: the portrait gallery fills its column like the others", () => {
     const { sizes } = productGalleryMainSlot(GALLERY.portrait, true);
-    expect(PORTRAIT_GALLERY_MAX_PX).toBe(404);
     expect(evaluateSizes(sizes, 390)).toBe(366);
-    expect(evaluateSizes(sizes, 1440)).toBe(PORTRAIT_GALLERY_MAX_PX);
-    expect(evaluateSizes(sizes, 1440, 2)).toBe(PORTRAIT_GALLERY_MAX_PX);
+    expect(evaluateSizes(sizes, 1440)).toBeGreaterThan(404);
   });
 
-  it("caps only the portrait stage, with the one width its CSS and sizes share", () => {
-    for (const [name, layout] of layouts) {
-      expect(productGalleryPortraitMaxPx(layout), name).toBe(layout.stageRatio === 0.75 ? PORTRAIT_GALLERY_MAX_PX : null);
-    }
+  it("takes the stage ratio from the theme's photo ratio unless the variant states its own", () => {
+    expect(galleryStageRatio(GALLERY.classic, "portrait")).toBe(0.75);
+    expect(galleryStageRatio(GALLERY.classic, "landscape")).toBeCloseTo(4 / 3);
+    expect(galleryStageRatio(GALLERY.classic, "square")).toBe(1);
+    expect(galleryStageRatio(GALLERY.portrait, "square")).toBe(0.75);
   });
 
   it("sizes thumbnails to their rail and caps their srcset at 296w", () => {

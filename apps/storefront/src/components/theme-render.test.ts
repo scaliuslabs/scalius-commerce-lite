@@ -39,7 +39,6 @@ import { homepageLeadSection, homepageSectionRenders, type HomepageContent } fro
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
   productGalleryMainSlot,
-  productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
 } from "@/components/product/lib/gallery-images";
 import { HEADER_SPECS, headerCondense, headerSpec } from "@/components/header/header-variants";
@@ -634,14 +633,8 @@ describe("storefront theme render matrix", () => {
       expect(mainImage.getAttribute("alt")).toBe("Kurta front");
     }
     expect(productPage.querySelector("#product-gallery")!.getAttribute("data-main-sizes")).toBe(mainSizes);
-    // The portrait stage's CSS cap is the width its `sizes` name.
-    const portraitMax = productGalleryPortraitMaxPx(layout.productPage);
-    expect(productPage.querySelector("#product-gallery")!.getAttribute("style")).toBe(
-      portraitMax === null ? null : `--gallery-portrait-max: ${portraitMax}px;`,
-    );
-    if (portraitMax !== null && layout.productPage.thumbnails !== "beside") {
-      expect(mainSizes).toMatch(new RegExp(`(^|\\s)${portraitMax}px$`));
-    }
+    // No width cap or inline style on the gallery: every stage fills its column.
+    expect(productPage.querySelector("#product-gallery")!.getAttribute("style")).toBeNull();
     for (const rail of ["mobile", "desktop"] as const) {
       const thumbs = productPage.querySelectorAll(`[data-thumbnail-rail="${rail}"] [data-gallery-thumbnail] img`);
       expect(thumbs).toHaveLength(GALLERY_MEDIA.length);
