@@ -232,11 +232,12 @@ app.openapi(setupGuideRoute, async (c) => {
         requestPaymentProviders(c),
         getPluginInstallation(db, BANGLADESH_PACK_ID),
     ]);
-    const countryCode = setup.current.countryCode;
+    // A store whose primary market names no country sells everywhere: it gets no country's own steps.
+    const countryCode = setup.countryConfigured ? setup.current.countryCode : "ZZ";
     const snapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey, providers);
     const offered = providers
         .filterForCurrency(snapshot.activePaymentMethods.enabledMethods, currency.currencyCode)
-        .filter((method) => providers.countryIssue(method, countryCode) === null);
+        .filter((method) => providers.countryIssue(method, setup.current.countryCode) === null);
     c.header("Cache-Control", "private, no-store");
     return ok(c, {
         dismissed,

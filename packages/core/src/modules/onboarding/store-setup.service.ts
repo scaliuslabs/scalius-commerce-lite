@@ -87,6 +87,8 @@ export interface StoreSetupStatus {
     done: StoreSetupDoneReason | null;
     /** What the store has now (the form starts from it). */
     current: StoreSetupValues;
+    /** The primary market names a country. False: it sells everywhere, and `current.countryCode` is only the form's starting point. */
+    countryConfigured: boolean;
     /** Products or delivery methods exist: their prices are in the current currency, which then cannot change. */
     currencyLocked: boolean;
 }
@@ -156,6 +158,7 @@ export async function getStoreSetupStatus(db: Database): Promise<StoreSetupStatu
         needed: done === null,
         priceIncrementMinor: backup?.priceIncrementMinor ?? null,
         done,
+        countryConfigured: countryRows.length > 0,
         current: {
             storeName: business.value.companyName,
             countryCode: countryRows[0]?.countryCode ?? "BD",
