@@ -1,24 +1,15 @@
-// Distinctness (AUDIT §2.1, §2.2, slice 2b): one template's tokens held
-// fixed, ONE block variant swapped at a time (what a merchant does in the
-// dashboard). Cards are measured on a product with every commerce signal the
-// store can hold (a discount, 10+ sold in 30 days, a colour axis with real
-// swatch colours, a published brand, a delivery rate) and on a plain product
-// with none, so a card never renders broken when facts are missing.
-//
-// Two bars per pair of variants:
-//   - pixels: each card at its natural size (no stretching), both padded
-//     onto one white canvas, the share of pixels more than 28 grey levels
-//     apart (>= 25% for the nearest other variant);
-//   - structure: the buyer-visible treatments measured in the browser
-//     (photo box, tile, price place/size/colour, struck price, discount
-//     mark, rating, facts, title, button, Compare); >= 3 differ.
-// Plus the card photo's fetched width against its drawn width (<= 1.2x at
-// DPR 1). Every listing layout is probed. Run through check.mjs.
+// One template's tokens held fixed, ONE block choice swapped at a time (what a
+// merchant does in the dashboard): every facts+action setting of the one card,
+// then every listing layout. Cards are measured on a product with every
+// commerce signal the store can hold (a discount, 10+ sold in 30 days, a
+// colour axis with real swatch colours, a published brand, a delivery rate)
+// and on a plain product with none, so a card never renders broken when facts
+// are missing. Bars per style: the card photo's fetched width against its
+// drawn width (<= 1.2x at DPR 1), the plain card renders whole, and phone
+// titles stay at the Bangla floor. Run through check.mjs.
 import { join } from "node:path";
-import { loadSharp } from "./lib/context.mjs";
-import { pixelDiffPct } from "./lib/compare.mjs";
 import { sleep } from "./lib/proc.mjs";
-import { applyTheme, variantNames } from "./lib/theme.mjs";
+import { applyTheme, cardSets, variantNames } from "./lib/theme.mjs";
 import { probePage } from "./matrix.mjs";
 import { MENUS } from "./menus.mjs";
 
@@ -76,7 +67,7 @@ const CARD_PROBE = (slug) => `(async () => {
   const cs = (el) => el ? getComputedStyle(el) : null;
   const body = card.querySelector('.product-card-body');
   const title = link.parentElement;
-  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('[data-card-price] > span:last-child') || (card.dataset.cardVariant === 'showcase' ? body.querySelector('.product-card-action') : null);
+  const price = card.querySelector('.pc-price-whole') || card.querySelector('.product-card-price') || body.querySelector('[data-card-price] > span:last-child');
   const regular = card.querySelector('.pc-price-regular') || card.querySelector('s');
   const media = card.querySelector('.product-card-media');
   const marks = [...card.querySelectorAll('[data-card-discount]')].map((m) => { const s = cs(m); return [m.closest('.product-card-media') ? 'photo' : 'price', m.textContent.trim(), s.backgroundColor, s.color, s.borderRadius].join('/'); });
@@ -101,7 +92,7 @@ const CARD_PROBE = (slug) => `(async () => {
       ratio: media ? (media.clientWidth / media.clientHeight).toFixed(2) : 'none',
       fit: img ? cs(img).objectFit + '/' + Math.round(parseFloat(cs(img).paddingLeft)) : 'none',
       tile: [c.backgroundColor, c.borderTopWidth, c.boxShadow === 'none' ? 'flat' : 'shadow', c.borderTopLeftRadius].join('/'),
-      pricePlace: price.classList.contains('product-card-action') ? 'in-action' : box(price).top < box(title).top ? 'before-title' : 'after-title',
+      pricePlace: box(price).top < box(title).top ? 'before-title' : 'after-title',
       priceSize: cs(price).fontSize + '/' + cs(price).fontWeight,
       priceColour: cs(price).color,
       strike: regular ? [box(regular).top > box(price).top + 4 ? 'below' : box(regular).x < box(price).x ? 'before' : 'after', cs(regular.querySelector('s') || regular).textDecorationLine, regular.textContent.replace(/[\\d৳,.\\s]|Regular price/g, '')].join('/') : 'none',
@@ -117,67 +108,14 @@ const CARD_PROBE = (slug) => `(async () => {
   };
 })()`;
 
-async function greyNatural(sharp, file) {
-  const { data, info } = await sharp(file).greyscale().raw().toBuffer({ resolveWithObject: true });
-  return { data, width: info.width, height: info.height };
-}
-
-/** Both crops padded top-left onto one white canvas of the larger size, then compared. */
-export function paddedDiffPct(a, b) {
-  const W = Math.max(a.width, b.width);
-  const H = Math.max(a.height, b.height);
-  const pad = (img) => {
-    const out = Buffer.alloc(W * H, 255);
-    for (let y = 0; y < img.height; y += 1) img.data.copy(out, y * W, y * img.width, y * img.width + img.width);
-    return out;
-  };
-  return pixelDiffPct(pad(a), pad(b));
-}
-
-/** Traits that differ between two cards. */
-export function differingTraits(a, b) {
-  return Object.keys(a).filter((key) => a[key] !== b[key]);
-}
-
-/** For each variant: its nearest other variant by pixels, and every pair's pixel and structural difference. */
-export async function cardDiffs(cards, viewport) {
-  const sharp = await loadSharp();
-  const names = Object.keys(cards).filter((n) => cards[n].file);
-  const grey = Object.fromEntries(await Promise.all(names.map(async (n) => [n, await greyNatural(sharp, cards[n].file)])));
-  const pairs = {};
-  for (let i = 0; i < names.length; i += 1) {
-    for (let j = i + 1; j < names.length; j += 1) {
-      const [a, b] = [names[i], names[j]];
-      const differing = differingTraits(cards[a].traits, cards[b].traits);
-      pairs[`${a}~${b}`] = { pct: paddedDiffPct(grey[a], grey[b]), structural: differing.length, differing };
-    }
-  }
-  const pair = (a, b) => pairs[`${a}~${b}`] ?? pairs[`${b}~${a}`];
-  const nearest = names.map((a) => {
-    let best = null;
-    for (const b of names) {
-      if (a === b) continue;
-      const pct = pair(a, b).pct;
-      if (!best || pct < best.pct) best = { a, b, pct, viewport };
-    }
-    return best;
-  }).filter(Boolean);
-  const structural = Object.entries(pairs).map(([key, p]) => {
-    const [a, b] = key.split("~");
-    return { a, b, count: p.structural, differing: p.differing, viewport };
-  });
-  return { pairs, nearest, structural };
-}
-
 export async function runVariants(ctx, { template = "department-mall", path }) {
   const { page, base, log, shotsDir, db } = ctx;
   const { card: cards, listing: layouts } = await variantNames();
   const fixture = pickCardProducts(db);
   log(`  card fixture: ${fixture.rich.slug} (${fixture.rich.sold} sold, ${fixture.rich.specs} key specs); plain ${fixture.plain?.slug ?? "none"}`);
-  const out = { template, fixture, cards: {}, plain: {}, listings: {}, diffs: [], structural: [], photos: [] };
-  const measured = { desktop: {}, phone: {} };
+  const out = { template, fixture, cards: {}, plain: {}, listings: {}, photos: [] };
   for (const v of cards) {
-    await applyTheme(ctx, template, { menu: MENUS["150"], sets: { "blocks.card.variant": v } });
+    await applyTheme(ctx, template, { menu: MENUS["150"], sets: cardSets(v) });
     for (const viewport of ["desktop", "phone"]) {
       await page.profile(viewport);
       const tag = viewport === "phone" ? "m" : "d";
@@ -198,7 +136,6 @@ export async function runVariants(ctx, { template = "department-mall", path }) {
         const record = { ...m, file: join(shotsDir, `${name}.jpg`) };
         if (role === "rich") {
           out.cards[`${v}-${viewport}`] = record;
-          measured[viewport][v] = record;
           if (m.photo) out.photos.push({ variant: v, viewport, ...m.photo });
         } else {
           out.plain[`${v}-${viewport}`] = { box: m.box, empty: m.empty, titleFontPx: m.titleFontPx };
@@ -206,17 +143,6 @@ export async function runVariants(ctx, { template = "department-mall", path }) {
       }
     }
   }
-  for (const viewport of ["desktop", "phone"]) {
-    if (Object.keys(measured[viewport]).length < 2) continue;
-    const { pairs, nearest, structural } = await cardDiffs(measured[viewport], viewport);
-    out[`pairs-${viewport}`] = pairs;
-    out.diffs.push(...nearest);
-    out.structural.push(...structural);
-  }
-  const weakest = [...out.diffs].filter((d) => d.viewport === "desktop").sort((x, y) => x.pct - y.pct).slice(0, 4);
-  log(`  variants ${template} cards (nearest by pixels, desktop): ${weakest.map((d) => `${d.a}~${d.b} ${d.pct}%`).join(", ")}`);
-  const fewest = [...out.structural].sort((x, y) => x.count - y.count).slice(0, 3);
-  log(`  variants ${template} cards (fewest differing treatments): ${fewest.map((d) => `${d.a}~${d.b} ${d.count} (${d.viewport})`).join(", ")}`);
   for (const v of layouts) {
     await applyTheme(ctx, template, { menu: MENUS["150"], sets: { "blocks.listing.layout.variant": v } });
     for (const viewport of ["desktop", "phone"]) {

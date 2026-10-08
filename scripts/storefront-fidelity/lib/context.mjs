@@ -15,10 +15,8 @@ export const STOREFRONT_DIR = join(ROOT, "apps", "storefront");
 /** The cache KV namespace both local Workers bind (wrangler.local.jsonc). */
 export const CACHE_KV_NAMESPACE = "d6e2d77d898e4b3f9c186802ce63f9b8";
 
-export const TEMPLATES = Object.freeze([
-  "boutique", "heritage-editorial", "fashion-value", "spec-catalogue", "rounded-tech",
-  "marketplace", "mass-retail", "department-mall", "daily-essentials", "showcase-landing",
-]);
+/** The five presets of the one design system (`STOREFRONT_TEMPLATE_IDS`). */
+export const TEMPLATES = Object.freeze(["boutique", "marketplace", "department-mall", "daily-essentials", "showcase-landing"]);
 
 export const DEFAULT_PORTS = Object.freeze({ api: 9001, storefront: 4601, admin: 4602, media: 4603, chrome: 9601 });
 

@@ -250,14 +250,13 @@ export function navChecks(template, menu, r, budgets) {
   return checks;
 }
 
-/** Card variant distinctness (slice 2 bar): every pair differs by >= N% of pixels. */
-export function variantChecks(template, diffs, budgets, { structural = [], photos = [], plain = {} } = {}) {
-  const checks = diffs.map((d) => budgetCheck("variants", template, d.viewport, `card.${d.a}~${d.b}.diffPct`, d.pct, budgets.cardVariantMinDiffPct, `AUDIT §8 slice 2: any two card variants differ by >= ${budgets.cardVariantMinDiffPct}% of pixels (on the product with every signal)`, "min"));
-  // Slice 2b: what a buyer notices, pair by pair.
-  for (const s of structural) {
-    const check = budgetCheck("variants", template, s.viewport, `card.${s.a}~${s.b}.treatments`, s.count, budgets.cardVariantMinTreatments, `slice 2b: any two card variants differ in >= ${budgets.cardVariantMinTreatments} buyer-visible treatments`, "min");
-    checks.push({ ...check, detail: `${check.detail}: ${s.differing.join(", ") || "none"}` });
-  }
+/**
+ * Card setting checks: for each facts+action style of the one card, the photo
+ * is fetched at no more than 1.2x its drawn width and a product without facts
+ * still renders a whole card with phone titles at the Bangla floor.
+ */
+export function variantChecks(template, budgets, { photos = [], plain = {} } = {}) {
+  const checks = [];
   // A desktop card photo is fetched at most 1.2x its drawn width (DPR 1).
   for (const p of photos.filter((photo) => photo.viewport === "desktop")) {
     checks.push(budgetCheck("variants", template, "desktop", `card.${p.variant}.photoRatio`, p.ratio, budgets.cardPhotoMaxRatio, `slice 2b: a card photo is fetched at <= ${budgets.cardPhotoMaxRatio}x its drawn width (${p.fetched}w for ${p.drawn}px)`));
@@ -314,10 +313,4 @@ export function exitCode(checks, { reportOnly = false } = {}) {
   return checks.some((c) => !c.pass) ? 1 : 0;
 }
 
-/** Share of pixels whose grey level differs by more than `threshold` (the audit's card metric). */
-export function pixelDiffPct(a, b, threshold = 28) {
-  if (a.length !== b.length) throw new Error("buffers differ in size");
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) if (Math.abs(a[i] - b[i]) > threshold) diff += 1;
-  return round((diff / a.length) * 100, 1);
-}
+

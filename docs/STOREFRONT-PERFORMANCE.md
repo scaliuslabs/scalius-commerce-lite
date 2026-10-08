@@ -185,7 +185,7 @@ Miss TTFB from a laptop includes the network round trip to the edge. From Bangla
 
 ```sh
 pnpm fidelity:check                                   # everything
-pnpm fidelity:check --only spec-catalogue --report-only
+pnpm fidelity:check --only department-mall --report-only
 pnpm fidelity:check --only listing,marketplace --state-cache /tmp/fidelity-cache
 ```
 
@@ -217,7 +217,7 @@ Budgets (`budgets` in `reference-metrics.json`):
 | Product JSON-LD | 20 KB |
 | Buy box top (1440x900) | 400 px |
 | Hover photo visible after pointerenter | 150 ms |
-| Card variants | at least 25% of pixels differ and at least 3 buyer-visible treatments differ; card photo fetched at most 1.2x its drawn width; phone card title at least 14 px |
+| Card settings (every facts and action pair) | card photo fetched at most 1.2x its drawn width; a product without facts still renders a whole card; phone card title at least 14 px |
 
 `--only` takes blocks (`header`, `card`, `listing`, `pdp`, `footer`, `size`, `perf`, `nav`, `variants`, `hover`, `tiny`) or a template name, and skips the stages it does not need. `--report-only` writes the same report and exits 0. Use it while a slice closes its gaps. The merge gate is the plain command. `node scripts/storefront-fidelity/density.mjs --out refs.json` re-measures the reference listings with read-only page loads and never accepts a cookie dialog.
 

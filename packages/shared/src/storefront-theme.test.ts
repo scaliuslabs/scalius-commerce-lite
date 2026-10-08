@@ -52,13 +52,12 @@ const V3_CLASSIC = {
     // The default's department search header renders through the composed (marketplace) header.
     header: "marketplace",
     footer: "columns",
-    productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
+    productCard: { imageRatio: "square", hoverImage: false },
     density: "compact",
     grid: { cardMin: { phone: "9.25rem", tablet: "11rem", desktop: "12.5rem" }, gap: { phone: "0.5rem", desktop: "1rem" } },
     productPage: { gallery: "beside", thumbnails: "beside" },
     navigation: "menu",
     mobileNavigation: "drawer",
-    cardSurface: "bordered",
   },
   css: {
     popover: "#ffffff", "popover-foreground": "#1d1c1a", ring: "#1d1c1a", background: "#ffffff", foreground: "#1d1c1a",
@@ -77,14 +76,14 @@ const V3_CLASSIC = {
   sections: ["hero", "collections", "category-tiles", "usp-strip"],
 } as const;
 
-describe("storefront theme document v8", () => {
+describe("storefront theme document v9", () => {
   it("parses every template as a complete document in its own palette", () => {
     expect(STOREFRONT_TEMPLATES.map((template) => template.id)).toEqual([...STOREFRONT_TEMPLATE_IDS]);
-    expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(10);
+    expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(5);
     for (const template of STOREFRONT_TEMPLATES) {
       const theme = storefrontTemplateTheme(template.id);
       expect(issues(theme), template.id).toEqual([]);
-      expect(theme).toMatchObject({ version: 8, template: template.id });
+      expect(theme).toMatchObject({ version: 9, template: template.id });
       expect(theme.tokens.colors).toEqual(STOREFRONT_THEME_PALETTES[template.palette]);
       expect(Object.isFrozen(template.blocks.product.below)).toBe(true);
     }
@@ -94,10 +93,9 @@ describe("storefront theme document v8", () => {
     const shapes = new Set(STOREFRONT_TEMPLATES.map((template) => JSON.stringify(template.blocks)));
     expect(shapes.size).toBe(STOREFRONT_TEMPLATES.length);
     // The measured density and header grammar survive into the data.
-    expect(storefrontTemplateTheme("spec-catalogue").tokens).toMatchObject({ density: "dense", typeScale: "flat", headerTone: "dark", container: "1290" });
-    expect(storefrontTemplateTheme("boutique").tokens).toMatchObject({ density: "airy", typeScale: "display", container: "1200" });
-    expect(storefrontTemplateTheme("heritage-editorial").tokens).toMatchObject({ headingCase: "uppercase", imageRatio: "portrait" });
-    expect(storefrontTemplateTheme("rounded-tech").tokens).toMatchObject({ radius: "soft", buttonShape: "pill", surface: "raised" });
+    expect(storefrontTemplateTheme("marketplace").tokens).toMatchObject({ density: "compact", typeScale: "flat", headerTone: "dark", container: "full", imageFit: "contain" });
+    expect(storefrontTemplateTheme("boutique").tokens).toMatchObject({ density: "airy", typeScale: "display", container: "1200", radius: "square" });
+    expect(storefrontTemplateTheme("showcase-landing").tokens).toMatchObject({ radius: "rounded", buttonShape: "pill", surface: "flat" });
   });
 
   it("renders the version 3 classic look from the default document", () => {
@@ -144,15 +142,12 @@ describe("storefront theme document v8", () => {
 
   it("checks the pairs of the chosen variants and of every variant they fall back to", () => {
     const theme = clone();
-    const base = storefrontThemeContrastPairs(theme.blocks).map((pair) => pair.join("/"));
-    expect(base).not.toContain("destructive/card");
-    theme.blocks.card = { variant: "retail", settings: {} };
+    // The one card always paints the sale colour on the card surface.
     expect(storefrontThemeContrastPairs(theme.blocks).map((pair) => pair.join("/"))).toContain("destructive/card");
-    // A light red that passes on a dark page but not on lighter dark cards
-    // is caught only when a card paints it.
+    // A light red that passes on a dark page but not on lighter dark cards is caught by the card.
     theme.tokens.colors = { ...STOREFRONT_THEME_PALETTES.midnight, card: "#3a3a40", popover: "#3a3a40" };
     expect(issues(theme).join("\n")).toMatch(/^tokens\.colors\.destructive: destructive on card has contrast/);
-    expect(issues({ ...theme, blocks: clone().blocks })).toEqual([]);
+    expect(issues({ ...theme, tokens: { ...theme.tokens, colors: { ...STOREFRONT_THEME_PALETTES.midnight } } })).toEqual([]);
     expect(storefrontVariantChain("header", "boutique-inline")).toEqual(["boutique-inline"]);
     expect(storefrontVariantChain("footer", "directory")).toEqual(["directory", "minimal-columns"]);
   });
@@ -169,10 +164,10 @@ describe("storefront theme document v8", () => {
         expect(raised, label).not.toBe(deep);
       }
     }
-    // Amazon's palette in the dark header: a raised navy band over a deeper bottom band.
-    const amazon = buildStorefrontThemeTokens(storefrontTemplateTheme("marketplace"));
-    expect([amazon["theme-header-background"], amazon["theme-header-raised"], amazon["theme-header-deep"]]).toEqual(["#1c2530", "#3c444d", "#151c24"]);
-    expect(amazon["theme-rating"]).toBe("#f59e0b");
+    // The marketplace palette in the dark header: a raised band over a deeper bottom band.
+    const market = buildStorefrontThemeTokens(storefrontTemplateTheme("marketplace"));
+    expect([market["theme-header-background"], market["theme-header-raised"], market["theme-header-deep"]]).toEqual(["#0f1111", "#313232", "#0b0d0d"]);
+    expect(market["theme-rating"]).toBe("#f59e0b");
   });
 
   it("computes WCAG contrast", () => {
@@ -285,7 +280,7 @@ describe("storefront theme document v8", () => {
     expect(parseStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual(DEFAULT_STOREFRONT_THEME);
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
-    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 9 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 10 }))).toBeNull();
   });
 
   it("builds CSS tokens from constants and validated colours only", () => {
@@ -295,13 +290,12 @@ describe("storefront theme document v8", () => {
       expect(tokens["theme-container-width"]).toMatch(/^\d+(\.\d+)?rem$/);
       expect(Number(tokens["theme-type-scale"])).toBeGreaterThan(0.85);
     }
-    const spec = buildStorefrontThemeTokens(storefrontTemplateTheme("spec-catalogue"));
+    const market = buildStorefrontThemeTokens(storefrontTemplateTheme("marketplace"));
     // The dark header takes the darker of ink and page.
-    expect(spec["theme-header-background"]).toBe(STOREFRONT_THEME_PALETTES.marketplace.foreground);
-    const tech = buildStorefrontThemeTokens(storefrontTemplateTheme("rounded-tech"));
-    expect(tech["theme-header-background"]).toBe(STOREFRONT_THEME_PALETTES.retail.foreground);
-    expect(tech["theme-button-radius"]).toBe("9999px");
-    expect(tech.radius).toBe("1.25rem");
+    expect(market["theme-header-background"]).toBe(STOREFRONT_THEME_PALETTES.marketplace.foreground);
+    const showcase = buildStorefrontThemeTokens(storefrontTemplateTheme("showcase-landing"));
+    expect(showcase["theme-button-radius"]).toBe("9999px");
+    expect(showcase.radius).toBe("0.75rem");
   });
 
   it("pairs every template with web fonts that fall back to Bangla and metric-matched faces", () => {

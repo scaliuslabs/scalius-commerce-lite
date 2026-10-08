@@ -444,5 +444,6 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-gutter-desktop": `${STOREFRONT_GUTTERS.desktop / 16}rem`,
     "theme-duration-fast": `${STOREFRONT_MOTION_MS.fast}ms`,
     "theme-duration-base": `${STOREFRONT_MOTION_MS.base}ms`,
+    ...Object.fromEntries(Object.entries(STOREFRONT_TYPE_STEPS).map(([step, px]) => [`theme-text-${step}`, `${px / 16}rem`])),
   };
 }

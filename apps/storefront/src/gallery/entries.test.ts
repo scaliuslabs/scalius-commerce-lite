@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   STOREFRONT_BLOCK_REGISTRY,
+  STOREFRONT_CARD_ACTIONS,
+  STOREFRONT_CARD_FACTS,
   STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_PRODUCT_STICKY,
   STOREFRONT_SECTION_REGISTRY,
@@ -21,7 +23,7 @@ import {
   storefrontThemeDocumentSchema,
   type StorefrontBlockSlot,
 } from "@scalius/shared/storefront-theme";
-import { entryId, galleryEntries } from "./entries";
+import { cardEntryId, entryId, galleryEntries } from "./entries";
 import { SECTION_CONTENT } from "./section-content";
 import { settingChoices, type SettingsSchema } from "./variants";
 import { fixtureFacets, fixtureMenu, menuLinkCount } from "./fixtures";
@@ -60,6 +62,12 @@ describe("the storefront gallery", () => {
       for (const variant of Object.keys(STOREFRONT_BLOCK_REGISTRY[slot])) {
         expect(ids.has(entryId("block", slot, variant, "default")), `${slot}/${variant}`).toBe(true);
       }
+    }
+  });
+
+  it("has an entry for every product card facts x action combination", () => {
+    for (const facts of STOREFRONT_CARD_FACTS) {
+      for (const action of STOREFRONT_CARD_ACTIONS) expect(ids.has(cardEntryId(facts, action)), `${facts} ${action}`).toBe(true);
     }
   });
 

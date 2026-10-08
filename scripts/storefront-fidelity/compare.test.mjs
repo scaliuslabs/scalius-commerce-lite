@@ -6,18 +6,17 @@ import { describe, expect, it } from "vitest";
 import { poolFile } from "./lib/media-server.mjs";
 import {
   DEFAULT_TOLERANCES, METRIC_RULES, compareTemplate, exitCode, extractOurs, htmlBudgetKb, judge, median, navChecks,
-  parseFont, parseOnly, perfChecks, pixelDiffPct, selected, summarize, variantChecks,
+  parseFont, parseOnly, perfChecks, selected, summarize, variantChecks,
 } from "./lib/compare.mjs";
 import { TEMPLATES, loadSharp } from "./lib/context.mjs";
 import { MENUS, TEMPLATE_MENUS } from "./menus.mjs";
-import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, specSearchLayoutChecks, stagesFor } from "./check.mjs";
+import { BLOCKS, marketplaceLayoutChecks, markdownSummary, parseArgs, resolveTemplatePdpCandidates, stagesFor } from "./check.mjs";
 import { referenceShotIssue, writePairs } from "./pairs.mjs";
-import { differingTraits, paddedDiffPct } from "./variants.mjs";
 
 const reference = JSON.parse(readFileSync(new URL("./reference-metrics.json", import.meta.url), "utf8"));
 
 it("uses relevant category menus for reference captures while retaining scale navigation", () => {
-  expect(TEMPLATE_MENUS["fashion-value"]).toBe("menu_fid_fashion");
+  expect(TEMPLATE_MENUS.boutique).toBe("menu_fid_fashion");
   expect(TEMPLATE_MENUS["daily-essentials"]).toBe("menu_fid_pantry");
   expect(TEMPLATE_MENUS.marketplace ?? MENUS["150"]).toBe(MENUS["150"]);
 });
@@ -176,34 +175,27 @@ describe("template comparison", () => {
   const ours = { desktop: extractOurs({ home: probe(), plp: plpProbe, pdp: pdpProbe }), phone: {} };
 
   it("checks every metric of the mapped reference site, per block", () => {
-    const checks = compareTemplate("spec-catalogue", ours, reference);
+    const checks = compareTemplate("department-mall", ours, reference);
     const byMetric = Object.fromEntries(checks.filter((c) => c.viewport === "desktop").map((c) => [c.metric, c]));
-    expect(byMetric["card.h"]).toMatchObject({ ours: 333, ref: 665, refSite: "startech", pass: false, block: "card" });
-    expect(byMetric["header.h"].pass).toBe(true);
-    expect(byMetric["listing.filtersVisible"]).toMatchObject({ ours: 2, ref: 7, pass: false });
-    expect(byMetric["footer.h"]).toMatchObject({ ours: 1215, ref: 448, pass: false });
+    expect(byMetric["card.w"]).toMatchObject({ refSite: "gameghor", block: "card" });
+    expect(byMetric["listing.filtersVisible"]).toMatchObject({ ours: 2, pass: false });
     expect(byMetric["pdp.buyTop"]).toMatchObject({ ref: 400, pass: false });
+    expect(byMetric["header.h"].refSite).toBe("gameghor");
     expect(checks.every((c) => c.id === `${c.template}/${c.block}/${c.viewport}/${c.metric}`)).toBe(true);
     // phone metrics exist in the reference but nothing was measured: every one fails as missing
     expect(checks.filter((c) => c.viewport === "phone").every((c) => !c.pass)).toBe(true);
   });
 
   it("judges filters visible only on large-catalogue templates", () => {
-    const small = { ...reference, templates: { ...reference.templates, "spec-catalogue": { ...reference.templates["spec-catalogue"], largeCatalogue: false } } };
-    expect(compareTemplate("spec-catalogue", ours, small).some((c) => c.metric === "listing.filtersVisible")).toBe(false);
+    const small = { ...reference, templates: { ...reference.templates, "department-mall": { ...reference.templates["department-mall"], largeCatalogue: false } } };
+    expect(compareTemplate("department-mall", ours, reference).some((c) => c.metric === "listing.filtersVisible")).toBe(true);
+    expect(compareTemplate("department-mall", ours, small).some((c) => c.metric === "listing.filtersVisible")).toBe(false);
   });
 
   it("uses Amazon for the marketplace header and cards", () => {
     const checks = compareTemplate("marketplace", ours, reference);
     expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop").refSite).toBe("amazon");
     expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop").refSite).toBe("amazon");
-  });
-
-  it("catches an oversized Heritage portrait gallery against the saved product photo", () => {
-    const stage = (w, h) => ({ ...ours, desktop: extractOurs({ home: probe(), plp: plpProbe, pdp: { ...pdpProbe, pdp: { ...pdpProbe.pdp, stage: { w, h } } } }) });
-    const checks = (w, h) => compareTemplate("heritage-editorial", stage(w, h), reference).filter((c) => c.metric.startsWith("pdp.stage."));
-    expect(checks(404, 539).every((c) => c.pass)).toBe(true);
-    expect(checks(588, 784).map((c) => c.pass)).toEqual([false, false]);
   });
 
   it("refuses an unmapped template", () => {
@@ -241,21 +233,6 @@ describe("marketplace category and search layout", () => {
     expect(checks.map((check) => check.pass)).toEqual([false, true, false, false]);
     expect(checks[2].detail).toBe("missing on our page");
   });
-});
-
-it("checks spec search columns, first card position, and visible products against saved references", () => {
-  const refs = reference.sites.startech.search;
-  expect(specSearchLayoutChecks({ "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } }, refs)
-    .map(({ pass, ref, src }) => [pass, ref, src])).toEqual([
-    [true, 5, expect.stringContaining("startech-search-d-top.jpg")],
-    [true, 289, expect.stringContaining("startech-search-d-top.jpg")],
-    [true, 5, expect.stringContaining("startech-search-d-top.jpg")],
-    [true, 1, expect.stringContaining("startech-search-m-top.jpg")],
-    [true, 260, expect.stringContaining("startech-search-m-top.jpg")],
-    [true, 1, expect.stringContaining("startech-search-m-top.jpg")],
-  ]);
-  expect(specSearchLayoutChecks({ "search-desktop": { density: { cols: 4, firstCardTop: 352, productsFullyHalfVisible: 4 } }, "search-phone": { density: { cols: 1, firstCardTop: 664, productsFullyHalfVisible: 0 } } }, refs)
-    .map(({ pass }) => pass)).toEqual([false, false, false, true, false, false]);
 });
 
 describe("budgets", () => {
@@ -300,52 +277,29 @@ describe("budgets", () => {
     expect(f("phone/fid-live.drawerDuplicates")).toMatchObject({ ours: 2, pass: false });
   });
 
-  it("wants card variants at least 25% apart", () => {
-    const checks = variantChecks("department-mall", [{ a: "retail", b: "quick-add", pct: 0, viewport: "desktop" }, { a: "spec", b: "standard", pct: 31.4, viewport: "phone" }], reference.budgets);
-    expect(checks.map((c) => c.pass)).toEqual([false, true]);
-    expect(checks[0].id).toBe("department-mall/variants/desktop/card.retail~quick-add.diffPct");
-  });
-
-  it("wants every pair three treatments apart, card photos at most 1.2x, and plain cards whole", () => {
-    const checks = variantChecks("department-mall", [], reference.budgets, {
-      structural: [{ a: "standard", b: "boutique", count: 2, differing: ["ratio", "tile"], viewport: "desktop" }, { a: "spec", b: "retail", count: 7, differing: [], viewport: "phone" }],
-      photos: [{ variant: "spec", viewport: "desktop", drawn: 204, fetched: 240, ratio: 1.18 }, { variant: "retail", viewport: "desktop", drawn: 241, fetched: 320, ratio: 1.33 }, { variant: "retail", viewport: "phone", ratio: 2 }],
-      plain: { "spec-phone": { box: { w: 180, h: 400 }, empty: false, titleFontPx: 13 }, "retail-desktop": { box: { w: 250, h: 0 }, empty: true, titleFontPx: 14 } },
+  it("wants card photos at most 1.2x their drawn width, and plain cards whole with phone titles at the floor", () => {
+    const checks = variantChecks("department-mall", reference.budgets, {
+      photos: [{ variant: "none+none", viewport: "desktop", drawn: 204, fetched: 240, ratio: 1.18 }, { variant: "delivery+full", viewport: "desktop", drawn: 241, fetched: 320, ratio: 1.33 }, { variant: "delivery+full", viewport: "phone", ratio: 2 }],
+      plain: { "none+none-phone": { box: { w: 180, h: 400 }, empty: false, titleFontPx: 13 }, "delivery+full-desktop": { box: { w: 250, h: 0 }, empty: true, titleFontPx: 14 } },
     });
     const f = (suffix) => checks.find((c) => c.id.endsWith(suffix));
-    expect(f("card.standard~boutique.treatments")).toMatchObject({ pass: false, detail: "2 < 3: ratio, tile" });
-    expect(f("card.spec~retail.treatments").pass).toBe(true);
-    expect(f("desktop/card.spec.photoRatio").pass).toBe(true);
-    expect(f("desktop/card.retail.photoRatio").pass).toBe(false);
-    expect(checks.some((c) => c.id.endsWith("phone/card.retail.photoRatio"))).toBe(false);
-    expect(f("phone/card.spec.titlePx").pass).toBe(false);
-    expect(f("phone/card.spec.plainRenders").pass).toBe(true);
-    expect(f("desktop/card.retail.plainRenders").pass).toBe(false);
-  });
-
-  it("compares cards at their natural size on one white canvas, and names the treatments that differ", () => {
-    const tall = { data: Buffer.from([0, 0, 0, 0]), width: 1, height: 4 };
-    const short = { data: Buffer.from([0, 0]), width: 1, height: 2 };
-    expect(paddedDiffPct(tall, short)).toBe(50);
-    expect(differingTraits({ a: "1", b: "x", c: "y" }, { a: "1", b: "z", c: "q" })).toEqual(["b", "c"]);
-  });
-
-  it("measures pixel difference as the share of pixels more than 28 grey levels apart", () => {
-    const a = Buffer.from([0, 0, 0, 0, 100, 100, 100, 100]);
-    const b = Buffer.from([0, 28, 29, 255, 100, 100, 100, 72]);
-    expect(pixelDiffPct(a, b)).toBe(25);
-    expect(() => pixelDiffPct(a, Buffer.alloc(3))).toThrow();
+    expect(f("desktop/card.none+none.photoRatio").pass).toBe(true);
+    expect(f("desktop/card.delivery+full.photoRatio").pass).toBe(false);
+    expect(checks.some((c) => c.id.endsWith("phone/card.delivery+full.photoRatio"))).toBe(false);
+    expect(f("phone/card.none+none.titlePx").pass).toBe(false);
+    expect(f("phone/card.none+none.plainRenders").pass).toBe(true);
+    expect(f("desktop/card.delivery+full.plainRenders").pass).toBe(false);
   });
 });
 
 describe("filters, verdict and exit code", () => {
   it("parses --only into templates and blocks and rejects unknown names", () => {
-    expect(parseOnly("spec-catalogue,listing", TEMPLATES, BLOCKS)).toEqual({ templates: ["spec-catalogue"], blocks: ["listing"] });
+    expect(parseOnly("department-mall,listing", TEMPLATES, BLOCKS)).toEqual({ templates: ["department-mall"], blocks: ["listing"] });
     expect(parseOnly("", TEMPLATES, BLOCKS)).toEqual({ templates: [], blocks: [] });
     expect(() => parseOnly("spec", TEMPLATES, BLOCKS)).toThrow(/unknown spec/);
-    const f = parseOnly("spec-catalogue,listing", TEMPLATES, BLOCKS);
-    expect(selected(f, "spec-catalogue", "listing")).toBe(true);
-    expect(selected(f, "spec-catalogue", "card")).toBe(false);
+    const f = parseOnly("department-mall,listing", TEMPLATES, BLOCKS);
+    expect(selected(f, "department-mall", "listing")).toBe(true);
+    expect(selected(f, "department-mall", "card")).toBe(false);
     expect(selected(f, "boutique", "listing")).toBe(false);
   });
 
@@ -354,6 +308,8 @@ describe("filters, verdict and exit code", () => {
     expect(stagesFor(parseOnly("boutique", TEMPLATES, BLOCKS))).toMatchObject({ matrix: true, variants: false, nav: true, perf: true, hover: true, tiny: true });
     expect(stagesFor(parseOnly("", TEMPLATES, BLOCKS))).toEqual({ matrix: true, variants: true, nav: true, perf: true, hover: true, tiny: true });
     expect(stagesFor(parseOnly("size", TEMPLATES, BLOCKS))).toMatchObject({ matrix: true, perf: true, nav: false });
+    // The hover-image check needs a preset whose card shows a second photo.
+    expect(stagesFor(parseOnly("marketplace", TEMPLATES, BLOCKS)).hover).toBe(false);
   });
 
   it("fails on any breach unless report-only, and never passes an empty run", () => {
@@ -383,8 +339,8 @@ describe("filters, verdict and exit code", () => {
         writeFileSync(join(dir, `target-${page}-${viewport}-top.jpg`), "blocked capture");
       }
       const pairs = await writePairs({
-        reference: { templates: { "mass-retail": { refs: { header: "target", card: "target", listing: "target", pdp: "target" } } }, sites: { target: { name: "Target", shots: { home: "target-home", plp: "target-search", pdp: "target-pdp" } } } },
-        matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["mass-retail"],
+        reference: { templates: { "marketplace": { refs: { header: "target", card: "target", listing: "target", pdp: "target" } } }, sites: { target: { name: "Target", shots: { home: "target-home", plp: "target-search", pdp: "target-pdp" } } } },
+        matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["marketplace"],
       });
       expect(pairs.made).toHaveLength(0);
       expect(pairs.unverified).toHaveLength(6);
@@ -392,11 +348,11 @@ describe("filters, verdict and exit code", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    const visualEvidence = { paired: 2, unverified: [{ template: "mass-retail", page: "home", viewport: "desktop", reference: "target-home-d-top.jpg", reason: "known blocked reference capture" }] };
-    const report = markdownSummary({ summary: summarize([{ template: "mass-retail", block: "header", pass: true }]), checks: [], meta: { finishedAt: "now", git: "test", durationS: 1, peakRssMb: 1 }, filter: "", visualEvidence });
+    const visualEvidence = { paired: 2, unverified: [{ template: "marketplace", page: "home", viewport: "desktop", reference: "target-home-d-top.jpg", reason: "known blocked reference capture" }] };
+    const report = markdownSummary({ summary: summarize([{ template: "marketplace", block: "header", pass: true }]), checks: [], meta: { finishedAt: "now", git: "test", durationS: 1, peakRssMb: 1 }, filter: "", visualEvidence });
     expect(report).toContain("1/1 metric checks pass");
     expect(report).toContain("Visual pairs: 2 paired, 1 unverified.");
-    expect(report).toContain("mass-retail/home/desktop | target-home-d-top.jpg | known blocked reference capture");
+    expect(report).toContain("marketplace/home/desktop | target-home-d-top.jpg | known blocked reference capture");
   });
 
   it("keeps compact Chaldal cards separate from the full-action grocery default", () => {
@@ -410,29 +366,17 @@ describe("filters, verdict and exit code", () => {
     expect(referenceShotIssue("/shots/chaldal-popular-m-top.jpg")).toBeNull();
   });
 
-  it("uses Walmart's measured desktop home without promoting blocked listing captures", async () => {
-    expect(reference.templates["mass-retail"].refs).toMatchObject({ header: "target", card: "target-pickaboo-card", listing: "target", pdp: "target" });
-    expect(reference.templates["mass-retail"].visualRefs).toEqual({ home: { desktop: "walmart", phone: "daraz" }, plp: "pickaboo", pdp: "pickaboo" });
+  it("keeps Walmart's measured desktop home without promoting blocked listing captures", async () => {
     expect(reference.sites.pickaboo.shots).toEqual({ plp: "pickaboo-plp", pdp: "pickaboo-pdp" });
     expect(reference.sites.walmart.shots).toEqual({ home: "walmart-home" });
     expect(reference.sites.walmart.desktop["header.h"].v).toBe(132);
     expect(reference.sites.walmart.phone).toEqual({});
     expect(referenceShotIssue("/shots/walmart-home-d-top.jpg")).toBeNull();
     expect(referenceShotIssue("/shots/walmart-search-m-full.jpg")).toBe("known blocked reference capture");
-    const dir = mkdtempSync(join(tmpdir(), "fidelity-walmart-home-"));
-    try {
-      const sharp = await loadSharp();
-      const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer();
-      writeFileSync(join(dir, "walmart-home-d-top.jpg"), photo);
-      writeFileSync(join(dir, "daraz-home-m-top.jpg"), photo);
-      writeFileSync(join(dir, "target-home-d-top.jpg"), "blocked capture");
-      writeFileSync(join(dir, "ours-mass-retail-home-d-top.jpg"), photo);
-      writeFileSync(join(dir, "ours-mass-retail-home-m-top.jpg"), photo);
-      const pairs = await writePairs({ reference, matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["mass-retail"] });
-      expect(pairs.made.map((file) => basename(file))).toEqual(["mass-retail-home-d.jpg", "mass-retail-home-m.jpg"]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // Judged like-for-like: a 173px phone card against Pickaboo's 163px is within the size tolerance.
+    expect(reference.sites["target-pickaboo-card"].phone["card.w"].v).toBe(Math.round(157 * 390 / 375));
+    expect(judge("size", 173, 163).pass).toBe(true);
+    expect(reference.sites.target.phone).toMatchObject({ "card.w": { v: 334 }, "card.cols": { v: 1 } });
   });
 
   it("uses the accessible Graza collection captures for showcase visual pairs", async () => {
@@ -447,41 +391,6 @@ describe("filters, verdict and exit code", () => {
       }
       const pairs = await writePairs({ reference, matrix: {}, checks: [], shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["showcase-landing"] });
       expect(pairs.made.map((file) => basename(file))).toEqual(["showcase-landing-plp-d.jpg", "showcase-landing-plp-m.jpg"]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("scores only like-for-like default mass-retail measurements", () => {
-    const checks = compareTemplate("mass-retail", { desktop: {}, phone: {} }, reference);
-    expect(checks.find((c) => c.metric === "header.h" && c.viewport === "desktop")).toMatchObject({ refSite: "target", ref: 80 });
-    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "desktop")).toMatchObject({ refSite: "target-pickaboo-card", ref: 318 });
-    expect(checks.find((c) => c.metric === "card.w" && c.viewport === "phone")).toMatchObject({ refSite: "target-pickaboo-card", ref: 163, src: expect.stringContaining("x14–171") });
-    expect(checks.find((c) => c.metric === "card.cols" && c.viewport === "phone")).toMatchObject({ refSite: "target-pickaboo-card", ref: 2 });
-    expect(reference.sites["target-pickaboo-card"].phone["card.w"].v).toBe(Math.round(157 * 390 / 375));
-    expect(judge("size", 173, 163).pass).toBe(true);
-    expect(reference.sites.target.phone).toMatchObject({ "card.w": { v: 334 }, "card.cols": { v: 1 } });
-    expect(checks.some((c) => c.metric === "card.h")).toBe(false);
-    expect(checks.filter((c) => c.refSite === "walmart")).toHaveLength(0);
-  });
-
-  it("pairs spec search separately from its category page", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "fidelity-spec-search-"));
-    try {
-      const sharp = await loadSharp();
-      const photo = await sharp({ create: { width: 32, height: 20, channels: 3, background: "white" } }).jpeg().toBuffer();
-      for (const v of ["d", "m"]) {
-        writeFileSync(join(dir, `startech-search-${v}-top.jpg`), photo);
-        writeFileSync(join(dir, `ours-spec-catalogue-search-${v}-top.jpg`), photo);
-      }
-      const pairs = await writePairs({
-        reference,
-        matrix: { "spec-catalogue": { "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } } },
-        checks: specSearchLayoutChecks({ "search-desktop": { density: { cols: 5, firstCardTop: 310, productsFullyHalfVisible: 5 } }, "search-phone": { density: { cols: 1, firstCardTop: 290, productsFullyHalfVisible: 1 } } }, reference.sites.startech.search),
-        shotsDir: dir, refDirs: [dir], outDir: join(dir, "pairs"), templates: ["spec-catalogue"],
-      });
-      expect(pairs.made.map((file) => basename(file))).toEqual(["spec-catalogue-search-d.jpg", "spec-catalogue-search-m.jpg"]);
-      expect(pairs.unverified.filter(({ page }) => page === "plp")).toHaveLength(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

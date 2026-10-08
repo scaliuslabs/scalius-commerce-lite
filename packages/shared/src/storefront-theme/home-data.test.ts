@@ -146,7 +146,7 @@ describe("homepage section data requests", () => {
     expect(parse({ heading: "", text: "", buttonLabel: "x".repeat(41) })).toBe(false);
     expect(parse({ heading: "", text: "", phone: "hidden" })).toBe(false);
     expect(storefrontSectionNeedsContent(storefrontSectionDefault("newsletter", "n"))).toBe(false);
-    for (const template of ["boutique", "fashion-value"] as const) {
+    for (const template of ["boutique"] as const) {
       expect(storefrontTemplateTheme(template).pages.home.at(-1)?.type, template).toBe("newsletter");
     }
   });
