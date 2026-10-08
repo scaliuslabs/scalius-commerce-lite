@@ -13,7 +13,7 @@ import { renderForPresence } from "@/lib/api/runtime";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { isTrustedBrowserContinuationPostOrigin } from "@/lib/browser-continuation-relay";
 import { resolveRequestTheme, type RequestTheme } from "@/lib/storefront-theme-context";
-import { clearThemePreviewCookieHeader, readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import { appendClearThemePreviewCookies, readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 
 export const THEME_PREVIEW_ROUTE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -61,6 +61,10 @@ export async function readThemePreviewPost<Body>(
   if (!layoutData) return themePreviewRefusal(503);
   const requestTheme = await resolveRequestTheme(astro, layoutData);
   // An expired or revoked session: the bridge asks the editor for a new one.
-  if (!requestTheme.preview) return themePreviewRefusal(401, { "Set-Cookie": clearThemePreviewCookieHeader() });
+  if (!requestTheme.preview) {
+    const refusal = themePreviewRefusal(401);
+    appendClearThemePreviewCookies(refusal.headers);
+    return refusal;
+  }
   return { body: result.data, token, layoutData, requestTheme };
 }

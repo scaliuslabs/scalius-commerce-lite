@@ -1,7 +1,7 @@
 ---
 import { resolveThemePreview } from "@/lib/api";
 import {
-  clearThemePreviewCookieHeader,
+  appendClearThemePreviewCookies,
   readThemePreviewCookie,
 } from "@/lib/theme-preview-cookie";
 import {
@@ -33,7 +33,7 @@ const initialDevice = normalizeThemePreviewDevice(requestedDevice);
 const preview = token ? await resolveThemePreview(token) : null;
 
 if (token && !preview) {
-  Astro.response.headers.append("Set-Cookie", clearThemePreviewCookieHeader());
+  appendClearThemePreviewCookies(Astro.response.headers);
 }
 ---
 

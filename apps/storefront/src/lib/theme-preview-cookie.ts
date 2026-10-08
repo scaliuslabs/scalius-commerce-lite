@@ -40,13 +40,19 @@ export function createThemePreviewCookieHeader(token: string, options: { embedde
   ].join("; ");
 }
 
-export function clearThemePreviewCookieHeader(): string {
-  return [
-    `${THEME_PREVIEW_COOKIE_NAME}=`,
-    "Path=/",
-    "Max-Age=0",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-  ].join("; ");
+/**
+ * Clears the preview cookie in both of its scopes. The tab cookie (Lax) and
+ * the editor frame's cookie (SameSite=None; Partitioned) are different
+ * cookies to a browser: where the dashboard and the storefront share a site
+ * (localhost, or one registrable domain) the frame's partitioned cookie is
+ * also sent to a top-level storefront tab, and a delete that names only the
+ * Lax scope leaves it behind, so the preview never ends.
+ */
+export function clearThemePreviewCookieHeaders(): string[] {
+  const expired = `${THEME_PREVIEW_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure`;
+  return [`${expired}; SameSite=Lax`, `${expired}; SameSite=None; Partitioned`];
+}
+
+export function appendClearThemePreviewCookies(headers: Headers): void {
+  for (const header of clearThemePreviewCookieHeaders()) headers.append("Set-Cookie", header);
 }
