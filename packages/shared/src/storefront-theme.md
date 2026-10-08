@@ -1,10 +1,10 @@
-# Storefront theme document (version 8)
+# Storefront theme document (version 9)
 
 One JSON document describes how the storefront looks: the template label, tokens, brand, one variant per block with its settings, the homepage sections, up to 20 landing pages, the sections of the product, listing, cart and CMS page templates and what `/` shows. The dashboard drafts, previews, publishes (atomically) and restores it. An agent can write it through the API, and installed apps add sections and product blocks. The storefront and the dashboard resolve it against the store with the same function. This file is the contract for contributors and coding agents.
 
 Store identity (name, phone, email, address, social profiles) is not in the theme. The business document (Settings > Store details) owns it, and every buyer surface reads it only from there.
 
-Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema and the read upgrade entry points ([upgrade.md](storefront-theme/upgrade.md)). The registries are `blocks.ts` (block variants) and `sections.ts` (20 section types), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the 19 colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the 10 templates and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts`, `preview.ts` (the editor's preview bodies) and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
+Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@scalius/shared/storefront-theme`. `document.ts` holds the schema and the read upgrade entry points ([upgrade.md](storefront-theme/upgrade.md)). The registries are `blocks.ts` (block variants) and `sections.ts` (20 section types), and `apps.ts` holds the sections and product blocks that installed apps draw (`<plugin id>/<type>`). `tokens.ts` and `contrast.ts` hold the tokens, the 19 colour keys and the AA pairs. `fit.ts` (`StoreShape`) and `resolve.ts` (`resolveStorefrontTheme(document, storeShape)`) fit a document to a store. `templates.ts` holds the 5 presets and `DEFAULT_STOREFRONT_THEME`. `content.ts`, `home-data.ts`, `pages.ts`, `preview.ts` (the editor's preview bodies) and `compare.ts` (`compareThemeDocuments`, the typed changes stored with each version) hold the rest.
 
 ## Shape
 
@@ -55,18 +55,19 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
 - **Content survives a template.** Choosing a template copies its look and keeps the merchant's content (`storefrontThemeWithContent`): the brand, the home mode, the landing pages, the announcement and footer words where the new variants carry them, each hero's slides and side banners, and the category tiles' and collections' picks. Picks go to the first section of the same type, then the second. "Matches a template" compares looks only (`storefrontThemeLook`). Switching a block variant, and a resolver fit fallback, keeps the settings both variants declare (`storefrontBlockSwitch`).
 - **What `/` shows.** `pages.homeMode` is `sections`, or `product` with a `productId`. While that product is public (the homepage read returns it as `sections.homeProduct`), `/` answers 302 to the product page. That page keeps its canonical URL and SEO and never redirects back. A product that stops being public leaves `/` on the sections. A preview follows the draft's mode.
 - **The template is a label.** `template` feeds the dashboard's "based on" line and its reset-to-template defaults. No storefront component and not the resolver read it for behaviour: every behaviour is a block variant, a setting or a token, so blocks from any template mix freely. `apps/storefront/src/lib/theme-contract-consumers.test.ts` fails when a component branches on the template, or when an enum value has no consumer. A choice with no renderer is removed.
-- **Per-resource overrides.** `products.page_template` names a template (or `classic`, the Department mall product page). The product page then uses that template's `blocks.product` and keeps the store's own header, footer, tokens and card. `categories`, `collections` and `brands` have `listing_template`: a listing layout or a filter style. It replaces the theme's own for that listing when the store fits it (`catalogListingPresentation`). `null` uses the theme.
+- **Per-resource overrides.** `products.page_template` names a preset (or `classic`, the Department product page; an id v9 retired renders the preset it became, `STOREFRONT_RETIRED_TEMPLATE_IDS`). The product page then uses that template's `blocks.product` and keeps the store's own header, footer, tokens and card. `categories`, `collections` and `brands` have `listing_template`: a listing layout or a filter style. It replaces the theme's own for that listing when the store fits it (`catalogListingPresentation`). `null` uses the theme.
 - **Strict writes, upgraded reads.** Writes accept only the current version, known keys and valid registry settings. Stored reads run the pure step-wise `upgradeThemeDocument` before the same validation, in memory, without writes or resets. An invalid or unknown future document fails closed: the dashboard reports it unreadable and the storefront renders the default theme.
 
 ### Tokens, cards and contrast
 
-- **Tokens are global; blocks choose structure.** A variant never carries its own colour, so any mix of variants stays coherent. One card per store. Cards are the exception for shape and type (below).
+- **Tokens are global; blocks choose structure.** A variant never carries its own colour, type size, radius or elevation, so any mix of variants stays coherent ("Scalius Base": one design system, not looks copied from other sites). The scales: spacing in 4px steps (`STOREFRONT_SPACE_SCALE`), one type scale of about 1.2 (`STOREFRONT_TYPE_STEPS`, 12 to 48 px), gutters 16/24/32 (`STOREFRONT_GUTTERS`), surface padding 12/16, elevation flat/hairline/raised (`STOREFRONT_ELEVATION`: a border or a shadow, never both), motion 150/250 ms (`STOREFRONT_MOTION_MS`). Colour roles beyond the palette: `theme-sale` (the error colour, for discounted prices and the sale badge only), `theme-rating` and `theme-success`. The storefront primitives that draw with them are in `apps/storefront/src/components/ui` (README.md).
 - **Readable text.** Every pair in `STOREFRONT_THEME_TEXT_PAIRS`, plus the `contrastPairs` of every chosen variant and of every variant it can fall back to, must reach WCAG AA (4.5:1). The header roles (`header-background`, `header-foreground`) follow `headerTone`: `dark` takes the darker of ink and page, `brand` takes the action colour. A write that breaks a pair is rejected. `muted-foreground` must also be near-neutral (Lab chroma 25 or less) and at least 40 CIE76 units from `destructive`, so helper text never looks like an error.
 - **Colours.** Every colour a block paints is a theme token. The footer tones re-point the footer's surface tokens to an AA pair. The banded `directory` footer uses the header tone with two derived bands, `theme-header-raised` (at most 14% toward the header text, never below AA) and `theme-header-deep`. Stars and review bars use `theme-rating`, always beside the rating number in text.
-- **Cards.** The registry has 12 card variants. `standard` follows the template's tokens and type scale. Every other card owns its measured look (`STOREFRONT_CARD_LOOKS`): photo ratio and fit, radius in px, surface, and title and price size and weight per viewport. A template's radius, surface and photo tokens never flatten it. Density still owns the grid (card minimum, gaps) and the card padding.
-  - A card's anatomy is data in `renders`. Any two cards differ in at least three anatomy fields on a product with every fact (render test). The storefront renders `standard` from its own file and every other card from `apps/storefront/src/components/cards/variants/anatomy.astro`.
-  - The `showcase` card shows Add only for a product that needs no buyer input (no options, customization or gift card; in stock; a fixed positive price). Other in-stock products open their page.
-  - Facts (brand, key specs, rating, sold, pack size, delivery, EMI, swatches, options) render only when the product has the data. There are no zero states. Sold counts show from 10 units in 30 days. Swatches come from the first colour axis (at most 5). Key specs show at most 4. The `emi` fact needs `emiMonthlyFrom`, which no API read sends, so it never renders. Only `spec` has `compare`.
+- **Cards.** One card per store (`standard`). Its photo ratio and fit, radius and surface are the tokens; its type is the system's (title 14/500 in two lines, price 16/600, the sale colour only while discounted, the struck regular price after it). Density owns the grid (card minimum, gaps). Three settings vary it:
+  - `facts`: `none`, `key-specs` (two on phones, three from 640 px), `swatches` (the colour axis, at most 5 and "+N") or `delivery`. Each renders only when the product has the data: no zero states. A rating shows on every card once the product has a published review; pack size and condition show when present.
+  - `action`: `none`, `quick-add` (a round add button on the photo for a product that needs no buyer input: no options, customization or gift card, in stock, a fixed positive price; a chevron hint for products with options) or `full` (a button under the price on every card: Add to cart, Choose options or View product). Simple products add to the cart in place; anything else opens its page.
+  - `hoverImage`: the second photo fades in on hover.
+  - One discount mark: the sale badge on the photo (or Sold out). The body never repeats it. Rows in a grid stretch to equal height, with the price and action at the bottom.
   - The facts are each product's `cardFacts` (`packages/core/src/modules/catalog/card-facts.ts`): one bounded statement batched with the card media, so no page gains a D1 round trip. A card never shows an original upload that has no renditions: it shows the placeholder while the render job runs.
 
 ### Fit and store shape
@@ -100,14 +101,14 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
 
 One listing block serves category, collection, brand and search pages. The editor shows it as those pages' blocks.
 
-- **Layout.** `grid`, `list`, `shelves` (one shelf per sub-category or collection, at most 8; needs category depth 2 or a collection, else `grid`) and `quick-grid` (needs the `quick-add` card, else `grid`). Shelves show only on the plain first page: no search, refinement, sort or later page.
+- **Layout.** `grid`, `list`, `shelves` (one shelf per sub-category or collection, at most 8; needs category depth 2 or a collection, else `grid`) and `quick-grid` (a denser grid). Shelves show only on the plain first page: no search, refinement, sort or later page.
 - **Starting views.** `searchLayout` sets how search results start and `phoneLayout` sets the phone view. The buyer's grid/list switch (`grid-list-toggle`) is stored in the browser, separately for browsing and for searching. `paging` is `numbered`, `load-more` or `infinite`. The last two keep crawlable `?page=n` links.
 - **Description.** `descriptionPlacement` puts a category, collection or brand description `above` the results (clamped to two lines with "Read more") or `below`. The merchant's buying guide always renders below the results.
 - **Filter styles.** `filters.style` places the facets: `sidebar-dense` (a 240 px column), `sidebar-comfortable` (270 px), `bar-dropdowns` (up to 4 facet dropdowns in a bar, the rest in a drawer) and `drawer` (a Filter button and a drawer). On phones every style opens the facets from a Filter button in a sheet. `openByDefault` opens the facet groups (never for `bar-dropdowns`). A template may set `column` (180 to 340 px), `rowPitch` (24 to 36 px) and `label` (12 to 18 px) over the style's numbers. A facet shows 10 values in the HTML. "See more" fetches the rest.
 - **Filter order and placement.** `order` reorders whole groups (unset keeps the style's arrangement). `searchPlacement: drawer` moves a sidebar's facets into the drawer on search, so the results take the width (up to five columns). `ruled` draws a sidebar's groups as one flat, ruled list that scrolls on its own. A sidebar stays sticky on computers (from 1024 px).
 - **Small catalogues.** Filters need 8 results and a facet with two values, unless the buyer already refined (`storefrontListingFiltersShown`). A store with fewer than 8 products resolves `shown: false`. Sort needs two results.
 - **Toolbar pieces.** The pieces are in `blocks.ts`. A piece without data is left out: `subcategory-pills` needs category depth 2 and `popular-filter-chips` needs key specs. `facet-value-chips` shows one row of 2 to 8 values of the first option or attribute facet. The editor has a switch for every piece except `popular-filter-chips` and `aspect-chips`, which follow the layout.
-- **Page chrome.** Template data sets `surface`, `gutter`, `phoneBar`, `links` (`chips`, or a `tabs` strip that starts with "All"; not on search), `phoneBanner` and `maxColumns` (3 to 6 or `null`; the `spec` and `mall` cards cap at four). `band` is `standard`, `inline` (needs the bar placement) or `beside-filters` (needs a sidebar). Otherwise `standard` renders.
+- **Page chrome.** Template data sets `surface`, `gutter`, `phoneBar`, `links` (`chips`, or a `tabs` strip that starts with "All"; not on search), `phoneBanner` and `maxColumns` (3 to 6 or `null`). `band` is `standard`, `inline` (needs the bar placement) or `beside-filters` (needs a sidebar). Otherwise `standard` renders.
 
 ### Product page
 
@@ -166,12 +167,12 @@ The editor shows each edit in the frame before it is saved, without a page load:
 
 | Edit | What the frame does |
 |---|---|
-| A colour or other token | Sets the CSS custom properties at once, then repaints from `POST /theme-preview/paint` (fonts, card attributes). |
+| A colour or other token | Sets the CSS custom properties at once, then repaints from `POST /theme-preview/paint` (fonts and body attributes). |
 | Typing in a text setting | Replaces the text in place, then draws the section again. |
 | Move or hide a section | Moves or hides the rendered units in the page at once. |
 | Add a section, or show one the page did not draw | Draws the page's regions again from `POST /theme-preview/render`. |
 | Any other section setting | Draws that section again from `POST /theme-preview/render`, 90 ms after the last edit. |
-| Header, footer, product modules, card style | Saves at once, then loads the page again in a hidden second frame and swaps it in when ready. |
+| Header, footer, product modules, card settings | Saves at once, then loads the page again in a hidden second frame and swaps it in when ready. |
 
 - **Bridge.** `@scalius/shared/theme-editor-bridge` is the message contract. The storefront side is the inline script in `apps/storefront/src/lib/theme-preview-bridge.ts`, present only on a page that rendered a valid preview. Both sides check the other's exact origin and window.
 - **No lost edits.** Every command carries a `seq`, and the page answers `ack` once it applied it (a render or paint: once it landed or failed). The editor keeps the newest command of each kind (per section or region) until its ack arrives. It sends them again when the shown frame connects (a navigation, a reload swap) and when an ack is late (600 ms; 3 s for a render or paint). After five unanswered sends it loads the page again. While a command waits, the canvas says "Updating preview". Each frame keeps one ref callback for its life (`use-preview.ts`), so re-renders never detach it (`use-preview.test.tsx`).
@@ -212,15 +213,13 @@ The OpenAPI contract states shared shapes once as named components (`StorefrontT
 
 ## Templates
 
-`templates.ts` holds every template's data: header, menus, card, listing and filter style, gallery, buy box, footer, tokens, top bar, navigation source, product modules, sticky bars and a starting homepage.
+`templates.ts` holds every preset's data: header, menus, card settings, listing and filter style, gallery, buy box, footer, tokens, top bar, navigation source, product modules, sticky bars and a starting homepage. A preset is a combination of tokens and block choices, never a look of its own.
 
-The templates are `boutique`, `heritage-editorial`, `fashion-value`, `spec-catalogue`, `rounded-tech`, `marketplace`, `mass-retail`, `department-mall` (the default), `daily-essentials` and `showcase-landing`. The dashboard's template library describes each one (`template_<id>Help` in `apps/admin-v2/src/i18n/online-store.ts`).
+The presets are `department-mall` (Department, the default), `boutique`, `marketplace`, `daily-essentials` (Essentials) and `showcase-landing` (Landing). Document v9 merged the other five: `spec-catalogue` and `rounded-tech` into Department, `heritage-editorial` and `fashion-value` into Boutique, `mass-retail` into Marketplace (upgrade.md). The dashboard's template library describes each one (`template_<id>Help` in `apps/admin-v2/src/i18n/online-store.ts`).
 
-Where a template departs from its reference:
-
-- **Department mall** is the default: every store with no saved theme renders it (`DEFAULT_STOREFRONT_THEME`). It keeps the `classic` gallery, with its own `mall` buy box, radius buttons and hairline cards in a 1200 px container. Its utility top bar, department search header and "All departments" rail (open on the home page) take departments from the tree (`tree+menu`).
-- **Showcase landing** shows its collection links as a tab strip starting with "All", and one row of real option or attribute values from the listing facets (`facet-value-chips`). The editor can hide either row.
-- **Card minimums** are grid minimums, not the measured card widths: an auto-fill grid stretches cards, and two cards must fit a 360 px phone. `dense` shares compact's type scale (the 14 px phone floor) and uses a 12 px desktop gap, so columns never drop when the page gutter grows at 1024 px.
+- **Department** is the default: every store with no saved theme renders it (`DEFAULT_STOREFRONT_THEME`). It keeps the `classic` gallery with the `mall` buy box, hairline cards with an Add to cart button, a mega menu and a department search in a 1200 px container, with departments from the tree (`tree+menu`).
+- **Landing** shows its collection links as a tab strip starting with "All", and one row of real option or attribute values from the listing facets (`facet-value-chips`). The editor can hide either row.
+- **Card minimums** are grid minimums: an auto-fill grid stretches cards, and two cards must fit a 360 px phone. `dense` shares compact's type scale (the 14 px phone floor).
 
 ## Changing the contract
 
@@ -231,19 +230,18 @@ Where a template departs from its reference:
 5. Run `pnpm generate:sdk` after any change to the document schema, because the API contract embeds it.
 6. Release the API and the storefront together. An older storefront cannot read a future document. Unknown store-shape keys still fail closed to fit fallbacks.
 
-`pnpm fidelity:check` measures the built storefront against the reference sites for every template.
+`pnpm fidelity:check` measures the built storefront for every preset.
 
 ## Palettes
 
 A template chooses one palette. Merchants recolour it with six colour roles. Every palette passes every AA pair and the helper-versus-error rule (tested). Neutrals tint toward the palette's hue, never raw grey on a warm page. A card surface uses a border or a shadow, never both. The values are in `STOREFRONT_THEME_PALETTES` (`tokens.ts`).
 
-- `retail` (department-mall, rounded-tech, showcase-landing): white page, charcoal ink and buttons, sand neutrals.
-- `marketplace` (spec-catalogue, mass-retail): white page, near-black ink, cool neutral panels, one saturated orange for buying.
-- `marketplaceAmazon` (marketplace): the marketplace buying hierarchy with ink #1c2530, terracotta #b84724 and gold #f1c65a.
+- `retail` (department-mall, showcase-landing): white page, charcoal ink and buttons, sand neutrals.
+- `marketplace` (marketplace): white page, near-black ink, cool neutral panels, one saturated orange for buying.
 - `boutique` (boutique): linen page, espresso ink, no colour.
 - `fresh` (daily-essentials): white with a leaf green for buying and green-tinted panels.
-- `beauty` (fashion-value): black type and buttons on white, a blush accent on surfaces and never on text.
-- `heritage` (heritage-editorial): paper, umber ink, madder terracotta actions.
+- `beauty` (no preset): black type and buttons on white, a blush accent on surfaces and never on text.
+- `heritage` (no preset): paper, umber ink, madder terracotta actions.
 - `midnight` (no template): layered near-blacks, white ink and buttons, zinc helper text.
 
 ## Typography
@@ -254,6 +252,6 @@ Each Latin face carries a Latin `unicode-range`, so Bangla text falls through to
 
 ## Craft
 
-- Motion is 180 ms ease-out for hover, press and reveal, and none under `prefers-reduced-motion`.
+- Motion is 150 ms ease-out for hover and press, 250 ms for fades and panels, and none under `prefers-reduced-motion` (the duration tokens are zero).
 - A store has one image aspect (`imageRatio`). A card photo zooms 1.03 on hover, or fades to the second photo where the card shows one. A pressed button scales to 0.98.
 - Loading skeletons mirror the final layout (the same aspect ratios and rows).

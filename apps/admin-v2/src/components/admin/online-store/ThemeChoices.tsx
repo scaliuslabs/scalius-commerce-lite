@@ -433,7 +433,6 @@ const CORNERS: Record<StorefrontThemeTokens["radius"], string> = {
 /** What a card renders: its photo shape, badge, buy button and second photo. */
 export type CardFacts = ResolvedStorefrontThemeLayout["productCard"];
 
-/** One product card as its variant draws it: photo shape, badge, buy-now button, second photo. */
 /** The photo box per image ratio token, as the storefront card draws it. */
 export const SKETCH_RATIOS = {
   square: "aspect-square",
@@ -445,51 +444,42 @@ export function ProductTile({
   card,
   radius = "subtle",
   badge = false,
-  showcase = false,
   className,
 }: {
   card: CardFacts;
   radius?: StorefrontThemeTokens["radius"];
   /** Draw the discount badge on this tile. */
   badge?: boolean;
-  showcase?: boolean;
   /** Width cap, so a tall photo still fits the sketch. */
   className: string;
 }) {
-  const spec = card;
   return (
     <span className={cn("flex w-full min-w-0 flex-col gap-1", className)}>
       <span
         className={cn(
           "relative flex overflow-clip bg-(--sk-soft)",
-          SKETCH_RATIOS[spec.imageRatio],
+          SKETCH_RATIOS[card.imageRatio],
           CORNERS[radius],
         )}
       >
         {/* The second photo that shows on hover. */}
-        {spec.hoverImage ? <span className="ms-auto w-1/3 bg-(--sk-edge)" /> : null}
-        {badge && spec.badge !== "price" ? <span className="absolute top-0.5 inset-s-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
-        {spec.quickBuy && spec.action === "round" ? <span data-card-sketch-round-action className="absolute inset-e-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
+        {card.hoverImage ? <span className="ms-auto w-1/3 bg-(--sk-edge)" /> : null}
+        {badge ? <span className="absolute top-0.5 inset-s-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {card.action === "quick-add" ? <span data-card-sketch-round-action className="absolute inset-e-0.5 bottom-0.5 size-1.5 rounded-full bg-(--sk-accent)" /> : null}
       </span>
-      {showcase ? <span data-card-sketch-showcase-title className="flex flex-col items-center gap-0.5"><Line className="w-4/5" /><Line className="w-2/3" /></span> : <Line className="w-full" />}
-      <span className="flex items-center gap-0.5">
-        <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
-        {badge && spec.badge !== "image" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
-      </span>
-      {spec.quickBuy && spec.action !== "round" ? showcase ? (
-        <span data-card-sketch-showcase-action className={cn("flex h-1.5 w-full items-center justify-center gap-0.5 bg-(--sk-accent)", CORNERS[radius])}>
-          <span className="h-0.5 w-1 bg-(--sk-paper)" /><span className="h-0.5 w-1.5 bg-(--sk-paper)" />
-        </span>
-      ) : <span data-card-sketch-full-action={spec.action === "outline" ? "" : undefined} className={cn("h-1.5 w-full", spec.action === "outline" ? "border border-(--sk-accent)" : "bg-(--sk-accent)", CORNERS[radius])} /> : null}
+      <Line className="w-full" />
+      {card.facts !== "none" ? <span data-card-sketch-facts={card.facts} className="h-0.5 w-2/3 rounded-xs bg-(--sk-edge)" /> : null}
+      <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
+      {card.action === "full" ? <span data-card-sketch-full-action className={cn("h-1.5 w-full border border-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
   );
 }
 
-export function CardStyleSketch({ card, variant }: { card: CardFacts; variant?: string }) {
+export function CardStyleSketch({ card }: { card: CardFacts }) {
   return (
     <Sketch className="flex-row items-start justify-center gap-2">
-      <ProductTile card={card} badge showcase={variant === "showcase"} className="max-w-9" />
-      <ProductTile card={card} showcase={variant === "showcase"} className="max-w-9" />
+      <ProductTile card={card} badge className="max-w-9" />
+      <ProductTile card={card} className="max-w-9" />
     </Sketch>
   );
 }

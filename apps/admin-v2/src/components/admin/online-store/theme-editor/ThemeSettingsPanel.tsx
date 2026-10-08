@@ -33,7 +33,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
-import { blockFallback, blockVariant, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
+import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
@@ -202,16 +202,11 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
       <SettingsGroup title={t("logo")}>
         <BrandFields theme={theme} media={media} setDraft={setDraft} />
       </SettingsGroup>
+      {/* One card for the whole store: its facts, buy action and hover photo; its shape follows the style above. */}
       <SettingsGroup title={t("productCards")}>
-        <VisualChoice
-          label={t("productCards")}
-          value={blockVariant(theme, "card")}
-          className="grid-cols-2"
-          options={block.options<Omit<ResolvedStorefrontThemeLayout["productCard"], "imageRatio">>("card", "cardStyle", (card, variant) => (
-            <CardStyleSketch variant={variant} card={{ ...(variant === "quick-add" && theme.blocks.card.variant === variant ? resolved.layout.productCard : card), imageRatio: resolved.layout.productCard.imageRatio }} />
-          ), true)}
-          onChange={block.set("card")}
-        />
+        <div className="max-w-48">
+          <CardStyleSketch card={resolved.layout.productCard} />
+        </div>
         {block.fields("card")}
       </SettingsGroup>
     </OpenGroup.Provider>
