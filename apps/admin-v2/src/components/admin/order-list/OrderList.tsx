@@ -351,7 +351,7 @@ export function OrderList({
             onChange={onChange}
             appFilterable={appList.filterable.length > 0}
             selectedCount={selectedRows.length}
-            live={{ ...live, pause: refreshPause }}
+            live={live}
             bulkActions={
               <div className="hidden flex-wrap items-center gap-2 md:flex">
                 <span className="text-body font-medium">

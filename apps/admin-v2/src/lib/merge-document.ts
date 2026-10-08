@@ -4,7 +4,7 @@
  * so editors pay nothing for it until two saves meet.
  */
 import { formatNumber, translate } from "~/i18n";
-import { realtimeMessages } from "~/i18n/realtime";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
 import { mergeDisplayValue, requestMergeChoice, type MergeChoiceRow } from "./merge-choice";
 import { resolveMerge, threeWayMerge, type MergeClash, type MergeOptions } from "./three-way-merge";
 
@@ -13,17 +13,17 @@ export { mergeDisplayValue, requestMergeChoice, resolveMerge, threeWayMerge };
 /** Words for showing a value in the side-by-side choice. */
 export function mergeWords() {
   return {
-    empty: translate(realtimeMessages, "emptyValue"),
-    on: translate(realtimeMessages, "valueOn"),
-    off: translate(realtimeMessages, "valueOff"),
-    items: (count: number) => translate(realtimeMessages, "valueItems", { count }),
+    empty: translate(realtimeMergeMessages, "emptyValue"),
+    on: translate(realtimeMergeMessages, "valueOn"),
+    off: translate(realtimeMergeMessages, "valueOff"),
+    items: (count: number) => translate(realtimeMergeMessages, "valueItems", { count }),
     number: (value: number) => formatNumber(value),
   };
 }
 
 /** The toast after a save that combined two saves. */
 export function mergedMessage(): string {
-  return translate(realtimeMessages, "merged");
+  return translate(realtimeMergeMessages, "merged");
 }
 
 /** One side-by-side row per clash, with the editor's labels and value formatting. */

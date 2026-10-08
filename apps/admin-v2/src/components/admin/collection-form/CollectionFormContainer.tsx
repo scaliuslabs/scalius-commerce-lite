@@ -1,5 +1,5 @@
 import React from "react";
-import { presenceKey } from "@scalius/shared/realtime";
+import { presenceKey } from "~/lib/realtime/store";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";

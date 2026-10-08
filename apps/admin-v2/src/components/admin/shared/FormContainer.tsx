@@ -9,7 +9,7 @@ import { saveBarMessages } from "~/i18n/save-bar";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
-import { EditorPresence } from "@/components/admin/realtime/EditorPresence";
+import { EditorPresence } from "~/lib/realtime/store";
 import { announceSave } from "~/lib/realtime/store";
 
 interface FormContainerProps<

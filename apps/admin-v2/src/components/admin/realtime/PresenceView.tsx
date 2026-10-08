@@ -12,7 +12,7 @@ import { Button } from "~/components/ui/button";
 import { getLocale, useMessages } from "~/i18n";
 import { realtimeMessages } from "~/i18n/realtime";
 import { realtimeUserId } from "~/lib/realtime/store";
-import type { EditorPresence as EditorPresenceState } from "~/lib/realtime/presence";
+import type { EditorPresence as EditorPresenceState } from "~/lib/realtime/store";
 
 const SHOWN_NAMES = 2;
 

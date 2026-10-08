@@ -22,7 +22,6 @@ import {
   paymentStatusLabel,
 } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
-import type { OrderRefreshPause } from "./order-bulk-actions";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
@@ -65,7 +64,7 @@ interface OrderListToolbarProps {
   selectedCount: number;
   bulkActions: ReactNode;
   /** The live list's offer to load new orders or changes (use-live-order-list.ts). */
-  live: { newCount: number; stale: boolean; showLatest: () => void; pause: OrderRefreshPause | null };
+  live: { newCount: number; stale: boolean; showLatest: () => void };
 }
 
 function FilterSelect({
@@ -209,11 +208,7 @@ export function OrderListToolbar({
             {/* Polite and still: the offer appears, it never flashes or moves rows. */}
             <span aria-live="polite" className="contents">
               {live.newCount > 0 || live.stale ? (
-                <Button
-                  variant="secondary"
-                  title={live.pause ? t(`pause.${live.pause}`) : undefined}
-                  onClick={live.showLatest}
-                >
+                <Button variant="secondary" onClick={live.showLatest}>
                   <RefreshCw className="h-4 w-4" />
                   {live.newCount > 0 ? t("newOrders", { count: live.newCount }) : t("ordersUpdated")}
                 </Button>

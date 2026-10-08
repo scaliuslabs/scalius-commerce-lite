@@ -16,7 +16,7 @@
  *   saved (use-preview-sync.ts).
  */
 import { PresenceAvatars } from "~/components/admin/realtime/PresenceView";
-import { useEditorPresence } from "~/lib/realtime/presence";
+import { useEditorPresence } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";

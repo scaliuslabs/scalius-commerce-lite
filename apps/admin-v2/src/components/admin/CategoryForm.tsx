@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { presenceKey } from "@scalius/shared/realtime";
+import { presenceKey } from "~/lib/realtime/store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";

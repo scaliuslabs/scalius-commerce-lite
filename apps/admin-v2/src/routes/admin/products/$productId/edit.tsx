@@ -28,9 +28,8 @@ import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pageHead } from "~/i18n/page-titles";
 import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
-import { presenceKey } from "@scalius/shared/realtime";
-import { EditorPresence } from "~/components/admin/realtime/EditorPresence";
-import { announceSave } from "~/lib/realtime/store";
+import { EditorPresence } from "~/lib/realtime/store";
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 
 /**
  * Fields that change together under the aggregate revision: the product's

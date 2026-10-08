@@ -6,8 +6,7 @@
  * honest status, a conflict that names who saved, and publishing,
  * restoring and discarding with restore points kept by the server.
  */
-import { presenceKey } from "@scalius/shared/realtime";
-import { announceSave } from "~/lib/realtime/store";
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {

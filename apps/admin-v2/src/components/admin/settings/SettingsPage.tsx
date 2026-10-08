@@ -20,10 +20,9 @@ import { saveBarMessages } from "~/i18n/save-bar";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
-import { presenceKey } from "@scalius/shared/realtime";
 import { useQueryClient } from "@tanstack/react-query";
-import { EditorPresence } from "../realtime/EditorPresence";
-import { PresenceScopeContext } from "~/lib/realtime/presence";
+import { EditorPresence } from "~/lib/realtime/store";
+import { PresenceScopeContext, presenceKey } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
 
 type SettingsNavTo = (typeof SETTINGS_NAV)[number]["to"];

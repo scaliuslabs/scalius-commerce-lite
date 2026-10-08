@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState, type SetStateAction } from "react";
 import { announceSave } from "~/lib/realtime/store";
-import { PresenceScopeContext } from "~/lib/realtime/presence";
+import { PresenceScopeContext } from "~/lib/realtime/store";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";

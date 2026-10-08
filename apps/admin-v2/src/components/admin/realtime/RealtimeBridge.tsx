@@ -20,8 +20,16 @@ export default function RealtimeBridge({ userId, permissions }: { userId: string
     const connection = new RealtimeConnection();
     const invalidator = createInvalidator(queryClient);
     const unsubscribe = connection.subscribe({
-      changes: (items) => invalidator.add(keysForChanges(items)),
-      resync: () => invalidator.add(resyncKeys(topics)),
+      changes: (items) => {
+        invalidator.add(keysForChanges(items));
+        // List screens hear notices as a window event, so they load no realtime module
+        // (use-live-order-list.ts listens for the same names).
+        window.dispatchEvent(new CustomEvent("scalius:realtime-changes", { detail: items }));
+      },
+      resync: () => {
+        invalidator.add(resyncKeys(topics));
+        window.dispatchEvent(new Event("scalius:realtime-resync"));
+      },
     });
     attachRealtime(connection, userId);
     connection.start();

@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
-import { realtimeMessages } from "~/i18n/realtime";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
 import { answerMergeChoice, currentMergeChoice, subscribeMergeChoice } from "~/lib/merge-choice";
 import type { MergeChoice } from "~/lib/three-way-merge";
 import { cn } from "@scalius/shared/utils";
@@ -48,7 +48,7 @@ function Side({
 }
 
 export function MergeChoiceHost() {
-  const t = useMessages(realtimeMessages);
+  const t = useMessages(realtimeMergeMessages);
   const pending = useSyncExternalStore(subscribeMergeChoice, currentMergeChoice, () => null);
   const [choices, setChoices] = useState<Record<string, MergeChoice>>({});
   const rows = pending?.request.rows ?? [];
