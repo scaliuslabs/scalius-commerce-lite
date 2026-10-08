@@ -211,12 +211,11 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             id="cart-button"
             data-header-cart
             class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full ps-1.5 active:scale-[0.98] lg:gap-3 lg:ps-2"
-            aria-label="Open shopping cart"
             aria-haspopup="dialog"
           >
+            <span class="sr-only">Open shopping cart</span>
             <span
               id="cart-total-display"
-              aria-hidden="true"
               class="hidden md:block text-[14px] font-bold tracking-tight whitespace-nowrap tabular-nums text-card"
             >
               0
@@ -230,11 +229,8 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
               <Icon name="shopping-cart" class="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
               <span
                 id="cart-count"
-                aria-hidden="true"
                 class="absolute -top-1 -inset-e-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
-              >
-                0
-              </span>
+              ></span>
             </div>
           </button>
         </div>

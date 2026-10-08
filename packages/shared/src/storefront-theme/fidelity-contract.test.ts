@@ -1,13 +1,13 @@
-// The slice 0 fidelity contract (audit/rewrite-2026-09-23/fidelity/AUDIT.md
-// section 8): card looks per variant, the listing filter style, the shared
-// navigation source, and the resolver on true store shapes. Matrix: every
-// template x card variant x filter style x navigation source, on empty,
-// tiny, live-small and 30k-seed stores.
+// The fidelity contract: the listing filter style, the shared navigation
+// source, the product page per preset, and the resolver on true store
+// shapes. Matrix: every preset x card setting x filter style x navigation
+// source, on empty, tiny, live-small and 30k-seed stores.
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_STORE_SHAPE,
   STOREFRONT_BUY_BOX_LOOKS,
-  STOREFRONT_CARD_LOOKS,
+  STOREFRONT_CARD_ACTIONS,
+  STOREFRONT_CARD_FACTS,
   STOREFRONT_FILTER_MIN_RESULTS,
   STOREFRONT_LISTING_FILTER_SPECS,
   STOREFRONT_LISTING_FILTER_GROUPS,
@@ -20,7 +20,6 @@ import {
   listStorefrontThemeDocumentContrastProblems,
   resolveStorefrontTheme,
   storeShapeFromFacts,
-  storefrontBlockVariants,
   storefrontFitFacts,
   storefrontListingFiltersShown,
   storefrontTemplateTheme,
@@ -66,21 +65,21 @@ const HUGE: StoreShape = storeShapeFromFacts({
 
 const SHAPES = { empty: EMPTY_STORE_SHAPE, tiny: TINY, liveSmall: LIVE_SMALL, seed30k: SEED_30K, huge: HUGE };
 
-it("keeps Amazon's default while saving an eBay-style marketplace combination", () => {
-  const amazon = storefrontTemplateTheme("marketplace");
-  expect(amazon.blocks.header.variant).toBe("marketplace-search");
-  expect(amazon.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("story-cards");
+it("keeps the marketplace preset while saving a lighter-header marketplace combination", () => {
+  const base = storefrontTemplateTheme("marketplace");
+  expect(base.blocks.header.variant).toBe("marketplace-search");
+  expect(base.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("full-bleed");
 
-  const ebay = structuredClone(amazon);
-  ebay.blocks.topBar = { variant: "utility", settings: { text: "Free delivery over ৳2,000", link: "/delivery" } };
-  ebay.blocks.header = { variant: "marketplace-light", settings: {} };
-  const hero = ebay.pages.home.find((section) => section.type === "hero");
-  const categories = ebay.pages.home.find((section) => section.type === "category-tiles");
+  const light = structuredClone(base);
+  light.blocks.topBar = { variant: "utility", settings: { text: "Free delivery over ৳2,000", link: "/delivery" } };
+  light.blocks.header = { variant: "marketplace-light", settings: {} };
+  const hero = light.pages.home.find((section) => section.type === "hero");
+  const categories = light.pages.home.find((section) => section.type === "category-tiles");
   if (hero?.type !== "hero" || categories?.type !== "category-tiles") throw new Error("Marketplace sections missing");
   hero.settings.layout = "wide-editorial";
   categories.settings.style = "square";
 
-  const saved = storefrontThemeDocumentSchema.parse(JSON.parse(JSON.stringify(ebay)));
+  const saved = storefrontThemeDocumentSchema.parse(JSON.parse(JSON.stringify(light)));
   const resolved = resolveStorefrontTheme(saved, SEED_30K);
   expect(resolved.blocks.topBar.variant).toBe("utility");
   expect(resolved.blocks.header.variant).toBe("marketplace-light");
@@ -118,26 +117,28 @@ function variantOf(template: StorefrontTemplateId, change: (theme: StorefrontThe
   return theme;
 }
 
-describe("contract matrix: template x card x filters x navigation source", () => {
-  it("keeps Showcase's own card by default and accepts a merchant's card override", () => {
+describe("contract matrix: preset x card x filters x navigation source", () => {
+  it("accepts a merchant's card settings on any preset", () => {
     const theme = storefrontTemplateTheme("showcase-landing");
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("showcase");
-    theme.blocks.card = { variant: "boutique", settings: { hoverImage: false, quickAction: false } };
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("boutique");
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card).toMatchObject({ variant: "standard", settings: { facts: "none", action: "full" } });
+    theme.blocks.card = { variant: "standard", settings: { facts: "swatches", action: "quick-add", hoverImage: true } };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard).toMatchObject({ facts: "swatches", action: "quick-add", hoverImage: true });
   });
 
   it("parses, passes AA, resolves to fitting blocks and keeps each choice's identity on every store", () => {
     let documents = 0;
+    const cards = STOREFRONT_CARD_FACTS.flatMap((facts) => STOREFRONT_CARD_ACTIONS.map((action) => ({ facts, action })));
     for (const template of STOREFRONT_TEMPLATE_IDS) {
-      for (const card of storefrontBlockVariants("card")) {
+      for (const card of cards) {
         for (const style of STOREFRONT_LISTING_FILTER_STYLES) {
           for (const source of STOREFRONT_NAVIGATION_SOURCES) {
+            const hoverImage = card.action === "full";
             const theme = variantOf(template, (next) => {
-              next.blocks.card = { variant: card, settings: structuredClone(storefrontVariantSpec("card", card).defaults) } as never;
+              next.blocks.card = { variant: "standard", settings: { ...card, hoverImage } };
               next.blocks.listing.filters = { style, openByDefault: style !== "bar-dropdowns", searchPlacement: "same", ruled: false };
               next.blocks.navigation = { ...next.blocks.navigation, source };
             });
-            const label = `${template}/${card}/${style}/${source}`;
+            const label = `${template}/${card.facts}-${card.action}/${style}/${source}`;
             const parsed = storefrontThemeDocumentSchema.safeParse(theme);
             expect(parsed.success ? [] : parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`), label).toEqual([]);
             expect(listStorefrontThemeDocumentContrastProblems(theme), label).toEqual([]);
@@ -157,17 +158,21 @@ describe("contract matrix: template x card x filters x navigation source", () =>
                 spec: STOREFRONT_LISTING_FILTER_SPECS[style],
                 shown: shape.productCount >= STOREFRONT_FILTER_MIN_RESULTS,
               });
-              // A card keeps its measured look in every template.
-              const look = resolved.layout.productCard.look;
-              if (card === "standard") expect(look.title, at).toBeNull();
-              else expect(look, at).toEqual(STOREFRONT_CARD_LOOKS[card as keyof typeof STOREFRONT_CARD_LOOKS]);
+              // The card keeps its settings and the preset's photo tokens on every store.
+              expect(resolved.layout.productCard, at).toEqual({
+                ...card,
+                hoverImage,
+                imageRatio: theme.tokens.imageRatio,
+                imageFit: theme.tokens.imageFit,
+                surface: theme.tokens.surface,
+              });
             }
             documents += 1;
           }
         }
       }
     }
-    expect(documents).toBe(STOREFRONT_TEMPLATE_IDS.length * storefrontBlockVariants("card").length * STOREFRONT_LISTING_FILTER_STYLES.length * STOREFRONT_NAVIGATION_SOURCES.length);
+    expect(documents).toBe(STOREFRONT_TEMPLATE_IDS.length * cards.length * STOREFRONT_LISTING_FILTER_STYLES.length * STOREFRONT_NAVIGATION_SOURCES.length);
   });
 });
 
@@ -186,31 +191,24 @@ describe("listing filters", () => {
     expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
   });
 
-  it("defaults mass-retail categories to phone cards and searches to rows with a shopper view choice", () => {
-    const listing = storefrontTemplateTheme("mass-retail").blocks.listing;
+  it("gives the marketplace phone cards, searches as rows and a shopper view choice", () => {
+    const listing = storefrontTemplateTheme("marketplace").blocks.listing;
     expect(listing.phoneLayout).toBe("grid");
     expect(listing.searchLayout).toBe("list");
     expect(listing.toolbar).toContain("grid-list-toggle");
   });
 
-  it("includes child-category pills in fashion-value's listing toolbar", () => {
-    expect(storefrontTemplateTheme("fashion-value").blocks.listing.toolbar).toContain("subcategory-pills");
+  it("includes child-category pills in the landing preset's listing toolbar", () => {
+    expect(storefrontTemplateTheme("showcase-landing").blocks.listing.toolbar).toContain("subcategory-pills");
   });
 
-  it("maps each template to its reference's filter style; large catalogues get the open dense column", () => {
+  it("maps each preset to a filter style; large catalogues get the open dense column", () => {
     const plain = { searchPlacement: "same", ruled: false } as const;
-    const priceFirst = ["price", "availability", "rating", "brand", "other", "category"];
     expect(Object.fromEntries(STOREFRONT_TEMPLATE_IDS.map((id) => [id, filtersOf(id)]))).toEqual({
-      boutique: { style: "bar-dropdowns", openByDefault: false, ...plain }, // Dawn
-      "heritage-editorial": { style: "bar-dropdowns", openByDefault: false, ...plain }, // Aarong
-      "fashion-value": { style: "sidebar-comfortable", openByDefault: true, searchPlacement: "same", ruled: true }, // Fabrilife's ruled rail
-      // Star Tech: price first, and searches open their facets from a drawer.
-      "spec-catalogue": { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14, order: priceFirst, searchPlacement: "drawer", ruled: false },
-      "rounded-tech": { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16, order: priceFirst, ...plain }, // Apple Gadgets
-      marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14, ...plain }, // Amazon
-      "mass-retail": { style: "drawer", openByDefault: false, ...plain }, // full-width retail grid; merchants can choose a sidebar
-      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14, ...plain }, // compact department rail
-      "daily-essentials": { style: "sidebar-comfortable", openByDefault: true, ...plain }, // Ghorer Bazar shop
+      boutique: { style: "bar-dropdowns", openByDefault: false, ...plain },
+      marketplace: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14, ...plain },
+      "department-mall": { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 24, label: 14, ...plain },
+      "daily-essentials": { style: "sidebar-comfortable", openByDefault: true, ...plain },
       "showcase-landing": { style: "drawer", openByDefault: false, ...plain },
     });
   });
@@ -232,12 +230,11 @@ describe("listing filters", () => {
 
   it("resolves a template's own column, row pitch and label over its style's, within bounds", () => {
     const spec = (template: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(template), LIVE_SMALL).blocks.listing.filters.spec;
-    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 22, label: 14 });
-    expect(spec("spec-catalogue")).toMatchObject({ placement: "sidebar", column: 225, rowPitch: 32, label: 14 });
-    expect(spec("rounded-tech")).toMatchObject({ placement: "sidebar", column: 316, rowPitch: 28, label: 16 });
-    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 21, label: 14 });
+    expect(spec("marketplace")).toEqual({ ...STOREFRONT_LISTING_FILTER_SPECS["sidebar-dense"], column: 262, rowPitch: 24, label: 14 });
+    expect(spec("department-mall")).toMatchObject({ placement: "sidebar", column: 262, rowPitch: 24, label: 14 });
     // No override: the style's own numbers.
-    expect(spec("mass-retail")).toEqual(STOREFRONT_LISTING_FILTER_SPECS.drawer);
+    expect(spec("showcase-landing")).toEqual(STOREFRONT_LISTING_FILTER_SPECS.drawer);
+    expect(spec("daily-essentials")).toEqual(STOREFRONT_LISTING_FILTER_SPECS["sidebar-comfortable"]);
     const theme = storefrontTemplateTheme("marketplace");
     for (const [key, value] of [["column", 179], ["column", 341], ["rowPitch", 15], ["rowPitch", 37], ["label", 11], ["label", 19], ["rowPitch", 18.5]] as const) {
       const next = structuredClone(theme);
@@ -283,16 +280,11 @@ describe("listing filters", () => {
 });
 
 describe("navigation source", () => {
-  it("names a source, a top-item cap and the shared link budget per template", () => {
+  it("names a source, a top-item cap and the shared link budget per preset", () => {
     const navigation = Object.fromEntries(STOREFRONT_TEMPLATE_IDS.map((id) => [id, storefrontTemplateTheme(id).blocks.navigation]));
     expect(navigation).toEqual({
       boutique: { source: "menu", maxTopItems: 6, linkBudget: 150 },
-      "heritage-editorial": { source: "tree+menu", maxTopItems: 11, linkBudget: 150 },
-      "fashion-value": { source: "tree+menu", maxTopItems: 6, linkBudget: 150 },
-      "spec-catalogue": { source: "category-tree", maxTopItems: 18, linkBudget: 150 },
-      "rounded-tech": { source: "category-tree", maxTopItems: 9, linkBudget: 150 },
       marketplace: { source: "tree+menu", maxTopItems: 18, linkBudget: 150 },
-      "mass-retail": { source: "tree+menu", maxTopItems: 17, linkBudget: 150 },
       "department-mall": { source: "tree+menu", maxTopItems: 8, linkBudget: 150 },
       "daily-essentials": { source: "tree+menu", maxTopItems: 16, linkBudget: 150 },
       "showcase-landing": { source: "menu", maxTopItems: 6, linkBudget: 150 },
@@ -310,7 +302,7 @@ describe("navigation source", () => {
   });
 
   it("falls back to whichever source has links, and says so", () => {
-    const tree = variantOf("spec-catalogue", () => undefined);
+    const tree = variantOf("department-mall", (theme) => { theme.blocks.navigation.source = "category-tree"; });
     // A tree template on a store without categories uses the menu.
     const menuOnly = storeShapeFromFacts({ ...TINY, topCategoryCount: 0, categoryDepth: 0, menu: flatMenu(4) });
     const onMenu = resolveStorefrontTheme(tree, menuOnly);
@@ -329,21 +321,21 @@ describe("navigation source", () => {
 
   it("judges menu patterns by the source that renders", () => {
     // Tree groups make a tree-driven mega panel fit without any menu.
-    const mega = variantOf("fashion-value", (theme) => { theme.blocks.navigation.source = "category-tree"; });
+    const mega = variantOf("department-mall", (theme) => { theme.blocks.navigation.source = "category-tree"; });
     expect(resolveStorefrontTheme(mega, HUGE).blocks.desktopNav.variant).toBe("mega-panel");
     expect(resolveStorefrontTheme(mega, SEED_30K).blocks.desktopNav).toMatchObject({ variant: "dropdown", requested: "mega-panel" });
-    // The cap keeps a 25-root tree inside Star Tech's 18-item bar.
-    const spec = resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), SEED_30K);
-    expect(spec.facts.navTopItems).toBe(18);
-    expect(spec.blocks.desktopNav.variant).toBe("sticky-category-bar");
+    // The cap keeps a 25-root tree inside the Essentials bar's 16 items.
+    const essentials = resolveStorefrontTheme(storefrontTemplateTheme("daily-essentials"), SEED_30K);
+    expect(essentials.facts.navTopItems).toBe(16);
+    expect(essentials.blocks.desktopNav.variant).toBe("sticky-category-bar");
     // Cascading needs two levels in the rendered source.
-    expect(spec.facts.navDepth).toBe(3);
+    expect(essentials.facts.navDepth).toBe(3);
     expect(storefrontFitFacts(SEED_30K, { source: "menu", maxTopItems: 18 })).toMatchObject({ navTopItems: 0, navDepth: 0 });
     expect(storefrontFitFacts(LIVE_SMALL, { source: "tree+menu", maxTopItems: 8 }).navTopItems).toBe(8);
   });
 });
 
-describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
+describe("resolver on true store shapes", () => {
   it("keeps boutique's own header on the real small store", () => {
     const boutique = resolveStorefrontTheme(storefrontTemplateTheme("boutique"), LIVE_SMALL);
     expect(boutique.blocks.header.variant).toBe("boutique-inline");
@@ -356,18 +348,19 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
   });
 
   it("brings shelves, sub-category pills and popular-filter chips alive on the 30k tree", () => {
-    const heritage = resolveStorefrontTheme(storefrontTemplateTheme("heritage-editorial"), SEED_30K);
-    expect(heritage.blocks.listing.layout.variant).toBe("shelves");
-    const spec = resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), SEED_30K);
-    expect(spec.blocks.listing.toolbar).toContain("subcategory-pills");
-    expect(spec.blocks.product.below).toContain("spec-table");
+    const shelves = variantOf("boutique", (theme) => {
+      theme.blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8, spacing: "airy" } };
+      theme.blocks.listing.toolbar = [...theme.blocks.listing.toolbar, "subcategory-pills", "popular-filter-chips"];
+    });
+    const big = resolveStorefrontTheme(shelves, SEED_30K);
+    expect(big.blocks.listing.layout.variant).toBe("shelves");
+    expect(big.blocks.listing.toolbar).toContain("subcategory-pills");
+    expect(big.blocks.listing.toolbar).toContain("popular-filter-chips");
     const showcase = resolveStorefrontTheme(storefrontTemplateTheme("showcase-landing"), SEED_30K);
     expect(showcase.blocks.listing.toolbar).toContain("subcategory-pills");
     expect(showcase.blocks.listing.toolbar).toContain("facet-value-chips");
-    const retail = resolveStorefrontTheme(storefrontTemplateTheme("mass-retail"), SEED_30K);
-    expect(retail.blocks.listing.toolbar).toContain("popular-filter-chips");
     // A flat store without collections has no shelves: the grid renders, and the dashboard says why.
-    const flat = resolveStorefrontTheme(storefrontTemplateTheme("heritage-editorial"), TINY);
+    const flat = resolveStorefrontTheme(shelves, TINY);
     expect(flat.blocks.listing.layout).toMatchObject({ variant: "grid", requested: "shelves" });
     expect(flat.blocks.listing.toolbar).not.toContain("subcategory-pills");
   });
@@ -388,14 +381,14 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
   });
 
   it("hides filters store-wide below the small-catalogue threshold, and says why", () => {
-    const resolved = resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), TINY);
+    const resolved = resolveStorefrontTheme(storefrontTemplateTheme("department-mall"), TINY);
     expect(resolved.blocks.listing.filters).toMatchObject({ style: "sidebar-dense", shown: false });
     expect(resolved.fallbacks).toContainEqual(expect.objectContaining({ kind: "filters", key: "listing", resolved: null, failed: [{ fact: "productCount", min: 8 }] }));
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), LIVE_SMALL).blocks.listing.filters.shown).toBe(true);
+    expect(resolveStorefrontTheme(storefrontTemplateTheme("department-mall"), LIVE_SMALL).blocks.listing.filters.shown).toBe(true);
   });
 
-  it("is version 8 and writes no older document", () => {
-    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(8);
+  it("is version 9 and writes no older document", () => {
+    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(9);
     const theme = storefrontTemplateTheme("department-mall");
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, version: 5 }).success).toBe(false);
     const oldLayout = structuredClone(theme);
@@ -406,48 +399,43 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
   });
 });
 
-describe("slice 5: product page per template", () => {
+describe("product page per preset", () => {
   const resolved = (id: StorefrontTemplateId) => resolveStorefrontTheme(storefrontTemplateTheme(id), EMPTY_STORE_SHAPE);
 
-  it("gives each template its reference buy box while keeping the department gallery", () => {
+  it("gives each preset its buy box while keeping the department gallery", () => {
     const mall = resolved("department-mall");
     expect(mall.layout.productPage).toEqual({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null });
     expect(mall.layout.buyBox).toEqual({ look: STOREFRONT_BUY_BOX_LOOKS.mall, emi: false, whatsapp: false });
     expect(resolved("boutique").layout.buyBox.look).toEqual(STOREFRONT_BUY_BOX_LOOKS.boutique);
     expect(resolved("showcase-landing").layout.buyBox.look?.title).toEqual({ size: { desktop: 48, phone: 31 }, weight: 700 });
-    // The EMI line waits for the store's EMI plans.
-    expect(resolved("spec-catalogue").layout.buyBox).toMatchObject({ look: STOREFRONT_BUY_BOX_LOOKS.spec, emi: false });
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), { ...EMPTY_STORE_SHAPE, hasEmiPlans: true }).layout.buyBox.emi).toBe(true);
     expect(resolved("marketplace").layout.buyBox.look?.facts).toBe("column");
-    expect(resolved("mass-retail").layout.buyBox.look?.facts).toBe("tiles");
     expect(resolved("daily-essentials").layout.buyBox.look).toMatchObject({
       title: { size: { phone: 20 } }, price: { size: { phone: 20 }, tone: "primary" },
       cta: { layout: "row", first: "add-to-cart" },
     });
   });
 
-  it.each(["fashion-value", "heritage-editorial"] as const)("starts %s with one purchase action and accepts a merchant's Buy now choice", (id) => {
-    const theme = storefrontTemplateTheme(id);
+  it("starts the fashion buy box with one purchase action and accepts a merchant's Buy now choice", () => {
+    const theme = storefrontTemplateTheme("boutique");
+    theme.blocks.product.buyBox = { variant: "fashion", settings: { showBuyNow: false } };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(false);
     theme.blocks.product.buyBox.settings = { showBuyNow: true };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look?.cta.showBuyNow).toBe(true);
   });
 
-  it("renders real gallery variants: Dawn stacked, Target grid, Amazon's narrow strip, a 3:4 stage", () => {
+  it("renders real gallery variants: stacked, a narrow thumbnail strip and the classic stage", () => {
     expect(resolved("boutique").layout.productPage.gallery).toBe("stacked");
-    expect(resolved("mass-retail").layout.productPage.gallery).toBe("grid");
-    expect(resolved("heritage-editorial").layout.productPage).toMatchObject({ gallery: "beside", stageRatio: 0.75 });
+    expect(resolved("showcase-landing").layout.productPage.gallery).toBe("stacked");
+    expect(resolved("marketplace").layout.productPage).toMatchObject({ thumbnails: "beside" });
+    expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: false });
+    expect(resolved("daily-essentials").blocks.product.sticky.phoneBottom).toBe("none");
     const theme = storefrontTemplateTheme("marketplace");
     theme.blocks.product.gallery = { variant: "thumbs-left", settings: {} };
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productPage).toMatchObject({ thumbnails: "beside", thumbnailSize: 48 });
-    expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: false });
-    expect(resolved("daily-essentials").blocks.product.sticky.phoneBottom).toBe("none");
   });
 
-  it("lists reviews on every template that shows them and warranty where the reference does", () => {
-    for (const id of ["spec-catalogue", "rounded-tech", "marketplace", "mass-retail"] as const) {
-      expect(resolved(id).blocks.product.below, id).toEqual(expect.arrayContaining(["warranty", "reviews"]));
-    }
+  it("lists reviews on every preset that shows them and warranty on the marketplace", () => {
+    expect(resolved("marketplace").blocks.product.below).toEqual(expect.arrayContaining(["warranty", "reviews"]));
     expect(resolved("department-mall").blocks.product.below).toEqual(["description", "reviews", "related"]);
     expect(resolved("daily-essentials").blocks.product.below).not.toContain("reviews");
   });

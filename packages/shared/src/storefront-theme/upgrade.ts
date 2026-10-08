@@ -6,6 +6,17 @@
 import { z } from "zod";
 import { STOREFRONT_BLOCK_REGISTRY } from "./blocks";
 import { STOREFRONT_SECTION_REGISTRY } from "./sections";
+import {
+  STOREFRONT_THEME_COLOR_KEYS,
+  STOREFRONT_THEME_MIN_CONTRAST,
+  isStorefrontThemeHexColor,
+  listStorefrontThemeContrastProblems,
+  listStorefrontThemeSemanticColorProblems,
+  storefrontThemeContrast,
+  storefrontThemeLuminance,
+  storefrontThemeMix,
+  type StorefrontThemeColors,
+} from "./contrast";
 
 type RecordValue = Record<string, unknown>;
 // Pre-v2 defaults were CSS colours, not the later retail palette.
@@ -235,8 +246,63 @@ function v7to8(doc: RecordValue): RecordValue {
   };
 }
 
+// v8's ten templates, as the five presets that replaced them.
+const V8_TEMPLATES: Record<string, string> = {
+  "department-mall": "department-mall", "spec-catalogue": "department-mall", "rounded-tech": "department-mall",
+  boutique: "boutique", "heritage-editorial": "boutique", "fashion-value": "boutique",
+  marketplace: "marketplace", "mass-retail": "marketplace",
+  "daily-essentials": "daily-essentials", "showcase-landing": "showcase-landing",
+};
+
+type V9Card = { facts: "none" | "key-specs" | "swatches" | "delivery"; action: "none" | "quick-add" | "full" };
+type V8CardLook = { ratio: "square" | "portrait" | "landscape"; fit: "cover" | "contain"; surface: "flat" | "hairline" | "raised" };
+
+/**
+ * v8's thirteen card looks as v9's one card: the facts and action each look
+ * showed, and its photo ratio, fit and surface (v8's own look, frozen here),
+ * which become the theme's tokens so the cards keep their shape. `standard`
+ * already followed the tokens.
+ */
+function v8Card(variant: string, settings: RecordValue): { card: V9Card; look: V8CardLook | null } {
+  const contain = (surface: V8CardLook["surface"], ratio: V8CardLook["ratio"] = "square"): V8CardLook => ({ ratio, fit: "contain", surface });
+  const cover = (surface: V8CardLook["surface"], ratio: V8CardLook["ratio"] = "square"): V8CardLook => ({ ratio, fit: "cover", surface });
+  switch (variant) {
+    case "standard": return { card: { facts: "none", action: "none" }, look: null };
+    case "boutique": return { card: { facts: "none", action: settings.quickAction === true ? "quick-add" : "none" }, look: cover("flat") };
+    case "showcase": return { card: { facts: "none", action: "full" }, look: cover("flat") };
+    case "portrait": return { card: { facts: "none", action: "none" }, look: cover("flat", "portrait") };
+    case "fashion-value": return { card: { facts: "none", action: "quick-add" }, look: cover("hairline") };
+    case "spec": return { card: { facts: "key-specs", action: "full" }, look: contain("hairline") };
+    case "tech-rounded": return { card: { facts: "none", action: "full" }, look: contain("raised", "landscape") };
+    case "retail": return { card: { facts: settings.quickAction === true ? "delivery" : "swatches", action: "full" }, look: contain("flat") };
+    case "marketplace": return { card: { facts: "none", action: "none" }, look: contain("flat") };
+    case "quick-add": return settings.fullAction === true
+      ? { card: { facts: "none", action: "full" }, look: contain("hairline") }
+      : { card: { facts: "delivery", action: "quick-add" }, look: contain("hairline") };
+    case "mall": return { card: { facts: "none", action: "none" }, look: contain("hairline") };
+    case "detailed": return { card: { facts: "swatches", action: "full" }, look: contain("flat") };
+    default: throw new Error(`Unsupported historical card: ${variant}.`);
+  }
+}
+
+/** v9 made one design system: ten templates became five presets, thirteen card looks one card with three settings. */
+function v8to9(doc: RecordValue): RecordValue {
+  const blocks = object(doc.blocks);
+  const card = object(blocks.card);
+  const settings = object(card.settings);
+  const { card: next, look } = v8Card(String(card.variant), settings);
+  const tokens = object(doc.tokens);
+  return {
+    ...doc,
+    version: 9,
+    template: choice(doc.template, V8_TEMPLATES),
+    tokens: look ? { ...tokens, imageRatio: look.ratio, imageFit: look.fit, surface: look.surface } : tokens,
+    blocks: { ...blocks, card: { variant: "standard", settings: { ...next, hoverImage: settings.hoverImage === true } } },
+  };
+}
+
 const THEME_UPGRADES: Record<number, (document: RecordValue) => RecordValue> = {
-  1: v1to2, 2: v2to3, 3: v3to4, 4: v4to5, 5: v5to6, 6: v6to7, 7: v7to8,
+  1: v1to2, 2: v2to3, 3: v3to4, 4: v4to5, 5: v5to6, 6: v6to7, 7: v7to8, 8: v8to9,
 };
 
 const BLOCK_SLOTS = ["topBar", "header", "desktopNav", "mobileNav", "card", "footer"] as const;
@@ -296,13 +362,67 @@ export function upgradeThemeDocumentSteps(value: unknown, currentVersion: number
     else if (Object.keys(doc).length > 0 && Object.keys(doc).every((key) => Object.hasOwn(V1_COLORS, key))) doc = { version: 1, colors: doc };
   }
   if (!Number.isInteger(doc.version) || Number(doc.version) < 1 || Number(doc.version) > currentVersion) throw new Error("Unsupported theme document version.");
-  if (doc.version === currentVersion) return doc;
+  if (doc.version === currentVersion) return withTightenedBounds(doc);
   while (doc.version !== currentVersion) {
     const step = THEME_UPGRADES[Number(doc.version)];
     if (!step) throw new Error("Missing theme document upgrade step.");
     doc = step(doc);
   }
-  return withCurrentDefaults(doc);
+  return withTightenedBounds(withCurrentDefaults(doc));
+}
+
+/**
+ * Bounds that tightened inside a document version. A stored value that was
+ * valid when saved must still read (the dashboard fails closed and the
+ * storefront falls back to the default theme on an unreadable document), so
+ * it is raised to the new minimum here. Add an entry whenever a bound tightens.
+ */
+function withTightenedBounds(doc: Record<string, unknown>): Record<string, unknown> {
+  const filters = (doc.blocks as { listing?: { filters?: { rowPitch?: unknown } } } | undefined)?.listing?.filters;
+  // WCAG 2.5.8 target size: filter rows are at least 24 px apart (was 16).
+  if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
+  withReadableSaleColour(doc);
+  return doc;
+}
+
+const SALE_PAIRS = [["destructive", "card"], ["destructive", "background"], ["destructive-foreground", "destructive"]] as const;
+
+/**
+ * v9's card draws a discounted price in the sale colour (`destructive`) on
+ * the card colour, a pair the editor now checks on save. A document saved
+ * before that check may fail it; on read, the stored sale colour moves toward
+ * black (or white on a dark card) just far enough to reach AA there, keeping
+ * its other pairs (and the sale badge's words, which take black or white when
+ * needed), so the store stays readable and the document still reads.
+ */
+function withReadableSaleColour(doc: Record<string, unknown>): void {
+  const tokens = doc.tokens as { colors?: Record<string, unknown>; headerTone?: unknown } | undefined;
+  const colors = tokens?.colors;
+  if (!colors || !STOREFRONT_THEME_COLOR_KEYS.every((key) => typeof colors[key] === "string" && isStorefrontThemeHexColor(colors[key] as string))) return;
+  const palette = colors as StorefrontThemeColors;
+  const failing = (candidate: StorefrontThemeColors) => listStorefrontThemeContrastProblems(candidate, SALE_PAIRS);
+  if (storefrontThemeContrast(palette.destructive, palette.card) >= STOREFRONT_THEME_MIN_CONTRAST) return;
+  const semantic = listStorefrontThemeSemanticColorProblems(palette).length;
+  const towards = storefrontThemeLuminance(palette.card) > 0.18 ? "#000000" : "#ffffff";
+  const readableOn = (surface: string) =>
+    storefrontThemeContrast("#ffffff", surface) >= storefrontThemeContrast("#000000", surface) ? "#ffffff" : "#000000";
+  let chosen: StorefrontThemeColors | null = null;
+  for (let step = 1; step <= 20 && !chosen; step += 1) {
+    const destructive = storefrontThemeMix(palette.destructive, towards, step / 20);
+    for (const candidate of [
+      { ...palette, destructive },
+      { ...palette, destructive, "destructive-foreground": readableOn(destructive) },
+    ]) {
+      if (failing(candidate).length === 0 && listStorefrontThemeSemanticColorProblems(candidate).length <= semantic) {
+        chosen = candidate;
+        break;
+      }
+    }
+  }
+  // Black or white always reaches AA on the card; its badge words take the other.
+  chosen ??= { ...palette, destructive: towards, "destructive-foreground": readableOn(towards) };
+  colors.destructive = chosen.destructive;
+  colors["destructive-foreground"] = chosen["destructive-foreground"];
 }
 
 /** CSS Color 4 conversions: https://www.w3.org/TR/css-color-4/#color-conversion-code */

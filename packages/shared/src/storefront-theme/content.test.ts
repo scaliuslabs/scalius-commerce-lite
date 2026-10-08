@@ -58,20 +58,24 @@ describe("theme content", () => {
   it("carries the merchant's content into another template", () => {
     const source = withContent();
     source.pages.landing.offer = { title: "ঈদ অফার", description: "", sections: [source.pages.home[0]!] };
-    const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), source);
+    const next = storefrontThemeWithContent(storefrontTemplateTheme("daily-essentials"), source);
     expect(storefrontThemeDocumentSchema.safeParse(next).success).toBe(true);
-    expect(next.template).toBe("heritage-editorial");
+    expect(next.template).toBe("daily-essentials");
     expect(next.brand.logo).toBe("media_logo");
     expect(next.pages.homeMode).toEqual({ kind: "product", productId: "prod_1" });
     expect(next.pages.landing).toEqual(source.pages.landing);
     expect(next.blocks.footer.settings).toMatchObject({ tagline: "Since 1998", copyright: "Acme Ltd." });
-    // Heritage has no top bar: the template's choice stands.
-    expect(next.blocks.topBar).toEqual({ variant: "none", settings: {} });
+    // The announcement's words move into the preset's own bar.
+    expect(next.blocks.topBar).toEqual({ variant: "utility", settings: { text: "Cash on delivery everywhere", link: "/delivery" } });
+    // A target without a top bar keeps none.
+    const noBar = storefrontTemplateTheme("daily-essentials");
+    noBar.blocks.topBar = { variant: "none", settings: {} };
+    expect(storefrontThemeWithContent(noBar, source).blocks.topBar).toEqual({ variant: "none", settings: {} });
     const hero = next.pages.home.find((section) => section.type === "hero");
     expect(hero?.type === "hero" && hero.settings.slides).toEqual([slide]);
-    expect(hero?.type === "hero" && hero.settings.layout).toBe("full-screen");
+    expect(hero?.type === "hero" && hero.settings.layout).toBe("full-bleed");
     const tiles = next.pages.home.find((section) => section.type === "category-tiles");
-    expect(tiles?.type === "category-tiles" && tiles.settings).toEqual({ style: "photo-grid", title: "Departments", categoryIds: ["cat_a", "cat_b"] });
+    expect(tiles?.type === "category-tiles" && tiles.settings).toEqual({ style: "photo", title: "Departments", categoryIds: ["cat_a", "cat_b"] });
   });
 
   it("compares looks without content: a filled-in template still looks like its template", () => {

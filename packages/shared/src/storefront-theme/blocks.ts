@@ -1,9 +1,7 @@
 // Block variants: each block of the storefront (top bar, header, menus,
 // card, listing, product page, footer) is one variant id plus strict
-// settings. Variants choose structure; tokens.ts owns colour and the global
-// sizes. One exception: a card variant owns its measured look (photo ratio
-// and fit, radius, surface, title and price type), because that look is the
-// card's identity (SYNTHESIS.md section 2 and fidelity AUDIT.md section 2.1).
+// settings. Variants choose structure; tokens.ts owns colour, type, space,
+// radius and elevation, so no block carries a look of its own.
 //
 // Each variant declares, as data:
 // - `settings` (a strict schema) and `defaults` (valid settings);
@@ -19,13 +17,11 @@ import {
   anyOf,
   atLeast,
   between,
-  blockIs,
   has,
   type FitCondition,
 } from "./fit";
 import { storefrontProductAppBlocksSchema } from "./apps";
 import { storefrontLinkSchema } from "./links";
-import type { StorefrontImageFit, StorefrontThemeSurface } from "./tokens";
 
 // ─── Primitives ───────────────────────────────────────────────────────────
 
@@ -60,7 +56,6 @@ function variant<Shape extends z.ZodRawShape = Record<never, never>, const Rende
   };
 }
 
-const hoverImage = { hoverImage: z.boolean() };
 const cartTotal = { cartTotal: z.boolean() };
 
 // Existing renderers (the v3 components) the variants map to for now.
@@ -80,27 +75,21 @@ export type StorefrontNavigationRenderer = (typeof STOREFRONT_NAVIGATION_RENDERE
 export type StorefrontMobileNavigationRenderer = (typeof STOREFRONT_MOBILE_NAVIGATION_RENDERERS)[number];
 export type StorefrontFooterRenderer = (typeof STOREFRONT_FOOTER_RENDERERS)[number];
 /**
- * Optional card facts. Each renders only when its data exists (a real
- * brand, key specs, reviews, 10+ sold, EMI plans...): no zero states.
+ * The facts a product card shows under its title (each renders only when the
+ * product has the data: no zero states): none, up to three key specs, the
+ * colour swatches, or the delivery line.
  */
-export const STOREFRONT_CARD_SLOTS = [
-  "brand",
-  "key-specs",
-  "rating",
-  "sold",
-  "savings",
-  "pack-size",
-  "delivery",
-  "emi",
-  // Amazon: colour dots above the title, "Options: 4 sizes" under it.
-  "swatches",
-  "options",
-] as const;
-export type StorefrontCardSlot = (typeof STOREFRONT_CARD_SLOTS)[number];
-/** What a card body shows, top to bottom: the title, the price and optional facts. */
-export type StorefrontCardPart = "title" | "price" | StorefrontCardSlot;
+export const STOREFRONT_CARD_FACTS = ["none", "key-specs", "swatches", "delivery"] as const;
+export type StorefrontCardFacts = (typeof STOREFRONT_CARD_FACTS)[number];
+/**
+ * The card's buy action: none (the card is one link), quick-add (a round add
+ * button on the photo for products without options) or full (a button at
+ * the bottom of every card: Add to cart, Choose options or View product).
+ */
+export const STOREFRONT_CARD_ACTIONS = ["none", "quick-add", "full"] as const;
+export type StorefrontCardAction = (typeof STOREFRONT_CARD_ACTIONS)[number];
 
-/** A type size in CSS px at 1440 wide (desktop) and 390 wide (phone). */
+/** A buy-box type size in CSS px at 1440 wide (desktop) and 390 wide (phone). */
 export interface StorefrontCardTypeSize {
   desktop: number;
   phone: number;
@@ -108,229 +97,17 @@ export interface StorefrontCardTypeSize {
 export type StorefrontCardWeight = 400 | 500 | 600 | 700;
 
 /**
- * A card's own look: the measured identity of its reference site, applied
- * in every template. A template's radius, surface and photo tokens never
- * flatten it (the tech-rounded card stays a 20px, raised, 1.31 contain card
- * on a square, flat boutique theme). Sizes are CSS px; the density step
- * still owns the grid (card minimum width, gaps) and the card's inner
- * padding, never these values. Phone titles never drop below 14px (the
- * Bangla floor); every other value is the reference's.
- */
-export interface StorefrontCardLook {
-  /** Photo box: width / height (1 square, 0.75 portrait 3:4, 1.31 a landscape crop) and how the photo fills it. */
-  image: { ratio: number; fit: StorefrontImageFit };
-  /** Corner radius in px: the card's frame; on a flat card, the photo's corners. */
-  radius: number;
-  surface: StorefrontThemeSurface;
-  title: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight; lines: 1 | 2 | 3 };
-  price: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight };
-}
-
-/** Each card's measured look (desktop / phone px). Sources in the comments. */
-export const STOREFRONT_CARD_LOOKS = {
-  // Dawn /collections/bags: 269×351 cards, square photos, radius 0, no
-  // chrome; title 13/400, price 16/400.
-  boutique: {
-    image: { ratio: 1, fit: "cover" },
-    radius: 0,
-    surface: "flat",
-    title: { size: { desktop: 13, phone: 14 }, weight: 400, lines: 2 },
-    price: { size: { desktop: 16, phone: 16 }, weight: 400 },
-  },
-  // Graza /collections/all: square lifestyle photos, centred copy and a
-  // full-width purchase pill. Keep the phone title above the 14px floor.
-  showcase: {
-    image: { ratio: 1, fit: "cover" },
-    radius: 12,
-    surface: "flat",
-    title: { size: { desktop: 15, phone: 14 }, weight: 600, lines: 2 },
-    price: { size: { desktop: 16, phone: 15 }, weight: 500 },
-  },
-  // Aarong /women/saree: 3:4 photos (310×413, 179×239 on phones), radius 0;
-  // name 16/700 in two lines, price 16/400.
-  portrait: {
-    image: { ratio: 0.75, fit: "cover" },
-    radius: 0,
-    surface: "flat",
-    title: { size: { desktop: 16, phone: 16 }, weight: 700, lines: 2 },
-    price: { size: { desktop: 16, phone: 16 }, weight: 400 },
-  },
-  // Fabrilife /shop: 236×366 white tiles with a hairline and 4px corners,
-  // square 234px photo; title 15/500 in two lines, price 20/700.
-  "fashion-value": {
-    image: { ratio: 1, fit: "cover" },
-    radius: 4,
-    surface: "hairline",
-    title: { size: { desktop: 15, phone: 15 }, weight: 500, lines: 2 },
-    price: { size: { desktop: 20, phone: 20 }, weight: 700 },
-  },
-  // Star Tech /laptop-notebook: 254×665 white tiles (a hairline, 4px
-  // corners), square 204px photo on white (contain); title 14/600 in two
-  // lines, price 17/600 (the same on phones, base 14).
-  spec: {
-    image: { ratio: 1, fit: "contain" },
-    radius: 4,
-    surface: "hairline",
-    title: { size: { desktop: 14, phone: 14 }, weight: 600, lines: 2 },
-    price: { size: { desktop: 17, phone: 17 }, weight: 600 },
-  },
-  // Apple Gadgets: radius 20, border plus soft shadow, image 278×212 (a
-  // 1.31 crop of a square photo, contain); title 18/600 (14/600 on phones),
-  // price 18/600.
-  "tech-rounded": {
-    image: { ratio: 1.31, fit: "contain" },
-    radius: 20,
-    surface: "raised",
-    title: { size: { desktop: 18, phone: 14 }, weight: 600, lines: 2 },
-    price: { size: { desktop: 18, phone: 18 }, weight: 600 },
-  },
-  // Target search: square 318px photo with radius 8, no card chrome; brand
-  // 14/700, title 14/400, price 22/700.
-  retail: {
-    image: { ratio: 1, fit: "contain" },
-    radius: 8,
-    surface: "flat",
-    title: { size: { desktop: 14, phone: 14 }, weight: 400, lines: 2 },
-    price: { size: { desktop: 22, phone: 22 }, weight: 700 },
-  },
-  // Walmart home: square image, small outline Add/Options above a bold price.
-  "retail-quick": {
-    image: { ratio: 1, fit: "contain" },
-    radius: 12,
-    surface: "flat",
-    title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
-    price: { size: { desktop: 24, phone: 20 }, weight: 700 },
-  },
-  // Daraz ?q=ssd: 250×421, square 200px photo, white on grey with no
-  // border, 2px corners; title 13/400 in two lines, price 18/400 (orange).
-  marketplace: {
-    image: { ratio: 1, fit: "contain" },
-    radius: 2,
-    surface: "flat",
-    title: { size: { desktop: 13, phone: 14 }, weight: 400, lines: 2 },
-    price: { size: { desktop: 18, phone: 18 }, weight: 400 },
-  },
-  // Chaldal /popular: 194px tiles ruled by hairlines, square photo; name
-  // 16/400 in two lines (14/400 on phones), price 18/700 (12/700 on phones).
-  "quick-add": {
-    image: { ratio: 1, fit: "contain" },
-    radius: 0,
-    surface: "hairline",
-    title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 2 },
-    price: { size: { desktop: 18, phone: 12 }, weight: 700 },
-  },
-  // Ghorer Bazar's food catalog keeps the photo and full purchase action in one tile.
-  "quick-add-full": {
-    image: { ratio: 1, fit: "contain" },
-    radius: 8,
-    surface: "hairline",
-    title: { size: { desktop: 15, phone: 14 }, weight: 500, lines: 2 },
-    price: { size: { desktop: 20, phone: 16 }, weight: 700 },
-  },
-  // A department mall's dense four-column tiles: blue merchant-accent title
-  // and a quieter 20px price, separated by fine rules rather than gutters.
-  mall: {
-    image: { ratio: 1, fit: "contain" },
-    radius: 0,
-    surface: "hairline",
-    title: { size: { desktop: 14, phone: 14 }, weight: 700, lines: 2 },
-    price: { size: { desktop: 20, phone: 20 }, weight: 400 },
-  },
-  // Amazon UK search grid (owner's screenshot, 2026-09-25): square photo
-  // contained on a grey well, no card chrome, radius 0; title 16/400 in
-  // three lines (14 on phones), superscript price with 28px whole units
-  // (22 on phones).
-  detailed: {
-    image: { ratio: 1, fit: "contain" },
-    radius: 0,
-    surface: "flat",
-    title: { size: { desktop: 16, phone: 14 }, weight: 400, lines: 3 },
-    price: { size: { desktop: 28, phone: 22 }, weight: 400 },
-  },
-} as const satisfies Record<string, StorefrontCardLook>;
-
-/**
- * A card's measured anatomy as data (SYNTHESIS.md section 2.4): its body,
- * actions and wording, plus its own look (`look`; null only for `standard`,
- * which follows the template's tokens and type scale so today's card stays
- * pixel-identical).
+ * The one product card (ProductCard.astro). Its photo ratio and fit, radius
+ * and surface are the theme's tokens; its type is the system's (title 14/500
+ * in two lines, price 16/600). These three settings are all it varies by.
  */
 export interface StorefrontCardRenderer {
-  /** A buy action on the card (products without options, in stock). */
-  quickBuy: boolean;
-  /**
-   * Where the discount mark sits: on the photo, beside the price, or both
-   * (Fabrilife: "-40%" on the photo and again after the struck price).
-   */
-  badge: "image" | "price" | "both";
+  facts: StorefrontCardFacts;
+  action: StorefrontCardAction;
+  /** The second photo fades in on hover (pointer devices only). */
   hoverImage: boolean;
-  /** How a discount reads: "-20%", "Sale", "Save ৳600" or "৳600 OFF". */
-  discount: "percent" | "sale" | "save" | "off";
-  /**
-   * The discount mark's shape: a round pill, a square tag, a flag flush with
-   * the photo's edge (Star Tech), plain text (Daraz, Target), a tinted chip
-   * (Apple Gadgets) or Amazon's red deal box above the price.
-   */
-  discountStyle: "pill" | "tag" | "flag" | "text" | "chip" | "deal";
-  /**
-   * The regular price while discounted: struck after the price, struck
-   * before it (Dawn), Target's plain "reg ৳1,200", or Amazon's "List:".
-   */
-  strike: "after" | "before" | "reg" | "list";
-  /** Title lines before it is clamped. */
-  titleLines: 1 | 2 | 3;
-  titleWeight: "regular" | "medium" | "strong";
-  /**
-   * The price's colour role: ink, the action colour, the sale colour while
-   * discounted, or the sale colour always (Star Tech's red prices).
-   */
-  priceTone: "ink" | "primary" | "sale" | "sale-always";
-  /** A rating as five stars and the count (Daraz, Amazon, Target, Dawn), or "★ 4.6 (128)". */
-  rating: "stars" | "score";
-  /** The body, top to bottom. */
-  body: readonly StorefrontCardPart[];
-  /**
-   * Where the buy action sits: a full-width button, an outline button, a
-   * round button (on the photo, or beside the price), or Amazon's small pill
-   * at the start of the row.
-   */
-  action: "block" | "outline" | "round" | "compact";
-  actionLabel: "buy-now" | "add-to-cart";
-  /** An "Add to Compare" toggle under the action, and the floating Compare tray (Star Tech). */
-  compare: boolean;
-  /** The card's own look; null follows the template's tokens (standard only). */
-  look: StorefrontCardLook | null;
 }
 
-const TITLE_WEIGHTS = { 400: "regular", 500: "medium", 600: "strong", 700: "strong" } as const;
-
-/**
- * A card from its anatomy and look. `titleLines` and `titleWeight` are
- * derived from the look so the two can never disagree.
- */
-function card(
-  look: StorefrontCardLook | null,
-  anatomy: Partial<Omit<StorefrontCardRenderer, "look" | "titleLines" | "titleWeight">>,
-): StorefrontCardRenderer {
-  return {
-    quickBuy: false,
-    badge: "image",
-    hoverImage: false,
-    discount: "percent",
-    discountStyle: "pill",
-    strike: "after",
-    priceTone: "ink",
-    rating: "stars",
-    body: ["title", "price"],
-    action: "block",
-    actionLabel: "add-to-cart",
-    compare: false,
-    ...anatomy,
-    titleLines: look?.title.lines ?? 2,
-    titleWeight: look ? TITLE_WEIGHTS[look.title.weight] : "medium",
-    look,
-  };
-}
 /**
  * The product page's photos. `beside`: one stage and a thumbnail rail
  * (beside it or below it), the details in the next column. `stacked`
@@ -649,146 +426,16 @@ export const STOREFRONT_MOBILE_NAV_VARIANTS = {
 
 /** One card per store: listing, rails, related and search share it (mix rule 2). */
 export const STOREFRONT_CARD_VARIANTS = {
-  // The classic card remains available to merchants: badge on the photo,
-  // title 2 lines, price below.
   standard: variant({
-    settings: hoverImage,
-    defaults: { hoverImage: false },
-    renders: (settings) => card(null, { hoverImage: settings.hoverImage }),
-  }),
-  // Dawn: title 13/400, stars when reviewed, the struck price before the
-  // 16/400 price, a "Sale" / "Sold out" pill on the photo.
-  boutique: variant({
-    settings: { ...hoverImage, quickAction: z.boolean().optional() },
-    defaults: { hoverImage: true, quickAction: false },
-    renders: (settings) => card(STOREFRONT_CARD_LOOKS.boutique, {
-      hoverImage: settings.hoverImage,
-      quickBuy: settings.quickAction === true,
-      discount: "sale",
-      strike: "before",
-      body: ["title", "rating", "price"],
-    }),
-  }),
-  showcase: variant({
-    renders: card(STOREFRONT_CARD_LOOKS.showcase, {
-      quickBuy: true,
-      discount: "sale",
-      strike: "before",
-      body: ["title", "pack-size", "price"],
-    }),
-  }),
-  // Aarong: portrait photo, name 16/700 in two lines, price 16/400 in the
-  // sale colour while discounted, a square "-20%" tag on the photo.
-  portrait: variant({
-    settings: hoverImage,
-    defaults: { hoverImage: true },
+    settings: {
+      facts: z.enum(STOREFRONT_CARD_FACTS),
+      action: z.enum(STOREFRONT_CARD_ACTIONS),
+      hoverImage: z.boolean(),
+    },
+    defaults: { facts: "none", action: "none", hoverImage: false },
+    // A discounted price is drawn in the sale colour on the card.
     contrastPairs: [["destructive", "card"]],
-    renders: (settings) => card(STOREFRONT_CARD_LOOKS.portrait, { hoverImage: settings.hoverImage, discountStyle: "tag", priceTone: "sale" }),
-  }),
-  // Fabrilife: a white bordered tile, a red "-40%" tag on the photo, title in
-  // two lines, "Save ৳600" chip, price 20/700 with the struck price and
-  // "-40%" after it, the round dark cart beside it.
-  "fashion-value": variant({
-    contrastPairs: [["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS["fashion-value"], {
-      quickBuy: true,
-      badge: "both",
-      discountStyle: "tag",
-      body: ["title", "savings", "price"],
-      action: "round",
-    }),
-  }),
-  // Star Tech: a white bordered tile, a "Save ৳" flag, title 14/600, four
-  // key-spec bullets, the price always red, full-width Buy Now, Compare.
-  spec: variant({
-    contrastPairs: [["primary", "card"], ["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS.spec, {
-      quickBuy: true,
-      discount: "save",
-      discountStyle: "flag",
-      priceTone: "sale-always",
-      rating: "score",
-      body: ["title", "key-specs", "price", "emi"],
-      actionLabel: "buy-now",
-      compare: true,
-    }),
-  }),
-  // Apple Gadgets: title 18/600, price 18/600 with a "৳500 OFF" chip, outline
-  // pill CTA.
-  "tech-rounded": variant({
-    contrastPairs: [["primary", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS["tech-rounded"], {
-      quickBuy: true,
-      badge: "price",
-      discount: "off",
-      discountStyle: "chip",
-      rating: "score",
-      body: ["title", "price", "emi"],
-      action: "outline",
-      actionLabel: "buy-now",
-    }),
-  }),
-  // Target: colour circles, the 22/700 price first (red with "Sale" and
-  // "reg ৳1,200" while discounted), brand 14/700, title 14/400, stars,
-  // delivery, a full-width Add to cart pill.
-  retail: variant({
-    settings: { quickAction: z.boolean().optional() },
-    defaults: { quickAction: false },
-    contrastPairs: [["primary", "card"], ["destructive", "card"]],
-    renders: (settings) => card(settings.quickAction ? STOREFRONT_CARD_LOOKS["retail-quick"] : STOREFRONT_CARD_LOOKS.retail, {
-      quickBuy: true,
-      badge: "price",
-      discount: settings.quickAction ? "percent" : "sale",
-      discountStyle: "text",
-      strike: settings.quickAction ? "after" : "reg",
-      priceTone: "sale",
-      rating: "score",
-      body: settings.quickAction ? ["price", "title", "rating", "delivery"] : ["swatches", "price", "brand", "title", "rating", "delivery"],
-      action: settings.quickAction ? "outline" : "block",
-    }),
-  }),
-  // Daraz: title 13/400, the 18/400 price always in its orange-red (the sale
-  // colour, so it survives an ink-only palette), the struck price and "-15%"
-  // under it, then "129 sold" and the stars on one line (only when real).
-  marketplace: variant({
-    contrastPairs: [["primary", "card"], ["destructive", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS.marketplace, {
-      badge: "price",
-      discountStyle: "text",
-      priceTone: "sale-always",
-      body: ["title", "price", "sold", "rating"],
-    }),
-  }),
-  // Chaldal: ruled tiles, a "৳81 OFF" tag and the round + on the photo,
-  // price first (red on sale), name 16/400, pack size, delivery chip.
-  "quick-add": variant({
-    settings: { fullAction: z.boolean().optional(), showBuyNow: z.boolean().optional() },
-    defaults: { fullAction: false, showBuyNow: false },
-    contrastPairs: [["destructive", "card"]],
-    renders: (settings) => card(settings.fullAction ? STOREFRONT_CARD_LOOKS["quick-add-full"] : STOREFRONT_CARD_LOOKS["quick-add"], {
-      quickBuy: true,
-      discount: "off",
-      discountStyle: "tag",
-      priceTone: "sale",
-      body: settings.fullAction ? ["title", "price"] : ["price", "title", "pack-size", "delivery"],
-      action: settings.fullAction ? "outline" : "round",
-    }),
-  }),
-  mall: variant({ renders: card(STOREFRONT_CARD_LOOKS.mall, {}) }),
-  // Amazon: colour swatches, title in three lines, "Options: 4 sizes",
-  // stars with the count, "1K+ bought in past month" (only from real
-  // sales), the red deal box, a superscript price with "List:", the
-  // delivery line and the small Add to cart pill.
-  detailed: variant({
-    contrastPairs: [["destructive", "card"], ["primary", "card"]],
-    renders: card(STOREFRONT_CARD_LOOKS.detailed, {
-      quickBuy: true,
-      badge: "price",
-      discountStyle: "deal",
-      strike: "list",
-      body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],
-      action: "compact",
-    }),
+    renders: (settings): StorefrontCardRenderer => ({ facts: settings.facts, action: settings.action, hoverImage: settings.hoverImage }),
   }),
 };
 
@@ -812,8 +459,8 @@ export const STOREFRONT_LISTING_VARIANTS = {
     fallback: "grid",
     renders: "classic",
   }),
-  // Chaldal: the dense quick-add grid.
-  "quick-grid": variant({ requires: [blockIs("card", "quick-add")], fallback: "grid", renders: "classic" }),
+  // A denser grid: smaller cards, more columns.
+  "quick-grid": variant({ renders: "classic" }),
 };
 
 // ─── Listing filters ──────────────────────────────────────────────────────
@@ -864,7 +511,7 @@ export interface StorefrontListingFilterSpec {
 export const STOREFRONT_LISTING_FILTER_SPECS = {
   // Amazon 262px / 22px pitch / 14px, Star Tech 225-265 / 32 / 14, Daraz
   // 190 / 18 / 13: 240 sits within 10% of Amazon and Star Tech; 22 is Amazon's pitch.
-  "sidebar-dense": { placement: "sidebar", column: 240, rowPitch: 22, label: 14, barFacets: null },
+  "sidebar-dense": { placement: "sidebar", column: 240, rowPitch: 24, label: 14, barFacets: null },
   // Fabrilife 270px, Game Ghor 270px, Apple Gadgets 250px with 28px rows and 16px labels.
   "sidebar-comfortable": { placement: "sidebar", column: 270, rowPitch: 28, label: 16, barFacets: null },
   // Dawn: "Filter: Availability, Price, Color" (3); Aarong: Categories, Colour, Fabric, Price (4).
@@ -884,11 +531,12 @@ export const STOREFRONT_FILTER_MIN_RESULTS = 8;
  * A template's own facet numbers over its style's (optional): each
  * reference is its own spec (Daraz's column is 190px with 18px rows, Star
  * Tech's 225px with 32px rows, Apple Gadgets' 316px). Bounds keep a column
- * readable and every row a target.
+ * readable and every row a 24px target (WCAG 2.5.8: the check box is 14px, so
+ * the row pitch is its clear space).
  */
 export const STOREFRONT_LISTING_FILTER_BOUNDS = {
   column: { min: 180, max: 340 },
-  rowPitch: { min: 16, max: 36 },
+  rowPitch: { min: 24, max: 36 },
   label: { min: 12, max: 18 },
 } as const;
 

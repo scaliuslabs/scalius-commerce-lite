@@ -359,8 +359,8 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 8;
-    template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
+    version: 9;
+    template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
             background: string;
@@ -543,64 +543,9 @@ export type StorefrontThemeDocument = {
         card: {
             variant: 'standard';
             settings: {
+                facts: 'none' | 'key-specs' | 'swatches' | 'delivery';
+                action: 'none' | 'quick-add' | 'full';
                 hoverImage: boolean;
-            };
-        } | {
-            variant: 'boutique';
-            settings: {
-                hoverImage: boolean;
-                quickAction?: boolean;
-            };
-        } | {
-            variant: 'showcase';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'portrait';
-            settings: {
-                hoverImage: boolean;
-            };
-        } | {
-            variant: 'fashion-value';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'spec';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'tech-rounded';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'retail';
-            settings: {
-                quickAction?: boolean;
-            };
-        } | {
-            variant: 'marketplace';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'quick-add';
-            settings: {
-                fullAction?: boolean;
-                showBuyNow?: boolean;
-            };
-        } | {
-            variant: 'mall';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'detailed';
-            settings: {
-                [key: string]: never;
             };
         };
         listing: {

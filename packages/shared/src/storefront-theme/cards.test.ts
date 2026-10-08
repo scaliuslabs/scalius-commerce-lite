@@ -1,180 +1,96 @@
 import { describe, expect, it } from "vitest";
 import {
-  STOREFRONT_CARD_LOOKS,
-  STOREFRONT_CARD_SLOTS,
+  STOREFRONT_CARD_ACTIONS,
+  STOREFRONT_CARD_FACTS,
   STOREFRONT_CARD_VARIANTS,
   storefrontBlockVariants,
   storefrontVariantSpec,
   type StorefrontCardRenderer,
 } from "./blocks";
-import { STOREFRONT_TEMPLATE_IDS } from "./document";
+import { storefrontThemeDocumentSchema, STOREFRONT_TEMPLATE_IDS } from "./document";
 import { EMPTY_STORE_SHAPE } from "./fit";
 import { resolveStorefrontTheme } from "./resolve";
 import { storefrontTemplateTheme } from "./templates";
-import { STOREFRONT_IMAGE_RATIOS, STOREFRONT_IMAGE_RATIO_VALUES, STOREFRONT_RADIUS_PX } from "./tokens";
+import { STOREFRONT_IMAGE_RATIOS } from "./tokens";
 
-const anatomy = (id: string): StorefrontCardRenderer =>
-  (storefrontVariantSpec("card", id).renders as (settings: unknown) => StorefrontCardRenderer)(
-    storefrontVariantSpec("card", id).defaults,
-  );
-const pairs = (id: string) => storefrontVariantSpec("card", id).contrastPairs.map((pair) => pair.join("/"));
+const spec = storefrontVariantSpec("card", "standard");
+const render = (settings: unknown) => (spec.renders as (settings: unknown) => StorefrontCardRenderer)(settings);
+const accepts = (card: unknown) => {
+  const theme = storefrontTemplateTheme("department-mall");
+  return storefrontThemeDocumentSchema.safeParse({ ...theme, blocks: { ...theme.blocks, card } }).success;
+};
 
-describe("card anatomy", () => {
-  it.each(storefrontBlockVariants("card"))("%s: one title, one price, known facts once each", (id) => {
-    const { body } = anatomy(id);
-    expect(body.filter((part) => part === "title")).toHaveLength(1);
-    expect(body.filter((part) => part === "price")).toHaveLength(1);
-    expect(new Set(body).size).toBe(body.length);
-    for (const part of body) expect(["title", "price", ...STOREFRONT_CARD_SLOTS]).toContain(part);
+describe("the one product card", () => {
+  it("is the only card variant, with facts, action and hover image as its settings", () => {
+    expect(storefrontBlockVariants("card")).toEqual(["standard"]);
+    expect(Object.keys(STOREFRONT_CARD_VARIANTS)).toEqual(["standard"]);
+    expect(spec.defaults).toEqual({ facts: "none", action: "none", hoverImage: false });
+    expect([...STOREFRONT_CARD_FACTS]).toEqual(["none", "key-specs", "swatches", "delivery"]);
+    expect([...STOREFRONT_CARD_ACTIONS]).toEqual(["none", "quick-add", "full"]);
   });
 
-  it.each(storefrontBlockVariants("card"))("%s: declares every colour role it paints", (id) => {
-    const card = anatomy(id);
-    if (card.priceTone === "primary" || card.action === "outline") expect(pairs(id)).toContain("primary/card");
-    // The sale colour as text on the card: a sale-toned price, a discount
-    // beside the price in words, or the savings line.
-    const saleText = card.priceTone === "sale" || card.priceTone === "sale-always"
-      || (card.badge === "price" && card.discount !== "off")
-      || card.badge === "both"
-      || card.body.includes("savings");
-    if (saleText) expect(pairs(id)).toContain("destructive/card");
-  });
-
-  it.each(STOREFRONT_IMAGE_RATIOS)("resolves the %s photo ratio token for the standard card only", (imageRatio) => {
-    const theme = storefrontTemplateTheme("department-mall");
-    theme.blocks.card = { variant: "standard", settings: { hoverImage: false } };
-    theme.tokens.imageRatio = imageRatio;
-    const standard = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard;
-    expect(standard.imageRatio).toBe(imageRatio);
-    expect(standard.look.image.ratio).toBe(STOREFRONT_IMAGE_RATIO_VALUES[imageRatio]);
-    // Every other card keeps its own photo box whatever the template says.
-    theme.blocks.card = { variant: "marketplace", settings: {} };
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard.imageRatio).toBe("square");
-  });
-
-  it("keeps the standard card as today's classic card", () => {
-    expect(anatomy("standard")).toEqual({
-      look: null,
-      quickBuy: false,
-      badge: "image",
-      hoverImage: false,
-      discount: "percent",
-      discountStyle: "pill",
-      strike: "after",
-      titleLines: 2,
-      titleWeight: "medium",
-      priceTone: "ink",
-      rating: "stars",
-      body: ["title", "price"],
-      action: "block",
-      actionLabel: "add-to-cart",
-      compare: false,
-    });
-  });
-
-  it("starts the department mall with its measured card", () => {
-    const theme = storefrontTemplateTheme("department-mall");
-    expect(theme.blocks.card.variant).toBe("mall");
-    const card = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard;
-    expect(card.look).toEqual(STOREFRONT_CARD_LOOKS.mall);
-    expect(card.titleLines).toBe(2);
-    expect(card.look.title).toEqual({ size: { desktop: 14, phone: 14 }, weight: 700, lines: 2 });
-    expect(card.look.price).toEqual({ size: { desktop: 20, phone: 20 }, weight: 400 });
-  });
-
-  it("starts showcase with its own centered purchase card while preserving merchant overrides", () => {
-    const theme = storefrontTemplateTheme("showcase-landing");
-    expect(theme.blocks.card).toEqual({ variant: "showcase", settings: {} });
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard).toMatchObject({
-      quickBuy: true,
-      body: ["title", "pack-size", "price"],
-      look: STOREFRONT_CARD_LOOKS.showcase,
-    });
-    theme.blocks.card = { variant: "boutique", settings: { hoverImage: false, quickAction: false } };
-    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.card.variant).toBe("boutique");
-  });
-
-  it("puts each measured anatomy on its own id", () => {
-    const shapes = Object.keys(STOREFRONT_CARD_VARIANTS).map((id) => JSON.stringify({ ...anatomy(id), hoverImage: null }));
-    expect(new Set(shapes).size).toBe(shapes.length);
-    // A few measured facts (SYNTHESIS.md section 2.4).
-    expect(anatomy("spec").body).toEqual(["title", "key-specs", "price", "emi"]);
-    // Target: the colour circles, then the price before the title.
-    expect(anatomy("retail").body.slice(0, 2)).toEqual(["swatches", "price"]);
-    expect(anatomy("quick-add")).toMatchObject({ action: "round", body: ["price", "title", "pack-size", "delivery"] });
-    const pantry = (storefrontVariantSpec("card", "quick-add").renders as (settings: { fullAction: boolean }) => StorefrontCardRenderer)({ fullAction: true });
-    expect(pantry).toMatchObject({ action: "outline", body: ["title", "price"], look: STOREFRONT_CARD_LOOKS["quick-add-full"] });
-    expect(anatomy("fashion-value")).toMatchObject({ action: "round", titleLines: 2, badge: "both" });
-    expect(anatomy("spec")).toMatchObject({ priceTone: "sale-always", discountStyle: "flag" });
-    expect(anatomy("retail")).toMatchObject({ strike: "reg", discountStyle: "text", priceTone: "sale", rating: "score" });
-    const quickRetail = (storefrontVariantSpec("card", "retail").renders as (settings: { quickAction: boolean }) => StorefrontCardRenderer)({ quickAction: true });
-    expect(quickRetail).toMatchObject({ quickBuy: true, action: "outline", body: ["price", "title", "rating", "delivery"] });
-    expect(anatomy("detailed")).toMatchObject({ strike: "list", discountStyle: "deal", action: "compact" });
-    expect(anatomy("marketplace")).toMatchObject({ quickBuy: false, priceTone: "sale-always" });
-    expect(anatomy("detailed")).toMatchObject({
-      titleLines: 3,
-      body: ["swatches", "title", "options", "rating", "sold", "price", "delivery"],
-    });
-    // Only the spec card offers Compare.
-    expect(storefrontBlockVariants("card").filter((id) => anatomy(id).compare)).toEqual(["spec"]);
-  });
-});
-
-describe("card looks (fidelity AUDIT.md section 2.1)", () => {
-  const owned = storefrontBlockVariants("card").filter((id) => id !== "standard");
-
-  it("gives every card but standard its own measured look, and no two the same", () => {
-    for (const id of owned) expect(anatomy(id).look, id).toEqual(STOREFRONT_CARD_LOOKS[id as keyof typeof STOREFRONT_CARD_LOOKS]);
-    const looks = owned.map((id) => JSON.stringify(anatomy(id).look));
-    expect(new Set(looks).size).toBe(looks.length);
-    // The anatomy's title fields are derived from the look, never set apart.
-    for (const id of owned) {
-      const card = anatomy(id);
-      expect(card.titleLines).toBe(card.look!.title.lines);
-      expect(card.titleWeight).toBe({ 400: "regular", 500: "medium", 600: "strong", 700: "strong" }[card.look!.title.weight]);
+  it("accepts every facts, action and hover image combination, and renders it as stored", () => {
+    for (const facts of STOREFRONT_CARD_FACTS) {
+      for (const action of STOREFRONT_CARD_ACTIONS) {
+        for (const hoverImage of [false, true]) {
+          const settings = { facts, action, hoverImage };
+          expect(accepts({ variant: "standard", settings }), JSON.stringify(settings)).toBe(true);
+          expect(render(settings)).toEqual(settings);
+        }
+      }
     }
   });
 
-  it("carries the reference numbers", () => {
-    expect(STOREFRONT_CARD_LOOKS["tech-rounded"]).toMatchObject({ image: { ratio: 1.31, fit: "contain" }, radius: 20, surface: "raised" });
-    // Star Tech and Fabrilife: white tiles with a hairline (the references show them).
-    expect(STOREFRONT_CARD_LOOKS.spec).toMatchObject({ radius: 4, surface: "hairline", title: { size: { desktop: 14 }, weight: 600 }, price: { size: { desktop: 17 }, weight: 600 } });
-    expect(STOREFRONT_CARD_LOOKS.portrait.image.ratio).toBe(0.75);
-    expect(STOREFRONT_CARD_LOOKS["fashion-value"]).toMatchObject({ surface: "hairline", title: { lines: 2 }, price: { size: { desktop: 20 }, weight: 700 } });
-    expect(STOREFRONT_CARD_LOOKS.marketplace.price).toEqual({ size: { desktop: 18, phone: 18 }, weight: 400 });
-    expect(STOREFRONT_CARD_LOOKS.retail.price.size.desktop).toBe(22);
-    expect(STOREFRONT_CARD_LOOKS.boutique.title).toMatchObject({ size: { desktop: 13 }, weight: 400 });
-    expect(STOREFRONT_CARD_LOOKS.showcase).toMatchObject({ radius: 12, surface: "flat", title: { lines: 2, weight: 600, size: { phone: 14 } } });
-    expect(STOREFRONT_CARD_LOOKS["quick-add"].price.size).toEqual({ desktop: 18, phone: 12 });
-    expect(STOREFRONT_CARD_LOOKS.detailed).toMatchObject({ title: { size: { desktop: 16, phone: 14 }, lines: 3 }, price: { size: { desktop: 28 } } });
-    for (const [id, look] of Object.entries(STOREFRONT_CARD_LOOKS)) {
-      // The Bangla floor on phones.
-      expect(look.title.size.phone, id).toBeGreaterThanOrEqual(14);
-      // Never both a border and a shadow; raised means a shadow.
-      expect(["flat", "hairline", "raised"]).toContain(look.surface);
+  it("rejects unknown values, missing and extra keys, and other variants", () => {
+    const ok = { facts: "none", action: "none", hoverImage: false };
+    expect(accepts({ variant: "standard", settings: ok })).toBe(true);
+    expect(accepts({ variant: "standard", settings: { ...ok, facts: "ratings" } })).toBe(false);
+    expect(accepts({ variant: "standard", settings: { ...ok, action: "buy-now" } })).toBe(false);
+    expect(accepts({ variant: "standard", settings: { ...ok, hoverImage: "yes" } })).toBe(false);
+    expect(accepts({ variant: "standard", settings: { ...ok, quickAction: true } })).toBe(false);
+    expect(accepts({ variant: "standard", settings: { facts: "none", action: "none" } })).toBe(false);
+    expect(accepts({ variant: "standard", settings: ok, extra: 1 })).toBe(false);
+    for (const retired of ["boutique", "mall", "retail", "detailed", "spec"]) {
+      expect(accepts({ variant: retired, settings: ok }), retired).toBe(false);
     }
   });
 
-  it.each(STOREFRONT_TEMPLATE_IDS)("never lets the %s template flatten a card's identity", (template) => {
-    for (const id of owned) {
-      const theme = storefrontTemplateTheme(template);
-      theme.blocks.card = { variant: id, settings: storefrontVariantSpec("card", id).defaults } as never;
-      const { productCard, cardSurface } = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout;
-      const look = STOREFRONT_CARD_LOOKS[id as keyof typeof STOREFRONT_CARD_LOOKS];
-      expect(productCard.look, `${template}/${id}`).toEqual(look);
-      expect(cardSurface).toBe({ flat: "flat", hairline: "bordered", raised: "elevated" }[look.surface]);
-      expect(productCard.imageRatio).toBe(look.image.ratio < 0.9 ? "portrait" : look.image.ratio > 1.15 ? "landscape" : "square");
-    }
-    // The standard card takes the template's tokens and keeps the theme's type scale.
-    const theme = storefrontTemplateTheme(template);
-    theme.blocks.card = { variant: "standard", settings: { hoverImage: false } };
-    const standard = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard.look;
-    expect(standard).toEqual({
-      image: { ratio: STOREFRONT_IMAGE_RATIO_VALUES[theme.tokens.imageRatio], fit: theme.tokens.imageFit },
-      radius: STOREFRONT_RADIUS_PX[theme.tokens.radius],
+  it("declares the sale colour on the card as the one contrast pair it paints", () => {
+    expect(spec.contrastPairs.map((pair) => pair.join("/"))).toEqual(["destructive/card"]);
+  });
+
+  it.each(STOREFRONT_TEMPLATE_IDS)("the %s preset uses it, and the resolved card carries its settings and the theme's photo tokens", (id) => {
+    const theme = storefrontTemplateTheme(id);
+    expect(theme.blocks.card.variant).toBe("standard");
+    const { productCard } = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout;
+    expect(productCard).toEqual({
+      ...theme.blocks.card.settings,
+      imageRatio: theme.tokens.imageRatio,
+      imageFit: theme.tokens.imageFit,
       surface: theme.tokens.surface,
-      title: null,
-      price: null,
     });
+  });
+
+  it.each(STOREFRONT_IMAGE_RATIOS)("follows the %s photo ratio, fit and surface tokens", (imageRatio) => {
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.tokens.imageRatio = imageRatio;
+    theme.tokens.imageFit = "contain";
+    theme.tokens.surface = "raised";
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard).toMatchObject({ imageRatio, imageFit: "contain", surface: "raised" });
+  });
+
+  it("gives the presets their card settings", () => {
+    const card = (id: (typeof STOREFRONT_TEMPLATE_IDS)[number]) => storefrontTemplateTheme(id).blocks.card.settings;
+    expect(card("department-mall")).toEqual({ facts: "none", action: "full", hoverImage: false });
+    expect(card("boutique")).toEqual({ facts: "swatches", action: "none", hoverImage: true });
+    expect(card("marketplace")).toEqual({ facts: "delivery", action: "none", hoverImage: false });
+    expect(card("daily-essentials")).toEqual({ facts: "none", action: "quick-add", hoverImage: false });
+    expect(card("showcase-landing")).toEqual({ facts: "none", action: "full", hoverImage: false });
+  });
+
+  it("keeps a merchant's card settings through resolve", () => {
+    const theme = storefrontTemplateTheme("showcase-landing");
+    theme.blocks.card = { variant: "standard", settings: { facts: "key-specs", action: "quick-add", hoverImage: true } };
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard).toMatchObject({ facts: "key-specs", action: "quick-add", hoverImage: true });
   });
 });

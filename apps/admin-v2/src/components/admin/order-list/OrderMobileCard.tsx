@@ -86,16 +86,19 @@ export const OrderMobileCard = memo(function OrderMobileCard({
             </>
           )}
         </span>
-        {/* What holds the order up comes first; else where the parcel is, or how it's delivered. */}
-        <span className="block truncate text-body text-muted-foreground">
-          <ListDate value={order[dateField]} />
-          {" · "}
-          {attention ? (
-            <span className={TONE_TEXT[attention.tone]}>{attention.text}</span>
-          ) : delivery ? (
-            <span className={cn(TONE_TEXT[delivery.tone])}>{delivery.text}</span>
-          ) : deliveryMethod(order, to)}
-          {collect > 0 ? <>{" · "}<span className="text-foreground tabular-nums">{t("codToCollect", { amount: fmtIn(collect, order.currencyCode) })}</span></> : null}
+        {/* What holds the order up comes first; else where the parcel is, or how it's delivered.
+            Cash still to collect keeps its own place at the end: a long line is cut before it, never through it. */}
+        <span className="flex items-center justify-between gap-3 text-body text-muted-foreground">
+          <span className="min-w-0 truncate">
+            <ListDate value={order[dateField]} />
+            {" · "}
+            {attention ? (
+              <span className={TONE_TEXT[attention.tone]}>{attention.text}</span>
+            ) : delivery ? (
+              <span className={cn(TONE_TEXT[delivery.tone])}>{delivery.text}</span>
+            ) : deliveryMethod(order, to)}
+          </span>
+          {collect > 0 ? <span className="shrink-0 text-foreground tabular-nums">{t("codToCollect", { amount: fmtIn(collect, order.currencyCode) })}</span> : null}
         </span>
       </Link>
     </div>

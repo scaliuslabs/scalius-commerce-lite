@@ -115,29 +115,28 @@ describe("fallback resolution", () => {
     }
     const drill = withBlock(base, (blocks) => { blocks.desktopNav = { variant: "drill-in-drawer", settings: {} }; });
     expect(resolve(drill).blocks.desktopNav.variant).toBe("drill-in-drawer");
-    // Shelves need a tree or collections; quick-grid needs the quick-add card.
+    // Shelves need a tree or collections; quick-grid fits any store.
     const shelves = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8, spacing: "standard" } }; });
     expect(resolve(shelves).blocks.listing.layout.variant).toBe("grid");
     const quickGrid = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "quick-grid", settings: {} }; });
-    expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("grid");
-    const quickGridQuickAdd = withBlock(quickGrid, (blocks) => { blocks.card = { variant: "quick-add", settings: {} }; });
-    expect(resolve(quickGridQuickAdd).blocks.listing.layout.variant).toBe("quick-grid");
+    expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("quick-grid");
+    expect(resolve(quickGrid).fallbacks.filter((each) => each.kind === "block" && each.key === "listing")).toEqual([]);
     // The digital buy box needs digital lines; the directory footer needs categories.
     const digital = withBlock(base, (blocks) => { blocks.product.buyBox = { variant: "digital", settings: {} }; blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "", about: "", copyright: "" } }; });
     expect(resolve(digital).blocks.product.buyBox.variant).toBe("classic");
     expect(resolve(digital).blocks.footer.variant).toBe("minimal-columns");
     // Modules and toolbar pieces without data are left out; nothing renders an empty box.
-    const spec = storefrontTemplateTheme("spec-catalogue");
-    const resolvedSpec = resolve(spec);
-    expect(resolvedSpec.blocks.product.below).toEqual(["spec-table", "description", "warranty", "reviews", "related"]);
-    expect(resolvedSpec.blocks.listing.toolbar).not.toContain("subcategory-pills");
+    const market = storefrontTemplateTheme("marketplace");
+    const resolvedMarket = resolve(market);
+    expect(resolvedMarket.blocks.product.below).toEqual(["about-bullets", "spec-table", "description", "warranty", "reviews", "related"]);
+    expect(resolvedMarket.blocks.listing.toolbar).not.toContain("subcategory-pills");
     // Aspect chips read today's facets (the storefront omits them without a
     // multi-value facet); the default listing has no per-page control.
     expect(resolve(storefrontTemplateTheme("marketplace")).blocks.listing.toolbar).toContain("aspect-chips");
     expect(resolve(base).blocks.listing.toolbar).toEqual(["breadcrumb", "result-count", "sort", "applied-chips"]);
     // Sections whose data is missing are dropped (category tiles need two categories).
-    expect(resolvedSpec.pages.home.map((section) => section.type)).not.toContain("category-tiles");
-    expect(resolve(storefrontTemplateTheme("marketplace")).pages.home.map((section) => section.type)).toEqual(["hero", "deal-block"]);
+    expect(resolvedMarket.pages.home.map((section) => section.type)).not.toContain("category-tiles");
+    expect(resolvedMarket.pages.home.map((section) => section.type)).toEqual(["hero", "deal-block"]);
   });
 
   it("keeps small-catalogue choices on a tiny store", () => {
@@ -146,10 +145,9 @@ describe("fallback resolution", () => {
     expect(boutique.fallbacks.filter((each) => each.kind === "block")).toEqual([]);
     // Landing content blocks wait for the merchant to write some.
     expect(boutique.fallbacks).toEqual([expect.objectContaining({ kind: "module", key: "content-blocks" })]);
-    const heritage = resolveStorefrontTheme(storefrontTemplateTheme("heritage-editorial"), TINY);
-    expect(heritage.blocks.desktopNav.variant).toBe("dropdown");
-    expect(heritage.blocks.listing.layout.variant).toBe("grid");
-    expect(heritage.pages.home.map((section) => section.type)).toContain("category-tiles");
+    const essentials = resolveStorefrontTheme(storefrontTemplateTheme("daily-essentials"), TINY);
+    expect(essentials.blocks.listing.layout.variant).toBe("grid");
+    expect(essentials.pages.home.map((section) => section.type)).toContain("category-tiles");
     expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("product-widgets");
   });
 

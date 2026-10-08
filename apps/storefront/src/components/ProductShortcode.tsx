@@ -201,7 +201,7 @@ export default function ProductShortcode({ productData }: { productData: Product
               <Button size="lg" disabled={isUnavailable || adding} onClick={() => void add(true)}><Check className="me-2 h-4 w-4" />Buy Now</Button>
             </div>
           )}
-          {toast ? <div className={cn("rounded-md p-3 text-sm", toast.type === "success" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>{toast.msg}</div> : null}
+          {toast ? <div className={cn("rounded-md p-3 text-sm", toast.type === "success" ? "bg-primary/10 text-primary-ink" : "bg-destructive/10 text-destructive")}>{toast.msg}</div> : null}
         </div>
       </div>
     </div>

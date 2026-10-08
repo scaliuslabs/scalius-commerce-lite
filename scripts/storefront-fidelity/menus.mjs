@@ -17,9 +17,6 @@ export const MENUS = Object.freeze({ "20": "menu_fid_20", "150": "menu_fid_150",
 export const REFERENCE_MENUS = Object.freeze({ fashion: "menu_fid_fashion", pantry: "menu_fid_pantry" });
 export const TEMPLATE_MENUS = Object.freeze({
   boutique: REFERENCE_MENUS.fashion,
-  "heritage-editorial": REFERENCE_MENUS.fashion,
-  "fashion-value": REFERENCE_MENUS.fashion,
-  "mass-retail": REFERENCE_MENUS.pantry,
   "daily-essentials": REFERENCE_MENUS.pantry,
 });
 

@@ -25,19 +25,12 @@
     "headerAnchors": 150,
     "buyBoxTopPx": 400,
     "hoverVisibleMs": 150,
-    "cardVariantMinDiffPct": 25,
-    "cardVariantMinTreatments": 3,
     "cardPhotoMaxRatio": 1.2,
     "cardPhoneTitleMinPx": 14
   },
   "templates": {
     "boutique": { "largeCatalogue": false, "refs": { "header": "dawn", "card": "dawn", "listing": "dawn", "pdp": "dawn", "footer": "dawn" } },
-    "heritage-editorial": { "largeCatalogue": false, "refs": { "header": "aarong", "card": "aarong", "listing": "aarong", "pdp": "aarong", "footer": "aarong" } },
-    "fashion-value": { "largeCatalogue": false, "refs": { "header": "fabrilife", "card": "fabrilife", "listing": "fabrilife", "pdp": "fabrilife", "footer": "fabrilife" } },
-    "spec-catalogue": { "largeCatalogue": true, "refs": { "header": "startech", "card": "startech", "listing": "startech", "pdp": "startech", "footer": "startech" } },
-    "rounded-tech": { "largeCatalogue": true, "refs": { "header": "applegadgets", "card": "applegadgets", "listing": "applegadgets", "pdp": "applegadgets", "footer": "applegadgets" } },
     "marketplace": { "largeCatalogue": true, "refs": { "header": "amazon", "card": "amazon", "listing": "amazon", "pdp": "amazon", "footer": "amazon" } },
-    "mass-retail": { "largeCatalogue": true, "refs": { "header": "target", "card": "target-pickaboo-card", "listing": "target", "pdp": "target", "footer": "target" }, "visualRefs": { "home": { "desktop": "walmart", "phone": "daraz" }, "plp": "pickaboo", "pdp": "pickaboo" } },
     "department-mall": { "largeCatalogue": true, "refs": { "header": "gameghor", "card": "gameghor", "listing": "amazon_uk", "pdp": "gameghor", "footer": "gameghor" }, "visualRefs": { "plp": "gameghor" } },
     "daily-essentials": { "largeCatalogue": false, "refs": { "header": "ghorerbazar", "card": "ghorerbazar", "listing": "ghorerbazar", "pdp": "ghorerbazar", "footer": "ghorerbazar" }, "visualRefs": { "home": "chaldal", "plp": "omneemart", "pdp": "omneemart" } },
     "showcase-landing": { "largeCatalogue": false, "refs": { "header": "landing-bd", "card": "landing-bd", "listing": "landing-bd", "pdp": "landing-bd", "footer": "landing-bd" }, "visualRefs": { "plp": "graza" } }

@@ -33,8 +33,9 @@ describe("theme setting labels", () => {
   it("reads the most specific label first, then the shared one", () => {
     expect(settingLabelKey(["s.category-tiles"], "title")).toBe("s.category-tiles.title");
     expect(settingLabelKey(["s.product-rail"], "title")).toBe("f.title");
-    expect(settingLabelKey(["b.card.boutique", "b.card"], "quickAction")).toBe("b.card.boutique.quickAction");
-    expect(settingLabelKey(["b.card.quick-add", "b.card"], "showBuyNow")).toBe("b.card.showBuyNow");
+    expect(settingLabelKey(["b.card.standard", "b.card"], "facts")).toBe("b.card.facts");
+    expect(settingLabelKey(["b.card.standard", "b.card"], "action", "quick-add")).toBe("b.card.action.quick-add");
+    expect(settingLabelKey(["b.buyBox.fashion", "b.buyBox"], "showBuyNow")).toBe("b.buyBox.showBuyNow");
     expect(settingLabelKey(["s.product-tabs"], "tabs.source.kind", "on-sale")).toBe("f.source.kind.on-sale");
     expect(settingLabelKey(["s.hero"], "nothing.here")).toBeNull();
   });

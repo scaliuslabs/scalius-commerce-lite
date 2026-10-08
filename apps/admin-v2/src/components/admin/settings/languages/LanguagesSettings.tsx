@@ -32,7 +32,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useHasPermission } from "~/contexts/PermissionContext";
-import { formatNumber, useLocale, useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { translationsMessages } from "~/i18n/translations";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -126,7 +126,7 @@ export function LanguagesSettings() {
                     ) : <span className="text-muted-foreground">{t("noWebAddress")}</span>}
                   </TableCell>
                   <TableCell data-numeric="">
-                    {language.isDefault ? "—" : t("translatedCount", { count: formatNumber(language.translatedResources) })}
+                    {language.isDefault ? "—" : t("translatedCount", { count: language.translatedResources })}
                   </TableCell>
                   <TableCell className="text-end">
                     <span className="flex items-center justify-end gap-1">

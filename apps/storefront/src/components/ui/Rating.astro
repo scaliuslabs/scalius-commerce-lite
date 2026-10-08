@@ -1,0 +1,73 @@
+---
+// The one rating (README.md): amber stars, the average and the count in
+// brackets ("★★★★½ 4.6 (212)"). The visible parts are hidden from screen
+// readers, which hear it in full ("Rated 4.6 out of 5 from 212 reviews").
+// Nothing renders without a review: never "(0)".
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import { formatCount } from "@/lib/store-time-zone";
+
+interface Props {
+  /** The average, 0-5. */
+  average: number;
+  /** Published reviews. */
+  count: number;
+  /** `sm` on cards (14px stars), `md` on the product page (18px). */
+  size?: "sm" | "md";
+  as?: "p" | "div" | "span";
+  class?: string;
+}
+
+const { average, count, size = "sm", as: Tag = "p", class: className } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).rating;
+const reviews = Math.max(0, Math.floor(count));
+const rounded = Math.round(Math.min(Math.max(average, 0), 5) * 10) / 10;
+const shown = rounded.toFixed(1);
+const counted = formatCount(reviews);
+// The stars' filled share, in tenths of a star.
+const fill = `${Math.round((rounded / 5) * 1000) / 10}%`;
+---
+
+{reviews > 0 && rounded > 0 && (
+  <Tag class:list={["sf-rating", className]} data-size={size}>
+    <span class="sc-stars sf-rating-stars" style={`--sc-fill:${fill}`} aria-hidden="true"></span>
+    <span class="sf-rating-average" aria-hidden="true">{shown}</span>
+    <span class="sf-rating-count" aria-hidden="true">({counted})</span>
+    <span class="sr-only">{copy.summary(shown, counted, reviews)}</span>
+  </Tag>
+)}
+
+<style is:global>
+  .site-root .sf-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+    color: var(--foreground);
+    font-size: var(--theme-text-xs, 0.75rem);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .site-root .sf-rating-stars {
+    --sc-star: 0.875rem;
+  }
+
+  .site-root .sf-rating-average {
+    font-weight: 600;
+  }
+
+  .site-root .sf-rating-count {
+    color: var(--muted-foreground);
+  }
+
+  .site-root .sf-rating[data-size="md"] {
+    gap: 0.375rem;
+    font-size: var(--theme-text-sm, 0.875rem);
+  }
+
+  .site-root .sf-rating[data-size="md"] .sf-rating-stars {
+    --sc-star: 1.125rem;
+  }
+</style>

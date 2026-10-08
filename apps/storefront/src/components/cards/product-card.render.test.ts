@@ -1,13 +1,14 @@
 // @vitest-environment node
 /**
- * The card matrix, render-only: every card variant x density x image ratio
- * x image fit renders the real ProductCard (Astro container API through a
- * Vite dev server in middleware mode) for products that exercise each
- * anatomy: on sale, with options, sold out, without a photo, a long Bangla
- * title, every optional fact, and facts at zero. Layout on real viewports
- * needs a browser; this checks the markup each anatomy promises.
+ * The one product card, render-only: every facts x action setting renders
+ * the real ProductCard (Astro container API through a Vite dev server in
+ * middleware mode) for products that exercise each part: on sale, with
+ * options, sold out, without a photo, a long Bangla title, every optional
+ * fact, and facts at zero. Layout on real viewports needs a browser; this
+ * checks the markup the card promises: which parts exist and when, one
+ * discount mark, the words a screen reader hears, both languages, heading
+ * levels and the structure that keeps cards in a row equally tall.
  */
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
@@ -15,26 +16,24 @@ import type { ViteDevServer } from "vite";
 import {
   DEFAULT_STOREFRONT_THEME,
   EMPTY_STORE_SHAPE,
+  STOREFRONT_CARD_ACTIONS,
+  STOREFRONT_CARD_FACTS,
   STOREFRONT_DENSITIES,
   STOREFRONT_IMAGE_FITS,
   STOREFRONT_IMAGE_RATIOS,
-  storefrontBlockDefault,
+  STOREFRONT_THEME_SURFACES,
+  buildStorefrontThemeTokens,
   storefrontBlockVariants,
   storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
-  type StorefrontCardRenderer,
+  type StorefrontCardAction,
+  type StorefrontCardFacts,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
-import {
-  CARD_ICONS,
-  CARD_IMAGE_DIMENSIONS,
-  CARD_PHOTO_MAX_PX,
-  KEY_SPECS_MAX,
-  cardIconIds,
-  cardLookTokens,
-  cardPageAttributes,
-} from "./card-model";
+import { productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
+import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { CARD_IMAGE_DIMENSIONS, KEY_SPECS_MAX } from "./card-model";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -167,9 +166,15 @@ const PRODUCTS = {
 type Fixture = keyof typeof PRODUCTS;
 const FIXTURES = Object.keys(PRODUCTS) as Fixture[];
 
-function themeWith(card: string, tokens: Partial<StorefrontThemeDocument["tokens"]>): StorefrontThemeDocument {
+type CardSettings = { facts?: StorefrontCardFacts; action?: StorefrontCardAction; hoverImage?: boolean };
+
+/** The department mall preset with these card settings and token overrides. */
+function themeWith(card: CardSettings, tokens: Partial<StorefrontThemeDocument["tokens"]> = {}): StorefrontThemeDocument {
   const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
-  theme.blocks.card = storefrontBlockDefault("card", card) as never;
+  theme.blocks.card = {
+    variant: "standard",
+    settings: { facts: "none", action: "none", hoverImage: false, ...card },
+  } as never;
   theme.tokens = { ...theme.tokens, ...tokens };
   return storefrontThemeDocumentSchema.parse(theme);
 }
@@ -181,8 +186,9 @@ async function renderCards(
   theme: StorefrontThemeDocument,
   props: object = {},
   shape = REVIEWED_STORE,
+  languageCode?: string,
 ): Promise<Record<Fixture, Element>> {
-  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape)) };
+  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape, { languageCode })) };
   const html = await Promise.all(
     FIXTURES.map((fixture, index) =>
       container.renderToString(ProductCard, {
@@ -196,112 +202,150 @@ async function renderCards(
   return Object.fromEntries(FIXTURES.map((fixture, index) => [fixture, cards[index]!])) as Record<Fixture, Element>;
 }
 
-const CARD_VARIANTS = storefrontBlockVariants("card");
-/**
- * Bytes of one card with every fact on a sidebar listing (the cards repeat
- * 20-40 times per listing: the look, flags, icons and shared utilities live
- * once per page, so a card carries only its own content).
- */
-const CARD_HTML_BUDGET: Record<string, number> = {
-  boutique: 2300, showcase: 2300, portrait: 1900, "fashion-value": 2500, spec: 2850, "tech-rounded": 2200,
-  retail: 2900, marketplace: 2400, "quick-add": 2450, mall: 1550, detailed: 3300,
-};
-const MATRIX = CARD_VARIANTS.flatMap((card) =>
-  STOREFRONT_DENSITIES.flatMap((density) =>
-    STOREFRONT_IMAGE_RATIOS.flatMap((imageRatio) =>
-      STOREFRONT_IMAGE_FITS.map((imageFit) => ({ card, density, imageRatio, imageFit })))));
-
-const DISCOUNT_WORDING: Record<StorefrontCardRenderer["discount"], string> = {
-  percent: "-20%",
-  sale: "Sale",
-  save: "Save ৳240",
-  off: "৳240 OFF",
-};
-
-/**
- * The buyer-visible treatments of one rendered card (the structural half of
- * the fidelity bar; the harness measures the same traits in a browser): the
- * photo box, the tile, the price's place, size and colour, the struck
- * price, the discount mark, the rating, the facts, the title, the button and
- * Compare.
- */
-function cardTraits(card: Element, anatomy: ReturnType<typeof requestThemeFor>["layout"]["productCard"]): Record<string, string> {
-  // The card's look lives in the page's token block (cardLookTokens), shared by every card.
-  const look = Object.fromEntries(cardLookTokens(card.getAttribute("data-card-variant") ?? "standard", anatomy));
-  const cssVar = (name: string) => look[name] ?? "theme";
-  const body = card.querySelector(".product-card-body")!;
-  const order = Array.from(body.children).map((child) =>
-    child.querySelector(".product-card-link") ? "title" : child.querySelector("s, .pc-price-reg, .product-card-price") || child.matches("[data-card-price]") ? "price" : null)
-    .filter(Boolean);
-  const price = card.querySelector(".product-card-price") ?? body.querySelector("[data-card-price] > span:last-child")!;
-  const regular = card.querySelector(".pc-price-regular, s")!;
-  const strikeAt = regular.compareDocumentPosition(price) & 4 ? "before" : "after";
-  const marks = Array.from(card.querySelectorAll("[data-card-discount]")).map((mark) =>
-    `${mark.closest(".product-card-media") ? "photo" : "price"}:${text(mark)}:${Array.from(mark.classList).filter((name) => /^pc-(badge|discount)-/.test(name)).join("+")}`);
-  const rating = card.querySelector('[data-card-fact="rating"]');
-  const action = card.querySelector("a.product-card-action[href], a.product-card-round-action[href]");
-  return {
-    // The standard card follows the template's tokens in the same units.
-    ratio: String(anatomy.look.image.ratio),
-    fit: `${anatomy.look.image.fit}/${cssVar("pc-inset") === "theme" ? "0%" : cssVar("pc-inset")}`,
-    surface: `${anatomy.look.surface}/${anatomy.look.radius}`,
-    pricePlace: order.indexOf("price") < order.indexOf("title") ? "before-title" : "after-title",
-    priceSize: String(anatomy.look.price?.size.desktop ?? 18),
-    priceColour: price.classList.contains("pc-price-super") ? "superscript" : ["text-primary", "text-destructive", "text-foreground"].find((name) => price.classList.contains(name)) ?? "?",
-    strike: `${strikeAt}:${text(regular).replace(/[\d৳,.\s]/g, "").replace("Regularprice", "")}${regular.querySelector("s") || regular.tagName === "S" ? ":struck" : ""}`,
-    discount: marks.sort().join("|"),
-    rating: rating ? (rating.classList.contains("pc-rating-stars") ? "stars" : "score") : "none",
-    facts: Array.from(card.querySelectorAll("[data-card-fact]")).map((node) => node.getAttribute("data-card-fact")).sort().join(","),
-    title: `${card.querySelector(".product-card-link")!.parentElement!.className.match(/line-clamp-\d/)![0]}/${anatomy.look.title?.weight ?? 500}/${anatomy.look.title?.size.desktop ?? 15}`,
-    button: action ? `${anatomy.action}:${text(action).split(":")[0]}` : "none",
-    compare: card.querySelector("[data-compare-toggle]") ? "compare" : "none",
-  };
+async function renderOne(theme: StorefrontThemeDocument, productOverrides: object, props: object = {}, shape = REVIEWED_STORE, languageCode?: string) {
+  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape, { languageCode })) };
+  const html = await container.renderToString(ProductCard, {
+    props: { product: { ...PRODUCTS.onSale, ...productOverrides }, currencySymbol: "৳", currencyCode: "BDT", ...props },
+    locals,
+    request: new Request("https://shop.test/"),
+  });
+  return parse(html).querySelector('[data-theme-component="product-card"]')!;
 }
 
-// ─── The matrix ───────────────────────────────────────────────────────────
+const fact = (card: Element, name: string) => card.querySelector(`[data-card-fact="${name}"]`);
+const factNames = (card: Element) => Array.from(card.querySelectorAll("[data-card-fact]")).map((node) => node.getAttribute("data-card-fact"));
+/** The decorative action hint (the title link covers the card). */
+const hint = (card: Element) => card.querySelector("[data-card-action-hint]");
+const quickAdd = (card: Element) => card.querySelector("a[data-card-quick-add]");
 
-describe("product card matrix", () => {
-  it("covers every card variant with every density, image ratio and fit", () => {
-    expect(MATRIX).toHaveLength(CARD_VARIANTS.length * STOREFRONT_DENSITIES.length * STOREFRONT_IMAGE_RATIOS.length * STOREFRONT_IMAGE_FITS.length);
-    expect(CARD_VARIANTS).toEqual(["standard", "boutique", "showcase", "portrait", "fashion-value", "spec", "tech-rounded", "retail", "marketplace", "quick-add", "mall", "detailed"]);
+const COMBINATIONS = STOREFRONT_CARD_FACTS.flatMap((facts) => STOREFRONT_CARD_ACTIONS.map((action) => ({ facts, action })));
+
+describe("the one product card", () => {
+  it("is the only card variant", () => {
+    expect(storefrontBlockVariants("card")).toEqual(["standard"]);
+    expect(COMBINATIONS).toHaveLength(12);
   });
 
-  it("renders the merchant's compact retail action above the price in the card layout", async () => {
-    const theme = themeWith("retail", {});
-    if (theme.blocks.card.variant !== "retail") throw new Error("Expected retail card");
-    theme.blocks.card.settings.quickAction = true;
-    const cards = await renderCards(theme);
-    const sale = cards.onSale;
-    // A store-wide flag: the page's body carries it (Layout.astro), not every card.
-    expect(cardPageAttributes("retail", requestThemeFor(theme).layout.productCard)).toHaveProperty("data-card-quick-retail", "");
-    expect(sale.hasAttribute("data-card-quick-retail")).toBe(false);
-    expect(sale.querySelector(".product-card-price-row")?.nextElementSibling?.classList.contains("product-card-name")).toBe(true);
-    expect(text(sale.querySelector(".product-card-action"))).toBe("+Add: Product sale");
-    expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
-    expect(sale.querySelector("a[data-card-quick-add]")?.getAttribute("data-card-quick-add")).toBe("");
-    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Options");
-    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
-    const ineligible = (await renderCards(theme, { product: { ...PRODUCTS.onSale, quickAddEligible: false } })).onSale;
-    expect(ineligible.querySelector("[data-card-quick-add]")).toBeNull();
-    expect(ineligible.querySelector(".product-card-link")?.getAttribute("href")).toBe("/products/product-sale");
+  it.each(COMBINATIONS)("facts $facts / action $action: renders each part only when its data exists", async ({ facts, action }) => {
+    const cards = await renderCards(themeWith({ facts, action }));
+
+    for (const fixture of FIXTURES) {
+      const card = cards[fixture];
+      const at = `${facts}/${action}/${fixture}`;
+      // One card, one design: no per-site variant attribute, the settings are the only switches.
+      expect(card.hasAttribute("data-card-variant"), at).toBe(false);
+      expect(card.getAttribute("data-action"), at).toBe(action);
+      expect(card.classList.contains("product-card"), at).toBe(true);
+      // The title is the card's one link, and it is a heading.
+      const links = Array.from(card.querySelectorAll("a")).filter((link) => link.classList.contains("product-card-link"));
+      expect(links.map((link) => link.getAttribute("href")), at).toEqual([`/products/${PRODUCTS[fixture].slug}`]);
+      expect(card.querySelector(".product-card-name")!.tagName, at).toBe("H3");
+      expect(card.querySelector(".product-card-name > a.product-card-link"), at).not.toBeNull();
+      // Equal heights: the price (and the action) sit in the foot, the body's last child.
+      const body = card.querySelector(".product-card-body")!;
+      const foot = body.lastElementChild!;
+      expect(foot.classList.contains("product-card-foot"), at).toBe(true);
+      expect(foot.querySelector(".sf-price"), at).not.toBeNull();
+      expect(card.querySelectorAll(".product-card-foot"), at).toHaveLength(1);
+      // No fake zero states, whatever the settings.
+      expect(text(card), at).not.toMatch(/\(0\)|\b0 reviews\b|EMI|\b\d+ sold\b|bought/i);
+    }
+
+    // The facts setting picks one fact; the others never render. Pack size
+    // and condition are details under every setting.
+    const all = cards.allFacts;
+    expect(fact(all, "key-specs") !== null).toBe(facts === "key-specs");
+    expect(fact(all, "swatches") !== null).toBe(facts === "swatches");
+    expect(fact(all, "delivery") !== null).toBe(facts === "delivery");
+    expect(text(fact(all, "details"))).toBe("400 gm");
+    if (facts === "key-specs") {
+      const specs = Array.from(fact(all, "key-specs")!.querySelectorAll("li")).map((item) => text(item));
+      expect(specs).toEqual(["Processor: Intel Core i5-1335U", "RAM: 8GB DDR4", "Display: 15.6\" FHD IPS"]);
+      expect(specs).toHaveLength(KEY_SPECS_MAX);
+    }
+    if (facts === "swatches") {
+      // "Midnight" has no known colour and is left out; the third colour counts in "+1".
+      const swatches = fact(all, "swatches")!;
+      expect(swatches.querySelectorAll(".product-card-swatch")).toHaveLength(2);
+      expect(text(swatches.querySelector(".product-card-swatch-more"))).toBe("+1");
+      expect(text(swatches.querySelector(".sr-only"))).toBe("Colours: Navy, Light Blue, 1 more colour");
+      expect(swatches.querySelector(".product-card-swatch")!.getAttribute("aria-hidden")).toBe("true");
+    }
+    if (facts === "delivery") expect(text(fact(all, "delivery"))).toBe("Free delivery");
+
+    // Facts with no data render nothing, even when selected.
+    for (const fixture of ["zeroFacts", "withOptions", "onSale", "soldOut", "noPhoto"] as const) {
+      expect(fact(cards[fixture], "key-specs"), fixture).toBeNull();
+      expect(fact(cards[fixture], "swatches"), fixture).toBeNull();
+      expect(fact(cards[fixture], "details"), fixture).toBeNull();
+      expect(fact(cards[fixture], "delivery"), fixture).toBeNull();
+    }
+    expect(factNames(cards.zeroFacts)).toEqual([]);
+    // The Bangla fixture ships free: only the delivery setting shows it.
+    expect(fact(cards.bangla, "delivery") !== null).toBe(facts === "delivery");
+
+    // The action: none leaves the card one link; quick-add is a round control
+    // on the photo; full is a button in the foot.
+    const quick = (card: Element) => card.querySelector(".product-card-media .product-card-quick");
+    const full = (card: Element) => card.querySelector(".product-card-foot .product-card-action");
+    if (action === "none") {
+      for (const fixture of FIXTURES) {
+        expect(cards[fixture].querySelector(".product-card-quick, .product-card-action, [data-card-quick-add], [data-card-action-hint]"), fixture).toBeNull();
+        expect(cards[fixture].querySelectorAll("a"), fixture).toHaveLength(1);
+      }
+    }
+    if (action === "quick-add") {
+      for (const fixture of ["onSale", "noPhoto", "bangla", "allFacts", "zeroFacts"] as const) {
+        const add = quick(cards[fixture])!;
+        expect(add.tagName, fixture).toBe("A");
+        expect(add.getAttribute("href"), fixture).toBe(`/products/${PRODUCTS[fixture].slug}`);
+        expect(add.hasAttribute("data-card-quick-add"), fixture).toBe(true);
+        expect(add.getAttribute("rel"), fixture).toBe("nofollow");
+        // The name a screen reader hears says what it adds.
+        expect(text(add), fixture).toBe(`Add to cart: ${PRODUCTS[fixture].name}`);
+        expect(add.querySelector("svg")!.getAttribute("aria-hidden"), fixture).toBe("true");
+        expect(hint(cards[fixture]), fixture).toBeNull();
+      }
+      // Options are chosen on the product page: a decorative hint under the card link.
+      const choose = hint(cards.withOptions)!;
+      expect(choose.tagName).toBe("SPAN");
+      expect(choose.getAttribute("aria-hidden")).toBe("true");
+      expect(choose.classList.contains("product-card-quick")).toBe(true);
+      expect(quickAdd(cards.withOptions)).toBeNull();
+      // Sold out: nothing to add and no hint.
+      expect(card_has_no_action(cards.soldOut)).toBe(true);
+      expect(full(cards.onSale)).toBeNull();
+    }
+    if (action === "full") {
+      for (const fixture of ["onSale", "noPhoto", "bangla", "allFacts", "zeroFacts"] as const) {
+        const add = full(cards[fixture])!;
+        expect(add.tagName, fixture).toBe("A");
+        expect(add.classList.contains("sf-button"), fixture).toBe(true);
+        expect(add.getAttribute("href"), fixture).toBe(`/products/${PRODUCTS[fixture].slug}`);
+        expect(add.hasAttribute("data-card-quick-add"), fixture).toBe(true);
+        expect(text(add), fixture).toBe(`Add to cart: ${PRODUCTS[fixture].name}`);
+        expect(add.querySelector(".sr-only")!.textContent, fixture).toBe(`: ${PRODUCTS[fixture].name}`);
+        expect(hint(cards[fixture]), fixture).toBeNull();
+      }
+      // Options and sold out: the full action is a decorative span (the title link is the control).
+      const options = hint(cards.withOptions)!;
+      expect(options.tagName).toBe("SPAN");
+      expect(options.getAttribute("aria-hidden")).toBe("true");
+      expect(options.classList.contains("sf-button")).toBe(true);
+      expect(text(options)).toBe("Choose options");
+      expect(options.closest(".product-card-foot")).not.toBeNull();
+      expect(quickAdd(cards.withOptions)).toBeNull();
+      const sold = hint(cards.soldOut)!;
+      expect(sold.getAttribute("aria-hidden")).toBe("true");
+      expect(text(sold)).toBe("View product");
+      expect(quickAdd(cards.soldOut)).toBeNull();
+      // Never two actions on one card.
+      for (const fixture of FIXTURES) expect(cards[fixture].querySelectorAll(".product-card-foot .product-card-action"), fixture).toHaveLength(1);
+      expect(cards.onSale.querySelector(".product-card-media .product-card-quick")).toBeNull();
+    }
   });
 
-  it("gives showcase cards an exact-price Add only when the projection proves quick add", async () => {
-    const cards = await renderCards(storefrontTemplateTheme("showcase-landing"));
-    expect(cards.onSale.querySelector("a[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
-    expect(text(cards.onSale.querySelector(".product-card-action"))).toBe("Add – ৳960: Product sale");
-    expect(text(cards.onSale.querySelector(".product-card-price-row"))).toContain("৳1,200");
-    expect(cards.noPhoto.querySelector(".product-card-price-row")).toBeNull();
-    expect(text(cards.noPhoto.querySelector(".product-card-action"))).toBe("Add – ৳1,200: Product nophoto");
-    expect(text(cards.onSale.querySelector("[data-card-fact='pack-size']"))).toBe("");
-    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
-    expect(text(cards.withOptions.querySelector(".product-card-link"))).toContain("Choose options");
-    expect(cards.withOptions.querySelector("a[data-card-quick-add]")).toBeNull();
-    expect(cards.soldOut.querySelector(".product-card-action")).toBeNull();
-    expect((await renderCards(themeWith("boutique", {}))).onSale.querySelector(".product-card-action")).toBeNull();
-    expect(text(cards.allFacts.querySelector("[data-card-fact='pack-size']"))).toBe("400 gm");
-    expect(text(cards.bangla.querySelector(".product-card-link"))).toContain(BANGLA_TITLE);
-
+  it("sends a simple product that cannot be added from a card to its page, not to the cart", async () => {
     for (const blocked of [
       { quickAddEligible: false },
       { quickAddEligible: undefined },
@@ -309,435 +353,275 @@ describe("product card matrix", () => {
       { requiresCustomization: true },
       { customizationUnavailable: true },
       { discountedPrice: 0 },
+      { isGiftCard: true },
     ]) {
-      const fallback = (await renderCards(storefrontTemplateTheme("showcase-landing"), {
-        product: { ...PRODUCTS.onSale, ...blocked },
-      })).onSale;
-      expect(fallback.querySelector("a[data-card-quick-add]"), JSON.stringify(blocked)).toBeNull();
-      expect(fallback.querySelector("a.product-card-action")?.getAttribute("href")).toBe("/products/product-sale");
-      expect(text(fallback.querySelector(".product-card-action"))).toBe("View product: Product sale");
-      expect(fallback.querySelectorAll(".product-card-action")).toHaveLength(1);
+      const label = JSON.stringify(blocked);
+      const full = await renderOne(themeWith({ action: "full" }), blocked);
+      expect(quickAdd(full), label).toBeNull();
+      expect(full.querySelector("a.product-card-action"), label).toBeNull();
+      expect(text(hint(full)), label).toBe("View product");
+      expect(hint(full)!.getAttribute("aria-hidden"), label).toBe("true");
+      const quick = await renderOne(themeWith({ action: "quick-add" }), blocked);
+      expect(card_has_no_action(quick), label).toBe(true);
     }
+    // A product with options asks for a choice.
+    const options = await renderOne(themeWith({ action: "full" }), { hasVariants: true, quickAddEligible: false });
+    expect(text(hint(options))).toBe("Choose options");
+    // Sold out wins over options.
+    const soldOptions = await renderOne(themeWith({ action: "full" }), { hasVariants: true, availableForSale: false });
+    expect(text(hint(soldOptions))).toBe("View product");
+    expect(card_has_no_action(await renderOne(themeWith({ action: "quick-add" }), { hasVariants: true, availableForSale: false }))).toBe(true);
   });
 
-  it("shows a product-page action when an available simple product cannot be added from a card", async () => {
-    const personalized = { ...PRODUCTS.onSale, quickAddEligible: false, requiresCustomization: true };
-    for (const variant of ["fashion-value", "spec", "tech-rounded", "retail", "quick-add", "detailed"]) {
-      const card = (await renderCards(themeWith(variant, {}), { product: personalized })).onSale;
-      const hint = card.querySelector("[data-card-action-hint]")!;
-      expect(hint, variant).not.toBeNull();
-      expect(hint.getAttribute("aria-hidden")).toBe("true");
-      expect(card.querySelector("[data-card-quick-add], a[href^='/buy/']"), variant).toBeNull();
-      expect(card.querySelector(".product-card-link")?.getAttribute("href")).toBe("/products/product-sale");
-      if (variant === "quick-add") expect(hint.querySelector("use")?.getAttribute("href")).toBe("#pci-arrow");
-      else expect(text(hint)).toBe("View product");
-    }
-
-    const boutique = themeWith("boutique", {});
-    if (boutique.blocks.card.variant !== "boutique") throw new Error("Expected boutique card");
-    boutique.blocks.card.settings.quickAction = true;
-    expect(text((await renderCards(boutique, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
-    expect((await renderCards(themeWith("boutique", {}), { product: personalized })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
-    expect((await renderCards(themeWith("standard", {}), { product: personalized })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
-    const retail = themeWith("retail", {});
-    if (retail.blocks.card.variant !== "retail") throw new Error("Expected retail card");
-    retail.blocks.card.settings.quickAction = true;
-    expect(text((await renderCards(retail, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
-    const essentials = themeWith("quick-add", {});
-    if (essentials.blocks.card.variant !== "quick-add") throw new Error("Expected essentials card");
-    essentials.blocks.card.settings.fullAction = true;
-    expect(text((await renderCards(essentials, { product: personalized })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
-    expect(text((await renderCards(themeWith("detailed", {}), {
-      product: { ...PRODUCTS.onSale, quickAddEligible: false },
-    })).onSale.querySelector("[data-card-action-hint]"))).toBe("View product");
-    expect((await renderCards(themeWith("quick-add", {}), { product: { ...personalized, availableForSale: false } })).onSale.querySelector("[data-card-action-hint]")).toBeNull();
-  });
-
-  it("keeps sparse retail cards compact and shows the real review score", async () => {
-    const cards = await renderCards(themeWith("retail", {}));
-    expect(cards.zeroFacts.querySelector("[data-card-fact]")).toBeNull();
-    expect(cards.zeroFacts.querySelector(".product-card-action")?.classList.contains("product-card-push")).toBe(false);
-    expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
-    expect(text(cards.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("★ 4.6 (128)");
-  });
-
-  it("renders pantry cards with full purchase actions and only available facts", async () => {
-    const theme = themeWith("quick-add", {});
-    if (theme.blocks.card.variant !== "quick-add") throw new Error("Expected essentials card");
-    theme.blocks.card.settings.fullAction = true;
-    const cards = await renderCards(theme);
-    const sale = cards.onSale;
-    expect(cardPageAttributes("quick-add", requestThemeFor(theme).layout.productCard)).toHaveProperty("data-card-full-essentials", "");
-    expect(sale.querySelector(".product-card-name")?.nextElementSibling?.classList.contains("product-card-price-row")).toBe(true);
-    expect(text(sale.querySelector(".product-card-action"))).toBe("Add to cart: Product sale");
-    expect(sale.querySelector(".product-card-action")?.classList.contains("pc-action-outline")).toBe(true);
-    expect(sale.querySelector(".product-card-round-action")).toBeNull();
-    expect(cards.allFacts.querySelector("[data-card-fact='pack-size'], [data-card-fact='delivery']")).toBeNull();
-    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
-    const compact = await renderCards(themeWith("quick-add", {}));
-    expect(cardPageAttributes("quick-add", requestThemeFor(themeWith("quick-add", {})).layout.productCard)).not.toHaveProperty("data-card-full-essentials");
-    expect(compact.onSale.hasAttribute("data-card-full-essentials")).toBe(false);
-    expect(compact.onSale.querySelector(".product-card-round-action")).not.toBeNull();
-    expect(compact.onSale.querySelector("[data-card-quick-add]")?.getAttribute("href")).toBe("/products/product-sale");
-    expect(compact.onSale.querySelector(".pc-buy-now")).toBeNull();
-    theme.blocks.card.settings.showBuyNow = true;
-    const withBuyNow = await renderCards(theme);
-    expect(withBuyNow.onSale.querySelector(".pc-buy-now")?.getAttribute("href")).toBe("/buy/product-sale");
-    expect(withBuyNow.withOptions.querySelector(".pc-buy-now")).toBeNull();
-  });
-
-  it.each(MATRIX)("$card / $density / $imageRatio / $imageFit", async ({ card, density, imageRatio, imageFit }) => {
-    const theme = themeWith(card, { density, imageRatio, imageFit });
-    const anatomy = requestThemeFor(theme).layout.productCard;
-    const cards = await renderCards(theme);
-    // The standard card follows the theme's ratio token; every other card its own look.
-    const ownRatio = card === "standard" ? imageRatio : anatomy.imageRatio;
-    const { width, height } = card === "standard"
-      ? CARD_IMAGE_DIMENSIONS[imageRatio]
-      : { width: 400, height: Math.round(400 / anatomy.look.image.ratio) };
-
-    // The card's own look is the page's token block (Layout.astro), never a per-card style.
-    const look = Object.fromEntries(cardLookTokens(card, anatomy));
-    if (card !== "standard") expect(look["pc-ratio"]).toBe(String(anatomy.look.image.ratio));
-    for (const fixture of FIXTURES) {
-      const element = cards[fixture];
-      expect(element.getAttribute("data-card-variant")).toBe(card);
-      if (card === "standard") expect(element.getAttribute("data-card-ratio")).toBe(ownRatio);
-      else {
-        expect(element.hasAttribute("data-card-ratio")).toBe(false);
-        expect(element.getAttribute("style") ?? "").not.toContain("--pc-");
-      }
-      // The photo box is always there; its ratio is the token (CSS), so a
-      // missing photo keeps the same box: the placeholder, never a gap.
-      const media = element.querySelector(":scope > .product-card-media")!;
-      expect(media).not.toBeNull();
-      const photo = media.querySelector(":scope > img.product-card-photo");
-      const placeholder = media.querySelector("[data-card-placeholder]");
-      const hasPhoto = Boolean(PRODUCTS[fixture].imageUrl) && fixture !== "original";
-      expect(Boolean(photo)).toBe(hasPhoto);
-      expect(Boolean(placeholder)).toBe(!hasPhoto);
-      if (photo) {
-        expect(photo.getAttribute("width")).toBe(String(width));
-        expect(photo.getAttribute("height")).toBe(String(height));
-        expect(photo.getAttribute("alt")).toBe(PRODUCTS[fixture].name);
-      } else {
-        expect(placeholder!.getAttribute("aria-hidden")).toBe("true");
-        expect(media.hasAttribute("data-hover-src")).toBe(false);
-      }
-      // No hover photo is in the HTML: the box names it for the intent script.
-      expect(media.querySelector(".product-card-hover-image")).toBeNull();
-      // One stretched title link to the product plus at most the buy action (and Compare).
-      const links = Array.from(element.querySelectorAll("a"));
-      expect(links.filter((link) => link.classList.contains("product-card-link")).map((link) => link.getAttribute("href")))
-        .toEqual([`/products/${PRODUCTS[fixture].slug}`]);
-      expect(links.length).toBeLessThanOrEqual(anatomy.compare ? 3 : 2);
-      // Titles are clamped; the anatomy's titles also break long words.
-      const title = element.querySelector(".product-card-link")!.parentElement!;
-      expect(title.className).toMatch(/\bline-clamp-[123]\b/);
-      if (card !== "standard") expect(title.classList.contains("product-card-name")).toBe(true);
-    }
-
-    // No fake zero states: blank or zero facts render nothing.
-    expect(cards.zeroFacts.querySelector("[data-card-fact]")).toBeNull();
-    expect(text(cards.zeroFacts)).not.toMatch(/\b\d+ sold\b|\(0\)|★|EMI|Options|bought/);
-
-    // Hover photo only where the card shows one, and only with a primary photo.
-    const hoverBox = (element: Element) => element.querySelector(".product-card-media")!.getAttribute("data-hover-src");
-    expect(Boolean(hoverBox(cards.onSale))).toBe(anatomy.hoverImage);
-    if (anatomy.hoverImage) expect(hoverBox(cards.onSale)).toBe(image("sale-back"));
-    expect(hoverBox(cards.noPhoto)).toBeNull();
-
-    // The discount, worded and placed by the anatomy ("both": the wording on
-    // the photo and the percentage again after the struck price).
-    const imageDiscount = cards.onSale.querySelector(".product-card-media [data-card-discount]");
-    const priceDiscount = cards.onSale.querySelector(".product-card-price-row [data-card-discount]");
-    const wording = card === "standard" ? "-20%" : DISCOUNT_WORDING[anatomy.discount];
-    if (anatomy.badge === "both") {
-      expect(text(imageDiscount)).toBe(wording);
-      expect(text(priceDiscount)).toBe("-20%");
-    } else {
-      expect(text(anatomy.badge === "image" ? imageDiscount : priceDiscount)).toBe(wording);
-      expect(anatomy.badge === "image" ? priceDiscount : imageDiscount).toBeNull();
-    }
-    // No discount, no mark and no struck price anywhere.
-    expect(cards.withOptions.querySelector("[data-card-discount], s, .pc-price-reg")).toBeNull();
-    expect(cards.withOptions.querySelector(".product-card-badges")).toBeNull();
-    expect(text(cards.soldOut.querySelector(".product-card-media"))).toContain("Sold out");
-    // Amount wordings fall back to the percentage when the price varies by option.
-    expect(text(cards.soldOut)).toContain("Sold out");
-
-    if (card === "standard") return;
-
-    // Facts: every fact in the anatomy that has data, in the anatomy's order.
-    const expectedFacts = anatomy.body.filter((part) => part !== "title" && part !== "price");
-    expect(Array.from(cards.allFacts.querySelectorAll("[data-card-fact]")).map((node) => node.getAttribute("data-card-fact")))
-      .toEqual(expectedFacts);
-    const fact = (name: string) => text(cards.allFacts.querySelector(`[data-card-fact="${name}"]`));
-    if (expectedFacts.includes("key-specs")) {
-      expect(cards.allFacts.querySelectorAll('[data-card-fact="key-specs"] li')).toHaveLength(KEY_SPECS_MAX);
-      expect(text(cards.allFacts.querySelector('[data-card-fact="key-specs"] li'))).toBe("Processor: Intel Core i5-1335U");
-    }
-    if (expectedFacts.includes("rating")) expect(fact("rating")).toContain("4.6");
-    if (expectedFacts.includes("sold")) {
-      expect(fact("sold")).toBe(card === "detailed" ? "100+ bought in past month" : "129 sold in 30 days");
-    }
-    if (expectedFacts.includes("swatches")) {
-      // A swatch colour from the swatch attribute, or an exact CSS colour name; never a guess.
-      const swatches = Array.from(cards.allFacts.querySelectorAll(".pc-swatch"));
-      expect(swatches.map((swatch) => swatch.getAttribute("style"))).toEqual(["--swatch:#1f2a44", "--swatch:lightblue"]);
-    }
-    if (expectedFacts.includes("options")) expect(fact("options")).toBe("Options: 5 sizes");
-    if (expectedFacts.includes("savings")) expect(fact("savings")).toBe("Save ৳200");
-    if (expectedFacts.includes("emi")) expect(fact("emi")).toBe("EMI from ৳2,500/month");
-    if (expectedFacts.includes("delivery")) expect(fact("delivery")).toBe("Free delivery");
-    if (expectedFacts.includes("brand")) expect(fact("brand")).toBe("Walton");
-    if (expectedFacts.includes("pack-size")) expect(fact("pack-size")).toBe("400 gm");
-    // The body order: price before or after the title as measured.
-    const body = cards.allFacts.querySelector(".product-card-body")!;
-    const order = Array.from(body.children).map((child) =>
-      child.querySelector(".product-card-link") ? "title"
-        : child.classList.contains("product-card-price-row") ? "price"
-          : child.getAttribute("data-card-fact"));
-    expect(order.filter((part) => part !== null)).toEqual(anatomy.body);
-
-    // The buy action: in stock without options only, above the card link,
-    // named with its visible words first (WCAG 2.5.3).
-    const cartAction = card === "quick-add" || card === "retail" || card === "showcase";
-    const action = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
-    const label = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
-    for (const fixture of ["onSale", "noPhoto", "allFacts"] as const) {
-      expect(Boolean(action(cards[fixture])), fixture).toBe(anatomy.quickBuy);
-    }
-    expect(action(cards.withOptions)).toBeNull();
-    expect(action(cards.soldOut)).toBeNull();
-    if (anatomy.quickBuy) {
-      const buy = action(cards.onSale)!;
-      expect(buy.getAttribute("href")).toBe(cartAction ? "/products/product-sale" : "/buy/product-sale");
-      expect(buy.getAttribute("rel")).toBe("nofollow");
-      // Above the stretched card link: z-index 10 from the action's own rule (theme-cards.css).
-      expect(buy.className).toMatch(anatomy.action === "round" ? /\bproduct-card-round-action\b/ : /\bpc-act\b/);
-      expect(buy.hasAttribute("aria-label")).toBe(false);
-      expect(text(buy)).toBe(card === "showcase" ? "Add – ৳960: Product sale" : `${label}: Product sale`);
-      if (anatomy.action === "round") {
-        expect(buy.classList.contains("product-card-round-action")).toBe(true);
-        expect(buy.parentElement!.classList.contains("product-card-media")).toBe(true);
-      } else {
-        expect(buy.classList.contains("product-card-action")).toBe(true);
-        // Options are chosen on the product page (a hint under the card
-        // link, not a second tab stop); sold out has no ghost action.
-        const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
-        expect(hint.getAttribute("aria-hidden")).toBe("true");
-        // span.pc-act: pointer-events none (theme-cards.css), so taps reach the card link.
-        expect(hint.tagName).toBe("SPAN");
-        expect(hint.classList.contains("pc-act")).toBe(true);
-        expect(cards.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
-      }
-    } else {
-      expect(cards.withOptions.querySelector("[data-card-action-hint], [data-quick-buy-spacer]")).toBeNull();
-    }
-
-    // The price tone is a colour role: the action colour, the sale colour
-    // while discounted, or ink.
-    const priceClass = cards.onSale.querySelector(".product-card-price")!.classList;
-    const tone = anatomy.priceTone === "primary" ? "text-primary"
-      : anatomy.priceTone === "sale" || anatomy.priceTone === "sale-always" ? "text-destructive" : "text-foreground";
-    // (Amazon's superscript price is ink through its own class, theme-cards.css.)
-    expect(priceClass.contains(tone) || (tone === "text-foreground" && priceClass.contains("pc-price-super"))).toBe(true);
-    // Without a discount the sale colour stays for Star Tech's always-red price only.
-    const plainTone = cards.withOptions.querySelector(".product-card-price")!.classList;
-    expect(plainTone.contains("text-destructive")).toBe(anatomy.priceTone === "sale-always");
-    // The struck price as the reference words it.
-    const regular = cards.onSale.querySelector(".pc-price-regular")!;
-    expect(text(regular)).toContain("৳1,200");
-    expect(Boolean(regular.querySelector("s"))).toBe(anatomy.strike !== "reg");
-    if (anatomy.strike === "list") expect(text(regular)).toMatch(/^List:/);
-    if (anatomy.strike === "reg") expect(text(regular)).toMatch(/^reg /);
-    const current = cards.onSale.querySelector(".product-card-price")!;
-    const before = Boolean(regular.compareDocumentPosition(current) & 4);
-    expect(before).toBe(anatomy.strike === "before");
-    expect(cards.withOptions.querySelector(".product-card-price")!.textContent).toContain("From ৳1,200");
-
-    // Compare (Star Tech): a plain link to the comparison without JavaScript.
-    const compare = cards.onSale.querySelector("[data-compare-toggle]");
-    expect(Boolean(compare)).toBe(anatomy.compare);
-    if (compare) expect(compare.getAttribute("href")).toBe("/compare?ids=sale");
-  });
-
-  it("makes every two cards differ in at least three buyer-visible treatments on a product with every fact", async () => {
-    const all: Record<string, Record<string, string>> = {};
-    for (const card of CARD_VARIANTS) {
-      const theme = themeWith(card, {});
-      all[card] = cardTraits((await renderCards(theme)).allFacts, requestThemeFor(theme).layout.productCard);
-    }
-    const short: string[] = [];
-    for (let i = 0; i < CARD_VARIANTS.length; i += 1) {
-      for (let j = i + 1; j < CARD_VARIANTS.length; j += 1) {
-        const [a, b] = [CARD_VARIANTS[i]!, CARD_VARIANTS[j]!];
-        const differing = Object.keys(all[a]!).filter((trait) => all[a]![trait] !== all[b]![trait]);
-        if (differing.length < 3) short.push(`${a}~${b}: ${differing.join(", ") || "nothing"}`);
-      }
-    }
-    expect(short).toEqual([]);
-  });
-
-  it("draws Amazon's superscript price and the delivery line from the stored rate", async () => {
-    const cards = await renderCards(themeWith("detailed", {}));
-    for (const card of [cards.onSale, cards.allFacts, cards.withOptions, cards.soldOut]) {
-      expect(card.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
-    }
-    expect(cards.onSale.querySelector(".product-card-action")?.classList.contains("product-card-push")).toBe(true);
-    expect(cards.withOptions.querySelector("[data-card-action-hint]")?.classList.contains("product-card-push")).toBe(true);
-    expect(cards.soldOut.querySelector(".product-card-action")).toBeNull();
-    const price = cards.onSale.querySelector(".pc-price-super")!;
-    expect(text(price.querySelector(".pc-price-symbol"))).toBe("৳");
-    expect(text(price.querySelector(".pc-price-whole"))).toBe("960");
-    expect(text(cards.onSale.querySelector(".pc-price-regular"))).toContain("৳1,200");
-    expect(text(cards.bangla.querySelector('[data-card-fact="delivery"]'))).toBe("Free delivery");
-    const fee = await renderCards(themeWith("detailed", {}));
-    expect(text(fee.allFacts.querySelector('[data-card-fact="delivery"]'))).toBe("Free delivery");
-    const retail = await container.renderToString(ProductCard, {
-      props: {
-        product: { ...PRODUCTS.allFacts, freeDelivery: false },
-        currencySymbol: "৳",
-        currencyCode: "BDT",
-      },
-      locals: { storefrontTheme: Promise.resolve(requestThemeFor(themeWith("retail", {}))) },
-      request: new Request("https://shop.test/"),
+  describe("the discount", () => {
+    it.each(COMBINATIONS)("facts $facts / action $action: is one badge on the photo and nothing else says '-20%'", async ({ facts, action }) => {
+      const { onSale, withOptions } = await renderCards(themeWith({ facts, action }));
+      const badges = onSale.querySelectorAll(".sf-badge");
+      expect(badges).toHaveLength(1);
+      expect(badges[0]!.getAttribute("data-kind")).toBe("sale");
+      expect(text(badges[0])).toBe("-20%");
+      expect(badges[0]!.closest(".product-card-media")).not.toBeNull();
+      expect(badges[0]!.parentElement!.classList.contains("product-card-badges")).toBe(true);
+      // The only "-20%" in the card is the badge: the body never repeats it.
+      expect(text(onSale).match(/-20%/g)).toHaveLength(1);
+      expect(text(onSale.querySelector(".product-card-body"))).not.toMatch(/%|\bsave\b|\boff\b|-20/i);
+      expect(onSale.querySelector(".sf-price-save")).toBeNull();
+      // No discount, no mark.
+      expect(withOptions.querySelector(".sf-badge, .product-card-badges")).toBeNull();
     });
-    expect(text(parse(retail).querySelector('[data-card-fact="delivery"]'))).toBe("Delivery from ৳60");
-    const quick = await container.renderToString(ProductCard, {
-      props: { product: { ...PRODUCTS.allFacts, freeDelivery: false }, currencySymbol: "৳", currencyCode: "BDT" },
-      locals: { storefrontTheme: Promise.resolve(requestThemeFor(themeWith("quick-add", {}))) },
-      request: new Request("https://shop.test/"),
+
+    it("draws the sale price in the sale colour only when discounted, with the regular price struck after it", async () => {
+      const { onSale, withOptions, bangla } = await renderCards(themeWith({}));
+      const current = onSale.querySelector(".sf-price-current")!;
+      expect(current.hasAttribute("data-sale")).toBe(true);
+      expect(text(current)).toBe("Sale price ৳960");
+      const compare = onSale.querySelector(".sf-price-compare")!;
+      expect(text(compare)).toBe("Regular price ৳1,200");
+      expect(compare.querySelector("s")!.textContent).toBe("৳1,200");
+      // Sale first, the struck regular price after it.
+      expect(current.compareDocumentPosition(compare) & 4).toBeTruthy();
+      expect(onSale.querySelectorAll("s")).toHaveLength(1);
+      // Undiscounted: the price in the text colour, no struck price.
+      for (const card of [withOptions, bangla]) {
+        expect(card.querySelector("[data-sale]")).toBeNull();
+        expect(card.querySelector("s, .sf-price-compare")).toBeNull();
+      }
+      expect(text(bangla.querySelector(".sf-price-current"))).toBe("Price ৳1,200");
     });
-    expect(text(parse(quick).querySelector('[data-card-fact="delivery"]'))).toBe("৳60 delivery");
+
+    it("says 'From' when the price varies by option", async () => {
+      const { withOptions } = await renderCards(themeWith({}));
+      expect(text(withOptions.querySelector(".sf-price-current"))).toBe("Price From ৳1,200");
+    });
+
+    it("shows a sold-out badge instead of the sale badge on a discounted sold-out product", async () => {
+      const card = await renderOne(themeWith({ action: "full" }), { availableForSale: false });
+      const badges = card.querySelectorAll(".sf-badge");
+      expect(badges).toHaveLength(1);
+      expect(badges[0]!.getAttribute("data-kind")).toBe("sold-out");
+      expect(text(badges[0])).toBe("Sold out");
+      expect(text(card)).not.toContain("-20%");
+    });
   });
 
-  it("includes a condition label only when the merchant saved one", async () => {
-    for (const variant of ["detailed", "standard"]) {
-      const locals = { storefrontTheme: Promise.resolve(requestThemeFor(themeWith(variant, {}))) };
-      const render = (productCondition: "used" | null) => container.renderToString(ProductCard, {
-        props: { product: { ...PRODUCTS.allFacts, productCondition } },
-        locals,
-        request: new Request("https://shop.test/search"),
-      });
-      expect(text(parse(await render("used")).querySelector('[data-card-fact="condition"]'))).toBe("Used");
-      expect(parse(await render(null)).querySelector('[data-card-fact="condition"]')).toBeNull();
+  describe("the ratings", () => {
+    it("shows the real score with its words for screen readers, once", async () => {
+      const { allFacts } = await renderCards(themeWith({}));
+      const rating = allFacts.querySelectorAll(".sf-rating");
+      expect(rating).toHaveLength(1);
+      expect(text(rating[0])).toContain("4.6");
+      expect(text(rating[0])).toContain("(128)");
+      expect(text(rating[0]!.querySelector(".sr-only"))).toBe("Rated 4.6 out of 5 from 128 reviews");
+      // The visible numbers are hidden from screen readers: the sentence replaces them.
+      expect(rating[0]!.querySelector(".sf-rating-average")!.getAttribute("aria-hidden")).toBe("true");
+      expect(rating[0]!.querySelector(".sf-rating-count")!.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("shows no rating while the store has no published review or reviews are off, or the product has none", async () => {
+      const off = await renderCards(themeWith({ facts: "key-specs", action: "full" }), {}, EMPTY_STORE_SHAPE);
+      expect(off.allFacts.querySelector(".sf-rating, .sc-stars")).toBeNull();
+      const on = await renderCards(themeWith({}));
+      expect(on.zeroFacts.querySelector(".sf-rating")).toBeNull();
+      expect(on.onSale.querySelector(".sf-rating")).toBeNull();
+    });
+  });
+
+  it("lists the condition with the pack size only when the merchant saved one", async () => {
+    const used = await renderOne(themeWith({}), { ...PRODUCTS.allFacts, productCondition: "used" });
+    expect(text(fact(used, "details"))).toBe("400 gm · Used");
+    const unknown = await renderOne(themeWith({}), { ...PRODUCTS.allFacts, productCondition: null });
+    expect(text(fact(unknown, "details"))).toBe("400 gm");
+    const bare = await renderOne(themeWith({}), { productCondition: "used" });
+    expect(text(fact(bare, "details"))).toBe("Used");
+  });
+
+  it("words the delivery fee from the stored rate, and free delivery wins", async () => {
+    const theme = themeWith({ facts: "delivery" });
+    const paid = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: false });
+    expect(text(fact(paid, "delivery"))).toBe("Delivery from ৳60");
+    const free = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: true });
+    expect(text(fact(free, "delivery"))).toBe("Free delivery");
+    const unknown = await renderOne(theme, { ...PRODUCTS.allFacts, freeDelivery: false, cardFacts: { ...(PRODUCTS.allFacts as unknown as { cardFacts: Record<string, unknown> }).cardFacts, delivery: null } });
+    expect(fact(unknown, "delivery")).toBeNull();
+  });
+
+  describe("Bangla", () => {
+    const BN = "bn-BD";
+    it("speaks Bangla for every word the card adds when the store language is bn", async () => {
+      const full = await renderCards(themeWith({ facts: "swatches", action: "full" }), {}, REVIEWED_STORE, BN);
+      expect(text(full.onSale.querySelector(".sf-badge"))).toBe("-20%");
+      expect(text(full.onSale.querySelector(".sf-price-current"))).toBe("ছাড়ের দাম ৳960");
+      expect(text(full.onSale.querySelector(".sf-price-compare"))).toBe("নিয়মিত দাম ৳1,200");
+      expect(text(full.bangla.querySelector(".sf-price-current"))).toBe("দাম ৳1,200");
+      expect(text(full.withOptions.querySelector(".sf-price-current"))).toBe("দাম ৳1,200 থেকে");
+      expect(text(full.onSale.querySelector("a.product-card-action"))).toBe("কার্টে যোগ করুন: Product sale");
+      expect(text(hint(full.withOptions))).toBe("অপশন বেছে নিন");
+      expect(text(hint(full.soldOut))).toBe("পণ্যটি দেখুন");
+      expect(text(full.soldOut.querySelector(".sf-badge"))).toBe("স্টক শেষ");
+      expect(text(full.allFacts.querySelector(".sf-rating .sr-only"))).toBe("৫-এর মধ্যে 4.6 রেটিং, 128টি রিভিউ");
+      expect(text(fact(full.allFacts, "swatches")!.querySelector(".sr-only"))).toBe("রং: Navy, Light Blue, আরও 1টি রং");
+      const delivery = await renderCards(themeWith({ facts: "delivery" }), {}, REVIEWED_STORE, BN);
+      expect(text(fact(delivery.allFacts, "delivery"))).toBe("ফ্রি ডেলিভারি");
+      const quick = await renderCards(themeWith({ action: "quick-add" }), {}, REVIEWED_STORE, BN);
+      expect(text(quick.onSale.querySelector("a.product-card-quick"))).toBe("কার্টে যোগ করুন: Product sale");
+      // No English chrome is left on a Bangla card.
+      for (const card of [full.onSale, full.withOptions, full.soldOut, quick.onSale]) {
+        expect(text(card)).not.toMatch(/Add to cart|Choose options|View product|Sale price|Regular price|Sold out|From /);
+      }
+    });
+
+    it("falls back to English for any other language", async () => {
+      for (const code of ["en", "en-US", "fr", undefined]) {
+        const cards = await renderCards(themeWith({ action: "full" }), {}, REVIEWED_STORE, code);
+        expect(text(cards.onSale.querySelector("a.product-card-action")), String(code)).toBe("Add to cart: Product sale");
+      }
+    });
+  });
+
+  it("uses the heading level it is given, h3 by default", async () => {
+    const theme = themeWith({});
+    expect((await renderOne(theme, {})).querySelector(".product-card-name")!.tagName).toBe("H3");
+    expect((await renderOne(theme, {}, { headingLevel: "h3" })).querySelector(".product-card-name")!.tagName).toBe("H3");
+    const h2 = await renderOne(theme, {}, { headingLevel: "h2" });
+    expect(h2.querySelector(".product-card-name")!.tagName).toBe("H2");
+    expect(h2.querySelectorAll("h1, h2, h3, h4, h5, h6")).toHaveLength(1);
+    expect(text(h2.querySelector(".product-card-name"))).toBe("Product sale");
+  });
+
+  it("gives a product without a photo its initial in the same box, Bangla included", async () => {
+    const cards = await renderCards(themeWith({}));
+    for (const card of [cards.noPhoto, cards.bangla]) {
+      expect(card.querySelector("img")).toBeNull();
+      expect(card.querySelector(":scope > .product-card-media")).not.toBeNull();
+      expect(card.querySelector("[data-card-placeholder]")!.getAttribute("aria-hidden")).toBe("true");
     }
+    expect(text(cards.noPhoto.querySelector("[data-card-placeholder]"))).toBe("P");
+    expect(text(cards.bangla.querySelector("[data-card-placeholder]"))).toBe(Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(BANGLA_TITLE))[0]!.segment);
+    expect(text(cards.bangla.querySelector(".product-card-link"))).toBe(BANGLA_TITLE);
+    // One of our own uploads without renditions never goes on a card.
+    expect(cards.original.querySelector("img")).toBeNull();
+    expect(cards.original.querySelector("[data-card-placeholder]")).not.toBeNull();
   });
 
-  it("shows no rating on any card while the store has no published review or reviews are off", async () => {
-    for (const card of ["standard", "retail", "marketplace", "detailed"]) {
-      const cards = await renderCards(themeWith(card, {}), {}, EMPTY_STORE_SHAPE);
-      expect(cards.allFacts.querySelector('[data-card-fact="rating"]'), card).toBeNull();
-      expect(cards.allFacts.querySelector(".sc-stars"), card).toBeNull();
-    }
-    const standard = await renderCards(themeWith("standard", {}));
-    expect(text(standard.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("(128)");
-    expect(standard.zeroFacts.querySelector('[data-card-fact="rating"]')).toBeNull();
-  });
+  describe("the photo", () => {
+    const gridFor = (theme: StorefrontThemeDocument) => {
+      const request = requestThemeFor(theme);
+      return {
+        spec: productGridSpec(request.layout.grid, request.layout.productCard.imageRatio),
+        container: buildStorefrontThemeTokens(request.resolved)["theme-container-width"]!,
+      };
+    };
 
-  it("keeps the standard card's markup when selected by a merchant", async () => {
-    const cards = await renderCards(themeWith("standard", {}));
-    const card = cards.onSale;
-    expect(card.className).toBe("group relative flex flex-col h-full bg-card overflow-hidden");
-    expect(card.querySelector(".product-card-media")!.className).toBe("product-card-media relative overflow-hidden bg-muted");
-    expect(card.querySelector(".product-card-photo")!.className).toBe("product-card-photo w-full h-full object-center");
-    expect(card.querySelector(".product-card-body")!.className).toBe("product-card-body p-3 sm:p-4 flex flex-col flex-1");
-    expect(card.querySelector(".product-card-link")!.parentElement!.className).toBe(
-      "mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]",
-    );
-    expect(text(card.querySelector("p"))).toBe("Regular price ৳1,200Sale price ৳960");
-    expect(card.querySelector("a[href^='/buy/']")).toBeNull();
-  });
-
-  it("renders the department mall's measured card by default", async () => {
-    const { onSale } = await renderCards(DEFAULT_STOREFRONT_THEME);
-    expect(onSale.getAttribute("data-card-variant")).toBe("mall");
-    const anatomy = requestThemeFor(DEFAULT_STOREFRONT_THEME).layout.productCard;
-    const look = Object.fromEntries(cardLookTokens("mall", anatomy));
-    expect(look).toMatchObject({ "pc-title-d": "14px", "pc-title-w": "700", "pc-price-d": "20px", "pc-price-w": "400" });
-    expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
-    // One number for the drawn photo and its `sizes`: the CSS caps the photo
-    // at the --pc-photo-max the page's token block sets from CARD_PHOTO_MAX_PX.
-    const photoMax = CARD_PHOTO_MAX_PX.mall;
-    expect(photoMax).toBe(170);
-    expect(look["pc-photo-max"]).toBe(`${photoMax}px`);
-    expect(onSale.querySelector(".product-card-photo")?.getAttribute("sizes")).toMatch(new RegExp(`(^|\\s)${photoMax}px$`));
-    const css = readFileSync(new URL("../../styles/theme-cards.css", import.meta.url), "utf8");
-    expect(css).toMatch(
-      /\.product-card\[data-card-variant="mall"\] \.product-card-photo \{[^}]*width: min\(var\(--pc-photo-max\), 100%\);/,
-    );
-    // Only the fixed-width card sets it.
-    const spec = requestThemeFor(themeWith("spec", {})).layout.productCard;
-    expect(Object.fromEntries(cardLookTokens("spec", spec))).not.toHaveProperty("pc-photo-max");
-  });
-
-  it("writes the look once per page and keeps each card small", async () => {
-    // The standard card keeps its tokens; every other card's look and flags are page-level.
-    expect(cardLookTokens("standard", requestThemeFor(themeWith("standard", {})).layout.productCard)).toEqual([]);
-    expect(cardPageAttributes("standard", requestThemeFor(themeWith("standard", {})).layout.productCard)).toEqual({});
-    for (const card of CARD_VARIANTS.filter((variant) => variant !== "standard")) {
-      const theme = themeWith(card, {});
-      const anatomy = requestThemeFor(theme).layout.productCard;
-      const tokens = cardLookTokens(card, anatomy);
-      // Values only from the registry's numbers and enums: safe in a <style> block.
-      for (const [, value] of tokens) expect(value).toMatch(/^[\d.]+(?:px|%)?$|^[a-z-]+$/);
-      expect(cardPageAttributes(card, anatomy)["data-card-fit"]).toBe(anatomy.look.image.fit);
-      const cards = await renderCards(theme);
-      // Every icon a card draws is one of the page sprite's symbols.
-      const icons = new Set(cardIconIds(card, anatomy));
-      for (const element of Object.values(cards)) {
-        for (const use of Array.from(element.querySelectorAll("use"))) {
-          const id = use.getAttribute("href")!.slice(1);
-          expect(id in CARD_ICONS, `${card} ${id}`).toBe(true);
-          expect(icons.has(id as keyof typeof CARD_ICONS), `${card} ${id}`).toBe(true);
+    it.each(STOREFRONT_DENSITIES.flatMap((density) =>
+      STOREFRONT_IMAGE_RATIOS.flatMap((imageRatio) =>
+        STOREFRONT_IMAGE_FITS.flatMap((imageFit) =>
+          STOREFRONT_THEME_SURFACES.map((surface) => ({ density, imageRatio, imageFit, surface }))))))(
+      "$density / $imageRatio / $imageFit / $surface: keeps the photo box fixed before the photo loads",
+      async ({ density, imageRatio, imageFit, surface }) => {
+        const theme = themeWith({ facts: "key-specs", action: "full", hoverImage: true }, { density, imageRatio, imageFit, surface });
+        const cards = await renderCards(theme);
+        const { width, height } = CARD_IMAGE_DIMENSIONS[imageRatio];
+        for (const fixture of FIXTURES) {
+          const card = cards[fixture];
+          expect(card.getAttribute("data-fit")).toBe(imageFit);
+          expect(card.getAttribute("data-surface")).toBe(surface);
+          const media = card.querySelector(":scope > .product-card-media")!;
+          expect(media).not.toBeNull();
+          const photo = media.querySelector(":scope > img.product-card-photo");
+          const hasPhoto = Boolean(PRODUCTS[fixture].imageUrl) && fixture !== "original";
+          expect(Boolean(photo), fixture).toBe(hasPhoto);
+          expect(Boolean(media.querySelector("[data-card-placeholder]")), fixture).toBe(!hasPhoto);
+          if (photo) {
+            // Intrinsic size = the token ratio's box: the browser reserves it before the bytes arrive.
+            expect(photo.getAttribute("width")).toBe(String(width));
+            expect(photo.getAttribute("height")).toBe(String(height));
+            expect(photo.getAttribute("alt")).toBe(PRODUCTS[fixture].name);
+          } else {
+            expect(media.hasAttribute("data-hover-src")).toBe(false);
+          }
+          // The hover photo is never in the HTML: the box names it for the intent script.
+          expect(media.querySelector(".product-card-hover-image")).toBeNull();
         }
-        expect(element.querySelector("svg path"), card).toBeNull();
-      }
-      // Per-card byte budget: the full card (every fact, a photo with its
-      // renditions, a discount and a buy action) on a sidebar listing.
-      const listing = await renderCards(theme, { context: "beside-filters", filterColumnPx: 240 });
-      expect(listing.allFacts.outerHTML.length, card).toBeLessThanOrEqual(CARD_HTML_BUDGET[card]!);
-    }
-  });
+      });
 
-  it("asks for options on a spec card only when a SKU choice is required", async () => {
-    const cards = await renderCards(themeWith("spec", {}));
-    expect(text(cards.withOptions.querySelector("[data-card-action-hint]"))).toBe("Choose options");
-    expect(cards.withOptions.querySelector("a[href^='/buy/']")).toBeNull();
-    expect(text(cards.onSale.querySelector("a[href^='/buy/']"))).toContain("Buy now");
-  });
+    it("names the hover photo only when the setting is on and the product has a photo", async () => {
+      const hoverOf = (card: Element) => card.querySelector(".product-card-media")!.getAttribute("data-hover-src");
+      const on = await renderCards(themeWith({ hoverImage: true }));
+      expect(hoverOf(on.onSale)).toBe(image("sale-back"));
+      expect(hoverOf(on.withOptions)).toBe(image("options-back"));
+      expect(hoverOf(on.noPhoto)).toBeNull();
+      expect(hoverOf(on.zeroFacts)).toBeNull();
+      expect(on.onSale.querySelector(".product-card-media")!.hasAttribute("data-hover-max")).toBe(true);
+      const off = await renderCards(themeWith({ hoverImage: false }));
+      expect(hoverOf(off.onSale)).toBeNull();
+      expect(off.onSale.querySelector(".product-card-media")!.hasAttribute("data-hover-max")).toBe(false);
+    });
 
-  it("shows a choice hint instead of a cart on fashion cards with options", async () => {
-    const cards = await renderCards(themeWith("fashion-value", {}));
-    const hint = cards.withOptions.querySelector("[data-card-action-hint]")!;
-    expect(text(hint)).toBe("Choose options");
-    expect(hint.getAttribute("aria-hidden")).toBe("true");
-    expect(text(cards.withOptions.querySelector(".product-card-link"))).toBe("Product options — Choose options");
-    expect(cards.withOptions.querySelector("a[data-card-quick-add], a[href^='/buy/']")).toBeNull();
-    expect(cards.onSale.querySelector("a.product-card-round-action[href='/buy/product-sale']")).not.toBeNull();
-  });
+    it("asks for a photo sized to the slot, 12% smaller for a contained photo, and caps the srcset to what is drawn", async () => {
+      const coverTheme = themeWith({}, { imageFit: "cover" });
+      const containTheme = themeWith({}, { imageFit: "contain" });
+      const cover = await renderCards(coverTheme);
+      const contain = await renderCards(containTheme);
+      const coverSizes = cover.onSale.querySelector("img")!.getAttribute("sizes")!;
+      const containSizes = contain.onSale.querySelector("img")!.getAttribute("sizes")!;
+      const coverGrid = gridFor(coverTheme);
+      expect(coverSizes).toBe(capPhoneSizesDensity(scaleSizes(productCardImageSizes(coverGrid.spec, coverGrid.container, "grid", "grid", undefined, 0), 1)));
+      const containGrid = gridFor(containTheme);
+      expect(containSizes).toBe(capPhoneSizesDensity(scaleSizes(productCardImageSizes(containGrid.spec, containGrid.container, "grid", "grid", undefined, 0), 0.88)));
+      expect(containSizes).not.toBe(coverSizes);
+      const lastPx = (sizes: string) => Number(/(\d+(?:\.\d+)?)px$/.exec(sizes.trim())?.[1]);
+      expect(lastPx(containSizes)).toBeLessThan(lastPx(coverSizes));
+      // The srcset stops at the widest file the slot can use at 2x.
+      const widths = (srcset: string | null) => (srcset ?? "1w").split(", ").map((entry) => Number(/ (\d+)w$/.exec(entry)?.[1] ?? 1));
+      const coverWidths = widths(cover.onSale.querySelector("img")!.getAttribute("srcset"));
+      const containWidths = widths(contain.onSale.querySelector("img")!.getAttribute("srcset"));
+      expect(Math.max(...containWidths)).toBeLessThanOrEqual(Math.max(...coverWidths));
+    });
 
-  it("keeps prices beside sparse facts and removes empty buy slots", async () => {
-    const tech = await renderCards(themeWith("tech-rounded", {}));
-    for (const fixture of ["onSale", "withOptions", "noPhoto", "bangla"] as const) {
-      expect(tech[fixture].querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
-    }
-    expect(tech.noPhoto.querySelector("[data-card-placeholder]")).not.toBeNull();
-    expect(tech.bangla.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
-    expect(tech.soldOut.querySelector("[data-quick-buy-spacer]")).toBeNull();
+    it("sizes list rows by the fixed photo column and honours an explicit `sizes`", async () => {
+      const row = await renderCards(themeWith({}), { phoneLayout: "list-row" });
+      expect(row.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/\(max-width: \d+px\) (?:calc\(\()?120px/);
+      const custom = await renderCards(themeWith({}, { imageFit: "cover" }), { sizes: "(max-width: 600px) 50vw, 300px" });
+      const img = custom.onSale.querySelector("img")!;
+      expect(img.getAttribute("sizes")).toContain("50vw");
+      expect(img.getAttribute("sizes")).toContain("300px");
+    });
 
-    const spec = await renderCards(themeWith("spec", {}));
-    expect(spec.allFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(true);
-    expect(spec.zeroFacts.querySelector(".product-card-price-row")?.classList.contains("product-card-push")).toBe(false);
-    expect(spec.zeroFacts.classList.contains("self-start")).toBe(true);
-    expect(spec.zeroFacts.classList.contains("product-card-compact")).toBe(true);
-    expect((await renderCards(themeWith("standard", {}))).zeroFacts.querySelector("[data-card-price]")?.classList.contains("mt-auto")).toBe(false);
+    it("loads the first row eagerly, the very first photos with high priority, and everything else lazily", async () => {
+      const loadingOf = async (props: object) => {
+        const photo = (await renderOne(themeWith({}), {}, props)).querySelector("img")!;
+        return [photo.getAttribute("loading"), photo.getAttribute("fetchpriority"), photo.getAttribute("decoding")];
+      };
+      expect(await loadingOf({ index: 0, aboveFold: true })).toEqual(["eager", "high", "sync"]);
+      expect(await loadingOf({ index: 1, aboveFold: true })).toEqual(["eager", "high", "sync"]);
+      expect(await loadingOf({ index: 40, aboveFold: true })).toEqual(["lazy", null, "async"]);
+      expect(await loadingOf({ index: 0, aboveFold: false })).toEqual(["lazy", null, "async"]);
+      expect(await loadingOf({})).toEqual(["lazy", null, "async"]);
+    });
   });
 
   it("uses the store's rows on phones when the listing asks for list rows", async () => {
-    const theme = themeWith("retail", { density: "comfortable" });
+    const theme = themeWith({});
     const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme)) };
     const html = await container.renderToString(ProductGrid, {
       props: { phoneLayout: "list-row" },
@@ -745,18 +629,28 @@ describe("product card matrix", () => {
       request: new Request("https://shop.test/"),
     });
     expect(parse(html).querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
-    const cards = await renderCards(theme, { phoneLayout: "list-row" });
-    // Below the tablet step the photo is the fixed list-row column.
-    // (retail: the phone-density cap is listed first, then the plain entries).
-    expect(cards.onSale.querySelector("img")!.getAttribute("sizes")).toMatch(/(?:^|, )\(max-width: \d+px\) calc\(\(120px\) \* 1\)|(?:^|, )\(max-width: \d+px\) 120px, /);
-    const grid = parse(await container.renderToString(ProductGrid, { props: {}, locals, request: new Request("https://shop.test/") }));
-    expect(grid.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
+    const plain = parse(await container.renderToString(ProductGrid, { props: {}, locals, request: new Request("https://shop.test/") }));
+    expect(plain.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
   });
 
-  it("gives a product without a photo its initial, Bangla included", async () => {
-    const cards = await renderCards(themeWith("marketplace", {}));
-    expect(text(cards.noPhoto.querySelector("[data-card-placeholder]"))).toBe("P");
-    expect(text(cards.bangla.querySelector("[data-card-placeholder]"))).toBe(Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(BANGLA_TITLE))[0]!.segment);
-    expect(text(cards.bangla.querySelector(".product-card-link"))).toBe(BANGLA_TITLE);
-  });
+  it.each(["department-mall", "boutique", "marketplace", "daily-essentials", "showcase-landing"] as const)(
+    "the %s preset renders the card its settings describe",
+    async (id) => {
+      const theme = storefrontTemplateTheme(id);
+      const { facts, action } = theme.blocks.card.settings as { facts: StorefrontCardFacts; action: StorefrontCardAction };
+      const cards = await renderCards(theme);
+      expect(cards.onSale.getAttribute("data-action")).toBe(action);
+      expect(cards.onSale.hasAttribute("data-card-variant")).toBe(false);
+      expect(cards.onSale.querySelectorAll(".sf-badge")).toHaveLength(1);
+      expect(cards.onSale.querySelector(".product-card-foot .sf-price")).not.toBeNull();
+      expect(Boolean(cards.onSale.querySelector(".product-card-foot .product-card-action"))).toBe(action === "full");
+      expect(Boolean(cards.onSale.querySelector(".product-card-media .product-card-quick"))).toBe(action === "quick-add");
+      expect(factNames(cards.allFacts).filter((name) => name !== "details")).toEqual(facts === "none" ? [] : [facts]);
+    },
+  );
 });
+
+/** True when the card has no add control and no hint (a sold-out or ineligible product under quick add). */
+function card_has_no_action(card: Element): boolean {
+  return card.querySelector("[data-card-quick-add], [data-card-action-hint], .product-card-quick, .product-card-action") === null;
+}

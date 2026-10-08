@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ViteDevServer } from "vite";
 import { Window } from "happy-dom";
-import { storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
+import { storefrontBlockDefault, storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const VIRTUAL_MODULES: Record<string, string> = {
@@ -91,12 +91,19 @@ const text = (node: Element | null | undefined) => node?.textContent?.replace(/\
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 const ANALYTICS = { id: "ga", type: "google-analytics", usePartytown: false, location: "head", config: "<script>window.__gaLoaded=1</script>" };
 
+/** A theme whose footer is the newsletter-grey one (it has its own signup form). */
+function themeWithNewsletterFooter() {
+  const theme = storefrontTemplateTheme("boutique");
+  theme.blocks.footer = storefrontBlockDefault("footer", "newsletter-grey") as never;
+  return theme;
+}
+
 function layout(languageCode: string) {
   return {
     analytics: [ANALYTICS],
     navigation: [],
     footerMenus: [],
-    theme: storefrontTemplateTheme("fashion-value"),
+    theme: themeWithNewsletterFooter(),
     brand: { logo: null, footerLogo: null, favicon: null },
     business: { companyName: "Nakshi Ghor", socialLinks: [] },
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 0 },

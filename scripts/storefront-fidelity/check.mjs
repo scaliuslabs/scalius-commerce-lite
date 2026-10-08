@@ -5,8 +5,8 @@
  *
  * It builds the storefront, seeds a 30k-product store into a temp state it
  * owns (or copies a cached one), runs the API and the built storefront under
- * `wrangler dev` with one headless Chrome, applies every template and single
- * variant swap, measures every block at 1440 and 390, and writes pairs, a JSON
+ * `wrangler dev` with one headless Chrome, applies every preset and single
+ * card-setting swap, measures every block at 1440 and 390, and writes pairs, a JSON
  * scorecard and a markdown summary. Every process tree it starts is killed and
  * the temp state is deleted at the end.
  *
@@ -48,16 +48,11 @@ import { runVariants } from "./variants.mjs";
 export const BLOCKS = Object.freeze(["header", "card", "listing", "pdp", "footer", "size", "perf", "nav", "variants", "hover", "tiny"]);
 const MATRIX_BLOCKS = ["header", "card", "listing", "pdp", "footer", "size"];
 
-// One PDP per template keeps the matrix bounded. The three exact fixtures
-// exercise apparel, pantry, and home goods; electronics use the scale seed.
+// One PDP per preset keeps the matrix bounded. The exact fixtures exercise
+// home goods and pantry; electronics use the scale seed.
 const PDP_PROFILES = {
   boutique: { slug: "fidelity-home-colourful-storage-box", images: [2, 2], axes: [0, 0] },
-  "heritage-editorial": { slug: "fidelity-apparel-everyday-longline-cotton-tunic", images: [2, 2], axes: [2, 2], discount: true },
-  "fashion-value": { slug: "fidelity-apparel-everyday-longline-cotton-tunic", images: [2, 2], axes: [2, 2], discount: true },
-  "spec-catalogue": { kind: "Laptop", images: [2, 4], axes: [0, 2], keySpecs: 4, namedProcessor: true },
-  "rounded-tech": { kind: "Smartphone", images: [3, 4], axes: [2, 2] },
   marketplace: { kind: "SSD", images: [3, 4], axes: [1, 1] },
-  "mass-retail": { slug: "fidelity-home-colourful-storage-box", images: [2, 2], axes: [0, 0] },
   "department-mall": { kind: "Graphics Card", images: [3, 4], axes: [0, 0] },
   "daily-essentials": { slug: "fidelity-grocery-cold-pressed-mustard-oil", images: [2, 2], axes: [1, 1] },
   "showcase-landing": { kind: "Camera", images: [3, 4], axes: [1, 1] },
@@ -134,7 +129,7 @@ export function stagesFor(filter) {
     variants: wants(["variants"]) && (!filter.templates.length || filter.templates.includes("department-mall")),
     nav: wants(["nav"]),
     perf: wants(["perf", "size"]),
-    hover: wants(["hover"]) && (!filter.templates.length || filter.templates.some((t) => ["boutique", "heritage-editorial"].includes(t))),
+    hover: wants(["hover"]) && (!filter.templates.length || filter.templates.includes("boutique")),
     tiny: wants(["tiny"]),
   };
 }
@@ -153,20 +148,6 @@ export function marketplaceLayoutChecks(matrixRows = {}) {
     }
   }
   return checks;
-}
-
-/** Star Tech's search uses five full-width cards, unlike its sidebar category. */
-export function specSearchLayoutChecks(matrixRows = {}, refs = {}) {
-  return ["desktop", "phone"].flatMap((viewport) => [
-    ["searchGridCols", "cols", "cols", "exact"],
-    ["searchFirstCardY", "firstCardTop", "firstCardY", "firstY"],
-    ["searchProductsVisible", "productsFullyHalfVisible", "productsVisible", "min"],
-  ].map(([metric, oursField, refField, rule]) => {
-    const ref = refs[viewport]?.[refField];
-    const ours = matrixRows[`search-${viewport}`]?.density?.[oursField] ?? null;
-    const { pass, detail } = judge(rule, ours, ref?.v);
-    return { id: `spec-catalogue/listing/${viewport}/listing.${metric}`, template: "spec-catalogue", block: "listing", viewport, metric: `listing.${metric}`, rule, ours, ref: ref?.v, refSite: "startech", src: ref?.src, pass, detail };
-  }));
 }
 
 /** Invalidates a cached seeded state when the seed code or the migrations change. */
@@ -327,7 +308,7 @@ async function main() {
       log(`PDP candidates: ${Object.entries(pdpCandidates).map(([name, row]) => `${name}=${row.slug}`).join(", ")}`);
     }
     const extraPages = Object.fromEntries(templates.map((template) => [template, {
-      ...(["marketplace", "spec-catalogue"].includes(template) ? { search: pages.search } : {}),
+      ...(template === "marketplace" ? { search: pages.search } : {}),
       ...(pdpCandidates[template] ? { pdp: pdpCandidates[template].path } : {}),
     }]));
     // Warm the isolates so the first template is not measured cold.
@@ -356,12 +337,12 @@ async function main() {
       return null;
     };
     if (stages.matrix) {
-      log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}${templates.includes("spec-catalogue") ? ", spec search" : ""}} x {1440, 390}`);
+      log(`matrix: ${templates.length} templates x {home, category, product${templates.includes("marketplace") ? ", marketplace search" : ""}} x {1440, 390}`);
       results.matrix = {};
       await runStage("matrix", "card", () => runMatrix(ctx, { templates, pages: { home: pages.home, plp: pages.plp, pdp: pages.pdp }, extraPages, into: results.matrix }));
     }
     if (stages.variants) {
-      log("variants: card and listing swaps on department-mall");
+      log("variants: card setting and listing swaps on department-mall");
       results.variants = await runStage("variants", "variants", () => runVariants(ctx, { template: "department-mall", path: pages.plp }));
     }
     if (stages.nav) {
@@ -379,7 +360,7 @@ async function main() {
       }
     }
     if (stages.hover) {
-      const targets = ["boutique", "heritage-editorial"].filter((t) => templates.includes(t));
+      const targets = ["boutique"].filter((t) => templates.includes(t));
       log(`hover: ${targets.join(", ")}`);
       results.hover = await runStage("hover", "hover", () => runHover(ctx, { targets, path: pages.plp }));
     }
@@ -400,7 +381,6 @@ async function main() {
         const ours = Object.fromEntries(["desktop", "phone"].map((v) => [v, extractOurs({ home: m[`home-${v}`], plp: m[`plp-${v}`], pdp: m[`pdp-${v}`], cardPage: template === "marketplace" ? m[`search-${v}`] : m[`plp-${v}`] })]));
         checks.push(...compareTemplate(template, ours, reference));
         if (template === "marketplace") checks.push(...marketplaceLayoutChecks(m));
-        if (template === "spec-catalogue") checks.push(...specSearchLayoutChecks(m, reference.sites.startech.search));
       }
       const perfRows = results.perf?.[template] ?? {};
       const rows = {};
@@ -418,7 +398,7 @@ async function main() {
         }
       }
     }
-    if (results.variants) checks.push(...variantChecks("department-mall", results.variants.diffs, reference.budgets, results.variants));
+    if (results.variants) checks.push(...variantChecks("department-mall", reference.budgets, results.variants));
     for (const [target, h] of Object.entries(results.hover ?? {})) checks.push(...hoverChecks(target.split(":")[0], h.results, reference.budgets).map((c) => ({ ...c, id: `${target}/${c.block}/${c.viewport}/${c.metric}` })));
 
     if (results.matrix) {

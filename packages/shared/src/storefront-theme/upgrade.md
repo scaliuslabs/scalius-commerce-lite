@@ -7,7 +7,8 @@ Stored live, draft and version reads use it through `parseStoredStorefrontThemeD
 ## Purity
 
 - Every step is a pure structural conversion. It uses only literals frozen with the version it reads (variant names, choice maps, historical defaults), never today's block or section registries.
-- Today's registry defaults enter once, after the last step (`withCurrentDefaults`). Settings an upgraded document never stored take today's defaults, and stored values win. A document that is already current is returned as a copy, unchanged.
+- Today's registry defaults enter once, after the last step (`withCurrentDefaults`). Settings an upgraded document never stored take today's defaults, and stored values win. A document that is already current is returned as a copy, unchanged except for the next rule.
+- A document that was valid when saved always reads. Validation that can reject a saved choice belongs on write, where the editor shows it at the field. When a rule tightens, `withTightenedBounds` normalizes the stored value on every read, current documents included: filter rows below 24 px rise to 24, and a sale colour (`destructive`) below AA on the card colour (v9's card paints discounted prices there) moves toward black, or white on a dark card, just far enough to pass, keeping its page and badge pairs.
 - A variant or section type that today's registries no longer know stays as stored, so the strict parse rejects it. The upgrade never guesses.
 
 ## Versions and golden fixtures
@@ -25,10 +26,11 @@ A reset migration deleted every stored theme row not at the version it introduce
 | v5 | `0093_theme_document_v5` | Template-only page chrome becomes stored listing settings. The brand and the home mode are added. Options that never rendered are removed: the questions module, retired sticky modes, deal end times, sub-brand rows and trending queries. |
 | v6 | `0106_theme_document_v6` | Landing pages (`pages.landing`) are added, empty. |
 | v7 | none | Page templates (`pages.templates`) are added, empty, with the fixed part first. |
-| v8 | none | The current document. It is the input of the next step. |
+| v8 | none | One design system. The ten templates become the five presets (Department, Boutique, Marketplace, Essentials, Landing): `spec-catalogue` and `rounded-tech` read as `department-mall`; `heritage-editorial` and `fashion-value` as `boutique`; `mass-retail` as `marketplace`; the other five keep their id. The thirteen card looks become the one `standard` card with `facts`, `action` and `hoverImage` settings (`v8Card` holds the mapping), and the photo ratio, fit and surface the old look drew with move into `tokens.imageRatio`, `tokens.imageFit` and `tokens.surface` (the `standard` card already followed the tokens). The stored `hoverImage` stays. |
+| v9 | none | The current document. It is the input of the next step. |
 
-## Adding v9
+## Adding v10
 
-1. Add `8: v8to9` to `THEME_UPGRADES`, written against the shape in `v8.json` with its own literals.
+1. Add `9: v9to10` to `THEME_UPGRADES`, written against the shape in `v9.json` with its own literals.
 2. Bump `STOREFRONT_THEME_DOCUMENT_VERSION` and the schema.
-3. Create the v9 golden fixture (a current document) next to the v8 one and add it to `goldenFixtures` in `upgrade.test.ts`. The fixture-count test fails until you do. Earlier steps and fixtures do not change.
+3. Create the v10 golden fixture (a current document) next to the v9 one and add it to `goldenFixtures` in `upgrade.test.ts`. The fixture-count test fails until you do. Earlier steps and fixtures do not change.

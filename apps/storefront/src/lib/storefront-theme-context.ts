@@ -24,6 +24,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { resolveThemePreview, type ThemePreviewData } from "./api/storefront";
 import { readThemePreviewCookie } from "./theme-preview-cookie";
+import { storefrontLanguage, type StorefrontLanguage } from "./storefront-copy";
 
 export interface RequestTheme {
   theme: StorefrontThemeDocument;
@@ -36,6 +37,8 @@ export interface RequestTheme {
   /** The cookie's token, when the request carries one (valid or not). */
   previewToken: string | null;
   preview: ThemePreviewData | null;
+  /** The store's language for the storefront's own words (lib/storefront-copy.ts). */
+  language: StorefrontLanguage;
 }
 
 interface ThemeLocals {
@@ -108,7 +111,7 @@ export function readStorefrontBrandAssets(value: unknown, brand: StorefrontTheme
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown } = {},
 ): RequestTheme {
   const resolved = resolveStorefrontTheme(theme, shape);
   return {
@@ -118,12 +121,13 @@ export function requestThemeFor(
     brand: readStorefrontBrandAssets(options.brand, theme.brand),
     previewToken: options.previewToken ?? null,
     preview: options.preview ?? null,
+    language: storefrontLanguage(options.languageCode),
   };
 }
 
 export function resolveRequestTheme(
   astro: { request: Request; locals: object },
-  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown } | null | undefined,
+  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; storefrontCopy?: { languageCode?: unknown } | null } | null | undefined,
 ): Promise<RequestTheme> {
   const locals = astro.locals as ThemeLocals;
   locals.storefrontTheme ??= (async () => {
@@ -135,7 +139,12 @@ export function resolveRequestTheme(
     return requestThemeFor(
       readStorefrontTheme(preview ? preview.theme : layoutData?.theme),
       readStoreShape(layoutData?.storeShape),
-      { previewToken, preview, brand: preview ? preview.brand : layoutData?.brand },
+      {
+        previewToken,
+        preview,
+        brand: preview ? preview.brand : layoutData?.brand,
+        languageCode: layoutData?.storefrontCopy?.languageCode,
+      },
     );
   })();
   return locals.storefrontTheme;

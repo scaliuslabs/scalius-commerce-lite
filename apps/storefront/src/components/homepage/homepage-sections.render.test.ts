@@ -35,7 +35,7 @@ import {
 } from "@/lib/homepage-sections";
 import type { HomepageMetaobject } from "@/lib/api/storefront";
 import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
-import { cardPhotoSizes } from "@/components/cards/card-model";
+import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -313,6 +313,10 @@ const EVERY_SECTION: StorefrontSection[] = [
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
+/** What ProductCard asks for a photo in `slot`: 88% of it for a contained photo, phones capped at 2x. */
+const cardSizes = (slot: string, theme = DEFAULT_STOREFRONT_THEME) =>
+  capPhoneSizesDensity(scaleSizes(slot, requestThemeFor(theme).layout.productCard.imageFit === "contain" ? 0.88 : 1));
+
 describe("homepage section library", () => {
   it("covers every renderable section type", () => {
     expect(new Set(EVERY_SECTION.map((each) => each.type))).toEqual(new Set(STOREFRONT_SECTION_RENDERERS));
@@ -424,7 +428,7 @@ describe("homepage section library", () => {
     const items = Array.from(track.children);
     expect(items).toHaveLength(12);
     expect(items.every((item) => item.className.includes("snap-start"))).toBe(true);
-    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(cardPhotoSizes(DEFAULT_STOREFRONT_THEME.blocks.card.variant, SHELF_CARD_SIZES));
+    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(cardSizes(SHELF_CARD_SIZES));
     // The title says what the list is; "View all" goes to the full listing.
     expect(text(large.querySelector("h2"))).toBe("New arrivals");
     expect(large.querySelector('a[href="/search"]')).not.toBeNull();
@@ -437,30 +441,26 @@ describe("homepage section library", () => {
   });
 
   it("sizes compact collection carousels as shelves without changing collection presentations", async () => {
-    // Apple Gadgets' compact shelf is the section's setting, in any template.
-    expect(storefrontTemplateTheme("rounded-tech").pages.home.find((each) => each.type === "collections")?.settings)
-      .toMatchObject({ carousel: "compact" });
+    // The compact shelf is the section's setting, in any template.
     const compact = [section("collections", "collections", { carousel: "compact", collectionIds: COLLECTION_IDS })];
-    for (const theme of [storefrontTemplateTheme("rounded-tech"), DEFAULT_STOREFRONT_THEME]) {
+    for (const theme of [storefrontTemplateTheme("marketplace"), DEFAULT_STOREFRONT_THEME]) {
       const rounded = await render(compact, store("large"), theme);
       expect(rounded.querySelectorAll(".product-grid")).toHaveLength(1);
       expect(rounded.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(12);
     }
 
-    const classic = await render([section("collections", "collections", { collectionIds: COLLECTION_IDS })], store("large"), storefrontTemplateTheme("rounded-tech"));
+    const classic = await render([section("collections", "collections", { collectionIds: COLLECTION_IDS })], store("large"), storefrontTemplateTheme("marketplace"));
     expect(classic.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(0);
     expect(classic.querySelector("[data-product-rail-track] > div")!.className).toContain("w-[72%]");
   });
 
   it("draws small and scrolling round categories from the section's style, in any template", async () => {
-    expect(storefrontTemplateTheme("rounded-tech").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "round-small" });
-    expect(storefrontTemplateTheme("mass-retail").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "round-row" });
     const rounded = await render([tiles({ style: "round-small" })], store("large"));
     const roundedTile = rounded.querySelector('a[href="/categories/category-1"]')!;
     expect(roundedTile.querySelector("span")!.classList.contains("size-14")).toBe(true);
     expect(roundedTile.querySelector("img")!.getAttribute("sizes")).toBe("56px");
 
-    const classic = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("rounded-tech"));
+    const classic = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("marketplace"));
     const classicTile = classic.querySelector('a[href="/categories/category-1"]')!;
     expect(classicTile.querySelector("span")!.classList.contains("max-w-28")).toBe(true);
     expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
@@ -482,7 +482,7 @@ describe("homepage section library", () => {
     const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
     const container = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
     const capped = productCardImageSizes(grid, container, "grid", "grid", 5);
-    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(cardPhotoSizes(theme.blocks.card.variant, capped));
+    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(cardSizes(capped, theme));
     expect(text(page.querySelector("h2"))).toBe("Sarees");
     expect(page.querySelector('a[href="/categories/sarees"]')).not.toBeNull();
   });
@@ -517,25 +517,29 @@ describe("homepage section library", () => {
     expect(noPhoto.querySelectorAll("ul > li")).toHaveLength(3);
   });
 
-  it("keeps photo-led fashion lookbooks compact without overriding other card choices", async () => {
-    // Fabrilife's square photo is the section's setting; the compact grid follows its card.
-    const look = section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" }, photo: "square" });
-    const fashion = storefrontTemplateTheme("fashion-value");
-    expect(fashion.pages.home.find((each) => each.type === "lookbook")?.settings).toMatchObject({ photo: "square" });
-    const tall = await render([section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } })], store("large"), fashion);
-    expect(tall.querySelector("[data-lookbook-compact]")).toBeNull();
-    const page = await render([look], store("large"), fashion);
-    expect(page.querySelector("[data-lookbook-compact]")).not.toBeNull();
-    expect(page.querySelector("figure img")?.className).toContain("aspect-square");
-    expect(page.querySelectorAll("[data-lookbook-compact] .product-card-link")).toHaveLength(7);
-    expect(page.querySelector("[data-lookbook-compact] .product-card-link")?.textContent).toContain("Product");
+  it("lays a square-photo lookbook out in a 1:2 split with the one product card, and a tall photo in 2:3", async () => {
+    // The square photo is the section's setting, in any template.
+    const source = { kind: "collection", collectionId: "col-eid" };
+    const square = await render([section("lookbook", "look", { mediaId: "m-look", source, photo: "square" })], store("large"));
+    expect(square.querySelector("figure img")?.className).toContain("aspect-square");
+    expect(square.querySelector("figure img")?.className).not.toContain("lg:aspect-auto");
+    expect(square.querySelector("figure")!.parentElement!.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]");
+    expect(square.querySelectorAll("figure ~ div .product-card-link, figure + div .product-card-link")).toHaveLength(7);
+    expect(square.querySelector("figure ~ div .product-card-link")?.textContent).toContain("Product");
+    // Every product is the one card: a heading level under the lookbook's h2, no per-site variant.
+    expect(square.querySelector("figure ~ div [data-theme-component='product-card']")!.hasAttribute("data-card-variant")).toBe(false);
+    expect(square.querySelector("figure ~ div .product-card-name")!.tagName).toBe("H3");
+    expect(text(square.querySelector("figcaption h2"))).toBe("Eid edit");
 
-    const noPhoto = await render([section("lookbook", "look", { mediaId: "missing", source: { kind: "collection", collectionId: "col-eid" }, photo: "square" })], store("large"), fashion);
-    expect(noPhoto.querySelector("[data-lookbook-compact]")).toBeNull();
-    const merchantCard = structuredClone(fashion);
-    merchantCard.blocks.card.variant = "standard";
-    const customized = await render([look], store("large"), merchantCard);
-    expect(customized.querySelector("[data-lookbook-compact]")).toBeNull();
+    const tall = await render([section("lookbook", "look", { mediaId: "m-look", source })], store("large"));
+    expect(tall.querySelector("figure img")?.className).toContain("lg:aspect-auto");
+    expect(tall.querySelector("figure")!.parentElement!.className).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]");
+
+    // Without its photo the lookbook is a headed grid of products.
+    const noPhoto = await render([section("lookbook", "look", { mediaId: "missing", source, photo: "square" })], store("large"));
+    expect(noPhoto.querySelector("figure")).toBeNull();
+    expect(noPhoto.querySelector("h2")).not.toBeNull();
+    expect(noPhoto.querySelectorAll("[data-theme-component='product-card']").length).toBeGreaterThan(0);
   });
 
   it("puts consecutive two-up banners in one row and draws text over a scrim", async () => {
@@ -605,7 +609,6 @@ describe("homepage section library", () => {
   });
 
   it("shows photo departments as a grid while the photo rail and other styles keep their own shape", async () => {
-    expect(storefrontTemplateTheme("heritage-editorial").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "photo-grid" });
     const categories = tiles({ style: "photo" });
     const heritage = await render([tiles({ style: "photo-grid" })], store("large"));
     const grid = heritage.querySelector("[data-heritage-departments]")!;
@@ -614,15 +617,14 @@ describe("homepage section library", () => {
     expect(grid.querySelector('a[href="/categories/category-0"]')!.classList.contains("rounded-[var(--radius)]")).toBe(true);
     expect(grid.querySelector("img")!.getAttribute("sizes")).toContain("/ 2");
 
-    const classic = await render([categories], store("large"), storefrontTemplateTheme("heritage-editorial"));
+    const classic = await render([categories], store("large"), storefrontTemplateTheme("boutique"));
     expect(classic.querySelector("[data-heritage-departments]")).toBeNull();
     expect(classic.querySelector(".homepage-category-scroll")).not.toBeNull();
-    const merchantRound = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("heritage-editorial"));
+    const merchantRound = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("boutique"));
     expect(merchantRound.querySelector("[data-heritage-departments]")).toBeNull();
   });
 
   it("shortens only an image-only compact phone hero so departments appear sooner", async () => {
-    expect(storefrontTemplateTheme("heritage-editorial").pages.home.find((each) => each.type === "hero")?.settings).toMatchObject({ phoneHeight: "compact" });
     const fullScreen = [hero({ layout: "full-screen", phoneHeight: "compact" })];
     const heritage = DEFAULT_STOREFRONT_THEME;
     // A linked photo without words or a button still needs no full screen.
@@ -636,7 +638,7 @@ describe("homepage section library", () => {
     const promoted = await render(fullScreen, store("large"), heritage);
     expect(promoted.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
       .toContain("100svh");
-    const screen = await render([hero({ layout: "full-screen" })], store("tiny"), storefrontTemplateTheme("heritage-editorial"));
+    const screen = await render([hero({ layout: "full-screen" })], store("tiny"), storefrontTemplateTheme("boutique"));
     expect(screen.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
       .toContain("100svh");
   });

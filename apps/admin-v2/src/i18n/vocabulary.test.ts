@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 type Catalog = { en: Record<string, string>; bn: Record<string, string> };
 
-const modules = import.meta.glob<Record<string, unknown>>("./*.ts", { eager: true });
+const modules = import.meta.glob<Record<string, unknown>>(["./*.ts", "!./*.test.ts"], { eager: true });
 
 /** Every en/bn catalog exported by `src/i18n/*`, by "file › export". */
 const catalogs: Array<[string, Catalog]> = Object.entries(modules)

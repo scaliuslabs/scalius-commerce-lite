@@ -21,9 +21,9 @@ import {
   type StorefrontThemeBlocks,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
+import { listingFilterColumnPx, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
 import { LIST_ROW_IMAGE_SIZES } from "@/lib/catalog-listing";
-import { cardPhotoSizes } from "@/components/cards/card-model";
+import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
 import type { ProductFacet } from "@/lib/api";
@@ -314,16 +314,62 @@ async function renderListing(
 }
 
 const plain = () => listingProps("https://shop.test/categories/sarees");
-/** The standard card names its slot as is, so layout tests use it to see the slot. */
-const STANDARD_CARD = { variant: "standard", settings: {} } as StorefrontThemeBlocks["card"];
+/** The one card with every setting off, so layout tests see the photo and the price alone. */
+const STANDARD_CARD = { variant: "standard", settings: { facts: "none", action: "none", hoverImage: false } } as StorefrontThemeBlocks["card"];
+/**
+ * What ProductCard asks for a photo in `slot`: a contained photo is drawn in a
+ * 6% margin, so 88% of the slot; phones at DPR 2.5+ ask for about 2x.
+ */
+const cardSizes = (slot: string, theme: StorefrontThemeDocument = DEFAULT_STOREFRONT_THEME) =>
+  capPhoneSizesDensity(scaleSizes(slot, requestThemeFor(theme, STORE_SHAPE).layout.productCard.imageFit === "contain" ? 0.88 : 1));
 const gridSizes = (context: "grid" | "beside-filters", theme: StorefrontThemeDocument = DEFAULT_STOREFRONT_THEME) => {
-  const layout = requestThemeFor(theme, STORE_SHAPE).layout;
+  const request = requestThemeFor(theme, STORE_SHAPE);
+  const layout = request.layout;
   const width = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
-  // CatalogResults caps the spec and mall grids at four columns.
-  const maxColumns = ["spec", "mall"].includes(theme.blocks.card.variant) ? 4 : Infinity;
-  const slot = productCardImageSizes(productGridSpec(layout.grid, layout.productCard.imageRatio), width, context, "grid", maxColumns);
-  return cardPhotoSizes(theme.blocks.card.variant, slot);
+  const filterColumnPx = context === "beside-filters" ? listingFilterColumnPx(request.resolved.blocks.listing.filters) : 0;
+  const slot = productCardImageSizes(productGridSpec(layout.grid, layout.productCard.imageRatio), width, context, "grid", undefined, filterColumnPx);
+  return cardSizes(slot, theme);
 };
+
+/**
+ * The listing settings the five retired presets (Star Tech, Target, Fabrilife,
+ * Apple Gadgets, Aarong) used, now plain settings on the department mall:
+ * the blocks keep every one of them, so a merchant can still choose them.
+ */
+const PRICE_FIRST = ["price", "availability", "rating", "brand", "other", "category"] as const;
+function mallWith(listing: Record<string, unknown>, header?: string): StorefrontThemeDocument {
+  const theme = storefrontTemplateTheme("department-mall");
+  if (header) theme.blocks.header = { variant: header, settings: {} } as never;
+  Object.assign(theme.blocks.listing, listing);
+  return theme;
+}
+/** Star Tech: a dense price-first rail, the title band beside it, searches spending the full width on results. */
+const specListingTheme = () => mallWith({
+  filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14, order: [...PRICE_FIRST], searchPlacement: "drawer", ruled: false },
+  toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page", "applied-chips"],
+  band: "beside-filters",
+}, "spec-two-row");
+/** Target: a filter drawer, rows for searches, the phone's one scrolling pill row, four columns at most. */
+const pillRowListingTheme = () => mallWith({
+  searchLayout: "list",
+  filters: { style: "drawer", openByDefault: false, searchPlacement: "same", ruled: false },
+  toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "grid-list-toggle", "applied-chips"],
+  phoneBar: "pill-row",
+  maxColumns: 4,
+});
+/** Fabrilife: a ruled department rail and the phone's Filter and Sort row pinned to the bottom. */
+const ruledRailListingTheme = () => mallWith({
+  filters: { style: "sidebar-comfortable", openByDefault: true, searchPlacement: "same", ruled: true },
+  toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"],
+  paging: "infinite",
+  phoneBar: "bottom",
+});
+/** Apple Gadgets: price first in a comfortable rail, the category banner on computers only. */
+const comfortableListingTheme = () => mallWith({
+  filters: { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16, order: [...PRICE_FIRST], searchPlacement: "same", ruled: false },
+  toolbar: ["breadcrumb", "category-banner", "result-count", "sort", "applied-chips"],
+  phoneBanner: false,
+});
 
 describe("listing layouts", () => {
   it("defaults Marketplace categories to cards and searches to rows, with both view controls", async () => {
@@ -394,34 +440,39 @@ describe("listing layouts", () => {
     const document = await renderListing(themeWith({ variant: "list" }, STANDARD_CARD), plain());
     expect(document.querySelector("#filter-section")!.className).toContain("lg:static");
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
-    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(LIST_ROW_IMAGE_SIZES);
-    // The mall card's photo keeps its fixed width in a list row too, and names it.
-    const mall = await renderListing(themeWith({ variant: "list" }), plain());
-    expect(mall.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(cardPhotoSizes("mall", LIST_ROW_IMAGE_SIZES));
+    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(cardSizes(LIST_ROW_IMAGE_SIZES));
+    // A contained photo is drawn in a margin, so its row photo asks for 88% of the column.
+    const contained = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+    contained.tokens.imageFit = "contain";
+    contained.blocks.listing.layout = { variant: "list", settings: {} } as never;
+    const mall = await renderListing(contained, plain());
+    expect(mall.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(cardSizes(LIST_ROW_IMAGE_SIZES, contained));
+    expect(mall.querySelector(".product-card-media img")!.getAttribute("sizes")).not.toBe(cardSizes(LIST_ROW_IMAGE_SIZES));
   });
 
-  it("quick-grid needs the quick-add card and packs its own denser grid", async () => {
-    const quickAdd = { variant: "quick-add", settings: {} } as StorefrontThemeBlocks["card"];
-    const document = await renderListing(themeWith({ variant: "quick-grid" }, quickAdd), plain());
-    const frame = document.querySelector(".product-grid-frame")!;
-    expect(frame.getAttribute("data-catalog-results")).toBe("quick");
-    expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
-    expect(document.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
-    // Without the quick-add card it falls back to the plain grid; the filter style stays the theme's.
+  it("quick-grid packs its own denser grid with any card", async () => {
+    for (const card of [STANDARD_CARD, { variant: "standard", settings: { facts: "swatches", action: "quick-add", hoverImage: true } } as StorefrontThemeBlocks["card"]]) {
+      const document = await renderListing(themeWith({ variant: "quick-grid" }, card), plain());
+      const frame = document.querySelector(".product-grid-frame")!;
+      expect(frame.getAttribute("data-catalog-results")).toBe("quick");
+      expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
+      expect(document.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
+      expect(frame.querySelectorAll("[data-theme-component='product-card']").length).toBeGreaterThan(0);
+    }
+    // The theme's own card renders too: no card is required.
     const fallback = await renderListing(themeWith({ variant: "quick-grid" }), plain());
-    expect(fallback.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-results")).toBe(false);
-    expect(fallback.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
+    expect(fallback.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("quick");
   });
 
-  it("lets buyers switch a quick-add category grid to list rows", async () => {
-    const quickAdd = { variant: "quick-add", settings: {} } as StorefrontThemeBlocks["card"];
+  it("lets buyers switch a quick-grid category listing to list rows", async () => {
+    const quickAdd = { variant: "standard", settings: { facts: "none", action: "quick-add", hoverImage: false } } as StorefrontThemeBlocks["card"];
     const document = await renderListing(themeWith({ variant: "quick-grid", phoneLayout: "list-row", toolbar: ["grid-list-toggle"] }, quickAdd), plain());
     const frame = document.querySelector(".product-grid-frame")!;
     expect(frame.getAttribute("data-catalog-results")).toBe("grid");
     expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
     expect(frame.getAttribute("data-catalog-view-storage-key")).toBe("scalius:listing-view:browse");
-    // The restored list view's row photo, shrunk by the quick-add photo margin.
-    expect(frame.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(cardPhotoSizes("quick-add", LIST_ROW_IMAGE_SIZES));
+    // The restored list view's row photo.
+    expect(frame.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(cardSizes(LIST_ROW_IMAGE_SIZES));
     expect(frame.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
     expect(document.querySelectorAll("[data-catalog-view-toggle]")).toHaveLength(2);
     expect(document.querySelector("[data-catalog-view-mobile] [data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
@@ -471,8 +522,8 @@ describe("listing layouts", () => {
     expect(shelves[1]!.querySelectorAll("[data-theme-component='product-card']")).toHaveLength(3);
   });
 
-  it("marks heritage shelves for their wider card spacing", async () => {
-    const theme = storefrontTemplateTheme("heritage-editorial");
+  it("marks airy shelves for their wider card spacing", async () => {
+    const theme = themeWith({ variant: "shelves", settings: { maxShelves: 8, spacing: "airy" } });
     const document = await renderListing(theme, {
       ...plain(),
       products: PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "silk" : "cotton" })),
@@ -482,6 +533,17 @@ describe("listing layouts", () => {
       ],
     });
     expect(document.querySelector("[data-catalog-shelves][data-catalog-heritage]")).not.toBeNull();
+    // Standard spacing leaves the mark off.
+    const standard = await renderListing(themeWith({ variant: "shelves", settings: { maxShelves: 8, spacing: "standard" } }), {
+      ...plain(),
+      products: PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 2 ? "silk" : "cotton" })),
+      subListings: [
+        { id: "cotton", label: "Cotton", href: "/categories/cotton" },
+        { id: "silk", label: "Silk", href: "/categories/silk" },
+      ],
+    });
+    expect(standard.querySelector("[data-catalog-shelves]")).not.toBeNull();
+    expect(standard.querySelector("[data-catalog-heritage]")).toBeNull();
   });
 
   it("lets buyers switch category shelves to grouped list rows without duplicating cards", async () => {
@@ -842,7 +904,7 @@ describe("filter styles (fidelity slice 3)", () => {
     const document = await renderListing(theme, { ...plain(), facets: [FOURTEEN, ...FACETS.slice(0, 1)] }, TREE_STORE_SHAPE);
     const column = document.querySelector("#filter-section")!;
     expect(column.getAttribute("data-placement")).toBe("sidebar");
-    expect(column.getAttribute("style")).toBe("--catalog-filter-column:262px;--catalog-filter-row:22px;--catalog-filter-label:14px");
+    expect(column.getAttribute("style")).toBe("--catalog-filter-column:262px;--catalog-filter-row:24px;--catalog-filter-label:14px");
     const form = column.querySelector("form")!;
     expect(form.getAttribute("data-filter-style")).toBe("sidebar-dense");
     // No in-listing search field in the dense column (the header searches).
@@ -971,8 +1033,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(unknown.querySelector("#filter-section")!.getAttribute("data-placement")).toBe("sidebar");
   });
 
-  it("lets mass-retail merchants choose sticky category sidebars without losing its four-column grid", async () => {
-    const theme = storefrontTemplateTheme("mass-retail");
+  it("lets merchants with a filter drawer choose sticky category sidebars without losing their four-column cap", async () => {
+    const theme = pillRowListingTheme();
     const defaultPage = await renderListing(theme, { ...plain(), kind: "category" });
     expect(defaultPage.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
     expect(defaultPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
@@ -983,8 +1045,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(sidebarPage.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
   });
 
-  it("defaults mass-retail categories to cards and searches to rows with a view choice", async () => {
-    const theme = storefrontTemplateTheme("mass-retail");
+  it("shows categories as cards and searches as rows with a view choice when the merchant asks for it", async () => {
+    const theme = pillRowListingTheme();
     const page = await renderListing(theme, { ...plain(), kind: "category" });
     expect(page.querySelector(".product-grid")!.hasAttribute("data-phone-layout")).toBe(false);
     expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
@@ -1016,8 +1078,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(merchantOnly.querySelector("[data-catalog-view-toggle]")).toBeNull();
   });
 
-  it("shows fashion-value child categories when the listing has published children", async () => {
-    const page = await renderListing(storefrontTemplateTheme("fashion-value"), {
+  it("shows child categories as pills when the listing has published children", async () => {
+    const page = await renderListing(ruledRailListingTheme(), {
       ...plain(), kind: "category",
       subListings: [
         { id: "cotton", label: "Cotton", href: "/categories/cotton" },
@@ -1028,8 +1090,8 @@ describe("filter styles (fidelity slice 3)", () => {
       .toEqual(["Cotton", "Silk"]);
   });
 
-  it("puts truthful mass-retail phone filters, sort, and popular values in one scroll row", async () => {
-    const theme = storefrontTemplateTheme("mass-retail");
+  it("puts truthful phone filters, sort, and popular values in one scroll row with the pill-row phone bar", async () => {
+    const theme = pillRowListingTheme();
     for (const [kind, url] of [
       ["category", "https://shop.test/categories/sarees"],
       ["search", "https://shop.test/search?q=linen&hasDiscount=true"],
@@ -1053,16 +1115,39 @@ describe("filter styles (fidelity slice 3)", () => {
     }
   });
 
-  it("renders department tiles in a capped grid with the merchant's card choice", async () => {
+  it("sets no column cap from the card: only the merchant's Max columns caps the grid", async () => {
     const theme = storefrontTemplateTheme("department-mall");
-    theme.blocks.card = { variant: "mall", settings: {} };
     const page = await renderListing(theme, { ...plain(), kind: "category" });
-    expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-card")).toBe("mall");
-    expect(page.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+    const frame = page.querySelector(".product-grid-frame")!;
+    expect(frame.hasAttribute("data-catalog-card")).toBe(false);
+    expect(frame.hasAttribute("data-catalog-grid-columns")).toBe(false);
+    theme.blocks.listing.maxColumns = 4;
+    const capped = await renderListing(theme, { ...plain(), kind: "category" });
+    expect(capped.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+    expect(capped.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-card")).toBe(false);
+  });
+
+  it("renders the one card for every facts and action setting on a listing, under one visually hidden Products heading", async () => {
+    for (const facts of ["none", "key-specs", "swatches", "delivery"] as const) {
+      for (const action of ["none", "quick-add", "full"] as const) {
+        const card = { variant: "standard", settings: { facts, action, hoverImage: false } } as StorefrontThemeBlocks["card"];
+        const page = await renderListing(themeWith({}, card), plain());
+        const cards = page.querySelectorAll("[data-theme-component='product-card']");
+        expect(cards.length, `${facts}/${action}`).toBe(PRODUCTS.length);
+        expect(cards[0]!.getAttribute("data-action")).toBe(action);
+        expect(cards[0]!.hasAttribute("data-card-variant")).toBe(false);
+        const frame = page.querySelector(".product-grid-frame")!;
+        const heading = frame.previousElementSibling!;
+        expect(heading.tagName).toBe("H2");
+        expect(heading.className).toBe("sr-only");
+        expect(heading.textContent!.trim()).toBe("Products");
+        expect(Array.from(cards).every((node) => node.querySelector(".product-card-name")!.tagName === "H3")).toBe(true);
+      }
+    }
   });
 
   it("opens with one compact band: breadcrumb, h1 at the theme's title size, count and sort", async () => {
-    const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
+    const document = await renderListing(specListingTheme(), {
       ...plain(),
       band: { title: "Laptop", breadcrumb: [{ label: "Home", href: "/" }, { label: "Computers", href: "/categories/computers" }], countLabel: "3,780 products" },
       subListings: [{ id: "gaming", label: "Gaming Laptop", href: "/categories/gaming" }, { id: "ultrabook", label: "Premium Ultrabook", href: "/categories/ultrabook" }],
@@ -1085,8 +1170,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(document.body.textContent).not.toContain("Showing 20 of");
   });
 
-  it("keeps the normal toolbar when a merchant changes the spec filters to a bar", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+  it("keeps the normal toolbar when a merchant changes the beside-filters band's filters to a bar", async () => {
+    const theme = specListingTheme();
     theme.blocks.listing.filters = { style: "bar-dropdowns", openByDefault: false, searchPlacement: "same", ruled: false };
     const document = await renderListing(theme, plain(), TREE_STORE_SHAPE);
     const band = document.querySelector("[data-catalog-band]")!;
@@ -1095,7 +1180,7 @@ describe("filter styles (fidelity slice 3)", () => {
   });
 
   it("keeps the spec category title visible on phones when breadcrumbs are disabled", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+    const theme = specListingTheme();
     theme.blocks.listing.toolbar = theme.blocks.listing.toolbar.filter((piece) => piece !== "breadcrumb");
     const document = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
     const band = document.querySelector(".catalog-spec-results-band")!;
@@ -1105,7 +1190,7 @@ describe("filter styles (fidelity slice 3)", () => {
   });
 
   it("offers matching search categories as wrapped pills without hiding the remaining facet", async () => {
-    const document = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
+    const document = await renderListing(specListingTheme(), {
       ...listingProps("https://shop.test/search?q=linen", {}, [CATEGORY_FACET, ...FACETS]),
       kind: "search",
     }, TREE_STORE_SHAPE);
@@ -1115,7 +1200,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(document.querySelector("#catalog-facet-category")).not.toBeNull();
     expect(pills.compareDocumentPosition(document.querySelector("[data-catalog-layout]")!) & 4).toBe(4);
 
-    const noCategoryFacet = await renderListing(storefrontTemplateTheme("spec-catalogue"), {
+    const noCategoryFacet = await renderListing(specListingTheme(), {
       ...listingProps("https://shop.test/search?q=linen"),
       kind: "search",
       band: { title: "Search results", countLabel: "50 results for linen" },
@@ -1127,7 +1212,7 @@ describe("filter styles (fidelity slice 3)", () => {
   });
 
   it("gives spec search the full five-card width while preserving merchant views and filter controls", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+    const theme = specListingTheme();
     const search = { ...listingProps("https://shop.test/search?q=linen", {}, [CATEGORY_FACET, ...FACETS]), kind: "search" as const };
     const defaultPage = await renderListing(theme, search, TREE_STORE_SHAPE);
     expect(defaultPage.querySelector("[data-catalog-kind='search'][data-catalog-layout='drawer']")).not.toBeNull();
@@ -1137,7 +1222,7 @@ describe("filter styles (fidelity slice 3)", () => {
 
     const category = await renderListing(theme, { ...plain(), kind: "category" }, TREE_STORE_SHAPE);
     expect(category.querySelector("[data-catalog-kind='category'][data-catalog-layout='sidebar']")).not.toBeNull();
-    expect(category.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+    expect(category.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-grid-columns")).toBe(false);
 
     theme.blocks.listing.searchLayout = "list";
     theme.blocks.listing.toolbar.push("grid-list-toggle");
@@ -1148,11 +1233,11 @@ describe("filter styles (fidelity slice 3)", () => {
     theme.blocks.listing.filters = { style: "sidebar-comfortable", openByDefault: true, searchPlacement: "same", ruled: false };
     const sidebar = await renderListing(theme, search, TREE_STORE_SHAPE);
     expect(sidebar.querySelector("[data-catalog-kind='search'][data-catalog-layout='sidebar'] > #filter-section")).not.toBeNull();
-    expect(sidebar.querySelector(".product-grid-frame")!.getAttribute("data-catalog-grid-columns")).toBe("4");
+    expect(sidebar.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-grid-columns")).toBe(false);
   });
 
   it("bounds spec search phone chips and leaves only real refinements above products", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+    const theme = specListingTheme();
     const facets = [CATEGORY_FACET, ...FACETS];
     const search = { ...listingProps("https://shop.test/search?q=laptop&size=M&hasDiscount=true", {}, facets), kind: "search" as const };
     const page = await renderListing(theme, search, TREE_STORE_SHAPE);
@@ -1172,19 +1257,21 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(alternateHeader.querySelector("nav[aria-label='Applied filters']")!.textContent).toContain("Search:");
   });
 
-  it("puts price first only in the spec catalogue's dense filter rail", async () => {
+  it("puts price first only where the merchant's group order says so", async () => {
     const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
       .map((span) => span.textContent!.trim());
-    const spec = storefrontTemplateTheme("spec-catalogue");
+    const spec = specListingTheme();
     expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Price", "Availability", "Size"]);
     expect(names(await renderListing(storefrontTemplateTheme("marketplace"), plain(), TREE_STORE_SHAPE)).slice(0, 3))
+      .toEqual(["Availability", "Size", "Fabric"]);
+    expect(names(await renderListing(storefrontTemplateTheme("department-mall"), plain(), TREE_STORE_SHAPE)).slice(0, 3))
       .toEqual(["Availability", "Size", "Fabric"]);
     spec.blocks.listing.filters = { style: "bar-dropdowns", openByDefault: false, searchPlacement: "same", ruled: false };
     expect(names(await renderListing(spec, plain(), TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Availability", "Price", "Size"]);
   });
 
   it("uses the merchant's group order while keeping facet order and omitting absent groups", async () => {
-    const theme = storefrontTemplateTheme("rounded-tech");
+    const theme = comfortableListingTheme();
     theme.blocks.listing.filters.order = ["other", "price", "category", "availability", "brand", "rating"];
     const brand = facet("brand", "Brand", [["samsung", 8], ["apple", 5]]);
     const page = { ...plain(), facets: [CATEGORY_FACET, brand, ...FACETS] };
@@ -1209,10 +1296,10 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(names(await renderListing(theme, page, TREE_STORE_SHAPE)).slice(0, 3)).toEqual(["Category", "Availability", "Price"]);
   });
 
-  it("shows rounded-tech buying filters before category links in its comfortable rail", async () => {
+  it("shows buying filters before category links in a price-first comfortable rail", async () => {
     const names = (document: Document) => Array.from(document.querySelectorAll("#filterForm .catalog-filter-groups > details > summary > span:first-child"))
       .map((span) => span.textContent!.trim());
-    const theme = storefrontTemplateTheme("rounded-tech");
+    const theme = comfortableListingTheme();
     const page = { ...plain(), facets: [CATEGORY_FACET, ...FACETS] };
     const comfortable = names(await renderListing(theme, page, TREE_STORE_SHAPE));
     expect(comfortable.slice(0, 3)).toEqual(["Price", "Availability", "Size"]);
@@ -1298,28 +1385,26 @@ describe("listing page", () => {
     expect(breadcrumb.getAttribute("aria-label")).toBe("Breadcrumb");
   });
 
-  it("keeps rounded-tech category banners off phone listings", async () => {
-    const document = await categoryPage(storefrontTemplateTheme("rounded-tech"));
+  it("keeps category banners off phone listings when the merchant turns the phone banner off", async () => {
+    const document = await categoryPage(comfortableListingTheme());
     const banner = document.querySelector("img[data-catalog-banner]")!;
     expect(banner.className).toContain("hidden sm:block");
   });
 
   it("renders every template's listing without duplicate ids", async () => {
-    for (const id of ["boutique", "heritage-editorial", "fashion-value", "spec-catalogue", "rounded-tech", "marketplace", "mass-retail", "department-mall", "daily-essentials", "showcase-landing"] as const) {
+    for (const id of ["boutique", "marketplace", "department-mall", "daily-essentials", "showcase-landing"] as const) {
       const document = parse(await render(PAGE, storefrontTemplateTheme(id), { kind: "search", hero: { title: "Search results", count: 50 }, listing: plain() }, EMPTY_SLOT, TREE_STORE_SHAPE));
       expect(duplicateIds(document), id).toEqual([]);
       expect(document.querySelectorAll("[data-theme-component='product-card']").length, id).toBeGreaterThan(0);
       if (id === "boutique") expect(document.querySelector(".min-h-screen")!.classList.contains("bg-background")).toBe(true);
-      if (id === "rounded-tech") expect(document.querySelector("[data-catalog-card='tech-rounded']")).not.toBeNull();
-      if (id === "heritage-editorial") expect(document.querySelector("[data-catalog-card='portrait']")).not.toBeNull();
-      if (id === "spec-catalogue") expect(document.querySelector("[data-catalog-card='spec'][data-catalog-grid-columns='5']")).not.toBeNull();
-      expect(document.querySelector("[data-catalog-rail='fashion']") !== null, id).toBe(id === "fashion-value");
-      expect(document.querySelector("[data-catalog-fashion-phone-bar]") !== null, id).toBe(id === "fashion-value");
+      // One card in every preset: no per-site card marks on the page.
+      expect(document.querySelector("[data-catalog-card], [data-card-variant]"), id).toBeNull();
+      expect(document.querySelectorAll("h2.sr-only").length, id).toBeGreaterThan(0);
     }
   });
 
-  it("keeps a fashion merchant's filter-style override", async () => {
-    const theme = storefrontTemplateTheme("fashion-value");
+  it("keeps a merchant's filter-style override on a ruled rail", async () => {
+    const theme = ruledRailListingTheme();
     theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true, searchPlacement: "same", ruled: false };
     const document = await categoryPage(theme);
     expect(document.querySelector("[data-catalog-rail='fashion']")).toBeNull();

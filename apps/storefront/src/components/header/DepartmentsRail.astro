@@ -147,6 +147,14 @@ const onHome = Astro.url.pathname === "/";
     color: var(--accent-foreground);
   }
 
+  /* The open-on-home list hangs over the page, so the page is at least as tall
+     as the list: it never covers the footer's links (WCAG 2.5.8 target space). */
+  @media (min-width: 64rem) {
+    body:has(.drail-menu[data-menu-home-open][open]) #main-content {
+      min-height: 28rem;
+    }
+  }
+
   /* Scrolled past the hero: the open-on-home list steps aside (HeaderLayout
      also closes it, so its state stays truthful). */
   #main-header.is-scrolled .drail-menu[data-menu-home-open] > .drail-panel {

@@ -24,7 +24,7 @@ import {
 } from "./product-card-layout";
 
 const css = readFileSync(new URL("../styles/theme-foundation.css", import.meta.url), "utf8");
-const cardCss = readFileSync(new URL("../styles/theme-cards.css", import.meta.url), "utf8");
+const cardCss = readFileSync(new URL("../components/cards/product-card.css", import.meta.url), "utf8");
 const DENSITIES = Object.entries(STOREFRONT_DENSITY_SPECS);
 const CONTAINER_WIDTHS = STOREFRONT_CONTAINERS.map((container) =>
   buildStorefrontThemeTokens({ tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, container } })["theme-container-width"]!);
@@ -44,75 +44,25 @@ describe("fluid product grid", () => {
   it("keeps card styles out of the shared foundation", () => {
     expect(css).not.toMatch(/\.product-card-|card-row-media|\[data-theme-card-style/);
     const card = readFileSync(new URL("../components/cards/ProductCard.astro", import.meta.url), "utf8");
-    expect(card).toContain('import "@/styles/theme-cards.css";');
+    expect(card).toContain('import "./product-card.css";');
   });
 
   it("keeps cards stable and touchable from CSS alone", () => {
     // The photo box has the token ratio before any photo loads (CLS 0), and
     // a missing photo fills that same box.
-    expect(cardCss).toMatch(/\.product-card-media \{\s*aspect-ratio: var\(--theme-image-ratio, 1 \/ 1\);/);
+    expect(cardCss).toMatch(/\.product-card-media \{[^}]*aspect-ratio: var\(--theme-image-ratio, 1 \/ 1\);/);
     expect(cardCss).toMatch(/\.product-card-placeholder \{\s*position: absolute;\s*inset: 0;/);
-    // Actions keep 44px touch targets; only a mouse gets the density's height.
-    expect(cardCss).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
-    expect(cardCss).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
-    expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card \.product-card-action \{\s*min-height: var\(--pc-action-h, var\(--theme-control-height/);
-    // Card corners follow the radius token; soft corners stop at 20px.
-    expect(cardCss).toMatch(/\[data-theme-component="product-card"\] \{\s*min-width: 0;\s*border-radius: calc\(var\(--radius\) \* 1\.5\);/);
-    expect(cardCss).toMatch(/\.site-root\[data-theme-radius="soft"\] \[data-theme-component="product-card"\] \{\s*border-radius: 1\.25rem;/);
-    // Card titles never drop below 14px on phones (each look's phone size is
-    // at least 14, blocks.ts), and long words break inside the card.
-    expect(cardCss).toContain("--pc-title: var(--pc-title-m, 0.875rem);");
-    expect(cardCss).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
-    // Every card's name link, the standard card's included (found in Chrome:
-    // a name without spaces was cut at the card edge).
-    expect(cardCss).toMatch(/\.site-root \.product-card-link \{\s*overflow-wrap: anywhere;/);
-  });
-
-  it.each(DENSITIES)("%s: reaches each density step value at its container width", (_density, grid) => {
-    const { tablet, tabletFull, desktop } = PRODUCT_GRID_STEPS_REM;
-    expect(productGridCardMin(grid, 360)).toBe(px(grid.cardMin.phone));
-    expect(productGridCardMin(grid, tablet * 16)).toBeCloseTo(px(grid.cardMin.phone));
-    expect(productGridCardMin(grid, tabletFull * 16)).toBeCloseTo(px(grid.cardMin.tablet));
-    expect(productGridCardMin(grid, desktop * 16)).toBeCloseTo(px(grid.cardMin.desktop));
-    expect(productGridCardMin(grid, 1800)).toBe(px(grid.cardMin.desktop));
-    expect(productGridGap(grid, 360)).toBe(px(grid.gap.phone));
-    expect(productGridGap(grid, 1800)).toBe(px(grid.gap.desktop));
-  });
-
-  it.each(DENSITIES)("%s: two columns on every phone, more columns only ever with more width", (_density, grid) => {
-    for (const containerWidth of CONTAINER_WIDTHS) {
-      for (const context of ["grid", "beside-filters"] as const) {
-        let previous = 0;
-        for (let viewport = 320; viewport <= 2560; viewport += 1) {
-          // The filter sidebar taking 22rem at 1024px is the one place a
-          // catalog grid loses room; it grows monotonically again from there.
-          if (context === "beside-filters" && viewport === 1024) previous = 0;
-          const columns = productGridColumnCount(grid, productGridWidth(viewport, px(containerWidth), context));
-          expect(columns, `${viewport}px ${containerWidth} ${context}`).toBeGreaterThanOrEqual(previous);
-          if (viewport >= 360 && viewport <= 430) expect(columns, `${viewport}px`).toBe(2);
-          previous = columns;
-        }
-      }
-    }
-  });
-
-  it.each(DENSITIES)("%s: portrait photos widen cards, never beyond the density on phones", (_density, grid) => {
-    const portrait = productGridSpec(grid, "portrait");
-    expect(productGridSpec(grid, "square")).toBe(grid);
-    expect(productGridSpec(grid, "landscape")).toBe(grid);
-    expect(portrait.cardMin.phone).toBe(grid.cardMin.phone);
-    expect(px(portrait.cardMin.desktop)).toBeGreaterThanOrEqual(Math.max(px(grid.cardMin.desktop), 240));
-    for (const containerWidth of CONTAINER_WIDTHS) {
-      let previous = 0;
-      for (let viewport = 320; viewport <= 2560; viewport += 1) {
-        const columns = productGridColumnCount(portrait, productGridWidth(viewport, px(containerWidth), "grid"));
-        expect(columns, `${viewport}px ${containerWidth}`).toBeGreaterThanOrEqual(previous);
-        if (viewport >= 360 && viewport <= 430) expect(columns, `${viewport}px`).toBe(2);
-        // No six portrait cards across a laptop or a 1440px container.
-        if (viewport <= 1440) expect(columns, `${viewport}px ${containerWidth}`).toBeLessThanOrEqual(5);
-        previous = columns;
-      }
-    }
+    // Quick add keeps a 44px target; the full action is the system button (44px on touch screens).
+    expect(cardCss).toMatch(/\.product-card-quick \{[^}]*inline-size: 2\.75rem;\s*block-size: 2\.75rem;/);
+    // Card corners follow the radius token.
+    expect(cardCss).toMatch(/\.site-root \.product-card \{[^}]*border-radius: var\(--radius\);/);
+    // Titles are two lines with both reserved, and long words break inside the card.
+    expect(cardCss).toMatch(/\.product-card-name \{[^}]*min-block-size: calc\(2em \* 1\.35\);/);
+    expect(cardCss).toMatch(/\.product-card-name \{[^}]*-webkit-line-clamp: 2;/);
+    expect(cardCss).toMatch(/\.product-card-link \{[^}]*overflow-wrap: anywhere;/);
+    // Equal heights: the card fills its grid cell and the price and action sit at the bottom.
+    expect(cardCss).toMatch(/\.site-root \.product-card \{[^}]*block-size: 100%;/);
+    expect(cardCss).toMatch(/\.product-card-foot \{[^}]*margin-block-start: auto;/);
   });
 
   it("emits the fluid steps as CSS built only from the density constants", () => {

@@ -96,10 +96,14 @@ describe("runPluginFunctions", () => {
     expect(await incident("beta.invalid")).toEqual([expect.stringMatching(/^error host function:checkout\.discounts: Invalid checkout\.discounts output at discounts\.0\.value\.amountMinor/)]);
     expect(await incident("gamma.throws")).toEqual(["error host function:checkout.discounts: TypeError: boom"]);
     // A timeout is also a limit breach (quota log line; repeated breaches stop the app).
-    expect(await incident("slow.late")).toEqual([
+    // Two writes in the same instant (Workers freeze the clock in a request):
+    // their relative order is not meaningful, so compare them as a set.
+    const slowLines = await incident("slow.late");
+    expect(slowLines).toHaveLength(2);
+    expect(slowLines).toEqual(expect.arrayContaining([
       "error host function:checkout.discounts: function:checkout.discounts exceeded its 100 ms wall-time limit.",
       "error quota Over its run time limit: function:checkout.discounts ran longer than 100 ms",
-    ]);
+    ]));
   });
 
   it("rejects an input that does not match the point's schema (a platform bug)", async () => {

@@ -127,7 +127,7 @@ describe("themes page", () => {
       lastPublished: { revision: 1, publishedBy: "staff_1", publishedByName: "Rahima", createdAt: "2026-10-03T10:30:00Z" } as never,
     }));
     expect([...container.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Current theme", "Templates"]);
-    expect(current().textContent).toContain("Department mall");
+    expect(current().textContent).toContain("Department");
     expect(current().textContent).toContain("Live");
     expect(current().textContent).toContain("Published by Rahima,");
     expect(current().querySelector('a[href="/admin/online-store/theme/editor"]')?.textContent).toBe("Customize");
@@ -138,36 +138,36 @@ describe("themes page", () => {
   it("offers every template drawn in its own colours, with the current one selected", () => {
     render(workspaceOf(DEFAULT_STOREFRONT_THEME));
     const templates = container.querySelectorAll("[role=radiogroup]")[0]!;
-    expect(templates.querySelectorAll("[role=radio]")).toHaveLength(10);
-    expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
-    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("false");
+    expect(templates.querySelectorAll("[role=radio]")).toHaveLength(5);
+    expect(radio("Department").getAttribute("aria-checked")).toBe("true");
+    expect(radio("Boutique").getAttribute("aria-checked")).toBe("false");
     // Previews are decorative; the radio's text names the choice.
-    expect(radio("Fashion value").querySelector("[aria-hidden=true]")).not.toBeNull();
+    expect(radio("Boutique").querySelector("[aria-hidden=true]")).not.toBeNull();
     const marketplace = radio("Marketplace").querySelector<HTMLElement>("[data-marketplace-preview]")!;
     expect(marketplace.style.getPropertyValue("--sk-purchase")).toBe(storefrontTemplateTheme("marketplace").tokens.colors.accent);
     expect(marketplace.querySelector("[data-marketplace-category-grid]")?.children).toHaveLength(4);
     expect(marketplace.querySelectorAll("[data-marketplace-result-row]")).toHaveLength(2);
-    expect(radio("Department mall").querySelector("[data-marketplace-preview]")).toBeNull();
+    expect(radio("Department").querySelector("[data-marketplace-preview]")).toBeNull();
   });
 
   it("applies a template to the draft only after confirmation, keeping the merchant's content", async () => {
     const theme = withContent(DEFAULT_STOREFRONT_THEME);
     render(workspaceOf(theme));
-    act(() => radio("Fashion value").click());
+    act(() => radio("Boutique").click());
     const dialog = document.querySelector("[role=alertdialog]")!;
-    expect(dialog.textContent).toContain("Replace your changes with Fashion value?");
+    expect(dialog.textContent).toContain("Replace your changes with Boutique?");
     act(() => confirm("Cancel").click());
     expect(api.draft).not.toHaveBeenCalled();
 
-    act(() => radio("Fashion value").click());
+    act(() => radio("Boutique").click());
     await act(async () => confirm("Replace").click());
     expect(api.draft).toHaveBeenCalledTimes(1);
     const body = api.draft.mock.calls[0]![0].body as { theme: StorefrontThemeDocument; expectedDraftRevision: number; basePublishedRevision: number };
     expect(body).toMatchObject({ expectedDraftRevision: 1, basePublishedRevision: 1 });
-    const fashion = storefrontTemplateTheme("fashion-value");
-    expect(body.theme.template).toBe("fashion-value");
-    expect(body.theme.blocks.header).toEqual(fashion.blocks.header);
-    expect(body.theme.tokens).toEqual(fashion.tokens);
+    const boutique = storefrontTemplateTheme("boutique");
+    expect(body.theme.template).toBe("boutique");
+    expect(body.theme.blocks.header).toEqual(boutique.blocks.header);
+    expect(body.theme.tokens).toEqual(boutique.tokens);
     expect(body.theme.brand).toEqual(theme.brand);
     expect(body.theme.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
     expect(body.theme.blocks.footer.settings).toMatchObject({ tagline: "Pure honey" });
@@ -180,19 +180,19 @@ describe("themes page", () => {
 
   it("saves a chosen grocery template with its merchant defaults", async () => {
     render(workspaceOf(DEFAULT_STOREFRONT_THEME));
-    act(() => radio("Daily essentials").click());
+    act(() => radio("Essentials").click());
     await act(async () => confirm("Replace").click());
     const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
     expect(saved.template).toBe("daily-essentials");
-    expect(saved.blocks.card).toEqual({ variant: "quick-add", settings: { fullAction: true, showBuyNow: false } });
+    expect(saved.blocks.card).toEqual({ variant: "standard", settings: { facts: "none", action: "quick-add", hoverImage: false } });
   });
 
   it("names the template a changed theme is based on", () => {
-    const tuned = storefrontTemplateTheme("fashion-value");
+    const tuned = storefrontTemplateTheme("boutique");
     tuned.blocks = { ...tuned.blocks, header: { variant: "spec-two-row", settings: {} } };
     render(workspaceOf(tuned));
-    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("false");
-    expect(current().textContent).toContain("Changed (based on Fashion value)");
+    expect(radio("Boutique").getAttribute("aria-checked")).toBe("false");
+    expect(current().textContent).toContain("Changed (based on Boutique)");
   });
 
   it("publishes an unpublished draft from the page after confirmation", async () => {
@@ -210,7 +210,7 @@ describe("themes page", () => {
   it("reloads and says so when another session changed the draft", async () => {
     render(workspaceOf(DEFAULT_STOREFRONT_THEME));
     api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "CONFLICT"));
-    act(() => radio("Fashion value").click());
+    act(() => radio("Boutique").click());
     await act(async () => confirm("Replace").click());
     expect(toasts.error).toHaveBeenCalledTimes(1);
     expect(api.workspace).toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe("themes page", () => {
     expect(current().textContent).toContain("Unpublished changes");
     expect(button("Publish theme")).toBeUndefined();
     expect(button("Preview")).toBeDefined();
-    act(() => radio("Fashion value").click());
+    act(() => radio("Boutique").click());
     expect(document.querySelector("[role=alertdialog]")).toBeNull();
     expect(container.textContent).toContain("You can view this theme but not change it.");
   });

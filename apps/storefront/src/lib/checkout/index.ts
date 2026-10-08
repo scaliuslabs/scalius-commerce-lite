@@ -773,7 +773,7 @@ export function renderOrderSummaryDetails(
       details,
       giftCopy.amountDueText,
       currencyFmt(quoteAmountDue(quote).amountDue, quote),
-      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary",
+      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary-ink",
     );
   } else if (isDepositPaymentRequired(config, quote.totalAmount)) {
     const advance = config.partialPaymentAmount;
@@ -782,7 +782,7 @@ export function renderOrderSummaryDetails(
       details,
       checkoutCopy.dueNowText,
       currencyFmt(advance, quote),
-      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary",
+      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary-ink",
     );
     appendSummaryRow(
       details,

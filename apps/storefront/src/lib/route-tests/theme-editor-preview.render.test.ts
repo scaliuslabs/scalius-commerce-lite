@@ -501,7 +501,7 @@ describe("the preview paint route", () => {
     expect(typeof painted.fonts).toBe("string");
 
     // Another template's document paints another look.
-    const other = JSON.parse((await paint({ theme: storefrontTemplateTheme("heritage-editorial") })).text) as { css: string };
+    const other = JSON.parse((await paint({ theme: storefrontTemplateTheme("boutique") })).text) as { css: string };
     expect(other.css).not.toBe(painted.css);
   });
 

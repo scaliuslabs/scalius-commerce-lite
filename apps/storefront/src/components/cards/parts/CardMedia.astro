@@ -1,9 +1,9 @@
 ---
-// The card photo box every card variant shares. Its size is fixed before
-// any photo loads (CLS 0): the standard card follows the theme's ratio and
-// fit tokens, every other card its own look (theme-cards.css). A product
+// The card's photo box. Its size is fixed before any photo loads (CLS 0):
+// the theme's image ratio and fit tokens (product-card.css). A product
 // without a photo shows its initial on the muted surface in the same box,
-// never a collapsed tile.
+// never a collapsed tile. The badges and the quick-add button come in the
+// default slot.
 //
 // The hover photo is not in the HTML: the box names its CDN URL
 // (`data-hover-src`, with the card's srcset cap in `data-hover-max`), and a
@@ -20,26 +20,14 @@ interface Props {
   loading: ProductCardImageLoading;
   /** Intrinsic width and height (the box's ratio). */
   dimensions: { width: number; height: number };
-  /** The discount pill on the photo, when the card puts it there. */
-  badge: string | null;
-  /** The mark's shape on the variants' own cards (pill, tag, flag...), drawn by theme-cards.css. */
-  badgeStyle?: string;
-  /** Extra classes for the box (the standard card keeps its own). */
-  class?: string;
 }
 
-const { model, sizes, loading, dimensions, badge, badgeStyle, class: className } = Astro.props;
+const { model, sizes, loading, dimensions } = Astro.props;
 const { width, height } = dimensions;
 const hover = model.image ? model.hoverImage : null;
-// Hooks for the variants' own badge drawing (the standard card's markup stays as it was).
-const own = className !== undefined;
 ---
 
-<div
-  class:list={own ? ["product-card-media", className] : "product-card-media relative overflow-hidden bg-muted"}
-  data-hover-src={hover?.url}
-  data-hover-max={hover?.maxWidth}
->
+<div class="product-card-media" data-hover-src={hover?.url} data-hover-max={hover?.maxWidth}>
   {
     model.image ? (
       <img
@@ -52,7 +40,7 @@ const own = className !== undefined;
         loading={loading.loading}
         fetchpriority={loading.fetchpriority === "auto" ? undefined : loading.fetchpriority}
         decoding={loading.decoding}
-        class={own ? "product-card-photo" : "product-card-photo w-full h-full object-center"}
+        class="product-card-photo"
       />
     ) : (
       <div class="product-card-placeholder" aria-hidden="true" data-card-placeholder>
@@ -60,23 +48,6 @@ const own = className !== undefined;
       </div>
     )
   }
-
-  {(badge || model.soldOut) && <div class={own ? "product-card-badges" : "absolute top-3 inset-s-3 flex flex-col gap-1.5 pointer-events-none"}>
-    {
-      badge && (
-        <span data-card-discount class:list={own ? ["product-card-badge", badgeStyle && `pc-badge-${badgeStyle}`] : "px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm"}>
-          {badge}
-        </span>
-      )
-    }
-    {
-      model.soldOut && (
-        <span data-card-sold-out={own ? "" : undefined} class={own ? "product-card-badge" : "px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border"}>
-          Sold out
-        </span>
-      )
-    }
-  </div>}
   <slot />
 </div>
 

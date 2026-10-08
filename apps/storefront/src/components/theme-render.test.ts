@@ -33,8 +33,8 @@ import {
   productGridFluidCss,
   productGridSpec,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX, cardLookTokens, cardPhotoSizes } from "@/components/cards/card-model";
-import { scaleSizes } from "@/lib/responsive-image";
+import { CARD_IMAGE_DIMENSIONS } from "@/components/cards/card-model";
+import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
@@ -419,7 +419,14 @@ const MATRIX = (() => {
 describe("storefront theme render matrix", () => {
   it("renders Marketplace's directory footer from merchant facts", async () => {
     const data = layoutData({ business: true });
-    const marketplace = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
+    // Amazon's bands are the directory's `bands` style; the preset keeps the plain columns.
+    const preset = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
+      title: "Home", layoutData: data,
+    }));
+    expect(preset.querySelector('footer[data-footer-variant="directory"]')!.hasAttribute("data-footer-marketplace")).toBe(false);
+    const bandsTheme = storefrontTemplateTheme("marketplace");
+    bandsTheme.blocks.footer = { variant: "directory", settings: { style: "bands", ...FOOTER_WORDS } };
+    const marketplace = parse(await render("/src/layouts/Layout.astro", bandsTheme, {
       title: "Home", layoutData: data,
     }));
     const footer = marketplace.querySelector('footer[data-footer-variant="directory"]')!;
@@ -472,7 +479,10 @@ describe("storefront theme render matrix", () => {
       expect(Array.from(section.querySelectorAll("a")).map((link) => link.getAttribute("href")))
         .toEqual(expect.arrayContaining(data.footerMenus[index]!.links.map((link) => link.href)));
     }
-    const marketplace = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
+    // The bands style shows the whole directory on every screen.
+    const bandsTheme = storefrontTemplateTheme("marketplace");
+    bandsTheme.blocks.footer = { variant: "directory", settings: { style: "bands", ...FOOTER_WORDS } };
+    const marketplace = parse(await render("/src/layouts/Layout.astro", bandsTheme, {
       title: "Home", layoutData: data,
     }));
     expect(marketplace.querySelector(".directory-more")).toBeNull();
@@ -522,7 +532,8 @@ describe("storefront theme render matrix", () => {
     // Body attributes the CSS reads.
     const body = page.body;
     expect(body.dataset.themeDensity).toBe(theme.tokens.density);
-    expect(body.dataset.themeCardStyle).toBe(layout.cardSurface);
+    // The card draws its surface from the theme token: no body attribute for it.
+    expect(body.hasAttribute("data-theme-card-style")).toBe(false);
     // The type pairing (editorial section headings step up on computers).
     expect(body.dataset.themeTypography).toBe(theme.tokens.typography);
     // Tokens the card and heading CSS select on.
@@ -647,19 +658,17 @@ describe("storefront theme render matrix", () => {
     const { layout, resolved } = requestThemeFor(DEFAULT_STOREFRONT_THEME, STORE_SHAPE);
     expect(layout).toMatchObject({
       header: "marketplace",
-      navigation: "menu",
+      navigation: "mega",
       mobileNavigation: "drawer",
       footer: "columns",
       productPage: { gallery: "beside", thumbnails: "beside" },
-      productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
-      density: "compact",
-      cardSurface: "bordered",
+      productCard: { facts: "none", action: "full", hoverImage: false, imageRatio: "square", imageFit: "cover", surface: "hairline" },
       topBar: true,
     });
     expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category-tiles", "usp-strip"]);
     expect(resolved.blocks.topBar.variant).toBe("utility");
     expect(resolved.blocks.header.variant).toBe("mall-search");
-    expect(resolved.blocks.desktopNav).toMatchObject({ variant: "departments-rail", settings: { open: "home" } });
+    expect(resolved.blocks.desktopNav).toMatchObject({ variant: "mega-panel" });
     expect(resolved.blocks.mobileNav.variant).toBe("accordion-drawer");
     expect(["product-widgets", "minimal-columns"]).toContain(resolved.blocks.footer.variant);
   });
@@ -671,8 +680,9 @@ describe("storefront theme render matrix", () => {
     expect(mall.querySelector('#main-header[data-header-variant="mall-search"]')).not.toBeNull();
     expect(mall.querySelector('.hdr-search form.hsearch--scoped select[data-search-scope]')).not.toBeNull();
     expect(mall.querySelector('.hsearch--scoped input[data-search-inline]')).toBeNull();
-    expect(mall.querySelector('details[data-menu-home-open][open] .drail-panel')).not.toBeNull();
-    expect(mall.querySelector('#mall-shortcuts-nav')).not.toBeNull();
+    // The department rail is a choice of its own now: the default's menu is the mega menu.
+    expect(mall.querySelector('#desktop-nav[data-nav-style="mega"]')).not.toBeNull();
+    expect(mall.querySelector('.drail-panel')).toBeNull();
     const classicTheme = storefrontTemplateTheme("department-mall");
     classicTheme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: null } };
     classicTheme.blocks.header = { variant: "mall-departments", settings: { cartTotal: true } };
@@ -702,9 +712,9 @@ describe("storefront theme render matrix", () => {
 
   it("shows the current search term in the header field on search pages", async () => {
     const field = "/src/components/header/HeaderSearch.astro";
-    const search = parse(await render(field, storefrontTemplateTheme("spec-catalogue"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/search?q=portable+SSD"));
+    const search = parse(await render(field, storefrontTemplateTheme("marketplace"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/search?q=portable+SSD"));
     expect(search.querySelector("input[name='q']")!.getAttribute("value")).toBe("portable SSD");
-    const category = parse(await render(field, storefrontTemplateTheme("spec-catalogue"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/categories/ssd?q=portable+SSD"));
+    const category = parse(await render(field, storefrontTemplateTheme("marketplace"), { shape: "field", id: "search-test" }, undefined, "https://shop.test/categories/ssd?q=portable+SSD"));
     expect(category.querySelector("input[name='q']")!.getAttribute("value")).toBe("");
   });
 });
@@ -848,49 +858,41 @@ function assertFooter(page: Document, variant: string, options: { business: bool
 }
 
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
-  const { layout, resolved } = requestThemeFor(theme, STORE_SHAPE);
+  const { layout } = requestThemeFor(theme, STORE_SHAPE);
   const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
   const card = layout.productCard;
-  // The standard card takes the theme's photo token; every other card its own look.
   const grid = productGridSpec(layout.grid, card.imageRatio);
   const firstRow = productGridFirstRow(grid, containerWidth);
-  const photoHeight = resolved.blocks.card.variant === "standard"
-    ? CARD_IMAGE_DIMENSIONS[card.imageRatio].height
-    : Math.round(400 / card.look.image.ratio);
   const cards = Array.from(document.querySelectorAll('[data-theme-component="product-card"]'));
   expect(cards).toHaveLength(Object.keys(CARD_PRODUCTS).length);
   const [onSale, withOptions, soldOut, plain] = cards as [Element, Element, Element, Element];
 
-  // Every card but standard draws its look from the page's token block.
-  const look = Object.fromEntries(cardLookTokens(resolved.blocks.card.variant, card));
+  // `sizes` follows the density's fluid grid within the container cap, 88% of
+  // it for a contained photo (drawn in a margin), and DPR 3 phones ask for
+  // about 2x pixels.
+  const slot = productCardImageSizes(grid, containerWidth);
+  expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
+  const expectedSizes = capPhoneSizesDensity(scaleSizes(slot, card.imageFit === "contain" ? 0.88 : 1));
   cards.forEach((element, index) => {
-    // The resolved card variant, in its photo ratio (nearest token).
-    expect(element.getAttribute("data-card-variant")).toBe(resolved.blocks.card.variant);
-    if (resolved.blocks.card.variant === "standard") expect(element.getAttribute("data-card-ratio")).toBe(card.imageRatio);
-    else expect(look["pc-ratio"]).toBe(String(card.look.image.ratio));
-    const media = element.querySelector(".product-card-media")!;
-    const photo = media.querySelector("img")!;
-    // `sizes` follows the density's fluid grid within the container cap; every
-    // card but standard asks for its photo's own width inside its margin (or
-    // its fixed CSS width, the one --pc-photo-max draws), and DPR 3 phones
-    // for about 2x pixels.
-    const slot = productCardImageSizes(grid, containerWidth);
-    expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
-    const variant = resolved.blocks.card.variant;
-    const photoMax = variant === "standard" ? undefined : CARD_PHOTO_MAX_PX[variant];
-    expect(photo.getAttribute("sizes")).toBe(cardPhotoSizes(variant, slot));
-    if (variant !== "standard" && !photoMax) expect(photo.getAttribute("sizes")).toContain(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)).split(", ")[0]);
+    // One card: its three settings and the theme's tokens are the only switches.
+    expect(element.hasAttribute("data-card-variant")).toBe(false);
+    expect(element.getAttribute("data-action")).toBe(card.action);
+    expect(element.getAttribute("data-fit")).toBe(card.imageFit);
+    expect(element.getAttribute("data-surface")).toBe(card.surface);
+    const photo = element.querySelector(".product-card-media img")!;
+    expect(photo.getAttribute("sizes")).toBe(expectedSizes);
     expect(element.getAttribute("style") ?? "").not.toContain("--pc-");
-    if (photoMax) expect(look["pc-photo-max"]).toBe(`${photoMax}px`);
-    else expect(look).not.toHaveProperty("pc-photo-max");
-    expect(photo.getAttribute("height")).toBe(String(photoHeight));
+    expect(photo.getAttribute("height")).toBe(String(CARD_IMAGE_DIMENSIONS[card.imageRatio].height));
+    expect(photo.getAttribute("width")).toBe(String(CARD_IMAGE_DIMENSIONS[card.imageRatio].width));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
     // "auto" is the default priority: the attribute is left out.
     expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : null);
-    // One link per card (the stretched title link) plus at most Buy now (and Compare).
-    const links = element.querySelectorAll("a");
-    expect(links.length).toBeLessThanOrEqual(card.compare ? 3 : 2);
+    // One title link (a heading) plus at most the add control; the foot holds the price.
+    expect(element.querySelectorAll("a").length).toBeLessThanOrEqual(2);
+    expect(element.querySelector(".product-card-name")!.tagName).toBe("H3");
+    expect(element.querySelector(".product-card-body")!.lastElementChild!.classList.contains("product-card-foot")).toBe(true);
+    expect(element.querySelector(".product-card-foot .sf-price")).not.toBeNull();
   });
 
   // Hover photo only where the card shows one (and only with a second
@@ -901,29 +903,37 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(hover(plain)).toBe(false);
   expect(onSale.querySelector(".product-card-hover-image")).toBeNull();
 
-  // A purchase action only on cards with one, only in stock without options;
-  // grocery quick add keeps the shelf open instead of entering /buy. The card matrix
-  // (cards/product-card.render.test.ts) covers each anatomy in detail.
-  // Mirrors anatomy.astro: these cards add to the cart in place instead of entering /buy.
-  const cardVariant = resolved.blocks.card.variant;
-  const cartAction = ["quick-add", "retail", "showcase"].includes(cardVariant) || (cardVariant === "boutique" && card.quickBuy);
-  const buyAction = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
-  expect(Boolean(buyAction(onSale))).toBe(card.quickBuy);
-  expect(Boolean(buyAction(plain))).toBe(card.quickBuy);
-  expect(buyAction(withOptions)).toBeNull();
-  expect(buyAction(soldOut)).toBeNull();
-  // Positioned above the stretched card link: the standard card's utilities,
-  // every other card's action rules in theme-cards.css (a.pc-act, a.product-card-round-action).
-  if (card.quickBuy) {
-    expect(buyAction(onSale)!.className).toMatch(cardVariant === "standard"
-      ? /\b(?:relative|absolute)\b.*\bz-10\b/
-      : /\b(?:pc-act|product-card-round-action)\b/);
+  // The action: simple in-stock products carry the API's quick-add proof;
+  // a product with options or a sold-out one asks for the page. The card
+  // matrix (cards/product-card.render.test.ts) covers each setting.
+  const hint = (element: Element) => element.querySelector("[data-card-action-hint]");
+  const add = (element: Element) => element.querySelector("a[data-card-quick-add]");
+  for (const element of [withOptions, soldOut]) expect(add(element)).toBeNull();
+  if (card.action === "none") {
+    for (const element of cards) {
+      expect(hint(element)).toBeNull();
+      expect(add(element)).toBeNull();
+    }
+  } else {
+    for (const element of [onSale, plain]) {
+      expect(add(element)!.getAttribute("href")).toBe(element.querySelector(".product-card-link")!.getAttribute("href"));
+      expect(hint(element)).toBeNull();
+    }
+    if (card.action === "quick-add") {
+      expect(hint(withOptions)).not.toBeNull();
+      expect(hint(soldOut)).toBeNull();
+    } else {
+      expect(hint(withOptions)!.textContent!.trim()).toBe("Choose options");
+      expect(hint(soldOut)!.textContent!.trim()).toBe("View product");
+    }
   }
 
-  // The discount badge sits on the photo, next to the price, or both (Fabrilife).
-  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge !== "price");
-  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge !== "image");
-  expect(soldOut.textContent).toContain("Sold out");
+  // One discount mark: the badge on the photo, nothing repeated in the body.
+  expect(onSale.querySelectorAll(".sf-badge")).toHaveLength(1);
+  expect(onSale.querySelector(".product-card-media .sf-badge")!.textContent).toBe("-20%");
+  expect(onSale.querySelector(".product-card-body")!.textContent).not.toContain("%");
+  expect(withOptions.querySelector(".sf-badge")).toBeNull();
+  expect(soldOut.querySelector(".sf-badge")!.textContent).toBe("Sold out");
 }
 
 // ─── Navigation: every desktop menu with every phone menu and header ─────
@@ -1070,21 +1080,38 @@ function headerLinks(page: Document): number {
   return page.querySelectorAll("#site-header a[href]").length;
 }
 
+/** Star Tech's header: two rows, a sticky category bar, bottom tabs with Offers (the retired spec preset's blocks, as plain settings). */
+function specHeaderTheme(): StorefrontThemeDocument {
+  const theme = storefrontTemplateTheme("department-mall");
+  theme.blocks.header = storefrontBlockDefault("header", "spec-two-row") as never;
+  theme.blocks.desktopNav = { variant: "sticky-category-bar", settings: { flyouts: "cascading" } } as never;
+  theme.blocks.mobileNav = { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "compare", "account"], drawer: "accordion" } } as never;
+  return theme;
+}
+
 describe("navigation", () => {
-  it("uses the narrower phone drill drawer only for Marketplace", async () => {
-    for (const template of ["marketplace", "mass-retail"] as const) {
-      const page = await renderNavigationPage(storefrontTemplateTheme(template));
+  it("uses the narrower phone drill drawer only for tall drill rows", async () => {
+    const drill = (rows: "tall" | "standard") => {
+      const theme = storefrontTemplateTheme("department-mall");
+      theme.blocks.header = storefrontBlockDefault("header", "retail-pill") as never;
+      theme.blocks.desktopNav = storefrontBlockDefault("desktopNav", "drill-in-drawer") as never;
+      theme.blocks.mobileNav = { variant: "drill-in-drawer", settings: rows === "tall" ? { rows: "tall" } : {} } as never;
+      return theme;
+    };
+    for (const rows of ["tall", "standard"] as const) {
+      const page = await renderNavigationPage(drill(rows));
+      const tall = rows === "tall";
       const drawer = page.querySelector("#mobile-menu-panel")!;
       expect(drawer.classList.contains("max-w-[365px]")).toBe(true);
-      expect(drawer.classList.contains("nav-drawer--marketplace")).toBe(template === "marketplace");
-      expect(drawer.classList.contains("w-[80vw]")).toBe(template === "marketplace");
-      expect(drawer.classList.contains("lg:w-[365px]")).toBe(template === "marketplace");
-      expect(drawer.classList.contains("w-[90vw]")).toBe(template !== "marketplace");
-      if (template === "marketplace") {
-        expect(drawer.querySelector(".drill[data-menu-root] details[data-menu='drill'] [data-menu-panel] details[data-menu='drill']"))
-          .not.toBeNull();
-      }
+      expect(drawer.classList.contains("nav-drawer--marketplace")).toBe(tall);
+      expect(drawer.classList.contains("w-[80vw]")).toBe(tall);
+      expect(drawer.classList.contains("lg:w-[365px]")).toBe(tall);
+      expect(drawer.classList.contains("w-[90vw]")).toBe(!tall);
+      expect(drawer.querySelector(".drill[data-menu-root] details[data-menu='drill'] [data-menu-panel] details[data-menu='drill']")).not.toBeNull();
     }
+    // The Marketplace preset keeps the plain drill drawer.
+    const marketplace = await renderNavigationPage(storefrontTemplateTheme("marketplace"));
+    expect(marketplace.querySelector("#mobile-menu-panel")!.classList.contains("nav-drawer--marketplace")).toBe(false);
   });
 
   it.each(NAVIGATION_MATRIX)("$name", async (entry) => {
@@ -1267,11 +1294,8 @@ describe("navigation", () => {
       const labels = Array.from(tabs.querySelectorAll(".mobile-tab")).map(
         (item) => item.querySelector(":scope > span:last-child")!.textContent,
       );
-      // Compare only where the card offers "Add to Compare" (the spec card);
-      // elsewhere it is left out, never a tab to an empty comparison.
-      const expectedLabels = chosen
-        .filter((tab) => tab !== "compare" || layout.productCard.compare)
-        .map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
+      // Every chosen tab shows, Compare included (it opens the buyer's list).
+      const expectedLabels = chosen.map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
       expect(labels).toEqual(expectedLabels);
       const categories = tabs.querySelector("[data-mobile-menu-open]")!;
       expect(categories.getAttribute("aria-controls")).toBe("mobile-menu-panel");
@@ -1290,22 +1314,15 @@ describe("navigation", () => {
     }
   });
 
-  it("shows the Compare tab only with the card that offers Compare", async () => {
+  it("shows the Compare tab the merchant chose, linking to the comparison", async () => {
     const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "cart", "account"], drawer: "accordion" });
     const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: "mall-departments" });
-    const compareTab = async (card: string) => {
-      const withCard = structuredClone(theme);
-      withCard.blocks.card = storefrontBlockDefault("card", card) as never;
-      return (await renderNavigationPage(withCard)).querySelector("#mobile-tab-bar [data-compare-tab]");
-    };
-    const tab = await compareTab("spec");
-    expect(tab?.getAttribute("href")).toBe("/compare");
-    expect(tab?.getAttribute("rel")).toBe("nofollow");
-    expect(await compareTab("detailed")).toBeNull();
+    const page = await renderNavigationPage(theme);
+    expect(page.querySelector("#mobile-tab-bar a[href='/compare'][data-compare-tab]")).not.toBeNull();
   });
 
-  it("keeps Cart in the spec catalogue phone header unless the merchant puts it in the tabs", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+  it("keeps Cart in the spec phone header unless the merchant puts it in the tabs", async () => {
+    const theme = specHeaderTheme();
     const pageFor = async () => parse(await render("/src/layouts/Layout.astro", theme, {
       title: "Home", layoutData: layoutData({ business: true }),
     }));
@@ -1324,7 +1341,7 @@ describe("navigation", () => {
   });
 
   it("uses a search action instead of the spec phone search band on category pages", async () => {
-    const theme = storefrontTemplateTheme("spec-catalogue");
+    const theme = specHeaderTheme();
     for (const path of ["/categories", "/categories/laptop"]) {
       const page = await renderNavigationPage(theme, {}, `https://shop.test${path}`);
       expect(page.querySelector(".hdr-phone-search--page")).toBeNull();
@@ -1388,7 +1405,7 @@ describe("navigation", () => {
       hasCollections: true,
       hasDeliveryMethods: true,
     });
-    for (const template of ["marketplace", "mass-retail", "spec-catalogue", "fashion-value", "heritage-editorial", "department-mall", "daily-essentials", "rounded-tech"] as const) {
+    for (const template of ["marketplace", "department-mall", "daily-essentials"] as const) {
       const theme = storefrontTemplateTheme(template);
       const { resolved } = requestThemeFor(theme, shape);
       const html = await render(
@@ -1402,12 +1419,6 @@ describe("navigation", () => {
       const page = parse(html);
       const site = page.querySelector("#site-header")!;
       expect(site.getAttribute("data-nav-source"), template).toBe(resolved.blocks.navigation.source);
-      if (template === "rounded-tech") {
-        expect(site.getAttribute("style")).toContain("--hdr-phone-bar: 4rem");
-        expect(page.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("account");
-        expect(Array.from(page.querySelectorAll("#mobile-tab-bar .mobile-tab")).map((tab) => tab.textContent!.trim()))
-          .toEqual(["Home", "Categories", "Offers", "Account"]);
-      }
       expect(headerLinks(page), template).toBeLessThanOrEqual(resolved.blocks.navigation.linkBudget);
       expect(duplicateIds(page), template).toEqual([]);
       // The phone drawer: at most maxTopItems departments, each once, then "All categories".
@@ -1596,10 +1607,13 @@ describe("theme brand and words", () => {
   });
 
   it("puts the newsletter signup in the newsletter-grey footer, once per page, in the store's language", async () => {
-    const footerForm = async (template: "heritage-editorial" | "fashion-value", url: string, languageCode = "en") => {
+    // A home page with no newsletter section (the mall's) and one that ends with it (the boutique's).
+    const footerForm = async (home: "mall" | "boutique", url: string, languageCode = "en") => {
+      const theme = storefrontTemplateTheme(home === "mall" ? "department-mall" : "boutique");
+      theme.blocks.footer = storefrontBlockDefault("footer", "newsletter-grey") as never;
       const page = parse(await render(
         "/src/layouts/Layout.astro",
-        withStoreContent(storefrontTemplateTheme(template)),
+        withStoreContent(theme),
         { title: "Home", layoutData: { ...layoutData({ business: true }), storefrontCopy: { languageCode } } },
         undefined,
         url,
@@ -1607,17 +1621,17 @@ describe("theme brand and words", () => {
       expect(duplicateIds(page)).toEqual([]);
       return page.querySelector("footer [data-footer-newsletter]");
     };
-    // Aarong's template has no newsletter section: the footer carries the form everywhere.
-    const signup = (await footerForm("heritage-editorial", "https://shop.test/"))!;
+    // No newsletter section: the footer carries the form everywhere.
+    const signup = (await footerForm("mall", "https://shop.test/"))!;
     const form = signup.querySelector("form[data-newsletter-form]")!;
     expect(form.getAttribute("action")).toBe("/api/newsletter/subscribe");
     expect(form.querySelector('input[name="phone"][type="tel"]')).not.toBeNull();
     expect(signup.querySelector("h2")!.textContent).toBe("Get news and offers");
-    // Fabrilife's homepage ends with the newsletter band, so its footer leaves the form out there only.
-    expect(await footerForm("fashion-value", "https://shop.test/")).toBeNull();
-    const elsewhere = (await footerForm("fashion-value", "https://shop.test/categories/shirts", "bn"))!;
+    // A homepage that ends with the newsletter band: its footer leaves the form out there only.
+    expect(await footerForm("boutique", "https://shop.test/")).toBeNull();
+    const elsewhere = (await footerForm("boutique", "https://shop.test/categories/shirts", "bn"))!;
     expect(elsewhere.querySelector("h2")!.textContent).toBe("নতুন খবর ও অফার পান");
-    expect(await footerForm("heritage-editorial", "https://shop.test/newsletter")).toBeNull();
+    expect(await footerForm("mall", "https://shop.test/newsletter")).toBeNull();
   });
 
   it("writes the footer block's words, its about text as escaped paragraphs and the © name", async () => {
@@ -1701,7 +1715,7 @@ describe("theme brand and words", () => {
 // ─── Sections in any order, repeated rich text ────────────────────────────
 
 describe("theme sections", () => {
-  const base = storefrontTemplateTheme("heritage-editorial");
+  const base = storefrontTemplateTheme("boutique");
   const custom = storefrontThemeDocumentSchema.parse({
     ...base,
     pages: {
@@ -1784,7 +1798,7 @@ describe("theme sections", () => {
 // ─── Product page modules and sticky bars from the page's own data ────────
 
 describe("product page modules", () => {
-  const theme = storefrontTemplateTheme("fashion-value");
+  const theme = storefrontTemplateTheme("department-mall");
 
   it("bundles this item with the co-bought products, joined by +, with a total only for fixed prices", async () => {
     const props = {

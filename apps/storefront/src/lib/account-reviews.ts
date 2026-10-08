@@ -420,7 +420,7 @@ function statusText(status: BuyerReviewStatus, copy: ReviewFormCopy): string {
 }
 
 const STATUS_TONE: Record<BuyerReviewStatus, string> = {
-  published: "bg-primary/10 text-primary",
+  published: "bg-primary/10 text-primary-ink",
   pending: "bg-muted text-foreground",
   rejected: "bg-destructive/10 text-destructive",
   withdrawn: "bg-muted text-muted-foreground",

@@ -8,14 +8,9 @@
 /** A product page: today's page (classic) or one template's own product page. */
 export const PRODUCT_PAGE_TEMPLATE_IDS = [
   "classic",
-  "boutique",
-  "heritage-editorial",
-  "fashion-value",
-  "spec-catalogue",
-  "rounded-tech",
-  "marketplace",
-  "mass-retail",
   "department-mall",
+  "boutique",
+  "marketplace",
   "daily-essentials",
   "showcase-landing",
 ] as const;

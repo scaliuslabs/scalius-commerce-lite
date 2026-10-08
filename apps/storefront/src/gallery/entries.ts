@@ -12,6 +12,8 @@
 import {
   DEFAULT_STOREFRONT_THEME,
   STOREFRONT_BLOCK_REGISTRY,
+  STOREFRONT_CARD_ACTIONS,
+  STOREFRONT_CARD_FACTS,
   STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_PRODUCT_STICKY,
   STOREFRONT_LISTING_TOOLBAR,
@@ -152,7 +154,7 @@ export function templateWithContent(id: StorefrontTemplateId): StorefrontThemeDo
   return theme;
 }
 
-/** The default theme (Department mall) with content: the base every non-template entry varies. */
+/** The default theme (Department) with content: the base every non-template entry varies. */
 export function baseTheme(): StorefrontThemeDocument {
   const theme = templateWithContent("department-mall");
   theme.pages.home = HOME_SHOWCASE();
@@ -165,7 +167,7 @@ function withHome(theme: StorefrontThemeDocument, home: StorefrontSection[]): St
   return next;
 }
 
-const TECH_TEMPLATES = new Set<string>(["spec-catalogue", "rounded-tech", "marketplace", "mass-retail", "department-mall", "daily-essentials"]);
+const TECH_TEMPLATES = new Set<string>(["marketplace", "department-mall", "daily-essentials"]);
 
 // ─── Families ─────────────────────────────────────────────────────────────
 
@@ -277,6 +279,39 @@ function blockEntries(): GalleryEntry[] {
     }
   }
   return entries;
+}
+
+/**
+ * The product card's setting combinations: `blockEntries` varies one setting
+ * at a time over the default, so these add every facts x action pair the
+ * one-at-a-time entries do not reach (each on a category listing).
+ */
+function cardEntries(): GalleryEntry[] {
+  const entries: GalleryEntry[] = [];
+  for (const facts of STOREFRONT_CARD_FACTS) {
+    for (const action of STOREFRONT_CARD_ACTIONS) {
+      if (facts === "none" || action === "none") continue;
+      const settings = { ...storefrontBlockDefault("card", "standard").settings, facts, action };
+      entries.push({
+        id: cardEntryId(facts, action),
+        family: "block:card",
+        title: `card standard, facts=${facts}, action=${action}`,
+        page: "category",
+        theme: withBlock(baseTheme(), "card", { variant: "standard", settings }),
+        focus: MAIN,
+        scenario: { product: facts === "key-specs" ? "electronics" : "fashion" },
+      });
+    }
+  }
+  return entries;
+}
+
+/** The entry that shows a card setting combination (the default and one-setting ones come from `blockEntries`). */
+export function cardEntryId(facts: string, action: string): string {
+  if (facts === "none" && action === "none") return entryId("block", "card", "standard", "default");
+  if (facts === "none") return entryId("block", "card", "standard", `action=${action}`);
+  if (action === "none") return entryId("block", "card", "standard", `facts=${facts}`);
+  return entryId("block", "card", "standard", `facts=${facts}`, `action=${action}`);
 }
 
 function listingEntries(): GalleryEntry[] {
@@ -483,6 +518,7 @@ export function galleryEntries(): GalleryEntry[] {
     ...templateEntries(),
     ...sectionEntries(),
     ...blockEntries(),
+    ...cardEntries(),
     ...navigationEntries(),
     ...listingEntries(),
     ...productEntries(),

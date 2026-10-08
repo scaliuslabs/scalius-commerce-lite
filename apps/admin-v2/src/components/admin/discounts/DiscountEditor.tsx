@@ -664,12 +664,12 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                       {preview.slice(0, 5).map(({ name, stacks }) => (
                         <li key={name}>{t(stacks ? "previewStacks" : "previewAlone", { name })}</li>
                       ))}
-                      {preview.length > 5 ? <li>{t("previewMore", { count: formatNumber(preview.length - 5) })}</li> : null}
+                      {preview.length > 5 ? <li>{t("previewMore", { count: preview.length - 5 })}</li> : null}
                     </ul>
                   </div>
                 ) : null}
                 {discount ? (
-                  <p className="text-body text-muted-foreground">{t("performance", { count: formatNumber(discount.redemptionCount) })}</p>
+                  <p className="text-body text-muted-foreground">{t("performance", { count: discount.redemptionCount })}</p>
                 ) : null}
               </CardContent>
             </Card>

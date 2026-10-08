@@ -141,6 +141,13 @@ describe("Home setup guide", () => {
         });
     });
 
+    it("gives a store that sells everywhere no country's own steps", async () => {
+        // The primary market names no country: the setup form's Bangladesh starting point is not the store's country.
+        database.sqlite.prepare("DELETE FROM market_countries WHERE market_id = 'mkt_backup'").run();
+        const { data } = await guide();
+        expect(data).toMatchObject({ countryCode: "ZZ", bangladeshPack: null });
+    });
+
     it("dismisses for the signed-in staff member only", async () => {
         const response = await app(HOME).request("/api/v1/admin/dashboard/setup-guide/dismiss", { method: "POST" }, {});
         expect(response.status).toBe(200);

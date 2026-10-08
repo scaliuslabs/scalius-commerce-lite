@@ -120,13 +120,17 @@ type OptionMatrixEditorProps = {
   fulfilmentMode?: ProductFulfilmentMode;
 };
 
+// One array for "none saved": a default of `[]` is a new array on every render, which made the memos below and the draft effect run on every render (and, with a parent that stores the draft, loop).
+const NO_OPTIONS: ProductOptionDefinition[] = [];
+const NO_VARIANTS: ProductVariant[] = [];
+
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
   productId,
   productName,
   productPrice,
   requirePositivePrice = false,
-  options: savedOptions = [],
-  variants: savedVariants = [],
+  options: savedOptions = NO_OPTIONS,
+  variants: savedVariants = NO_VARIANTS,
   images,
   aggregateRevision,
   onAggregateRevisionChange,
@@ -256,7 +260,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       if (units === 0) continue;
       const breakdown = [...levels]
         .sort((a, b) => (order.get(a.locationId) ?? Infinity) - (order.get(b.locationId) ?? Infinity))
-        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? t("otherLocation"), count: formatNumber(level.onHand) }))
+        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? t("otherLocation"), count: level.onHand }))
         .join(" · ");
       const places = levels
         .filter((level) => level.locationId !== homeLocation.id)
@@ -300,7 +304,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       : simpleConversion && simpleElsewhere > 0
         ? {
             message: t("issueStockElsewhere", {
-              count: formatNumber(simpleElsewhere),
+              count: simpleElsewhere,
               locations: stockElsewhere.get(defaultSku!.id)!.places,
               home: homeLocation.name,
             }),
@@ -829,7 +833,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           {/* Limits show as the merchant nears them (from three quarters), never only at save. */}
           {validShape && combinationCount > MAX_COMBINATIONS * 0.75 ? (
             <span className={cn("tabular-nums", combinationCount > MAX_COMBINATIONS ? "text-destructive" : "text-muted-foreground")}>
-              {t("variantsLimitNear", { count: formatNumber(combinationCount), max: formatNumber(MAX_COMBINATIONS) })}
+              {t("variantsLimitNear", { count: combinationCount, max: formatNumber(MAX_COMBINATIONS) })}
             </span>
           ) : null}
           {options.length >= MAX_AXES ? (

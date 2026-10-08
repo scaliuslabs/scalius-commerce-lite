@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@scalius/shared/utils";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
 import { revealCard } from "./CollapsibleCard";
 import { DIGITAL_CARD_ID, digitalAssetsKey, digitalAssetsQueryOptions, digitalSkuStock } from "./digital-stock";
@@ -48,7 +48,7 @@ export function DigitalStockStatus({ productId, variantId, tracked }: {
   }
   if (pending) return <Skeleton className="h-5 w-56" />;
   const facts = tracked
-    ? stock?.keys != null ? t("stockKeys", { count: formatNumber(stock.keys) }) : t("stockNoKeys")
+    ? stock?.keys != null ? t("stockKeys", { count: stock.keys }) : t("stockNoKeys")
     : stock?.file ? t("stockUnlimited") : t("stockNoFile");
   const problem = !stock || stock.sellable
     ? null
@@ -105,7 +105,7 @@ export function DigitalStockCell({ productId, variantId, tracked }: {
   const ready = Boolean(stock?.sellable);
   const text = !ready
     ? t("stockCellNotReady")
-    : tracked && stock?.keys != null ? t("stockCellKeys", { count: formatNumber(stock.keys) }) : t("stockCellUnlimited");
+    : tracked && stock?.keys != null ? t("stockCellKeys", { count: stock.keys }) : t("stockCellUnlimited");
   return (
     <p
       className={cn("py-2 text-body tabular-nums", ready ? "text-muted-foreground" : "text-warning")}

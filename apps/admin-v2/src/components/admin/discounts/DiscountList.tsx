@@ -230,9 +230,9 @@ export function DiscountList({
     const done = rows.length - failed.length;
     const verb = action === "delete" ? "Deleted" : action === "activate" ? "Activated" : "Deactivated";
     if (failed.length === 0) {
-      toast.success(done === 1 ? t(`toast${verb}`) : t(`bulk${verb}`, { count: formatNumber(done) }));
+      toast.success(done === 1 ? t(`toast${verb}`) : t(`bulk${verb}`, { count: done }));
     } else {
-      toast.error(t(`bulkPartly${verb}`, { done: formatNumber(done), count: formatNumber(rows.length) }), {
+      toast.error(t(`bulkPartly${verb}`, { done: formatNumber(done), count: rows.length }), {
         description: <ul>{failed.map((line) => <li key={line}>{line}</li>)}</ul>,
         duration: 10_000,
       });
@@ -241,7 +241,7 @@ export function DiscountList({
 
   const bulkActions = (
     <>
-      <span className="text-body">{t("selectedCount", { count: formatNumber(chosen.length) })}</span>
+      <span className="text-body">{t("selectedCount", { count: chosen.length })}</span>
       {canToggle && toActivate.length > 0 ? (
         <Button type="button" variant="outline" size="sm" disabled={bulkBusy !== null} loading={bulkBusy === "activate"} onClick={() => void runBulk("activate", toActivate)}>
           {t("activate")}
@@ -327,7 +327,7 @@ export function DiscountList({
         }}
         title={confirmRows?.length === 1
           ? t("deleteTitle", { name: titleOf(confirmRows[0]!) })
-          : t("bulkDeleteTitle", { count: formatNumber(confirmRows?.length ?? 0) })}
+          : t("bulkDeleteTitle", { count: confirmRows?.length ?? 0 })}
         description={t(confirmRows?.length === 1 ? "deleteBody" : "bulkDeleteBody")}
         confirmLabel={t(confirmRows?.length === 1 ? "delete" : "bulkDelete")}
         cancelLabel={t("cancel")}

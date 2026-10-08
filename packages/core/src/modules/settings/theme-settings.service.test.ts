@@ -280,7 +280,7 @@ describe("versioned storefront theme settings", () => {
 
   it("publishes the exact saved draft and advances both authorities atomically", async () => {
     seedPublishedWorkspace();
-    const draftTheme = storefrontTemplateTheme("heritage-editorial");
+    const draftTheme = storefrontTemplateTheme("boutique");
     await saveThemeDraft(db, draftTheme, 1, 1, "admin_1");
 
     const published = await publishThemeDraft(db, 1, 2, "admin_1");
@@ -302,14 +302,14 @@ describe("versioned storefront theme settings", () => {
   });
 
   it("restores history only to the draft and requires explicit publication", async () => {
-    const originalTheme = storefrontTemplateTheme("rounded-tech");
+    const originalTheme = storefrontTemplateTheme("marketplace");
     seedPublishedWorkspace({ theme: originalTheme });
-    await saveThemeDraft(db, storefrontTemplateTheme("fashion-value"), 1, 1, "admin_1");
+    await saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1, "admin_1");
     await publishThemeDraft(db, 1, 2, "admin_1");
 
     const restored = await restoreThemeVersion(db, 1, 3, 2, "admin_2");
     expect(restored).toMatchObject({ published: { revision: 2 }, draft: { revision: 4, basePublishedRevision: 2 }, draftDiffersFromLive: true });
-    expect((await getThemeSettings(db)).theme).toEqual(storefrontTemplateTheme("fashion-value"));
+    expect((await getThemeSettings(db)).theme).toEqual(storefrontTemplateTheme("boutique"));
     expect((await getThemeWorkspace(db)).draft.theme).toEqual(originalTheme);
     expect(await listThemeVersions(db)).toHaveLength(2);
     await publishThemeDraft(db, 2, 4, "admin_2");
@@ -668,8 +668,13 @@ describe("theme document resets (0093 to version 5, 0106 to version 6)", () => {
   });
 
   it("keeps a version 6 published theme through 0106 and drops only its older history", async () => {
-    const currentTheme = storefrontTemplateTheme("boutique");
-    const serialized = JSON.stringify({ ...currentTheme, version: 6, pages: { home: currentTheme.pages.home, homeMode: currentTheme.pages.homeMode } });
+    const boutique = storefrontTemplateTheme("boutique");
+    // As stored at v6: the boutique card was a variant of its own, which reads as the one card without facts or an action.
+    const storedCard = { variant: "boutique", settings: { hoverImage: true, quickAction: false } };
+    const serialized = JSON.stringify({
+      ...boutique, version: 6, blocks: { ...boutique.blocks, card: storedCard }, pages: { home: boutique.pages.home, homeMode: boutique.pages.homeMode },
+    });
+    const currentTheme = { ...boutique, blocks: { ...boutique.blocks, card: { variant: "standard", settings: { facts: "none", action: "none", hoverImage: true } } } };
     const sqlite = createMigratedSqlite({ beforeMigration: "0106_" });
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 3, 1, 1)").run(serialized);
     sqlite.prepare(`

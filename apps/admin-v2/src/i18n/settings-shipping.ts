@@ -34,6 +34,7 @@ export const shippingMessages = defineMessages({
     postalSummary: "postal codes {prefixes}",
     pickupTitle: "Local pickup",
     pickupDescription: "Customers collect orders from your shop. Pickup is offered for every address.",
+    pickupDescriptionOff: "Customers collect orders from your shop. Pickup is off until you add a pickup point.",
     editPickup: "Local pickup",
     noPickup: "No pickup points",
     placeCount: "{count, plural, one {# place} other {# places}}",
@@ -89,6 +90,8 @@ export const shippingMessages = defineMessages({
     areasTitle: "Delivery areas",
     areasDescription: "Cities, thanas and areas customers choose from.",
     areasSummary: "Cities: {cities} · Thanas: {zones} · Areas: {areas}",
+    areasDescriptionGlobal: "Cities and areas customers choose from.",
+    areasSummaryGlobal: "Cities: {cities} · Areas: {areas}",
     manage: "Manage",
     loadAreas: "Delivery areas",
 
@@ -199,6 +202,7 @@ export const shippingMessages = defineMessages({
     postalSummary: "পোস্টাল কোড {prefixes}",
     pickupTitle: "দোকান থেকে পিকআপ",
     pickupDescription: "কাস্টমার আপনার দোকান থেকে অর্ডার নেবে। পিকআপ সব ঠিকানার জন্য দেখানো হয়।",
+    pickupDescriptionOff: "কাস্টমার আপনার দোকান থেকে অর্ডার নেবে। পিকআপ পয়েন্ট যোগ না করা পর্যন্ত পিকআপ বন্ধ।",
     editPickup: "দোকান থেকে পিকআপ",
     noPickup: "কোনো পিকআপ পয়েন্ট নেই",
     placeCount: "{count}টি জায়গা",
@@ -254,6 +258,8 @@ export const shippingMessages = defineMessages({
     areasTitle: "ডেলিভারি এলাকা",
     areasDescription: "কাস্টমার যেসব শহর, থানা ও এলাকা বেছে নেয়।",
     areasSummary: "শহর: {cities} · থানা: {zones} · এলাকা: {areas}",
+    areasDescriptionGlobal: "কাস্টমার যেসব শহর ও এলাকা বেছে নেয়।",
+    areasSummaryGlobal: "শহর: {cities} · এলাকা: {areas}",
     manage: "ম্যানেজ",
     loadAreas: "ডেলিভারি এলাকা",
 

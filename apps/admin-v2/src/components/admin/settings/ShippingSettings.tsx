@@ -54,18 +54,19 @@ export function DeliveryAreasCard() {
   if (isError) return <SettingsLoadFailure title={t("loadAreas")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
   // Cities, thanas and areas are Bangladesh's: another country's store has none to manage.
-  if (getStoreRegion() !== "BD" && data.cities + data.zones + data.areas === 0) return null;
+  const bangladesh = getStoreRegion() === "BD";
+  if (!bangladesh && data.cities + data.zones + data.areas === 0) return null;
   return (
     <SettingsCard id="deliveryAreas"
       title={t("areasTitle")}
-      description={t("areasDescription")}
+      description={t(bangladesh ? "areasDescription" : "areasDescriptionGlobal")}
       action={
         <Button asChild variant="outline" size="sm">
           <Link to="/admin/settings/shipping/areas">{t("manage")}</Link>
         </Button>
       }
     >
-      <p className="text-body">{t("areasSummary", data)}</p>
+      <p className="text-body">{t(bangladesh ? "areasSummary" : "areasSummaryGlobal", data)}</p>
     </SettingsCard>
   );
 }

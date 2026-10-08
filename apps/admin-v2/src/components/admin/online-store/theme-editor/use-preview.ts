@@ -354,19 +354,29 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const register = useCallback((id: number) => {
     let callback = refs.current.get(id);
     if (!callback) {
+      // Records the element only. React also calls a ref with null when the
+      // same iframe detaches and re-attaches during a render, so null must not
+      // forget the connection: a frame leaves only when `frames` drops it (the
+      // effect below). Forgetting here made every later command a no-op.
       callback = (element: HTMLIFrameElement | null) => {
-        if (element) {
-          elements.current.set(id, element);
-          return;
-        }
-        elements.current.delete(id);
-        connected.current.delete(id);
-        refs.current.delete(id);
+        if (element) elements.current.set(id, element);
       };
       refs.current.set(id, callback);
     }
     return callback;
   }, []);
+
+  // A frame is gone once `frames` no longer lists it: drop its element,
+  // connection and ref callback.
+  useEffect(() => {
+    const live = new Set(frames.map((frame) => frame.id));
+    for (const id of [...refs.current.keys()]) {
+      if (live.has(id)) continue;
+      elements.current.delete(id);
+      connected.current.delete(id);
+      refs.current.delete(id);
+    }
+  }, [frames]);
 
   return {
     phase,

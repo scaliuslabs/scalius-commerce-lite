@@ -1,0 +1,43 @@
+---
+// The one page container (README.md): the theme's container width and the
+// system gutters (16px phones, 24px tablets, 32px computers). Header,
+// sections, listing, product page and footer use it instead of their own
+// `max-w-7xl`, so every edge on a page lines up. `text` caps a reading
+// column (CMS pages, policies) at 48rem inside the same gutters.
+import type { HTMLAttributes } from "astro/types";
+
+type Props = Omit<HTMLAttributes<"div">, "class"> & {
+  as?: "div" | "section" | "header" | "footer" | "nav" | "main" | "article";
+  width?: "page" | "text";
+  class?: string;
+};
+
+const { as: Tag = "div", width = "page", class: className, ...rest } = Astro.props;
+---
+
+<Tag class:list={["sf-container", className]} data-width={width === "text" ? "text" : undefined} {...rest}><slot /></Tag>
+
+<style is:global>
+  .site-root .sf-container {
+    inline-size: 100%;
+    max-inline-size: var(--theme-container-width, 75rem);
+    margin-inline: auto;
+    padding-inline: var(--theme-gutter-phone, 1rem);
+  }
+
+  .site-root .sf-container[data-width="text"] {
+    max-inline-size: 48rem;
+  }
+
+  @media (min-width: 40rem) {
+    .site-root .sf-container {
+      padding-inline: var(--theme-gutter-tablet, 1.5rem);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .site-root .sf-container {
+      padding-inline: var(--theme-gutter-desktop, 2rem);
+    }
+  }
+</style>

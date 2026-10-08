@@ -217,7 +217,9 @@ function pageChecks({ focus, locale, dir }) {
   if (!pageLang.startsWith(locale)) push("lang", "serious", `The page language is "${pageLang || "(none)"}"; this entry renders "${locale}".`, [html]);
   const pageDir = (html.getAttribute("dir") ?? "ltr").toLowerCase();
   if (pageDir !== dir) push("dir", "serious", `The page direction is "${pageDir}"; "${locale}" reads ${dir}.`, [html]);
-  const scripts = [["bn", /[ঀ-৿]/], ["ar", /[؀-ۿ]/]];
+  // Letters and digits only: the taka sign (U+09F2, U+09F3) is a currency
+  // symbol, not a passage in Bangla, so a price needs no lang (WCAG 3.1.2).
+  const scripts = [["bn", /[\u0980-\u09F1\u09F4-\u09FF]/], ["ar", /[؀-ۿ]/]];
   const mislabelled = new Set();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {

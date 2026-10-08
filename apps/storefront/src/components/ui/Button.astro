@@ -1,0 +1,133 @@
+---
+// The one storefront button (README.md): primary (solid action colour),
+// secondary (outline) or tertiary (a link), each in two sizes. Shape is the
+// theme's button shape, height the density's control height (44px on touch
+// screens), motion the system's. A link when it has `href`; `as="span"`
+// draws the button's look for a decorative hint under a stretched link
+// (give it `aria-hidden="true"`).
+import type { HTMLAttributes } from "astro/types";
+
+type Props = Omit<HTMLAttributes<"a"> & HTMLAttributes<"button"> & HTMLAttributes<"span">, "class"> & {
+  variant?: "primary" | "secondary" | "tertiary";
+  size?: "md" | "sm";
+  /** The full width of its container. */
+  full?: boolean;
+  as?: "a" | "button" | "span";
+  href?: string;
+  class?: string;
+};
+
+const { variant = "primary", size = "md", full = false, as, href, class: className, type, ...rest } = Astro.props;
+const Tag = as ?? (href ? "a" : "button");
+---
+
+<Tag
+  href={Tag === "a" ? href : undefined}
+  type={Tag === "button" ? (type ?? "button") : undefined}
+  class:list={["sf-button", className]}
+  data-theme-component="button"
+  data-variant={variant}
+  data-size={size}
+  data-full={full ? "" : undefined}
+  {...rest}
+>
+  <slot name="start" />
+  <slot />
+  <slot name="end" />
+</Tag>
+
+<style is:global>
+  .site-root .sf-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-block-size: var(--theme-control-height, 2.75rem);
+    padding-inline: 1.25rem;
+    border: 1px solid transparent;
+    border-radius: var(--theme-button-radius, var(--radius));
+    font-family: var(--theme-font-body);
+    font-size: var(--theme-text-base, 1rem);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--theme-duration-fast, 150ms) ease-out,
+      border-color var(--theme-duration-fast, 150ms) ease-out,
+      color var(--theme-duration-fast, 150ms) ease-out;
+  }
+
+  .site-root .sf-button[data-size="sm"] {
+    min-block-size: 2.25rem;
+    padding-inline: 0.875rem;
+    font-size: var(--theme-text-sm, 0.875rem);
+  }
+
+  /* Touch screens keep a 44px target whatever the density. */
+  @media (pointer: coarse) {
+    .site-root .sf-button:not([data-variant="tertiary"]) {
+      min-block-size: 2.75rem;
+    }
+  }
+
+  .site-root .sf-button[data-full] {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  .site-root .sf-button[data-variant="primary"] {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .site-root .sf-button[data-variant="secondary"] {
+    background: transparent;
+    border-color: color-mix(in oklab, var(--foreground) 40%, transparent);
+    color: var(--foreground);
+  }
+
+  .site-root .sf-button[data-variant="tertiary"] {
+    min-block-size: var(--target-min, 1.5rem);
+    padding-inline: 0;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .site-root .sf-button[data-variant="primary"]:hover {
+      background: color-mix(in oklab, var(--primary) 88%, var(--foreground));
+    }
+
+    .site-root .sf-button[data-variant="secondary"]:hover {
+      border-color: var(--foreground);
+      background: color-mix(in oklab, var(--foreground) 5%, transparent);
+    }
+
+    .site-root .sf-button[data-variant="tertiary"]:hover {
+      text-decoration-thickness: 2px;
+    }
+  }
+
+  .site-root .sf-button:is(:disabled, [aria-disabled="true"]) {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  /* The primary surface carries light text: the focus ring takes the text colour there. */
+  .site-root .sf-button[data-variant="primary"]:focus-visible {
+    outline-color: var(--foreground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-root .sf-button {
+      transition: none;
+    }
+  }
+</style>

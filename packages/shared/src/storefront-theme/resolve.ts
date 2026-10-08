@@ -1,7 +1,7 @@
 // One resolver for the storefront and the dashboard: a document plus the
 // store's shape give the variants that actually render (after fit
-// fallbacks), the navigation source and filter style that apply, each
-// card's concrete look, the sections that have data to show, and the facts
+// fallbacks), the navigation source and filter style that apply, the
+// card's settings, the sections that have data to show, and the facts
 // today's storefront components read. The dashboard preview and the live
 // store run this same function on the same inputs, so they always agree.
 import {
@@ -14,7 +14,6 @@ import {
   storefrontBlockValue,
   storefrontVariantSpec,
   type StorefrontBlockSlot,
-  type StorefrontCardLook,
   type StorefrontCardRenderer,
   type StorefrontFooterRenderer,
   type StorefrontBuyBoxRenderer,
@@ -46,12 +45,10 @@ import { STOREFRONT_SECTION_REGISTRY, storefrontVisibleSection, type StorefrontS
 import { STOREFRONT_PAGE_TEMPLATES, type StorefrontPageTemplateValue } from "./pages";
 import {
   STOREFRONT_DENSITY_SPECS,
-  STOREFRONT_IMAGE_RATIO_VALUES,
-  STOREFRONT_RADIUS_PX,
-  storefrontNearestImageRatio,
   type StorefrontDensity,
   type StorefrontDensitySpec,
   type StorefrontImageRatio,
+  type StorefrontImageFit,
   type StorefrontThemeSurface,
   type StorefrontThemeTokens,
 } from "./tokens";
@@ -103,20 +100,6 @@ export interface ResolvedStorefrontListingFilters {
 }
 
 /**
- * A card's look with every value concrete. The standard card follows the
- * template's tokens (photo ratio and fit, radius, surface) and keeps its
- * type on the theme's type scale (`title` and `price` null), so today's card
- * stays pixel-identical; every other card carries its own measured look.
- */
-export interface ResolvedStorefrontCardLook {
-  image: StorefrontCardLook["image"];
-  radius: number;
-  surface: StorefrontThemeSurface;
-  title: StorefrontCardLook["title"] | null;
-  price: StorefrontCardLook["price"] | null;
-}
-
-/**
  * What today's storefront components render (the v3 renderers), derived
  * from the resolved variants' `renders`. Each block's own renderer replaces
  * its entry in the phase that builds it.
@@ -127,13 +110,12 @@ export interface ResolvedStorefrontThemeLayout {
   navigation: StorefrontNavigationRenderer;
   mobileNavigation: StorefrontMobileNavigationRenderer;
   footer: StorefrontFooterRenderer;
-  productCard: Omit<StorefrontCardRenderer, "look"> & {
-    /** The ratio token nearest the card's own photo ratio (today's grid code reads it). */
+  /** The card's settings with the tokens it draws its photo and surface with. */
+  productCard: StorefrontCardRenderer & {
     imageRatio: StorefrontImageRatio;
-    look: ResolvedStorefrontCardLook;
+    imageFit: StorefrontImageFit;
+    surface: StorefrontThemeSurface;
   };
-  /** The card's surface as today's card CSS names it. */
-  cardSurface: "flat" | "bordered" | "elevated";
   density: StorefrontDensity;
   grid: StorefrontDensitySpec;
   productPage: StorefrontGalleryRenderer;
@@ -141,7 +123,7 @@ export interface ResolvedStorefrontThemeLayout {
   buyBox: StorefrontBuyBoxRenderer;
 }
 
-/** The card as renderers read it: its anatomy, the nearest ratio token and its concrete look. */
+/** The card as renderers read it: its settings and the tokens it draws with. */
 export type ResolvedStorefrontCard = ResolvedStorefrontThemeLayout["productCard"];
 
 export interface ResolvedStorefrontTheme {
@@ -296,25 +278,8 @@ function resolveTemplate(
   return { sections: [...before, ...after], main: before.length };
 }
 
-const SURFACE_RENDERERS = { flat: "flat", hairline: "bordered", raised: "elevated" } as const;
-
 function renders<Render>(slot: StorefrontBlockSlot, block: ResolvedStorefrontBlock): Render {
   return (storefrontVariantSpec(slot, block.variant).renders as (settings: unknown) => Render)(block.settings);
-}
-
-/** A card's concrete look: its own, or the template's tokens for the standard card. */
-export function resolveStorefrontCardLook(
-  look: StorefrontCardLook | null,
-  tokens: Pick<StorefrontThemeTokens, "imageRatio" | "imageFit" | "radius" | "surface">,
-): ResolvedStorefrontCardLook {
-  if (look) return structuredClone(look) as ResolvedStorefrontCardLook;
-  return {
-    image: { ratio: STOREFRONT_IMAGE_RATIO_VALUES[tokens.imageRatio], fit: tokens.imageFit },
-    radius: STOREFRONT_RADIUS_PX[tokens.radius],
-    surface: tokens.surface,
-    title: null,
-    price: null,
-  };
 }
 
 /** Resolve a valid document against the store's shape. */
@@ -337,8 +302,7 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
   const home = fittingSections(document.pages.home, context, fallbacks);
 
   const { tokens } = document;
-  const { look: ownLook, ...card } = renders<StorefrontCardRenderer>("card", resolved.card);
-  const look = resolveStorefrontCardLook(ownLook, tokens);
+  const card = renders<StorefrontCardRenderer>("card", resolved.card);
   const buyBox = renders<StorefrontBuyBoxRenderer>("buyBox", resolved.buyBox);
   return {
     // A label only: what the theme is based on. Nothing below reads it.
@@ -389,12 +353,7 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       navigation: renders<StorefrontNavigationRenderer>("desktopNav", resolved.desktopNav),
       mobileNavigation: renders<StorefrontMobileNavigationRenderer>("mobileNav", resolved.mobileNav),
       footer: renders<StorefrontFooterRenderer>("footer", resolved.footer),
-      productCard: {
-        ...card,
-        imageRatio: ownLook ? storefrontNearestImageRatio(look.image.ratio) : tokens.imageRatio,
-        look,
-      },
-      cardSurface: SURFACE_RENDERERS[look.surface],
+      productCard: { ...card, imageRatio: tokens.imageRatio, imageFit: tokens.imageFit, surface: tokens.surface },
       density: tokens.density,
       grid: STOREFRONT_DENSITY_SPECS[tokens.density],
       productPage: renders<StorefrontGalleryRenderer>("gallery", resolved.gallery),

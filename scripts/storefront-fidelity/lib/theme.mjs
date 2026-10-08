@@ -35,8 +35,9 @@ function setPath(doc, path, raw) {
 
 /**
  * Builds a validated theme document: the template's defaults, then `sets`
- * ({ "blocks.card.variant": "spec", ... }). A variant swap resets that block's
- * settings to the new variant's defaults, as the dashboard does.
+ * ({ "blocks.listing.layout.variant": "shelves", ...cardSets("delivery+full") }).
+ * A variant swap resets that block's settings to the new variant's defaults,
+ * as the dashboard does.
  */
 export async function buildThemeDocument(template, sets = {}) {
   const { T, D, B } = await themeModules();
@@ -63,10 +64,22 @@ export async function buildThemeDocument(template, sets = {}) {
   return parsed.data;
 }
 
+/** The one card's setting combinations, named `facts+action` (hover image off). */
+export async function cardStyleNames() {
+  const { B } = await themeModules();
+  return B.STOREFRONT_CARD_FACTS.flatMap((facts) => B.STOREFRONT_CARD_ACTIONS.map((action) => `${facts}+${action}`));
+}
+
+/** `sets` for a card style name from `cardStyleNames()`. */
+export function cardSets(style) {
+  const [facts, action] = style.split("+");
+  return { "blocks.card.settings": { facts, action, hoverImage: false } };
+}
+
 export async function variantNames() {
   const { B } = await themeModules();
   return {
-    card: Object.keys(B.STOREFRONT_CARD_VARIANTS),
+    card: await cardStyleNames(),
     listing: Object.keys(B.STOREFRONT_LISTING_VARIANTS ?? {}),
     gallery: Object.keys(B.STOREFRONT_GALLERY_VARIANTS ?? {}),
     buyBox: Object.keys(B.STOREFRONT_BUY_BOX_VARIANTS ?? {}),

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
-import { SaveErrorBanner, SaveScope, useSaveBar, type SaveBarEntry, type SaveScopeState } from "./SaveBar";
+import { SaveErrorBanner, SaveNotCompleted, SaveScope, useSaveBar, type SaveBarEntry, type SaveScopeState } from "./SaveBar";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -98,6 +98,35 @@ describe("save scope", () => {
 
     act(() => scope!.discardAll());
     expect(container.querySelector("[role=alert]")).toBeNull();
+    act(() => bannerRoot.unmount());
+    container.remove();
+  });
+
+  it("turns a problem line that names a control into a link to it", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const bannerRoot = createRoot(container);
+    let scope: SaveScopeState | null = null;
+    const focus = vi.fn();
+    const entry = {
+      dirty: true,
+      save: vi.fn(async () => { throw new SaveNotCompleted("Title can't be blank.", ["Title can't be blank.", "Price: Enter a price."], { "Title can't be blank.": focus }); }),
+      discard: vi.fn(),
+    };
+    act(() => {
+      bannerRoot.render(
+        <SaveScope render={(next) => { scope = next; return null; }}>
+          <SaveErrorBanner />
+          <Card {...entry} />
+        </SaveScope>,
+      );
+    });
+    await act(async () => { await scope!.saveAll(); });
+    const links = [...container.querySelectorAll<HTMLButtonElement>("[role=alert] li button")];
+    // Only the line with a control is a link; the other stays text.
+    expect(links.map((link) => link.textContent)).toEqual(["Title can't be blank."]);
+    act(() => links[0]!.click());
+    expect(focus).toHaveBeenCalledOnce();
     act(() => bannerRoot.unmount());
     container.remove();
   });
