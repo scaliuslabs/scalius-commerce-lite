@@ -209,9 +209,10 @@ export class RealtimeHub extends DurableObject<Env> {
     if (parsed.t === "saved" && typeof parsed.key === "string" && state.keys.includes(parsed.key)) {
       const rev = typeof parsed.rev === "number" && Number.isSafeInteger(parsed.rev) ? parsed.rev : null;
       const by: RealtimePerson = { id: state.userId, name: state.name };
+      const now = nowSeconds();
       for (const other of this.ctx.getWebSockets()) {
         if (other === socket) continue;
-        const otherState = readState(other);
+        const otherState = this.liveState(other, now);
         if (otherState?.keys.includes(parsed.key)) send(other, { t: "saved", key: parsed.key, by, rev });
       }
     }
@@ -243,12 +244,26 @@ export class RealtimeHub extends DurableObject<Env> {
     for (const key of keys) this.broadcastPresence(key, socket);
   }
 
+  /**
+   * A socket's state while its proof lasts. Past it, the socket hears nothing
+   * more (no presence, no save notices: staff names) and is closed, so a
+   * revoked session never outlives its proof.
+   */
+  private liveState(socket: HibernatableWebSocket, now: number): SocketState | null {
+    const state = readState(socket);
+    if (!state) return null;
+    if (state.exp > now) return state;
+    socket.close(REALTIME_CLOSE_REAUTH, "Authenticate again");
+    return null;
+  }
+
   /** Everyone on `key` hears who is on it (one entry per person, however many tabs). */
   private broadcastPresence(key: string, leaving?: HibernatableWebSocket): void {
     const watchers: Array<{ socket: HibernatableWebSocket; state: SocketState }> = [];
+    const now = nowSeconds();
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === leaving) continue;
-      const state = readState(socket);
+      const state = this.liveState(socket, now);
       if (state?.keys.includes(key)) watchers.push({ socket, state });
     }
     const people = new Map<string, RealtimePerson>();
