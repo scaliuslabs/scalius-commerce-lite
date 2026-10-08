@@ -140,8 +140,8 @@ describe("templates", () => {
   it("keeps the announcement's and footer's words when the bar or footer changes", () => {
     const theme = withContent(DEFAULT_STOREFRONT_THEME);
     expect(theme.blocks.topBar.variant).toBe("utility");
-    const banner = setBlockVariant(theme, "topBar", "app-banner");
-    expect(banner.blocks.topBar).toEqual({ variant: "app-banner", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
+    const banner = setBlockVariant(theme, "topBar", "announcement");
+    expect(banner.blocks.topBar).toEqual({ variant: "announcement", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
     expect(setBlockVariant(banner, "topBar", "none").blocks.topBar).toEqual({ variant: "none", settings: {} });
     const footer = setBlockVariant(theme, "footer", "brand-black");
     expect(footer.blocks.footer.settings).toEqual({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
@@ -164,7 +164,7 @@ describe("templates", () => {
     const boutique = storefrontTemplateTheme("boutique");
     const resolved = resolveThemeForStore(boutique, shape);
     expect(resolved).toEqual(resolveStorefrontTheme(boutique, shape));
-    expect(resolved.blocks.header.variant).toBe("boutique-inline");
+    expect(resolved.blocks.header.variant).toBe("inline-nav");
     expect(blockFallback(resolved, "header")).toBeNull();
     expect(blockFallback(resolved, "desktopNav")).toBeNull();
     expect(blockFallback(resolveThemeForStore(boutique, EMPTY_STORE_SHAPE), "header")).toBeNull();

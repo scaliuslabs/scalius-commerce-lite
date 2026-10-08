@@ -41,9 +41,9 @@ const selected = selectedMarketCountry(matrix, presence);
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    max-width: 80rem;
+    max-width: var(--theme-container-width, 80rem);
     margin: 0 auto;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem var(--theme-gutter-phone, 1rem);
     font-size: 0.875rem;
     color: var(--muted-foreground);
   }

@@ -382,7 +382,62 @@ function withTightenedBounds(doc: Record<string, unknown>): Record<string, unkno
   // WCAG 2.5.8 target size: filter rows are at least 24 px apart (was 16).
   if (filters && typeof filters.rowPitch === "number" && filters.rowPitch < 24) filters.rowPitch = 24;
   withReadableSaleColour(doc);
+  withConsolidatedChrome(doc);
   return doc;
+}
+
+type HeaderChoice = { variant: string; settings: Record<string, unknown> };
+
+/**
+ * The fifteen header variants as the three layouts they became (inline-nav,
+ * search-first, centered-logo) and the settings that kept their look: the
+ * search (icon, field, department-scoped), whether the main row wears the
+ * header colours, and the running cart total. A stored cart total stays; a
+ * header that always showed one (mall, grocery) keeps showing it. The
+ * departments list that opened by itself on the home page (`open: "home"`)
+ * opens on a press instead: it never covers the page. The phone drawer's
+ * `rows` setting is gone (one row style), and the dismissible app banner,
+ * which promoted an app the store may not have, reads as the announcement.
+ */
+const HEADER_LAYOUTS: Record<string, { variant: string; search: string; rowTone: "page" | "header"; cartTotal?: boolean }> = {
+  "boutique-inline": { variant: "inline-nav", search: "icon", rowTone: "page" },
+  "showcase-simple": { variant: "inline-nav", search: "icon", rowTone: "page" },
+  "fashion-department": { variant: "inline-nav", search: "field", rowTone: "page" },
+  "heritage-nav": { variant: "centered-logo", search: "field", rowTone: "page" },
+  "spec-two-row": { variant: "search-first", search: "field", rowTone: "header" },
+  "tech-rounded": { variant: "search-first", search: "field", rowTone: "header" },
+  "marketplace-search": { variant: "search-first", search: "scoped", rowTone: "header" },
+  "marketplace-light": { variant: "search-first", search: "scoped", rowTone: "page" },
+  "mall-departments": { variant: "search-first", search: "scoped", rowTone: "page", cartTotal: true },
+  "mall-search": { variant: "search-first", search: "scoped", rowTone: "page", cartTotal: true },
+  "retail-pill": { variant: "search-first", search: "field", rowTone: "header" },
+  "grocery-shell": { variant: "search-first", search: "field", rowTone: "page", cartTotal: true },
+};
+
+function withConsolidatedChrome(doc: Record<string, unknown>): void {
+  const blocks = doc.blocks as { header?: HeaderChoice; desktopNav?: HeaderChoice; mobileNav?: HeaderChoice; topBar?: HeaderChoice } | undefined;
+  const header = blocks?.header;
+  const layout = header && typeof header.variant === "string" ? HEADER_LAYOUTS[header.variant] : undefined;
+  if (blocks && header && layout) {
+    const stored = header.settings && typeof header.settings === "object" ? header.settings : {};
+    blocks.header = {
+      variant: layout.variant,
+      settings: {
+        search: layout.search,
+        rowTone: layout.rowTone,
+        cartTotal: typeof stored.cartTotal === "boolean" ? stored.cartTotal : layout.cartTotal ?? false,
+      },
+    };
+  }
+  const nav = blocks?.desktopNav;
+  if (nav && nav.variant === "departments-rail" && nav.settings?.open === "home") nav.settings = { ...nav.settings, open: "demand" };
+  const mobile = blocks?.mobileNav;
+  if (mobile && mobile.variant === "drill-in-drawer" && mobile.settings && "rows" in mobile.settings) {
+    const { rows: _rows, ...settings } = mobile.settings;
+    mobile.settings = settings;
+  }
+  const topBar = blocks?.topBar;
+  if (topBar && topBar.variant === "app-banner") topBar.variant = "announcement";
 }
 
 const SALE_PAIRS = [["destructive", "card"], ["destructive", "background"], ["destructive-foreground", "destructive"]] as const;

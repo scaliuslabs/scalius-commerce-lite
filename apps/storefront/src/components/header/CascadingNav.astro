@@ -13,6 +13,8 @@
 // - flyouts cascade: fly-outs beside the column; indent: nested lists inside it.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import FlyoutList from "./FlyoutList.astro";
 import { navigationPanelKey } from "./nav-tree";
 import {
@@ -37,7 +39,10 @@ interface Props {
   panelsSrc?: string;
 }
 
-const { navigation = [], id, layout, flyouts, label = "Main navigation", extras = [], allCategories = false, panelsSrc } = Astro.props;
+const { navigation = [], id, layout, flyouts, label: labelProp, extras = [], allCategories = false, panelsSrc } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
+const label = labelProp ?? copy.nav.main;
 const items = navigation.filter((item) => item?.title);
 const hasExtras = extras.length > 0 || allCategories;
 const link = (item: NavigationItem) => ({
@@ -65,7 +70,7 @@ const link = (item: NavigationItem) => ({
             {children.length > 0 && (
               <details class="cnav-menu" data-menu="popup" data-menu-hover>
                 <summary class:list={["cnav-toggle", !item.href && "cnav-link"]} data-menu-top-link={item.href ? undefined : ""}>
-                  {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
+                  {item.href ? <span class="sr-only">{copy.nav.submenu(item.title)}</span> : <span>{item.title}</span>}
                   <i class="nav-chevron" aria-hidden="true"></i>
                 </summary>
                 <div class="cnav-panel" data-menu-panel>
@@ -80,7 +85,7 @@ const link = (item: NavigationItem) => ({
     <li class="cnav-item cnav-more" data-nav-more hidden={!hasExtras}>
       <details class="cnav-menu" data-menu="popup">
         <summary class="cnav-toggle cnav-link">
-          <span>More</span>
+          <span>{copy.nav.more}</span>
           <i class="nav-chevron" aria-hidden="true"></i>
         </summary>
         <div class="cnav-panel cnav-panel--end" data-menu-panel>
@@ -93,7 +98,7 @@ const link = (item: NavigationItem) => ({
             ))}
             {allCategories && (
               <li class="cnav-more-entry cnav-more-all">
-                <a class="cnav-more-link" href="/categories">All categories</a>
+                <a class="cnav-more-link" href="/categories">{copy.nav.allCategories}</a>
               </li>
             )}
           </ul>

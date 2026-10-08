@@ -143,7 +143,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["mall-search"],
+      header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 8 },
       desktopNav: ["mega-panel"],
       mobileNav: ["accordion-drawer"],
@@ -172,7 +172,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "announcement",
-      header: ["boutique-inline"],
+      header: ["inline-nav"],
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
@@ -216,7 +216,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["marketplace-search"],
+      header: ["search-first", { search: "scoped", rowTone: "header" }],
       navigation: { source: "tree+menu", maxTopItems: 18 },
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
@@ -256,7 +256,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "utility",
-      header: ["mall-search", { cartTotal: true }],
+      header: ["search-first", { search: "scoped", cartTotal: true }],
       navigation: { source: "tree+menu", maxTopItems: 16 },
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "cart", "search", "account"], drawer: "drill-in" }],
@@ -285,7 +285,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     },
     blocks: blocks({
       topBar: "announcement",
-      header: ["showcase-simple"],
+      header: ["inline-nav"],
       navigation: { source: "menu", maxTopItems: 6 },
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],

@@ -10,6 +10,8 @@
 import type { NavigationItem } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import {
   ariaCurrent,
   navigationChildren,
@@ -30,6 +32,8 @@ const MAX_COLUMNS = 4;
 const MAX_TILES = 4;
 
 const { id, item, promoImages = false } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const children = navigationChildren(item);
 const link = (target: NavigationItem) => ({
   href: target.href,
@@ -99,7 +103,7 @@ const columns = [...groups, ...plain].slice(0, columnCount);
     </ul>
     {
       tiles.length > 0 && (
-        <ul class="mega-promo" aria-label={`Featured in ${item.title}`}>
+        <ul class="mega-promo" aria-label={copy.nav.featuredIn(item.title)}>
           {tiles.map((entry) => (
             <li>
               <a class="mega-promo-tile" {...link(entry)}>

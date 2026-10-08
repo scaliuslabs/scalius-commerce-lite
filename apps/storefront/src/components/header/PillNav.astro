@@ -6,6 +6,8 @@
 // their parent's page; an item without a link contributes its children.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import {
   ariaCurrent,
   navigationChildren,
@@ -18,6 +20,8 @@ interface Props {
 }
 
 const { navigation = [] } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const pills = navigation
   .filter((item) => item?.title)
   .flatMap((item) => (item.href ? [item] : navigationChildren(item).filter((child) => child.href)));
@@ -25,7 +29,7 @@ const pills = navigation
 
 {
   pills.length > 0 && (
-    <nav id="pill-nav" class="pill-nav" aria-label="Main navigation">
+    <nav id="pill-nav" class="pill-nav" aria-label={copy.nav.main}>
       <ul class="pill-nav-list" data-pill-scroller>
         {pills.map((item) => (
           <li>

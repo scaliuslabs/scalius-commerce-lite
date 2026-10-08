@@ -189,7 +189,7 @@ describe("themes page", () => {
 
   it("names the template a changed theme is based on", () => {
     const tuned = storefrontTemplateTheme("boutique");
-    tuned.blocks = { ...tuned.blocks, header: { variant: "spec-two-row", settings: {} } };
+    tuned.blocks = { ...tuned.blocks, header: { variant: "search-first", settings: { search: "field", rowTone: "header", cartTotal: false } } };
     render(workspaceOf(tuned));
     expect(radio("Boutique").getAttribute("aria-checked")).toBe("false");
     expect(current().textContent).toContain("Changed (based on Boutique)");

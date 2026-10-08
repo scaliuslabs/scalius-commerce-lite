@@ -35,6 +35,8 @@ export interface FooterInput {
   social: SocialLink[];
   policies: Array<{ title: string; path: string }>;
   business: StorefrontBusinessInfo | null | undefined;
+  /** The "Track your order" link's words in the store's language. */
+  trackOrderLabel: string;
 }
 
 export interface FooterModel {
@@ -82,7 +84,7 @@ export function footerModel(input: FooterInput): FooterModel {
     .join(", ");
   const { menus, inBottomRow } = placeTrackOrderLink(
     input.menus.map((menu): FooterMenu => ({ ...menu, links: Array.isArray(menu.links) ? menu.links : [] })),
-    "Track your order",
+    input.trackOrderLabel,
   );
   const linkedHrefs = new Set(menus.flatMap((menu) => menu.links.map((link) => (link.href ?? "").replace(/\/+$/, ""))));
   const policyLinks = policies

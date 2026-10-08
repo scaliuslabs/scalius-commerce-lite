@@ -329,34 +329,48 @@ export const STOREFRONT_TOP_BAR_VARIANTS = {
   // Game Ghor, Target: the announcement at the start; call, track order and
   // account at the end. Computers only (phones reach them in the menu).
   utility: variant({ settings: announcement, defaults: NO_ANNOUNCEMENT, contrastPairs: [["foreground", "muted"]], renders: true }),
-  // Apple Gadgets, Amazon: a dismissible phone-only banner (60px) carrying
-  // the announcement until the store has an app to link.
-  "app-banner": variant({ settings: announcement, defaults: NO_ANNOUNCEMENT, renders: true }),
 };
 
+/**
+ * What a header row wears: the page colours, or the header colours (Colours,
+ * Header: light, dark or the brand colour, an AA pair either way).
+ */
+export const STOREFRONT_HEADER_ROW_TONES = ["page", "header"] as const;
+export type StorefrontHeaderRowTone = (typeof STOREFRONT_HEADER_ROW_TONES)[number];
+
+const headerSettings = <const Search extends readonly [string, ...string[]]>(searches: Search) => ({
+  search: z.enum(searches),
+  rowTone: z.enum(STOREFRONT_HEADER_ROW_TONES),
+  ...cartTotal,
+});
+
+/**
+ * Three header layouts; everything else a header can look like is a setting.
+ * Phones share one bar in all three (menu, logo, account, cart; the search
+ * is an icon, or a row under the bar for `search-first`).
+ */
 export const STOREFRONT_HEADER_VARIANTS = {
-  // Dawn: 84px, logo, 3-6 inline items, icon search.
-  "boutique-inline": variant({ renders: "centered" }),
-  "showcase-simple": variant({ renders: "centered" }),
-  // Fabrilife/Aarong: uppercase departments, filled search, icon-over-label utilities.
-  // The filled search fields paint ink on the muted surface.
-  "fashion-department": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
-  "heritage-nav": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
-  // Star Tech: dark row with a 580px search, light category row that stays.
-  "spec-two-row": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
-  // Apple Gadgets: dark row, pill search, round icons, category row.
-  "tech-rounded": variant({ renders: "marketplace" }),
-  // Amazon/Daraz: department-scoped search.
-  "marketplace-search": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
-  // eBay: light utility and category rows, search scoped at the right.
-  "marketplace-light": variant({ renders: "marketplace" }),
-  // Game Ghor: big logo, search with a category select, cart with its total.
-  "mall-departments": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "classic" }),
-  "mall-search": variant({ settings: cartTotal, defaults: { cartTotal: true }, renders: "marketplace" }),
-  // Target/Walmart: Categories and Deals pills, pill search.
-  "retail-pill": variant({ settings: cartTotal, defaults: { cartTotal: false }, renders: "marketplace" }),
-  // Chaldal: fixed header, delivery-city selector, wide search.
-  "grocery-shell": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
+  // The logo, the menu inline, then search and account and cart.
+  "inline-nav": variant({
+    settings: headerSettings(["icon", "field"]),
+    defaults: { search: "icon", rowTone: "page", cartTotal: false },
+    contrastPairs: [["foreground", "muted"]],
+    renders: "classic",
+  }),
+  // The logo, a wide search and account and cart over a row for the menu.
+  "search-first": variant({
+    settings: headerSettings(["field", "scoped"]),
+    defaults: { search: "field", rowTone: "page", cartTotal: false },
+    contrastPairs: [["foreground", "muted"]],
+    renders: "marketplace",
+  }),
+  // The logo in the middle, search and cart at the sides, the menu centred under it.
+  "centered-logo": variant({
+    settings: headerSettings(["icon", "field"]),
+    defaults: { search: "icon", rowTone: "page", cartTotal: false },
+    contrastPairs: [["foreground", "muted"]],
+    renders: "centered",
+  }),
 };
 
 /** How the header menu is browsed on computers (mix rule 4: the pattern must fit the tree). */
@@ -373,12 +387,12 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
   // Amazon, Target: one button opens a drawer that drills in a level at a
   // time. Scales to any depth: always valid.
   "drill-in-drawer": variant({ renders: "drawer" }),
-  // Game Ghor (home): an "All departments" tab whose list is open over the
-  // hero on the home page and opens on demand elsewhere. Chaldal (always): a
-  // column beside every page.
+  // `demand`: an "All departments" button whose list opens on a press, over
+  // the page, and closes on Escape or a press outside; never open by itself,
+  // so it never covers the hero. `always`: a column beside every page.
   "departments-rail": variant({
-    settings: { open: z.enum(["home", "always"]) },
-    defaults: { open: "home" },
+    settings: { open: z.enum(["demand", "always"]) },
+    defaults: { open: "demand" },
     requires: [atLeast("navTopItems", 4)],
     fallback: "dropdown",
     renders: (settings) => (settings.open === "always" ? "sidebar" : "menu"),
@@ -396,22 +410,10 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
 
 export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "search", "compare", "cart", "account"] as const;
 
-/**
- * A drawer's rows: `standard` (90vw wide, 44px rows), or Amazon's `tall`
- * rows (80vw wide, 52px rows on phones and tablets).
- */
-export const STOREFRONT_DRAWER_ROWS = ["standard", "tall"] as const;
-export type StorefrontDrawerRows = (typeof STOREFRONT_DRAWER_ROWS)[number];
-
 export const STOREFRONT_MOBILE_NAV_VARIANTS = {
   "accordion-drawer": variant({ renders: "drawer" }),
-  // Amazon: one level at a time; `rows` sets the drawer's geometry (both
-  // drawers the header renders use it).
-  "drill-in-drawer": variant({
-    settings: { rows: z.enum(STOREFRONT_DRAWER_ROWS) },
-    defaults: { rows: "standard" },
-    renders: "drawer",
-  }),
+  // One level at a time.
+  "drill-in-drawer": variant({ renders: "drawer" }),
   // 56-61px, 4-5 items; cart and account move from the header to the tabs.
   "bottom-tabs": variant({
     settings: {

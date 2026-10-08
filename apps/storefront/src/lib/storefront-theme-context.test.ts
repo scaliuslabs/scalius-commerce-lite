@@ -76,7 +76,7 @@ describe("request theme", () => {
     const resolved = await resolveRequestTheme({ request: request(), locals: {} }, fromApi);
     expect(resolved.resolved).toEqual(resolveStorefrontTheme(theme, SHAPE));
     // Boutique keeps its own header at any catalogue size.
-    expect(resolved.resolved.blocks.header).toMatchObject({ variant: "boutique-inline" });
+    expect(resolved.resolved.blocks.header).toMatchObject({ variant: "inline-nav" });
     expect(requestThemeFor(theme, SHAPE).resolved).toEqual(resolved.resolved);
   });
 

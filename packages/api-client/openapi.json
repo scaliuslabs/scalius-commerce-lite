@@ -1622,185 +1622,33 @@
                       "variant": {
                         "type": "string",
                         "enum": [
-                          "boutique-inline"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "showcase-simple"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "fashion-department"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "heritage-nav"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "spec-two-row"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "tech-rounded"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "marketplace-search"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "marketplace-light"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "mall-departments"
+                          "inline-nav"
                         ]
                       },
                       "settings": {
                         "type": "object",
                         "properties": {
+                          "search": {
+                            "type": "string",
+                            "enum": [
+                              "icon",
+                              "field"
+                            ]
+                          },
+                          "rowTone": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "header"
+                            ]
+                          },
                           "cartTotal": {
                             "type": "boolean"
                           }
                         },
                         "required": [
+                          "search",
+                          "rowTone",
                           "cartTotal"
                         ],
                         "additionalProperties": false
@@ -1818,17 +1666,33 @@
                       "variant": {
                         "type": "string",
                         "enum": [
-                          "mall-search"
+                          "search-first"
                         ]
                       },
                       "settings": {
                         "type": "object",
                         "properties": {
+                          "search": {
+                            "type": "string",
+                            "enum": [
+                              "field",
+                              "scoped"
+                            ]
+                          },
+                          "rowTone": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "header"
+                            ]
+                          },
                           "cartTotal": {
                             "type": "boolean"
                           }
                         },
                         "required": [
+                          "search",
+                          "rowTone",
                           "cartTotal"
                         ],
                         "additionalProperties": false
@@ -1846,40 +1710,35 @@
                       "variant": {
                         "type": "string",
                         "enum": [
-                          "retail-pill"
+                          "centered-logo"
                         ]
                       },
                       "settings": {
                         "type": "object",
                         "properties": {
+                          "search": {
+                            "type": "string",
+                            "enum": [
+                              "icon",
+                              "field"
+                            ]
+                          },
+                          "rowTone": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "header"
+                            ]
+                          },
                           "cartTotal": {
                             "type": "boolean"
                           }
                         },
                         "required": [
+                          "search",
+                          "rowTone",
                           "cartTotal"
                         ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": [
-                      "variant",
-                      "settings"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "enum": [
-                          "grocery-shell"
-                        ]
-                      },
-                      "settings": {
-                        "type": "object",
-                        "properties": {},
                         "additionalProperties": false
                       }
                     },
@@ -2028,7 +1887,7 @@
                           "open": {
                             "type": "string",
                             "enum": [
-                              "home",
+                              "demand",
                               "always"
                             ]
                           }
@@ -2113,18 +1972,7 @@
                       },
                       "settings": {
                         "type": "object",
-                        "properties": {
-                          "rows": {
-                            "type": "string",
-                            "enum": [
-                              "standard",
-                              "tall"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "rows"
-                        ],
+                        "properties": {},
                         "additionalProperties": false
                       }
                     },

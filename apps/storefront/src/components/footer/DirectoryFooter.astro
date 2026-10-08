@@ -5,7 +5,10 @@
 // heavy; the fit rule only offers it with 8 or more top categories.
 import type { FooterModel } from "./footer-model";
 import { directoryLinks } from "./footer-model";
+import { ltr } from "@/lib/bidi";
 import { mediaImageUrl } from "@/lib/media-url";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   model: FooterModel;
@@ -15,19 +18,20 @@ interface Props {
 const { model, marketplace = false } = Astro.props;
 const { brandName, tagline, phoneHref, chatHref, storePhone, storeEmail, logo } = model;
 const directory = directoryLinks(model.menus);
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
 <div class="directory-footer" data-marketplace={marketplace ? "" : undefined}>
   <section class="directory-care" aria-labelledby="footer-care-title">
-    <h2 id="footer-care-title" class="footer-heading">Customer care</h2>
-    {brandName && <p class="directory-brand">{brandName}</p>}
+    <h2 id="footer-care-title" class="footer-heading">{brandName || copy.footer.contactUs}</h2>
     {tagline && <p>{tagline}</p>}
     <ul class="directory-care-links">
       {
         phoneHref && (
           <li>
             <a href={phoneHref} data-footer-contact>
-              Call {storePhone}
+              {copy.footer.call(ltr(storePhone))}
             </a>
           </li>
         )
@@ -36,7 +40,7 @@ const directory = directoryLinks(model.menus);
         chatHref && (
           <li>
             <a href={chatHref} target="_blank" rel="noopener noreferrer">
-              WhatsApp
+              {copy.footer.whatsapp}
             </a>
           </li>
         )
@@ -53,7 +57,7 @@ const directory = directoryLinks(model.menus);
 
   {
     directory.length > 0 && (
-      <nav class="directory-links" aria-label="Store directory">
+      <nav class="directory-links" aria-label={copy.footer.storeDirectory}>
         {directory.map((menu) => {
           const compact = !marketplace && menu.links.length > 8;
           const visible = compact ? menu.links.slice(0, 4) : menu.links;
@@ -73,8 +77,8 @@ const directory = directoryLinks(model.menus);
               {compact && (
                 <details class="directory-more">
                   <summary>
-                    <span class="when-closed">Show {more.length} more {menu.title} links</span>
-                    <span class="when-open">Hide extra {menu.title} links</span>
+                    <span class="when-closed">{copy.footer.showMoreLinks(more.length, menu.title)}</span>
+                    <span class="when-open">{copy.footer.hideExtraLinks(menu.title)}</span>
                   </summary>
                   <ul>
                     {more.map((link) => (
@@ -96,7 +100,7 @@ const directory = directoryLinks(model.menus);
   {marketplace && (logo.src || brandName) && (
     <div class="directory-identity" data-footer-identity>
       {logo.src ? (
-        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || "Home"} width="160" height="48" loading="lazy" decoding="async" />
+        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || copy.home} width="160" height="48" loading="lazy" decoding="async" />
       ) : (
         <span>{brandName}</span>
       )}
@@ -124,14 +128,10 @@ const directory = directoryLinks(model.menus);
   /* .footer-heading is shared by every footer: the root class stands for the scope here (same weight). */
   .directory-footer .footer-heading {
     margin-bottom: 0.625rem;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-  }
-
-  .directory-brand:not(.\#) {
-    font-weight: 700;
   }
 
   .directory-care:not(.\#) {
@@ -149,7 +149,7 @@ const directory = directoryLinks(model.menus);
     overflow-wrap: anywhere;
   }
 
-  /* A dense directory on computers (13px rows); phones keep 44px targets. */
+  /* A dense directory on computers (28px rows); phones keep 44px targets. */
   @media (min-width: 40rem) {
     .directory-care-links:not(.\#) a:not(.\#),
     .directory-links:not(.\#) a:not(.\#) {
@@ -167,16 +167,12 @@ const directory = directoryLinks(model.menus);
     margin-bottom: 1.25rem;
   }
 
-  .directory-links:not(.\#) a:not(.\#) {
-    font-size: 0.8125rem;
-  }
-
   .directory-more:not(.\#) summary:not(.\#) {
     display: flex;
     align-items: center;
     min-height: 2.75rem;
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 700;
     list-style: none;
   }

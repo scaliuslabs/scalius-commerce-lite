@@ -241,7 +241,8 @@ describe("v8 to v9: one design system", () => {
   it("changes only the template, the card and its photo tokens", () => {
     const stored = v8Document("fashion-value", { variant: "tech-rounded", settings: { hoverImage: false } });
     const upgraded = upgradeThemeDocument(stored);
-    const withoutCard = ({ card: _card, ...blocks }: Record<string, unknown>) => blocks;
+    // The header is the one chrome change: heritage-nav reads as centered-logo (header-upgrade.test.ts).
+    const withoutCard = ({ card: _card, header: _header, ...blocks }: Record<string, unknown>) => blocks;
     const withoutPhoto = ({ imageRatio: _ratio, imageFit: _fit, surface: _surface, ...tokens }: Record<string, unknown>) => tokens;
     expect(withoutCard(upgraded.blocks)).toEqual(withoutCard(stored.blocks));
     expect(withoutPhoto(upgraded.tokens)).toEqual(withoutPhoto(stored.tokens));

@@ -67,12 +67,12 @@ const SHAPES = { empty: EMPTY_STORE_SHAPE, tiny: TINY, liveSmall: LIVE_SMALL, se
 
 it("keeps the marketplace preset while saving a lighter-header marketplace combination", () => {
   const base = storefrontTemplateTheme("marketplace");
-  expect(base.blocks.header.variant).toBe("marketplace-search");
+  expect(base.blocks.header.variant).toBe("search-first");
   expect(base.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("full-bleed");
 
   const light = structuredClone(base);
   light.blocks.topBar = { variant: "utility", settings: { text: "Free delivery over ৳2,000", link: "/delivery" } };
-  light.blocks.header = { variant: "marketplace-light", settings: {} };
+  light.blocks.header = { variant: "search-first", settings: { search: "scoped", rowTone: "page", cartTotal: false } };
   const hero = light.pages.home.find((section) => section.type === "hero");
   const categories = light.pages.home.find((section) => section.type === "category-tiles");
   if (hero?.type !== "hero" || categories?.type !== "category-tiles") throw new Error("Marketplace sections missing");
@@ -82,10 +82,10 @@ it("keeps the marketplace preset while saving a lighter-header marketplace combi
   const saved = storefrontThemeDocumentSchema.parse(JSON.parse(JSON.stringify(light)));
   const resolved = resolveStorefrontTheme(saved, SEED_30K);
   expect(resolved.blocks.topBar.variant).toBe("utility");
-  expect(resolved.blocks.header.variant).toBe("marketplace-light");
+  expect(resolved.blocks.header).toMatchObject({ variant: "search-first", settings: { rowTone: "page" } });
   expect(resolved.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("wide-editorial");
   expect(resolved.pages.home.find((section) => section.type === "category-tiles")?.settings.style).toBe("square");
-  expect(storefrontTemplateTheme("marketplace").blocks.header.variant).toBe("marketplace-search");
+  expect(storefrontTemplateTheme("marketplace").blocks.header.settings).toMatchObject({ rowTone: "header" });
 });
 
 const SLOTS: StorefrontBlockSlot[] = ["topBar", "header", "desktopNav", "mobileNav", "card", "listing", "gallery", "buyBox", "footer"];
@@ -338,13 +338,13 @@ describe("navigation source", () => {
 describe("resolver on true store shapes", () => {
   it("keeps boutique's own header on the real small store", () => {
     const boutique = resolveStorefrontTheme(storefrontTemplateTheme("boutique"), LIVE_SMALL);
-    expect(boutique.blocks.header.variant).toBe("boutique-inline");
+    expect(boutique.blocks.header.variant).toBe("inline-nav");
     expect(boutique.facts.navTopItems).toBe(6);
     expect(boutique.fallbacks.filter((each) => each.kind === "block")).toEqual([]);
     // The menu keeps its overflow pattern even for many roots and SKUs.
     const oldShape = storeShapeFromFacts({ ...LIVE_SMALL, topCategoryCount: 382, menu: flatMenu(12) });
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), oldShape).blocks.header.variant).toBe("boutique-inline");
-    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), SEED_30K).blocks.header.variant).toBe("boutique-inline");
+    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), oldShape).blocks.header.variant).toBe("inline-nav");
+    expect(resolveStorefrontTheme(storefrontTemplateTheme("boutique"), SEED_30K).blocks.header.variant).toBe("inline-nav");
   });
 
   it("brings shelves, sub-category pills and popular-filter chips alive on the 30k tree", () => {

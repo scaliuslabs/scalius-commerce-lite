@@ -407,64 +407,25 @@ export type StorefrontThemeDocument = {
             };
         };
         header: {
-            variant: 'boutique-inline';
+            variant: 'inline-nav';
             settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'showcase-simple';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'fashion-department';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'heritage-nav';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'spec-two-row';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'tech-rounded';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'marketplace-search';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'marketplace-light';
-            settings: {
-                [key: string]: never;
-            };
-        } | {
-            variant: 'mall-departments';
-            settings: {
+                search: 'icon' | 'field';
+                rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
         } | {
-            variant: 'mall-search';
+            variant: 'search-first';
             settings: {
+                search: 'field' | 'scoped';
+                rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
         } | {
-            variant: 'retail-pill';
+            variant: 'centered-logo';
             settings: {
+                search: 'icon' | 'field';
+                rowTone: 'page' | 'header';
                 cartTotal: boolean;
-            };
-        } | {
-            variant: 'grocery-shell';
-            settings: {
-                [key: string]: never;
             };
         };
         navigation: {
@@ -495,7 +456,7 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'departments-rail';
             settings: {
-                open: 'home' | 'always';
+                open: 'demand' | 'always';
             };
         } | {
             variant: 'sticky-category-bar';
@@ -511,7 +472,7 @@ export type StorefrontThemeDocument = {
         } | {
             variant: 'drill-in-drawer';
             settings: {
-                rows: 'standard' | 'tall';
+                [key: string]: never;
             };
         } | {
             variant: 'bottom-tabs';

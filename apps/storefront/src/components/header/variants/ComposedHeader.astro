@@ -1,14 +1,15 @@
 ---
-// Every header variant but the classic one, composed from one spec
-// (header-variants.ts) and shared pieces: logo, search, utilities, cart and
-// the menu (slot "menu", in the main row or its own row). Tokens paint it:
-// the toned rows use the header tone (`--theme-header-*`, an AA pair), the
-// search field is always the card surface.
+// The header, in one of three layouts (header-variants.ts) drawn from one
+// spec: logo, search, account and cart, and the menu (slot "menu", in the
+// main row or its own row). Tokens paint it: a toned row uses the header
+// colours (`--theme-header-*`, an AA pair); the search field is always the
+// card or muted surface. One icon set, one gap, one order everywhere:
+// menu, logo, search, account, cart.
 //
-// Sticky: the whole header on phones. On computers the whole header, or only
-// the menu row when `stickyMenuRow` (Star Tech: the category bar stays when
-// the header scrolls away); then #main-header is `display: contents` there
-// and the menu row is the sticky part (HeaderLayout measures it).
+// Sticky: the whole header, or only the menu row when it has one of its own
+// (`stickyMenuRow`): the top row scrolls away and the category bar stays;
+// then #main-header is `display: contents` on computers and the menu row is
+// the sticky part (HeaderLayout measures it).
 import type { NavigationItem } from "@/lib/api";
 import type {
   StorefrontHeaderRenderer,
@@ -20,6 +21,8 @@ import {
   normalizeHeaderLogoWidth,
 } from "@scalius/shared/brand-presentation";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import HeaderSearch from "../HeaderSearch.astro";
 import type { HeaderLogo, HeaderSpec } from "../header-variants";
 
@@ -32,7 +35,7 @@ interface Props {
   navigationStyle: StorefrontNavigationRenderer;
   /** Render the menu slot (a menu exists and belongs in the header). */
   hasMenu: boolean;
-  /** The menu sits in its own row (the spec's, or a category bar that needs one). */
+  /** The menu sits in its own row (the layout's, or a category bar that needs one). */
   menuPlacement: "inline" | "row";
   stickyMenuRow: boolean;
   /** Top-level menu items, for the department-scoped search. */
@@ -54,14 +57,17 @@ const {
   phoneDrop,
 } = Astro.props;
 
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const logoWidth = normalizeHeaderLogoWidth(logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 const logoSrcSet = mediaImageSrcSet(logo.src);
 const inlineMenu = hasMenu && menuPlacement === "inline";
 const menuRow = hasMenu && menuPlacement === "row";
 const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
-const compactCategorySearch = variantId === "spec-two-row" &&
-  (Astro.url.pathname === "/categories" || Astro.url.pathname.startsWith("/categories/"));
+// A search icon sits with the account and cart icons (one gap); a field has its own place.
+const searchIcon = spec.search === "icon";
+const iconsTogether = searchIcon && spec.layout !== "centered-logo";
 const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight || 2.75}rem; --header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`;
 ---
 
@@ -72,9 +78,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   data-header-variant={variantId}
   data-navigation={navigationStyle}
   data-hdr-search={spec.search}
-  data-hdr-utilities={spec.utilities}
   data-hdr-sticky={stickyMenuRow ? "menu-row" : "header"}
-  data-hdr-uppercase={spec.uppercaseMenu ? "" : undefined}
   data-phone-drop={phoneDrop || undefined}
   style={style}
 >
@@ -85,7 +89,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           id="mobile-menu-toggle"
           type="button"
           class="hdr-icon-button"
-          aria-label="Open menu"
+          aria-label={copy.header.openMenu}
           aria-haspopup="dialog"
           aria-controls="mobile-menu-panel"
           aria-expanded="false"
@@ -93,21 +97,21 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
         <noscript>
-          <a href="#mobile-menu-panel" class="hdr-icon-button" aria-label="Open menu">
+          <a href="#mobile-menu-panel" class="hdr-icon-button" aria-label={copy.header.openMenu}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </a>
         </noscript>
         {
           spec.phoneSearch === "none" && (
             <>
-              <button id="mobile-search-toggle" type="button" class="hdr-icon-button" aria-label="Search" aria-haspopup="dialog">
+              <button id="mobile-search-toggle" type="button" class="hdr-icon-button" aria-label={copy.header.search} aria-haspopup="dialog">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" />
                   <path d="m20 20-3.5-3.5" />
                 </svg>
               </button>
               <noscript>
-                <a href="/search" class="hdr-icon-button" aria-label="Search">
+                <a href="/search" class="hdr-icon-button" aria-label={copy.header.search}>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="11" cy="11" r="7" />
                     <path d="m20 20-3.5-3.5" />
@@ -139,33 +143,24 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
         }
       </a>
 
-      {variantId === "marketplace-light" && (
-        <a class="hdr-shop-categories" href="/categories">Shop by category</a>
-      )}
-
       {inlineMenu && (
         <div class="hdr-inline-menu">
           <slot name="menu" />
         </div>
       )}
 
-      <div class:list={["hdr-search", spec.search === "icon" && "hdr-search--icon"]}>
-        <HeaderSearch shape={spec.search} id="header-search-input" departments={departments} />
-      </div>
+      {!iconsTogether && (
+        <div class:list={["hdr-search", searchIcon && "hdr-search--icon"]}>
+          <HeaderSearch shape={spec.search} id="header-search-input" departments={departments} />
+        </div>
+      )}
 
       <div class="hdr-actions">
-        {compactCategorySearch && (
-          <a href="/search" class="hdr-icon-button hdr-category-search" aria-label="Search" aria-haspopup="dialog" data-search-open>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          </a>
+        {iconsTogether && (
+          <div class="hdr-search hdr-search--icon">
+            <HeaderSearch shape="icon" id="header-search-input" />
+          </div>
         )}
-        <a href="/track-order" data-astro-prefetch="false" class="hdr-util hdr-util--desktop" data-mall-hide="">
-          <span class="hdr-util-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-.1M17.5 19a2 2 0 1 0 0-.1" /></svg>
-          </span>
-          <span class="hdr-util-text"><small>Your orders</small><strong>Track order</strong></span>
-        </a>
-
         <a
           id="account-link"
           href="/account"
@@ -176,7 +171,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           <span class="hdr-util-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>
           </span>
-          <span class="hdr-util-text"><small>Hello, sign in</small><strong>Account</strong></span>
+          <span class="hdr-util-text">{copy.header.account}</span>
         </a>
 
         <button
@@ -197,11 +192,11 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           <span class="hdr-util-text">
             {spec.cartTotal ? (
               <>
-                <small>Cart</small>
-                <strong id="cart-total-display" class="tabular-nums">0</strong>
+                <small>{copy.header.cart}</small>
+                <bdi dir="ltr"><strong id="cart-total-display" class="tabular-nums">0</strong></bdi>
               </>
             ) : (
-              <strong>Cart</strong>
+              copy.header.cart
             )}
           </span>
         </button>
@@ -218,21 +213,13 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   {menuRow && (
-    <div class="hdr-menu-row" data-tone={spec.menuRowTone === "tone" && spec.toneRow ? "tone" : "surface"}>
+    <div class="hdr-menu-row" data-tone="surface">
       <div class="hdr-inner hdr-menu-inner">
         <slot name="menu" />
       </div>
     </div>
   )}
 </div>
-
-{
-  spec.phoneSearch === "in-page" && !compactCategorySearch && (
-    <div class:list={["hdr-phone-search", "hdr-phone-search--page", variantId === "marketplace-light" && "hdr-phone-search--marketplace-light"]}>
-      <HeaderSearch shape="field" id="header-search-input-phone" />
-    </div>
-  )
-}
 
 <slot name="phone-extras" />
 
@@ -247,14 +234,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     transition: box-shadow 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
   }
 
-  .hdr[data-header-variant="marketplace-search"] {
-    position: relative;
-  }
-
-  .hdr[data-header-variant="marketplace-light"] {
-    position: relative;
-  }
-
   .hdr.is-scrolled {
     box-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.18);
   }
@@ -263,18 +242,18 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     width: 100%;
     max-width: var(--theme-container-width, 80rem);
     margin-inline: auto;
-    padding-inline: 1rem;
+    padding-inline: var(--theme-gutter-phone, 1rem);
   }
 
   @media (min-width: 40rem) {
     .hdr-inner {
-      padding-inline: 1.5rem;
+      padding-inline: var(--theme-gutter-tablet, 1.5rem);
     }
   }
 
   @media (min-width: 64rem) {
     .hdr-inner {
-      padding-inline: 2rem;
+      padding-inline: var(--theme-gutter-desktop, 2rem);
     }
   }
 
@@ -354,13 +333,18 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
   .hdr-logo {
     position: absolute;
-    left: 50%;
+    inset-inline-start: 50%;
     top: 50%;
     z-index: 1;
     display: flex;
     align-items: center;
+    max-width: calc(100% - 12rem);
     transform: translate(-50%, -50%);
     color: inherit;
+  }
+
+  :root[dir="rtl"] .hdr-logo {
+    transform: translate(50%, -50%);
   }
 
   .hdr-logo-image {
@@ -377,11 +361,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     }
   }
 
-  /* A text logo never runs under the phone bar's icons. */
-  .hdr-logo {
-    max-width: calc(100% - 12rem);
-  }
-
   .hdr-logo-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -391,37 +370,13 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     white-space: nowrap;
   }
 
-  .hdr-shop-categories {
-    display: none;
-  }
-
-  @media (max-width: 63.99rem) {
-    .hdr[data-header-variant="marketplace-light"] .hdr-phone-start {
-      order: 3;
-      margin-inline-start: 0;
-      margin-inline-end: -0.5rem;
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-logo {
-      inset-inline-start: 1rem;
-      max-width: calc(100% - 10rem);
-      transform: translateY(-50%);
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-actions {
-      order: 2;
-      margin-inline-end: 0;
-    }
-  }
-
   .hdr-inline-menu,
-  .hdr-search,
-  .hdr-util.hdr-util--desktop {
+  .hdr-search {
     display: none;
   }
 
   /* The words of a utility are its accessible name (WCAG 2.5.3: the name
-     holds the visible text). Where the style shows only the icon they stay
+     holds the visible text). The header shows the icon alone: the words stay
      in the page for assistive technology, visually hidden, never display:none. */
   .hdr-util-text {
     position: absolute;
@@ -495,9 +450,9 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   /* Phones: a search row under the bar that folds away on scroll, so the
-     sticky stack stays under 120px (mix rule 6). */
+     sticky stack stays under 120px. */
   .hdr-phone-search {
-    padding: 0 1rem 0.5rem;
+    padding: 0 var(--theme-gutter-phone, 1rem) 0.5rem;
   }
 
   /* The sticky row is exactly the height the scroll reserve holds; it
@@ -511,23 +466,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       visibility 0s linear;
   }
 
-  .hdr-phone-search--page {
-    padding-top: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .hdr-phone-search--marketplace-light {
-    padding-block: 0.75rem;
-    background: var(--background);
-  }
-
-  .hdr-phone-search--marketplace-light :global(.hsearch) {
-    height: 2.5rem;
-    border-color: var(--border);
-    border-radius: 9999px;
-    background: var(--card);
-  }
-
   .hdr.is-scrolled > .hdr-phone-search {
     height: 0;
     padding-bottom: 0;
@@ -537,10 +475,8 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   @media (min-width: 64rem) {
-    .hdr-category-search,
     .hdr-phone-search,
-    .hdr-phone-start,
-    .hdr-phone-search--page {
+    .hdr-phone-start {
       display: none;
     }
   }
@@ -558,7 +494,8 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       gap: 1.5rem;
     }
 
-    .hdr-logo {
+    .hdr-logo,
+    :root[dir="rtl"] .hdr-logo {
       position: static;
       flex-shrink: 0;
       max-width: none;
@@ -568,31 +505,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     .hdr-logo-image {
       max-height: 2.75rem;
       max-width: var(--header-logo-width);
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-inner {
-      max-width: 93rem;
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-shop-categories {
-      display: inline-flex;
-      flex: 0 0 5.5rem;
-      align-items: center;
-      gap: 0.25rem;
-      font-size: 0.75rem;
-      line-height: 1.15;
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-shop-categories:hover {
-      text-decoration: underline;
-    }
-
-    .hdr[data-header-variant="mall-search"] .hdr-logo-image {
-      max-height: 6.25rem;
-    }
-
-    .hdr[data-header-variant="mall-search"] [data-mall-hide] {
-      display: none;
     }
 
     .hdr-inline-menu {
@@ -606,23 +518,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       display: flex;
       flex: 1 1 36rem;
       min-width: 12rem;
-      max-width: 50rem;
-    }
-
-    .hdr[data-header-variant="marketplace-light"] .hdr-search {
-      flex-basis: 65rem;
-      max-width: 65rem;
-    }
-
-    .hdr[data-header-variant="tech-rounded"] .hdr-search {
-      max-width: 36.5rem;
-    }
-
-    .hdr[data-header-variant="spec-two-row"] .hdr-search {
-      max-width: 36.25rem;
-    }
-
-    .hdr[data-header-variant="mall-search"] .hdr-search {
       max-width: 45rem;
     }
 
@@ -631,18 +526,9 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       min-width: 0;
     }
 
-    /* Beside an inline menu the search is a fixed, modest field (Fabrilife 300px). */
+    /* Beside an inline menu the search is a fixed, modest field. */
     .hdr-inline-menu ~ .hdr-search:not(.hdr-search--icon) {
       flex: 0 1 19rem;
-    }
-
-    .hdr[data-header-variant="retail-pill"] .hdr-inline-menu {
-      flex: 0 1 auto;
-    }
-
-    .hdr[data-header-variant="retail-pill"] .hdr-inline-menu ~ .hdr-search {
-      flex: 1 1 39.25rem;
-      max-width: 39.25rem;
     }
 
     .hdr-actions {
@@ -650,8 +536,37 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       margin-inline-end: 0;
     }
 
-    .hdr-util.hdr-util--desktop {
-      display: inline-flex;
+    /* The centred logo: search at the start, the icons at the end. */
+    .hdr[data-header-variant="centered-logo"] .hdr-bar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+
+    .hdr[data-header-variant="centered-logo"] .hdr-search {
+      grid-column: 1;
+      grid-row: 1;
+      justify-self: start;
+      width: 100%;
+      max-width: 19rem;
+    }
+
+    .hdr[data-header-variant="centered-logo"] .hdr-search--icon {
+      width: auto;
+    }
+
+    .hdr[data-header-variant="centered-logo"] .hdr-logo {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .hdr[data-header-variant="centered-logo"] .hdr-actions {
+      grid-column: 3;
+      grid-row: 1;
+      justify-self: end;
+    }
+
+    .hdr[data-header-variant="centered-logo"] .hdr-menu-inner {
+      justify-content: center;
     }
 
     .hdr-menu-row {
@@ -661,17 +576,13 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       border-bottom: 1px solid var(--border);
     }
 
-    .hdr-menu-row[data-tone="tone"] {
-      border-bottom-color: color-mix(in srgb, currentColor 14%, transparent);
-    }
-
     .hdr-menu-inner {
       display: flex;
       align-items: center;
       min-height: var(--hdr-menu);
     }
 
-    /* Only the menu row stays (Star Tech's category bar). */
+    /* Only the menu row stays: the top row scrolls away. */
     .hdr[data-hdr-sticky="menu-row"] {
       display: contents;
     }
@@ -686,81 +597,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       box-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.18);
     }
 
-    /* Utilities, as each variant reads them. */
-    .hdr[data-hdr-utilities="icons"] .hdr-util.hdr-util--desktop {
-      display: none;
-    }
-
-    .hdr[data-hdr-utilities="stacked"] .hdr-util {
-      flex-direction: column;
-      gap: 0.125rem;
-      min-width: 3.5rem;
-    }
-
-    .hdr[data-hdr-utilities="stacked"] .hdr-util-icon {
-      width: 1.5rem;
-      height: 1.5rem;
-      background: none;
-    }
-
-    .hdr[data-hdr-utilities="stacked"] .hdr-util-text {
-      display: block;
-      white-space: nowrap;
-      font-size: 0.75rem;
-      font-weight: 600;
-      line-height: 1;
-    }
-
-    .hdr[data-hdr-utilities="stacked"] .hdr-util-text small {
-      display: none;
-    }
-
-    .hdr[data-hdr-utilities="two-line"] .hdr-util {
-      padding-inline-end: 0.5rem;
-      gap: 0.25rem;
-    }
-
-    .hdr[data-hdr-utilities="two-line"] .hdr-util-text {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.15;
-      white-space: nowrap;
-    }
-
-    .hdr[data-hdr-utilities="two-line"] .hdr-util-text small {
-      font-size: 0.75rem;
-    }
-
-    .hdr[data-hdr-utilities="two-line"] .hdr-util-text strong {
-      font-size: 0.875rem;
-      font-weight: 700;
-    }
-
-    .hdr[data-hdr-utilities="round"] .hdr-util-icon {
-      width: 3rem;
-      height: 3rem;
-      border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-    }
-
-    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-icon {
-      display: none;
-    }
-
-    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text {
-      display: block;
-      padding-inline: 0.5rem;
-      font-size: 0.875rem;
-      font-weight: 600;
-    }
-
-    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text small {
-      display: none;
-    }
-
-    /* The styles that show the words undo the visual hiding. */
-    .hdr[data-hdr-utilities="stacked"] .hdr-util-text,
-    .hdr[data-hdr-utilities="two-line"] .hdr-util-text,
-    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text,
+    /* A cart with its running total reads it beside the icon. */
     .hdr-cart:has(#cart-total-display) .hdr-util-text {
       position: static;
       inline-size: auto;
@@ -768,33 +605,19 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
       margin: 0;
       overflow: visible;
       clip-path: none;
-    }
-
-    /* A cart with its running total reads it beside the icon, whatever the style. */
-    .hdr-cart:has(#cart-total-display) .hdr-util-text {
       display: flex;
       flex-direction: column;
+      padding-inline-end: 0.5rem;
       line-height: 1.15;
     }
 
     .hdr-cart:has(#cart-total-display) .hdr-util-text small {
-      font-size: 0.75rem;
+      font-size: var(--theme-text-xs, 0.75rem);
     }
 
     .hdr-cart:has(#cart-total-display) .hdr-util-text strong {
-      font-size: 0.9375rem;
+      font-size: var(--theme-text-sm, 0.875rem);
       font-weight: 700;
-    }
-
-    /* Fashion departments: the top-level items in capitals (not the panels). */
-    .hdr[data-hdr-uppercase] :global(:is(.desktop-nav-link, [data-menu-top-link])) {
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 600;
-    }
-
-    .hdr[data-header-variant="tech-rounded"] .hdr-menu-inner {
-      justify-content: center;
     }
   }
 

@@ -205,42 +205,7 @@ export function HeaderRows({ kind }: { kind: StorefrontHeaderRenderer }) {
   );
 }
 
-export function HeaderSketch({ kind, variant }: { kind: StorefrontHeaderRenderer; variant?: string }) {
-  if (variant === "marketplace-light") {
-    return (
-      <Sketch>
-        <span className="flex justify-end border-b border-(--sk-line) py-0.5"><Line className="h-0.5 w-1/4" /></span>
-        <span className="flex items-center gap-1.5 py-1">
-          <Logo className="h-3 w-6" />
-          <span className="flex h-2.5 flex-1 items-center rounded-full border border-(--sk-ink) px-1">
-            <span className="ms-auto h-1 w-5 border-s border-(--sk-line)" />
-          </span>
-          <span className="h-2.5 w-4 rounded-full bg-(--sk-accent)" />
-        </span>
-        <span className="flex gap-1 border-t border-(--sk-line) pt-1"><Line /><Line /><Line /><Line /></span>
-        <Filler className="mt-1" />
-      </Sketch>
-    );
-  }
-  if (variant === "mall-search") {
-    return (
-      <Sketch>
-        <span className="flex items-center gap-1 py-1">
-          <Logo className="h-3 w-6" />
-          <span className="flex h-2.5 flex-1 rounded-xs border border-(--sk-accent)">
-            <span className="w-5 border-e border-(--sk-line) bg-(--sk-soft)" />
-            <span className="ms-auto w-3 bg-(--sk-accent)" />
-          </span>
-          <Dot /><Dot />
-        </span>
-        <span className="flex items-center gap-1 border-t border-(--sk-line)">
-          <Block className="h-1.5 w-1/3 bg-(--sk-accent)" />
-          <Line /><Line />
-        </span>
-        <Filler className="mt-1" />
-      </Sketch>
-    );
-  }
+export function HeaderSketch({ kind }: { kind: StorefrontHeaderRenderer; variant?: string }) {
   return (
     <Sketch>
       <HeaderRows kind={kind} />

@@ -1,20 +1,19 @@
 ---
-// minimal-columns (Dawn) and product-widgets (Game Ghor; its product lists
-// wait for product data in the layout read, so it renders the columns): the
-// logo, tagline and call line, the about text, then one column per footer
-// menu. Kept pixel-identical to the version 3 columns footer, the default
-// template's.
-import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+// minimal-columns and product-widgets (product lists wait for product data
+// in the layout read, so both render the columns): the logo, tagline and
+// call line, the about text, then one group per footer menu (FooterMenus:
+// columns on computers, accordions on phones).
 import RichTextStyles from "../RichTextStyles.astro";
+import FooterMenus from "./FooterMenus.astro";
 import { mediaImageUrl } from "@/lib/media-url";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import type { FooterModel } from "./footer-model";
 
 interface Props {
   model: FooterModel;
-  collapsibleMenus?: boolean;
 }
 
-const { collapsibleMenus = false } = Astro.props;
 const {
   logo,
   brandName,
@@ -24,31 +23,25 @@ const {
   about,
   menus,
 } = Astro.props.model;
-
-const menuCount = menus.length;
-let menuGridCols = collapsibleMenus ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-2";
-if (!collapsibleMenus && menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
-if (!collapsibleMenus && menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
   <div class="lg:col-span-4">
     {/* No logo and no store name: no empty link to tab onto. */}
     {(logo.src || brandName) && (
-      <a
-        href="/"
-        class="group inline-block transform transition-transform hover:scale-105 duration-300"
-      >
+      <a href="/" class="inline-block">
         {
           logo.src ? (
             <img
               src={mediaImageUrl(logo.src, 480)}
-              alt={brandName || "Home"}
+              alt={brandName || copy.home}
               width={344}
               height={256}
               loading="lazy"
               decoding="async"
-              class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
+              class="h-12 sm:h-14 w-auto object-contain"
             />
           ) : (
             <span class="text-lg font-bold">{brandName}</span>
@@ -67,9 +60,9 @@ if (!collapsibleMenus && menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-col
     {
       phoneHref && (
         <p class="mt-3 text-base">
-          Call us:{" "}
+          {copy.footer.callUs}{" "}
           <a href={phoneHref} class="font-semibold underline underline-offset-4">
-            {storePhone}
+            <bdi dir="ltr">{storePhone}</bdi>
           </a>
         </p>
       )
@@ -90,87 +83,6 @@ if (!collapsibleMenus && menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-col
   </div>
 
   <div class="lg:col-span-8">
-    <div class={`grid ${menuGridCols} gap-8 sm:gap-10`}>
-      {
-        menus.map((menu) => (
-          collapsibleMenus ? (
-            <details class="footer-menu-details">
-              <summary><h2 class="text-sm font-bold tracking-widest uppercase">{menu.title}</h2></summary>
-              <RecursiveFooterLink links={menu.links} />
-            </details>
-          ) : (
-            <div class="flex flex-col gap-4">
-              <h2 class="text-sm font-bold tracking-widest uppercase">{menu.title}</h2>
-              <RecursiveFooterLink links={menu.links} />
-            </div>
-          )
-        ))
-      }
-    </div>
+    <FooterMenus menus={menus} />
   </div>
-
 </div>
-
-<style>
-  .footer-menu-details summary {
-    display: flex;
-    align-items: center;
-    min-height: 4.75rem;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .footer-menu-details summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .footer-menu-details summary::after {
-    content: "+";
-    margin-inline-start: auto;
-    font-size: 1.25rem;
-  }
-
-  .footer-menu-details[open] summary::after {
-    content: "−";
-  }
-
-  .footer-menu-details summary:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-  }
-
-  .footer-menu-details :global(ul) {
-    padding-top: 0.5rem;
-  }
-
-  @media (min-width: 64rem) {
-    .footer-menu-details summary {
-      min-height: 2.75rem;
-    }
-
-    :global(.footer-menu-details > ul) {
-      columns: 2;
-      column-gap: 1rem;
-    }
-
-    .footer-menu-details :global(li) {
-      break-inside: avoid;
-    }
-
-    .footer-menu-details :global(a) {
-      font-size: 0.8125rem;
-      line-height: 1.3;
-    }
-  }
-</style>
-
-<script>
-  const wideFooter = window.matchMedia("(min-width: 64rem)");
-  const syncFooterMenus = () => {
-    document.querySelectorAll<HTMLDetailsElement>(".footer-menu-details").forEach((menu) => {
-      menu.open = wideFooter.matches;
-    });
-  };
-  syncFooterMenus();
-  wideFooter.addEventListener("change", syncFooterMenus);
-</script>

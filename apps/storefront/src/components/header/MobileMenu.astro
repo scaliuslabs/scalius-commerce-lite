@@ -11,6 +11,8 @@ import Icon from "@/components/icons/Icon.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import NavTree from "./NavTree.astro";
 import DrillDrawer from "./DrillDrawer.astro";
 
@@ -27,8 +29,6 @@ interface Props {
   title?: string;
   /** The top level ends with "All categories" (/categories). */
   allCategories?: boolean;
-  /** Amazon-style drawer geometry for the Marketplace template. */
-  marketplace?: boolean;
 }
 
 const {
@@ -38,10 +38,12 @@ const {
   id = "mobile-menu",
   tree = "accordion",
   screens = "phone",
-  title = "Menu",
+  title: titleProp,
   allCategories = false,
-  marketplace = false,
 } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
+const title = titleProp ?? copy.nav.menu;
 const menuHasTrackOrder = (function has(list: NavigationItem[]): boolean {
   return list.some((item) => {
     const href = item.href?.split(/[?#]/)[0]?.replace(/\/+$/, "");
@@ -68,12 +70,12 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
   id={`${id}-panel`}
   class:list={[
     "nav-drawer invisible fixed inset-s-0 top-0 z-70 flex h-dvh max-w-[365px] -translate-x-full rtl:translate-x-full transform flex-col border-e border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
-    marketplace ? "nav-drawer--marketplace w-[80vw] lg:w-[365px]" : "w-[90vw]",
+    "w-[90vw]",
     phoneOnly && "lg:hidden",
   ]}
   role="dialog"
   aria-modal="true"
-  aria-label={phoneOnly ? "Mobile menu" : title}
+  aria-label={phoneOnly ? copy.nav.mobileMenu : title}
   data-drawer={id}
   data-drawer-screens={screens}
 >
@@ -87,7 +89,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       id={`${id}-close`}
       type="button"
       class="-me-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
-      aria-label="Close menu"
+      aria-label={copy.header.closeMenu}
       data-drawer-close
     >
       <Icon name="x" class="h-5 w-5 stroke-[1.5]" />
@@ -96,7 +98,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       <a
         href="#"
         class="-me-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground"
-        aria-label="Close menu"
+        aria-label={copy.header.closeMenu}
       >
         <Icon name="x" class="h-5 w-5 stroke-[1.5]" />
       </a>
@@ -109,7 +111,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       tree === "drill" ? "flex min-h-0 flex-col" : "overflow-y-auto px-3 py-3",
     ]}
     id={navId}
-    aria-label={phoneOnly ? "Mobile navigation" : title}
+    aria-label={phoneOnly ? copy.nav.mobileNavigation : title}
   >
     {
       tree === "drill" ? (
@@ -134,7 +136,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
         tree === "drill" && "mx-3 shrink-0",
       ]}
     >
-      Track your order
+      {copy.nav.trackOrder}
     </a>}
 
     {
@@ -142,7 +144,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
         <div class="mt-4 flex flex-wrap gap-2 border-t border-border px-3 pt-4">
           {social.map((item) => {
             if (!item.url) return null;
-            const displayTitle = item.label || "Social";
+            const displayTitle = item.label || copy.nav.social;
             const href = item.url.startsWith("http")
               ? item.url
               : `https://${item.url}`;
@@ -201,10 +203,10 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-xs text-muted-foreground font-semibold leading-none mb-1">
-              Call support
+              {copy.nav.callSupport}
             </p>
             <p class="text-sm font-bold text-foreground tracking-tight truncate">
-              {phone}
+              <bdi dir="ltr">{phone}</bdi>
             </p>
           </div>
           <Icon name="chevron-right" class="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
@@ -215,13 +217,6 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 </div>
 
 <style>
-  @media (max-width: 63.999rem) {
-    .nav-drawer--marketplace :global(:is(.drill-link, :where(.drill-list > li > a))),
-    .nav-drawer--marketplace :global(.drill-level)::before {
-      min-height: 3.25rem;
-    }
-  }
-
   /* Without JavaScript the drawer opens as the URL's target (the <noscript>
      menu links) and closes through its <noscript> close link. */
   .nav-drawer:target {

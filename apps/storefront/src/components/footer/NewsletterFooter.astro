@@ -2,9 +2,13 @@
 // newsletter-grey (Fabrilife): on the muted surface, centred. The logo, the
 // newsletter signup (the same form as the homepage section, posting to the
 // store's signup endpoint; left out on a homepage that shows that section),
-// one band of links (menus and policies), the hotline ("For any help, call
-// us") with WhatsApp, and the tagline as the sub-footer line.
+// the links grouped under their headings (menus and policies: columns on
+// computers, accordions on phones), the hotline with WhatsApp, and the
+// tagline as the sub-footer line.
 import NewsletterForm from "@/components/newsletter/NewsletterForm.astro";
+import FooterMenus from "./FooterMenus.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { mediaImageUrl } from "@/lib/media-url";
 import type { NewsletterFormModel } from "@/lib/newsletter-form";
 import type { FooterModel } from "./footer-model";
@@ -16,7 +20,13 @@ interface Props {
 }
 
 const { model, signup } = Astro.props;
-const { logo, brandName, tagline, phoneHref, chatHref, storePhone, flatLinks } = model;
+const { logo, brandName, tagline, phoneHref, chatHref, storePhone, menus, policyLinks } = model;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
+const groups = [
+  ...menus,
+  ...(policyLinks.length > 0 ? [{ title: copy.footer.policies, links: policyLinks }] : []),
+];
 ---
 
 <div class="newsletter-footer">
@@ -24,7 +34,7 @@ const { logo, brandName, tagline, phoneHref, chatHref, storePhone, flatLinks } =
     (logo.src || brandName) && (
       <a href="/" class="newsletter-logo">
         {logo.src ? (
-          <img src={mediaImageUrl(logo.src, 480)} alt={brandName || "Home"} width={344} height={256} loading="lazy" decoding="async" />
+          <img src={mediaImageUrl(logo.src, 480)} alt={brandName || copy.home} width={344} height={256} loading="lazy" decoding="async" />
         ) : (
           <span>{brandName}</span>
         )}
@@ -42,33 +52,23 @@ const { logo, brandName, tagline, phoneHref, chatHref, storePhone, flatLinks } =
     )
   }
 
-  {
-    flatLinks.length > 0 && (
-      <nav aria-label="Footer">
-        <ul class="newsletter-links">
-          {flatLinks.map((link) => (
-            <li>
-              <a href={link.href}>{link.title}</a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    )
-  }
+  <div class="newsletter-menus">
+    <FooterMenus menus={groups} label={copy.footer.footerLinks} />
+  </div>
 
   {
     (phoneHref || chatHref) && (
       <div class="newsletter-hotline" data-footer-contact>
-        <p>For any help, call us</p>
+        <p>{copy.footer.hotline}</p>
         <div>
           {phoneHref && (
             <a href={phoneHref} class="newsletter-phone">
-              {storePhone}
+              <bdi dir="ltr">{storePhone}</bdi>
             </a>
           )}
           {chatHref && (
             <a href={chatHref} target="_blank" rel="noopener noreferrer" class="newsletter-chat">
-              WhatsApp
+              {copy.footer.whatsapp}
             </a>
           )}
         </div>
@@ -100,20 +100,11 @@ const { logo, brandName, tagline, phoneHref, chatHref, storePhone, flatLinks } =
     font-weight: 700;
   }
 
-  .newsletter-links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0 1.25rem;
-    max-width: 56rem;
+  .newsletter-menus {
+    width: 100%;
+    text-align: start;
   }
 
-  .newsletter-links li {
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .newsletter-links a,
   .newsletter-phone,
   .newsletter-chat {
     display: inline-flex;
@@ -123,7 +114,6 @@ const { logo, brandName, tagline, phoneHref, chatHref, storePhone, flatLinks } =
     overflow-wrap: anywhere;
   }
 
-  .newsletter-links a:hover,
   .newsletter-chat:hover {
     text-decoration: underline;
     text-underline-offset: 0.2em;

@@ -2,13 +2,15 @@
 // src/components/Footer.astro
 // The footer block (theme block `footer`), one component per variant under
 // ./footer, all reading one model (footer/footer-model.ts):
-// - minimal-columns, product-widgets: the columns footer (version 3, the
-//   default template's; product lists wait for product data in the layout).
-// - support-dark: the header's tone, a large phone card (Star Tech).
-// - brand-black: the ink surface, policies and a watermark (Apple Gadgets).
-// - newsletter-grey: the muted surface, one centred band (Fabrilife).
-// - directory: customer care and a curated link directory (Daraz); with
-//   `style: bands`, Amazon's banded directory in the header's tone.
+// - minimal-columns, product-widgets: the columns footer (the default
+//   template's; product lists wait for product data in the layout).
+// - support-dark: the header's tone, a large phone card.
+// - brand-black: the ink surface and a policies column.
+// - newsletter-grey: the muted surface, a signup and grouped links.
+// - directory: the store's contact details and a curated link directory;
+//   with `style: bands`, a banded directory in the header's tone.
+// Every footer sits in the page Container, so its edges line up with the
+// header and the sections, and groups links the same way (FooterMenus).
 // Tones re-point the footer's own surface tokens (secondary, border), so the
 // shared bottom row and the menus read correctly on every surface. Every
 // tone is a theme pair the AA rule checks (the header pair, ink on page, ink
@@ -29,6 +31,8 @@ import NewsletterFooter from "./footer/NewsletterFooter.astro";
 import DirectoryFooter from "./footer/DirectoryFooter.astro";
 import FooterBottom from "./footer/FooterBottom.astro";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
+import Container from "./ui/Container.astro";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { newsletterFormModel, themeNewsletterSettings } from "@/lib/newsletter-form";
 
 interface Props {
@@ -48,7 +52,8 @@ interface Props {
 }
 
 const { menus, storeName, storePhone, social, policies, business, languageCode } = Astro.props;
-const { resolved, brand } = await currentRequestTheme(Astro.locals);
+const { resolved, brand, language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const variant = resolved.blocks.footer.variant;
 // newsletter-grey carries the signup form, with the homepage newsletter
 // section's settings when the theme has one. A homepage that shows that
@@ -70,6 +75,7 @@ const model = footerModel({
   social,
   policies,
   business,
+  trackOrderLabel: copy.nav.trackOrder,
 });
 const TONES: Record<string, string | undefined> = {
   "support-dark": "header",
@@ -84,20 +90,20 @@ const TONES: Record<string, string | undefined> = {
   data-footer-tone={marketplaceDirectory ? "header" : TONES[variant]}
   data-footer-marketplace={marketplaceDirectory ? "" : undefined}
 >
-  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">Back to top</a>}
-  <div class:list={["relative mx-auto w-full px-4 sm:px-6", marketplaceDirectory ? "directory-main max-w-5xl py-8 lg:py-10" : "max-w-7xl py-5 lg:py-6"]}>
-    {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} collapsibleMenus={variant === "product-widgets"} />}
+  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">{copy.footer.backToTop}</a>}
+  <Container class:list={["relative", marketplaceDirectory ? "directory-main py-8 lg:py-10" : "py-8 lg:py-10"]}>
+    {(variant === "minimal-columns" || variant === "product-widgets") && <ColumnsFooter model={model} />}
     {variant === "support-dark" && <SupportFooter model={model} />}
     {variant === "brand-black" && <BrandFooter model={model} />}
     {variant === "newsletter-grey" && <NewsletterFooter model={model} signup={signup} />}
     {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
     {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "newsletter-grey" && variant !== "brand-black"} />}
-  </div>
+  </Container>
   {marketplaceDirectory && (
     <div class="directory-lower" data-footer-lower>
-      <div class="relative mx-auto w-full max-w-5xl px-4 sm:px-6">
+      <Container class="relative">
         <FooterBottom model={model} marketplace />
-      </div>
+      </Container>
     </div>
   )}
 </footer>
@@ -156,7 +162,7 @@ const TONES: Record<string, string | undefined> = {
     min-height: 50px;
     background: var(--theme-header-raised);
     color: var(--theme-header-foreground);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
 

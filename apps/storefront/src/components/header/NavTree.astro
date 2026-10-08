@@ -5,6 +5,8 @@
 // expanded, so the buyer sees where they are without any script.
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import {
   ariaCurrent,
   navigationChildren,
@@ -23,6 +25,8 @@ interface Props {
 }
 
 const { items = [], idPrefix, variant, depth = 0, allCategories = false } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 const visible = items.filter((item) => item?.title);
 ---
 
@@ -63,7 +67,7 @@ const visible = items.filter((item) => item?.title);
                 aria-controls={`${id}-panel`}
                 data-disclosure="tree"
               >
-                {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
+                {item.href ? <span class="sr-only">{copy.nav.submenu(item.title)}</span> : <span>{item.title}</span>}
               </button>
             )}
           </div>
@@ -80,7 +84,7 @@ const visible = items.filter((item) => item?.title);
     depth === 0 && allCategories && (
       <li class="nav-tree-all">
         <div class="nav-tree-row">
-          <a href="/categories" class="nav-tree-link">All categories</a>
+          <a href="/categories" class="nav-tree-link">{copy.nav.allCategories}</a>
         </div>
       </li>
     )

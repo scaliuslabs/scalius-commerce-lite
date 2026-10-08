@@ -20,7 +20,6 @@ const astroSources = (readdirSync(src, { recursive: true }) as string[])
 
 const layout = read("../../layouts/Layout.astro");
 const headers = {
-  classic: read("./variants/ClassicHeader.astro"),
   composed: read("./variants/ComposedHeader.astro"),
 };
 

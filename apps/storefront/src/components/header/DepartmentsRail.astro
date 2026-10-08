@@ -1,15 +1,15 @@
 ---
-// The departments rail (desktop menu `departments-rail`, open "home"; Game
-// Ghor): an "All departments" tab (270px) in the menu row whose list of
-// departments (35px rows, fly-outs for their children) hangs over the page.
-// On the home page it renders open over the hero; elsewhere it opens on hover
-// or press. It is a native <details>: it works without JavaScript, and
-// nav-menus.ts adds hover, arrow keys and Escape. The open-on-home list
-// closes once the page scrolls (HeaderLayout), so it never rides the sticky
-// header over the content. The "always" rail (Chaldal) is the column beside
-// the page: SidebarNav.astro.
+// The departments rail (desktop menu `departments-rail`, open "demand"): an
+// "All departments" button in the menu row whose list of departments
+// (fly-outs for their children) hangs over the page when pressed or hovered.
+// It is never open by itself, so it never covers what the page starts with.
+// It is a native <details>: it works without JavaScript, and nav-menus.ts adds
+// hover, arrow keys and Escape. The "always" rail is the column beside the
+// page: SidebarNav.astro.
 import type { NavigationItem } from "@/lib/api";
 import FlyoutList from "./FlyoutList.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   navigation: NavigationItem[];
@@ -18,25 +18,20 @@ interface Props {
 }
 
 const { navigation, allCategories = false } = Astro.props;
-const onHome = Astro.url.pathname === "/";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
-<nav class="drail" aria-label="All departments" data-menu-root>
-  <details
-    class="drail-menu"
-    data-menu={onHome ? "rail" : "popup"}
-    data-menu-hover={onHome ? undefined : ""}
-    data-menu-home-open={onHome ? "" : undefined}
-    open={onHome}
-  >
+<nav class="drail" aria-label={copy.nav.allDepartments} data-menu-root>
+  <details class="drail-menu" data-menu="popup" data-menu-hover>
     <summary class="drail-tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-      <span>All departments</span>
+      <span>{copy.nav.allDepartments}</span>
       <i class="nav-chevron drail-chevron" aria-hidden="true"></i>
     </summary>
     <div class="drail-panel" data-menu-panel>
       <FlyoutList items={navigation} mode="cascade" />
-      {allCategories && <a class="drail-all" href="/categories">All categories</a>}
+      {allCategories && <a class="drail-all" href="/categories">{copy.nav.allCategories}</a>}
     </div>
   </details>
 </nav>

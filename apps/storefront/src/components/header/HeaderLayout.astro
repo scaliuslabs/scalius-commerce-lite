@@ -1,41 +1,33 @@
 ---
-// The header block, one component per shape: `mall-departments` is the
-// classic header (variants/ClassicHeader.astro, pixel-identical to version
-// 3 and still merchant-selectable); every other variant is composed from its spec
-// (header-variants.ts, variants/ComposedHeader.astro). The menu arrives in
-// slot "menu" and lands in the header's menu row or main row; phone extras
-// (a shortcut row) in slot "phone-extras". The behaviour every variant
-// shares lives here: the scroll state, the sticky height the page reads
-// (--header-height), search openers and the account link.
+// The header block: one component per layout (variants/ComposedHeader.astro,
+// from the spec in header-variants.ts). The menu arrives in slot "menu" and
+// lands in the header's menu row or main row; phone extras (a shortcut row)
+// in slot "phone-extras". The behaviour every layout shares lives here: the
+// scroll state, the sticky height the page reads (--header-height), search
+// openers and the account link.
 import type { NavigationItem } from "@/lib/api";
 import type {
   StorefrontHeaderRenderer,
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
-import ClassicHeader from "./variants/ClassicHeader.astro";
 import ComposedHeader from "./variants/ComposedHeader.astro";
 import type { HeaderLogo, HeaderSpec } from "./header-variants";
 
 interface Props {
   logo: HeaderLogo;
-  /** The store's support phone (Business settings): the classic header's call button. */
-  phone: string | null;
   variantId: string;
-  /** null: the classic header. */
-  spec: HeaderSpec | null;
+  spec: HeaderSpec;
   headerStyle: StorefrontHeaderRenderer;
   navigationStyle: StorefrontNavigationRenderer;
   hasMenu: boolean;
   menuPlacement: "inline" | "row";
   stickyMenuRow: boolean;
-  condensedMenu: boolean;
   departments: NavigationItem[];
   phoneDrop: string;
 }
 
 const {
   logo,
-  phone,
   variantId,
   spec,
   headerStyle,
@@ -43,43 +35,26 @@ const {
   hasMenu,
   menuPlacement,
   stickyMenuRow,
-  condensedMenu,
   departments,
   phoneDrop,
 } = Astro.props;
 ---
 
-{
-  spec ? (
-    <ComposedHeader
-      logo={logo}
-      variantId={variantId}
-      spec={spec}
-      headerStyle={headerStyle}
-      navigationStyle={navigationStyle}
-      hasMenu={hasMenu}
-      menuPlacement={menuPlacement}
-      stickyMenuRow={stickyMenuRow}
-      departments={departments}
-      phoneDrop={phoneDrop}
-    >
-      <slot name="menu" slot="menu" />
-      <slot name="phone-extras" slot="phone-extras" />
-    </ComposedHeader>
-  ) : (
-    <ClassicHeader
-      logo={logo}
-      phone={phone}
-      variantId={variantId}
-      menuRow={hasMenu}
-      navigationStyle={navigationStyle}
-      condensedMenu={condensedMenu}
-      phoneDrop={phoneDrop}
-    >
-      <slot name="menu" slot="desktop-nav-full" />
-    </ClassicHeader>
-  )
-}
+<ComposedHeader
+  logo={logo}
+  variantId={variantId}
+  spec={spec}
+  headerStyle={headerStyle}
+  navigationStyle={navigationStyle}
+  hasMenu={hasMenu}
+  menuPlacement={menuPlacement}
+  stickyMenuRow={stickyMenuRow}
+  departments={departments}
+  phoneDrop={phoneDrop}
+>
+  <slot name="menu" slot="menu" />
+  <slot name="phone-extras" slot="phone-extras" />
+</ComposedHeader>
 
 <style is:global>
   /* The sticky header condenses on scroll, but the page under it must not
@@ -117,12 +92,6 @@ const {
     }
   }
 
-  @media (min-width: 64rem) {
-    #main-header.is-scrolled {
-      margin-bottom: var(--hdr-condense-desktop, 0rem);
-    }
-  }
-
   /* Bottom tabs carry cart and account on phones (mix rule 5). */
   @media (max-width: 63.99rem) {
     #main-header[data-phone-drop~="account"] [data-header-account],
@@ -157,10 +126,6 @@ const {
   }
 
   function updateHeaderHeight() {
-    if (["marketplace-search", "marketplace-light"].includes(document.getElementById("main-header")?.dataset.headerVariant ?? "")) {
-      setHeaderHeight(0);
-      return;
-    }
     const part = stickyPart();
     if (part) setHeaderHeight(part.offsetHeight);
   }
@@ -187,14 +152,6 @@ const {
     if (nextCompact === isCompact) return;
     isCompact = nextCompact;
     header.classList.toggle("is-scrolled", isCompact);
-    if (header.dataset.headerStyle === "classic") header.classList.toggle("shadow-md", isCompact);
-    // The departments list open on the home page steps aside once the page
-    // scrolls (it would otherwise ride the sticky header over the content).
-    if (isCompact) {
-      document.querySelectorAll<HTMLDetailsElement>("details[data-menu-home-open][open]").forEach((rail) => {
-        rail.open = false;
-      });
-    }
   }
 
   function scheduleScrollState() {

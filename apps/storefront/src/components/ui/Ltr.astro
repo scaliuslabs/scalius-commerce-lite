@@ -1,0 +1,12 @@
+---
+// A phone number, price, percentage or count that keeps its left-to-right
+// reading inside a right-to-left sentence (lib/bidi.ts). On a left-to-right
+// page it changes nothing.
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<bdi dir="ltr" class={className}><slot /></bdi>

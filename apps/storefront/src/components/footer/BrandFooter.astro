@@ -1,11 +1,13 @@
 ---
 // brand-black (Apple Gadgets): the page's ink as the surface (the palette's
 // darkest pair, AA by construction). The logo with phone and email, a
-// "Visit us" column (the store address), the store's menus, a Policies
+// "Visit us" column (the store address), the store's menus and a Policies
 // column (payment, delivery, warranty and refund pages are what shoppers
-// look for here), and the store name as an oversized outline watermark.
+// look for here).
 import RecursiveFooterLink from "../RecursiveFooterLink.astro";
 import { mediaImageUrl } from "@/lib/media-url";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import type { FooterModel } from "./footer-model";
 
 interface Props {
@@ -14,6 +16,8 @@ interface Props {
 
 const { model } = Astro.props;
 const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddress, menus, policyLinks } = model;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
 <div class="brand-footer">
@@ -22,7 +26,7 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
       (logo.src || brandName) && (
         <a href="/" class="brand-logo">
           {logo.src ? (
-            <img src={mediaImageUrl(logo.src, 480)} alt={brandName || "Home"} width={344} height={256} loading="lazy" decoding="async" />
+            <img src={mediaImageUrl(logo.src, 480)} alt={brandName || copy.home} width={344} height={256} loading="lazy" decoding="async" />
           ) : (
             <span>{brandName}</span>
           )}
@@ -33,7 +37,7 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
     {
       phoneHref && (
         <a href={phoneHref} class="brand-contact" data-footer-contact>
-          {storePhone}
+          <bdi dir="ltr">{storePhone}</bdi>
         </a>
       )
     }
@@ -49,7 +53,7 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
   {
     storeAddress && (
       <section>
-        <h2 class="footer-heading">Visit us</h2>
+        <h2 class="footer-heading">{copy.footer.visitUs}</h2>
         <address>{storeAddress}</address>
       </section>
     )
@@ -66,8 +70,8 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
 
   {
     policyLinks.length > 0 && (
-      <nav aria-label="Store policies">
-        <h2 class="footer-heading">Policies</h2>
+      <nav aria-label={copy.footer.storePolicies}>
+        <h2 class="footer-heading">{copy.footer.policies}</h2>
         <ul class="brand-policies">
           {policyLinks.map((link) => (
             <li>
@@ -79,8 +83,6 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
     )
   }
 </div>
-
-{brandName && <p class="brand-watermark" aria-hidden="true">{brandName}</p>}
 
 <style>
   .brand-footer {
@@ -178,24 +180,5 @@ const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddres
   .brand-footer a:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
-  }
-
-  /* Apple Gadgets' oversized outline logo: decoration, clipped by the footer. */
-  .brand-watermark {
-    margin: 1rem 0 -1.5rem;
-    overflow: hidden;
-    color: transparent;
-    -webkit-text-stroke: 1px color-mix(in srgb, currentColor 22%, transparent);
-    font-size: clamp(3.5rem, 14vw, 11rem);
-    font-weight: 800;
-    line-height: 1;
-    letter-spacing: -0.03em;
-    white-space: nowrap;
-    user-select: none;
-    pointer-events: none;
-  }
-
-  .brand-watermark {
-    -webkit-text-stroke-color: var(--border);
   }
 </style>

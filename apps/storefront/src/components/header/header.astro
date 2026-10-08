@@ -29,6 +29,7 @@ import type {
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { headerCondense, headerGeometryStyle, headerSpec, type HeaderLogo } from "./header-variants";
@@ -67,13 +68,14 @@ const {
   navigationStyle,
 } = Astro.props;
 
-const { resolved, layout: themeLayout, brand, preview } = await currentRequestTheme(Astro.locals);
+const { resolved, brand, preview, language } = await currentRequestTheme(Astro.locals);
 const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
+const copy = storefrontCopy(language).chrome;
 
 // The theme's logo with the store name as its alt text (the text logo without one).
 const logo: HeaderLogo = {
   src: brand.logo?.url ?? "",
-  alt: storeName || "Store",
+  alt: storeName || copy.home,
   width: normalizeHeaderLogoWidth(resolved.brand.logoWidth),
 };
 // The bar above the header: `none` is its only off switch; the others carry
@@ -90,7 +92,7 @@ const hasNavigation = tree.length > 0;
 // Shortcut rows (beside "All", the phone's pills) lead with the merchant's
 // own links when the departments come from the tree (Amazon's Deals, Sell...).
 const menuTree = sourceNavigation("menu", menuItems, []);
-const mallLinks = header.variant === "mall-search"
+const mallLinks = header.variant === "search-first" && desktopNav.variant === "departments-rail"
   ? navigationShortcuts(menuTree.filter((item) => !item.href?.startsWith("/categories/")), 7)
   : [];
 const shortcutTree = navigation.source === "tree+menu" && menuTree.length > 0
@@ -107,21 +109,16 @@ const phoneTree: "accordion" | "drill" =
 const tabs =
   mobileNav.variant === "bottom-tabs" ? (mobileSettings.tabs as ReadonlyArray<(typeof STOREFRONT_MOBILE_TABS)[number]>) : null;
 const desktopDrill = hasNavigation && desktopKind === "drill-in-drawer";
-// Amazon's drawer geometry (80vw, 52px rows on phones): the phone drawer's
-// `rows` setting, shared by the desktop drawer the header also renders.
-const tallDrawerRows = mobileNav.variant === "drill-in-drawer" && mobileSettings.rows === "tall";
 // One drawer serves both screens when both drill in.
 const sharedDrawer = desktopDrill && phoneTree === "drill";
 const desktopDrawer = sharedDrawer ? "mobile-menu" : "nav-drawer";
 // The departments column (always open) is the Layout's, beside the page.
 const desktopMenu = hasNavigation && !railAlways;
 
-const spec = header.variant === "mall-departments" ? null : headerSpec(header.variant, header.settings as Record<string, unknown>);
-const retailPill = header.variant === "retail-pill";
-const shortcutRow = Boolean(spec?.phoneShortcuts) && hasNavigation;
-const rowLinks = desktopDrill && !retailPill ? (header.variant === "marketplace-light" ? 12 : 8) : 0;
-const menuPlacement: "inline" | "row" =
-  !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
+const spec = headerSpec(header.variant, header.settings as Record<string, unknown>);
+const shortcutRow = spec.phoneShortcuts && hasNavigation;
+const rowLinks = desktopDrill ? 8 : 0;
+const menuPlacement: "inline" | "row" = desktopKind === "sticky-category-bar" ? "row" : spec.menu;
 
 // ── The link budget, across every surface ──────────────────────────────
 const rowKinds = ["dropdown", "mega-panel", "cascading", "sticky-category-bar"];
@@ -162,14 +159,12 @@ const panelsSrc =
 // Without JavaScript an inline row (between the logo and the search) cannot
 // wrap: it shows what the narrowest desktop (1024px) surely fits, then "All
 // categories". Rows of their own wrap instead.
-const inlineRowPx = spec && menuPlacement === "inline"
-  ? 1024 - 64 - logo.width - (spec.search === "icon" ? 44 : 304) -
-    (spec.utilities === "icons" ? 100 : 190) - 4 * 24
+const inlineRowPx = menuPlacement === "inline"
+  ? 1024 - 64 - logo.width - (spec.search === "icon" ? 44 : 304) - 100 - 4 * 24
   : null;
 const noScriptFit = inlineRowPx !== null && plan.allCategories
   ? estimateNavRowFit(desktopTree.map((item) => item.title), {
       fontPx: 14,
-      uppercase: spec?.uppercaseMenu,
       itemChromePx: 28,
       gapPx: 4,
       availablePx: Math.max(0, inlineRowPx),
@@ -180,18 +175,12 @@ const noScriptFit = inlineRowPx !== null && plan.allCategories
 const flyouts = desktopSettings.flyouts === "cascading" ? "cascading" : "dropdown";
 const departments = tree.filter((item) => item.href).slice(0, navigation.maxTopItems);
 const phoneDrop = tabs ? tabs.filter((tab) => tab === "cart" || tab === "account").join(" ") : "";
-const drawerTitle = treeSourced ? "Shop by department" : "Menu";
+const drawerTitle = treeSourced ? copy.nav.shopByDepartment : copy.nav.menu;
 
-// The classic header folds the dropdown row into the bar on scroll.
-const condensedMenu = !spec && desktopMenu && desktopKind === "dropdown";
-const stickyMenuRow =
-  Boolean(spec) && desktopMenu && menuPlacement === "row" && (header.variant === "spec-two-row" || desktopKind === "sticky-category-bar");
-// Heights and the scroll reserve, from the variant data (HeaderLayout's CSS).
-const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: condensedMenu }))
-  + (header.variant === "tech-rounded" || header.variant === "boutique-inline" ? "; --hdr-phone-bar: 4rem" : "")
-  + (header.variant === "spec-two-row" ? "; --hdr-phone-bar: 3.125rem" : "")
-  + (header.variant === "marketplace-light" ? "; --hdr-phone-bar: 3.25rem; --hdr-phone-bar-condensed: 3.25rem" : "")
-  + (header.variant === "showcase-simple" ? "; --hdr-phone-bar: 4.125rem" : "");
+// A menu row of its own stays when the top row scrolls away.
+const stickyMenuRow = desktopMenu && menuPlacement === "row";
+// Heights and the scroll reserve, from the layout data (HeaderLayout's CSS).
+const geometryStyle = headerGeometryStyle(headerCondense(spec));
 ---
 
 <header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant} data-nav-source={navigation.source}>
@@ -200,7 +189,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
       variant={topBar.variant}
       text={announcementText}
       link={announcementLink}
-      storeName={logo.alt}
       phone={storePhone}
     />
   </ThemeEditorMark>
@@ -209,7 +197,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
   <ThemeEditorMark id={preview ? THEME_EDITOR_MARKS.header : null}>
   <HeaderLayout
     logo={logo}
-    phone={storePhone}
     variantId={header.variant}
     spec={spec}
     headerStyle={headerStyle}
@@ -217,7 +204,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     hasMenu={desktopMenu}
     menuPlacement={menuPlacement}
     stickyMenuRow={stickyMenuRow}
-    condensedMenu={condensedMenu}
     departments={departments}
     phoneDrop={phoneDrop}
   >
@@ -268,23 +254,19 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
       {desktopMenu && desktopKind === "departments-rail" && (
         <>
           <DepartmentsRail navigation={desktopTree} allCategories={plan.allCategories} />
-          {mallLinks.length > 0 && <DesktopNav navigation={mallLinks} id="mall-shortcuts-nav" navStyle="menu" align="start" label="Store links" />}
+          {mallLinks.length > 0 && <DesktopNav navigation={mallLinks} id="mall-shortcuts-nav" navStyle="menu" align="start" label={copy.nav.storeLinks} />}
         </>
       )}
       {desktopDrill && (
         <div class="drill-row-menu">
-          <DrawerTrigger
-            drawer={desktopDrawer}
-            shape={retailPill ? "pill" : "text"}
-            label={retailPill ? "Categories" : "All"}
-          />
+          <DrawerTrigger drawer={desktopDrawer} label={copy.header.allScopes} />
           {rowLinks > 0 && (
             <DesktopNav
               navigation={navigationShortcuts(shortcutTree, rowLinks)}
               id="drill-row-nav"
               navStyle="menu"
               align="start"
-              label="Shortcuts"
+              label={copy.nav.shortcuts}
             />
           )}
         </div>
@@ -308,7 +290,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
     screens={sharedDrawer ? "all" : "phone"}
     title={drawerTitle}
     allCategories={plan.drawerAllCategories}
-    marketplace={tallDrawerRows}
   />
 
   {
@@ -321,7 +302,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
         screens="all"
         title={drawerTitle}
         allCategories={plan.drawerAllCategories}
-        marketplace={tallDrawerRows}
       />
     )
   }
@@ -333,10 +313,6 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
 </header>
 
 <style is:global>
-  #site-header[data-header-variant="marketplace-light"] .top-utility-inner {
-    max-width: 93rem;
-  }
-
   /* The menus' chevrons, painted by CSS (masks in currentColor) instead of an
      inline <svg> per row, and the menus' styles are global (no per-element
      scope attribute): both keep the header HTML within its budget. */

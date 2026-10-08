@@ -148,7 +148,7 @@ describe("storefront theme document v9", () => {
     theme.tokens.colors = { ...STOREFRONT_THEME_PALETTES.midnight, card: "#3a3a40", popover: "#3a3a40" };
     expect(issues(theme).join("\n")).toMatch(/^tokens\.colors\.destructive: destructive on card has contrast/);
     expect(issues({ ...theme, tokens: { ...theme.tokens, colors: { ...STOREFRONT_THEME_PALETTES.midnight } } })).toEqual([]);
-    expect(storefrontVariantChain("header", "boutique-inline")).toEqual(["boutique-inline"]);
+    expect(storefrontVariantChain("header", "inline-nav")).toEqual(["inline-nav"]);
     expect(storefrontVariantChain("footer", "directory")).toEqual(["directory", "minimal-columns"]);
   });
 
@@ -207,7 +207,7 @@ describe("storefront theme document v9", () => {
     expect(issues(namedColor)).not.toEqual([]);
     // A variant takes only its own settings.
     const otherSettings = clone();
-    otherSettings.blocks.header = { variant: "spec-two-row", settings: { cartTotal: true } } as never;
+    otherSettings.blocks.header = { variant: "inline-nav", settings: { search: "icon", rowTone: "page", cartTotal: false, extra: true } } as never;
     expect(issues(otherSettings)).not.toEqual([]);
     const missingSettings = clone();
     missingSettings.blocks.desktopNav = { variant: "departments-rail", settings: {} } as never;

@@ -7,6 +7,8 @@
 // "More". Phones use the drawer instead.
 import type { NavigationItem } from "@/lib/api";
 import CascadingNav from "./CascadingNav.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   navigation: NavigationItem[];
@@ -18,6 +20,8 @@ interface Props {
 }
 
 const { navigation, flyouts, extras = [], allCategories = false, panelsSrc } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).chrome;
 ---
 
 <div class="category-bar" data-category-bar>
@@ -26,7 +30,7 @@ const { navigation, flyouts, extras = [], allCategories = false, panelsSrc } = A
     id="category-bar"
     layout="bar"
     flyouts={flyouts === "cascading" ? "cascade" : "indent"}
-    label="Categories"
+    label={copy.nav.categories}
     extras={extras}
     allCategories={allCategories}
     panelsSrc={panelsSrc}
