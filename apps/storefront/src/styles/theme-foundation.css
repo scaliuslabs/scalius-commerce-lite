@@ -70,6 +70,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  /* Text on a primary tint (a badge, a pill): the brand colour drawn toward the
+     text colour, so it keeps AA contrast on the tinted surface whatever the brand. */
+  --color-primary-ink: color-mix(in oklab, var(--primary) 75%, var(--foreground));
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -234,9 +237,18 @@ html.dark {
    unlayered on purpose so it wins over `outline-none` utilities and no
    control can drop its focus ring by accident. Text fields keep their own
    border/ring focus styles: :focus-visible also matches them on pointer focus. */
+.site-root {
+  /* The one focus ring (WCAG 2.4.7, 2.4.11) and the one minimum target
+     (WCAG 2.5.8): components read these tokens, never their own numbers. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--foreground);
+  --target-min: 1.5rem;
+}
+
 @layer base {
   .site-root :focus-visible {
-    outline-offset: 2px;
+    outline-offset: var(--focus-ring-offset);
   }
 }
 
@@ -257,13 +269,30 @@ html.dark {
     input[type="checkbox"],
     input[type="radio"]
   ):focus-visible {
-  outline: 2px solid var(--foreground);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
 }
 
 /* Primary and ink surfaces (the header account/cart pill) carry light text,
    so the ring takes the text color and stays visible on them. */
 .site-root :where(.bg-primary, .bg-card-foreground) :focus-visible {
   outline-color: currentColor;
+}
+
+/* No control is under 24 x 24 CSS px (WCAG 2.5.8). Links in running text are
+   exempt, so only controls are set here; a list of links sets
+   `min-block-size: var(--target-min)` on its own link. */
+.site-root
+  :where(
+    button,
+    summary,
+    select,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    input:not([type="hidden"], [type="checkbox"], [type="radio"])
+  ) {
+  min-block-size: var(--target-min);
+  min-inline-size: var(--target-min);
 }
 
 /* Focused targets scroll clear of the sticky header (WCAG 2.4.11). */

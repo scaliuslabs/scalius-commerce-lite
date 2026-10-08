@@ -172,12 +172,11 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           class="hdr-util"
           data-header-account
           data-astro-prefetch={accountPrefetch}
-          aria-label="My Account"
         >
           <span class="hdr-util-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>
           </span>
-          <span class="hdr-util-text" aria-hidden="true"><small>Hello, sign in</small><strong>Account</strong></span>
+          <span class="hdr-util-text"><small>Hello, sign in</small><strong>Account</strong></span>
         </a>
 
         <button
@@ -185,7 +184,6 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           id="cart-button"
           class="hdr-util hdr-cart"
           data-header-cart
-          aria-label="Open shopping cart"
           aria-haspopup="dialog"
         >
           <span class="hdr-util-icon" aria-hidden="true">
@@ -194,9 +192,9 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
               <circle cx="19" cy="21" r="1" />
               <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
             </svg>
-            <span id="cart-count" class="hdr-cart-count scale-0 opacity-0" aria-hidden="true">0</span>
+            <span id="cart-count" class="hdr-cart-count scale-0 opacity-0"></span>
           </span>
-          <span class="hdr-util-text" aria-hidden="true">
+          <span class="hdr-util-text">
             {spec.cartTotal ? (
               <>
                 <small>Cart</small>
@@ -418,9 +416,21 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
   .hdr-inline-menu,
   .hdr-search,
-  .hdr-util.hdr-util--desktop,
-  .hdr-util-text {
+  .hdr-util.hdr-util--desktop {
     display: none;
+  }
+
+  /* The words of a utility are its accessible name (WCAG 2.5.3: the name
+     holds the visible text). Where the style shows only the icon they stay
+     in the page for assistive technology, visually hidden, never display:none. */
+  .hdr-util-text {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .hdr-actions {
@@ -745,6 +755,19 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
     .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text small {
       display: none;
+    }
+
+    /* The styles that show the words undo the visual hiding. */
+    .hdr[data-hdr-utilities="stacked"] .hdr-util-text,
+    .hdr[data-hdr-utilities="two-line"] .hdr-util-text,
+    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text,
+    .hdr-cart:has(#cart-total-display) .hdr-util-text {
+      position: static;
+      inline-size: auto;
+      block-size: auto;
+      margin: 0;
+      overflow: visible;
+      clip-path: none;
     }
 
     /* A cart with its running total reads it beside the icon, whatever the style. */

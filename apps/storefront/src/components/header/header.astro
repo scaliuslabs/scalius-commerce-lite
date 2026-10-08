@@ -489,7 +489,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
       );
       countElements.forEach((el) => {
         if (el instanceof HTMLElement) {
-          el.textContent = String(totalItems);
+          el.textContent = totalItems > 0 ? String(totalItems) : "";
           el.classList.remove(
             "scale-0",
             "opacity-0",

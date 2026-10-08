@@ -864,7 +864,7 @@ export interface StorefrontListingFilterSpec {
 export const STOREFRONT_LISTING_FILTER_SPECS = {
   // Amazon 262px / 22px pitch / 14px, Star Tech 225-265 / 32 / 14, Daraz
   // 190 / 18 / 13: 240 sits within 10% of Amazon and Star Tech; 22 is Amazon's pitch.
-  "sidebar-dense": { placement: "sidebar", column: 240, rowPitch: 22, label: 14, barFacets: null },
+  "sidebar-dense": { placement: "sidebar", column: 240, rowPitch: 24, label: 14, barFacets: null },
   // Fabrilife 270px, Game Ghor 270px, Apple Gadgets 250px with 28px rows and 16px labels.
   "sidebar-comfortable": { placement: "sidebar", column: 270, rowPitch: 28, label: 16, barFacets: null },
   // Dawn: "Filter: Availability, Price, Color" (3); Aarong: Categories, Colour, Fabric, Price (4).
@@ -884,11 +884,12 @@ export const STOREFRONT_FILTER_MIN_RESULTS = 8;
  * A template's own facet numbers over its style's (optional): each
  * reference is its own spec (Daraz's column is 190px with 18px rows, Star
  * Tech's 225px with 32px rows, Apple Gadgets' 316px). Bounds keep a column
- * readable and every row a target.
+ * readable and every row a 24px target (WCAG 2.5.8: the check box is 14px, so
+ * the row pitch is its clear space).
  */
 export const STOREFRONT_LISTING_FILTER_BOUNDS = {
   column: { min: 180, max: 340 },
-  rowPitch: { min: 16, max: 36 },
+  rowPitch: { min: 24, max: 36 },
   label: { min: 12, max: 18 },
 } as const;
 

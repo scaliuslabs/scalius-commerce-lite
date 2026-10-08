@@ -53,6 +53,7 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
   :where(.footer-link) {
     display: inline-flex;
     align-items: center;
+    min-block-size: var(--target-min);
     gap: calc(var(--spacing) * 2);
     font-size: var(--text-base);
     line-height: var(--tw-leading, var(--text-base--line-height));

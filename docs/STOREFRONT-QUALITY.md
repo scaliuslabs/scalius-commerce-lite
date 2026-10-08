@@ -72,3 +72,17 @@ Exit code: 1 when an entry has a gating finding, else 0. To accept a gating find
 - `src/gallery/server.ts` throws in a production build, and the gallery server refuses to start with `NODE_ENV=production`. It listens on 127.0.0.1 only.
 - `pnpm check:dist-secrets` (part of every storefront build and deploy) fails when the storefront build output names the gallery or its fixture API.
 - The gallery renders in Vite dev mode: CSS and scripts are unbundled. Use `pnpm perf:storefront` for production timing; the storefront render budgets do not include the gallery.
+
+## Accessibility foundations
+
+These rules live in `apps/storefront/src/styles/theme-foundation.css`. Components read the tokens; they never set their own numbers.
+
+- **Focus ring.** `--focus-ring-width`, `--focus-ring-offset` and `--focus-ring-color` give every control one visible ring (WCAG 2.4.7). A component draws its own ring only when the shared one cannot show (inside a scroll list, on a coloured surface), and then draws it on the control itself, never on a child.
+- **Minimum target.** `--target-min` (24px, WCAG 2.5.8) is the floor for buttons, summaries, selects and text fields. A list of links sets `min-block-size: var(--target-min)` on its link. A check box is 14px, so its row pitch is its clear space: listing `rowPitch` is at least 24.
+- **Names hold the visible text** (WCAG 2.5.3). Do not put an `aria-label` on a control that shows words, and do not hide those words with `aria-hidden`. Where a style shows only the icon, keep the words in the page visually hidden. Text on a primary tint uses `text-primary-ink`, not `text-primary`.
+- **Lists of results do not use `content-visibility`.** A stand-in size shifts the page when the real size arrives (the footer on a short page), and the stand-in boxes overlap the controls below.
+
+## What the gallery does for the audit
+
+- The layout fixture names the gallery origin as the API (Platform settings take an origin only). The server answers `<origin>/api/v1/...` from the fixtures of the entry that asked (the page's Referer in the browser, the render's entry on the server), so browser reads such as the cart's delivery rates work.
+- Component styles are inlined in the page and the first paint waits for the whole page (`<link rel="expect" blocking="render">`). The dev page is large; without this the browser paints it half parsed and the footer grows as its markup arrives, a shift no shopper sees.
