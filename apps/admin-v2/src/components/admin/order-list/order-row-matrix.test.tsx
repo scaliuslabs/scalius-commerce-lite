@@ -210,7 +210,7 @@ describe("orders list rows across the state matrix", () => {
       const link = card.querySelector("a")!;
       expect(link.children, card.getAttribute("data-card")!).toHaveLength(4);
       // The number, total, name and phone never wrap; the closing line is cut, not wrapped.
-      expect(link.children[3]!.className).toMatch(/\btruncate\b/);
+      expect(link.children[3]!.firstElementChild!.className).toMatch(/\btruncate\b/);
       expect(link.children[1]!.firstElementChild!.className).toMatch(/\btruncate\b/);
     }
   }, 120_000);
