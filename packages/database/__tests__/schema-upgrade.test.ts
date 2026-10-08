@@ -607,6 +607,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 125,
+        name: "0125_plugin_lifecycle",
+        // The data-update ledger, six installation columns and the ledger.
+        sqliteStatements: 8,
+        postgresStatements: 8,
+      },
     ]);
   });
 
@@ -780,6 +787,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 122, name: "0122_sales_channels" },
           { version: 123, name: "0123_market_currencies" },
           { version: 124, name: "0124_theme_restore_points" },
+          { version: 125, name: "0125_plugin_lifecycle" },
         ],
       });
     } finally {

@@ -6,7 +6,7 @@
 // what it may do. Everything is drawn from the API's description of the
 // app; no app code runs in the dashboard. A Super Admin activates (or
 // approves an update); managers change settings, deactivate and uninstall.
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
@@ -42,6 +42,12 @@ import { AppSettingsTab } from "./AppSettingsTab";
 import { AppWhereItAppears } from "./AppWhereItAppears";
 import { AppStatusBadge } from "./app-status";
 
+// The lifecycle additions (Stop now, why an app is stopped, a registry update, who signed it)
+// load after the page: none of them is needed to read it.
+const AppStopAction = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppStopAction })));
+const AppLifecycleNotices = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppLifecycleNotices })));
+const AppRunFacts = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppRunFacts })));
+
 type DialogName = "activate" | "deactivate" | "uninstall" | null;
 
 const JOB_VARIANT = { running: "info", succeeded: "success", failed: "destructive" } as const;
@@ -62,6 +68,11 @@ function Overview({ app }: { app: AppDetail }) {
           <Fact label={t("runsIn")}>{t(app.runtime === "bundled" ? "runtime_bundled" : "runtime_sandbox")}</Fact>
           <Fact label={t("approvedBy")}>{app.activatedBy?.name ?? t("notApproved")}</Fact>
           {app.activatedAt ? <Fact label={t("activeSince")}>{formatWhen(app.activatedAt) ?? "—"}</Fact> : null}
+          {app.signer || app.source === "upload" || app.runtime === "sandbox" ? (
+            <Suspense fallback={null}>
+              <AppRunFacts app={app} />
+            </Suspense>
+          ) : null}
         </AppListingFacts>
       </CardContent>
     </Card>
@@ -141,6 +152,11 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
 
   const actions = (
     <>
+      {canManage && active ? (
+        <Suspense fallback={null}>
+          <AppStopAction app={app} />
+        </Suspense>
+      ) : null}
       {canManage ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -184,6 +200,11 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
             <AlertTitle>{t("failedTitle")}</AlertTitle>
             <AlertDescription>{app.failureReason ?? t("failedBody")}</AlertDescription>
           </Alert>
+        ) : null}
+        {(app.status === "disabled" && app.failureReason) || (canManage && app.source !== "bundled") ? (
+          <Suspense fallback={null}>
+            <AppLifecycleNotices app={app} canManage={canManage} />
+          </Suspense>
         ) : null}
         {app.needsApproval ? (
           <Alert variant="warning">

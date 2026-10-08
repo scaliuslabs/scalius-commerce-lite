@@ -3,7 +3,7 @@
 // of resource, then an item; its
 // fields open beside the list on a computer and in place of it on a phone.
 // The editor downloads when the first item opens. The page's state lives in
-// its URL, so a link (Settings › Languages, a product's Translations card)
+// its URL, so a link (Settings › Languages, a product's Translate action)
 // opens the same item.
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";

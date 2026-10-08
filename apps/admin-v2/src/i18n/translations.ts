@@ -111,7 +111,7 @@ export const translationsMessages = defineMessages({
     optionValue: "Value: {value}",
     outdated: "Outdated",
     outdatedHelp: "The {language} text changed after this was translated. Check it and save.",
-    htmlSourceHint: "This field is HTML. To edit it with formatting, open the Translations card on the item's own page.",
+    htmlSourceHint: "This field is HTML. Keep its tags and translate the text between them.",
     noSourceText: "No text in the default language.",
     slugHelp: "Leave empty to use {path}.",
     slugMarketHelp: "Web addresses are translated for all markets of a language.",
@@ -130,12 +130,6 @@ export const translationsMessages = defineMessages({
     machineDone: "Translated: check and save",
     machineFailed: "Couldn't translate",
     machineHelp: "Fills the empty fields. Nothing is saved until you save.",
-
-    // Resource pages
-    translationsCard: "Translations",
-    translationsCardHelp: "This item's text in your other languages.",
-    translationsCardEmpty: "Add a language in Settings › Languages to translate this item.",
-    openInTranslate: "Open in Translate & adapt",
   },
   bn: {
     languagesTitle: "ভাষা",
@@ -240,7 +234,7 @@ export const translationsMessages = defineMessages({
     optionValue: "মান: {value}",
     outdated: "পুরোনো",
     outdatedHelp: "অনুবাদের পরে {language} লেখা বদলেছে। দেখে সেভ করুন।",
-    htmlSourceHint: "এই ঘরটি HTML। ফরম্যাটসহ লিখতে আইটেমের নিজের পেজে ‘অনুবাদ’ কার্ড খুলুন।",
+    htmlSourceHint: "এই ঘরটি HTML। ট্যাগগুলো রেখে তার ভেতরের লেখা অনুবাদ করুন।",
     noSourceText: "ডিফল্ট ভাষায় কোনো লেখা নেই।",
     slugHelp: "খালি রাখলে {path} ব্যবহার হবে।",
     slugMarketHelp: "ওয়েব ঠিকানা একটি ভাষার সব মার্কেটের জন্য অনুবাদ হয়।",
@@ -259,10 +253,5 @@ export const translationsMessages = defineMessages({
     machineDone: "অনুবাদ হয়েছে: দেখে সেভ করুন",
     machineFailed: "অনুবাদ করা যায়নি",
     machineHelp: "খালি ঘরগুলো পূরণ করে। সেভ না করা পর্যন্ত কিছু সংরক্ষিত হয় না।",
-
-    translationsCard: "অনুবাদ",
-    translationsCardHelp: "আপনার অন্য ভাষাগুলোতে এই আইটেমের লেখা।",
-    translationsCardEmpty: "এই আইটেম অনুবাদ করতে সেটিংস › ভাষা থেকে একটি ভাষা যোগ করুন।",
-    openInTranslate: "অনুবাদ ও মানিয়ে নেওয়ায় খুলুন",
   },
 });

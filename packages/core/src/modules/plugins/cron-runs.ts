@@ -129,9 +129,9 @@ export async function latestPluginCronRuns(
   return result;
 }
 
-/** Bounded delete of finished runs older than 30 days. */
-export async function prunePluginCronRuns(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
-  const rows = await db.delete(pluginCronRuns).where(and(
+/** Bounded delete of finished runs older than 30 days, as one statement (a caller may batch it with other maintenance). */
+export function prunePluginCronRunsStatement(db: Database, nowSeconds = Math.floor(Date.now() / 1000)) {
+  return db.delete(pluginCronRuns).where(and(
     inArray(pluginCronRuns.status, ["succeeded", "failed"]),
     lt(pluginCronRuns.startedAt, nowSeconds - PLUGIN_CRON_RETENTION_SECONDS),
     sql`(${pluginCronRuns.pluginId}, ${pluginCronRuns.cronName}, ${pluginCronRuns.scheduledFor}) IN (
@@ -139,5 +139,8 @@ export async function prunePluginCronRuns(db: Database, nowSeconds = Math.floor(
       WHERE old_run.status IN ('succeeded', 'failed') AND old_run.started_at < ${nowSeconds - PLUGIN_CRON_RETENTION_SECONDS}
       LIMIT ${PRUNE_BATCH_SIZE})`,
   )).returning({ pluginId: pluginCronRuns.pluginId });
-  return rows.length;
+}
+
+export async function prunePluginCronRuns(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
+  return (await prunePluginCronRunsStatement(db, nowSeconds)).length;
 }

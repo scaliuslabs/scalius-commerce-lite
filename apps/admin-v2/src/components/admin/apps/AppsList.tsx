@@ -30,6 +30,11 @@ import { localizedApp } from "./app-text";
 
 // The available app's listing loads the first time one is opened.
 const AvailableAppDialog = lazy(() => import("./AvailableAppDialog").then((module) => ({ default: module.AvailableAppDialog })));
+// Upload, the emergency stop, the registries and the stopped-apps notice load after the list;
+// registry apps load when the Available or Updates view first opens (the API reads each registry).
+const AppsToolbar = lazy(() => import("./AppsToolbar").then((module) => ({ default: module.AppsToolbar })));
+const AppsNotices = lazy(() => import("./AppsToolbar").then((module) => ({ default: module.AppsNotices })));
+const RegistryAppRows = lazy(() => import("./RegistryAppRows").then((module) => ({ default: module.RegistryAppRows })));
 
 /** The manifest's category order (Shopify's App Store subcategories); the record keeps it complete. */
 const CATEGORY_ORDER = Object.keys({
@@ -112,6 +117,7 @@ export function AppsList() {
   const categoryLabel = (value: AppCategory) => t(`category_${value}`);
   const shown = entries.filter((entry) => appMatches(entry, { view, category, query }, locale, categoryLabel));
   const filtered = view !== "all" || category !== null || query.trim() !== "";
+  const registryView = view === "available" || view === "updates";
   const clearFilters = () => {
     setView("all");
     setCategory(null);
@@ -175,14 +181,14 @@ export function AppsList() {
             />
           ) : null}
         </div>
-        {shown.length === 0 ? (
+        {shown.length === 0 && !registryView ? (
           <EmptyState
             icon={Search}
             title={t("noMatchTitle")}
             description={t("noMatchBody")}
             action={filtered ? <Button type="button" variant="outline" onClick={clearFilters}>{t("clearFilters")}</Button> : undefined}
           />
-        ) : (
+        ) : shown.length === 0 ? null : (
           <ul>
             {shown.map((entry) => (
               <li key={`${entry.kind}:${entry.app.id}`} className="border-t border-border first:border-t-0">
@@ -206,13 +212,40 @@ export function AppsList() {
             ))}
           </ul>
         )}
+        {registryView ? (
+          <Suspense fallback={null}>
+            <RegistryAppRows
+              view={view}
+              query={query}
+              categoryChosen={category !== null}
+              filtered={category !== null || query.trim() !== ""}
+              hasOther={shown.length > 0}
+              listed={new Set(shown.map((entry) => entry.app.id))}
+              onClearFilters={clearFilters}
+              chevron={<ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" aria-hidden="true" />}
+              emptyIcon={Search}
+            />
+          </Suspense>
+        ) : null}
       </>
     );
   }
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader title={t("title")} />
+      <PageHeader
+        title={t("title")}
+        actions={data ? (
+          <Suspense fallback={null}>
+            <AppsToolbar apps={data.apps} sandboxAvailable={data.sandboxAvailable} />
+          </Suspense>
+        ) : undefined}
+      />
+      {data ? (
+        <Suspense fallback={null}>
+          <AppsNotices apps={data.apps} />
+        </Suspense>
+      ) : null}
       <Card className="overflow-clip">{body}</Card>
       {previewLoaded ? (
         <Suspense fallback={null}>

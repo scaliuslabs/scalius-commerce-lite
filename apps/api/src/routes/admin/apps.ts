@@ -15,6 +15,10 @@ import { user as userTable, PLUGIN_EVENT_DELIVERY_STATUSES } from "@scalius/data
 import {
   PLUGIN_DELIVERY_LIST_MAX_LIMIT,
   describePluginSettings,
+  isOfficialPluginKey,
+  isThirdPartyPlugin,
+  pluginRegistrySettingsDocument,
+  trustedPluginKeys,
   latestPluginCronRuns,
   listPluginEventDeliveries,
   listPluginInstallations,
@@ -64,6 +68,8 @@ import {
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
 // per permission) load only on the requests that need them, never when this
@@ -164,6 +170,8 @@ const appSummarySchema = z.object({
   source: z.enum(["bundled", "registry", "upload"]),
   status: z.enum(["installed", "active", "disabled", "failed"]),
   needsApproval: z.boolean().openapi({ description: "An update asks for more access than was approved; the app waits until a Super Admin approves it." }),
+  thirdParty: z.boolean().openapi({ description: "Not published by Scalius: the emergency switch for third-party apps stops it." }),
+  signed: z.boolean().openapi({ description: "Its code was verified against a trusted developer key (registry or signed upload); bundled code is the operator's own." }),
   failureReason: z.string().nullable(),
   revision: z.number().int(),
   installedAt: z.string(),
@@ -258,7 +266,23 @@ const appDetailSchema = appSummarySchema.extend({
     actions: z.array(z.object({ id: z.string(), target: z.enum(PLUGIN_ADMIN_TARGETS), label: z.string(), bulk: z.boolean() })),
     widgets: z.array(z.object({ id: z.string(), title: z.string() })),
   }),
-  limits: z.object({ cpuMs: z.number().int(), wallMs: z.number().int() }),
+  limits: z.object({
+    cpuMs: z.number().int(),
+    wallMs: z.number().int(),
+    subrequests: z.number().int().openapi({ description: "Platform calls per run." }),
+    invocationsPerMinute: z.number().int(),
+    storageBytes: z.number().int().openapi({ description: "The most its storage may hold." }),
+  }).openapi({ description: "What one run may use: the app's own limits within the plan's." }),
+  storageUsage: z.object({
+    bytes: z.number().int(),
+    measuredAt: z.string().nullable(),
+  }).openapi({ description: "Its stored data at the last daily measurement." }),
+  signer: z.object({ keyId: z.string(), name: z.string().nullable(), official: z.boolean() }).nullable()
+    .openapi({ description: "The developer key that verified its code; null for bundled code and unsigned uploads." }),
+  migrations: z.object({
+    declared: z.array(z.object({ version: z.number().int(), description: z.string() })),
+    applied: z.number().int().openapi({ description: "The newest data update that ran." }),
+  }),
 }).openapi("AppDetail");
 
 const appDeliverySchema = z.object({
@@ -303,6 +327,8 @@ function summary(installation: PluginInstallation) {
     source: installation.source,
     status: installation.status,
     needsApproval: pluginNeedsApproval(installation),
+    thirdParty: isThirdPartyPlugin(installation.pluginId),
+    signed: installation.signerKeyId !== null,
     failureReason: installation.failureReason,
     revision: installation.revision,
     installedAt: iso(installation.installedAt),
@@ -376,12 +402,14 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const { manifest } = installation;
   const request = pluginGrantRequest(manifest);
   const described = describePluginSettings(installation);
-  const [approver, lastRuns, permissions] = await Promise.all([
+  const caps = planLimits().plugins;
+  const [approver, lastRuns, permissions, registrySettings] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
     latestPluginCronRuns(db, installation.pluginId, manifest.cron.map((job) => job.name)),
     permissionRows(request),
+    installation.signerKeyId ? pluginRegistrySettingsDocument.read(db) : Promise.resolve({ registries: [], trustedKeys: [] }),
   ]);
   const available = runtimeAvailable(c, installation);
   return {
@@ -444,7 +472,25 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       actions: manifest.admin.actions.map((action) => ({ id: action.id, target: action.target, label: action.label, bulk: action.bulk })),
       widgets: manifest.admin.widgets.map((widget) => ({ id: widget.id, title: widget.title })),
     },
-    limits: { cpuMs: manifest.limits.cpuMs, wallMs: manifest.limits.wallMs },
+    limits: {
+      cpuMs: Math.min(manifest.limits.cpuMs, caps.cpuMs),
+      wallMs: Math.min(manifest.limits.wallMs, caps.wallMs),
+      subrequests: caps.subrequests,
+      invocationsPerMinute: caps.invocationsPerMinute,
+      storageBytes: caps.storageBytes,
+    },
+    storageUsage: { bytes: installation.storageBytes, measuredAt: isoOrNull(installation.storageMeasuredAt) },
+    signer: installation.signerKeyId
+      ? {
+        keyId: installation.signerKeyId,
+        name: trustedPluginKeys(registrySettings).find((key) => key.id === installation.signerKeyId)?.name ?? null,
+        official: isOfficialPluginKey(installation.signerKeyId),
+      }
+      : null,
+    migrations: {
+      declared: manifest.migrations.map((migration) => ({ version: migration.version, description: migration.description })),
+      applied: installation.migratedVersion,
+    },
   };
 }
 
@@ -689,6 +735,10 @@ app.openapi(surfacesRoute, async (c) => {
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return ok(c, { apps });
 });
+
+// ── Registry, upload, update and emergency stop (apps-lifecycle.ts; before `/{id}`) ──
+
+registerAppLifecycleRoutes(app, { detail, detailSchema: appDetailSchema, lifecycleContext: lifecycleContext as never });
 
 // ── Get ──
 

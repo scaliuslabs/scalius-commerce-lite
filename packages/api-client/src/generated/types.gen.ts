@@ -2691,6 +2691,14 @@ export type AppSummary = {
      * An update asks for more access than was approved; the app waits until a Super Admin approves it.
      */
     needsApproval: boolean;
+    /**
+     * Not published by Scalius: the emergency switch for third-party apps stops it.
+     */
+    thirdParty: boolean;
+    /**
+     * Its code was verified against a trusted developer key (registry or signed upload); bundled code is the operator's own.
+     */
+    signed: boolean;
     failureReason: string | null;
     revision: number;
     installedAt: string;
@@ -2859,6 +2867,70 @@ export type AppProviderEntry = {
     icon: string | null;
 };
 
+export type RegistryState = {
+    id: string;
+    name: string;
+    official: boolean;
+    status: 'ok' | 'unavailable';
+    error: string | null;
+};
+
+export type RegistryApp = {
+    registryId: string;
+    id: string;
+    name: string;
+    version: string;
+    tagline: string | null;
+    description: string;
+    author: string;
+    signer: AppSigner;
+    compatible: boolean;
+    /**
+     * Why this Scalius cannot run it (plugin API version or platform release).
+     */
+    incompatibleReason: string | null;
+    installed: {
+        version: string;
+        source: 'bundled' | 'registry' | 'upload';
+    } | null;
+    /**
+     * Newer than the installed version (a bundled app updates with a deploy).
+     */
+    updateAvailable: boolean;
+    /**
+     * The operator's command on Workers Free (bundles the app; then deploy).
+     */
+    installCommand: string;
+};
+
+export type AppSigner = {
+    keyId: string;
+    /**
+     * The trusted key's name; null when this store does not trust the key.
+     */
+    name: string | null;
+    trusted: boolean;
+    official: boolean;
+};
+
+export type AppRegistrySettings = {
+    revision: number;
+    officialConfigured: boolean;
+    registries: Array<{
+        id: string;
+        name: string;
+        indexUrl: string;
+    }>;
+    trustedKeys: Array<TrustedAppKey>;
+};
+
+export type TrustedAppKey = {
+    id: string;
+    name: string;
+    publicKey: string;
+    official: boolean;
+};
+
 export type AppDetail = AppSummary & {
     /**
      * Same-origin addresses of up to six screenshots.
@@ -3009,9 +3081,46 @@ export type AppDetail = AppSummary & {
             title: string;
         }>;
     };
+    /**
+     * What one run may use: the app's own limits within the plan's.
+     */
     limits: {
         cpuMs: number;
         wallMs: number;
+        /**
+         * Platform calls per run.
+         */
+        subrequests: number;
+        invocationsPerMinute: number;
+        /**
+         * The most its storage may hold.
+         */
+        storageBytes: number;
+    };
+    /**
+     * Its stored data at the last daily measurement.
+     */
+    storageUsage: {
+        bytes: number;
+        measuredAt: string | null;
+    };
+    /**
+     * The developer key that verified its code; null for bundled code and unsigned uploads.
+     */
+    signer: {
+        keyId: string;
+        name: string | null;
+        official: boolean;
+    } | null;
+    migrations: {
+        declared: Array<{
+            version: number;
+            description: string;
+        }>;
+        /**
+         * The newest data update that ran.
+         */
+        applied: number;
     };
 };
 
@@ -55527,6 +55636,458 @@ export type GetApiV1AdminAppsSurfacesResponses = {
 };
 
 export type GetApiV1AdminAppsSurfacesResponse = GetApiV1AdminAppsSurfacesResponses[keyof GetApiV1AdminAppsSurfacesResponses];
+
+export type GetApiV1AdminAppsRegistryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/registry';
+};
+
+export type GetApiV1AdminAppsRegistryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsRegistryError = GetApiV1AdminAppsRegistryErrors[keyof GetApiV1AdminAppsRegistryErrors];
+
+export type GetApiV1AdminAppsRegistryResponses = {
+    /**
+     * Registry apps
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * False until the official registry and its key are published.
+             */
+            officialConfigured: boolean;
+            /**
+             * dashboard: one-click install (Workers Paid); command: run installCommand, then deploy.
+             */
+            installMode: 'dashboard' | 'command';
+            registries: Array<RegistryState>;
+            apps: Array<RegistryApp>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsRegistryResponse = GetApiV1AdminAppsRegistryResponses[keyof GetApiV1AdminAppsRegistryResponses];
+
+export type GetApiV1AdminAppsRegistrySettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/registry/settings';
+};
+
+export type GetApiV1AdminAppsRegistrySettingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsRegistrySettingsError = GetApiV1AdminAppsRegistrySettingsErrors[keyof GetApiV1AdminAppsRegistrySettingsErrors];
+
+export type GetApiV1AdminAppsRegistrySettingsResponses = {
+    /**
+     * Registry settings
+     */
+    200: {
+        success: true;
+        data: AppRegistrySettings;
+    };
+};
+
+export type GetApiV1AdminAppsRegistrySettingsResponse = GetApiV1AdminAppsRegistrySettingsResponses[keyof GetApiV1AdminAppsRegistrySettingsResponses];
+
+export type PutApiV1AdminAppsRegistrySettingsData = {
+    body: {
+        expectedRevision: number;
+        registries: Array<{
+            /**
+             * The registry's id (`official` for the official registry).
+             */
+            id: string;
+            name: string;
+            indexUrl: string;
+        }>;
+        trustedKeys: Array<{
+            name: string;
+            publicKey: string;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/registry/settings';
+};
+
+export type PutApiV1AdminAppsRegistrySettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1AdminAppsRegistrySettingsError = PutApiV1AdminAppsRegistrySettingsErrors[keyof PutApiV1AdminAppsRegistrySettingsErrors];
+
+export type PutApiV1AdminAppsRegistrySettingsResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: AppRegistrySettings;
+    };
+};
+
+export type PutApiV1AdminAppsRegistrySettingsResponse = PutApiV1AdminAppsRegistrySettingsResponses[keyof PutApiV1AdminAppsRegistrySettingsResponses];
+
+export type PostApiV1AdminAppsRegistryInstallData = {
+    body: {
+        /**
+         * The registry's id (`official` for the official registry).
+         */
+        registryId: string;
+        id: string;
+        /**
+         * A listed version; left out, the newest one.
+         */
+        version?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/registry/install';
+};
+
+export type PostApiV1AdminAppsRegistryInstallErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The release failed verification
+     */
+    422: ErrorResponse;
+    /**
+     * The registry could not be read
+     */
+    502: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsRegistryInstallError = PostApiV1AdminAppsRegistryInstallErrors[keyof PostApiV1AdminAppsRegistryInstallErrors];
+
+export type PostApiV1AdminAppsRegistryInstallResponses = {
+    /**
+     * Installed, waiting for approval
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsRegistryInstallResponse = PostApiV1AdminAppsRegistryInstallResponses[keyof PostApiV1AdminAppsRegistryInstallResponses];
+
+export type PostApiV1AdminAppsByIdUpdateData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * The registry's id (`official` for the official registry).
+         */
+        registryId: string;
+        /**
+         * A listed version; left out, the newest one.
+         */
+        version?: string;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/update';
+};
+
+export type PostApiV1AdminAppsByIdUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The release failed verification
+     */
+    422: ErrorResponse;
+    /**
+     * The registry could not be read
+     */
+    502: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdUpdateError = PostApiV1AdminAppsByIdUpdateErrors[keyof PostApiV1AdminAppsByIdUpdateErrors];
+
+export type PostApiV1AdminAppsByIdUpdateResponses = {
+    /**
+     * Updated, waiting for approval, or rolled back
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            rolledBack: boolean;
+            error: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdUpdateResponse = PostApiV1AdminAppsByIdUpdateResponses[keyof PostApiV1AdminAppsByIdUpdateResponses];
+
+export type PostApiV1AdminAppsUploadData = {
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * true: a Super Admin accepts a package without a signature.
+         */
+        allowUnsigned?: 'true' | 'false';
+        /**
+         * true: a Super Admin trusts the package's developer key from now on.
+         */
+        trustDeveloper?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/apps/upload';
+};
+
+export type PostApiV1AdminAppsUploadErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The release failed verification
+     */
+    422: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsUploadError = PostApiV1AdminAppsUploadErrors[keyof PostApiV1AdminAppsUploadErrors];
+
+export type PostApiV1AdminAppsUploadResponses = {
+    /**
+     * Installed (waiting for approval), updated, or rolled back
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            updated: boolean;
+            rolledBack: boolean;
+            error: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsUploadResponse = PostApiV1AdminAppsUploadResponses[keyof PostApiV1AdminAppsUploadResponses];
+
+export type PostApiV1AdminAppsStopThirdPartyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/stop-third-party';
+};
+
+export type PostApiV1AdminAppsStopThirdPartyErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsStopThirdPartyError = PostApiV1AdminAppsStopThirdPartyErrors[keyof PostApiV1AdminAppsStopThirdPartyErrors];
+
+export type PostApiV1AdminAppsStopThirdPartyResponses = {
+    /**
+     * Stopped
+     */
+    200: {
+        success: true;
+        data: {
+            stopped: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsStopThirdPartyResponse = PostApiV1AdminAppsStopThirdPartyResponses[keyof PostApiV1AdminAppsStopThirdPartyResponses];
+
+export type PostApiV1AdminAppsByIdStopData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/stop';
+};
+
+export type PostApiV1AdminAppsByIdStopErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdStopError = PostApiV1AdminAppsByIdStopErrors[keyof PostApiV1AdminAppsByIdStopErrors];
+
+export type PostApiV1AdminAppsByIdStopResponses = {
+    /**
+     * Stopped
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            stopped: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdStopResponse = PostApiV1AdminAppsByIdStopResponses[keyof PostApiV1AdminAppsByIdStopResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

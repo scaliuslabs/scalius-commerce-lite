@@ -47,4 +47,43 @@ export const DASHBOARD_APP_OPERATIONS = {
     batch: "forbidden",
     limits: { request: 16_384, response: 16_384 },
   },
+  // Registries, installs, updates and the emergency stop
+  // (docs/platform/PLUGINS.md, "Registry", "Quotas and kill switch").
+  "dashboard.apps.registry_list": { openWorld: true, limits: { response: 65_536 } },
+  "dashboard.apps.registry_settings_get": { limits: { response: 65_536 } },
+  "dashboard.apps.registry_settings_update": {
+    exposure: "excluded",
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 65_536, response: 65_536 },
+    reason: "Choosing which developers and registries the store trusts is a Super Admin's decision in the dashboard; agents can read it.",
+  },
+  "dashboard.apps.registry_install": {
+    risk: "security",
+    openWorld: true,
+    batch: "forbidden",
+    limits: { request: 16_384, response: 65_536 },
+  },
+  "dashboard.apps.update": {
+    risk: "security",
+    openWorld: true,
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 16_384, response: 65_536 },
+  },
+  "dashboard.apps.upload": {
+    exposure: "excluded",
+    reason: "A package file upload, and the trust choices that may come with it, are a person's in the dashboard; agents install from a registry (dashboard.apps.registry_install).",
+  },
+  "dashboard.apps.stop": {
+    risk: "security",
+    batch: "forbidden",
+    limits: { request: 4_096, response: 65_536 },
+  },
+  "dashboard.apps.stop_third_party": {
+    risk: "security",
+    batch: "forbidden",
+    limits: { request: 4_096, response: 16_384 },
+  },
 } as const satisfies Record<string, OperationRegistryEntry>;

@@ -80,6 +80,24 @@ export interface PlanLimits {
     /** Deepest OFFSET a numbered page may read; deeper pages use the keyset cursor. */
     readonly maxOffset: number;
   };
+  /**
+   * Per-app ceilings (docs/platform/PLUGINS.md, "Quotas"). An app's manifest
+   * `limits` apply within them; the platform takes the lower value.
+   */
+  readonly plugins: {
+    /** CPU per invocation of a sandboxed app (the isolate's limit). */
+    readonly cpuMs: number;
+    /** Wall time per invocation (both loaders). */
+    readonly wallMs: number;
+    /** Platform calls (bridge and network) per invocation; Workers' own per-invocation ceilings (Free 50, Paid 1,000). */
+    readonly subrequests: number;
+    /** Bytes an app may keep in its storage and key/value data; writes stop above it (deletes still work). */
+    readonly storageBytes: number;
+    /** Event, route and cron runs per app a minute (functions and storefront output are paced by the platform). */
+    readonly invocationsPerMinute: number;
+    /** Limit breaches (at most one counted a minute) within an hour that stop the app. */
+    readonly breachesBeforeStop: number;
+  };
 }
 
 export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.freeze({
@@ -100,6 +118,14 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
     maintenance: Object.freeze({ slices: 4, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000 }),
+    plugins: Object.freeze({
+      cpuMs: 50,
+      wallMs: 10_000,
+      subrequests: 50,
+      storageBytes: 50 * 1024 * 1024,
+      invocationsPerMinute: 600,
+      breachesBeforeStop: 5,
+    }),
   }),
   paid: Object.freeze({
     plan: "paid",
@@ -118,6 +144,14 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
     maintenance: Object.freeze({ slices: 1, limitScale: 1, inlineRenditionsPerRun: 240 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000 }),
+    plugins: Object.freeze({
+      cpuMs: 200,
+      wallMs: 30_000,
+      subrequests: 1_000,
+      storageBytes: 1024 * 1024 * 1024,
+      invocationsPerMinute: 6_000,
+      breachesBeforeStop: 5,
+    }),
   }),
 }) as Readonly<Record<WorkersPlan, PlanLimits>>;
 

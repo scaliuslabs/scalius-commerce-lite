@@ -216,19 +216,32 @@ stop_storefront_background() {
   (cd "$ROOT_DIR/apps/storefront" && "$PNPM_BIN" exec astro dev stop >/dev/null 2>&1) || true
 }
 
+# Applies pending migrations to the database the API Worker will open: the
+# local Wrangler config (the one `pnpm dev` in apps/api uses, not the deploy
+# config, whose database id would give a different local SQLite file) and the
+# same --persist-to state directory. CI=true keeps Wrangler from prompting.
 apply_local_migrations() {
   if [ "${SCALIUS_SKIP_DEV_MIGRATIONS:-0}" = "1" ]; then
     echo "Skipping local D1 migrations (SCALIUS_SKIP_DEV_MIGRATIONS=1)."
     return
   fi
 
+  local state_dir="${SCALIUS_WRANGLER_STATE:-../../.wrangler/state}"
   echo "Applying local D1 migrations..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] node scripts/deploy.mjs --migrate-only --local"
+    echo "[dry-run] cd apps/api && CI=true $PNPM_BIN exec wrangler d1 migrations apply DB --local --config <local api config> --persist-to $state_dir"
     return
   fi
 
-  (cd "$ROOT_DIR" && node scripts/deploy.mjs --migrate-only --local) || exit 1
+  local api_config
+  if ! api_config="$(cd "$ROOT_DIR" && node scripts/plugins.mjs wrangler-config --local)"; then
+    echo "Could not resolve the local API Wrangler config. Local D1 migrations were not applied." >&2
+    exit 1
+  fi
+  if ! (cd "$ROOT_DIR/apps/api" && CI=true "$PNPM_BIN" exec wrangler d1 migrations apply DB --local --config "$api_config" --persist-to "$state_dir"); then
+    echo "Applying local D1 migrations failed (state: $state_dir). Fix the error above, then rerun pnpm dev." >&2
+    exit 1
+  fi
 }
 
 sync_local_platform() {

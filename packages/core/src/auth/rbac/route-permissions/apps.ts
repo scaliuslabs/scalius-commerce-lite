@@ -28,6 +28,16 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*/assets/*": { GET: { anyOf: ANY_STAFF } },
   "/api/v1/admin/apps/*/deliveries": { GET: view },
   "/api/v1/admin/apps/*/deliveries/*/retry": { POST: manage },
+  // Registries, installs from them or from a package, updates and the
+  // emergency stop. Trusting a developer or an unsigned package and changing
+  // the trusted keys are also Super Admin only (enforced by the routes).
+  "/api/v1/admin/apps/registry": { GET: view },
+  "/api/v1/admin/apps/registry/settings": { GET: view, PUT: manage },
+  "/api/v1/admin/apps/registry/install": { POST: manage },
+  "/api/v1/admin/apps/upload": { POST: manage },
+  "/api/v1/admin/apps/stop-third-party": { POST: manage },
+  "/api/v1/admin/apps/*/stop": { POST: manage },
+  "/api/v1/admin/apps/*/update": { POST: manage },
   // An app's own dashboard routes: reading its pages needs apps.view; its
   // mutating actions also need apps.use.
   "/api/v1/plugins/*/admin/**": { GET: view, POST: use, PUT: use, PATCH: use, DELETE: use },

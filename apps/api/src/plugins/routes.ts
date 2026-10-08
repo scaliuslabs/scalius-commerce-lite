@@ -194,6 +194,8 @@ const FAILURE_STATUS: Record<PluginInvocationFailure, { status: number; code: st
   timeout: { status: 504, code: "APP_TIMEOUT", message: "The app took too long to answer." },
   error: { status: 502, code: "APP_FAILED", message: "The app could not answer." },
   invalid: { status: 502, code: "APP_FAILED", message: "The app gave an invalid answer." },
+  limited: { status: 429, code: "APP_BUSY", message: "The app is busy. Try again in a minute." },
+  migration_failed: { status: 502, code: "APP_FAILED", message: "The app could not update its data." },
 };
 
 /** `Cache-Control` of a plugin response on a surface: admin never stored; others only an exact, short public max-age. */

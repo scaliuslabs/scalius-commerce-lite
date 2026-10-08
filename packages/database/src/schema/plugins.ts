@@ -61,6 +61,16 @@ export const pluginInstallations = sqliteTable("plugin_installations", {
     installedAt: integer("installed_at").notNull().default(UNIX_NOW),
     activatedAt: integer("activated_at"),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    /** The newest data update (`manifest.migrations`) that ran; the host runs newer ones before the app's next run. */
+    migratedVersion: integer("migrated_version").notNull().default(0),
+    /** The trusted key id that verified the bundle (registry or signed upload); null for bundled code and unsigned uploads. */
+    signerKeyId: text("signer_key_id"),
+    /** Bytes the app keeps in plugin_records and plugin_kv, as last measured (the scheduled sweep). */
+    storageBytes: integer("storage_bytes").notNull().default(0),
+    storageMeasuredAt: integer("storage_measured_at"),
+    /** Limit breaches in the current window (one counted a minute); enough of them stop the app. */
+    breachCount: integer("breach_count").notNull().default(0),
+    lastBreachAt: integer("last_breach_at"),
 }, (table) => [
     index("plugin_installations_status_idx").on(table.status, table.pluginId),
     check("plugin_installations_id_shape", pluginIdShape(table.pluginId)),
@@ -75,6 +85,28 @@ export const pluginInstallations = sqliteTable("plugin_installations", {
     check("plugin_installations_failure_reason", sql`${table.failureReason} IS NULL OR length(${table.failureReason}) BETWEEN 1 AND 500`),
     check("plugin_installations_settings_json", jsonObject(table.settingsJson, 131072)),
     check("plugin_installations_revision_positive", sql`${table.revision} >= 1`),
+    // The 0125 columns are added in place (no table rebuild, so the cache
+    // dependency triggers stay); their writers keep them in range.
+]);
+
+/**
+ * The data updates (`manifest.migrations`) that ran for an app, one row per
+ * version. Owned by the plugin id like its records: an uninstall that keeps
+ * data keeps them, so a reinstall does not run them again.
+ */
+export const pluginMigrations = sqliteTable("plugin_migrations", {
+    pluginId: text("plugin_id").notNull(),
+    version: integer("version").notNull(),
+    /** The app version that ran it. */
+    pluginVersion: text("plugin_version").notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    appliedAt: integer("applied_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.pluginId, table.version] }),
+    check("plugin_migrations_plugin_id_shape", pluginIdShape(table.pluginId)),
+    check("plugin_migrations_version_range", sql`${table.version} BETWEEN 1 AND 10000`),
+    check("plugin_migrations_plugin_version_length", sql`length(${table.pluginVersion}) BETWEEN 5 AND 80`),
+    check("plugin_migrations_duration", sql`${table.durationMs} >= 0`),
 ]);
 
 /** Extension-point registrations derived from an installation's manifest. */

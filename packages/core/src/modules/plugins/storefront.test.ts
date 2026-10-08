@@ -20,6 +20,7 @@ function installation(id: string, scripts: Array<{ src: string; pages?: string[]
     pluginId: id, version: "1.0.0", source: "bundled", bundleSha256: "a".repeat(64), manifest,
     grant: pluginGrantRequest(parse(grantedFrom)), grantKey: "k", status: "active", failureReason: null,
     storedSettings: {}, revision: 1, installedBy: null, activatedBy: "owner", installedAt: 1, activatedAt: 1, updatedAt: 1,
+    migratedVersion: 0, signerKeyId: null, storageBytes: 0, storageMeasuredAt: null,
   };
 }
 
