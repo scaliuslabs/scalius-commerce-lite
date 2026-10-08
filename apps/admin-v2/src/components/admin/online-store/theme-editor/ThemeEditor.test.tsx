@@ -54,7 +54,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminProducts: vi.fn(async () => ({ products: [], pagination: { page: 1, totalPages: 1 } })),
   getApiV1AdminProductsByIds: vi.fn(async () => ({ products: [] })),
 }));
-vi.mock("~/lib/toast", () => ({ toast: toasts }));
+vi.mock("~/lib/toast", async (importActual) => ({ ...(await importActual<typeof import("~/lib/toast")>()), toast: toasts }));
 vi.mock("sonner", () => ({ toast: toasts }));
 vi.mock("../type-preview-fonts", () => ({ registerTypePreviewFonts: vi.fn() }));
 vi.mock("../theme-preview", () => ({ useOpenThemePreview: () => vi.fn(), isSafeThemePreviewContinuation: () => true }));
@@ -297,6 +297,47 @@ describe("theme editor: live preview and saving", () => {
     expect(saved.find((each) => each.id === "story")!.settings).toMatchObject({ heading: "Our honey story" });
     await vi.waitFor(() => expect(status()).toBe("held"));
     expect(container.querySelector("[data-save-status]")!.textContent).toContain("1 setting to fix");
+  });
+
+  it("opens the tab and group of a theme setting to fix, and puts the cursor in the field", async () => {
+    render();
+    const tab = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find((each) => each.textContent === name)!;
+    const choose = (name: string) => act(() => tab(name).dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+    choose("Theme settings");
+    await vi.waitFor(() => expect([...document.querySelectorAll("h2 > button[aria-expanded]")].some((each) => each.textContent === "Colors")).toBe(true));
+    const colors = () => [...document.querySelectorAll<HTMLButtonElement>("h2 > button[aria-expanded]")].find((each) => each.textContent === "Colors")!;
+    act(() => colors().click());
+    await ready("#theme-color-background");
+    type(field("theme-color-background"), "bad-colour");
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    // Collapse the group and leave the tab, as the merchant did.
+    act(() => colors().click());
+    choose("Sections");
+    await vi.waitFor(() => expect(document.querySelector("#theme-color-background")).toBeNull());
+    act(() => button("1 setting to fix").click());
+    await ready("#theme-color-background");
+    await vi.waitFor(() => expect(document.activeElement).toBe(field("theme-color-background")));
+    expect(colors().getAttribute("aria-expanded")).toBe("true");
+    expect(field("theme-color-background-note").textContent).toContain("Use a color code");
+  });
+
+  it("on a phone, keeps toasts above the Layers / Theme / Add bar, and on a computer lifts nothing", () => {
+    const lift = () => document.documentElement.style.getPropertyValue("--toast-lift");
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(56);
+    try {
+      setViewport(390);
+      render();
+      expect(container.querySelector("nav[aria-label='Editor']")).toBeTruthy();
+      expect(lift()).toBe("56px");
+      act(() => root.unmount());
+      expect(lift()).toBe("");
+      root = createRoot(container);
+      setViewport(1440);
+      render();
+      expect(lift()).toBe("");
+    } finally {
+      height.mockRestore();
+    }
   });
 
   it("undoes and redoes across autosave", async () => {

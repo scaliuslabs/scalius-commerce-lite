@@ -48,7 +48,7 @@ export interface SalesChannelRecord {
     position: number;
     /** The locations whose on-hand it sells, by id. */
     locationIds: string[];
-    /** Products published to it (live and in trash alike). */
+    /** Products published to it, trashed ones left out (the Products list the count links to). */
     publishedProducts: number;
 }
 
@@ -73,10 +73,11 @@ export async function listSalesChannels(db: Database): Promise<SalesChannelRecor
         db.select({ channelId: salesChannelLocations.channelId, locationId: salesChannelLocations.locationId })
             .from(salesChannelLocations)
             .orderBy(asc(salesChannelLocations.locationId)),
-        // The partial index on published rows serves each channel's count.
+        // The partial index on published rows serves each channel's count; trashed products are not in the list it links to.
         db.select({ channelId: productChannelPublications.channelId, count: sql<number>`count(*)` })
             .from(productChannelPublications)
-            .where(isNull(productChannelPublications.unpublishedAt))
+            .innerJoin(products, eq(products.id, productChannelPublications.productId))
+            .where(and(isNull(productChannelPublications.unpublishedAt), isNull(products.deletedAt)))
             .groupBy(productChannelPublications.channelId),
     ] as never) as unknown as [SalesChannel[], Array<{ channelId: string; locationId: string }>, Array<{ channelId: string; count: number }>];
     const locationsByChannel = new Map<string, string[]>();

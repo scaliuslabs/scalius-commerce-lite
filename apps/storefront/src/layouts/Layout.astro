@@ -45,7 +45,7 @@ import {
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import {
-  clearThemePreviewCookieHeader,
+  appendClearThemePreviewCookies,
 } from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
@@ -150,10 +150,7 @@ if (themePreviewToken) {
     "private, no-cache, no-store, must-revalidate",
   );
   if (!themePreview) {
-    Astro.response.headers.append(
-      "Set-Cookie",
-      clearThemePreviewCookieHeader(),
-    );
+    appendClearThemePreviewCookies(Astro.response.headers);
   }
 }
 

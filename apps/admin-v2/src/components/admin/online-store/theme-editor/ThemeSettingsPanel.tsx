@@ -4,7 +4,7 @@
  * announcement bar and menus) and the footer are rows of every page's tree;
  * their settings are here too, for the editor's settings panel.
  */
-import { createContext, useContext, useId, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -35,6 +35,7 @@ import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
 import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
+import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
@@ -42,8 +43,10 @@ type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 const OpenGroup = createContext<{ open: string | null | undefined; toggle: (id: string) => void } | null>(null);
 
 /** One group of settings in a panel: a heading (a toggle in Theme settings), what it is for, then its fields. */
-function SettingsGroup({ title, description, action, defaultOpen = false, children }: {
+function SettingsGroup({ title, description, action, defaultOpen = false, name, children }: {
   title: ReactNode;
+  /** Names the group for "setting to fix": a request for it opens the group. */
+  name?: ThemeSettingsGroup;
   description?: ReactNode;
   action?: ReactNode;
   /** Open until the merchant opens another group. */
@@ -52,6 +55,14 @@ function SettingsGroup({ title, description, action, defaultOpen = false, childr
 }) {
   const id = useId();
   const groups = useContext(OpenGroup);
+  const reveal = useThemeReveal();
+  const toggle = useRef(groups?.toggle);
+  toggle.current = groups?.toggle;
+  const asked = name !== undefined && reveal?.group === name ? reveal.nonce : 0;
+  // Opens once per request; the merchant can close it again afterwards.
+  useEffect(() => {
+    if (asked > 0) toggle.current?.(id);
+  }, [asked, id]);
   const open = groups === null || groups.open === id || (groups.open === undefined && defaultOpen);
   return (
     <section className="border-b border-border last:border-b-0">
@@ -179,7 +190,9 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
   );
 }
 
-export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
+export function ThemeSettingsPanel({ theme, resolved, media, setDraft, reveal = null }: {
+  /** Opens the group a "setting to fix" is in. */
+  reveal?: ThemeRevealRequest | null;
   theme: Theme;
   resolved: ResolvedStorefrontTheme;
   media: MediaPreviews;
@@ -191,25 +204,27 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
   // One group open at a time; the panel opens as a short list of its groups.
   const [open, setOpen] = useState<string | null>(null);
   return (
+    <ThemeRevealContext.Provider value={reveal}>
     <OpenGroup.Provider value={{ open, toggle: (id) => setOpen(id || null) }}>
-      <SettingsGroup title={t("colors")}>
+      <SettingsGroup title={t("colors")} name="colors">
         <ColorFields theme={theme} setDraft={setDraft} />
       </SettingsGroup>
       <TypographyCard theme={theme} setDraft={setDraft} frame={SettingsGroup} />
       <SettingsGroup title={editor("layoutGroup")}>
         <LayoutFields theme={theme} setDraft={setDraft} />
       </SettingsGroup>
-      <SettingsGroup title={t("logo")}>
+      <SettingsGroup title={t("logo")} name="logo">
         <BrandFields theme={theme} media={media} setDraft={setDraft} />
       </SettingsGroup>
       {/* One card for the whole store: its facts, buy action and hover photo; its shape follows the style above. */}
-      <SettingsGroup title={t("productCards")}>
+      <SettingsGroup title={t("productCards")} name="productCards">
         <div className="max-w-48">
           <CardStyleSketch card={resolved.layout.productCard} />
         </div>
         {block.fields("card")}
       </SettingsGroup>
     </OpenGroup.Provider>
+    </ThemeRevealContext.Provider>
   );
 }
 

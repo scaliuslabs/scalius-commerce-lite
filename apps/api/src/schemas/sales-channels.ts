@@ -24,7 +24,7 @@ export const salesChannelRecordSchema = z.object({
   status: z.enum(SALES_CHANNEL_STATUSES).openapi({ description: "An inactive channel shows nothing: its feed is empty and its checkout refuses orders. The online store is always active; an app's channel follows the app." }),
   position: z.number().int(),
   locationIds: z.array(z.string()).openapi({ description: "The inventory locations whose on-hand the channel sells. Every channel sells every location until a merchant unlinks one." }),
-  publishedProducts: z.number().int().nonnegative().openapi({ description: "Products published to it (trashed ones included)." }),
+  publishedProducts: z.number().int().nonnegative().openapi({ description: "Products published to it (trashed ones left out)." }),
 }).openapi("SalesChannel");
 
 export function presentSalesChannel(channel: SalesChannelRecord) {

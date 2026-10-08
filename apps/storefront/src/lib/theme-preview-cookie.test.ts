@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  clearThemePreviewCookieHeader,
+  clearThemePreviewCookieHeaders,
   createThemePreviewCookieHeader,
   readThemePreviewCookie,
   THEME_PREVIEW_COOKIE_NAME,
@@ -33,6 +33,15 @@ describe("storefront theme preview cookie", () => {
     expect(createThemePreviewCookieHeader("not-a-preview")).toBe("");
     expect(readThemePreviewCookie(`${THEME_PREVIEW_COOKIE_NAME}=bad`)).toBe("");
     expect(readThemePreviewCookie(`${THEME_PREVIEW_COOKIE_NAME}=%E0%A4%A`)).toBe("");
-    expect(clearThemePreviewCookieHeader()).toContain("Max-Age=0");
+    const [lax, framed] = clearThemePreviewCookieHeaders();
+    expect(lax).toContain("SameSite=Lax");
+    // The editor frame's partitioned cookie is a different cookie: exit must expire it too.
+    expect(framed).toContain("SameSite=None");
+    expect(framed).toContain("Partitioned");
+    for (const header of [lax, framed]) {
+      expect(header).toContain(`${THEME_PREVIEW_COOKIE_NAME}=;`);
+      expect(header).toContain("Max-Age=0");
+      expect(header).toContain("Path=/");
+    }
   });
 });
