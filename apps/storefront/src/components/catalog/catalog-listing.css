@@ -594,30 +594,6 @@
   }
 }
 
-@media (min-width: 64rem) {
-  /* Apple Gadgets uses roomier listing titles than its homepage rails. */
-  .site-root .product-grid-frame[data-catalog-card="tech-rounded"] .product-card-name {
-    font-size: 1.25rem;
-  }
-
-  .site-root .product-grid-frame[data-catalog-card="tech-rounded"] > .product-grid {
-    gap: 1rem;
-  }
-
-  .site-root .product-grid-frame[data-catalog-card="portrait"]:not([data-catalog-results="list"]) > .product-grid {
-    column-gap: 2.5rem;
-  }
-
-  .site-root .product-grid-frame[data-catalog-card="spec"]:not([data-catalog-results="list"]) > .product-grid {
-    gap: 0;
-  }
-
-  .site-root .product-grid-frame[data-catalog-card="mall"]:not([data-catalog-results="list"]) > .product-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
-  }
-}
-
 /* ─── Computers ──────────────────────────────────────────────────────── */
 @media (min-width: 64rem) {
   /* The column: sidebar-dense (Amazon, Daraz, Star Tech) is flat rows under
@@ -1130,15 +1106,9 @@
   gap: 0.25rem;
 }
 
-.site-root .product-grid-frame[data-catalog-results="list"] .product-card[data-card-variant="detailed"] .product-card-name {
-  font-size: 1.125rem;
-  line-height: 1.35;
-}
-
 /* A row reads top to bottom (title, facts, price, action) instead of
-   pinning the price to the bottom of a tall photo; the action keeps its
-   own width (Amazon's 272px "Add to cart"), not the row's. */
-.site-root .product-grid-frame[data-catalog-results="list"] .product-card-body > .mt-auto {
+   pinning the price to the bottom of a tall photo. */
+.site-root .product-grid-frame[data-catalog-results="list"] .product-card-foot {
   margin-top: 0.5rem;
 }
 

@@ -1,0 +1,104 @@
+---
+// The one section header (README.md): the title, an optional subtitle and
+// one trailing "View all" link. Carousel arrows go in the `actions` slot,
+// after the link; the caller shows them from 1024px only. No decorative
+// bars and no unexplained chips. The link's name starts with its visible
+// words ("View all: New arrivals", WCAG 2.5.3).
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+
+interface Props {
+  title: string;
+  subtitle?: string | null;
+  /** The "View all" destination; none shows no link. */
+  href?: string | null;
+  /** The link's visible words; "View all" by default. */
+  linkLabel?: string | null;
+  level?: 2 | 3;
+  /** The heading's id, for `aria-labelledby` on the section. */
+  id?: string;
+  class?: string;
+}
+
+const { title, subtitle, href, linkLabel, level = 2, id, class: className } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).section;
+const Heading = level === 3 ? "h3" : "h2";
+const hasActions = Astro.slots.has("actions");
+---
+
+<div class:list={["sf-section-header", className]}>
+  <div class="sf-section-header-text">
+    <Heading id={id} class="section-heading sf-section-title">{title}</Heading>
+    {subtitle && <p class="sf-section-subtitle">{subtitle}</p>}
+  </div>
+  {(href || hasActions) && (
+    <div class="sf-section-header-actions">
+      {href && (
+        <a href={href} class="sf-section-link">
+          {linkLabel || copy.viewAll}<span class="sr-only">: {title}</span>
+          <svg aria-hidden="true" data-dir-icon viewBox="0 0 24 24" width="16" height="16"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </a>
+      )}
+      <slot name="actions" />
+    </div>
+  )}
+</div>
+
+<style is:global>
+  .site-root .sf-section-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-block-end: 1rem;
+  }
+
+  @media (min-width: 64rem) {
+    .site-root .sf-section-header {
+      margin-block-end: 1.5rem;
+    }
+  }
+
+  .site-root .sf-section-header-text {
+    min-inline-size: 0;
+  }
+
+  .site-root .sf-section-title {
+    margin: 0;
+  }
+
+  .site-root .sf-section-subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--muted-foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    line-height: 1.5;
+  }
+
+  .site-root .sf-section-header-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .site-root .sf-section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-block-size: var(--target-min, 1.5rem);
+    color: var(--foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+    text-underline-offset: 0.25em;
+    white-space: nowrap;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .site-root .sf-section-link:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+</style>

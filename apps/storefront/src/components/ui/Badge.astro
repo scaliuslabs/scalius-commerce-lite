@@ -1,0 +1,62 @@
+---
+// The one badge (README.md): one shape (the theme radius), four kinds.
+// `sale` carries the discount ("-15%") in the sale colour, `sold-out` ink
+// on the page colour, `new` the action colour, `custom` a quiet surface.
+// On a product photo it sits top-start (the card stacks them there); the
+// same discount is never repeated in the card body.
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+
+interface Props {
+  kind: "sale" | "sold-out" | "new" | "custom";
+  /** The words; `sale` defaults to "Sale", `sold-out` and `new` to theirs. `custom` needs one. */
+  label?: string | null;
+  class?: string;
+}
+
+const { kind, label, class: className } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).badge;
+const text = label || (kind === "sale" ? copy.sale : kind === "sold-out" ? copy.soldOut : kind === "new" ? copy.new : "");
+---
+
+{text && <span class:list={["sf-badge", className]} data-kind={kind}>{text}</span>}
+
+<style is:global>
+  .site-root .sf-badge {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
+    padding-inline: 0.5rem;
+    border-radius: min(var(--radius), 0.75rem);
+    font-family: var(--theme-font-body);
+    font-size: var(--theme-text-xs, 0.75rem);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .site-root .sf-badge[data-kind="sale"] {
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+  }
+
+  .site-root .sf-badge[data-kind="sold-out"] {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .site-root .sf-badge[data-kind="new"] {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .site-root .sf-badge[data-kind="custom"] {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+  }
+</style>

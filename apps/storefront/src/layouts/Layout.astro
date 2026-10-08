@@ -12,8 +12,6 @@ import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { themePaint } from "@/lib/theme-paint";
-import { cardIconIds } from "@/components/cards/card-model";
-import CardIconSprite from "../components/cards/CardIconSprite.astro";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -300,7 +298,6 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // portrait photos). Body data attributes carry the tokens CSS selects on.
 // The theme editor's paint route returns the same three for an unsaved document.
 const paint = themePaint(storefrontTheme, resolvedTheme);
-const cardIcons = cardIconIds(resolvedTheme.blocks.card.variant, themeLayout.productCard);
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
@@ -490,10 +487,8 @@ const pageStoreTimeZone = storeTimeZone();
     class="flex flex-col min-h-screen site-root"
     {...paint.attributes}
     data-storefront-route={storefrontRouteKind}
-    {...paint.cardAttributes}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
-    <CardIconSprite icons={cardIcons} />
 
     <a
       href="#main-content"

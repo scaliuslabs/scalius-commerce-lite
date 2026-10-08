@@ -1,0 +1,86 @@
+---
+// The one price (README.md): the current price in ink, or in the sale
+// colour while discounted, then the struck regular price after it, and an
+// optional "Save ৳600". Screen readers hear "Sale price ৳X, Regular price
+// ৳Y" (or "Price ৳X"). Amounts arrive formatted (lib/currency formatMoney).
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+
+interface Props {
+  /** The price the buyer pays, formatted. */
+  amount: string;
+  /** The regular price while discounted, formatted; it is struck after the price. */
+  compareAt?: string | null;
+  /** The price varies by option: "From ৳2,450". */
+  from?: boolean;
+  /** The amount saved, formatted; shows "Save ৳600" after the struck price. */
+  saving?: string | null;
+  /** `card` 16/600 (cards, rails, cart lines); `page` 24/700 (the product page). */
+  size?: "card" | "page";
+  as?: "p" | "div" | "span";
+  class?: string;
+}
+
+const { amount, compareAt = null, from = false, saving = null, size = "card", as: Tag = "p", class: className } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).price;
+const discounted = Boolean(compareAt);
+---
+
+<Tag class:list={["sf-price", className]} data-size={size}>
+  <span class="sf-price-current" data-sale={discounted ? "" : undefined}>
+    <span class="sr-only">{discounted ? copy.sale : copy.price} </span>{from ? copy.from(amount) : amount}
+  </span>
+  {compareAt && (
+    <span class="sf-price-compare"><span class="sr-only">{copy.regular} </span><s>{compareAt}</s></span>
+  )}
+  {discounted && saving && <span class="sf-price-save">{copy.save(saving)}</span>}
+</Tag>
+
+<style is:global>
+  .site-root .sf-price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.5rem;
+    row-gap: 0.125rem;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+  }
+
+  .site-root .sf-price > span {
+    white-space: nowrap;
+  }
+
+  .site-root .sf-price-current {
+    color: var(--foreground);
+    font-size: var(--theme-text-base, 1rem);
+    font-weight: 600;
+  }
+
+  .site-root .sf-price-current[data-sale] {
+    color: var(--theme-sale, var(--destructive));
+  }
+
+  .site-root .sf-price-compare {
+    color: var(--muted-foreground);
+    font-size: var(--theme-text-xs, 0.75rem);
+    font-weight: 400;
+  }
+
+  .site-root .sf-price-save {
+    color: var(--theme-sale, var(--destructive));
+    font-size: var(--theme-text-xs, 0.75rem);
+    font-weight: 600;
+  }
+
+  .site-root .sf-price[data-size="page"] .sf-price-current {
+    font-size: var(--theme-text-2xl, 1.5rem);
+    font-weight: 700;
+  }
+
+  .site-root .sf-price[data-size="page"] :is(.sf-price-compare, .sf-price-save) {
+    font-size: var(--theme-text-base, 1rem);
+  }
+</style>

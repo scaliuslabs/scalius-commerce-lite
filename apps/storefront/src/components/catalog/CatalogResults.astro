@@ -1,6 +1,6 @@
 ---
 // A listing's products: the theme's card in the fluid grid, one product per
-// row (list), or Chaldal's dense quick-add grid. The frame carries
+// row (list), or a denser quick grid. The frame carries
 // `data-catalog-results` for the paging script (appends the next page's
 // cards) and the list styles; the grid/list toggle's stored choice is
 // applied by an inline script as soon as the result grid has parsed.
@@ -18,6 +18,7 @@ import {
 } from "@/lib/product-card-layout";
 import { LIST_ROW_IMAGE_SIZES, quickGridSpec } from "@/lib/catalog-listing";
 import { catalogViewStorageKey } from "@/lib/catalog-paging";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   products: Product[];
@@ -41,12 +42,9 @@ interface Props {
 }
 
 const { products, results, kind, phoneLayout, context, filterColumnPx = 0, maxColumns: columns, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
-const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
-// The page's own cap (a full-width search), else the listing's (Target's
-// four roomy columns), else the card's: Star Tech's and the mall's tiles cap at four.
-const maxColumns = columns
-  ?? resolved.blocks.listing.maxColumns
-  ?? (["spec", "mall"].includes(resolved.blocks.card.variant) ? 4 : undefined);
+const { resolved, theme, layout, language } = await currentRequestTheme(Astro.locals);
+// The page's own cap (a full-width search), else the listing's.
+const maxColumns = columns ?? resolved.blocks.listing.maxColumns ?? undefined;
 // Only a grid beside the filters loses their column.
 const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 
@@ -77,7 +75,9 @@ const viewStorageKey = catalogViewStorageKey(kind);
 const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localStorage.getItem(${JSON.stringify(viewStorageKey)});if(v==="grid"||v==="list"){f.setAttribute("data-catalog-results",v);if(v==="grid")f.querySelector(".product-grid").removeAttribute("data-phone-layout")}}catch(e){}})(document.currentScript)`;
 ---
 
-<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={restoreView && results === "quick" ? "grid" : marked || results !== "grid" ? results : undefined} data-catalog-kind={kind} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} data-catalog-card={["tech-rounded", "portrait", "spec", "mall"].includes(resolved.blocks.card.variant) ? resolved.blocks.card.variant : undefined} style={style}>
+{/* The page's outline: h1 (the listing), then this h2, then each card's h3. */}
+<h2 class="sr-only">{storefrontCopy(language).card.products}</h2>
+<ProductGrid class="mb-8" phoneLayout={gridPhoneLayout} data-catalog-results={restoreView && results === "quick" ? "grid" : marked || results !== "grid" ? results : undefined} data-catalog-kind={kind} data-catalog-view-storage-key={restoreView ? viewStorageKey : undefined} data-catalog-grid-columns={maxColumns ? String(maxColumns) : undefined} style={style}>
   {products.map((product, index) => (
     <ProductCard
       product={product}
@@ -90,7 +90,7 @@ const restoreScript = `(function(s){try{var f=s.previousElementSibling,v=localSt
       phoneLayout={restoreView ? "grid" : gridPhoneLayout}
       sizes={sizes}
       maxColumns={maxColumns}
-      headingLevel="h2"
+      headingLevel="h3"
     />
   ))}
 </ProductGrid>

@@ -18,7 +18,7 @@ export const ALL: APIRoute = async (context) => {
   const paint = themePaint(theme, resolved);
   return new Response(JSON.stringify({
     css: paint.css,
-    attributes: { ...paint.attributes, ...paint.cardAttributes },
+    attributes: paint.attributes,
     fonts: paint.fonts.css,
   }), {
     status: 200,

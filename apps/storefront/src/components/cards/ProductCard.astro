@@ -1,12 +1,21 @@
 ---
 // src/components/cards/ProductCard.astro
-// One card per store (mix rule 2): listings, rails, related products and
-// search render the theme's card variant. `standard` is the classic card;
-// every other variant renders its registry anatomy (variants/anatomy.astro).
-import "@/styles/theme-cards.css";
+// The one product card (mix rule 2): listings, rails, related products and
+// search render it. Its photo ratio and fit, radius and surface are the
+// theme's tokens; its type is the system's. Three settings vary it
+// (`blocks.card.settings`): the facts under the title (none, key specs,
+// swatches, delivery), the buy action (none, a round quick-add on the
+// photo, a full button at the bottom) and the hover photo.
+//
+// One link per card: the title link stretches over the card, so the card is
+// one tab stop and screen readers hear the name once. Only the add-to-cart
+// control sits above it as its own control. In a grid every card fills its
+// row's height, so prices and actions line up.
+import "./product-card.css";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { buildStorefrontThemeTokens, type ResolvedStorefrontCard } from "@scalius/shared/storefront-theme";
+import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import {
   listingFilterColumnPx,
   productCardImageMaxCssWidth,
@@ -17,9 +26,13 @@ import {
   type ProductGridContext,
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX, cardPhotoSizes, productCardModel, type ProductCardProduct } from "./card-model";
-import StandardCard from "./variants/standard.astro";
-import AnatomyCard from "./variants/anatomy.astro";
+import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { CARD_IMAGE_DIMENSIONS, productCardModel, type ProductCardProduct } from "./card-model";
+import CardMedia from "./parts/CardMedia.astro";
+import Badge from "@/components/ui/Badge.astro";
+import Button from "@/components/ui/Button.astro";
+import Price from "@/components/ui/Price.astro";
+import Rating from "@/components/ui/Rating.astro";
 
 interface Props {
   product: ProductCardProduct;
@@ -46,13 +59,13 @@ interface Props {
    * not describe (listing list rows, shelves, the quick-add grid).
    */
   sizes?: string;
+  /** h3 under a section or "Products" h2 (the default); h2 only where nothing heads the grid. */
   headingLevel?: "h2" | "h3";
   /** The grid's column cap (a homepage grid section's `columns`), for image `sizes`. */
   maxColumns?: number;
   /**
    * The filter column beside a `beside-filters` grid, in px; by default the
-   * listing's own (`listingFilterColumnPx(resolved filters)`: the template's
-   * column, else its style's), 0 for a bar or drawer.
+   * listing's own (`listingFilterColumnPx(resolved filters)`), 0 for a bar or drawer.
    */
   filterColumnPx?: number;
 }
@@ -72,68 +85,111 @@ const {
   filterColumnPx: filterColumnOverride,
 } = Astro.props;
 
-// The card variant and its anatomy come from the resolved theme. The
-// standard card follows the theme's photo tokens; every other card its own
-// look (ratio, fit, radius, surface, type), whatever the template. Density
-// and the container width set the fluid grid the image `sizes` follow.
-const { resolved, layout } = await currentRequestTheme(Astro.locals);
-const variant = resolved.blocks.card.variant;
-const anatomy: ResolvedStorefrontCard = layout.productCard;
-const ratio = anatomy.imageRatio;
-const grid = productGridSpec(layout.grid, ratio);
-const containerWidth =
-  containerWidthOverride ?? buildStorefrontThemeTokens(resolved)["theme-container-width"]!;
-const loading = productCardImageLoading(
-  productGridFirstRow(grid, containerWidth, maxColumns),
-  { index, aboveFold },
-);
-// The listing's own column when it passes one (a category's listing template
-// can override the theme's filters), else the theme's for a grid beside them.
+const { resolved, layout, language } = await currentRequestTheme(Astro.locals);
+const card = layout.productCard;
+const copy = storefrontCopy(language).card;
+const grid = productGridSpec(layout.grid, card.imageRatio);
+const containerWidth = containerWidthOverride ?? buildStorefrontThemeTokens(resolved)["theme-container-width"]!;
+const loading = productCardImageLoading(productGridFirstRow(grid, containerWidth, maxColumns), { index, aboveFold });
 const filterColumnPx = filterColumnOverride
   ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
+// A contained photo is drawn inside a 6% margin (product-card.css), so it
+// asks for that much less; DPR-3 phones fetch about 2x pixels.
+const drawn = card.imageFit === "contain" ? 0.88 : 1;
 const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
-// Every card but standard (kept as it was): the photo's own width inside its
-// margin, and DPR 3 phones fetch about 2x pixels, so a card photo is never
-// much wider than drawn.
-const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
-// A fixed-width photo (the mall's) is that wide whatever the tile; the card
-// CSS draws the same number.
-const photoMaxPx = variant === "standard" ? undefined : CARD_PHOTO_MAX_PX[variant];
-const sizes = cardPhotoSizes(variant, slotSizes);
-const imageMaxWidth = photoMaxPx ? photoMaxPx * 2 : sizesOverride ? undefined : Math.ceil(
-  productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx)
-  * (variant === "standard" ? 3 : 2) * (1 - 2 * inset),
+const sizes = capPhoneSizesDensity(scaleSizes(slotSizes, drawn));
+const imageMaxWidth = sizesOverride ? undefined : Math.ceil(
+  productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx) * 2 * drawn,
 );
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,
-  hoverImage: anatomy.hoverImage,
-  quickBuy: anatomy.quickBuy,
+  hoverImage: card.hoverImage,
   imageMaxWidth,
   // Ratings show only while the store takes reviews and has a published one.
   ratings: resolved.facts.hasReviews,
 });
-// Intrinsic size in the card's own photo ratio (the box's CSS ratio), so the
-// photo never shifts the grid.
-const dimensions = variant === "standard"
-  ? CARD_IMAGE_DIMENSIONS[ratio]
-  : { width: 400, height: Math.round(400 / anatomy.look.image.ratio) };
+const { facts } = model;
+const TitleTag = headingLevel;
+const details = [facts.packSize, model.condition].filter(Boolean).join(" · ");
+const keySpecs = card.facts === "key-specs" ? facts.keySpecs : [];
+const swatches = card.facts === "swatches" ? facts.swatches : { items: [], more: 0 };
+const delivery = card.facts === "delivery" ? facts.delivery : null;
+const swatchWords = swatches.items.length > 0
+  ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(swatches.more)] : [])].join(", "))
+  : "";
 ---
 
-{
-  variant === "standard" ? (
-    <StandardCard model={model} ratio={ratio} sizes={sizes} loading={loading} headingLevel={headingLevel} />
-  ) : (
-    <AnatomyCard
-      variant={variant}
-      anatomy={anatomy}
-      model={model}
-      dimensions={dimensions}
-      productId={product.id}
-      showBuyNow={resolved.blocks.card.variant === "quick-add" && resolved.blocks.card.settings.showBuyNow === true}
-      sizes={sizes}
-      loading={loading}
-      headingLevel={headingLevel}
-    />
-  )
-}
+<div
+  data-theme-component="product-card"
+  class="product-card"
+  data-surface={card.surface}
+  data-fit={card.imageFit}
+  data-action={card.action}
+>
+  <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[card.imageRatio]} sizes={sizes} loading={loading}>
+    {(model.soldOut || model.percentOff) && (
+      <div class="product-card-badges">
+        {model.soldOut ? <Badge kind="sold-out" /> : <Badge kind="sale" label={model.percentOff} />}
+      </div>
+    )}
+    {card.action === "quick-add" && model.quickAddEligible && (
+      <a href={model.href} data-card-quick-add data-astro-prefetch="false" rel="nofollow" class="product-card-quick">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" /></svg>
+        <span class="sr-only">{copy.addToCart}: {model.name}</span>
+      </a>
+    )}
+    {card.action === "quick-add" && model.needsOptions && (
+      /* Options are chosen on the product page: the hint sits under the card link. */
+      <span aria-hidden="true" class="product-card-quick" data-card-action-hint>
+        <svg viewBox="0 0 24 24" width="20" height="20" data-dir-icon><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </span>
+    )}
+  </CardMedia>
+
+  <div class="product-card-body">
+    <TitleTag class="product-card-name">
+      <a href={model.href} class="product-card-link">{model.name}</a>
+    </TitleTag>
+    {details && <p class="product-card-meta" data-card-fact="details">{details}</p>}
+    {facts.rating && <Rating average={facts.rating.average} count={facts.rating.count} class="product-card-rating" />}
+    {keySpecs.length > 0 && (
+      <ul class="product-card-specs" data-card-fact="key-specs">
+        {keySpecs.map((spec) => <li>{spec}</li>)}
+      </ul>
+    )}
+    {swatches.items.length > 0 && (
+      <p class="product-card-swatches" data-card-fact="swatches">
+        {swatches.items.map((swatch) => <span class="product-card-swatch" style={`--swatch:${swatch.colour}`} aria-hidden="true"></span>)}
+        {swatches.more > 0 && <span class="product-card-swatch-more" aria-hidden="true">+{swatches.more}</span>}
+        <span class="sr-only">{swatchWords}</span>
+      </p>
+    )}
+    {delivery && (
+      <p class="product-card-meta" data-card-fact="delivery">
+        {delivery.free ? copy.freeDelivery : copy.deliveryFrom(delivery.fee)}
+      </p>
+    )}
+    <div class="product-card-foot">
+      <Price amount={model.price.current} compareAt={model.price.regular} from={model.price.from} />
+      {card.action === "full" && (
+        model.quickAddEligible ? (
+          <Button href={model.href} variant="secondary" size="sm" full class="product-card-action" data-card-quick-add data-astro-prefetch="false" rel="nofollow">
+            {copy.addToCart}<span class="sr-only">: {model.name}</span>
+          </Button>
+        ) : (
+          /* Options or a sold-out product: the product page is the next step, under the card link. */
+          <Button as="span" aria-hidden="true" variant="secondary" size="sm" full class="product-card-action" data-card-action-hint>
+            {model.needsOptions ? copy.chooseOptions : copy.viewProduct}
+          </Button>
+        )
+      )}
+    </div>
+  </div>
+  {card.action !== "none" && (
+    <script>
+      import { initQuickAddCards } from "./scripts/quick-add-card";
+      initQuickAddCards();
+    </script>
+  )}
+</div>

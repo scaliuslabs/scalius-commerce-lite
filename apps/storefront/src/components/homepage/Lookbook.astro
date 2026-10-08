@@ -8,7 +8,6 @@ import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import ProductCard from "@/components/cards/ProductCard.astro";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -24,10 +23,8 @@ interface Props {
 
 const { section, title, href, products, photo, currencySymbol, currencyCode, aboveFold } = Astro.props;
 const headingId = `home-${section.id}-title`;
-const { resolved } = await currentRequestTheme(Astro.locals);
 // `photo: square` is Fabrilife's square photo in a 1:2 split; `tall` fills the grid's height.
 const fashionPhoto = Boolean(photo) && section.settings.photo === "square";
-const compactFashion = fashionPhoto && resolved.blocks.card.variant === "fashion-value";
 // Eight tiles at most: with more to see, the eighth is "View more".
 const viewMore = Boolean(href) && products.length >= 8;
 const shown = products.slice(0, viewMore ? 7 : 8);
@@ -59,7 +56,7 @@ const shown = products.slice(0, viewMore ? 7 : 8);
       )}
       <div class="min-w-0">
         {!photo && <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{title}</h2>}
-        <ul class="grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-3" data-lookbook-compact={compactFashion ? "" : undefined}>
+        <ul class="grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-3">
           {shown.map((product, index) => (
             <li class="min-w-0">
               <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
@@ -78,31 +75,3 @@ const shown = products.slice(0, viewMore ? 7 : 8);
     </div>
   </div>
 </section>
-
-<style>
-  /* Fabrilife's photo-led lookbooks use thumbnails with a price. The title
-     remains in the accessibility tree, and its stretched link stays clickable. */
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .pc-title) {
-    display: block;
-    overflow: visible;
-    font-size: 0;
-    line-height: 0;
-    height: 0;
-    margin: 0;
-  }
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .pc-savings),
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .pc-price-regular),
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .pc-discount),
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .product-card-badge[data-card-discount]),
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .product-card-round-action),
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] [data-card-action-hint]) {
-    display: none;
-  }
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .product-card-stack) {
-    padding: 0.25rem 0;
-  }
-  [data-lookbook-compact] :global(.product-card[data-card-variant="fashion-value"] .pc-price) {
-    font-size: 0.75rem;
-    line-height: 1.25rem;
-  }
-</style>
