@@ -10,6 +10,7 @@ import {
   getApiV1AdminReviewsSummary,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
+import { pollWhileOffline } from "../admin-query-client";
 
 export type AdminReviewQuery = Omit<ApiQuery<typeof getApiV1AdminReviews>, "cursor">;
 export type AdminReview = ApiResult<typeof getApiV1AdminReviews>["items"][number];
@@ -28,6 +29,7 @@ export const reviewKeys = {
   settings: () => [...reviewKeys.all, "settings"] as const,
 };
 
+/** Live through the realtime hub; this poll runs only while it is unreachable. */
 const SUMMARY_POLL_MS = 60_000;
 
 /** Counts per status (the tabs and the sidebar badge), plus one product's stats when asked. */
@@ -36,7 +38,7 @@ export const reviewSummaryQueryOptions = (productId?: string) =>
     queryKey: reviewKeys.summary(productId),
     queryFn: async (): Promise<AdminReviewSummary> =>
       apiData(getApiV1AdminReviewsSummary(productId ? { query: { productId } } : undefined)),
-    refetchInterval: SUMMARY_POLL_MS,
+    refetchInterval: pollWhileOffline(SUMMARY_POLL_MS),
     staleTime: 30_000,
   });
 

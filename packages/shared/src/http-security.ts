@@ -43,6 +43,9 @@ export function applyBaselineSecurityHeaders(
   response: Response,
   options: { frameProtection?: FrameProtection } = {},
 ): Response {
+  // A WebSocket handshake (the realtime hub): its 101 cannot be rebuilt
+  // without losing the socket, and it carries no document to protect.
+  if (response.status === 101) return response;
   const headers = new Headers(response.headers);
   const url = new URL(request.url);
 

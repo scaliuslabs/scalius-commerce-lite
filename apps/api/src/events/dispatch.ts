@@ -17,7 +17,7 @@ import {
 } from "@scalius/core/modules/events";
 import { sendWebhookDisabledNotice } from "@scalius/core/modules/notifications";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { eventsQueue } from "./flush";
+import { eventsQueue, realtimeFlushObserver } from "./flush";
 import { createWebhookRepresentationResolver } from "./representations";
 import { API_EVENT_FAN_OUT_TARGETS } from "./targets";
 
@@ -88,11 +88,14 @@ export async function runScheduledEventMaintenance(db: Database, env: Env): Prom
   pluginDeliveries: { scanned: number; enqueued: number; failed: number; skipped: number };
 }> {
   const { flushDuePluginEventDeliveries, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT } = await import("@scalius/core/modules/plugins");
+  // Expiries and other sweeps write orders too: the hub hears them as after a request.
+  const realtime = realtimeFlushObserver(env);
   const events = await flushPendingEventOutbox({
     db,
     queue: eventsQueue(env),
     targets: API_EVENT_FAN_OUT_TARGETS,
     limit: MAX_EVENT_FLUSH_LIMIT,
+    onFlushed: realtime.onFlushed,
   });
   const deliveries = await flushDueWebhookDeliveries({ db, queue: eventsQueue(env), limit: MAX_DELIVERY_FLUSH_LIMIT });
   const pluginDeliveries = await flushDuePluginEventDeliveries({ db, queue: eventsQueue(env), limit: MAX_PLUGIN_DELIVERY_FLUSH_LIMIT });

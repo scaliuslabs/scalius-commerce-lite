@@ -28,3 +28,21 @@ export function createAdminQueryClient() {
     },
   });
 }
+
+// Whether the realtime hub is reachable now (set by lib/realtime/store.ts),
+// for query options that poll only without it. Kept here, with the query
+// defaults the shell loads anyway, so the shell's badges add no chunk.
+let realtimeOpen = false;
+
+export function setRealtimeOpen(next: boolean): void {
+  realtimeOpen = next;
+}
+
+/**
+ * A refetch interval that applies only while the hub is unreachable (a proxy
+ * that blocks WebSockets, a hub outage): live notices replace polling, and
+ * the screen still catches up without them.
+ */
+export function pollWhileOffline(ms: number): () => number | false {
+  return () => (realtimeOpen ? false : ms);
+}

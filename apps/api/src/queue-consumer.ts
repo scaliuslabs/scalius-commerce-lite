@@ -21,6 +21,8 @@
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
 
+import { runWithReadObserver } from "@scalius/database/read-observer";
+import { createEventWriteObserver } from "./middleware/event-dispatch";
 import { getDb } from "@scalius/database/client";
 import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { CatalogQueueMessage } from "./utils/catalog-jobs";
@@ -282,7 +284,10 @@ export async function handleQueueBatch(
   // Urgent messages (OTP, payments, notifications) start before bulk ones
   // (renditions, catalogue refreshes) whatever order the batch arrived in.
   const order = queueLaneOrder(batch.messages.map((message) => message.body));
-  const processed = await runSettledWithConcurrency(
+  // Notes evented writes and realtime tables (an inbound channel message, a
+  // review) so the hub hears them after the batch, as after a request.
+  const writes = createEventWriteObserver();
+  const processed = await runWithReadObserver(writes, () => runSettledWithConcurrency(
     order,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (index) => processQueueMessage(
@@ -291,7 +296,7 @@ export async function handleQueueBatch(
       env,
       executionCtx,
     ),
-  );
+  ));
   const results: Array<PromiseSettledResult<void>> = new Array(batch.messages.length);
   order.forEach((index, position) => { results[index] = processed[position]!; });
 
@@ -324,14 +329,22 @@ export async function handleQueueBatch(
   // fulfilments and stock: hand the event rows they produced to the queue
   // now. Other jobs write no evented table; the scheduled sweep is the
   // backstop either way.
+  // The flush also tells the realtime hub (one RPC, no read); a batch that
+  // wrote only a realtime table sends just that notice.
+  const tableTopics = [...writes.realtimeTopics];
+  let after: Promise<unknown> | null = null;
   if (batch.messages.some((msg) => EVENT_WRITING_MESSAGE_TYPES.has(String((msg.body as { type?: unknown }).type)))) {
-    const flush = import("./events/flush")
-      .then(({ flushEventsAfterWrite }) => flushEventsAfterWrite(db, env))
+    after = import("./events/flush")
+      .then(({ flushEventsAfterWrite }) => flushEventsAfterWrite(db, env, { tableTopics }))
       .catch((error: unknown) => {
         console.warn("[Queue] Event outbox flush failed; the scheduled sweep retries:", error instanceof Error ? error.message : "unknown error");
       });
-    if (executionCtx && typeof executionCtx.waitUntil === "function") executionCtx.waitUntil(flush);
-    else await flush;
+  } else if (tableTopics.length > 0) {
+    after = import("./realtime/publish").then(({ publishRealtime, tableChanges }) => publishRealtime(env, tableChanges(tableTopics)));
+  }
+  if (after) {
+    if (executionCtx && typeof executionCtx.waitUntil === "function") executionCtx.waitUntil(after);
+    else await after;
   }
 }
 

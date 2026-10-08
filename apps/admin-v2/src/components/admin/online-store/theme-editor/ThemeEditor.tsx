@@ -15,6 +15,8 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
+import { PresenceAvatars } from "~/components/admin/realtime/PresenceView";
+import { useEditorPresence } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
@@ -106,7 +108,7 @@ import { themeVersionDocumentQuery } from "./theme-history-queries";
 import { useBlockName, useEditorTree, useSectionName } from "./use-editor-tree";
 import { usePreview } from "./use-preview";
 import { usePreviewSync } from "./use-preview-sync";
-import { useThemeDraft } from "./use-theme-draft";
+import { THEME_PRESENCE_KEY, useThemeDraft } from "./use-theme-draft";
 
 type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
@@ -202,6 +204,16 @@ export function ThemeEditor({ workspace, refetch }: {
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
   const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
   const draft = useThemeDraft({ workspace, refetch, canEdit, appSections, appBlocks });
+  // Who else is in the editor; a save of theirs loads at once while this one has nothing unsaved
+  // (with unsaved edits, the next autosave meets their revision and the conflict names them).
+  const editors = useEditorPresence(THEME_PRESENCE_KEY, draft.saved.revision);
+  const { remoteSave, dismissRemoteSave } = editors;
+  useEffect(() => {
+    if (!remoteSave) return;
+    dismissRemoteSave();
+    if (!draft.unsavedEdits && !draft.busy) void draft.reload(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to the notice only
+  }, [remoteSave]);
   const theme = draft.working;
   const storeShape = workspace.storeShape;
   const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
@@ -807,7 +819,12 @@ export function ThemeEditor({ workspace, refetch }: {
             className={phone ? "w-full" : "w-44"}
           />
         )}
-        market={<MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />}
+        market={(
+          <>
+            {phone ? null : <PresenceAvatars others={editors.others} />}
+            <MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />
+          </>
+        )}
         device={device}
         onDevice={(next) => setDevice(next)}
         desktopWidth={view.desktopWidth}

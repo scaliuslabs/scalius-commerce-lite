@@ -28,6 +28,16 @@ import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pageHead } from "~/i18n/page-titles";
 import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
+import { EditorPresence } from "~/lib/realtime/store";
+import { announceSave, presenceKey } from "~/lib/realtime/store";
+
+/**
+ * Fields that change together under the aggregate revision: the product's
+ * own price and discount, and the variant composition (which carries the
+ * prices once the product has options). Never mixed from two saves.
+ */
+const PRICING_GROUP = ["price", "discountType", "discountPercentage", "discountAmount", "variants"] as const;
+const VARIANTS_FIELD = "variants";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -217,6 +227,71 @@ function ProductEditor({ productId, initialProduct, categories }: {
    * top, still unsaved. When the other save changed the same fields (or the variants the
    * merchant is editing), nothing is applied; the dialog names those fields instead.
    */
+  /**
+   * The save met a newer revision: merge the draft onto the other save
+   * (base = what this editor loaded, theirs = the latest, mine = the draft).
+   * Different fields combine; a field both changed goes to the side-by-side
+   * choice; a clash in the variants or sections opens the conflict dialog.
+   * Returns the revision to save at, or null.
+   */
+  const mergeOnConflict = useCallback(async (conflict: ProductRevisionConflict): Promise<number | null> => {
+    const reader = draftRef.current;
+    if (!reader || conflict.currentRevision === null) return null;
+    const latest = await queryClient.fetchQuery({ ...productQueryOptions(productId), staleTime: 0 }) as ProductDetail;
+    if (latest.deletedAt) return null;
+    const sections = await reader().prepareSectionsRebase();
+    const draft = reader();
+    const matrix = currentMatrix.current;
+    const before = { ...toFormValues(formSnapshot), [VARIANTS_FIELD]: variantsSignature(matrix.snapshot) };
+    const after = { ...toFormValues(latest), [VARIANTS_FIELD]: variantsSignature(latest) };
+    const mine: Record<string, unknown> = { ...before };
+    for (const key of draft.changed) mine[key] = draft.values[key];
+    // An unsaved variant draft counts as a change to the composition.
+    if (matrix.dirty) mine[VARIANTS_FIELD] = `${before[VARIANTS_FIELD]}:draft`;
+    const { clashRows, mergeDisplayValue, mergeWords, requestMergeChoice, threeWayMerge } = await import("~/lib/merge-document");
+    const result = threeWayMerge(before, after, mine, { deep: false, coupled: { pricing: PRICING_GROUP } });
+    const blocked = sections.overlaps.length > 0 || result.clashes.some((clash) => clash.paths.includes(VARIANTS_FIELD));
+    const labels = result.clashes.flatMap((clash) => clash.paths.filter((path) => path !== VARIANTS_FIELD)
+      .map((path) => productFieldLabel(path as keyof ProductFormValues)));
+    const openDialog = () => {
+      setRevisionConflict(conflict);
+      setOverlap([...new Set([...sections.overlaps, ...labels, ...(blocked && matrix.dirty ? [translate(productMessages, "variants")] : [])])]);
+      setIsConflictOpen(true);
+    };
+    if (blocked) {
+      openDialog();
+      return null;
+    }
+    let keep: Array<keyof ProductFormValues> = draft.changed;
+    if (result.clashes.length > 0) {
+      const words = mergeWords();
+      const show = (path: string, value: unknown) => path === "categoryId"
+        ? categories.find((category) => category.id === value)?.name ?? mergeDisplayValue(value, words)
+        : mergeDisplayValue(value, words);
+      const choices = await requestMergeChoice({
+        rows: clashRows(result.clashes, (path) => productFieldLabel(path as keyof ProductFormValues), show),
+      });
+      if (!choices) {
+        openDialog();
+        return null;
+      }
+      const theirsKeys = new Set(result.clashes.filter((clash) => choices[clash.key] !== "mine").flatMap((clash) => clash.paths));
+      keep = draft.changed.filter((key) => !theirsKeys.has(key));
+    }
+    setFormSnapshot(latest);
+    setAggregateRevision(latest.aggregateRevision);
+    sections.apply();
+    draft.rebase(toFormValues(latest), keep);
+    costsRef.current.sync(latest.variants);
+    if (!matrix.dirty) {
+      setMatrixSnapshot(latest);
+      setMatrixGeneration((value) => value + 1);
+    }
+    setRevisionConflict(null);
+    setOverlap(null);
+    return latest.aggregateRevision;
+  }, [categories, formSnapshot, productId, queryClient]);
+
   const applyMineToLatest = useCallback(async () => {
     if (!draftRef.current) return;
     setIsReloadingLatest(true);
@@ -274,9 +349,13 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setOverlap(null);
           setIsConflictOpen(true);
         }}
+        resolveRevisionConflict={mergeOnConflict}
         onOpenRevisionConflict={() => setIsConflictOpen(true)}
         draftRef={draftRef}
-        onProductSaved={handleProductSaved}
+        onProductSaved={(values, revision) => {
+          handleProductSaved(values, revision);
+          announceSave(presenceKey("product", productId), revision);
+        }}
         optionMatrixIssue={matrixIssue}
         optionMatrixDirty={matrixDirty}
         optionMatrixSaving={matrixSaving}
@@ -284,6 +363,14 @@ function ProductEditor({ productId, initialProduct, categories }: {
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}
+        presence={(dirty) => (
+          <EditorPresence
+            presenceKey={presenceKey("product", productId)}
+            revision={aggregateRevision}
+            dirty={dirty}
+            onLoadLatest={() => void (dirty ? applyMineToLatest() : reloadLatest())}
+          />
+        )}
         onDiscard={() => {
           if (revisionConflict) {
             void reloadLatest();

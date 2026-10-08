@@ -43,7 +43,7 @@ export default defineConfig({
       },
       load(id) {
         if (id === resolvedCloudflareWorkersModuleId) {
-          return "export const env = {}; export class WorkerEntrypoint {};";
+          return "export const env = {}; export class WorkerEntrypoint {}; export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }";
         }
         return undefined;
       },

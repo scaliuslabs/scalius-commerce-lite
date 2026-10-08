@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { presenceKey } from "~/lib/realtime/store";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -183,6 +184,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
 
   return (
     <FormContainer
+      presenceKey={isEdit && defaultValues?.id ? presenceKey("page", defaultValues.id) : null}
       heading={isEdit ? defaultValues?.title || t(isArticle ? "blogPost" : "page") : t(isArticle ? "addBlogPost" : "addPage")}
       unsavedLabel={isEdit ? undefined : t(isArticle ? "unsavedBlogPost" : "unsavedPage")}
       savedMessage={t(isEdit ? (isArticle ? "blogPostSaved" : "pageSaved") : isArticle ? "blogPostCreated" : "pageCreated")}

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -43,7 +44,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   // The return a dialog acts on; kept after closing so the dialog can animate out.
   const [target, setTarget] = useState<OrderReturnDto | null>(null);
   const targetKey = target ? `${target.id}:${target.version}` : "none";
-  const query = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS, refetchInterval: 30_000 });
+  const query = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS, refetchInterval: pollWhileOffline(30_000) });
   const returns = query.data?.returns ?? EMPTY_RETURNS;
   const itemsById = useMemo(() => new Map(order.items.map((item) => [item.id, item])), [order.items]);
   const remaining = useMemo(() => getRemainingReturnableQuantities(order.items, returns), [order.items, returns]);

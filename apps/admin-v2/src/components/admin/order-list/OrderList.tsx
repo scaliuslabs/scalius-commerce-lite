@@ -45,7 +45,7 @@ import {
 import { OrderListToolbar } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
-import { useOrderAutoRefresh } from "./use-order-auto-refresh";
+import { useLiveOrderList } from "./use-live-order-list";
 
 // The dialogs load the first time they open: the cancel confirmation (the
 // order page's restock and reason copy) when Cancelled is chosen from a row's
@@ -169,7 +169,12 @@ export function OrderList({
     actionDialogOpen: actions.dialogOpen || exportDialog.open,
     mutationInFlight: actions.busy,
   });
-  const autoRefresh = useOrderAutoRefresh({ refetch, isFetching, paused: refreshPause !== null });
+  const live = useLiveOrderList({
+    refetch,
+    paused: refreshPause !== null,
+    visibleIds: pageRows.map((row) => row.original.id),
+    onShowLatest: cursored || search.page > 1 ? () => onChange({ page: 1, ...NO_CURSOR }) : undefined,
+  });
 
   const mobileCardRenderer = useCallback(
     (row: Row<OrderListItem>) => (
@@ -346,7 +351,7 @@ export function OrderList({
             onChange={onChange}
             appFilterable={appList.filterable.length > 0}
             selectedCount={selectedRows.length}
-            autoRefresh={{ ...autoRefresh, pause: refreshPause }}
+            live={live}
             bulkActions={
               <div className="hidden flex-wrap items-center gap-2 md:flex">
                 <span className="text-body font-medium">

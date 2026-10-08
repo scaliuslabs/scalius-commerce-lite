@@ -79,6 +79,7 @@ export default defineConfig(({ command }) => ({
       "/api/v1": { target: API_DEV_ORIGIN, changeOrigin: true },
       "/api/auth": { target: API_DEV_ORIGIN, changeOrigin: true },
       "/api/scanner-token": { target: API_DEV_ORIGIN, changeOrigin: true },
+      "/api/realtime": { target: API_DEV_ORIGIN, changeOrigin: true, ws: true },
     },
   },
   resolve: {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Inbox, Search } from "lucide-react";
@@ -63,7 +64,7 @@ export function InboxList({
     queryFn: ({ pageParam }) => apiData(getApiV1AdminConversations({ query: { ...query, cursor: pageParam } })),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    refetchInterval: 30_000,
+    refetchInterval: pollWhileOffline(30_000),
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const filtered = Boolean(search.q) || assignee !== "all" || subject !== "all";

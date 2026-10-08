@@ -1,4 +1,5 @@
 import React from "react";
+import { presenceKey } from "~/lib/realtime/store";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";
@@ -244,6 +245,7 @@ export function CollectionForm({
 
   return (
     <FormContainer
+      presenceKey={isEdit && defaultValues?.id ? presenceKey("collection", defaultValues.id) : null}
       heading={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
       actions={isEdit && defaultValues?.id ? <AppActionsMenu target="collection" id={defaultValues.id} extraItems={translateItem} /> : undefined}
       isSubmitting={isSubmitting}

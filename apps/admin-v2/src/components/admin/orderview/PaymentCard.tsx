@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -148,7 +149,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     ...orderPaymentsQueryOptions(order.id),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
+    // Live through the realtime hub; polls only while it is unreachable.
     refetchInterval: (query) => {
+      if (pollWhileOffline(30_000)() === false) return false;
       const data = query.state.data;
       const busy = data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing)
         || Boolean(data?.activeRefundOperation?.active)

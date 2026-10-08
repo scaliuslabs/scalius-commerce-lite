@@ -24,6 +24,18 @@
   "observability": {
     "enabled": true
   },
+  // The realtime hub: one SQLite-backed Durable Object per store (Workers
+  // Free and Paid) that fans change notices, presence and save notices out to
+  // staff dashboards over hibernatable WebSockets. It stores nothing; the
+  // relational database stays the authority (docs/platform/REALTIME.md).
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REALTIME_HUB",
+        "class_name": "RealtimeHub"
+      }
+    ]
+  },
   // Checkout commits with one guarded database batch per order; the retired
   // checkout coordinator Durable Object is deleted with its stored state.
   "migrations": [
@@ -34,6 +46,10 @@
     {
       "tag": "checkout-coordinator-v2-delete",
       "deleted_classes": ["CheckoutCoordinator"]
+    },
+    {
+      "tag": "realtime-hub-v1",
+      "new_sqlite_classes": ["RealtimeHub"]
     }
   ],
   "d1_databases": [

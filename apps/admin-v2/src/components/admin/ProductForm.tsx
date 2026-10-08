@@ -103,6 +103,8 @@ interface ProductFormProps {
   revisionConflict?: ProductRevisionConflict | null;
   onAggregateRevisionChange?: (revision: number) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  /** Merges a stale save onto the other one and returns the revision to retry at (useProductSubmit). */
+  resolveRevisionConflict?: (conflict: ProductRevisionConflict) => Promise<number | null>;
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   optionManager: (context: {
@@ -131,14 +133,19 @@ interface ProductFormProps {
   customizationSchemaInvalid?: boolean;
   /** The saved brand's name, for the brand picker. */
   brandName?: string | null;
+  /** Who else is editing and their saves (realtime presence), given whether this page has unsaved changes. */
+  presence?: (dirty: boolean) => React.ReactNode;
 }
 
 /** Reads the unsaved fields and rebases without unmounting the section or SKU editors. */
 export type ProductDraftReader = () => {
   changed: Array<keyof ProductFormValues>;
   changedSections: string[];
+  /** The draft as it stands (for the three-way merge). */
+  values: ProductFormValues;
   prepareSectionsRebase: ReturnType<typeof useProductSections>["prepareRebase"];
-  rebase: (latest: ProductFormValues) => void;
+  /** Puts the latest saved values under the draft; `keep` names the changed fields to keep (all by default). */
+  rebase: (latest: ProductFormValues, keep?: ReadonlyArray<keyof ProductFormValues>) => void;
 };
 
 /** The one product page: add, edit, or view (without products.edit). */
@@ -175,6 +182,7 @@ function ProductEditor({
   revisionConflict = null,
   onAggregateRevisionChange,
   onRevisionConflict,
+  resolveRevisionConflict,
   onOpenRevisionConflict,
   onProductSaved,
   optionManager,
@@ -188,6 +196,7 @@ function ProductEditor({
   onDiscard,
   customizationSchemaInvalid = false,
   brandName = null,
+  presence,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -255,6 +264,7 @@ function ProductEditor({
     aggregateRevision,
     onAggregateRevisionChange,
     onRevisionConflict,
+    resolveRevisionConflict,
     onProductSaved,
     createComposition,
     onVariantIssue: (path, message) => matrixRef.current?.showServerIssue(path, message) ?? null,
@@ -269,11 +279,13 @@ function ProductEditor({
     draftRef.current = () => ({
       changedSections: sections.dirtyHandles().map((handle) => handle.label),
       prepareSectionsRebase: sections.prepareRebase,
-      rebase: (latest) => {
+      values: form.getValues(),
+      rebase: (latest, keep) => {
         const values = form.getValues();
         const changed = Object.keys(form.formState.dirtyFields) as Array<keyof ProductFormValues>;
         form.reset({ ...form.formState.defaultValues, ...latest });
         for (const key of changed) {
+          if (keep && !keep.includes(key)) continue;
           form.setValue(key, values[key] as never, { shouldDirty: true });
         }
       },
@@ -423,6 +435,7 @@ function ProductEditor({
         ) : null}
       />
       {readOnly ? <ReadOnlyNotice /> : null}
+      {presence?.(productFormDirty || optionMatrixDirty || sections.dirty)}
       <Form {...form}>
         <form
           method="post"

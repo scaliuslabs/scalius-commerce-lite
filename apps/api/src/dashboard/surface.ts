@@ -9,6 +9,7 @@
  *
  *   <base>/api/auth/*          Better Auth + route-guard state (./auth.ts)
  *   <base>/api/scanner-token   scanner cookie exchange (./scanner-session.ts)
+ *   <base>/api/realtime        staff WebSocket to the realtime hub (../realtime/connect.ts)
  *   <base>/api/v1/*            the normal API, with the base path removed
  *   <base>/<file.ext>          a static file below the base path
  *   <base>/<route>             the SPA shell (index.html)
@@ -124,6 +125,10 @@ export async function routeDashboardRequest(
     return handleDashboardAuthRequest(request, env, path, basePath);
   }
   if (path === "/api/scanner-token") return handleScannerSessionRequest(request, env);
+  if (path === "/api/realtime") {
+    const { handleRealtimeConnect } = await import("../realtime/connect");
+    return handleRealtimeConnect(request, env);
+  }
   if (path.startsWith("/api/")) return notFound();
   return serveStatic(request, env, path, basePath);
 }

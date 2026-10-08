@@ -10,7 +10,7 @@ import { buildAgentOperationManifest, type AgentOperationManifestEntry } from ".
 import type { AgentOAuthProps, AgentPrincipal } from "./types";
 
 const state = vi.hoisted(() => ({ operations: [] as AgentOperationManifestEntry[], principal: null as AgentPrincipal | null, props: null as AgentOAuthProps | null }));
-vi.mock("cloudflare:workers", () => ({ WorkerEntrypoint: class {} }));
+vi.mock("cloudflare:workers", () => ({ DurableObject: class {}, WorkerEntrypoint: class {} }));
 vi.mock("agents/mcp/server", () => ({ createMcpHandler: vi.fn(), getMcpAuthContext: () => ({ props: state.props }) }));
 vi.mock("./principal", () => ({ resolveAgentPrincipalFromBearer: vi.fn(async () => state.principal), resolveAgentPrincipalFromGrant: vi.fn(async () => state.principal) }));
 vi.mock("./backend", () => ({ loadAgentAccessBackend: vi.fn(async () => ({ resolvePrincipal: vi.fn(async () => state.principal), authorizeOperation: vi.fn(async () => true), writeAudit: vi.fn(async () => undefined) })) }));

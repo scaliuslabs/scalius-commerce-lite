@@ -22,7 +22,6 @@ import {
   paymentStatusLabel,
 } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
-import type { OrderRefreshPause } from "./order-bulk-actions";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
@@ -64,7 +63,8 @@ interface OrderListToolbarProps {
   appFilterable?: boolean;
   selectedCount: number;
   bulkActions: ReactNode;
-  autoRefresh: { enabled: boolean; toggle: () => void; pause: OrderRefreshPause | null };
+  /** The live list's offer to load new orders or changes (use-live-order-list.ts). */
+  live: { newCount: number; stale: boolean; showLatest: () => void };
 }
 
 function FilterSelect({
@@ -155,7 +155,7 @@ function DateRangeFilter({
   );
 }
 
-/** One row: search, Filters, sort and auto-refresh; the filter fields open below it. */
+/** One row: search, Filters, sort and the live list's "new orders" offer; the filter fields open below it. */
 export function OrderListToolbar({
   search,
   term,
@@ -164,7 +164,7 @@ export function OrderListToolbar({
   appFilterable = false,
   selectedCount,
   bulkActions,
-  autoRefresh,
+  live,
 }: OrderListToolbarProps) {
   const t = useMessages(orderListMessages);
   const to = useMessages(orderMessages);
@@ -205,15 +205,15 @@ export function OrderListToolbar({
               }}
               options={sortOptions.map((option) => ({ value: option, label: t(`sort.${option}`) }))}
             />
-            <Button
-              variant={autoRefresh.enabled ? "secondary" : "ghost"}
-              aria-pressed={autoRefresh.enabled}
-              title={autoRefresh.enabled && autoRefresh.pause ? t(`pause.${autoRefresh.pause}`) : undefined}
-              onClick={autoRefresh.toggle}
-            >
-              <RefreshCw className="h-4 w-4" />
-              {t("autoRefresh")}
-            </Button>
+            {/* Polite and still: the offer appears, it never flashes or moves rows. */}
+            <span aria-live="polite" className="contents">
+              {live.newCount > 0 || live.stale ? (
+                <Button variant="secondary" onClick={live.showLatest}>
+                  <RefreshCw className="h-4 w-4" />
+                  {live.newCount > 0 ? t("newOrders", { count: live.newCount }) : t("ordersUpdated")}
+                </Button>
+              ) : null}
+            </span>
           </div>
         }
       />

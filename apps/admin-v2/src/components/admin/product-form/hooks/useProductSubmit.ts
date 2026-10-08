@@ -48,6 +48,12 @@ interface UseProductSubmitOptions {
   aggregateRevision?: number;
   onAggregateRevisionChange?: (revision: number) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  /**
+   * Merges the draft onto the other save (three-way, lib/three-way-merge.ts)
+   * and returns the revision to save at, or null when it could not (a real
+   * clash the merchant left open, a deleted product). The save then retries once.
+   */
+  resolveRevisionConflict?: (conflict: ProductRevisionConflict) => Promise<number | null>;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   createComposition?: ProductCreateComposition | null;
   /** Marks a rejected variant/SKU field in the variant editor; returns its banner line. */
@@ -90,6 +96,7 @@ export function useProductSubmit({
   aggregateRevision,
   onAggregateRevisionChange,
   onRevisionConflict,
+  resolveRevisionConflict,
   onProductSaved,
   createComposition,
   onVariantIssue,
@@ -239,7 +246,19 @@ export function useProductSubmit({
       pendingComposition.current = composition;
       revision = (await mutation.mutateAsync({ values, expectedAggregateRevision, composition })).aggregateRevision;
     } catch (error) {
-      return explain(error, values);
+      const conflict = isEdit && resolveRevisionConflict ? readProductRevisionConflict(error) : null;
+      if (!conflict || !resolveRevisionConflict) return explain(error, values);
+      // Someone saved first: combine the two saves and try once more at their revision.
+      const next = await resolveRevisionConflict(conflict).catch(() => null);
+      if (next === null) throw new SaveNotCompleted(t("changedElsewhere"));
+      try {
+        const merged = form.getValues();
+        sent.current = copyValues(merged);
+        revision = (await mutation.mutateAsync({ values: merged, expectedAggregateRevision: next, composition })).aggregateRevision;
+      } catch (retryError) {
+        return explain(retryError, values);
+      }
+      void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
     }
     await afterPartsSaved(composition, revision);
     return revision;

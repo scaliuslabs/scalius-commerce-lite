@@ -6,6 +6,7 @@
  * honest status, a conflict that names who saved, and publishing,
  * restoring and discarding with restore points kept by the server.
  */
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,6 +31,9 @@ import { saveableDraft } from "./saveable-draft";
 import { themeVersionsKey } from "./theme-history-queries";
 
 type Theme = StorefrontThemeDocument;
+
+/** The theme draft is one document: everyone in the editor shares this presence key. */
+export const THEME_PRESENCE_KEY = presenceKey("theme", "draft");
 
 /** How long the editor waits after the last edit before saving the draft. */
 export const AUTOSAVE_DELAY_MS = 800;
@@ -116,6 +120,8 @@ export function useThemeDraft({ workspace, refetch, canEdit, appSections, appBlo
       setSaved({ theme: sending, revision: result.revision, basePublishedRevision: result.basePublishedRevision });
       setLastSent(sending);
       setFailure(null);
+      // The other people in the editor hear it at once (realtime presence).
+      announceSave(THEME_PRESENCE_KEY, result.revision);
       return true;
     } catch (error) {
       if (isAdminApiConflictError(error)) void noteConflict();

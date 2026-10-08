@@ -25,6 +25,7 @@ function mockRuntimeApps(loaded: Record<RuntimeAppName, boolean>) {
 }
 
 vi.mock("cloudflare:workers", () => ({
+  DurableObject: class {},
   WorkerEntrypoint: class {
     env: Env;
     ctx: ExecutionContext;
