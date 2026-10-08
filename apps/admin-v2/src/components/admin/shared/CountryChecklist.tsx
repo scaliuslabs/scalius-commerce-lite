@@ -64,14 +64,20 @@ export function CountryChecklist({
           value={search}
           disabled={disabled}
           placeholder={copy.search}
-          aria-invalid={invalid || undefined}
-          aria-describedby={describedBy}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
           className="ps-9"
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <div data-slot="country-list" className="h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+      {/* The list is what a missing country is wrong with, so it takes the error colour, not the search field above it. */}
+      <div
+        data-slot="country-list"
+        role="group"
+        aria-label={copy.search}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
+        className="h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border aria-invalid:border-destructive aria-invalid:bg-critical-surface"
+      >
         {matches.length === 0 ? (
           <p className="p-4 text-center text-body text-muted-foreground">{copy.none}</p>
         ) : (

@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { ChevronRight } from "lucide-react";
 import { formatList } from "@scalius/shared/locale-words";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
@@ -36,26 +37,28 @@ function SoleMarket({ market }: { market: Market }) {
     currency: market.currencyCode,
     language: languageName(market.presence?.locale ?? locale, locale),
   };
+  // The whole row opens the market (its currency, language and countries), with a chevron to say so.
   return (
-    <div className="space-y-1 px-4 py-3">
-      <p className="flex flex-wrap items-center gap-2">
-        <Link
-          to="/admin/settings/markets/$marketId"
-          params={{ marketId: market.id }}
-          aria-label={t("edit", { name: market.name })}
-          className="break-words text-body font-medium text-foreground hover:underline"
-        >
-          {market.name}
-        </Link>
-        <PrimaryBadge />
-      </p>
-      <p className="text-body text-muted-foreground">
-        {market.countries.length > 0
-          ? t("soleSummary", { ...vars, countries: formatList(market.countries.map(countryName), locale) })
-          : t("soleSummaryEverywhere", vars)}
-      </p>
-      <p className="text-body text-muted-foreground">{t("sellElsewhereHelp")}</p>
-    </div>
+    <Link
+      to="/admin/settings/markets/$marketId"
+      params={{ marketId: market.id }}
+      aria-label={t("edit", { name: market.name })}
+      className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      <span className="min-w-0 flex-1 space-y-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="break-words text-body font-medium text-foreground">{market.name}</span>
+          <PrimaryBadge />
+        </span>
+        <span className="block text-body text-muted-foreground">
+          {market.countries.length > 0
+            ? t("soleSummary", { ...vars, countries: formatList(market.countries.map(countryName), locale) })
+            : t("soleSummaryEverywhere", vars)}
+        </span>
+        <span className="block text-body text-muted-foreground">{t("sellElsewhereHelp")}</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -88,19 +91,20 @@ export function MarketsList() {
                   <TableHead>{t("countries")}</TableHead>
                   <TableHead>{t("currency")}</TableHead>
                   {showAddress ? <TableHead>{t("webAddress")}</TableHead> : null}
+                  <TableHead data-pin="actions"><span className="sr-only">{t("open")}</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.map((market) => {
                   const path = marketPresencePath(market);
                   return (
-                    <TableRow key={market.id}>
+                    <TableRow key={market.id} className="relative">
                       <TableCell data-pin="primary">
                         <span className="flex flex-wrap items-center gap-2">
                           <Link
                             to="/admin/settings/markets/$marketId"
                             params={{ marketId: market.id }}
-                            className="break-words font-medium text-foreground hover:underline"
+                            className="break-words font-medium text-foreground after:absolute after:inset-0 hover:underline"
                           >
                             {market.name}
                           </Link>
@@ -121,6 +125,9 @@ export function MarketsList() {
                           {market.isBackup || !path ? <span className="text-muted-foreground">—</span> : <code>{path}</code>}
                         </TableCell>
                       ) : null}
+                      <TableCell data-pin="actions">
+                        <ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" aria-hidden="true" />
+                      </TableCell>
                     </TableRow>
                   );
                 })}

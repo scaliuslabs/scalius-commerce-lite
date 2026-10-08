@@ -204,6 +204,34 @@ describe("markets settings", () => {
     expect(container.textContent).toContain("Primary");
     expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Sell in another country"]);
     expect(container.textContent).not.toContain("Web address");
+    // The whole row opens the market: one link around the name and the sentence, not only the name.
+    const rows = container.querySelectorAll("a[aria-label='Edit Bangladesh']");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.textContent).toContain("Your store sells in Bangladesh");
+  });
+
+  it("opens a market from anywhere on its row in the table", async () => {
+    await render(<MarketsList />);
+    await vi.waitFor(() => expect(container.querySelectorAll("tbody tr")).toHaveLength(2));
+    const link = container.querySelector("tbody tr a")!;
+    // The name's link covers the row (a stretched link), and the row ends in a chevron.
+    expect(link.className).toContain("after:inset-0");
+    expect(container.querySelector("tbody tr")!.className).toContain("relative");
+    expect(container.querySelector("tbody tr svg")).not.toBeNull();
+  });
+
+  it("puts the error colour on the country list, not on the search field above it", async () => {
+    await render(<MarketsList />);
+    await vi.waitFor(() => expect(container.querySelectorAll("tbody tr")).toHaveLength(2));
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Add market")!.click());
+    // The name's help is a sentence on its own.
+    expect(document.body.textContent).toContain("Only you and your staff see this name. For example, Europe.");
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>("button[form=market-create-form]")!.click();
+    });
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Add at least one country."));
+    expect(document.querySelector("#market-create-countries")!.getAttribute("aria-invalid")).toBeNull();
+    expect(document.querySelector("[data-slot=country-list]")!.getAttribute("aria-invalid")).toBe("true");
   });
 
   it("saves the backup market's price increment under the revision it loaded", async () => {
