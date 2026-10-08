@@ -1060,6 +1060,47 @@ describe("initCartFunctionality", () => {
     window.removeEventListener("delivery-location-unavailable", gone);
   });
 
+  it("retries an aborted cart check, never a refusal, and offers Try again when it still fails", async () => {
+    await initCartFunctionality();
+    const message = document.getElementById("cartValidationMessage")!;
+    const submit = document.getElementById("submitButton") as HTMLButtonElement;
+    const fetchMock = vi.mocked(fetch);
+
+    // The first call aborts in transit; the repeat answers.
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValueOnce(new DOMException("Aborted", "AbortError"));
+    fetchMock.mockResolvedValue(jsonResponse(VALID_CART));
+    const check = window.validateCartSnapshot?.();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(await check).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(message.textContent).toBe("");
+
+    // A 4xx answer is final: one call.
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(jsonResponse({ success: false, error: "Cart is not valid." }, 400));
+    await window.validateCartSnapshot?.();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(message.querySelector("[data-cart-validation-retry]")).toBeNull();
+
+    // Every try fails: the plain error, a working Try again, and checkout stays off.
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(jsonResponse({ success: false }, 503));
+    const failing = window.validateCartSnapshot?.();
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(await failing).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retry = message.querySelector<HTMLButtonElement>("[data-cart-validation-retry]")!;
+    expect(retry).not.toBeNull();
+    expect(submit.disabled).toBe(true);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(jsonResponse(VALID_CART));
+    retry.click();
+    await vi.waitFor(() => expect(message.classList).toContain("hidden"));
+    expect(submit.disabled).toBe(false);
+  });
+
   it("clears a delivery refusal once the buyer picks an option that applies", async () => {
     withAddress();
     taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(310));

@@ -110,6 +110,7 @@ import {
   isPendingCodeReason,
   renderDiscountPanel,
 } from "./discount-panel";
+import { fetchWithTransientRetry } from "@/lib/transient-fetch";
 import { currentPresence } from "@/lib/presence-url";
 
 /**
@@ -156,6 +157,11 @@ let cartValidationGlobalError = "";
 let cartValidationSummaryMessage = "";
 let cartQuantityLimits: Record<string, number | null> = {};
 let preserveCartValidationSummaryOnce = false;
+/** The check in flight; a newer cart change cancels it. */
+let cartValidationAbort: AbortController | null = null;
+/** True while the last check failed in transit, so the message offers "Try again". */
+let cartValidationRetryable = false;
+const CART_VALIDATION_TIMEOUT_MS = 10_000;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
@@ -242,6 +248,9 @@ function resetCartRuntimeListeners(): AbortSignal {
   cartStoreUnsubscribe = null;
   cartRuntimeAbortController?.abort();
   cartRuntimeAbortController = new AbortController();
+  cartValidationAbort?.abort();
+  cartValidationAbort = null;
+  cartValidationRetryable = false;
 
   for (const timer of [abandonedCheckoutTimer, cartValidationTimer, undoTimer]) {
     if (timer !== null) clearTimeout(timer);
@@ -901,6 +910,19 @@ function updateCartValidationMessage() {
   const rulesOnly = ruleBannerShown && !cartValidationGlobalError && cartIssueCount() === 0 && !codRefusedForCart();
   if (hasBlockingCartIssues() && !rulesOnly) {
     message.textContent = cartBlockedMessage();
+    if (cartValidationGlobalError && cartValidationRetryable) {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.dataset.cartValidationRetry = "true";
+      retry.className = "ms-1 font-medium underline underline-offset-2";
+      retry.textContent = activeCheckoutCopy().retryText;
+      retry.addEventListener("click", () => {
+        retry.disabled = true;
+        retry.textContent = activeCheckoutCopy().calculatingText;
+        void validateCartSnapshot({ renderUnchanged: false });
+      });
+      message.append(retry);
+    }
     if (!cartValidationGlobalError) {
       message.insertAdjacentHTML(
         "beforeend",
@@ -947,8 +969,12 @@ export async function validateCartSnapshot(
   const { items } = cartStore.get();
   const payloadItems = cartValidationPayload(items);
   const sequence = ++cartValidationSequence;
+  cartValidationAbort?.abort();
+  const controller = new AbortController();
+  cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
+    cartValidationRetryable = false;
     cartValidationIssues = {};
     validationRuleErrors = [];
     quoteRuleErrors = [];
@@ -960,16 +986,22 @@ export async function validateCartSnapshot(
   }
 
   try {
-    const response = await fetch("/api/checkout/validate-cart", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: payloadItems,
-        ...cartValidationDeliveryPayload(),
-        // The page's market prices the cart (MARKETS-DESIGN D5).
-        ...cartPresencePayload(),
-      }),
-    });
+    const response = await fetchWithTransientRetry(
+      fetch,
+      "/api/checkout/validate-cart",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: payloadItems,
+          ...cartValidationDeliveryPayload(),
+          // The page's market prices the cart (MARKETS-DESIGN D5).
+          ...cartPresencePayload(),
+        }),
+      },
+      QUOTE_RETRY_DELAYS_MS,
+      { timeoutMs: CART_VALIDATION_TIMEOUT_MS, signal: controller.signal },
+    );
     const json = (await response.json().catch(() => null)) as {
       success?: boolean;
       error?: string;
@@ -980,6 +1012,7 @@ export async function validateCartSnapshot(
     if (sequence !== cartValidationSequence) {
       return !hasBlockingCartIssues();
     }
+    cartValidationRetryable = false;
 
     // What the lines show: a check that changes none of it re-renders (and
     // re-prices) nothing, so choosing a delivery option quotes once.
@@ -1031,6 +1064,7 @@ export async function validateCartSnapshot(
           ? ""
           : (response.status < 500 ? json?.error || json?.details?.message : "") ||
             activeCheckoutCopy().cartAvailabilityFailedText;
+      cartValidationRetryable = Boolean(cartValidationGlobalError) && (response.status >= 500 || response.status === 429);
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
@@ -1043,7 +1077,10 @@ export async function validateCartSnapshot(
 
     return json.data?.valid !== false && !hasBlockingCartIssues();
   } catch (error) {
+    // A newer check (or a page reset) replaced this one; it speaks for itself.
+    if (sequence !== cartValidationSequence || controller.signal.aborted) return !hasBlockingCartIssues();
     console.warn("Could not refresh cart availability before checkout.", error);
+    cartValidationRetryable = true;
     cartValidationIssues = {};
     validationRuleErrors = [];
     clearCartValidationSummary();
@@ -1057,6 +1094,7 @@ export async function validateCartSnapshot(
 
 function scheduleCartValidation() {
   cartValidationSequence += 1;
+  cartValidationAbort?.abort();
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
     void validateCartSnapshot({ renderUnchanged: false });
