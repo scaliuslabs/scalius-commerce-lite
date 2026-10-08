@@ -79,7 +79,8 @@ export function safeReturnTo(value: string | null | undefined): string {
     !candidate.startsWith("/")
     || candidate.startsWith("//")
     || candidate.length > RETURN_TO_MAX
-    || /[\\\u0000-\u001f\u007f\s]/.test(candidate)
+    || /[\\\s]/.test(candidate)
+    || [...candidate].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)
     || candidate.split("?")[0]!.split("/").some((segment) => segment === ".." || segment === ".")
   ) {
     return IDENTITY_DEFAULT_RETURN_TO;

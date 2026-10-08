@@ -5,9 +5,10 @@
 // `mo:<definition id>` for each type, so any change to the type or its
 // entries refreshes it and nothing else does.
 //
-// Values are the stored canonical texts with their field types (money in
-// integer minor units, a media reference its media id): the storefront
-// formats them with the store's currency and looks images up by id.
+// Values are in the custom-field HTTP contract, as public custom fields are
+// (`customFieldWireValue`: money in decimal major units of the store currency,
+// integers as numbers, lists as arrays, a media reference its media id): the
+// storefront formats them and looks images up by id.
 
 import type { Database } from "@scalius/database/client";
 import { metaobjectDefinitions, metaobjectEntries } from "@scalius/database/schema";
@@ -16,7 +17,9 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   customFieldReferenceIds,
   customFieldReferenceTarget,
+  customFieldWireValue,
   type CustomFieldType,
+  type CustomFieldWireValue,
 } from "@scalius/shared/custom-fields";
 import {
   METAOBJECT_SECTION_ENTRIES_MAX,
@@ -25,6 +28,7 @@ import {
   type MetaobjectFieldDefinition,
 } from "@scalius/shared/metaobjects";
 import { deps } from "../../cache-deps";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 
 type BatchStatement = BatchItem<"sqlite">;
 
@@ -34,7 +38,7 @@ export interface StorefrontMetaobjectEntry {
   /** The display field's text, else the handle. */
   title: string;
   /** Every other field with a value, in the definition's order. */
-  fields: Array<{ key: string; name: string; type: CustomFieldType; value: string }>;
+  fields: Array<{ key: string; name: string; type: CustomFieldType; value: CustomFieldWireValue }>;
 }
 
 /** One content type a section shows, with its published entries. */
@@ -73,6 +77,7 @@ export function planStorefrontMetaobjects(
     name: metaobjectDefinitions.name,
     fields: metaobjectDefinitions.fields,
     displayField: metaobjectDefinitions.displayField,
+    currencyCode: storeCurrencyCodeSql(),
   }).from(metaobjectDefinitions)
     .where(and(sql`${metaobjectDefinitions.id} IN ${idSet}`, eq(metaobjectDefinitions.storefrontAccess, true)));
   // The first entries of each type in order: a window keeps the read bounded per type.
@@ -91,7 +96,7 @@ export function planStorefrontMetaobjects(
   return {
     statements: [definitions as unknown as BatchStatement, entries as unknown as BatchStatement],
     resolve(results, offset) {
-      const definitionRows = (results[offset] ?? []) as Array<{ id: string; name: string; fields: string; displayField: string | null }>;
+      const definitionRows = (results[offset] ?? []) as Array<{ id: string; name: string; fields: string; displayField: string | null; currencyCode: string | null }>;
       const entryRows = (results[offset + 1] ?? []) as Array<{ definitionId: string; handle: string; fields: string; rank: number }>;
       const mediaIds = new Set<string>();
       const types = ids.flatMap((id): StorefrontMetaobjectType[] => {
@@ -100,6 +105,7 @@ export function planStorefrontMetaobjects(
         const parsed = metaobjectFieldListSchema.safeParse(parseJson(row.fields));
         const fields: MetaobjectFieldDefinition[] = parsed.success ? parsed.data : [];
         const display = metaobjectDisplayField(fields, row.displayField);
+        const context = { decimalPlaces: storeDecimalPlacesFromCode(row.currencyCode), currencyCode: storeCurrencyFromCode(row.currencyCode) };
         const limit = limits.get(id) ?? METAOBJECT_SECTION_ENTRIES_MAX;
         const entries = entryRows.filter((entry) => entry.definitionId === id && Number(entry.rank) <= limit).map((entry) => {
           const stored = parseJson(entry.fields);
@@ -108,8 +114,11 @@ export function planStorefrontMetaobjects(
           const shown = fields.flatMap((field) => {
             const value = values[field.key];
             if (field.key === display || typeof value !== "string" || !value) return [];
+            // Not canonical for its type (never guessed at): left out.
+            const wire = customFieldWireValue(field.type, value, context);
+            if (wire === null) return [];
             if (customFieldReferenceTarget(field.type) === "media") for (const mediaId of customFieldReferenceIds(field.type, value)) mediaIds.add(mediaId);
-            return [{ key: field.key, name: field.name, type: field.type, value }];
+            return [{ key: field.key, name: field.name, type: field.type, value: wire }];
           });
           return { handle: entry.handle, title: title.slice(0, 200), fields: shown };
         });

@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => {
     runScheduledEventMaintenance: vi.fn(),
     runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
     runScheduledPluginMaintenance: vi.fn(),
-    refreshAppFxRates: vi.fn(async () => ({ markets: 0, changed: 0, failed: 0 })),
   };
 });
 
@@ -118,10 +117,6 @@ vi.mock("./events/dispatch", () => ({
 
 vi.mock("./plugins/scheduled", () => ({
   runScheduledPluginMaintenance: mocks.runScheduledPluginMaintenance,
-}));
-
-vi.mock("./plugins/providers/fx", () => ({
-  refreshAppFxRates: mocks.refreshAppFxRates,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({
@@ -224,7 +219,7 @@ describe("runScheduledMaintenance", () => {
       pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 },
     });
     mocks.runScheduledPluginMaintenance.mockResolvedValue({
-      bundled: { installed: [], updated: [], removed: [], failed: [] },
+      bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false },
       cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 },
       prunedCronRuns: 0,
     });
@@ -828,7 +823,7 @@ describe("the sweep rotation", () => {
     mocks.reconcileExternalRefundWebhooks.mockResolvedValue({ refundNotifications: [], scanned: 0, imported: 0, finalized: 0, skipped: 0, deferred: 0, errors: [], limit: 1, hasMore: false });
     mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({ scanned: 0, failed: 0, limit: 5, hasMore: false });
     mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0 }, deliveries: { scanned: 0, enqueued: 0 }, pluginDeliveries: { scanned: 0, enqueued: 0 }, pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 } });
-    mocks.runScheduledPluginMaintenance.mockResolvedValue({ bundled: { installed: [], updated: [], removed: [], failed: [] }, cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 }, prunedCronRuns: 0 });
+    mocks.runScheduledPluginMaintenance.mockResolvedValue({ bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false }, cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 }, prunedCronRuns: 0 });
 
     // Slice 0 (inventory, refunds, stale webhooks) on tick 0; nothing of slices 1-3.
     await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_000) });

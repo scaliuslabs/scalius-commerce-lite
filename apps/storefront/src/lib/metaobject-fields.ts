@@ -6,8 +6,8 @@
  * attribute. Product, variant, collection and JSON fields are not shown
  * (v1): they have no buyer-facing form without more reads.
  */
-import { fromMinor } from "@scalius/shared/money";
-import { formatMoney, getDecimalPlaces } from "@/lib/currency";
+import { formatDateTime } from "@scalius/shared/locale-format";
+import { formatMoney } from "@/lib/currency";
 import type { HomepageMediaAsset, HomepageMetaobjectField } from "@/lib/api/storefront";
 import type { NewsletterLanguage } from "@/lib/newsletter-copy";
 
@@ -77,24 +77,31 @@ function formatDate(value: string, language: NewsletterLanguage, withTime: boole
   if (!Number.isFinite(time)) return null;
   // The instant is shown in UTC: a date has no zone, and a date and time names the zone it is in.
   try {
-    const text = new Intl.DateTimeFormat(WORDS[language].locale, withTime
+    const text = formatDateTime(new Date(time), WORDS[language].locale, withTime
       ? { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }
-      : { dateStyle: "long", timeZone: "UTC" }).format(new Date(time));
+      : { dateStyle: "long", timeZone: "UTC" });
     return withTime ? `${text} UTC` : text;
   } catch {
     return null;
   }
 }
 
-function itemPart(type: string, value: string, context: MetaobjectFieldContext): MetaobjectPart | null {
+function itemPart(type: string, raw: unknown, context: MetaobjectFieldContext): MetaobjectPart | null {
+  // The API sends the custom-field HTTP contract: integers and money as numbers, booleans as booleans.
+  if (type === "boolean") return typeof raw === "boolean" ? { kind: "text", text: raw ? WORDS[context.language].yes : WORDS[context.language].no } : null;
+  if (type === "integer") return typeof raw === "number" && Number.isFinite(raw) ? { kind: "text", text: String(raw) } : null;
+  if (type === "money") {
+    return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
+      ? { kind: "text", text: formatMoney(raw, { symbol: context.currencySymbol, code: context.currencyCode }) }
+      : null;
+  }
+  if (typeof raw !== "string") return null;
+  const value = raw;
   switch (type) {
     case "single_line_text":
     case "multi_line_text":
-    case "integer":
     case "decimal":
       return value.trim() ? { kind: "text", text: value } : null;
-    case "boolean":
-      return { kind: "text", text: value === "true" ? WORDS[context.language].yes : WORDS[context.language].no };
     case "date":
     case "date_time": {
       const text = formatDate(value, context.language, type === "date_time");
@@ -106,12 +113,6 @@ function itemPart(type: string, value: string, context: MetaobjectFieldContext):
     }
     case "color":
       return COLOR.test(value) ? { kind: "color", value: value.toLowerCase() } : null;
-    case "money": {
-      const minor = Number(value);
-      if (!/^\d{1,16}$/.test(value) || !Number.isSafeInteger(minor)) return null;
-      const amount = fromMinor(minor, getDecimalPlaces(context.currencyCode));
-      return { kind: "text", text: formatMoney(amount, { symbol: context.currencySymbol, code: context.currencyCode }) };
-    }
     case "media_reference": {
       const asset = context.media.get(value);
       return asset ? { kind: "image", asset } : null;
@@ -121,21 +122,14 @@ function itemPart(type: string, value: string, context: MetaobjectFieldContext):
   }
 }
 
-function listItems(value: string): string[] {
-  try {
-    const items = JSON.parse(value) as unknown;
-    return Array.isArray(items) ? items.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
+
 
 /** One field as the section draws it, or null (a hidden type, an empty value, a photo that did not load). */
 export function metaobjectFieldView(field: HomepageMetaobjectField, context: MetaobjectFieldContext): MetaobjectFieldView | null {
   const type = itemType(field.type);
-  if (HIDDEN_ITEM_TYPES.has(type) || !field.value) return null;
+  if (HIDDEN_ITEM_TYPES.has(type) || field.value === null || field.value === undefined || field.value === "") return null;
   const list = field.type.startsWith("list.");
-  const values = list ? listItems(field.value) : [field.value];
+  const values: unknown[] = list ? (Array.isArray(field.value) ? field.value : []) : [field.value];
   const parts = values.flatMap((value) => {
     const part = itemPart(type, value, context);
     return part ? [part] : [];

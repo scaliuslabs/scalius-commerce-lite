@@ -101,7 +101,8 @@ export interface HomepageMetaobjectField {
   name: string;
   /** A custom-field type id (`single_line_text`, `money`, `list.media_reference`...). */
   type: string;
-  value: string;
+  /** The custom-field HTTP contract: text, dates, URLs, colours and media ids as strings; integers and money (major units) as numbers; booleans; lists as arrays. */
+  value: string | number | boolean | unknown[] | null;
 }
 
 /** A Metaobjects section's content type with its published entries (only types with storefront access are sent). */

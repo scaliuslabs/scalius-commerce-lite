@@ -41,6 +41,8 @@ export interface BundledSyncResult {
   removed: string[];
   /** Plugins whose code could not be loaded or whose manifest is not installable (logged, skipped). */
   failed: Array<{ pluginId: string; reason: string }>;
+  /** Whether an active app approved for the `fx` port provides exchange rates (the tick then refreshes market rates). */
+  fxApps: boolean;
 }
 
 async function bundledManifest(entry: BundledPluginEntry): Promise<unknown> {
@@ -95,9 +97,13 @@ export async function syncBundledPlugins(
   db: Database,
   registry: BundledPluginRegistry = BUNDLED_PLUGINS,
 ): Promise<BundledSyncResult> {
-  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [] };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
   const ids = Object.keys(registry);
   const installations = new Map((await listPluginInstallations(db)).map((installation) => [installation.pluginId, installation]));
+  // Read here, once, so a store without an exchange rate app reads nothing more for rates.
+  result.fxApps = [...installations.values()].some((installation) => installation.status === "active"
+    && (installation.grant?.providers ?? []).includes("fx")
+    && installation.manifest.providers.some((provider) => provider.kind === "fx"));
   for (const installation of installations.values()) {
     if (installation.source !== "bundled" || Object.prototype.hasOwnProperty.call(registry, installation.pluginId)) continue;
     try {
@@ -130,7 +136,7 @@ export async function syncBundledPlugin(
   const entry = Object.prototype.hasOwnProperty.call(registry, pluginId) ? registry[pluginId] : undefined;
   if (!entry) return null;
   const current = await requirePluginInstallation(db, pluginId).catch(() => undefined);
-  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [] };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
   if (needsSync(entry, current)) await syncOne(db, pluginId, entry, current, result);
   if (result.failed.length > 0) return null;
   return requirePluginInstallation(db, pluginId).catch(() => null);

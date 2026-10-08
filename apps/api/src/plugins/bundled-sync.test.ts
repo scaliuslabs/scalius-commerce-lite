@@ -23,7 +23,7 @@ describe("bundled plugin sync", () => {
   it("installs every bundled app once and leaves the rows alone on the next sync", async () => {
     const first = await syncBundledPlugins(db, FIXTURE_APPS);
     expect(first.installed).toEqual(Object.keys(FIXTURE_APPS).sort());
-    expect(await syncBundledPlugins(db, FIXTURE_APPS)).toEqual({ installed: [], updated: [], removed: [], failed: [] });
+    expect(await syncBundledPlugins(db, FIXTURE_APPS)).toEqual({ installed: [], updated: [], removed: [], failed: [], fxApps: false });
   });
 
   it("uninstalls a bundled app the deployment no longer carries and keeps its data", async () => {

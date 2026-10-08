@@ -7,7 +7,7 @@
 import type { HomepageMetaobject, HomepageMetaobjectField } from "@/lib/api/storefront";
 import { BANGLA_LONG } from "./fixtures";
 
-const field = (key: string, name: string, type: string, value: string): HomepageMetaobjectField => ({ key, name, type, value });
+const field = (key: string, name: string, type: string, value: HomepageMetaobjectField["value"]): HomepageMetaobjectField => ({ key, name, type, value });
 const entry = (handle: string, title: string, fields: HomepageMetaobjectField[]) => ({ handle, title, fields });
 
 const SIZES: Array<[string, string, string, string]> = [
@@ -36,8 +36,8 @@ export const FIXTURE_METAOBJECTS: Record<string, HomepageMetaobject> = {
     id: "mo-size-chart",
     name: "Size chart",
     entries: SIZES.map(([size, chest, length, height]) => entry(`size-${size.toLowerCase()}`, `Size ${size}`, [
-      field("chest", "Chest (inches)", "integer", chest),
-      field("length", "Length (inches)", "integer", length),
+      field("chest", "Chest (inches)", "integer", Number(chest)),
+      field("length", "Length (inches)", "integer", Number(length)),
       field("height", "Fits height", "single_line_text", height),
     ])),
   },
@@ -50,7 +50,7 @@ export const FIXTURE_METAOBJECTS: Record<string, HomepageMetaobject> = {
         field("address", "Address", "multi_line_text", "House 12, Road 5\nDhanmondi, Dhaka 1205"),
         field("phone", "Phone", "single_line_text", "+880 1711-000000"),
         field("hours", "Hours", "single_line_text", "10 am to 9 pm, every day"),
-        field("parking", "Parking", "boolean", "true"),
+        field("parking", "Parking", "boolean", true),
         field("opened", "Opened", "date", "2019-04-14"),
         field("map", "Map", "url", "https://maps.example.com/nakshi-bazar-dhanmondi"),
       ]),
@@ -58,14 +58,14 @@ export const FIXTURE_METAOBJECTS: Record<string, HomepageMetaobject> = {
         field("photo", "ছবি", "media_reference", "square-store-uttara"),
         field("address", "ঠিকানা", "multi_line_text", "সেক্টর ৭, রোড ১২\nউত্তরা, ঢাকা ১২৩০"),
         field("hours", "খোলা থাকে", "single_line_text", "সকাল ১০টা থেকে রাত ৯টা"),
-        field("parking", "পার্কিং", "boolean", "false"),
+        field("parking", "পার্কিং", "boolean", false),
         field("map", "ম্যাপ", "url", "/pages/stores"),
       ]),
       entry("chattogram", "Chattogram, GEC Circle", [
         field("photo", "Photo", "media_reference", "square-store-chattogram"),
         field("address", "Address", "multi_line_text", "Shop 4, Chittagong Shopping Complex, GEC Circle"),
-        field("services", "Services", "list.single_line_text", JSON.stringify(["Alterations", "Gift wrap", "Same-day pickup"])),
-        field("pickup", "Free pickup over", "money", "300000"),
+        field("services", "Services", "list.single_line_text", ["Alterations", "Gift wrap", "Same-day pickup"]),
+        field("pickup", "Free pickup over", "money", 3000),
         field("accent", "Store colour", "color", "#7a1f2b"),
       ]),
       entry("sylhet", "Sylhet, Zindabazar", [
@@ -85,5 +85,5 @@ export function fixtureMetaobject(id: string, limit: number): HomepageMetaobject
 
 /** The photos the given types' entries show (they ride in `sections.media`). */
 export function metaobjectMediaIds(types: readonly HomepageMetaobject[]): string[] {
-  return [...new Set(types.flatMap((type) => type.entries.flatMap((each) => each.fields.filter((item) => item.type === "media_reference").map((item) => item.value))))];
+  return [...new Set(types.flatMap((type) => type.entries.flatMap((each) => each.fields.flatMap((item) => (item.type === "media_reference" && typeof item.value === "string" ? [item.value] : [])))))];
 }

@@ -607,19 +607,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Exchange rates from apps (markets.fx_rate_source): hourly on Free, every
-    // tick on Paid. Without a market on an app source: one small read.
-    name: "market_fx_refresh",
-    slice: 2,
-    async run({ db, env, timed }) {
-      const { refreshAppFxRates } = await import("./plugins/providers/fx");
-      const fx = await timed("market_fx_refresh", () => refreshAppFxRates(db, env));
-      if (fx.markets > 0) {
-        console.log(`[scheduled] Market FX refresh: markets=${fx.markets}, changed=${fx.changed}, failed=${fx.failed}`);
-      }
-    },
-  },
-  {
     // Event outbox (COMMERCE-HOOKS H3): the at-least-once backstop for events
     // no post-write flush handed over, due webhook retries, then retention.
     // Every tick: a merchant's webhook consumer is waiting on it.
@@ -669,7 +656,10 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt, {
           nightly: isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env)),
         }));
-      const { bundled, cron } = plugins;
+      const { bundled, cron, fx } = plugins;
+      if (fx && fx.markets > 0) {
+        console.log(`[scheduled] Market FX refresh: markets=${fx.markets}, changed=${fx.changed}, failed=${fx.failed}`);
+      }
       if (bundled.installed.length > 0 || bundled.updated.length > 0 || bundled.failed.length > 0 || cron.due > 0 || cron.expired > 0) {
         console.log(
           `[scheduled] Plugins: installed=${bundled.installed.length}, updated=${bundled.updated.length}, ` +

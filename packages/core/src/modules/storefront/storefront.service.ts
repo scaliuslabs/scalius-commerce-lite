@@ -414,7 +414,8 @@ export async function getHomepageData(
       // App sections that drew something, by section id (sanitized HTML).
       apps: await appSections,
       // The Metaobjects sections' content types with their published entries.
-      metaobjects: metaobjects.types,
+      // Only a page with a Metaobjects section carries the key (other pages answer as before).
+      ...(metaobjects.types.length > 0 || (requests.metaobjects?.length ?? 0) > 0 ? { metaobjects: metaobjects.types } : {}),
     },
   };
 }

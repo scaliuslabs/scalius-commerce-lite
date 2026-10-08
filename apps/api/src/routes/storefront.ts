@@ -207,7 +207,7 @@ const homepageSectionsSchema = z.object({
         key: z.string(),
         name: z.string(),
         type: z.string(),
-        value: z.string().openapi({ description: "The stored canonical text: money in integer minor units, a media reference its media id (in media), a list a JSON array." }),
+        value: z.unknown().openapi({ description: "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays." }),
       })),
     })),
   })).optional().openapi({
