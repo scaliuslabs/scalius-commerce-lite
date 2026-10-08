@@ -43,7 +43,6 @@ import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMe
 import { notificationsDocument } from "./documents";
 import { getNotificationChannels, getOrderWhatsAppTemplateSettings } from "./channel-settings";
 import { getNotificationTemplates } from "./notification-templates.service";
-import { onlineStaffIds } from "./staff-presence";
 import { deliverWebPush, readPushSubscriptions, sendAppPush, sendWebPushNotification, webPushPayload, webPushSender } from "./web-push";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
@@ -300,8 +299,9 @@ async function sendStaffWebPushNotice(
 ): Promise<void> {
     const sender = await webPushSender(env);
     if (!sender) return;
-    // Staff with an open dashboard see it live through the realtime hub.
-    await sendWebPushNotification(db, sender, { audience: "staff", skipUserIds: await onlineStaffIds(env) }, {
+    // Like Shopify's app: a staff phone gets the push even while a dashboard is open elsewhere
+    // (a sleeping laptop's socket must never silence it).
+    await sendWebPushNotification(db, sender, { audience: "staff" }, {
         title: notice.title.slice(0, 120),
         body: notice.body.slice(0, 500),
         ...(notice.link ? { url: notice.link } : {}),
@@ -371,11 +371,8 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec): Pr
         // A Worker that cannot sign reads nothing.
         const sender = await webPushSender(env);
         if (!sender) return [];
-        const subscribed = await readPushSubscriptions(db, { audience: "staff" });
-        if (subscribed.length === 0) return [];
-        // Staff with an open dashboard see it live through the realtime hub: no duplicate push.
-        const online = await onlineStaffIds(env);
-        const subscriptions = subscribed.filter((subscription) => !subscription.userId || !online.has(subscription.userId));
+        // Every subscribed staff browser, open dashboard or not: a sleeping laptop's socket must never silence a phone.
+        const subscriptions = await readPushSubscriptions(db, { audience: "staff" });
         if (subscriptions.length === 0) return [];
         const payload = webPushPayload({
             title: spec.title.slice(0, 120),

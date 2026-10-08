@@ -96,14 +96,3 @@ export async function publishRealtime(env: Env, changes: readonly RealtimeChange
     console.warn("[realtime] Publish failed:", error instanceof Error ? error.name : "unknown");
   }
 }
-
-/** Staff with an open dashboard, or null when the hub cannot say (then nobody counts as online). */
-export async function onlineStaffIds(env: Env): Promise<ReadonlySet<string> | null> {
-  const hub = realtimeHub(env);
-  if (!hub) return null;
-  try {
-    return new Set(await hub.online());
-  } catch {
-    return null;
-  }
-}

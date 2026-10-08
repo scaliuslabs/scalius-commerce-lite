@@ -172,8 +172,6 @@ export type PushTarget =
   | {
     audience: "staff";
     userIds?: readonly string[];
-    /** Staff the realtime hub reaches live now (staff-presence.ts): their browsers are skipped. */
-    skipUserIds?: ReadonlySet<string>;
   }
   | { audience: "customer"; customerIds: readonly string[] };
 
@@ -186,10 +184,8 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
     auth: pushSubscriptions.auth,
     userId: pushSubscriptions.userId,
   };
-  const skip = target.audience === "staff" ? target.skipUserIds : undefined;
-  const live = (rows: StoredPushSubscription[]) => skip && skip.size > 0 ? rows.filter((row) => !row.userId || !skip.has(row.userId)) : rows;
   if (target.audience === "staff" && target.userIds === undefined) {
-    return live(await db.select(columns).from(pushSubscriptions).where(eq(pushSubscriptions.audience, "staff")).orderBy(asc(pushSubscriptions.id)));
+    return db.select(columns).from(pushSubscriptions).where(eq(pushSubscriptions.audience, "staff")).orderBy(asc(pushSubscriptions.id));
   }
   const owners = [...new Set(target.audience === "staff" ? target.userIds! : target.customerIds)];
   const found: StoredPushSubscription[] = [];
@@ -199,7 +195,7 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
       ? and(eq(pushSubscriptions.audience, "staff"), inArray(pushSubscriptions.userId, chunk))
       : and(eq(pushSubscriptions.audience, "customer"), inArray(pushSubscriptions.customerId, chunk))));
   }
-  return live(found);
+  return found;
 }
 
 /** What a send needs: the VAPID keys and subject. Null when the Worker cannot sign (no master secret or https origin). */
