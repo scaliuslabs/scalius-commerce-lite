@@ -39,6 +39,7 @@ import {
 import { CustomFieldsCard } from "../custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "../apps/ui/AppActions";
 import { AppResourceCards } from "../apps/ui/AppResourceCards";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 type CollectionFormApi = UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 
@@ -103,8 +104,6 @@ export function CollectionForm({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
-      description: null,
-      content: null,
       presentation: "grid",
       isActive: false,
       canonicalPath: null,
@@ -114,6 +113,8 @@ export function CollectionForm({
       metaDescription: null,
       config: { ...DEFAULT_CONFIG },
       ...defaultValues,
+      description: richTextOrNull(defaultValues?.description),
+      content: richTextOrNull(defaultValues?.content),
     },
   });
 

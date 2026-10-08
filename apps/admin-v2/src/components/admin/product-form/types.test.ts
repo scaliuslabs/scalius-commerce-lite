@@ -45,6 +45,12 @@ describe("product form checks", () => {
     expect(messages({})).toEqual([]);
   });
 
+  it("accepts an empty description in every form the editor writes, and still asks for ten characters of text", () => {
+    for (const empty of [null, "", "<p></p>", "<p></p><p></p>", "<p><br></p>"]) expect(messages({ description: empty })).toEqual([]);
+    expect(messages({ description: "<p>Too short</p>" })).toEqual([]);
+    expect(messages({ description: "<p>a</p>" })).toEqual([`description: ${translate(productMessages, "descriptionMin")}`]);
+  });
+
   it("holds the save while the compare-at price can't be stored, with the reason", () => {
     expect(messages({ compareAtProblem: "notHigher" })).toEqual([`compareAtProblem: ${translate(productMessages, "compareAtNotHigher")}`]);
     expect(messages({ compareAtProblem: "invalid" })).toEqual([`compareAtProblem: ${translate(productMessages, "issueNotANumber")}`]);

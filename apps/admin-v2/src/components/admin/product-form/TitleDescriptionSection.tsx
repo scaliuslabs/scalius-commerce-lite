@@ -17,6 +17,7 @@ import { productMessages } from "~/i18n/products";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
+import { richTextOrNull } from "~/lib/rich-text-value";
 
 const AdditionalInfoManager = lazy(() =>
   import("./AdditionalInfoManager").then((module) => ({
@@ -60,7 +61,7 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
                 <FormControl>
                   <DeferredTiptapEditor
                     content={field.value || ""}
-                    onChange={field.onChange}
+                    onChange={(html) => field.onChange(richTextOrNull(html))}
                     ariaLabel={t("description")}
                     compact
                   />

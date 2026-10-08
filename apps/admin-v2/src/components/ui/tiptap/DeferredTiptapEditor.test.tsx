@@ -54,4 +54,29 @@ describe("DeferredTiptapEditor", () => {
     );
     expect(host.querySelector(".ProseMirror")).not.toBeNull();
   }, 10_000);
+
+  type EditorHandle = { commands: { setContent: (html: string, options?: { emitUpdate?: boolean }) => boolean } };
+  const mountEditor = async (content: string, onChange: (html: string) => void) => {
+    await act(async () => {
+      root.render(<DeferredTiptapEditor content={content} onChange={onChange} ariaLabel="Description" />);
+    });
+    await vi.waitFor(() => expect(host.querySelector(".ProseMirror")).not.toBeNull(), { timeout: 5_000 });
+    return (host.querySelector(".ProseMirror") as unknown as { editor: EditorHandle }).editor;
+  };
+
+  it("tells the form an emptied editor is \"\", never <p></p>", async () => {
+    const onChange = vi.fn();
+    const editor = await mountEditor("<p>Some description text</p>", onChange);
+    await act(async () => { editor.commands.setContent("<p></p>", { emitUpdate: true }); });
+    expect(onChange).toHaveBeenLastCalledWith("");
+    expect(onChange).toHaveBeenCalledTimes(1);
+  }, 10_000);
+
+  it("stays silent while an empty field is still empty (an Enter, an empty paragraph)", async () => {
+    const onChange = vi.fn();
+    const editor = await mountEditor("", onChange);
+    await act(async () => { editor.commands.setContent("<p></p><p></p>", { emitUpdate: true }); });
+    await act(async () => { editor.commands.setContent("<p></p>", { emitUpdate: true }); });
+    expect(onChange).not.toHaveBeenCalled();
+  }, 10_000);
 });

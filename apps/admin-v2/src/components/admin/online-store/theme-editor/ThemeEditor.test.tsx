@@ -321,6 +321,31 @@ describe("theme editor: live preview and saving", () => {
     expect(field("theme-color-background-note").textContent).toContain("Use a color code");
   });
 
+  it("on a phone, the setting to fix switches the bottom bar to Theme, opens the group and focuses the field", async () => {
+    setViewport(390);
+    render();
+    const bar = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("nav[aria-label='Editor'] button")].find((each) => each.textContent === name)!;
+    const colors = () => [...document.querySelectorAll<HTMLButtonElement>("h2 > button[aria-expanded]")].find((each) => each.textContent === "Colors")!;
+    act(() => bar("Theme").click());
+    await vi.waitFor(() => expect(colors()).toBeTruthy());
+    act(() => colors().click());
+    await ready("#theme-color-background");
+    type(field("theme-color-background"), "bad-colour");
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    act(() => colors().click());
+    act(() => bar("Layers").click());
+    await vi.waitFor(() => expect(document.querySelector("#theme-color-background")).toBeNull());
+    // On a phone the status dot is the control: a real target, not a clipped screen-reader-only button.
+    expect(button("1 setting to fix").className).not.toContain("sr-only");
+    expect(button("1 setting to fix").querySelector("[aria-hidden]")).toBeTruthy();
+    act(() => button("1 setting to fix").click());
+    await ready("#theme-color-background");
+    await vi.waitFor(() => expect(document.activeElement).toBe(field("theme-color-background")));
+    expect(colors().getAttribute("aria-expanded")).toBe("true");
+    const drawer = container.querySelector<HTMLElement>("aside[aria-label='Sidebar']");
+    expect(drawer?.hasAttribute("inert") ?? false).toBe(false);
+  });
+
   it("on a phone, keeps toasts above the Layers / Theme / Add bar, and on a computer lifts nothing", () => {
     const lift = () => document.documentElement.style.getPropertyValue("--toast-lift");
     const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(56);
