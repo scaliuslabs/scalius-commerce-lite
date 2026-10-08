@@ -83,7 +83,6 @@ describe("homepage section data requests", () => {
     expect(homeSectionRequestsEmpty(requests)).toBe(false);
     expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("usp-strip", "u")])).toBe(true);
     expect(homeSectionsShowDeliveryFacts([section({ id: "u", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "custom", items: [{ title: "COD", detail: "" }] } } })])).toBe(false);
-    expect(homeSectionsShowDeliveryFacts([section({ ...storefrontSectionDefault("hero", "h"), settings: { layout: "app-panel", slides: [] } })])).toBe(true);
     expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("hero", "h")])).toBe(false);
   });
 

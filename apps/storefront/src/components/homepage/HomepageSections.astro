@@ -51,6 +51,8 @@ import RecentlyViewed from "./RecentlyViewed.astro";
 import AppSection from "./AppSection.astro";
 import NewsletterSection from "./NewsletterSection.astro";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   sections: StorefrontSection[];
@@ -69,8 +71,12 @@ interface Props {
   languageCode?: string | null;
 }
 
-const { sections, content, leadSectionId, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
+const { sections, content: stored, leadSectionId, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
 const language = newsletterLanguage(languageCode);
+// The storefront's own words (default titles, "View more") follow the request's language.
+const { language: storeLanguage } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(storeLanguage).home;
+const content: HomepageContent = { ...stored, language: storeLanguage };
 const units = homepageRenderUnits(sections, content);
 const phoneSections = homepagePhoneSections(sections, content);
 const phoneHeroAfterCategories = phoneSections !== sections;
@@ -129,7 +135,6 @@ const root = only
                 const asset = homepageMedia(content, banner.mediaId);
                 return asset ? [{ asset, alt: banner.alt, href: banner.href }] : [];
               })}
-              panelFacts={content.deliveryFacts}
             />
           </section>
         )}
@@ -139,7 +144,7 @@ const root = only
         {section.type === "category-tiles" && (
           <CategoryTiles
             section={section}
-            title={homepageCategoryTilesTitle(section)}
+            title={homepageCategoryTilesTitle(section, storeLanguage)}
             categories={homepageCategoryTiles(section, content)}
           />
         )}
@@ -231,7 +236,7 @@ const root = only
         {section.type === "utility-cards" && <UtilityCards section={section} />}
 
         {section.type === "endless-grid" && list && (
-          <EndlessGrid section={section} title={section.settings.title.trim() || "More to explore"} products={list.products} aboveFold={lead} {...money} />
+          <EndlessGrid section={section} title={section.settings.title.trim() || copy.moreToExplore} products={list.products} aboveFold={lead} {...money} />
         )}
 
         {section.type === "seo-text" && <SeoText section={section} />}

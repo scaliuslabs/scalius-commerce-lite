@@ -26,10 +26,15 @@ function phoneShape(index: number): string {
   // An odd one out on phones spans the row at 2:1 instead of leaving a hole.
   return rest % 2 === 1 && index === rest - 1 ? "col-span-2 aspect-[2/1]" : "aspect-square";
 }
+import Container from "@/components/ui/Container.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 ---
 
-<section class="home-section w-full" aria-label="Promotions">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+<section class="home-section w-full" aria-label={copy.promotions}>
+  <Container>
     <div class:list={["grid grid-cols-2 gap-3 md:gap-4", tiles.length > 1 && "lg:aspect-[2/1] lg:grid-cols-4 lg:grid-rows-2"]}>
       {tiles.map((tile, index) => {
         const large = index === 0;
@@ -41,7 +46,7 @@ function phoneShape(index: number): string {
             data-astro-prefetch={tile.href ? getStorefrontPrefetchAttribute(tile.href, Astro.url) : undefined}
             target={external ? "_blank" : undefined}
             rel={external ? "noopener noreferrer" : undefined}
-            aria-label={tile.href && !tile.alt.trim() ? `Promotion ${index + 1}` : undefined}
+            aria-label={tile.href && !tile.alt.trim() ? copy.promotion(index + 1) : undefined}
             class:list={[
               "group relative block overflow-hidden rounded-xl bg-muted",
               large
@@ -64,5 +69,5 @@ function phoneShape(index: number): string {
         );
       })}
     </div>
-  </div>
+  </Container>
 </section>

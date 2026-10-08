@@ -9,8 +9,8 @@ import { mediaImageSrcSet, mediaImageUrl } from "./media-url";
 import { capSizesDensity } from "./responsive-image";
 
 /**
- * Rendered banner width per viewport: hero.astro's max-w-7xl (80rem)
- * container minus its side padding (px-4, sm:px-6, lg:px-8). Phones get the
+ * Rendered banner width per viewport: hero.astro's contained banner, the
+ * page container (up to 80rem) minus its gutters (16, 24 and 32px). Phones get the
  * phone banner below md (48rem), everything wider the desktop banner.
  */
 export const HERO_IMAGE_SIZES: Record<HeroSlideViewport, string> = {
@@ -57,8 +57,7 @@ export type StorefrontHeroLayout = StorefrontSectionOf<"hero">["settings"]["layo
  * The banner's rendered width per hero layout. Contained heroes (with side
  * banners or the facts panel beside them) keep the container sizes, which
  * are never smaller than the banner; full-bleed and full-screen heroes span
- * the viewport; split heroes show two halves on computers; story cards are
- * rail cards (STORY_CARD_SIZES).
+ * the viewport; split heroes show two halves on computers.
  */
 export function heroImageSizes(layout: StorefrontHeroLayout, viewport: HeroSlideViewport): string {
   switch (layout) {
@@ -67,8 +66,6 @@ export function heroImageSizes(layout: StorefrontHeroLayout, viewport: HeroSlide
       return "100vw";
     case "split":
       return viewport === "desktop" ? "50vw" : "100vw";
-    case "story-cards":
-      return STORY_CARD_SIZES;
     case "wide-editorial":
       return viewport === "desktop"
         ? "(min-width: 97rem) 93rem, calc(100vw - 4rem)"
@@ -78,22 +75,12 @@ export function heroImageSizes(layout: StorefrontHeroLayout, viewport: HeroSlide
   }
 }
 
-/** Story-card widths (hero.astro): 62% of a phone, then 40%, 25% and 19% (Amazon's 5.3 visible). */
-export const STORY_CARD_SIZES =
-  "(max-width: 639px) 62vw, (max-width: 1023px) 40vw, (max-width: 1279px) 25vw, 19vw";
-
 /**
  * The first banner of each viewport, as the hero paints it: the LCP
  * preload offers exactly these candidates, so the browser never fetches a
- * second file for the same slot. Story cards show the computer banners on
- * every screen, so they have one candidate without a media query.
+ * second file for the same slot.
  */
 export function heroLeadCandidates(hero: ResolvedHomepageHero, layout: StorefrontHeroLayout): HeroImageCandidate[] {
-  if (layout === "story-cards") {
-    const first = hero.desktop[0] ?? hero.mobile[0];
-    if (!first) return [];
-    return [{ ...heroImageCandidate(first.url, "desktop", layout), media: "all" }];
-  }
   return [
     hero.mobile[0] ? heroImageCandidate(hero.mobile[0].url, "mobile", layout) : null,
     hero.desktop[0] ? heroImageCandidate(hero.desktop[0].url, "desktop", layout) : null,

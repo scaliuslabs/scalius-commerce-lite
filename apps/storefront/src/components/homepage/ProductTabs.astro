@@ -7,7 +7,7 @@
 // products are shown; a single tab is a plain row under its title.
 import type { HomepageProductTab } from "@/lib/homepage-sections";
 import ProductRail from "./ProductRail.astro";
-import SectionHeader from "./SectionHeader.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 
@@ -26,6 +26,11 @@ const headingId = `${base}-title`;
 const heading = title.trim();
 const single = tabs.length === 1;
 const labelled = Boolean(heading) || single;
+import Container from "@/components/ui/Container.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 ---
 
 <section
@@ -34,7 +39,7 @@ const labelled = Boolean(heading) || single;
   aria-label={labelled ? undefined : tabs.map((tab) => tab.title).join(", ")}
   data-product-tabs
 >
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     {labelled && <SectionHeader id={headingId} title={heading || tabs[0]!.title} href={single ? tabs[0]!.href : null} />}
     <div class="home-tabs">
       {!single && tabs.map((tab, index) => (
@@ -76,7 +81,7 @@ const labelled = Boolean(heading) || single;
               )}
               {!single && tab.href && (
                 <p class="mt-2 text-end">
-                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">View all {tab.title}</a>
+                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">{copy.viewAllOf(tab.title)}</a>
                 </p>
               )}
             </div>
@@ -84,7 +89,7 @@ const labelled = Boolean(heading) || single;
         })}
       </div>
     </div>
-  </div>
+  </Container>
 </section>
 
 <style>

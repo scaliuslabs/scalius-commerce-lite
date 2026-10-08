@@ -1,26 +1,24 @@
 ---
 // src/components/hero.astro
-// The homepage hero in its layout (SYNTHESIS.md 2.3), from the section's
-// own slides (lib/homepage-hero resolveHomepageHero): phones show each
-// slide's phone image, else its computer image around the phone focal point.
-// - contained-banners: today's contained carousel (Star Tech), with up to
-//   two side banners beside it when the section names them.
-// - app-panel: the contained carousel with the store's delivery facts
-//   beside it on computers (Daraz's panel, without an app to push).
-// - full-bleed: edge to edge at 2.6:1 on computers, 5:3 on phones (Fabrilife).
-// - full-screen: the first screen on phones (Aarong), tall on computers.
-// - split: the first two banners side by side on computers (Dawn).
-// - story-cards: a scroll-snap rail of portrait cards (Amazon).
-// - wide-editorial: eBay's contained, low campaign banner with copy beside imagery.
+// The homepage hero in its layout, from the section's own slides
+// (lib/homepage-hero resolveHomepageHero): phones show each slide's phone
+// image, else its computer image around the phone focal point. Every layout
+// shows each slide's heading, supporting text and button (HeroCopy).
+// - contained-banners: a contained carousel (the theme's container), with up
+//   to two side banners beside it when the section names them.
+// - full-bleed: edge to edge at 2.6:1 on computers, 5:3 on phones.
+// - full-screen: 70% of the first screen on phones, tall on computers.
+// - split: the first two banners side by side on computers.
+// - wide-editorial: a contained, low campaign banner with the copy in a
+//   panel beside the photo.
 // Only the first banner is the LCP image: high priority, and preloaded by
 // pages/index.astro from heroLeadCandidates() when the hero leads.
 import CustomCarousel from "./sliders/CustomCarousel.astro";
-import StoryCards from "./sliders/StoryCards.astro";
 import HeroPicture from "./sliders/HeroPicture.astro";
+import Container from "@/components/ui/Container.astro";
 import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 import type { ResolvedHomepageHero, StorefrontHeroLayout } from "@/lib/homepage-hero";
 import type { HomepageMediaAsset } from "@/lib/api/storefront";
-import type { DeliveryFact } from "@/lib/delivery-facts";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
@@ -37,12 +35,10 @@ interface Props {
   /** Phones can show category tiles before this banner. */
   phonePriority?: boolean;
   layout?: StorefrontHeroLayout;
-  /** full-screen on phones: the first screen, or Aarong's compact frame for photo-only banners. */
+  /** full-screen on phones: 70% of the first screen, or a compact frame for photo-only banners. */
   phoneHeight?: "screen" | "compact";
   /** contained-banners: up to two images beside the banner. */
   sideBanners?: HeroSideBanner[];
-  /** app-panel: the facts listed beside the banner. */
-  panelFacts?: DeliveryFact[];
 }
 
 const {
@@ -52,35 +48,41 @@ const {
   layout = "contained-banners",
   phoneHeight = "screen",
   sideBanners = [],
-  panelFacts = [],
 } = Astro.props;
 const hasBanners = hero.desktop.length > 0 || hero.mobile.length > 0;
 const sides = layout === "contained-banners" ? sideBanners.slice(0, 2) : [];
-const panel = layout === "app-panel" ? panelFacts.slice(0, 4) : [];
-const contained = layout === "contained-banners" || layout === "app-panel";
 
 // Edge-to-edge frames follow the viewport: 2.6:1 on computers (1440x548)
-// and 5:3 on phones (390x234); full-screen fills the first screen below
-// the header (svh never changes while scrolling, so nothing shifts).
+// and 5:3 on phones (390x234); full-screen is 70% of the first screen on
+// phones (svh never changes while scrolling, so nothing shifts).
 const FRAME_HEIGHT = {
   "full-bleed": { desktop: "clamp(18rem, 38vw, 42rem)", mobile: "60vw" },
   "full-screen": {
     desktop: "clamp(26rem, calc(100svh - var(--header-height, 3.5rem)), 56vw)",
-    mobile: "max(26rem, calc(100svh - var(--header-height, 3.5rem)))",
+    mobile: "clamp(24rem, 70svh, 40rem)",
   },
+  "wide-editorial": { desktop: "clamp(16rem, calc((100vw - 4rem) * 0.242), 22.5rem)", mobile: "min(24rem, 90vw)" },
 } as const;
-const frame = layout === "full-bleed" || layout === "full-screen" ? FRAME_HEIGHT[layout] : null;
-// A photo-only phone banner needs no full screen (Aarong): 65svh, 23-35rem.
-const compactHeritagePhone = layout === "full-screen"
+const frames = layout === "full-bleed" || layout === "full-screen" || layout === "wide-editorial" ? FRAME_HEIGHT[layout] : null;
+// A photo-only phone banner needs no tall frame: 65svh, 23-35rem.
+const compactPhone = layout === "full-screen"
   && phoneHeight === "compact"
   && hero.mobile.length > 0
   && hero.mobile.every((slide) => !slide.heading?.trim() && !slide.supportingText?.trim() && !(slide.link && slide.buttonLabel?.trim()));
+const edgeToEdge = layout === "full-bleed" || layout === "full-screen";
+// One carousel per viewport; CSS shows the one that fits.
+const carousels = [
+  { type: "desktop" as const, slides: hero.desktop, wrap: "hidden md:block relative", lead: priority, frameHeight: frames?.desktop },
+  {
+    type: "mobile" as const,
+    slides: hero.mobile,
+    wrap: "md:hidden relative",
+    lead: phonePriority,
+    frameHeight: compactPhone ? "clamp(23rem, 65svh, 35rem)" : frames?.mobile,
+  },
+].filter((each) => each.slides.length > 0);
 const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
 ---
-
-{hasBanners && layout === "story-cards" && (
-  <StoryCards slides={hero.desktop.length > 0 ? hero.desktop : hero.mobile} priority={priority} />
-)}
 
 {hasBanners && layout === "split" && (
   <div class="relative w-full" data-hero-layout="split">
@@ -100,123 +102,35 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
 )}
 
 {hasBanners && layout === "wide-editorial" && (
-  <div class="mx-auto max-w-[97rem] px-4 sm:px-6 lg:px-8" data-hero-layout="wide-editorial">
-    {hero.desktop.length > 0 && (
-      <div class="hidden md:block">
-        <CustomCarousel
-          images={hero.desktop}
-          height={HERO_SLIDE_PRESENTATION.desktop.height}
-          type="desktop"
-          priority={priority}
-          layout={layout}
-          frameHeight="clamp(16rem, calc((100vw - 4rem) * 0.242), 22.5rem)"
-          overlay="editorial"
-        />
+  <Container data-hero-layout="wide-editorial">
+    {carousels.map((each) => (
+      <div class={each.wrap}>
+        <CustomCarousel images={each.slides} height={HERO_SLIDE_PRESENTATION[each.type].height} type={each.type} priority={each.lead} layout={layout} frameHeight={each.frameHeight} overlay="editorial" />
       </div>
-    )}
-    {hero.mobile.length > 0 && (
-      <div class="md:hidden">
-        <CustomCarousel
-          images={hero.mobile}
-          height={HERO_SLIDE_PRESENTATION.mobile.height}
-          type="mobile"
-          priority={phonePriority}
-          layout={layout}
-          frameHeight="min(24rem, 90vw)"
-          overlay="editorial"
-        />
-      </div>
-    )}
-  </div>
+    ))}
+  </Container>
 )}
 
-{hasBanners && frame && (
+{hasBanners && edgeToEdge && (
   <div class="relative w-full" data-hero-layout={layout}>
-    {hero.desktop.length > 0 && (
-      <div class="hidden md:block relative">
-        <CustomCarousel
-          images={hero.desktop}
-          height={HERO_SLIDE_PRESENTATION.desktop.height}
-          type="desktop"
-          priority={priority}
-          layout={layout}
-          frameHeight={frame.desktop}
-          rounded={false}
-          overlay="band"
-        />
+    {carousels.map((each) => (
+      <div class={each.wrap}>
+        <CustomCarousel images={each.slides} height={HERO_SLIDE_PRESENTATION[each.type].height} type={each.type} priority={each.lead} layout={layout} frameHeight={each.frameHeight} rounded={false} />
       </div>
-    )}
-    {hero.mobile.length > 0 && (
-      <div class="md:hidden relative">
-        <CustomCarousel
-          images={hero.mobile}
-          height={HERO_SLIDE_PRESENTATION.mobile.height}
-          type="mobile"
-          priority={phonePriority}
-          layout={layout}
-          frameHeight={compactHeritagePhone ? "clamp(23rem, 65svh, 35rem)" : frame.mobile}
-          rounded={false}
-          overlay="band"
-        />
-      </div>
-    )}
+    ))}
   </div>
 )}
 
-{hasBanners && contained && sides.length === 0 && panel.length === 0 && (
-  <div class="relative w-full">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
-      {hero.desktop.length > 0 && (
-        <div class="hidden md:block relative">
-          <CustomCarousel
-            images={hero.desktop}
-            height={HERO_SLIDE_PRESENTATION.desktop.height}
-            type="desktop"
-            priority={priority}
-          />
-        </div>
-      )}
-      {hero.mobile.length > 0 && (
-        <div class="md:hidden relative">
-          <CustomCarousel
-            images={hero.mobile}
-            height={HERO_SLIDE_PRESENTATION.mobile.height}
-            type="mobile"
-            priority={phonePriority}
-          />
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-{hasBanners && contained && (sides.length > 0 || panel.length > 0) && (
-  <div class="relative w-full" data-hero-layout={layout}>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
-      <div class:list={["grid gap-3 md:gap-4", sides.length > 0 ? "md:grid-cols-[minmax(0,1fr)_18.75rem]" : "md:grid-cols-[minmax(0,1fr)_15rem]"]}>
+{hasBanners && layout === "contained-banners" && (
+  <div class="relative w-full" data-hero-layout={sides.length > 0 ? layout : undefined}>
+    <Container class="pt-2 md:pt-4">
+      <div class:list={["grid gap-3 md:gap-4", sides.length > 0 && "md:grid-cols-[minmax(0,1fr)_18.75rem]"]}>
         <div class="min-w-0">
-          {hero.desktop.length > 0 && (
-            <div class="hidden md:block relative">
-              <CustomCarousel
-                images={hero.desktop}
-                height={HERO_SLIDE_PRESENTATION.desktop.height}
-                type="desktop"
-                priority={priority}
-                overlay="band"
-              />
+          {carousels.map((each) => (
+            <div class={each.wrap}>
+              <CustomCarousel images={each.slides} height={HERO_SLIDE_PRESENTATION[each.type].height} type={each.type} priority={each.lead} />
             </div>
-          )}
-          {hero.mobile.length > 0 && (
-            <div class="md:hidden relative">
-              <CustomCarousel
-                images={hero.mobile}
-                height={HERO_SLIDE_PRESENTATION.mobile.height}
-                type="mobile"
-                priority={phonePriority}
-                overlay="band"
-              />
-            </div>
-          )}
+          ))}
         </div>
 
         {sides.length > 0 && (
@@ -245,26 +159,13 @@ const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
             })}
           </div>
         )}
-
-        {panel.length > 0 && (
-          <aside class="hidden md:flex flex-col justify-center gap-1 rounded-xl border border-border bg-card p-4" aria-label="Why shop here" data-hero-panel>
-            <ul class="divide-y divide-border">
-              {panel.map((fact) => (
-                <li class="py-3">
-                  <span class="block text-sm font-semibold text-foreground">{fact.title}</span>
-                  {fact.detail && <span class="block text-sm leading-relaxed text-muted-foreground">{fact.detail}</span>}
-                </li>
-              ))}
-            </ul>
-          </aside>
-        )}
       </div>
-    </div>
+    </Container>
   </div>
 )}
 
 <style>
-  /* Dawn's split banner: two portrait halves, never taller than the first
+  /* A split banner: two portrait halves, never taller than the first
      screen below the header. */
   :global(.hero-split-frame) {
     aspect-ratio: 4 / 5;

@@ -295,6 +295,22 @@ describe("tightened bounds inside a version", () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.blocks.listing.filters?.rowPitch).toBe(24);
   });
+
+  it("reads the retired app-panel and story-cards heroes as the contained and full-bleed banners, slides kept", () => {
+    const slide = { image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", heading: "Eid sale", text: "Up to half off", link: null };
+    const stored = structuredClone(v9) as Record<string, any>;
+    stored.pages.home = [
+      { id: "hero", type: "hero", version: 1, settings: { layout: "app-panel", slides: [slide] } },
+      { id: "stories", type: "hero", version: 1, settings: { layout: "story-cards", slides: [slide] } },
+    ];
+    stored.pages.landing = { offer: { sections: [{ id: "hero", type: "hero", version: 1, settings: { layout: "story-cards", slides: [slide] } }] } };
+    const parsed = parseStoredStorefrontThemeDocument(JSON.stringify(stored));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.pages.home.map((each) => (each.settings as { layout?: string }).layout)).toEqual(["contained-banners", "full-bleed"]);
+    expect((parsed?.pages.landing.offer!.sections[0]!.settings as { layout?: string; slides: unknown[] })).toMatchObject({ layout: "full-bleed", slides: [slide] });
+    // Saving a retired layout is rejected: it is no longer a choice.
+    expect(storefrontThemeDocumentSchema.safeParse(stored).success).toBe(false);
+  });
 });
 
 describe("a stored sale colour the v9 card cannot read on", () => {

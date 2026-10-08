@@ -8,6 +8,8 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { CollectionWithProducts, Product } from "@/lib/api";
 import { collectionShowsProducts } from "@/lib/homepage-sections";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import ProductGridSection from "./ProductGridSection.astro";
 import ProductRail from "./ProductRail.astro";
 
@@ -23,6 +25,8 @@ interface Props {
 }
 
 const { section, collections, fallbackProducts, currencySymbol, currencyCode, lead } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const RAIL_WIDTH = { large: "collection", compact: "shelf" } as const satisfies Record<typeof section.settings.carousel, "collection" | "shelf">;
 const railWidth = RAIL_WIDTH[section.settings.carousel];
 // Only the first collection that shows products can sit above the fold.
@@ -45,7 +49,8 @@ const collectionHref = (collection: CollectionWithProducts) => `/collections/${e
         title={collection.config?.title || collection.name}
         products={gridProducts(collection)}
         href={collectionHref(collection)}
-        collection={{ subtitle: collection.config?.subtitle || "", categories: collection.categories ?? [] }}
+        collection={{ subtitle: collection.config?.subtitle || "" }}
+        headingId={`home-collection-${collection.id}-title`}
         currencySymbol={currencySymbol}
         currencyCode={currencyCode}
         aboveFold={lead && collection.id === firstShownCollectionId}
@@ -54,6 +59,7 @@ const collectionHref = (collection: CollectionWithProducts) => `/collections/${e
     {collection.presentation === "carousel" && (
       <ProductRail
         width={railWidth}
+        headingId={`home-collection-${collection.id}-title`}
         title={collection.config?.title || collection.name}
         products={collection.products ?? []}
         href={collectionHref(collection)}
@@ -67,12 +73,10 @@ const collectionHref = (collection: CollectionWithProducts) => `/collections/${e
 
 {fallbackProducts.length > 0 && (
   <ProductGridSection
-    title={section.settings.title || "New arrivals"}
+    title={section.settings.title || copy.newArrivals}
     headingId="home-products-title"
     products={fallbackProducts}
     href="/search"
-    hrefLabel="View all products"
-    classicSpacing
     currencySymbol={currencySymbol}
     currencyCode={currencyCode}
     aboveFold={lead && !firstShownCollectionId}

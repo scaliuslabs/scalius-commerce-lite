@@ -1,0 +1,29 @@
+---
+// The one placeholder for a category without a photo: its first letter in
+// the heading font on a tinted surface. It fills whatever box holds it, so
+// tiles never change size.
+interface Props {
+  name: string;
+}
+
+const { name } = Astro.props;
+const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next().value;
+const letter = (first?.segment ?? "").toLocaleUpperCase();
+---
+
+<span class="cat-monogram" aria-hidden="true">{letter}</span>
+
+<style>
+  .cat-monogram {
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+    place-items: center;
+    background: color-mix(in oklab, var(--primary) 10%, var(--muted));
+    color: var(--muted-foreground);
+    font-family: var(--theme-font-heading);
+    font-size: var(--theme-text-2xl, 1.5rem);
+    font-weight: var(--theme-heading-weight, 650);
+    line-height: 1;
+  }
+</style>

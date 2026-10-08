@@ -12,10 +12,11 @@ interface Props {
 }
 
 const { section, surface } = Astro.props;
+import Container from "@/components/ui/Container.astro";
 ---
 
 <section class="home-section w-full" data-app-section={section.settings.app}>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
-  </div>
+  </Container>
 </section>

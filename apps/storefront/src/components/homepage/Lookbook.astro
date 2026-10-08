@@ -1,13 +1,17 @@
 ---
-// A lookbook (Fabrilife: a ~400x400 lifestyle photo with its caption beside
-// a 4x2 grid of the list's products whose last tile is "View more"). On
-// phones the photo sits above a two-column grid. Without its photo it is
-// the product grid alone.
+// A lookbook: a lifestyle photo with its caption beside a 4x2 grid of the
+// list's products whose last tile is "View more". The photo fills its cell
+// (square, or the grid's height); the product cards show their own titles
+// and prices. On phones the photo sits above a two-column grid. Without its
+// photo it is the product grid under a SectionHeader.
 import type { Product } from "@/lib/api";
 import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -22,19 +26,22 @@ interface Props {
 }
 
 const { section, title, href, products, photo, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const headingId = `home-${section.id}-title`;
 // `photo: square` is Fabrilife's square photo in a 1:2 split; `tall` fills the grid's height.
 const fashionPhoto = Boolean(photo) && section.settings.photo === "square";
 // Eight tiles at most: with more to see, the eighth is "View more".
 const viewMore = Boolean(href) && products.length >= 8;
 const shown = products.slice(0, viewMore ? 7 : 8);
+import Container from "@/components/ui/Container.astro";
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId}>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     <div class:list={["grid gap-4 md:gap-6", photo && (fashionPhoto ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" : "lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")]}>
       {photo && (
-        <figure class="relative overflow-hidden rounded-lg bg-muted">
+        <figure class="relative aspect-square overflow-hidden rounded-[var(--radius)] bg-muted lg:aspect-auto lg:min-h-80">
           <img
             src={mediaImageUrl(photo.url, 960)}
             srcset={mediaImageSrcSet(photo.url)}
@@ -44,7 +51,7 @@ const shown = products.slice(0, viewMore ? 7 : 8);
             height={photo.height ?? 800}
             loading={aboveFold ? "eager" : "lazy"}
             decoding="async"
-            class:list={["aspect-square w-full object-cover", !fashionPhoto && "h-full lg:aspect-auto"]}
+            class="absolute inset-0 h-full w-full object-cover"
           />
           <figcaption class="absolute inset-x-0 bottom-0">
             <div class="h-10 bg-linear-to-t from-black/70 to-transparent md:h-14" aria-hidden="true" />
@@ -55,7 +62,7 @@ const shown = products.slice(0, viewMore ? 7 : 8);
         </figure>
       )}
       <div class="min-w-0">
-        {!photo && <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{title}</h2>}
+        {!photo && <SectionHeader id={headingId} title={title} href={href} />}
         <ul class="grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-3">
           {shown.map((product, index) => (
             <li class="min-w-0">
@@ -65,7 +72,7 @@ const shown = products.slice(0, viewMore ? 7 : 8);
           {viewMore && (
             <li class="min-w-0">
               <a href={href!} class="flex h-full min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted p-4 text-center text-sm font-semibold text-foreground transition-colors hover:border-primary">
-                View more
+                {copy.viewMore}
                 <Icon name="arrow-right" class="h-4 w-4" />
               </a>
             </li>
@@ -73,5 +80,5 @@ const shown = products.slice(0, viewMore ? 7 : 8);
         </ul>
       </div>
     </div>
-  </div>
+  </Container>
 </section>

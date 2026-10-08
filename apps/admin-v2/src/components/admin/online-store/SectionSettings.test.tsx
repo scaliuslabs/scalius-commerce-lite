@@ -219,11 +219,11 @@ describe("section settings (generated from the registry)", () => {
   });
 
   it("sets the banner layout and its phone placement", () => {
-    render(section("hero", "hero", { layout: "story-cards" }));
+    render(section("hero", "hero", { layout: "split" }));
     expect(document.querySelector("#theme-section-hero-phoneHeight")).toBeNull();
     choose(field<HTMLButtonElement>("theme-section-hero-layout"), "Full screen banner");
-    // Leaving the phone height unset is the whole first screen.
-    expect(field<HTMLButtonElement>("theme-section-hero-phoneHeight").textContent).toContain("The whole first screen");
+    // Leaving the phone height unset is most of the first screen (70%).
+    expect(field<HTMLButtonElement>("theme-section-hero-phoneHeight").textContent).toContain("Most of the first screen");
     choose(field<HTMLButtonElement>("theme-section-hero-phonePlacement"), "After category tiles");
     expect(settings()).toEqual({ layout: "full-screen", slides: [], phonePlacement: "after-categories" });
     choose(field<HTMLButtonElement>("theme-section-hero-phonePlacement"), "Same order as desktop");

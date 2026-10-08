@@ -121,13 +121,11 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
 
 /**
  * Whether the sections show the store's delivery facts (a delivery-facts
- * strip, or the facts panel beside an app-panel hero), so the storefront
- * reads shipping and checkout settings only when one does.
+ * strip), so the storefront reads shipping and checkout settings only when
+ * one does.
  */
 export function homeSectionsShowDeliveryFacts(sections: readonly StorefrontSection[]): boolean {
-  return sections.some((section) =>
-    !section.hidden && ((section.type === "usp-strip" && section.settings.source.kind === "delivery-facts")
-    || (section.type === "hero" && section.settings.layout === "app-panel")));
+  return sections.some((section) => !section.hidden && section.type === "usp-strip" && section.settings.source.kind === "delivery-facts");
 }
 
 /**

@@ -1,17 +1,21 @@
 ---
-// A deal block (Daraz flash sale: title, countdown, "Shop all", then the
-// cards). The countdown counts only to the end of the running promotion the
-// merchant picked (`dealEndsAt`), and a small script shows and ticks it and
-// removes it at the end: the cached page never claims a deal is running
-// once it has ended, and without script there is no countdown at all. Its
-// box is laid out (invisible) from the first paint, so showing it shifts
-// nothing.
+// A deal block (title, "Shop all", then the cards). The deal counts only to
+// the end of the running promotion the merchant picked (`dealEndsAt`). More
+// than 48 hours out it says when the deal ends ("Ends 31 Dec"); in the last
+// 48 hours it counts down. A small script keeps that true after the cached
+// page was rendered and removes the line at the end: the page never claims a
+// deal is running once it has ended, and without script there is no line at
+// all. The line's box is laid out (invisible) from the first paint, so
+// showing it shifts nothing.
 import type { Product } from "@/lib/api";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import ProductRail from "./ProductRail.astro";
-import SectionHeader from "./SectionHeader.astro";
+import Container from "@/components/ui/Container.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   section: StorefrontSectionOf<"deal-block">;
@@ -26,28 +30,41 @@ interface Props {
 }
 
 const { section, title, href, products, currencySymbol, currencyCode, aboveFold, endsAt } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const headingId = `home-${section.id}-title`;
-// The time left when the page was rendered: the box's width from the first
-// paint (the script replaces it before showing it).
-function remainingAt(end: string, now: number): string {
+const DAY_MS = 86_400_000;
+// What the line says when the page was rendered; the script replaces it
+// before showing it (and again every second inside the last 48 hours).
+function lineAt(end: string, now: number): { label: string; clock: string | null } {
   const left = Math.max(0, Math.floor((Date.parse(end) - now) / 1000));
+  if (left * 1000 > 2 * DAY_MS) {
+    const date = new Intl.DateTimeFormat(language, { day: "numeric", month: "short", timeZone: "UTC" }).format(Date.parse(end));
+    return { label: copy.endsOn(date), clock: null };
+  }
   const pad = (value: number) => String(value).padStart(2, "0");
-  const clock = `${pad(Math.floor((left % 86_400) / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
-  return left >= 86_400 ? `${Math.floor(left / 86_400)}d ${clock}` : clock;
+  return { label: copy.endsIn, clock: `${pad(Math.floor(left / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}` };
 }
+const line = endsAt ? lineAt(endsAt, Date.now()) : null;
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId} data-deal-block>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <div class="rounded-xl border border-border bg-card p-3 md:p-5">
-      <SectionHeader id={headingId} title={title} href={href} hrefLabel="Shop all">
-        <Fragment slot="aside">{endsAt && (
-          <p class="invisible me-auto flex shrink-0 items-center gap-2 text-sm text-muted-foreground" data-deal-countdown data-ends-at={endsAt}>
-            <span>Ends in</span>
-            <time datetime={endsAt} class="rounded-md bg-primary px-2 py-0.5 font-semibold tabular-nums text-primary-foreground" data-deal-remaining>{remainingAt(endsAt, Date.now())}</time>
-          </p>
-        )}</Fragment>
-      </SectionHeader>
+  <Container>
+    <div class="deal-surface">
+      <SectionHeader id={headingId} title={title} href={href} linkLabel={copy.shopAll} />
+      {endsAt && line && (
+        <p
+          class="deal-line invisible"
+          data-deal-countdown
+          data-ends-at={endsAt}
+          data-label-in={copy.endsIn}
+          data-label-on={copy.endsOn("%DATE%")}
+          data-locale={language}
+        >
+          <span data-deal-label>{line.label}</span>
+          <time datetime={endsAt} class="deal-clock" data-deal-remaining hidden={line.clock === null}>{line.clock ?? ""}</time>
+        </p>
+      )}
       {products.length >= 4 ? (
         <ProductRail title={title} href={null} products={products} currencySymbol={currencySymbol} currencyCode={currencyCode} aboveFold={aboveFold} bare />
       ) : (
@@ -58,34 +75,46 @@ function remainingAt(end: string, now: number): string {
         </ProductGrid>
       )}
     </div>
-  </div>
+  </Container>
 </section>
 
 <script>
-  // One timer for every countdown on the page; paused while the tab is hidden.
-  // Each tick reads the countdowns again, so a section the theme editor drew
+  // One timer for every deal line on the page; paused while the tab is hidden.
+  // Each tick reads the lines again, so a section the theme editor drew
   // again (astro:page-load) keeps counting.
+  const DAY_MS = 86_400_000;
   const pad = (value: number) => String(value).padStart(2, "0");
   let timer = 0;
   function updateDealCountdowns() {
-    const countdowns = document.querySelectorAll<HTMLElement>("[data-deal-countdown]");
-    if (countdowns.length === 0) {
+    const lines = document.querySelectorAll<HTMLElement>("[data-deal-countdown]");
+    if (lines.length === 0) {
       window.clearInterval(timer);
       timer = 0;
       return;
     }
     const now = Date.now();
-    countdowns.forEach((countdown) => {
-      const left = Math.floor((Date.parse(countdown.dataset.endsAt ?? "") - now) / 1000);
-      if (!(left > 0)) {
-        countdown.remove();
+    lines.forEach((line) => {
+      const end = Date.parse(line.dataset.endsAt ?? "");
+      const leftMs = end - now;
+      if (!(leftMs > 0)) {
+        line.remove();
         return;
       }
-      const days = Math.floor(left / 86_400);
-      const clock = `${pad(Math.floor((left % 86_400) / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
-      const remaining = countdown.querySelector("[data-deal-remaining]");
-      if (remaining) remaining.textContent = days > 0 ? `${days}d ${clock}` : clock;
-      countdown.classList.remove("invisible");
+      const label = line.querySelector("[data-deal-label]");
+      const clock = line.querySelector<HTMLElement>("[data-deal-remaining]");
+      if (leftMs > 2 * DAY_MS) {
+        const date = new Intl.DateTimeFormat(line.dataset.locale || undefined, { day: "numeric", month: "short" }).format(end);
+        if (label) label.textContent = (line.dataset.labelOn ?? "").replace("%DATE%", date);
+        if (clock) clock.hidden = true;
+      } else {
+        const left = Math.floor(leftMs / 1000);
+        if (label) label.textContent = line.dataset.labelIn ?? "";
+        if (clock) {
+          clock.hidden = false;
+          clock.textContent = `${pad(Math.floor(left / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
+        }
+      }
+      line.classList.remove("invisible");
     });
   }
   function startDealCountdowns() {
@@ -104,3 +133,37 @@ function remainingAt(end: string, now: number): string {
     startDealCountdowns();
   }
 </script>
+
+<style>
+  .deal-surface {
+    padding: var(--theme-surface-pad-phone, 0.75rem);
+    border: var(--theme-surface-border, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--theme-surface-shadow, none);
+  }
+
+  @media (min-width: 64rem) {
+    .deal-surface { padding: var(--theme-surface-pad-desktop, 1.25rem); }
+  }
+
+  .deal-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: -0.5rem 0 0.75rem;
+    color: var(--muted-foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+  }
+
+  .deal-clock {
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .deal-clock[hidden] { display: none; }
+</style>

@@ -1,0 +1,190 @@
+---
+// The words over a hero banner, one component for every hero layout and
+// every banner row: the heading (in the theme's heading font and case), the
+// supporting text (two lines) and the button (the shared Button, so it
+// follows the button shape and primary colour). `band` sits at the bottom of
+// the photo on a 70% black band with a short lead-in, so white words keep AA
+// contrast over any photo however many lines they wrap to; `editorial` is the
+// wide-editorial layout's panel beside the photo; `plain` is a colour banner
+// without a photo (the secondary colour behind the words).
+import Button from "@/components/ui/Button.astro";
+
+interface Props {
+  heading?: string;
+  text?: string;
+  /** The button's words; none draws no button. */
+  buttonLabel?: string;
+  tone?: "band" | "editorial" | "plain";
+  /** Heading size: a banner in a four-up row is smaller. */
+  size?: "lg" | "md";
+  /** The heading's id, for a banner section named by its own words. */
+  headingId?: string;
+  headingLevel?: "p" | "h2";
+}
+
+const { heading, text, buttonLabel, tone = "band", size = "lg", headingId, headingLevel = "p" } = Astro.props;
+const Heading = headingLevel;
+---
+
+{(heading || text || buttonLabel) && (
+  <div class="hero-copy" data-tone={tone} data-size={size}>
+    {tone === "band" && <div class="hero-copy-lead" aria-hidden="true" />}
+    <div class="hero-copy-body">
+      {heading && <Heading id={headingId} class="hero-copy-heading">{heading}</Heading>}
+      {text && <p class="hero-copy-text">{text}</p>}
+      {buttonLabel && (
+        <Button as="span" variant="primary" class="hero-copy-button">{buttonLabel}</Button>
+      )}
+    </div>
+  </div>
+)}
+
+<style is:global>
+  .site-root .hero-copy {
+    overflow-wrap: anywhere;
+  }
+
+  .site-root .hero-copy[data-tone="band"] {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    color: #fff;
+  }
+
+  .site-root .hero-copy-lead {
+    block-size: 3rem;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.7), transparent);
+  }
+
+  .site-root .hero-copy-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0 1.25rem 1.25rem;
+  }
+
+  .site-root .hero-copy[data-tone="band"] .hero-copy-body {
+    background: rgb(0 0 0 / 0.7);
+  }
+
+  /* The pager sits under the copy: reserve its 44px row and a gap. */
+  .site-root [data-pager] .hero-copy[data-tone="band"] .hero-copy-body {
+    padding-block-end: 3.5rem;
+  }
+
+  .site-root .hero-copy-heading {
+    margin: 0;
+    max-inline-size: 36rem;
+    font-family: var(--theme-font-heading);
+    font-size: var(--theme-text-2xl, 1.5rem);
+    font-weight: var(--theme-heading-weight, 650);
+    line-height: var(--theme-heading-leading, 1.15);
+    letter-spacing: var(--theme-heading-tracking, -0.02em);
+    text-wrap: balance;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
+  .site-root[data-theme-heading-case="uppercase"] .hero-copy-heading {
+    text-transform: uppercase;
+    letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
+
+  .site-root .hero-copy[data-size="md"] .hero-copy-heading {
+    font-size: var(--theme-text-xl, 1.25rem);
+  }
+
+  .site-root .hero-copy-text {
+    margin: 0;
+    max-inline-size: 34rem;
+    font-size: var(--theme-text-sm, 0.875rem);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .site-root .hero-copy-button {
+    margin-block-start: 0.25rem;
+  }
+
+  @media (min-width: 48rem) {
+    .site-root .hero-copy-body {
+      padding: 0 2.5rem 2rem;
+    }
+
+    .site-root [data-pager] .hero-copy[data-tone="band"] .hero-copy-body {
+      padding-block-end: 3.5rem;
+    }
+
+    .site-root .hero-copy-heading {
+      font-size: var(--theme-text-4xl, 2.25rem);
+    }
+
+    .site-root .hero-copy[data-size="md"] .hero-copy-heading {
+      font-size: var(--theme-text-2xl, 1.5rem);
+    }
+
+    .site-root .hero-copy-text {
+      font-size: var(--theme-text-base, 1rem);
+    }
+  }
+
+  /* A colour banner without a photo: the words on the secondary colour. */
+  .site-root .hero-copy[data-tone="plain"] {
+    color: var(--secondary-foreground);
+  }
+
+  .site-root .hero-copy[data-tone="plain"] .hero-copy-body {
+    padding: 0;
+  }
+
+  /* No photo to cover: the words show in full. */
+  .site-root .hero-copy[data-tone="plain"] :is(.hero-copy-heading, .hero-copy-text) {
+    display: block;
+    overflow: visible;
+  }
+
+  /* Wide editorial: the copy panel beside the photo (primary colour). Phones
+     keep it over the photo's lower edge. */
+  .site-root .hero-copy[data-tone="editorial"] {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    color: #fff;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.85));
+    padding-block-start: 3rem;
+  }
+
+  .site-root .hero-copy[data-tone="editorial"] .hero-copy-heading {
+    font-size: clamp(1.5rem, 2.1vw, 2.25rem);
+    line-height: 1.16;
+  }
+
+  @media (min-width: 48rem) {
+    .site-root .hero-copy[data-tone="editorial"] {
+      inset-inline-end: auto;
+      inset-block: 0;
+      inline-size: 52%;
+      display: flex;
+      align-items: center;
+      padding-block-start: 0;
+      background: none;
+      color: var(--primary-foreground);
+    }
+
+    .site-root .hero-copy[data-tone="editorial"] .hero-copy-body {
+      padding: 2rem clamp(2rem, 5vw, 5.875rem) 3.5rem;
+    }
+
+    /* On the panel the button takes the page colour so it stands out from the primary. */
+    .site-root .hero-copy[data-tone="editorial"] .sf-button[data-variant="primary"] {
+      background: var(--background);
+      color: var(--foreground);
+    }
+  }
+</style>

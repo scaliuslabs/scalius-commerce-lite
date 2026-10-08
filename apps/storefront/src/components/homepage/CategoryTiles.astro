@@ -1,19 +1,25 @@
 ---
 // The categories the section names (its `categoryIds`, in order; only
 // published ones arrive) under its title, as tiles.
-// - photo: the classic store's photo tiles with captions (HomepageCategoryRail).
-// - photo-grid: Aarong's department grid of the same photos, 2 to 4 across.
-// - icons: Star Tech's icon grid, 8 across on computers and 4 on phones.
-// - round: round images, 8 / 3 across; round-small: Apple Gadgets' 56px
-//   circles; round-row: Target's round images in one scrolling row on phones.
-// - quad: Amazon's cards of four labelled images in a 2x2 grid.
-// - square: eBay's seven-across desktop gallery, three across on phones.
-// A category without a photo shows its first letter on the muted colour,
-// in the same box, so tiles never change size.
+// - photo / photo-grid: portrait photos with captions. A scrolling row on
+//   phones (the next tile peeks in), a grid from 640px.
+// - icons: an icon grid, 3 across on phones.
+// - round / round-small / round-row: round images (round-row is one scrolling
+//   row on phones).
+// - quad: cards of four labelled images in a 2x2 grid.
+// - square: a square gallery.
+// Grids use the widest column count that leaves no stranded row
+// (balancedColumns), so twelve tiles are 6 or 4 across, never 8 + 4. A
+// category without a photo shows CategoryMonogram in the same box.
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { HomepageCategory } from "@/lib/api/storefront";
+import { balancedColumns } from "@/lib/homepage-sections";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import HomepageCategoryRail from "./HomepageCategoryRail.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+import SectionHeader from "@/components/ui/SectionHeader.astro";
+import CategoryMonogram from "./CategoryMonogram.astro";
 
 interface Props {
   section: StorefrontSectionOf<"category-tiles">;
@@ -24,41 +30,73 @@ interface Props {
 }
 
 const { section, title, categories } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const style = section.settings.style;
 const photo = style === "photo" || style === "photo-grid";
 const round = style === "round" || style === "round-small" || style === "round-row";
 const compactRound = style === "round-small";
-const retailRound = style === "round-row";
 const headingId = `home-${section.id}-title`;
 const hrefOf = (category: (typeof categories)[number]) =>
   category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`;
-const letter = (name: string) => {
-  const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(name.trim())[Symbol.iterator]().next().value;
-  return (first?.segment ?? "").toLocaleUpperCase();
-};
-const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
+const count = categories.length;
+// Columns per width step: phone, 640px, 1024px.
+const columns = (phone: number, tablet: number, desktop: number) =>
+  `--cols-phone:${balancedColumns(count, phone)};--cols-tablet:${balancedColumns(count, tablet)};--cols-desktop:${balancedColumns(count, desktop)};`;
+const quads = Array.from({ length: Math.ceil(count / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
+const shown = photo ? count >= 1 : count >= 2;
 ---
 
-{photo && <HomepageCategoryRail title={title} categories={categories} headingId={headingId} heritage={style === "photo-grid"} />}
-
-{!photo && categories.length >= 2 && (
+{shown && (
   <section class="home-section w-full" aria-labelledby={headingId}>
-    <div class:list={["mx-auto px-4 sm:px-6 lg:px-8", style === "quad" ? "max-w-[100rem]" : style === "square" ? "max-w-[97rem]" : "max-w-7xl"]}>
-      <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{title}</h2>
+    <Container>
+      <SectionHeader id={headingId} title={title} />
 
-      {style === "icons" && (
-        <ul class="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 md:gap-3">
+      {photo && (
+        <ul
+          class="cat-photos"
+          style={columns(3, style === "photo-grid" ? 3 : 3, style === "photo-grid" ? 4 : 5)}
+          data-heritage-departments={style === "photo-grid" ? "" : undefined}
+        >
           {categories.map((category) => (
             <li>
-              <a href={hrefOf(category)} class="flex h-full min-h-24 flex-col items-center gap-2 rounded-lg border border-border bg-card p-2 text-center transition-colors hover:border-primary md:p-3">
-                <span class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-muted md:size-14" aria-hidden="true">
+              <a href={hrefOf(category)} class="group cat-photo" aria-label={copy.browse(category.name)}>
+                {category.imageUrl ? (
+                  <img
+                    src={mediaImageUrl(category.imageUrl, 480)}
+                    srcset={mediaImageSrcSet(category.imageUrl)}
+                    sizes="(max-width: 639px) min(42vw, 176px), (max-width: 1023px) 30vw, 20vw"
+                    alt=""
+                    width="520"
+                    height="620"
+                    loading="lazy"
+                    decoding="async"
+                    class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                  />
+                ) : (
+                  <CategoryMonogram name={category.name} />
+                )}
+                <span class="cat-photo-scrim" aria-hidden="true"></span>
+                <span class="cat-photo-name">{category.name}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {style === "icons" && (
+        <ul class="cat-icons" style={columns(3, 6, 8)}>
+          {categories.map((category) => (
+            <li>
+              <a href={hrefOf(category)} class="cat-icon-tile">
+                <span class="cat-icon-box" aria-hidden="true">
                   {category.imageUrl ? (
                     <img src={mediaImageUrl(category.imageUrl, 160)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="56px" alt="" width="56" height="56" loading="lazy" decoding="async" class="h-full w-full object-contain" />
                   ) : (
-                    <span class="text-lg font-semibold text-muted-foreground">{letter(category.name)}</span>
+                    <CategoryMonogram name={category.name} />
                   )}
                 </span>
-                <span class="line-clamp-2 text-xs font-medium leading-snug text-foreground [overflow-wrap:anywhere] md:text-sm">{category.name}</span>
+                <span class="cat-label">{category.name}</span>
               </a>
             </li>
           ))}
@@ -66,22 +104,18 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
       )}
 
       {round && (
-        <ul class:list={[
-          retailRound
-            ? "flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-6 md:gap-y-4 lg:grid-cols-8"
-            : "grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8",
-        ]}>
+        <ul class:list={["cat-round", style === "round-row" && "cat-round-row"]} style={columns(3, 4, 8)}>
           {categories.map((category) => (
-            <li class={retailRound ? "w-[30%] shrink-0 md:w-auto" : undefined}>
-              <a href={hrefOf(category)} class="group flex flex-col items-center gap-2 text-center">
-                <span class:list={["grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-shadow group-hover:ring-2 group-hover:ring-primary", compactRound ? "size-14" : "aspect-square w-full max-w-28"]} aria-hidden="true">
+            <li>
+              <a href={hrefOf(category)} class="group cat-round-tile">
+                <span class:list={["cat-round-photo", compactRound && "cat-round-small"]} aria-hidden="true">
                   {category.imageUrl ? (
                     <img src={mediaImageUrl(category.imageUrl, compactRound ? 160 : 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes={compactRound ? "56px" : "(max-width: 639px) 30vw, 112px"} alt="" width={compactRound ? "56" : "112"} height={compactRound ? "56" : "112"} loading="lazy" decoding="async" class="h-full w-full object-cover" />
                   ) : (
-                    <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
+                    <CategoryMonogram name={category.name} />
                   )}
                 </span>
-                <span class="line-clamp-2 text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">{category.name}</span>
+                <span class="cat-label">{category.name}</span>
               </a>
             </li>
           ))}
@@ -89,18 +123,18 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
       )}
 
       {style === "square" && (
-        <ul class="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 lg:grid-cols-7 lg:gap-x-4">
+        <ul class="cat-square" style={columns(3, 4, 7)}>
           {categories.map((category) => (
             <li>
               <a href={hrefOf(category)} class="group block h-full">
-                <span class="grid aspect-square place-items-center overflow-hidden rounded-xl bg-muted" aria-hidden="true">
+                <span class="cat-square-photo" aria-hidden="true">
                   {category.imageUrl ? (
                     <img src={mediaImageUrl(category.imageUrl, 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="(max-width: 639px) 30vw, (max-width: 1023px) 23vw, 14vw" alt="" width="320" height="320" loading="lazy" decoding="async" class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
                   ) : (
-                    <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
+                    <CategoryMonogram name={category.name} />
                   )}
                 </span>
-                <span class="mt-2 block text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere] group-hover:underline">{category.name}</span>
+                <span class="cat-label cat-label-start">{category.name}</span>
               </a>
             </li>
           ))}
@@ -108,21 +142,21 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
       )}
 
       {style === "quad" && (
-        <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 md:gap-4">
+        <ul class="cat-quads" style={`--cols-desktop:${balancedColumns(quads.length, 4, 1)};`}>
           {quads.map((group) => (
-            <li class="rounded-lg border border-border bg-card p-3 md:p-4">
+            <li class="cat-quad">
               <ul class="grid grid-cols-2 gap-3">
                 {group.map((category) => (
                   <li>
                     <a href={hrefOf(category)} class="group block">
-                      <span class="grid aspect-square place-items-center overflow-hidden rounded-md bg-muted" aria-hidden="true">
+                      <span class="cat-square-photo cat-quad-photo" aria-hidden="true">
                         {category.imageUrl ? (
                           <img src={mediaImageUrl(category.imageUrl, 320)} srcset={mediaImageSrcSet(category.imageUrl)} sizes="(max-width: 639px) 45vw, (max-width: 1023px) 23vw, 150px" alt="" width="150" height="150" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
                         ) : (
-                          <span class="text-2xl font-semibold text-muted-foreground">{letter(category.name)}</span>
+                          <CategoryMonogram name={category.name} />
                         )}
                       </span>
-                      <span class="mt-1.5 block min-h-11 text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere] group-hover:underline">{category.name}</span>
+                      <span class="cat-label cat-label-start">{category.name}</span>
                     </a>
                   </li>
                 ))}
@@ -131,6 +165,246 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
           ))}
         </ul>
       )}
-    </div>
+    </Container>
   </section>
 )}
+
+<style>
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cat-label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    margin-block-start: 0.5rem;
+    color: var(--foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 500;
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+
+  .cat-label-start {
+    text-align: start;
+  }
+
+  /* Photo tiles: a scrolling row on phones, a balanced grid from 640px. */
+  .cat-photos {
+    display: flex;
+    gap: 0.75rem;
+    margin-inline: calc(var(--theme-gutter-phone, 1rem) * -1);
+    padding-inline: var(--theme-gutter-phone, 1rem);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .cat-photos::-webkit-scrollbar { display: none; }
+
+  .cat-photos > li {
+    flex: 0 0 42vw;
+    max-inline-size: 11rem;
+    scroll-snap-align: start;
+  }
+
+  .cat-photo {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: var(--radius);
+    background: var(--muted);
+  }
+
+  .cat-photo-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0.05) 60%, transparent);
+  }
+
+  .cat-photo-name {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    padding: 0.75rem;
+    color: #fff;
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+
+  @media (min-width: 40rem) {
+    .cat-photos {
+      display: grid;
+      grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr));
+      gap: 1rem;
+      margin-inline: 0;
+      padding-inline: 0;
+      overflow: visible;
+    }
+
+    .cat-photos > li { max-inline-size: none; }
+    .cat-photo-name { font-size: var(--theme-text-base, 1rem); padding: 1rem; }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-photos { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
+  }
+
+  /* Icon tiles: 3 across on phones so names fit whole. */
+  .cat-icons {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-phone), minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .cat-icon-tile {
+    display: flex;
+    block-size: 100%;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem 0.5rem;
+    border: var(--theme-surface-border, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--theme-surface-shadow, none);
+    text-align: center;
+  }
+
+  .cat-icon-box {
+    display: block;
+    overflow: hidden;
+    inline-size: 3rem;
+    block-size: 3rem;
+    border-radius: var(--radius);
+    background: var(--muted);
+  }
+
+  @media (hover: hover) {
+    .cat-icon-tile:hover { border-color: var(--primary); }
+  }
+
+  @media (min-width: 40rem) {
+    .cat-icons { grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr)); gap: 0.75rem; }
+    .cat-icon-box { inline-size: 3.5rem; block-size: 3.5rem; }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-icons { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
+  }
+
+  /* Round tiles. */
+  .cat-round {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-phone), minmax(0, 1fr));
+    gap: 1rem 0.75rem;
+  }
+
+  .cat-round-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .cat-round-photo {
+    display: block;
+    overflow: hidden;
+    inline-size: 100%;
+    max-inline-size: 7rem;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    background: var(--muted);
+    box-shadow: 0 0 0 1px var(--border);
+    transition: box-shadow var(--theme-duration-fast, 150ms) ease-out;
+  }
+
+  .cat-round-small {
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+  }
+
+  @media (hover: hover) {
+    .cat-round-tile:hover .cat-round-photo { box-shadow: 0 0 0 2px var(--primary); }
+  }
+
+  /* Target's row: one scrolling row on phones. */
+  .cat-round-row {
+    display: flex;
+    margin-inline: calc(var(--theme-gutter-phone, 1rem) * -1);
+    padding-inline: var(--theme-gutter-phone, 1rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .cat-round-row::-webkit-scrollbar { display: none; }
+  .cat-round-row > li { flex: 0 0 30%; }
+
+  @media (min-width: 40rem) {
+    .cat-round,
+    .cat-round-row {
+      display: grid;
+      grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr));
+      margin-inline: 0;
+      padding-inline: 0;
+      overflow: visible;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-round,
+    .cat-round-row { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
+  }
+
+  /* Square gallery and quad cards. */
+  .cat-square {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-phone), minmax(0, 1fr));
+    gap: 1.25rem 0.75rem;
+  }
+
+  .cat-square-photo {
+    display: block;
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: var(--radius);
+    background: var(--muted);
+  }
+
+  @media (min-width: 40rem) {
+    .cat-square { grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr)); }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-square { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); column-gap: 1rem; }
+  }
+
+  .cat-quads {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .cat-quad {
+    padding: var(--theme-surface-pad-phone, 0.75rem);
+    border: var(--theme-surface-border, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--theme-surface-shadow, none);
+  }
+
+  @media (min-width: 40rem) {
+    .cat-quads { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-quads { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
+    .cat-quad { padding: var(--theme-surface-pad-desktop, 1rem); }
+  }
+</style>

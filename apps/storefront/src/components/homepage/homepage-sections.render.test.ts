@@ -162,7 +162,7 @@ const slide = (image: string, options: { phoneImage?: string; heading?: string; 
   ...(options.phoneImage ? { phoneImage: options.phoneImage } : {}),
   focalPoint: { x: 50, y: 50 },
   alt: `Banner ${image}`,
-  ...(options.heading ? { heading: options.heading, buttonLabel: "Shop now" } : {}),
+  ...(options.heading ? { heading: options.heading, text: "Supporting words", buttonLabel: "Shop now" } : {}),
   link: options.link !== undefined ? options.link : options.heading ? "/collections/eid" : null,
 });
 
@@ -351,27 +351,22 @@ describe("homepage section library", () => {
     expect(page.querySelector('.mobile-carousel img')?.getAttribute("fetchpriority")).toBe("auto");
   });
 
-  it.each(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"] as const)(
+  it.each(["full-bleed", "contained-banners", "split", "full-screen", "wide-editorial"] as const)(
     "renders the %s hero with the first banner as the only high-priority image",
     async (layout) => {
       const page = await render([hero({ layout })], store("large"));
       const high = Array.from(page.querySelectorAll('img[fetchpriority="high"]'));
       expect(high.length).toBeGreaterThan(0);
       expect(high.length).toBeLessThanOrEqual(2); // one per viewport
-      if (layout === "story-cards") {
-        const cards = page.querySelectorAll('[data-hero-layout="story-cards"] li');
-        expect(cards).toHaveLength(3);
-        expect(page.querySelector(".story-rail")!.className).toContain("snap-x");
-        // The headline is real text over a scrim, never the alt text.
-        expect(text(cards[0])).toContain(BANGLA);
-      } else if (layout === "split") {
+      if (layout === "split") {
         expect(page.querySelectorAll('[data-hero-layout="split"] .hero-picture')).toHaveLength(3);
       } else {
         expect(page.querySelector(".desktop-carousel")).not.toBeNull();
         const rounded = page.querySelector(".desktop-carousel")!.classList.contains("rounded-xl");
-        expect(rounded).toBe(layout === "contained-banners" || layout === "app-panel");
+        expect(rounded).toBe(layout === "contained-banners" || layout === "wide-editorial");
       }
-      if (layout === "app-panel") expect(text(page.querySelector("[data-hero-panel]"))).toContain("Cash on delivery");
+      // The slide's supporting text shows in every layout, beside its heading.
+      expect(text(page.querySelector('[data-home-section="hero"]'))).toContain("Supporting words");
     },
   );
 
@@ -604,10 +599,10 @@ describe("homepage section library", () => {
 
     const promoted = await render(fullScreen, store("large"), heritage);
     expect(promoted.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
-      .toContain("100svh");
+      .toContain("70svh");
     const screen = await render([hero({ layout: "full-screen" })], store("tiny"), storefrontTemplateTheme("boutique"));
     expect(screen.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
-      .toContain("100svh");
+      .toContain("70svh");
   });
 
   it("switches product tabs without script and keeps only tabs with products", async () => {

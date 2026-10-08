@@ -1,7 +1,13 @@
 ---
-// Optimized carousel component for best performance and LCP
+// The hero carousel (every layout except split, which uses HeroPicture): the
+// slides, their words (HeroCopy), a dot pager, arrows from 768px and a
+// pause control. Slides advance only on computers, and never under reduced
+// motion or after the buyer has used a control (WCAG 2.2.2).
 import { heroImageCandidate, type StorefrontHeroLayout } from "@/lib/homepage-hero";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import HeroCopy from "./HeroCopy.astro";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
@@ -13,6 +19,7 @@ interface Props {
   images: HeroSlide[];
   height: number;
   type: "desktop" | "mobile";
+  /** Advance on their own (computers only; phones swipe or tap the dots). */
   autoRotate?: boolean;
   interval?: number;
   /** The first slide is the page's LCP (high fetch priority, sync decode). */
@@ -27,28 +34,24 @@ interface Props {
   frameHeight?: string;
   /** Rounded corners (a contained banner); edge-to-edge heroes are square. */
   rounded?: boolean;
-  /**
-   * Overlay copy on the classic gradient, or on a 70% black band behind the
-   * words (AA over any photo however many lines the heading wraps to). The
-   * contained classic banner keeps its gradient; the other hero layouts use
-   * the band.
-   */
-  overlay?: "gradient" | "band" | "editorial";
+  /** The words sit on a band over the photo, or (wide editorial) on a panel beside it. */
+  overlay?: "band" | "editorial";
 }
 
-// Slides advance every 6 s (WCAG 2.2.2 needs a pause control, provided below).
 const {
   images,
   height,
   type,
-  autoRotate = true,
+  autoRotate = type === "desktop",
   interval = 6000,
   priority = true,
   layout = "contained-banners",
   frameHeight,
   rounded = true,
-  overlay = "gradient",
+  overlay = "band",
 } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const corner = rounded ? (layout === "wide-editorial" ? " rounded-2xl" : " rounded-xl") : "";
 const canRotate = autoRotate && images.length > 1;
 const presentation = HERO_SLIDE_PRESENTATION[type];
@@ -64,11 +67,12 @@ if (images.length === 0) return;
   style={`height: ${frameHeight ?? `${height}px`};`}
   role="region"
   aria-roledescription="carousel"
-  aria-label="Featured"
+  aria-label={copy.featured}
   data-carousel-type={type}
   data-carousel-layout={layout}
   data-auto-rotate={canRotate}
   data-interval={interval}
+  data-pager={images.length > 1 ? "" : undefined}
 >
   <div class="carousel-container relative w-full h-full">
     {/* Slides */}
@@ -81,7 +85,7 @@ if (images.length === 0) return;
           const headline = image.heading?.trim();
           const supportingText = image.supportingText?.trim();
           const buttonLabel = image.link ? image.buttonLabel?.trim() : "";
-          const editorial = layout === "wide-editorial" && Boolean(headline || supportingText || buttonLabel);
+          const editorial = overlay === "editorial" && Boolean(headline || supportingText || buttonLabel);
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           // Every rendition with the rendered width, built by the same helper
           // as the LCP preload in pages/index.astro, so the browser picks one
@@ -94,7 +98,7 @@ if (images.length === 0) return;
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               role="group"
               aria-roledescription="slide"
-              aria-label={`${index + 1} of ${images.length}`}
+              aria-label={copy.slideOf(index + 1, images.length)}
               aria-hidden={index === 0 ? undefined : "true"}
               inert={index === 0 ? undefined : true}
               data-slide-index={index}
@@ -103,7 +107,7 @@ if (images.length === 0) return;
                 href={image.link || undefined}
                 data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
                 class={`slide-link group relative block h-full w-full${corner} ${editorial ? "bg-primary" : ""} ${image.link ? "cursor-pointer" : "cursor-default"}`}
-                aria-label={image.link && !headline && !image.title ? `Slide ${index + 1}` : undefined}
+                aria-label={image.link && !headline && !image.title ? copy.banner(index + 1) : undefined}
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
@@ -126,37 +130,7 @@ if (images.length === 0) return;
                     decoding={index === 0 && priority ? "sync" : "async"}
                   />
                 </picture>
-
-                {(headline || buttonLabel) && overlay === "gradient" && (
-                  <div class="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/55 to-transparent px-5 pb-12 pt-20 text-white md:px-10 md:pb-14">
-                    {headline && <p class="max-w-xl text-xl font-bold leading-tight [text-shadow:0_1px_3px_rgb(0_0_0/0.6)] md:text-4xl">{headline}</p>}
-                    {buttonLabel && (
-                      <span class="mt-3 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-neutral-900 transition-transform group-hover:scale-[1.03]">
-                        {buttonLabel}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {(headline || buttonLabel) && overlay === "band" && (
-                  <div class="absolute inset-x-0 bottom-0 text-white">
-                    <div class="h-12 bg-linear-to-t from-black/70 to-transparent md:h-20" aria-hidden="true" />
-                    <div class="bg-black/70 px-5 pb-12 md:px-10 md:pb-14">
-                      {headline && <p class="max-w-xl text-xl font-bold leading-tight [overflow-wrap:anywhere] md:text-4xl">{headline}</p>}
-                      {buttonLabel && (
-                        <span class="mt-3 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-neutral-900 transition-transform group-hover:scale-[1.03]">
-                          {buttonLabel}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {(headline || supportingText || buttonLabel) && overlay === "editorial" && (
-                  <div class="wide-editorial-copy">
-                    {headline && <p class="wide-editorial-heading [overflow-wrap:anywhere]">{headline}</p>}
-                    {supportingText && <p class="wide-editorial-support [overflow-wrap:anywhere]">{supportingText}</p>}
-                    {buttonLabel && <span class="wide-editorial-button">{buttonLabel}</span>}
-                  </div>
-                )}
+                <HeroCopy heading={headline} text={supportingText} buttonLabel={buttonLabel} tone={overlay} />
               </SlideFrame>
             </div>
           );
@@ -168,8 +142,10 @@ if (images.length === 0) return;
       canRotate && (
         <button
           type="button"
-          class="absolute bottom-0 inset-e-2 z-20 flex h-11 w-11 items-center justify-center rounded-full text-white"
-          aria-label="Pause slideshow"
+          class="carousel-pause absolute bottom-0 inset-e-2 z-20 flex h-11 w-11 items-center justify-center rounded-full text-white"
+          aria-label={copy.pauseSlides}
+          data-label-pause={copy.pauseSlides}
+          data-label-play={copy.playSlides}
           data-carousel-pause
         >
           <span class="flex h-7 w-7 items-center justify-center rounded-full bg-black/50">
@@ -180,15 +156,15 @@ if (images.length === 0) return;
       )
     }
 
-    {/* Navigation dots - Enhanced visibility */}
+    {/* Pager dots: 44px targets, only the dot is drawn. */}
     {
       images.length > 1 && (
-        <div class="absolute bottom-0 left-1/2 z-10 flex -translate-x-1/2">
+        <div class="carousel-dots absolute bottom-0 left-1/2 z-10 flex -translate-x-1/2">
           {images.map((_: Props["images"][0], index: number) => (
             <button
               type="button"
               class="group flex h-11 w-11 items-center justify-center rounded-full"
-              aria-label={`Go to slide ${index + 1}`}
+              aria-label={copy.goToSlide(index + 1)}
               aria-current={index === 0 ? "true" : undefined}
               data-nav-index={index}
             >
@@ -213,43 +189,21 @@ if (images.length === 0) return;
           <button
             type="button"
             class="nav-button absolute inset-s-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
-            aria-label="Previous slide"
+            aria-label={copy.previousSlide}
             data-nav="prev"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="2.5"
-              stroke="currentColor"
-              class="w-5 h-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M15.75 19.5L8.25 12l7.5-7.5"
-              />
+            <svg data-dir-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </button>
           <button
             type="button"
             class="nav-button absolute inset-e-4 top-1/2 -translate-y-1/2 w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
-            aria-label="Next slide"
+            aria-label={copy.nextSlide}
             data-nav="next"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="2.5"
-              stroke="currentColor"
-              class="w-5 h-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M8.25 4.5l7.5 7.5-7.5 7.5"
-              />
+            <svg data-dir-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
         </>
@@ -267,6 +221,7 @@ if (images.length === 0) return;
       navDots!: HTMLElement[];
       currentIndex: number = 0;
       autoRotate: boolean;
+      reducedMotion: boolean;
       interval: number;
       timer: ReturnType<typeof setInterval> | null = null;
       initialTimer: ReturnType<typeof setTimeout> | null = null;
@@ -286,9 +241,8 @@ if (images.length === 0) return;
 
       constructor(carousel: HTMLElement) {
         this.carousel = carousel;
-        this.autoRotate =
-          carousel.dataset.autoRotate === "true" &&
-          !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        this.autoRotate = carousel.dataset.autoRotate === "true" && !this.reducedMotion;
         this.interval = parseInt(carousel.dataset.interval || "3000");
 
         // Get all slides
@@ -318,6 +272,7 @@ if (images.length === 0) return;
         this.navDots.forEach((dot, index) => {
           dot.addEventListener("click", (e) => {
             e.preventDefault();
+            this.stopForGood();
             if (!this.isTransitioning) {
               void this.goToSlide(index);
             }
@@ -331,6 +286,7 @@ if (images.length === 0) return;
         if (prevButton) {
           prevButton.addEventListener("click", (e) => {
             e.preventDefault();
+            this.stopForGood();
             if (!this.isTransitioning) {
               void this.goToPrevSlide();
             }
@@ -340,6 +296,7 @@ if (images.length === 0) return;
         if (nextButton) {
           nextButton.addEventListener("click", (e) => {
             e.preventDefault();
+            this.stopForGood();
             if (!this.isTransitioning) {
               void this.goToNextSlide();
             }
@@ -351,18 +308,8 @@ if (images.length === 0) return;
           "[data-carousel-pause]",
         );
         this.pauseButton?.addEventListener("click", () => {
-          this.isPaused = !this.isPaused;
-          this.pauseButton!.setAttribute(
-            "aria-label",
-            this.isPaused ? "Play slideshow" : "Pause slideshow",
-          );
-          this.pauseButton!
-            .querySelector("[data-icon-pause]")
-            ?.classList.toggle("hidden", this.isPaused);
-          this.pauseButton!
-            .querySelector("[data-icon-play]")
-            ?.classList.toggle("hidden", !this.isPaused);
-          this.syncAutoRotation();
+          if (this.isPaused) this.autoRotate = this.carousel.dataset.autoRotate === "true" && !this.reducedMotion;
+          this.setPaused(!this.isPaused);
         });
         this.carousel.addEventListener("focusin", () => {
           this.hasFocus = true;
@@ -417,6 +364,7 @@ if (images.length === 0) return;
             const swipeDistance = this.touchEndX - this.touchStartX;
             const threshold = 50; // Minimum swipe distance
 
+            if (Math.abs(swipeDistance) > threshold) this.stopForGood();
             if (swipeDistance > threshold) {
               // Swipe right - go to previous slide
               void this.goToPrevSlide();
@@ -441,6 +389,27 @@ if (images.length === 0) return;
             }
           });
         });
+      }
+
+      /** Pause or resume the rotation, with the control showing which. */
+      setPaused(paused: boolean) {
+        this.isPaused = paused;
+        const button = this.pauseButton;
+        if (button) {
+          button.setAttribute(
+            "aria-label",
+            (paused ? button.dataset.labelPlay : button.dataset.labelPause) ?? "",
+          );
+          button.querySelector("[data-icon-pause]")?.classList.toggle("hidden", paused);
+          button.querySelector("[data-icon-play]")?.classList.toggle("hidden", !paused);
+        }
+        this.syncAutoRotation();
+      }
+
+      /** Any use of a pager, arrow or swipe ends the rotation for good: the buyer is reading. */
+      stopForGood() {
+        this.autoRotate = false;
+        this.setPaused(true);
       }
 
       startAutoRotation() {
@@ -685,72 +654,6 @@ if (images.length === 0) return;
 </script>
 
 <style>
-  .wide-editorial-copy {
-    position: absolute;
-    inset: auto 0 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 3rem 1.25rem 3.5rem;
-    background: linear-gradient(transparent, rgb(0 0 0 / 0.85));
-    color: white;
-  }
-
-  .wide-editorial-heading {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    overflow: hidden;
-    max-width: 34rem;
-    font-size: clamp(1.5rem, 2.1vw, 2.25rem);
-    font-weight: 700;
-    line-height: 1.16;
-  }
-
-  .wide-editorial-support {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    max-width: 34rem;
-    font-size: clamp(0.875rem, 1.1vw, 1rem);
-    line-height: 1.5;
-  }
-
-  .wide-editorial-button {
-    display: inline-flex;
-    min-height: 2.75rem;
-    align-items: center;
-    padding-inline: 1.25rem;
-    border-radius: 999px;
-    background: var(--background);
-    color: var(--foreground);
-    font-size: 0.875rem;
-    font-weight: 700;
-  }
-
-  @media (min-width: 48rem) {
-    .wide-editorial-copy {
-      inset: 0 auto 0 0;
-      width: 52%;
-      justify-content: center;
-      padding: 2rem clamp(2rem, 5vw, 5.875rem);
-      background: none;
-      color: var(--primary-foreground);
-    }
-
-    [data-carousel-layout="wide-editorial"] .nav-button {
-      top: auto;
-      bottom: 0.25rem;
-      inset-inline-start: auto;
-      transform: none;
-    }
-
-    [data-carousel-layout="wide-editorial"] [data-nav="prev"] { inset-inline-end: 7rem; }
-    [data-carousel-layout="wide-editorial"] [data-nav="next"] { inset-inline-end: 3.75rem; }
-  }
-
   /* Ensure smooth transitions */
   .slide {
     will-change: opacity;
@@ -762,7 +665,6 @@ if (images.length === 0) return;
     contain: layout;
   }
 
-  /* Fix for jumpy navigation buttons */
   .nav-button {
     transform: translateY(-50%);
     opacity: 0.95;
@@ -783,6 +685,40 @@ if (images.length === 0) return;
   [data-nav-index] {
     background: transparent;
     box-shadow: none;
+  }
+
+  /* Reduced motion: slides swap without fading, and the pause control (which
+     would pause nothing) is not drawn. */
+  @media (prefers-reduced-motion: reduce) {
+    .slide {
+      transition: none;
+    }
+
+    [data-carousel-pause] {
+      display: none;
+    }
+  }
+
+  /* Wide editorial on computers: the pager and arrows sit inside the copy
+     panel (the start 52%), not across the seam to the photo. */
+  @media (min-width: 48rem) {
+    [data-carousel-layout="wide-editorial"] .carousel-dots {
+      inset-inline-start: clamp(1.25rem, 4.2vw, 5.25rem);
+      left: auto;
+      translate: none;
+      transform: none;
+    }
+
+    [data-carousel-layout="wide-editorial"] .nav-button {
+      top: auto;
+      bottom: 0;
+      inset-inline-start: auto;
+      translate: none;
+      transform: none;
+    }
+
+    [data-carousel-layout="wide-editorial"] [data-nav="prev"] { inset-inline-end: calc(48% + 3.5rem); }
+    [data-carousel-layout="wide-editorial"] [data-nav="next"] { inset-inline-end: calc(48% + 0.75rem); }
   }
 
   /* The slide link fills a rounded overflow-hidden frame, so an outside ring

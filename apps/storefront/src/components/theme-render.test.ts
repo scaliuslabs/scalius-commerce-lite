@@ -571,7 +571,7 @@ describe("storefront theme render matrix", () => {
       const hero = page.querySelector('[data-home-section="hero"]')!;
       expect(hero.querySelectorAll('img[fetchpriority="high"]').length).toBeGreaterThan(0);
       const layout = heroSection.settings.layout;
-      if (layout !== "split" && layout !== "story-cards") {
+      if (layout !== "split") {
         // Phones get a phone-sized rendition, and the first slide paints without script.
         const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
         expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/613.webp 613w");

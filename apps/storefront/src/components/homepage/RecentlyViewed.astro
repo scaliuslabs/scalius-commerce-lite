@@ -17,13 +17,14 @@ const { section } = Astro.props;
 const rootId = `home-${section.id}`;
 const headingId = `${rootId}-title`;
 const title = section.settings.title.trim() || "Recently viewed";
+import Container from "@/components/ui/Container.astro";
 ---
 
 <section id={rootId} class="home-section w-full" aria-labelledby={headingId} hidden data-recently-viewed>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     <h2 id={headingId} class="section-heading mb-3 text-foreground [overflow-wrap:anywhere] md:mb-5">{title}</h2>
     <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
-  </div>
+  </Container>
 </section>
 <script is:inline set:html={recentlyViewedRenderScript(rootId)} />
 
