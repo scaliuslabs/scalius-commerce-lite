@@ -1077,6 +1077,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
   import { shippingCountryName } from "@/lib/checkout/shipping-country";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
+  import { addressAutocompleteService, pageLocale } from "@/lib/app-services";
   import {
     checkoutInformationFields,
     enhanceCheckoutFields,
@@ -2144,4 +2145,23 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   // The chosen country's rules hide the fields it doesn't use and mark the
   // required ones (the form already works without this).
   enhanceShippingCountry(document, { signal: cartPageSignal });
+
+  // ── Address autocomplete ──
+  // Only when an active app completes addresses (the layout names it): the
+  // code loads then and not otherwise. The street line suggests addresses for
+  // the countries the app serves; the form is the same without it.
+  const addressApp = addressAutocompleteService();
+  const streetLine = document.getElementById("shippingAddress");
+  if (addressApp && (streetLine instanceof HTMLTextAreaElement || streetLine instanceof HTMLInputElement)) {
+    void import("@/lib/checkout/address-autocomplete").then(({ apiPost, enhanceAddressAutocomplete }) => {
+      enhanceAddressAutocomplete({
+        root: document,
+        input: streetLine,
+        service: addressApp,
+        locale: pageLocale(),
+        post: apiPost(browserApiUrl),
+        signal: cartPageSignal,
+      });
+    });
+  }
 </script>

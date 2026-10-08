@@ -230,6 +230,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const plan = gallery.galleryRenderPlan(id, origin);
         if (!plan) return sendJson(response, 404, { error: `unknown entry ${id}` });
         const pageModule = await vite.ssrLoadModule(plan.page);
+        // Read before the render: the layout payload resets the request's platform origins.
+        const fixtureApiUrl = plan.runtime.PUBLIC_API_URL;
         const rendered = await currentEntry.run(plan.entry, () =>
           runtimeModule.requestRuntime.run(plan.runtime, () =>
             container.renderToResponse(pageModule.default, {
@@ -239,7 +241,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
             }),
           ),
         );
-        let html = await rendered.text();
+        // The page is built with no platform origin; its browser calls (address
+        // suggestions) reach this entry's fixture API.
+        let html = (await rendered.text()).replace('window.__API_BASE_URL__="";', `window.__API_BASE_URL__=${JSON.stringify(fixtureApiUrl)};`);
         const resolved = await vite.moduleGraph.getModuleByUrl(plan.page, true);
         const styles = collectStyles(vite, resolved?.id ?? plan.page);
         const links = styles.map((href) => `<link rel="stylesheet" href="${href}${href.includes("?") ? "&" : "?"}direct">`).join("");

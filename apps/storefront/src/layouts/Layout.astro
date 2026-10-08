@@ -31,6 +31,7 @@ import {
   buildOnlineStoreJsonLd,
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { appServiceGlobals } from "@/lib/app-services";
 import { themePreviewBridgeScript } from "@/lib/theme-preview-bridge";
 import { showsThemePreviewBar, themePreviewBarCopy } from "@/lib/theme-preview-bar";
 import { THEME_EDITOR_MARKS, themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
@@ -367,6 +368,9 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_PRICE_INCREMENT__=${serializeJsonForInlineScript(currencyPriceIncrement)};`,
   `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
   `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
+  // Buyer services of active apps: written only when an app provides one, so a
+  // store without apps ships none of this and the islands stay unloaded.
+  ...appServiceGlobals(layoutData?.appServices),
 ].join("");
 const privateSessionPrefetchGuardScript =
   buildPrivateSessionPrefetchGuardScript(

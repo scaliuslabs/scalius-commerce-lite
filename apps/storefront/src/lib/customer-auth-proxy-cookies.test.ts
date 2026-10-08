@@ -61,6 +61,14 @@ describe("customer auth proxy cookie handling", () => {
     ).toBe("cs_tok=secret; Path=/; HttpOnly; SameSite=Strict; Secure");
   });
 
+  it("moves a cookie scoped to the API's customer-auth path to the proxy's path", () => {
+    expect(
+      rewriteCustomerAuthSetCookie(
+        "scalius_idp=abc; Max-Age=600; Path=/api/v1/customer-auth/identity; HttpOnly; Secure; SameSite=Lax",
+      ),
+    ).toBe("scalius_idp=abc; Max-Age=600; Path=/api/customer-auth/identity; HttpOnly; Secure; SameSite=Lax");
+  });
+
   it("appends each rewritten customer-auth cookie to the storefront response", () => {
     const source = new Headers();
     source.append(

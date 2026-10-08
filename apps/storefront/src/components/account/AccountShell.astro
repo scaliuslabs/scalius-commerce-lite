@@ -10,6 +10,8 @@
 // cart and checkout state are cleared first (shared devices).
 import { ACCOUNT_CONTAINER, accountUi as ui } from "@/lib/account-ui";
 import { accountNavTabs, type AccountSection, type AccountSummary } from "@/lib/account-tabs";
+import { getLayoutData } from "@/lib/api";
+import { continueWithLabel, readSignInApps, signInAppHref, signInErrorMessage, signInLanguage } from "@/lib/sign-in-apps";
 
 export interface Props {
   current: AccountSection;
@@ -34,6 +36,12 @@ const {
   unavailable = { text: "We couldn't reach the store. Check your connection and try again.", retryHref: "/account" },
 } = Astro.props;
 const tabs = accountNavTabs(current, summary);
+// Signed out: "Continue with <app>" for each sign-in app (plain links, no JavaScript needed),
+// and the fixed message a failed attempt came back with. The layout is read once per request.
+const signedOutLayout = state === "signed_out" ? await getLayoutData().catch(() => null) : null;
+const signInWords = signInLanguage(signedOutLayout?.storefrontCopy?.languageCode);
+const signInAppList = readSignInApps(signedOutLayout?.appServices?.signIn);
+const signInError = state === "signed_out" ? signInErrorMessage(Astro.url.searchParams.get("sign_in_error"), signInWords) : null;
 const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
 ---
 
@@ -68,10 +76,20 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
     <div class="mx-auto max-w-md py-16 text-center">
       <h1 class="text-2xl font-semibold text-foreground">{signedOut.title}</h1>
       {signedOut.body && <p class="mt-2 text-muted-foreground">{signedOut.body}</p>}
+      {signInError && <p role="alert" data-sign-in-error class={`${ui.errorNotice} mt-6 text-start`}>{signInError}</p>}
       <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
         <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={`${ui.primaryButton} px-6`}>{signedOut.action ?? "Sign in"}</button>
         <slot name="signed-out" />
       </div>
+      {signInAppList.length > 0 && (
+        <ul class="mx-auto mt-4 flex max-w-xs flex-col gap-2" data-sign-in-apps>
+          {signInAppList.map((app) => (
+            <li>
+              <a href={signInAppHref(app, { locale: signInWords })} data-astro-prefetch="false" rel="nofollow" class={`${ui.secondaryButton} w-full`}>{continueWithLabel(app.name, signInWords)}</a>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )}
 

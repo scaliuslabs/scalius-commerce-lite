@@ -340,6 +340,25 @@ describe("sign-in dialog", () => {
     expect(host.querySelector("[data-phone-sign-in-note]")).toBeNull();
   });
 
+  it("offers Continue with each sign-in app as a plain link, and none when the layout names none", async () => {
+    await open();
+    expect(host.querySelector("[data-sign-in-apps]")).toBeNull();
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+
+    window.__SIGN_IN_APPS__ = [{ id: "acme.signin:google", name: "Google" }, { id: "not a provider", name: "Bad" }];
+    try {
+      await act(async () => window.dispatchEvent(new CustomEvent("open-auth-modal")));
+      const links = [...host.querySelectorAll<HTMLAnchorElement>("[data-sign-in-apps] a")];
+      expect(links.map((link) => link.textContent)).toEqual(["Continue with Google"]);
+      const href = new URL(links[0]!.href, "https://shop.test");
+      expect(href.pathname).toBe("/api/customer-auth/identity/acme.signin:google/start");
+      expect(href.searchParams.get("returnTo")).toBe(window.location.pathname);
+    } finally {
+      delete window.__SIGN_IN_APPS__;
+    }
+  });
+
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {
     document.cookie = "cs_auth=1; path=/";
     mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });

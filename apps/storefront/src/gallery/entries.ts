@@ -58,16 +58,22 @@ export interface GalleryScenario {
   storage?: Record<string, string>;
   /** An app draws blocks at the checkout targets (the layout lists the `checkout` page). */
   checkoutBlocks?: boolean;
+  /** The store sells to the United Kingdom too, and an address app completes its street lines (the layout names it). */
+  addressApp?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
 }
 
 /** A click the audit makes before it checks (a closed drawer has nothing to check). */
-export interface GalleryInteraction {
-  click: string;
-  /** Only below this viewport width (phones and tablets). */
-  maxWidth?: number;
-}
+export type GalleryInteraction =
+  | {
+      click: string;
+      /** Only below this viewport width (phones and tablets). */
+      maxWidth?: number;
+    }
+  | { select: string; value: string }
+  /** Types into a field one key at a time, then waits (a debounced suggestion list needs it). */
+  | { type: string; text: string; wait?: number };
 
 export interface GalleryEntry {
   id: string;
@@ -403,6 +409,19 @@ function appEntries(): GalleryEntry[] {
   };
   return [
     { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
+    {
+      id: entryId("app", "address-autocomplete"),
+      family: "app:address-autocomplete",
+      title: "Address autocomplete: suggestions under the street line (cart page, United Kingdom)",
+      page: "cart",
+      theme: clone(base),
+      focus: MAIN,
+      scenario: { addressApp: true, storage: { "cart:v3": GALLERY_CART } },
+      interact: [
+        { select: "#checkout-country", value: "GB" },
+        { type: "#shippingAddress", text: "10 Down", wait: 900 },
+      ],
+    },
     { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },
     { id: entryId("app", "section", "empty"), family: "app:section", title: "App section that drew nothing", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { apps: false } },
     { id: entryId("app", "product-blocks"), family: "app:product-block", title: "App product blocks (buy box and below)", page: "product", theme: product, focus: MAIN, scenario: { apps: true, product: "fashion" } },

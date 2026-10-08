@@ -79,6 +79,10 @@ function storeShape() {
 }
 
 function markets(entry: GalleryEntry) {
+  // A store that also delivers to the United Kingdom: the checkout offers the country and its free-text fields.
+  if (entry.scenario.addressApp) {
+    return { markets: [{ id: "mkt_backup", handle: "bangladesh", name: "Bangladesh and United Kingdom", isBackup: true, countries: ["BD", "GB"], presences: [{ value: "", locale: "en" }] }] };
+  }
   if (entry.scenario.locale === "bn") {
     return { markets: [{ id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "bn" }, { value: "en", locale: "en" }] }] };
   }
@@ -111,7 +115,37 @@ function layout(entry: GalleryEntry) {
     timeZone: "Asia/Dhaka",
     policies: FIXTURE_POLICIES,
     ...(entry.scenario.checkoutBlocks ? { appBlockPages: ["checkout"] } : {}),
+    ...(entry.scenario.addressApp ? { appServices: { search: null, address: { id: ADDRESS_APP_ID, countries: ["GB"] }, signIn: [] } } : {}),
   };
+}
+
+/** The address app the gallery store has installed (the layout names it; the checkout suggests through it). */
+export const ADDRESS_APP_ID = "acme.addresses/lookup";
+const ADDRESS_SUGGESTIONS = [
+  { id: "addr_1", text: "10 Downing Street", secondaryText: "Westminster, London SW1A 2AA" },
+  { id: "addr_2", text: "10 Downing Place", secondaryText: "Cambridge CB2 3NY" },
+  { id: "addr_3", text: "10 Downing Road", secondaryText: "Manchester M11 4JT" },
+];
+const RESOLVED_ADDRESSES: Record<string, Record<string, string>> = {
+  addr_1: { countryCode: "GB", line1: "10 Downing Street", dependentLocality: "Westminster", locality: "London", adminArea: "England", postalCode: "SW1A 2AA" },
+  addr_2: { countryCode: "GB", line1: "10 Downing Place", locality: "Cambridge", adminArea: "England", postalCode: "CB2 3NY" },
+  addr_3: { countryCode: "GB", line1: "10 Downing Road", locality: "Manchester", adminArea: "England", postalCode: "M11 4JT" },
+};
+
+/**
+ * The POSTs the checkout page makes from the browser: the discount preview and
+ * abandoned-checkout capture (nothing to apply or save in the gallery), and the
+ * address app's suggest and resolve. null for any other request.
+ */
+async function browserPostAnswer(entry: GalleryEntry, path: string, request: Request): Promise<unknown | null> {
+  if (request.method !== "POST") return null;
+  if (path === "/api/v1/discounts/validate") return { totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
+  if (path === "/api/v1/abandoned-checkouts") return { saved: true };
+  if (!entry.scenario.addressApp) return null;
+  const body = (await request.json().catch(() => ({}))) as { id?: string };
+  if (path === "/api/v1/address-rules/autocomplete/suggest") return { suggestions: ADDRESS_SUGGESTIONS };
+  if (path === "/api/v1/address-rules/autocomplete/resolve") return { address: RESOLVED_ADDRESSES[body.id ?? ""] ?? null };
+  return null;
 }
 
 /** The section data a list of sections reads (homepage, landing and template parts). */
@@ -298,6 +332,8 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
     });
     return new Response(envelope({ parts }), { headers: json });
   }
+  const posted = await browserPostAnswer(entry, url.pathname, request);
+  if (posted !== null) return new Response(envelope(posted), { headers: json });
   const data = answer(entry, url.pathname, url.searchParams);
   if (data === undefined) {
     record(entry, `${request.method} ${url.pathname}`);

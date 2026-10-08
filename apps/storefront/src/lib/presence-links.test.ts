@@ -27,6 +27,8 @@ const REVIEWED: ReadonlyArray<readonly [file: string, fragment: string, reason: 
   ["lib/api/transport.ts", "", "API paths, not storefront pages"],
   ["lib/browser-continuation-relay.ts", "", "private relays agents open by exact root URL"],
   ["lib/theme-preview-bridge.ts", "", "the merchant's theme preview, never under a presence"],
+  ["lib/account-push.ts", "const padded", "base64 alphabet, not a page path"],
+  ["lib/account-push.ts", "const scope", "the service worker scope is the origin root on every presence"],
   ["lib/public-discovery-cache.ts", "", "the gateway's browser cache policy of a page's logical path"],
   ["pages/buy/[slug].ts", "Location:", "redirects: the gateway localizes Location"],
   ["pages/sitemap.xsl.ts", "", "XSL template paths"],

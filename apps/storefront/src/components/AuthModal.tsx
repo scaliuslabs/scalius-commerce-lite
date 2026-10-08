@@ -29,6 +29,8 @@ import {
   resolveCustomerAuthUi,
 } from "@/lib/customer-auth-ui";
 import { pagePath } from "@/lib/presence-url";
+import { pageLocale, signInApps } from "@/lib/app-services";
+import { continueWithLabel, signInAppHref, signInLanguage } from "@/lib/sign-in-apps";
 
 export interface AuthModalPrefill {
   name?: string;
@@ -376,6 +378,13 @@ export default function AuthModal() {
   const errorFor = (field: Field) => fieldErrors[field] ?? "";
   const clearError = (field: Field) => setFieldErrors(({ [field]: _cleared, ...rest }) => rest);
   // The wait shows once: on the code step the resend button counts it down.
+  // "Continue with <app>": plain links through the same-origin proxy, back to this page after.
+  const signInWords = signInLanguage(document.documentElement.lang);
+  const signInAppLinks = signInApps().map((app) => ({
+    id: app.id,
+    label: continueWithLabel(app.name, signInWords),
+    href: signInAppHref(app, { returnTo: window.location.pathname, locale: pageLocale() }),
+  }));
   const alertText = error || (limit && sendWait > 0
     ? step === "code" ? limit : `${limit} Try again in ${formatWait(sendWait)}.`
     : "");
@@ -499,6 +508,21 @@ export default function AuthModal() {
                     </p>
                   )}
                 </div>
+                {signInAppLinks.length > 0 && (
+                  <ul className="space-y-2 border-t border-border pt-4" data-sign-in-apps>
+                    {signInAppLinks.map((app) => (
+                      <li key={app.id}>
+                        <a
+                          href={app.href}
+                          rel="nofollow"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {app.label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </>
             )}
 
