@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { STOREFRONT_TEMPLATE_IDS } from "@scalius/shared/storefront-theme";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_COMPONENT_SCHEMAS,
@@ -127,7 +128,8 @@ describe("shared component schemas in the agent manifest", () => {
     expect(AGENT_COMPONENT_SCHEMAS).toHaveProperty("StorefrontThemeDocument");
     // The theme document is written once, not per operation.
     const source = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
-    expect(source.split('"template":{"type":"string","enum":["boutique"').length - 1).toBe(1);
+    const templateEnum = `"template":{"type":"string","enum":${JSON.stringify(STOREFRONT_TEMPLATE_IDS)}`;
+    expect(source.split(templateEnum).length - 1).toBe(1);
     // Compact JSON: no indented value lines.
     expect(source).not.toMatch(/\n {2}"/);
   });
