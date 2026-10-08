@@ -33,12 +33,13 @@ function placeholders(template: string): { all: Set<string>; counted: Set<string
 }
 
 /** Sample values: a count where the string counts something, else a word. */
-function sample(template: string, count: number): Record<string, string | number> {
+function sample(template: string, count: number | string): Record<string, string | number> {
   const { all, counted } = placeholders(template);
   return Object.fromEntries(Array.from(all, (name) => [name, counted.has(name) || /^(?:count|total|max|min|done|page|pages|rows|n)$/.test(name) ? count : "Sample"]));
 }
 
-const COUNTS = [0, 1, 2, 5, 1200];
+// Numbers as callers should pass them, then counts already written for the store ("1,20,000", "1,200+"): none may print a raw plural.
+const COUNTS: Array<number | string> = [0, 1, 2, 5, 1200, "1,20,000", "1,200+"];
 
 function leftovers(text: string, template: string): string[] {
   const found = [];
