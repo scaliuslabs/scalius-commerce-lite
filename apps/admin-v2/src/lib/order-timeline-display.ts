@@ -141,6 +141,18 @@ export function describeTimelineEvent(
         detail: from && from !== to ? t("timeline.locationWas", { location: from }) : null,
       };
     }
+    case "app_event": {
+      // An app's typed line: its name and the kind's title, then its message and facts as written.
+      const fields = data.fields && typeof data.fields === "object" && !Array.isArray(data.fields)
+        ? Object.entries(data.fields as Record<string, unknown>)
+          .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+          .map(([key, value]) => `${key}: ${String(value)}`)
+        : [];
+      return {
+        text: t("timeline.appEvent", { app: text(data.appName) ?? text(data.pluginId) ?? "", title: text(data.title) ?? text(data.kind) ?? "" }),
+        detail: [body, fields.join(" · ")].filter((part): part is string => Boolean(part)).join(" · ") || null,
+      };
+    }
     default:
       return { text: body ?? "", detail: null };
   }

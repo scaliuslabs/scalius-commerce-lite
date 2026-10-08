@@ -151,6 +151,24 @@ export interface PluginMessaging {
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
 }
 
+/** Typed lines on order timelines (needs `orders.edit`; each kind declared in `manifest.timeline`). */
+export interface PluginTimeline {
+  /**
+   * Adds a line staff see on the order (and agents read): your app's name,
+   * the kind's title and `message` (plain text, 500 characters), with up to
+   * 10 small typed `fields`. Never put buyer contact data in it. The same
+   * `idempotencyKey` (an event id) adds the line once. It changes nothing on
+   * the order and emits no event.
+   */
+  add(input: {
+    orderId: string;
+    kind: string;
+    message: string;
+    fields?: Record<string, string | number | boolean>;
+    idempotencyKey?: string;
+  }): Promise<{ id: string }>;
+}
+
 export interface PluginLogger {
   debug(message: string, fields?: Record<string, unknown>): void;
   info(message: string, fields?: Record<string, unknown>): void;
@@ -169,6 +187,7 @@ export interface PluginContext {
   http: PluginHttp;
   customFields: PluginCustomFields;
   messaging: PluginMessaging;
+  timeline: PluginTimeline;
   log: PluginLogger;
 }
 

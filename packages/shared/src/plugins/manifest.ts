@@ -168,6 +168,13 @@ const adminSchema = z.object({
   widgets: z.array(z.object({ id: name, title, route: name }).strict()).max(5).default([]),
 }).strict();
 
+/**
+ * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
+ * with the title staff see. Writing needs the `orders.edit` permission.
+ */
+const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
+  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
+
 const storefrontSchema = z.object({
   /** Theme sections the merchant can add in the theme editor/builder. */
   sections: z.array(z.object({
@@ -324,6 +331,8 @@ const pluginTranslationSchema = z.object({
   salesChannels: z.record(name, title).optional(),
   actions: z.record(name, title).optional(),
   widgets: z.record(name, title).optional(),
+  /** Order timeline entry titles by kind. */
+  timeline: z.record(name, title).optional(),
   /** Page tab titles: page id → tab id → title. */
   tabs: z.record(name, z.record(name, title)).optional(),
   /** Settings section titles and descriptions by group id. */
@@ -440,6 +449,7 @@ export const pluginManifestSchema = z.object({
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
+  timeline: timelineSchema,
   storefront: storefrontSchema.default({ sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false }),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
@@ -483,6 +493,10 @@ export const pluginManifestSchema = z.object({
           context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
         }
       }
+    }
+    const timelineKinds = new Set(manifest.timeline.map((entry) => entry.kind));
+    for (const kind of Object.keys(translation.timeline ?? {})) {
+      if (!timelineKinds.has(kind)) context.addIssue({ code: "custom", path: ["translations", locale, "timeline", kind], message: `No timeline kind ${kind} to translate.` });
     }
     const salesChannelIds = new Set(manifest.salesChannels.map((channel) => channel.id));
     for (const id of Object.keys(translation.salesChannels ?? {})) {

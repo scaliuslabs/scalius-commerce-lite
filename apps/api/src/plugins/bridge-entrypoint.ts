@@ -129,4 +129,8 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
   async messagingNotifyStaff(input: Parameters<PluginBridgeApi["messagingNotifyStaff"]>[0]): Promise<void> {
     return (await this.#host()).messagingNotifyStaff(input);
   }
+
+  async timelineAdd(input: Parameters<PluginBridgeApi["timelineAdd"]>[0]): Promise<{ id: string }> {
+    return (await this.#host()).timelineAdd(input);
+  }
 }

@@ -1,13 +1,14 @@
 // Scalius Order tagger: a small, realistic plugin built only on the public
 // plugin API. When an order is paid it reads the order through the store's
-// own operations (`ctx.api`, as the dashboard and agents do), adds a note to
-// the order's timeline, sets its own `tag` custom field on the order, and
-// remembers the order so a redelivered event changes nothing.
+// own operations (`ctx.api`, as the dashboard and agents do), adds a typed
+// line to the order's timeline (`ctx.timeline`), sets its own `tag` custom
+// field on the order, and remembers the order so a redelivered event changes
+// nothing.
 //
 // Idempotent three ways, as every event handler should be: its own record
-// (checked first), the timeline note's request key (derived from the event
-// id, so the API returns the first note on a replay) and the custom field
-// (setting the same value again is a no-op for the merchant).
+// (checked first), the timeline line's idempotency key (the event id, so a
+// replay adds nothing) and the custom field (setting the same value again is
+// a no-op for the merchant).
 
 import { adminContext, definePlugin, PLUGIN_API_VERSION, ui, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 
@@ -32,6 +33,7 @@ export const manifest = {
   storage: {
     tagged: { indexes: ["taggedAt"] },
   },
+  timeline: [{ kind: "tagged", title: "Order tagged" }],
   customFields: [
     { ownerType: "order", key: "tag", name: "Tag", type: "single_line_text", description: "Set by Order tagger when the order is paid." },
   ],
@@ -49,6 +51,7 @@ export const manifest = {
       tagline: "পেমেন্ট হওয়া অর্ডারে ট্যাগ, যাতে টিম জানে কী প্যাক করতে হবে",
       description: "পেমেন্ট হওয়া নতুন অর্ডারে ট্যাগ দেয় আর অর্ডারের টাইমলাইনে নোট রাখে, যাতে আপনার টিম এক নজরে বোঝে কী প্যাক করতে হবে।",
       pages: { overview: "অর্ডার ট্যাগার" },
+      timeline: { tagged: "অর্ডারে ট্যাগ দেওয়া হয়েছে" },
     },
   },
 } satisfies PluginManifestInput;
@@ -119,11 +122,13 @@ export default definePlugin({
 
       const tag = String(ctx.settings.tag ?? "").trim() || "paid";
       const note = String(ctx.settings.note ?? "").trim();
-      const comment = await ctx.api.call("dashboard.orders.comment_add", {
-        path: { id: orderId },
-        body: { body: note ? `#${tag} · ${note}` : `#${tag}`, requestKey: `order-tagger_${event.id}` },
+      await ctx.timeline.add({
+        orderId,
+        kind: "tagged",
+        message: note ? `#${tag} · ${note}` : `#${tag}`,
+        fields: { tag },
+        idempotencyKey: event.id,
       });
-      if (!comment.ok) throw new Error(`The timeline note could not be added (${comment.error?.code ?? comment.status}).`);
       await ctx.customFields.set("order", orderId, { tag });
       await tagged(ctx).put(orderId, { orderId, orderNumber, tag, taggedAt } satisfies TaggedRecord);
       ctx.log.info("Tagged a paid order", { orderId, tag });

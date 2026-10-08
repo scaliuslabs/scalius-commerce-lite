@@ -12,22 +12,23 @@ function api(totalAmount = 1500) {
     answer: async (operationId: string, input: PluginApiCallInput | undefined) => {
       calls.push({ operationId, input });
       if (operationId === "dashboard.orders.get") return { ok: true, status: 200, data: { id: input?.path?.id, totalAmount }, error: null };
-      if (operationId === "dashboard.orders.comment_add") return { ok: true, status: 201, data: { id: "tl_1" }, error: null };
       return { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: operationId } };
     },
   };
 }
 
 describe("acme.order-tagger", () => {
-  it("tags a paid order once: reads it, notes it on the timeline with an event-derived key, sets its tag field", async () => {
+  it("tags a paid order once: reads it, adds a typed timeline line keyed by the event, sets its tag field", async () => {
     const calls = api();
     const harness = createPluginTestHarness(tagger, { api: calls.answer, settings: { tag: "vip" } });
     expect(await harness.event("order.paid", { type: "order", id: "ord_1" })).toMatchObject({ ok: true });
-    const comment = calls.calls.find((call) => call.operationId === "dashboard.orders.comment_add");
-    expect(comment?.input).toMatchObject({
-      path: { id: "ord_1" },
-      body: { body: "#vip · Payment received. Ready to pack.", requestKey: expect.stringMatching(/^order-tagger_evt_test_[0-9a-f]+$/) },
-    });
+    expect(harness.sent.timeline).toEqual([{
+      orderId: "ord_1",
+      kind: "tagged",
+      message: "#vip · Payment received. Ready to pack.",
+      fields: { tag: "vip" },
+      idempotencyKey: expect.stringMatching(/^evt_test_[0-9a-f]+$/),
+    }]);
     expect(harness.customFields.get("order:ord_1")).toEqual({ tag: "vip" });
     expect(harness.records.get("tagged")?.get("ord_1")).toMatchObject({ orderId: "ord_1", tag: "vip" });
 
