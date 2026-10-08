@@ -12845,6 +12845,46 @@ export type PostApiV1CustomerAuthPushUnsubscribeResponses = {
 
 export type PostApiV1CustomerAuthPushUnsubscribeResponse = PostApiV1CustomerAuthPushUnsubscribeResponses[keyof PostApiV1CustomerAuthPushUnsubscribeResponses];
 
+export type GetApiV1CustomerAuthIdentityByProviderIdStartData = {
+    body?: never;
+    path: {
+        /**
+         * The app's identity provider id (`<plugin id>:<provider id>`).
+         */
+        providerId: string;
+    };
+    query?: {
+        /**
+         * A storefront path to return to after signing in. Default /account.
+         */
+        returnTo?: string;
+        /**
+         * The page's language (ISO 639-1) for the provider's page.
+         */
+        locale?: string;
+    };
+    url: '/api/v1/customer-auth/identity/{providerId}/start';
+};
+
+export type GetApiV1CustomerAuthIdentityByProviderIdCallbackData = {
+    body?: never;
+    path: {
+        /**
+         * The app's identity provider id (`<plugin id>:<provider id>`).
+         */
+        providerId: string;
+    };
+    query?: {
+        code?: string;
+        state?: string;
+        /**
+         * Set by the provider when the buyer declined or it failed.
+         */
+        error?: string;
+    };
+    url: '/api/v1/customer-auth/identity/{providerId}/callback';
+};
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;

@@ -139,6 +139,19 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
     revision: "required",
   },
   "storefront.customer_auth.status": { exposure: "continuation" },
+  // "Continue with <app>": browser redirects that carry the buyer to an app's sign-in page and back.
+  "storefront.customer_auth_identity.start": {
+    exposure: "excluded",
+    risk: "security",
+    sensitive: true,
+    reason: "A browser redirect to the identity provider's sign-in page; the buyer signs in there, never an agent.",
+  },
+  "storefront.customer_auth_identity.callback": {
+    exposure: "excluded",
+    risk: "security",
+    sensitive: true,
+    reason: "The identity provider's browser redirect back to the store: it consumes a single-use code, issues the customer session cookie and redirects.",
+  },
   "storefront.customer_profile.get": {},
   "storefront.customer_profile.update": {},
   "storefront.customer_addresses.manage": {},

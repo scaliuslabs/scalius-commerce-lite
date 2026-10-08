@@ -45164,6 +45164,159 @@
         "security": []
       }
     },
+    "/api/v1/customer-auth/identity/{providerId}/start": {
+      "get": {
+        "operationId": "storefront.customer_auth_identity.start",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Start Continue with an app (browser redirect to the provider)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 150,
+              "description": "The app's identity provider id (`<plugin id>:<provider id>`)."
+            },
+            "required": true,
+            "description": "The app's identity provider id (`<plugin id>:<provider id>`).",
+            "name": "providerId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2048,
+              "description": "A storefront path to return to after signing in. Default /account."
+            },
+            "required": false,
+            "description": "A storefront path to return to after signing in. Default /account.",
+            "name": "returnTo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "The page's language (ISO 639-1) for the provider's page."
+            },
+            "required": false,
+            "description": "The page's language (ISO 639-1) for the provider's page.",
+            "name": "locale",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect: the provider's sign-in page, or back to the store"
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "A browser redirect to the identity provider's sign-in page; the buyer signs in there, never an agent."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/identity/{providerId}/callback": {
+      "get": {
+        "operationId": "storefront.customer_auth_identity.callback",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Finish Continue with an app (the provider returns here; signs the buyer in)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 150,
+              "description": "The app's identity provider id (`<plugin id>:<provider id>`)."
+            },
+            "required": true,
+            "description": "The app's identity provider id (`<plugin id>:<provider id>`).",
+            "name": "providerId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "required": false,
+            "name": "code",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "required": false,
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "description": "Set by the provider when the buyer declined or it failed."
+            },
+            "required": false,
+            "description": "Set by the provider when the buyer declined or it failed.",
+            "name": "error",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect: the provider's sign-in page, or back to the store"
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The identity provider's browser redirect back to the store: it consumes a single-use code, issues the customer session cookie and redirects."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/checkout-languages/active": {
       "get": {
         "operationId": "storefront.checkout_language.get_active",

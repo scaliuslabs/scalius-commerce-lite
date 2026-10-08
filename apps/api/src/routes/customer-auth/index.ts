@@ -7,6 +7,7 @@ import { customerAddressRoutes } from "./addresses";
 import { customerConversationRoutes } from "./conversations";
 import { customerDownloadRoutes } from "./downloads";
 import { customerGiftCardRoutes } from "./gift-cards";
+import { customerIdentityRoutes } from "./identity";
 import { customerMarketingRoutes } from "./marketing";
 import { customerOrderListRoutes } from "./order-list";
 import { customerOrderRoutes } from "./orders";
@@ -33,5 +34,6 @@ app.route("/", customerWarrantyRoutes);
 app.route("/", customerMarketingRoutes);
 app.route("/", customerAddressRoutes);
 app.route("/", customerPushRoutes);
+app.route("/", customerIdentityRoutes);
 
 export { app as customerAuthRoutes };
