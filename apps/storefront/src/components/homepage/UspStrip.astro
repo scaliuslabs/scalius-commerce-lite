@@ -1,15 +1,20 @@
 ---
-// A strip of short promises (Apple Gadgets' "36 months EMI · fastest
-// delivery", Star Tech's notice ticker).
-// - icons: 3-4 items in one bordered row. The live delivery facts render as
-//   the classic store's trust strip (DeliveryFacts); the merchant's own
-//   items take the same shape with a check mark.
-// - ticker: one 40px pill whose text scrolls (CSS only: it pauses while
-//   hovered or with its pause toggle, and stands still under reduced motion).
+// A strip of short promises (delivery, cash on delivery, returns, or the
+// merchant's own points).
+// - icons: 2-4 items in one bordered row, two across on phones. The live
+//   delivery facts need two to be a strip (one is shown by the product page
+//   and checkout); the merchant's own items may be one, centred inline.
+// - ticker: the same points as one still, wrapping line (nothing moves, so
+//   there is nothing to pause or chase; WCAG 2.2.2).
 import Icon from "@/components/icons/Icon.astro";
+import type { LucideIconName } from "@/components/icons/lucide-icons";
+import Container from "@/components/ui/Container.astro";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { DeliveryFact } from "@/lib/delivery-facts";
-import DeliveryFacts from "@/components/DeliveryFacts.astro";
+import { HOME_USP_MIN_FACTS } from "@/lib/homepage-sections";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
 
 interface Props {
   section: StorefrontSectionOf<"usp-strip">;
@@ -17,120 +22,178 @@ interface Props {
 }
 
 const { section, deliveryFacts } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const { style, source } = section.settings;
-const items = source.kind === "delivery-facts"
-  ? deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail }))
-  : source.items;
-const columns = ["", "sm:grid-cols-1", "sm:grid-cols-2 sm:divide-x sm:divide-y-0", "sm:grid-cols-3 sm:divide-x sm:divide-y-0"][items.length]
-  ?? "lg:grid-cols-4 lg:divide-x lg:divide-y-0";
-const tickerText = items.map((item) => [item.title, item.detail].filter(Boolean).join(": "));
-// About 3 characters a second, never faster than one loop in 12 s.
-const duration = Math.max(12, Math.round(tickerText.join("").length * 0.3));
+const ICONS: Record<DeliveryFact["kind"], LucideIconName> = { delivery: "truck", pickup: "store", cod: "banknote", returns: "rotate-ccw" };
+const items: Array<{ title: string; detail: string; icon: LucideIconName; href?: string }> = source.kind === "delivery-facts"
+  ? (deliveryFacts.length >= HOME_USP_MIN_FACTS ? deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail, icon: ICONS[fact.kind], href: fact.href })) : [])
+  : source.items.map((item) => ({ title: item.title, detail: item.detail, icon: "badge-check" as const }));
 ---
 
-{style === "icons" && source.kind === "delivery-facts" && <DeliveryFacts facts={deliveryFacts} />}
-
-{style === "icons" && source.kind === "custom" && items.length > 0 && (
-  <section class="w-full py-4 md:py-8" aria-label="Why shop with us">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <ul class={`grid divide-y divide-border rounded-xl border border-border bg-card ${columns}`}>
-        {items.map((item) => (
-          <li class="flex min-h-20 items-center gap-3 px-4 py-3 md:px-5">
-            <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-              <Icon name="badge-check" class="size-4" aria-hidden="true" />
-            </span>
-            <span class="min-w-0 [overflow-wrap:anywhere]">
-              <span class="block text-sm font-semibold text-foreground">{item.title}</span>
-              {item.detail && <span class="block text-sm leading-relaxed text-muted-foreground">{item.detail}</span>}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+{style === "icons" && items.length === 1 && (
+  <section class="home-section w-full" aria-label={copy.whyShop}>
+    <Container>
+      <p class="usp-single">
+        <Icon name={items[0]!.icon} class="size-4" aria-hidden="true" />
+        <span><strong>{items[0]!.title}</strong>{items[0]!.detail && ` ${items[0]!.detail}`}</span>
+      </p>
+    </Container>
   </section>
 )}
 
-{style === "ticker" && tickerText.length > 0 && (
-  <section class="w-full py-2 md:py-3" aria-label="Store notices">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div class="usp-ticker flex h-10 items-center overflow-hidden rounded-full border border-border bg-card text-sm text-foreground" style={`--usp-ticker-duration: ${duration}s;`}>
-        {/* A pause control with no script (WCAG 2.2.2): the checkbox stops the scroll. */}
-        <input type="checkbox" id={`${section.id}-ticker-pause`} class="usp-ticker-toggle sr-only" aria-label="Pause notices" />
-        <div class="usp-ticker-window flex min-w-0 flex-1 overflow-hidden">
-          <ul class="usp-ticker-track flex shrink-0 items-center gap-10 whitespace-nowrap px-5">
-            {tickerText.map((text) => <li>{text}</li>)}
-          </ul>
-          {/* A second copy makes the loop seamless; screen readers read the first only. */}
-          <ul class="usp-ticker-track usp-ticker-copy flex shrink-0 items-center gap-10 whitespace-nowrap px-5" aria-hidden="true">
-            {tickerText.map((text) => <li>{text}</li>)}
-          </ul>
-        </div>
-        <label for={`${section.id}-ticker-pause`} class="usp-ticker-pause grid h-10 w-10 shrink-0 cursor-pointer place-items-center border-s border-border text-muted-foreground" aria-hidden="true">
-          <span class="usp-ticker-pause-icon"><Icon name="pause" class="size-3.5" /></span>
-          <span class="usp-ticker-play-icon"><Icon name="play" class="size-3.5" /></span>
-        </label>
-      </div>
-    </div>
+{style === "icons" && items.length > 1 && (
+  <section class="home-section w-full" aria-label={copy.whyShop}>
+    <Container>
+      <ul class="usp-grid" data-count={items.length}>
+        {items.map((item) => {
+          const content = (
+            <>
+              <span class="usp-icon" aria-hidden="true"><Icon name={item.icon} class="size-4" /></span>
+              <span class="min-w-0 [overflow-wrap:break-word]">
+                <span class="usp-title">{item.title}</span>
+                {item.detail && <span class="usp-detail">{item.detail}</span>}
+              </span>
+            </>
+          );
+          return (
+            <li>
+              {item.href ? (
+                <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} class="usp-item usp-link">{content}</a>
+              ) : (
+                <div class="usp-item">{content}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Container>
+  </section>
+)}
+
+{style === "ticker" && source.kind === "custom" && source.items.length > 0 && (
+  <section class="home-section w-full" aria-label={copy.notices}>
+    <Container>
+      <ul class="usp-still">
+        {source.items.map((item) => <li>{[item.title, item.detail].filter(Boolean).join(": ")}</li>)}
+      </ul>
+    </Container>
+  </section>
+)}
+
+{style === "ticker" && source.kind === "delivery-facts" && deliveryFacts.length > 0 && (
+  <section class="home-section w-full" aria-label={copy.notices}>
+    <Container>
+      <ul class="usp-still">
+        {deliveryFacts.map((fact) => <li>{[fact.title, fact.detail].filter(Boolean).join(": ")}</li>)}
+      </ul>
+    </Container>
   </section>
 )}
 
 <style>
-  .usp-ticker-track {
+  .usp-grid,
+  .usp-still,
+  .usp-single {
+    margin: 0;
+    padding: 0;
     list-style: none;
-    animation: usp-ticker var(--usp-ticker-duration, 20s) linear infinite;
+    border: var(--theme-surface-border, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--theme-surface-shadow, none);
   }
 
-  .usp-ticker:hover .usp-ticker-track,
-  .usp-ticker-toggle:checked ~ .usp-ticker-window .usp-ticker-track {
-    animation-play-state: paused;
+  /* One pixel gap on a border-coloured ground draws the dividers, whatever
+     the arrangement (two across on a phone, one row on a computer). */
+  .usp-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    background: var(--border);
   }
 
-  .usp-ticker-play-icon,
-  .usp-ticker-toggle:checked ~ .usp-ticker-pause .usp-ticker-pause-icon {
-    display: none;
+  .usp-grid > li {
+    background: var(--card);
   }
 
-  .usp-ticker-toggle:checked ~ .usp-ticker-pause .usp-ticker-play-icon {
+  /* An odd last item spans the row rather than leaving a hole. */
+  .usp-grid > li:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .usp-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    block-size: 100%;
+    padding: 0.75rem;
+    color: var(--foreground);
+  }
+
+  .usp-icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: 9999px;
+    background: var(--muted);
+  }
+
+  .usp-title {
     display: block;
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
+    line-height: 1.3;
   }
 
-  .usp-ticker-toggle:focus-visible ~ .usp-ticker-pause {
-    outline: 2px solid var(--foreground);
-    outline-offset: -4px;
+  .usp-detail {
+    display: block;
+    color: var(--muted-foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    line-height: 1.4;
   }
 
-  @keyframes usp-ticker {
-    from { transform: translateX(0); }
-    to { transform: translateX(-100%); }
+  @media (hover: hover) {
+    .usp-link:hover { background: color-mix(in oklab, var(--muted) 50%, var(--card)); }
   }
 
-  /* Still under reduced motion: the notices wrap and stay in view (no
-     scroll region to reach by keyboard). */
-  @media (prefers-reduced-motion: reduce) {
-    .usp-ticker {
-      height: auto;
-      min-height: 2.5rem;
-      border-radius: 1.25rem;
+  @media (min-width: 40rem) {
+    .usp-grid[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .usp-grid[data-count="3"] > li:last-child:nth-child(odd) { grid-column: auto; }
+
+    .usp-item {
+      align-items: center;
+      gap: 0.75rem;
+      min-block-size: 4.5rem;
+      padding: 0.75rem 1rem;
     }
 
-    .usp-ticker-window {
-      overflow: visible;
-    }
-
-    .usp-ticker-track {
-      animation: none;
-      flex-shrink: 1;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.125rem 2.5rem;
-      padding-block: 0.5rem;
-      white-space: normal;
-    }
-
-    .usp-ticker-copy,
-    .usp-ticker-pause,
-    .usp-ticker-toggle {
-      display: none;
+    .usp-icon {
+      inline-size: 2.25rem;
+      block-size: 2.25rem;
     }
   }
+
+  @media (min-width: 64rem) {
+    .usp-grid[data-count="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
+  .usp-single,
+  .usp-still {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem 1.5rem;
+    padding: 0.625rem 1rem;
+    color: var(--foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    text-align: center;
+  }
+
+  .usp-single { gap: 0.5rem; }
+  .usp-single strong { font-weight: 600; }
 </style>

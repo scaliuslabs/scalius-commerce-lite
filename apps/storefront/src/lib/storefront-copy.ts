@@ -56,6 +56,42 @@ export interface StorefrontCopy {
   };
   /** Header, menus, drawers and footer (chrome-copy.ts). */
   chrome: ChromeCopy;
+  /** The home page's sections, hero and carousels. */
+  home: {
+    featured: string;
+    slideOf: (position: number, total: number) => string;
+    goToSlide: (position: number) => string;
+    previousSlide: string;
+    nextSlide: string;
+    pauseSlides: string;
+    playSlides: string;
+    banner: (position: number) => string;
+    promotion: (position: number) => string;
+    promotions: string;
+    whyShop: string;
+    notices: string;
+    aboutStore: string;
+    shopByCategory: string;
+    viewMore: string;
+    shopAll: string;
+    newArrivals: string;
+    onSale: string;
+    popular: string;
+    moreToExplore: string;
+    endsIn: string;
+    endsOn: (date: string) => string;
+    previousProducts: (title: string) => string;
+    nextProducts: (title: string) => string;
+    shopByBrand: string;
+    questions: string;
+    ourStory: string;
+    highlights: string;
+    customersSay: string;
+    storeServices: string;
+    shopBy: string;
+    loadMore: string;
+    viewAllOf: (title: string) => string;
+  };
 }
 
 const EN: StorefrontCopy = {
@@ -90,6 +126,41 @@ const EN: StorefrontCopy = {
     viewAll: "View all",
   },
   chrome: CHROME_EN,
+  home: {
+    featured: "Featured",
+    slideOf: (position, total) => `${position} of ${total}`,
+    goToSlide: (position) => `Go to slide ${position}`,
+    previousSlide: "Previous slide",
+    nextSlide: "Next slide",
+    pauseSlides: "Pause slideshow",
+    playSlides: "Play slideshow",
+    banner: (position) => `Banner ${position}`,
+    promotion: (position) => `Promotion ${position}`,
+    promotions: "Promotions",
+    whyShop: "Why shop with us",
+    notices: "Store notices",
+    aboutStore: "About the store",
+    shopByCategory: "Shop by category",
+    viewMore: "View more",
+    shopAll: "Shop all",
+    newArrivals: "New arrivals",
+    onSale: "On sale",
+    popular: "Popular right now",
+    moreToExplore: "More to explore",
+    endsIn: "Ends in",
+    endsOn: (date) => `Ends ${date}`,
+    previousProducts: (title) => `Previous products in ${title}`,
+    nextProducts: (title) => `Next products in ${title}`,
+    shopByBrand: "Shop by brand",
+    questions: "Questions and answers",
+    ourStory: "Our story",
+    highlights: "Highlights",
+    customersSay: "What customers say",
+    storeServices: "Store services",
+    shopBy: "Shop by",
+    loadMore: "Load more",
+    viewAllOf: (title) => `View all ${title}`,
+  },
 };
 
 const BN: StorefrontCopy = {
@@ -124,6 +195,41 @@ const BN: StorefrontCopy = {
     viewAll: "সব দেখুন",
   },
   chrome: CHROME_BN,
+  home: {
+    featured: "বিশেষ আয়োজন",
+    slideOf: (position, total) => `${total}-এর ${position} নম্বর`,
+    goToSlide: (position) => `${position} নম্বর স্লাইডে যান`,
+    previousSlide: "আগের স্লাইড",
+    nextSlide: "পরের স্লাইড",
+    pauseSlides: "স্লাইডশো থামান",
+    playSlides: "স্লাইডশো চালান",
+    banner: (position) => `ব্যানার ${position}`,
+    promotion: (position) => `প্রচার ${position}`,
+    promotions: "অফার",
+    whyShop: "কেন আমাদের থেকে কিনবেন",
+    notices: "স্টোরের জানানি",
+    aboutStore: "স্টোর সম্পর্কে",
+    shopByCategory: "ক্যাটাগরি অনুযায়ী কিনুন",
+    viewMore: "আরও দেখুন",
+    shopAll: "সব কিনুন",
+    newArrivals: "নতুন পণ্য",
+    onSale: "ছাড়ে পণ্য",
+    popular: "এখন জনপ্রিয়",
+    moreToExplore: "আরও দেখুন",
+    endsIn: "শেষ হতে বাকি",
+    endsOn: (date) => `শেষ ${date}`,
+    previousProducts: (title) => `${title}: আগের পণ্য`,
+    nextProducts: (title) => `${title}: পরের পণ্য`,
+    shopByBrand: "ব্র্যান্ড অনুযায়ী কিনুন",
+    questions: "প্রশ্ন ও উত্তর",
+    ourStory: "আমাদের গল্প",
+    highlights: "বিশেষত্ব",
+    customersSay: "ক্রেতারা যা বলেন",
+    storeServices: "স্টোরের সেবা",
+    shopBy: "ধরন অনুযায়ী কিনুন",
+    loadMore: "আরও পণ্য দেখুন",
+    viewAllOf: (title) => `${title}: সব দেখুন`,
+  },
 };
 
 const COPY: Record<StorefrontLanguage, StorefrontCopy> = { en: EN, bn: BN };

@@ -8,6 +8,10 @@ import { richTextParagraphs } from "@/lib/homepage-sections";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import RichTextSection from "./RichTextSection.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"editorial">;
   photo: HomepageMediaAsset | null;
@@ -15,6 +19,8 @@ interface Props {
 }
 
 const { section, photo, aboveFold } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const settings = section.settings;
 const headingId = `home-section-${section.id}-title`;
 const heading = "heading" in settings ? settings.heading.trim() : "";
@@ -28,8 +34,8 @@ const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2
 {settings.layout === "rich-text" && <RichTextSection id={section.id} heading={settings.heading} body={settings.body} />}
 
 {settings.layout === "image-with-text" && (
-  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "Our story"}>
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : copy.ourStory}>
+    <Container>
       <div class:list={["grid items-center gap-6 md:gap-10", photo && "md:grid-cols-2"]}>
         {photo && (
           <div class:list={["overflow-hidden rounded-xl bg-muted", settings.imageSide === "end" && "md:order-last"]}>
@@ -53,13 +59,13 @@ const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2
           ))}
         </div>
       </div>
-    </div>
+    </Container>
   </section>
 )}
 
 {settings.layout === "multicolumn" && columns.length > 0 && (
-  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "Highlights"}>
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : copy.highlights}>
+    <Container>
       {heading && <h2 id={headingId} class="section-heading mb-4 text-foreground md:mb-6">{heading}</h2>}
       <ul class={`grid gap-6 ${columnClass}`}>
         {columns.map((column) => (
@@ -69,13 +75,13 @@ const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2
           </li>
         ))}
       </ul>
-    </div>
+    </Container>
   </section>
 )}
 
 {settings.layout === "testimonial" && quotes.length > 0 && (
-  <section class="home-section w-full" aria-label="What customers say">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <section class="home-section w-full" aria-label={copy.customersSay}>
+    <Container>
       <ul class:list={["grid gap-4 md:gap-6", quotes.length > 1 && "md:grid-cols-2", quotes.length > 2 && "lg:grid-cols-3"]}>
         {quotes.map((quote) => (
           <li>
@@ -86,6 +92,6 @@ const columnClass = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2
           </li>
         ))}
       </ul>
-    </div>
+    </Container>
   </section>
 )}

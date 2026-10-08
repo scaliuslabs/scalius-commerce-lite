@@ -33,6 +33,7 @@ import type {
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
 import { readHomepageAppSurfaces, type HomepageAppSurface } from "@/lib/app-surfaces";
+import { storefrontCopy, type StorefrontLanguage } from "@/lib/storefront-copy";
 import type { PluginHead } from "@scalius/shared/plugins/storefront";
 
 /**
@@ -56,6 +57,8 @@ export interface HomepageContent {
   apps?: ReadonlyMap<string, HomepageAppSurface>;
   /** The Metaobjects sections' content types, by definition id; absent or missing: nothing. */
   metaobjects?: ReadonlyMap<string, HomepageMetaobject>;
+  /** The store's language for default titles (English when absent). */
+  language?: StorefrontLanguage;
 }
 
 export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = {
@@ -127,8 +130,27 @@ export function homepageHero(section: StorefrontSectionOf<"hero">, content: Home
 }
 
 /** The title category tiles show: the section's own, else "Shop by category". */
-export function homepageCategoryTilesTitle(section: StorefrontSectionOf<"category-tiles">): string {
-  return section.settings.title.trim() || "Shop by category";
+export function homepageCategoryTilesTitle(section: StorefrontSectionOf<"category-tiles">, language: StorefrontLanguage = "en"): string {
+  return section.settings.title.trim() || storefrontCopy(language).home.shopByCategory;
+}
+
+/**
+ * Columns for a grid of `count` tiles that leaves no stranded row: the
+ * widest count in `min`..`max` that divides evenly, else the one whose last
+ * row is fullest (12 tiles: 6 or 4 across, never 8 + 4; 7 tiles: 7).
+ */
+export function balancedColumns(count: number, max: number, min = 2): number {
+  const widest = Math.max(1, Math.min(max, count));
+  let best = widest;
+  let bestFill = -1;
+  for (let columns = widest; columns >= Math.min(min, widest); columns -= 1) {
+    const fill = (count % columns || columns) / columns;
+    if (fill > bestFill + 1e-9) {
+      best = columns;
+      bestFill = fill;
+    }
+  }
+  return best;
 }
 
 /** A category-tiles section's categories, in the section's order (ones that are not public are skipped). */
@@ -159,14 +181,16 @@ export function richTextParagraphs(body: string): string[] {
 }
 
 /**
- * Long SEO copy as blocks (Star Tech's h2 + paragraph pairs): a paragraph
- * whose first line starts with "## " opens with that line as a subheading.
+ * Long SEO copy as blocks (heading + paragraph pairs): a paragraph whose
+ * first line starts with "## " or "### " opens with that line as a
+ * subheading. Markdown markers never print.
  */
 export function seoTextBlocks(body: string): Array<{ heading: string | null; text: string }> {
   return richTextParagraphs(body).map((paragraph) => {
     const [first = "", ...rest] = paragraph.split("\n");
-    if (!/^##(\s|$)/.test(first)) return { heading: null, text: paragraph };
-    return { heading: first.slice(2).trim() || null, text: rest.join("\n").trim() };
+    const marker = /^#{2,3}(?:\s|$)/.exec(first);
+    if (!marker) return { heading: null, text: paragraph };
+    return { heading: first.slice(marker[0].length).trim() || null, text: rest.join("\n").trim() };
   }).filter((block) => block.heading || block.text);
 }
 
@@ -179,24 +203,20 @@ export interface HomepageSectionProducts {
   href: string | null;
 }
 
-const SOURCE_TITLES: Record<"newest" | "on-sale" | "popular", string> = {
-  newest: "New arrivals",
-  "on-sale": "On sale",
-  popular: "Popular right now",
-};
-
 function sourceTitleAndHref(
   source: StorefrontProductSource,
   list: HomepageProductList | undefined,
+  language: StorefrontLanguage,
 ): { title: string; href: string | null } | null {
+  const copy = storefrontCopy(language).home;
   switch (source.kind) {
     case "newest":
-      return { title: SOURCE_TITLES.newest, href: "/search" };
+      return { title: copy.newArrivals, href: "/search" };
     case "on-sale":
-      return { title: SOURCE_TITLES["on-sale"], href: "/search?hasDiscount=true" };
+      return { title: copy.onSale, href: "/search?hasDiscount=true" };
     // No listing sorts by popularity, so the list has no "View all".
     case "popular":
-      return { title: SOURCE_TITLES.popular, href: null };
+      return { title: copy.popular, href: null };
     case "collection":
       return list?.collection
         ? { title: list.collection.title, href: `/collections/${encodeURIComponent(list.collection.id)}` }
@@ -217,7 +237,7 @@ function sourceProducts(
   content: HomepageContent,
 ): { products: Product[]; title: string; href: string | null } | null {
   const list = content.lists.get(storefrontProductSourceKey(source));
-  const named = sourceTitleAndHref(source, list);
+  const named = sourceTitleAndHref(source, list, content.language ?? "en");
   const products = (list?.products ?? []).slice(0, limit) as Product[];
   return named && products.length > 0 ? { products, ...named } : null;
 }
@@ -299,6 +319,9 @@ export function homepageBrandHref(brand: Pick<HomepageBrand, "slug" | "canonical
   return brand.canonicalPath || `/brands/${encodeURIComponent(brand.slug)}`;
 }
 
+/** The delivery-facts strip needs two facts to be a strip. */
+export const HOME_USP_MIN_FACTS = 2;
+
 /** A brand wall needs four brands to be a wall (the section's fit rule reads the same count). */
 export const HOME_BRAND_WALL_MIN = 4;
 
@@ -347,7 +370,7 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
       return homepageHero(section, content).desktop.length > 0;
     case "usp-strip":
       return section.settings.source.kind === "delivery-facts"
-        ? content.deliveryFacts.length > 0
+        ? content.deliveryFacts.length >= HOME_USP_MIN_FACTS
         : section.settings.source.items.length > 0;
     case "category-tiles":
       // Photo tiles are a rail (one category is enough there); the denser
@@ -449,6 +472,16 @@ export function homepagePhoneSections(
   const [hero] = ordered.splice(heroIndex, 1);
   ordered.splice(categoryIndex, 0, hero!);
   return ordered;
+}
+
+/**
+ * How a banner row draws: a lone banner fills the row, and a short run of
+ * four-up banners spreads over the row instead of leaving it part empty.
+ */
+export function bannerRowLayout(layout: "two-up" | "four-up", count: number): "full" | "two-up" | "three-up" | "four-up" {
+  if (count <= 1) return "full";
+  if (layout === "two-up" || count === 2) return "two-up";
+  return count === 3 ? "three-up" : "four-up";
 }
 
 /** What renders, in order: one entry per section, consecutive two-up / four-up banners in one row. */

@@ -571,7 +571,7 @@ describe("storefront theme render matrix", () => {
       const hero = page.querySelector('[data-home-section="hero"]')!;
       expect(hero.querySelectorAll('img[fetchpriority="high"]').length).toBeGreaterThan(0);
       const layout = heroSection.settings.layout;
-      if (layout !== "split" && layout !== "story-cards") {
+      if (layout !== "split") {
         // Phones get a phone-sized rendition, and the first slide paints without script.
         const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
         expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/613.webp 613w");
@@ -1391,8 +1391,8 @@ describe("navigation", () => {
     expect(page.querySelector('[data-hero-layout="wide-editorial"]')?.className).not.toMatch(/\bpt-/);
     const carousel = page.querySelector('.desktop-carousel[data-carousel-layout="wide-editorial"]')!;
     expect(carousel.className).toContain("rounded-2xl");
-    expect(carousel.querySelector(".wide-editorial-copy")?.textContent).toContain("Find your next favorite");
-    expect(carousel.querySelector(".wide-editorial-support")?.textContent).toBe("Discover items from around the world.");
+    expect(carousel.querySelector('.hero-copy[data-tone="editorial"]')?.textContent).toContain("Find your next favorite");
+    expect(carousel.querySelector(".hero-copy-text")?.textContent).toBe("Discover items from around the world.");
     expect(carousel.querySelector("picture")?.className).toContain("md:w-[48%]");
     expect(carousel.querySelector("source")?.getAttribute("sizes")).toBe(heroImageCandidate(campaign.url, "desktop", "wide-editorial").sizes);
     const imageOnly = parse(await render("/src/components/hero.astro", storefrontTemplateTheme("marketplace"), {
@@ -1404,7 +1404,7 @@ describe("navigation", () => {
       hero: { desktop: [campaign], mobile: [campaign] },
       layout: "contained-banners",
     }));
-    expect(plainBanner.querySelector(".wide-editorial-support")).toBeNull();
+    expect(plainBanner.querySelector('.hero-copy[data-tone="editorial"]')).toBeNull();
   });
 
   it("never opens the departments list by itself, on the home page included", async () => {

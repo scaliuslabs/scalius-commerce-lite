@@ -3015,9 +3015,7 @@
                       "enum": [
                         "full-bleed",
                         "contained-banners",
-                        "app-panel",
                         "split",
-                        "story-cards",
                         "full-screen",
                         "wide-editorial"
                       ]

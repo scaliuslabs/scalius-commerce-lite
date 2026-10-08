@@ -113,7 +113,7 @@ function layout(entry: GalleryEntry) {
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, footerLogo: null, favicon: null },
     storeShape: storeShape(),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
-    seo: { socialImage: "" },
+    seo: { socialImage: "", returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" } },
     // The API serves the store language; a Bangla store speaks Bangla in its chrome too.
     ...(entry.scenario.locale === "bn" ? { storefrontCopy: { languageCode: "bn" } } : {}),
     timeZone: "Asia/Dhaka",

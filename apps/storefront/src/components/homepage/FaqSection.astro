@@ -6,17 +6,23 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import Icon from "@/components/icons/Icon.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"faq">;
 }
 
 const { section } = Astro.props;
-const heading = section.settings.heading.trim() || "Questions and answers";
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
+const heading = section.settings.heading.trim() || copy.questions;
 const headingId = `home-${section.id}-title`;
 ---
 
 <section class="home-section w-full" aria-labelledby={headingId}>
-  <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+  <Container width="text">
     <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{heading}</h2>
     <div class="divide-y divide-border rounded-xl border border-border bg-card">
       {section.settings.items.map((item) => (
@@ -29,5 +35,5 @@ const headingId = `home-${section.id}-title`;
         </details>
       ))}
     </div>
-  </div>
+  </Container>
 </section>

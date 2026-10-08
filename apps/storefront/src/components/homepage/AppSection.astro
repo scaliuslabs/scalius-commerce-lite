@@ -5,6 +5,7 @@
 import AppSurface from "@/components/apps/AppSurface.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontAppSection;
@@ -15,7 +16,7 @@ const { section, surface } = Astro.props;
 ---
 
 <section class="home-section w-full" data-app-section={section.settings.app}>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
-  </div>
+  </Container>
 </section>

@@ -8,6 +8,7 @@
 // public (lib/recently-viewed-client.ts).
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontSectionOf<"recently-viewed">;
@@ -20,10 +21,10 @@ const title = section.settings.title.trim() || "Recently viewed";
 ---
 
 <section id={rootId} class="home-section w-full" aria-labelledby={headingId} hidden data-recently-viewed>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <Container>
     <h2 id={headingId} class="section-heading mb-3 text-foreground [overflow-wrap:anywhere] md:mb-5">{title}</h2>
     <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
-  </div>
+  </Container>
 </section>
 <script is:inline set:html={recentlyViewedRenderScript(rootId)} />
 

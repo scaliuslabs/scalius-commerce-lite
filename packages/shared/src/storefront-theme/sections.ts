@@ -120,9 +120,11 @@ export const STOREFRONT_SECTION_REGISTRY = {
   hero: section({
     type: "hero",
     settings: z.object({
-      // Fabrilife full-bleed 2.6:1; Star Tech contained + 2 side banners;
-      // Daraz + app panel; Dawn split; Amazon story cards; Aarong full-screen phone; eBay wide editorial.
-      layout: z.enum(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen", "wide-editorial"]),
+      // Full-bleed 2.6:1; contained (+ 2 side banners); split halves; a
+      // full-screen phone frame; wide editorial (copy beside the image).
+      // Retired: app-panel reads as contained-banners and story-cards as
+      // full-bleed (upgrade.ts withTightenedBounds).
+      layout: z.enum(["full-bleed", "contained-banners", "split", "full-screen", "wide-editorial"]),
       /** The slides, in order. A hero without one renders nothing. */
       slides: z.array(storefrontHeroSlideSchema).max(STOREFRONT_HERO_SLIDE_LIMIT),
       /** Keep the desktop order, but let category tiles lead on phones. */

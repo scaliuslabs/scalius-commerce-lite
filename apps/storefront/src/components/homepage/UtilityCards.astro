@@ -6,17 +6,23 @@ import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import Icon from "@/components/icons/Icon.astro";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"utility-cards">;
 }
 
 const { section } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const cards = section.settings.cards;
 ---
 
-<section class="home-section w-full" aria-label="Store services">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <ul class:list={["grid grid-cols-2 gap-2 md:gap-4", cards.length >= 3 && "lg:grid-cols-4", cards.length === 1 && "grid-cols-1"]}>
+<section class="home-section w-full" aria-label={copy.storeServices}>
+  <Container>
+    <ul class:list={["grid grid-cols-1 gap-2 sm:grid-cols-2 md:gap-4", cards.length >= 3 && "lg:grid-cols-4"]}>
       {cards.map((card) => {
         const external = card.href.startsWith("https://");
         return (
@@ -38,5 +44,5 @@ const cards = section.settings.cards;
         );
       })}
     </ul>
-  </div>
+  </Container>
 </section>

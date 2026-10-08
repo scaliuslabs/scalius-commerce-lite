@@ -40,8 +40,7 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
 // One batch: layout, homepage (with every section's products, images,
 // categories and collections), and the delivery facts a delivery-facts strip
-// or an app-panel hero shows (read speculatively so they add no second round
-// trip).
+// shows (read speculatively so they add no second round trip).
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
@@ -130,13 +129,13 @@ const phoneCategory = phoneLeadSection?.type === "category-tiles"
   ? homepageCategoryTiles(phoneLeadSection, content).find((category) => category.imageUrl)
   : null;
 const phoneCategoryImage = phoneCategory?.imageUrl ?? null;
-// The leading tiles' phone photo, at the width and sizes CategoryTiles and
-// HomepageCategoryRail draw it with (the preload must name that file).
+// The leading tiles' phone photo, at the width and sizes CategoryTiles draws
+// it with (the preload must name that file).
 const phoneCategoryStyle = phoneLeadSection?.type === "category-tiles" ? phoneLeadSection.settings.style : null;
 const phoneCategoryWidth = phoneCategoryStyle === "photo" || phoneCategoryStyle === "photo-grid" ? 480 : phoneCategoryStyle === "round-small" ? 160 : 320;
 const phoneCategorySizes = phoneCategoryStyle ? {
   photo: "min(42vw, 176px)",
-  "photo-grid": "calc((100vw - 2.75rem) / 2)",
+  "photo-grid": "min(42vw, 176px)",
   icons: "56px",
   round: "30vw",
   "round-small": "56px",

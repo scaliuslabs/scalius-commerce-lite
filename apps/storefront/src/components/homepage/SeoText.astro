@@ -5,18 +5,24 @@
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import { seoTextBlocks } from "@/lib/homepage-sections";
 
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import Container from "@/components/ui/Container.astro";
+
 interface Props {
   section: StorefrontSectionOf<"seo-text">;
 }
 
 const { section } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = storefrontCopy(language).home;
 const heading = section.settings.heading.trim();
 const headingId = `home-${section.id}-title`;
 const blocks = seoTextBlocks(section.settings.body);
 ---
 
-<section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "About the store"}>
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+<section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : copy.aboutStore}>
+  <Container>
     <div class="max-w-4xl text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
       {heading && <h2 id={headingId} class="mb-3 text-lg font-semibold text-foreground md:text-xl">{heading}</h2>}
       {blocks.map((block) => (
@@ -26,5 +32,5 @@ const blocks = seoTextBlocks(section.settings.body);
         </Fragment>
       ))}
     </div>
-  </div>
+  </Container>
 </section>

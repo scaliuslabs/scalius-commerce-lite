@@ -386,6 +386,7 @@ function withTightenedBounds(doc: Record<string, unknown>): Record<string, unkno
   withConsolidatedChrome(doc);
   // Product-page and listing choices the redesign removed read as their replacements.
   retireProductPageChoices(doc);
+  withRetiredHeroLayouts(doc);
   return doc;
 }
 
@@ -469,6 +470,34 @@ function withConsolidatedChrome(doc: Record<string, unknown>): void {
     const kept = (mobile.settings.tabs as unknown[]).filter((tab) => tab !== "cart" && tab !== "search");
     for (const filler of ["offers", "compare"]) if (kept.length < 3 && !kept.includes(filler)) kept.push(filler);
     mobile.settings = { ...mobile.settings, tabs: kept };
+  }
+}
+
+/** Hero layouts retired from the registry, as the layout each now reads as. */
+const RETIRED_HERO_LAYOUTS: Readonly<Record<string, string>> = { "app-panel": "contained-banners", "story-cards": "full-bleed" };
+
+/**
+ * The app-panel hero (an almost empty facts box beside the banner) reads as
+ * the contained banner, and the story-cards hero (narrow cards with no
+ * button) as the full-bleed banner, on the home page, landing pages and
+ * page-template sections. Their slides, words and links are kept.
+ */
+function withRetiredHeroLayouts(doc: Record<string, unknown>): void {
+  const pages = doc.pages as { home?: unknown; landing?: unknown; templates?: unknown } | undefined;
+  if (!pages) return;
+  const fix = (sections: unknown) => {
+    if (!Array.isArray(sections)) return;
+    for (const each of sections) {
+      const hero = each as { type?: unknown; settings?: { layout?: unknown } } | null;
+      if (hero?.type !== "hero" || !hero.settings || typeof hero.settings.layout !== "string") continue;
+      const next = RETIRED_HERO_LAYOUTS[hero.settings.layout];
+      if (next) hero.settings.layout = next;
+    }
+  };
+  fix(pages.home);
+  for (const group of [pages.landing, pages.templates]) {
+    if (!group || typeof group !== "object") continue;
+    for (const page of Object.values(group)) fix((page as { sections?: unknown } | null)?.sections);
   }
 }
 

@@ -100,15 +100,8 @@ describe("heroLeadCandidates", () => {
     expect(heroImageSizes("wide-editorial", "desktop")).toBe("(min-width: 97rem) 93rem, calc(100vw - 4rem)");
   });
 
-  it("offers story cards one candidate for every screen", () => {
-    const [candidate, ...rest] = heroLeadCandidates({ desktop, mobile }, "story-cards");
-    expect(rest).toEqual([]);
-    expect(candidate!.media).toBe("all");
-    expect(candidate!.srcset).toContain("media/d.webp");
-  });
-
   it("preloads nothing without banners", () => {
-    expect(heroLeadCandidates({ desktop: [], mobile: [] }, "story-cards")).toEqual([]);
+    expect(heroLeadCandidates({ desktop: [], mobile: [] }, "contained-banners")).toEqual([]);
     expect(heroLeadCandidates({ desktop: [], mobile: [] }, "full-bleed")).toEqual([]);
   });
 });
