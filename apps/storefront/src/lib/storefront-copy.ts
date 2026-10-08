@@ -69,7 +69,6 @@ export interface StorefrontCopy {
     notices: string;
     aboutStore: string;
     shopByCategory: string;
-    browse: (name: string) => string;
     viewMore: string;
     shopAll: string;
     newArrivals: string;
@@ -138,7 +137,6 @@ const EN: StorefrontCopy = {
     notices: "Store notices",
     aboutStore: "About the store",
     shopByCategory: "Shop by category",
-    browse: (name) => `Browse ${name}`,
     viewMore: "View more",
     shopAll: "Shop all",
     newArrivals: "New arrivals",
@@ -207,7 +205,6 @@ const BN: StorefrontCopy = {
     notices: "স্টোরের জানানি",
     aboutStore: "স্টোর সম্পর্কে",
     shopByCategory: "ক্যাটাগরি অনুযায়ী কিনুন",
-    browse: (name) => `${name} দেখুন`,
     viewMore: "আরও দেখুন",
     shopAll: "সব কিনুন",
     newArrivals: "নতুন পণ্য",

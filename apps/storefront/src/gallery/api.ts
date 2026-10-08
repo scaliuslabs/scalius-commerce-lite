@@ -107,7 +107,7 @@ function layout(entry: GalleryEntry) {
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, footerLogo: null, favicon: null },
     storeShape: storeShape(),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
-    seo: { socialImage: "" },
+    seo: { socialImage: "", returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" } },
     timeZone: "Asia/Dhaka",
     // The Platform settings take origins: the gallery server answers `/api/v1`
     // on its own origin (by the page's Referer in the browser), so the page's

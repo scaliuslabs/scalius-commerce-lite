@@ -69,7 +69,7 @@ const Heading = headingLevel;
   }
 
   /* The pager sits under the copy: reserve its 44px row and a gap. */
-  .site-root [data-pager] .hero-copy[data-tone="band"] .hero-copy-body {
+  .site-root [data-pager] .hero-copy:is([data-tone="band"], [data-tone="editorial"]) .hero-copy-body {
     padding-block-end: 3.5rem;
   }
 

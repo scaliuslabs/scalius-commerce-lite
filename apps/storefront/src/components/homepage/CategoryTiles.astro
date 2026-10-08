@@ -15,8 +15,6 @@ import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { HomepageCategory } from "@/lib/api/storefront";
 import { balancedColumns } from "@/lib/homepage-sections";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
 import Container from "@/components/ui/Container.astro";
 import SectionHeader from "@/components/ui/SectionHeader.astro";
 import CategoryMonogram from "./CategoryMonogram.astro";
@@ -30,8 +28,6 @@ interface Props {
 }
 
 const { section, title, categories } = Astro.props;
-const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
 const style = section.settings.style;
 const photo = style === "photo" || style === "photo-grid";
 const round = style === "round" || style === "round-small" || style === "round-row";
@@ -60,7 +56,7 @@ const shown = photo ? count >= 1 : count >= 2;
         >
           {categories.map((category) => (
             <li>
-              <a href={hrefOf(category)} class="group cat-photo" aria-label={copy.browse(category.name)}>
+              <a href={hrefOf(category)} class="group cat-photo">
                 {category.imageUrl ? (
                   <img
                     src={mediaImageUrl(category.imageUrl, 480)}
