@@ -1236,8 +1236,8 @@ describe("navigation", () => {
       const labels = Array.from(tabs.querySelectorAll(".mobile-tab")).map(
         (item) => item.querySelector(":scope > span:last-child")!.textContent,
       );
-      // Every chosen tab shows, Compare included (it opens the buyer's list).
-      const expectedLabels = chosen.map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
+      // Every chosen tab shows except Compare: this store's product page offers nothing to compare.
+      const expectedLabels = chosen.filter((tab) => tab !== "compare").map((tab) => tab.charAt(0).toUpperCase() + tab.slice(1));
       expect(labels).toEqual(expectedLabels);
       const categories = tabs.querySelector("[data-mobile-menu-open]")!;
       expect(categories.getAttribute("aria-controls")).toBe("mobile-menu-panel");
@@ -1258,11 +1258,28 @@ describe("navigation", () => {
     }
   });
 
-  it("shows the Compare tab the merchant chose, linking to the comparison", async () => {
+  it("shows the Compare tab only where the product page can start a comparison", async () => {
     const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "account"], drawer: "accordion" });
     const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: HEADERS[2]! });
-    const page = await renderNavigationPage(theme);
-    expect(page.querySelector("#mobile-tab-bar a[href='/compare'][data-compare-tab]")).not.toBeNull();
+    theme.blocks.product.below = ["description", "compare-similar", "related"];
+    const renderBar = async (shape: StoreShape) => parse(await render(
+      "/src/layouts/Layout.astro",
+      theme,
+      { title: "Silk sarees", layoutData: { ...layoutData({ business: true }), navigation: NAVIGATION } },
+      { default: "<main><h1>Silk sarees</h1></main>" },
+      CURRENT_PAGE,
+      shape,
+    ));
+    const withSpecs = await renderBar({ ...STORE_SHAPE, hasKeySpecs: true });
+    expect(withSpecs.querySelector("#mobile-tab-bar a[href='/compare'][data-compare-tab]")).not.toBeNull();
+    // No key specs: the module does not fit, so there is nothing to start a comparison from.
+    expect((await renderBar(STORE_SHAPE)).querySelector("#mobile-tab-bar [data-compare-tab]")).toBeNull();
+
+    theme.blocks.product.below = ["description", "related"];
+    const without = await renderNavigationPage(theme);
+    expect(without.querySelector("#mobile-tab-bar [data-compare-tab]")).toBeNull();
+    // The bar keeps at least three tabs.
+    expect(without.querySelectorAll("#mobile-tab-bar li").length).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps the cart and the search in the phone header, whatever the tabs", async () => {

@@ -5,19 +5,23 @@
 // is narrower than the tablet step (pass the same value to each ProductCard
 // for its image `sizes`). `data-*` attributes and `style` go on the frame
 // (listing layouts mark their results and override the grid's variables).
+// `sparse` is for a home section with one or two products: a two-column grid
+// capped at a readable width, aligned to the section header, so a lone card
+// is neither stretched across the row nor left beside an empty row.
 import type { ProductGridPhoneLayout } from "@/lib/product-card-layout";
 
 interface Props {
   class?: string;
   phoneLayout?: ProductGridPhoneLayout;
+  sparse?: boolean;
   style?: string;
   [data: `data-${string}`]: string | undefined;
 }
 
-const { class: className, phoneLayout = "grid", ...frame } = Astro.props;
+const { class: className, phoneLayout = "grid", sparse = false, ...frame } = Astro.props;
 ---
 
-<div class:list={["product-grid-frame", className]} {...frame}>
+<div class:list={["product-grid-frame", className]} data-sparse={sparse ? "" : undefined} {...frame}>
   <div class="product-grid" data-phone-layout={phoneLayout === "list-row" ? "list-row" : undefined}>
     <slot />
   </div>

@@ -465,10 +465,11 @@ function withConsolidatedChrome(doc: Record<string, unknown>): void {
   if (topBar && topBar.variant === "app-banner") topBar.variant = "announcement";
   // The header always carries the cart and the search on phones: the bottom
   // bar's Cart and Search tabs read as nothing, and a bar left with fewer than
-  // three tabs takes Offers, then Compare, so it stays a bar.
+  // three tabs takes Offers, then Categories, then Home, so it stays a bar.
+  // Never Compare: it appears only where the product page can compare.
   if (mobile && mobile.variant === "bottom-tabs" && Array.isArray(mobile.settings?.tabs)) {
     const kept = (mobile.settings.tabs as unknown[]).filter((tab) => tab !== "cart" && tab !== "search");
-    for (const filler of ["offers", "compare"]) if (kept.length < 3 && !kept.includes(filler)) kept.push(filler);
+    for (const filler of ["offers", "categories", "home"]) if (kept.length < 3 && !kept.includes(filler)) kept.push(filler);
     mobile.settings = { ...mobile.settings, tabs: kept };
   }
 }

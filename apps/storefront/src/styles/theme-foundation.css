@@ -333,6 +333,22 @@ html {
   }
 }
 
+/* Horizontal rails keep focused items clear of the edges (scripts/rail-focus.ts). */
+[data-h-rail] {
+  scroll-padding-inline: 0.5rem;
+}
+
+/* A home section with one or two products (ProductGrid `sparse`): two
+   columns, capped so a card stays a readable size and starts under the
+   section header. Never one card stretched across the row. */
+.product-grid-frame[data-sparse] {
+  max-inline-size: 40rem;
+}
+
+.product-grid-frame[data-sparse] .product-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 /* ── Craft (Theme -> Style) ─────────────────────────────────────────────
    One motion language (tokens.ts STOREFRONT_MOTION_MS): 150ms for hovers
    and presses, 250ms for panels and fades, ease-out, and none under reduced

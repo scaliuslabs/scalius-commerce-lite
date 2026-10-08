@@ -1,5 +1,6 @@
 import type { AddToCartEventDetail, OpenCartEventDetail } from "@/components/CartFlyout";
 import type { AuthModalOpenDetail } from "@/components/AuthModal";
+import { installRailFocus } from "@/scripts/rail-focus";
 
 function hasCustomerAuthMirrorCookie(): boolean {
   return document.cookie
@@ -10,6 +11,7 @@ function hasCustomerAuthMirrorCookie(): boolean {
 export function installLazyGlobalUi(): void {
   if (window.__scaliusLazyGlobalUiInstalled) return;
   window.__scaliusLazyGlobalUiInstalled = true;
+  installRailFocus();
 
   let authLoading: Promise<unknown> | null = null;
   const loadAuth = (openModal: boolean, detail?: AuthModalOpenDetail) => {

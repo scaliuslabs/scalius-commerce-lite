@@ -11,6 +11,7 @@ import {
   type ProductGalleryLayout,
 } from "./lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "./lib/gallery-media";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import VideoFacade from "./VideoFacade.astro";
 
 interface Props {
@@ -27,6 +28,8 @@ interface Props {
   playVideoLabel?: string;
   /** The words of the computer zoom button, and of the stacked list's "show all" control. */
   zoomLabel?: string;
+  /** One photo's zoom button in the stacked and grid lists ("Zoom photo 2 of 4"). */
+  zoomOfLabel?: (position: number, total: number) => string;
   showAllLabel?: (count: number) => string;
 }
 
@@ -37,6 +40,7 @@ const {
   initialProductMediaId = null,
   playVideoLabel = "Play video: {title}",
   zoomLabel = "Zoom photo",
+  zoomOfLabel = (position: number, total: number) => `Zoom photo ${position} of ${total}`,
   showAllLabel = (count: number) => `Show all photos (${count})`,
 } = Astro.props;
 const thumbnails = layout.thumbnails;
@@ -111,6 +115,7 @@ const listMedia =
     : initialMedia
       ? [initialMedia, ...galleryItems.filter((entry) => entry !== initialMedia)]
       : [];
+const listImages = listMedia.filter((entry) => entry.item.kind === "image");
 const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
 // A long list shows its first photos; the rest open with one control (no script).
 const LIST_VISIBLE = 6;
@@ -160,7 +165,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
               videoFirst && "hidden",
             ]}
             style={stageStyle}
-            aria-label="Open product image zoom"
+            aria-label={zoomLabel}
           >
             <img
               data-mobile-main-image
@@ -275,6 +280,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                 class="pointer-events-none absolute -top-1 inset-s-0 inset-e-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media up"
                 tabindex="-1"
+                aria-hidden="true"
               >
                 <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
                   <Icon name="chevron-up" class="h-3 w-3" />
@@ -368,6 +374,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                 class="pointer-events-none absolute bottom-0 inset-s-0 inset-e-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media down"
                 tabindex="-1"
+                aria-hidden="true"
               >
                 <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
                   <Icon name="chevron-down" class="h-3 w-3" />
@@ -388,6 +395,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
             class="pointer-events-none absolute -top-1 inset-s-0 inset-e-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media up"
             tabindex="-1"
+            aria-hidden="true"
           >
             <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
               <Icon name="chevron-up" class="h-4 w-4" />
@@ -475,6 +483,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
             class="pointer-events-none absolute bottom-0 inset-s-0 inset-e-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media down"
             tabindex="-1"
+            aria-hidden="true"
           >
             <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
               <Icon name="chevron-down" class="h-4 w-4" />
@@ -518,6 +527,18 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                 eager={index === 0}
                 duration={entry.duration}
               />
+            )}
+            {sources && (
+              <button
+                type="button"
+                data-zoom-trigger
+                data-zoom-url={mediaImageUrl(entry.url, GALLERY_IMAGE_WIDTHS.zoom) || entry.url}
+                data-zoom-alt={entry.altText}
+                class="gallery-zoom-trigger absolute inset-e-3 bottom-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-reduce:transition-none"
+                aria-label={zoomOfLabel(listImages.indexOf(entry) + 1, listImages.length)}
+              >
+                <Icon name="maximize-2" class="h-4 w-4" aria-hidden="true" />
+              </button>
             )}
           </li>
         );

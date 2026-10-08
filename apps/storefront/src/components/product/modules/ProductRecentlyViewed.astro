@@ -29,7 +29,7 @@ const headingId = `${rootId}-heading`;
   hidden
 >
   <h2 id={headingId} class="mb-4 text-xl font-bold leading-tight text-foreground lg:text-2xl">{title}</h2>
-  <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
+  <ul data-h-rail class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
 </section>
 <script is:inline set:html={recentlyViewedRenderScript(rootId, slug)} />
 

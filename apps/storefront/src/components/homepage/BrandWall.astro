@@ -31,6 +31,7 @@ const rail = section.settings.style === "rail";
   <Container>
     <SectionHeader id={headingId} title={title} />
     <ul
+      data-h-rail={rail ? "" : undefined}
       class:list={[
         rail
           ? "flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"

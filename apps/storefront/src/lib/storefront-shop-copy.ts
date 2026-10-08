@@ -18,6 +18,16 @@ export interface ShopCopy {
     stock: { inStock: string; lowStock: string };
     showAllPhotos: (count: number) => string;
     zoomPhoto: string;
+    /** One photo of a gallery list: "Zoom photo 2 of 4". */
+    zoomPhotoOf: (position: number, total: number) => string;
+  };
+  compare: {
+    title: string;
+    /** The empty state when a product page can start a comparison. */
+    emptyHow: string;
+    /** The empty state when nothing can start one. */
+    empty: string;
+    continueShopping: string;
   };
   cart: {
     popularNow: string;
@@ -37,6 +47,13 @@ const EN: ShopCopy = {
     stock: { inStock: "In stock", lowStock: "Low stock" },
     showAllPhotos: (count) => `Show all photos (${count})`,
     zoomPhoto: "Zoom photo",
+    zoomPhotoOf: (position, total) => `Zoom photo ${position} of ${total}`,
+  },
+  compare: {
+    title: "Compare products",
+    emptyHow: "Nothing to compare yet. Open a product and use its “Compare with similar items” section to see products side by side.",
+    empty: "Nothing to compare yet.",
+    continueShopping: "Continue shopping",
   },
   cart: {
     popularNow: "Popular now",
@@ -56,6 +73,13 @@ const BN: ShopCopy = {
     stock: { inStock: "স্টকে আছে", lowStock: "স্টক কম" },
     showAllPhotos: (count) => `সব ছবি দেখুন (${count})`,
     zoomPhoto: "ছবি বড় করুন",
+    zoomPhotoOf: (position, total) => `${total}টির মধ্যে ${position} নম্বর ছবি বড় করুন`,
+  },
+  compare: {
+    title: "পণ্য তুলনা",
+    emptyHow: "এখনো তুলনা করার কিছু নেই। একটি পণ্য খুলে তার তুলনার অংশ থেকে পণ্যগুলো পাশাপাশি দেখুন।",
+    empty: "এখনো তুলনা করার কিছু নেই।",
+    continueShopping: "কেনাকাটা চালিয়ে যান",
   },
   cart: {
     popularNow: "এখন জনপ্রিয়",

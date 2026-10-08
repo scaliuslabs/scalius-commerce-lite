@@ -14,6 +14,8 @@ import {
   type CompareProduct,
 } from "@/components/compare/compare-data";
 import { loadPageWithLayout } from "@/lib/page-data";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { shopCopy } from "@/lib/storefront-shop-copy";
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { formatMoney } from "@/lib/currency";
@@ -28,6 +30,11 @@ if (!layoutData || !comparison) {
   response.headers.set("X-Storefront-Data-State", "unavailable");
   return response;
 }
+
+const { resolved, language } = await currentRequestTheme(Astro.locals);
+const copy = shopCopy(language).compare;
+// The empty state names the way in only where it exists: a product page that lists compare-similar.
+const canStartCompare = resolved.blocks.product.below.includes("compare-similar");
 
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
@@ -45,20 +52,20 @@ const photo = (product: CompareProduct) =>
 ---
 
 <Layout
-  title="Compare products"
+  title={copy.title}
   description="Compare products side by side: prices and specifications."
   layoutData={layoutData}
   canonicalUrl={canonicalUrl}
   noindex={true}
 >
   <section class="compare-page container mx-auto px-4 py-6 sm:py-8">
-    <h1 class="text-2xl font-semibold text-foreground">Compare products</h1>
+    <h1 class="text-2xl font-semibold text-foreground">{copy.title}</h1>
 
     {
       products.length === 0 ? (
         <div class="mt-6 rounded-md border border-border p-6 text-muted-foreground">
-          <p>Nothing to compare yet. Choose "Add to Compare" on up to four products.</p>
-          <a href="/" class="mt-3 inline-flex text-primary underline underline-offset-4">Continue shopping</a>
+          <p>{canStartCompare ? copy.emptyHow : copy.empty}</p>
+          <a href="/" class="mt-3 inline-flex min-h-11 items-center text-primary underline underline-offset-4">{copy.continueShopping}</a>
         </div>
       ) : (
         <div class="compare-scroll mt-6" role="region" aria-label="Product comparison" tabindex="0">

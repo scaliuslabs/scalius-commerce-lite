@@ -2,10 +2,11 @@
 // The `bottom-tabs` phone navigation: a bottom tab bar below `lg` with the
 // tabs the theme chose (4-5 of Home, Categories, Offers, Search, Compare,
 // Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). Compare
-// shows only where the store's card offers "Add to Compare" (the spec card):
-// elsewhere nothing fills the comparison, so the tab is left out rather than
-// opening an empty page. It links to /compare (the empty state explains
-// it); the compare script points it at the buyer's list. The tabs reuse the header's openers
+// shows only where comparing is possible (`compare`: the product page lists
+// the compare-similar module): elsewhere nothing fills the comparison, so
+// the tab is left out rather than opening an empty page. A bar left with
+// fewer than three tabs takes the standard ones. The tab links to /compare;
+// the compare script points it at the buyer's list. The tabs reuse the header's openers
 // (header.astro binds `[data-mobile-menu-open]` and `[data-cart-open]`,
 // HeaderLayout binds `[data-search-open]` and `[data-account-link]`), and
 // each is a real link first (the menu drawer's :target, /search, /cart), so
@@ -21,7 +22,7 @@ type Tab = (typeof STOREFRONT_MOBILE_TABS)[number];
 
 interface Props {
   tabs?: readonly Tab[];
-  /** Show the Compare tab when the merchant chose it (the compare page opens the buyer's list). */
+  /** Comparing is possible (the product page offers compare-similar): show the Compare tab when the merchant chose it. */
   compare?: boolean;
 }
 
@@ -33,7 +34,8 @@ const OFFERS_HREF = "/search?hasDiscount=true";
 const { tabs = DEFAULT_TABS, compare = false } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
-const shown = tabs.filter((tab) => AVAILABLE.has(tab) || (tab === "compare" && compare));
+const chosen = tabs.filter((tab) => AVAILABLE.has(tab) || (tab === "compare" && compare));
+const shown = chosen.length >= 3 ? chosen : [...chosen, ...DEFAULT_TABS.filter((tab) => !chosen.includes(tab))].slice(0, 3);
 const path = Astro.url.pathname;
 const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") === "true";
 const active = {
