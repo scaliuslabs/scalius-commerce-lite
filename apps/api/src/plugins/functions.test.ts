@@ -72,7 +72,10 @@ describe("runPluginFunctions", () => {
           case "zeta.good":
             return ok(discount("Zeta"));
           case "alpha.good":
-            await new Promise((resolve) => setTimeout(resolve, 20));
+            // Asynchronous but well inside the limit, without depending on the
+            // wall clock (a loaded machine stretched a real 20 ms sleep past it).
+            await Promise.resolve();
+            await Promise.resolve();
             return ok(discount("Alpha"));
           case "beta.invalid":
             return ok({ discounts: [{ title: "Bad", target: { kind: "order" }, value: { type: "fixed_amount", amountMinor: -5 } }] });
