@@ -52,4 +52,6 @@ export function retireProductPageChoices(doc: RecordValue): void {
   const listing = blocks.listing;
   // The bottom filter bar sat above the bottom tabs (two fixed bars); the standard bar replaces it.
   if (isRecord(listing) && listing.phoneBar === "bottom") listing.phoneBar = "standard";
+  // The side gutter is the page container's: every listing's cards line up with its header and title.
+  if (isRecord(listing)) delete listing.gutter;
 }

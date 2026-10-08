@@ -17,7 +17,11 @@ describe("stacked and grid product pages", () => {
     expect(layout).toMatch(/\[data-gallery="stacked"\] \{\s*--product-info-column: 345px;/);
     expect(layout).toMatch(/\[data-gallery="grid"\] \{\s*--product-info-column: 400px;/);
     expect(layout).toMatch(/@media \(min-width: 80rem\) \{\s*\.product-layout\[data-gallery="grid"\] \{\s*--product-info-column: 480px;/);
-    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*position: sticky;/);
+    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{[^}]*position: sticky;/);
+  });
+
+  it("starts the sticky details column at the top of its row, so the grid never stretches it to the photos' height", () => {
+    expect(layout).toMatch(/\[data-gallery="grid"\] > :global\(\[data-product-summary\]\) \{\s*(?:\/\*[^*]*\*\/\s*)?align-self: start;\s*position: sticky;/);
   });
 
   it("sticks the marketplace gallery within the product grid without changing classic beside pages", () => {

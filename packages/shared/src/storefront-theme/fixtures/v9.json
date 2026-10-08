@@ -110,9 +110,13 @@
         "settings": {}
       },
       "buyBox": {
-        "variant": "heritage",
+        "variant": "classic",
         "settings": {
-          "showBuyNow": false
+          "cta": "stack",
+          "features": false,
+          "details": "buy-box",
+          "emi": false,
+          "whatsapp": false
         }
       },
       "below": [

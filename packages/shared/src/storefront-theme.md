@@ -28,7 +28,7 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
       "searchLayout", "descriptionPlacement",
       "filters": { "style", "openByDefault", "order"?, "column"?, "rowPitch"?, "label"?, "searchPlacement", "ruled" },
       "toolbar": [], "phoneLayout", "paging",
-      "surface", "gutter", "band", "phoneBar", "links", "phoneBanner", "maxColumns"
+      "surface", "band", "phoneBar", "links", "phoneBanner", "maxColumns"
     },
     "product": { "gallery", "buyBox", "below": [], "apps"?: [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
     "footer"                           // every variant: { tagline, about, copyright } (+ directory's style)
@@ -108,18 +108,15 @@ One listing block serves category, collection, brand and search pages. The edito
 - **Filter order and placement.** `order` reorders whole groups (unset keeps the style's arrangement). `searchPlacement: drawer` moves a sidebar's facets into the drawer on search, so the results take the width (up to five columns). `ruled` draws a sidebar's groups as one flat, ruled list that scrolls on its own. A sidebar stays sticky on computers (from 1024 px).
 - **Small catalogues.** Filters need 8 results and a facet with two values, unless the buyer already refined (`storefrontListingFiltersShown`). A store with fewer than 8 products resolves `shown: false`. Sort needs two results.
 - **Toolbar pieces.** The pieces are in `blocks.ts`. A piece without data is left out: `subcategory-pills` needs category depth 2 and `popular-filter-chips` needs key specs. `facet-value-chips` shows one row of 2 to 8 values of the first option or attribute facet. The editor has a switch for every piece except `popular-filter-chips` and `aspect-chips`, which follow the layout.
-- **Page chrome.** Template data sets `surface`, `gutter`, `phoneBar`, `links` (`chips`, or a `tabs` strip that starts with "All"; not on search), `phoneBanner` and `maxColumns` (3 to 6 or `null`). `band` is `standard`, `inline` (needs the bar placement) or `beside-filters` (needs a sidebar). Otherwise `standard` renders.
+- **Page chrome.** Template data sets `surface`, `phoneBar` (`standard`, `pill-row` or `split-sheet`; the bottom bar was dropped), `links` (`chips`, or a `tabs` strip that starts with "All"; not on search), `phoneBanner` and `maxColumns` (3 to 6 or `null`). `band` is `standard`, `inline` (needs the bar placement) or `beside-filters` (needs a sidebar). Otherwise `standard` renders.
 
 ### Product page
 
 `blocks.product` is the page template for every product. A product's `page_template` can swap it (see above).
 
 - **Gallery.** `classic`, `thumbs-below`, `thumbs-left` (`phoneSideThumbnails` keeps the rail beside phone photos), `stacked`, `portrait` and `image-grid`. `stacked` and `image-grid` keep their details column sticky by layout.
-- **Buy box.** There are 12 variants (`classic` and 11 others). Each but `classic` has a measured look (`STOREFRONT_BUY_BOX_LOOKS`).
-  - `spec` and `tech` take `emi` (shown only when the store has EMI plans). `tech` also takes `whatsapp` (shown only when the store has a WhatsApp number). `fashion` and `heritage` start with one purchase button, and `showBuyNow` adds Buy now.
-  - `digital` needs a digital SKU, else `classic`.
-  - `classic`, `boutique`, `showcase`, `heritage` and `fashion` keep the description beside the gallery. Other buy boxes render it as the `description` module.
-- **Modules.** `below` lists the modules in page order. Each renders only when this product has its data, from reads the page already makes. Rules: `frequently-bought-together` shows the first half of the recommendations (two at most) when they are mostly real co-purchases. `key-attributes` shows at most 8 key-spec rows and needs key specs in the store, as does `compare-similar`. `about-bullets` is left out when the buy box already lists the features. `spec-table` never shows a brand as a row. `reviews` carries "Write a review" in its zero state. `recently-viewed` is this browser's own list, filled before paint, and shows nothing without JavaScript.
+- **Buy box.** Two variants. `classic` takes `cta` (`row` or `stack`, full width on phones), `features` (key features under the title), `details` (the description tabs in the buy box, or the description module below), `emi` (shown only when the store has EMI plans) and `whatsapp` (call and WhatsApp links, shown only when the store has a number). Its type scale, button height and shape come from the theme tokens. `marketplace-3col` adds a facts column from 1280px wide (below that it reads as classic). The ten measured buy boxes read as `classic` with settings (`retired-product-blocks.ts` holds the mapping), as do the bottom phone bar and the dropped bundle module.
+- **Modules.** `below` lists the modules in page order. Each renders only when this product has its data, from reads the page already makes. Rules: `key-attributes` shows at most 8 key-spec rows and needs key specs in the store, as does `compare-similar`. `key-attributes` shows above a spec table that lists more rows, and not beside the marketplace facts column. `about-bullets` is left out when the buy box already lists the features. `spec-table` never shows a brand as a row. `reviews` carries "Write a review" in its zero state. `recently-viewed` is this browser's own list, filled before paint, and shows nothing without JavaScript.
 - **Sticky bars.** At most one at the top and one at the bottom on phones. `phoneBottom: buy-bar` and `desktop: product-bar` show the price and Add to cart once the buy buttons scroll away.
 - **App blocks.** `blocks.product.apps` lists blocks that installed apps draw (`{ id, app, values }`, at most 10, in the merchant's order). Each renders in the buy box or after the modules, as its app declares.
 

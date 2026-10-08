@@ -1,4 +1,5 @@
 // src/lib/cart/client.ts
+import { showEmptyCartSuggestions } from "./empty-suggestions";
 import { billingQuoteFields } from "@/lib/checkout/billing-address";
 import {
   cartStore,
@@ -366,6 +367,9 @@ function handleAbandonedCheckout() {
   }, 1500); // Debounce for 1.5 seconds
 }
 
+/** The totals ask again after a quote fails in transit (a cold or restarting API), then say so with a retry button. */
+const QUOTE_RETRY_DELAYS_MS = [500, 1500] as const;
+
 function syncCartPagePresentation(ready: boolean): void {
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
@@ -380,6 +384,8 @@ function syncCartPagePresentation(ready: boolean): void {
     root.dataset.cartState = !ready ? "loading" : hasItems ? "items" : "empty";
   }
   cartItems?.setAttribute("aria-busy", ready ? "false" : "true");
+  // A cart known to be empty offers something to shop instead of a dead end.
+  if (ready && !hasItems) void showEmptyCartSuggestions();
 
   const hideOperationalPanels = !ready || !hasItems;
   cartSummary?.classList.toggle("hidden", hideOperationalPanels);
@@ -744,7 +750,12 @@ function setTaxStatus(elements: TotalsElements, message: string): void {
   retry.type = "button";
   retry.className = "font-medium underline underline-offset-2";
   retry.textContent = activeCheckoutCopy().retryText;
-  retry.addEventListener("click", () => void updateTotals());
+  retry.addEventListener("click", () => {
+    // A clear state while it asks again: the button says so and cannot be pressed twice.
+    retry.disabled = true;
+    retry.textContent = activeCheckoutCopy().calculatingText;
+    void updateTotals();
+  });
   status.append(retry);
 }
 
@@ -1151,7 +1162,7 @@ export async function updateTotals() {
 
   totalEl.textContent = activeCheckoutCopy().calculatingText;
   try {
-    const quote = await fetchAuthoritativeTaxQuote(quoteInput);
+    const quote = await fetchAuthoritativeTaxQuote(quoteInput, fetch, QUOTE_RETRY_DELAYS_MS);
     if (quoteSequence !== cartTaxQuoteSequence) return;
     if (expectedQuoteFingerprintInput) {
       expectedQuoteFingerprintInput.value = quote.quoteFingerprint;

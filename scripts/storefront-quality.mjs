@@ -401,6 +401,8 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       // drawer) can leave a navigation running.
       await page?.close().catch(() => {});
       page = await context.newPage();
+      // The cart lives in the browser: a seeded cart is written after the context cleared storage, before the page's scripts read it.
+      if (entry.cartSeed) await page.addInitScript((cart) => { try { localStorage.setItem("cart:v3", cart); } catch { /* storage is off */ } }, JSON.stringify(entry.cartSeed));
       page.on("console", (message) => {
         if (message.type() === "error" && !/WebSocket|\[vite\]/.test(message.text())) consoleErrors.push(message.text().slice(0, 200));
       });

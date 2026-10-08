@@ -507,8 +507,6 @@ export const STOREFRONT_LISTING_SEARCH_LAYOUTS = ["same", "grid", "list"] as con
 export const STOREFRONT_LISTING_DESCRIPTION_PLACEMENTS = ["above", "below"] as const;
 /** The listing page's background: the page colour (Dawn) or a muted wash behind the cards. */
 export const STOREFRONT_LISTING_SURFACES = ["page", "muted"] as const;
-/** Side gutters: inset (16-32px), or Aarong's flush results (8px on phones, the container's edge on computers). */
-export const STOREFRONT_LISTING_GUTTERS = ["inset", "flush"] as const;
 /**
  * The title band (breadcrumb, h1, count, sort and view): `standard` above
  * the facets and results; `inline` (Dawn) the title alone, then the count
@@ -757,7 +755,6 @@ export const storefrontThemeBlocksSchema = z.object({
     phoneLayout: z.enum(STOREFRONT_LISTING_PHONE_LAYOUTS),
     paging: z.enum(STOREFRONT_LISTING_PAGING),
     surface: z.enum(STOREFRONT_LISTING_SURFACES),
-    gutter: z.enum(STOREFRONT_LISTING_GUTTERS),
     band: z.enum(STOREFRONT_LISTING_BANDS),
     phoneBar: z.enum(STOREFRONT_LISTING_PHONE_BARS),
     links: z.enum(STOREFRONT_LISTING_LINK_STYLES),

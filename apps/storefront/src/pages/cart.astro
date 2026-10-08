@@ -33,6 +33,7 @@ import {
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
+import { shopCopy } from "@/lib/storefront-shop-copy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
@@ -296,6 +297,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart template's own sections (Online store, theme editor), around the cart.
 const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
+// An empty cart points to the store's top categories (popular products fill in from the browser).
+const emptyCartCopy = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
+const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node) => node.parentId === null).slice(0, 8);
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 const templateData = await templateSectionData("cart", cartRequestTheme);
 ---
@@ -388,7 +392,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         } catch (error) {}
       })();
     </script>
-    <h1 class="sr-only">{copy.pageTitle}</h1>
     <noscript>
       {/* The lines live in browser storage: without scripts there is nothing
           to load, so no endless skeleton or empty form, only this note. */}
@@ -865,9 +868,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
         >
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <h2 id="cartHeading" class="text-lg font-semibold text-foreground">
+            <h1 id="cartHeading" class="text-lg font-semibold text-foreground">
               {copy.cartSectionTitle}
-            </h2>
+            </h1>
             <a
               href="/"
               class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
@@ -901,7 +904,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <h3 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h3>
+              <h2 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h2>
               <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
               <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
                 <a
@@ -989,6 +992,28 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </div>
         </section>
+        {/* An empty cart still leads somewhere: the store's categories now, its popular products once the cart script knows the cart is empty. */}
+        <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
+          {emptyCartCategories.length > 0 && (
+            <nav aria-labelledby="cartEmptyCategoriesTitle">
+              <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{emptyCartCopy.shopByCategory}</h2>
+              <ul class="flex flex-wrap gap-2">
+                {emptyCartCategories.map((node) => (
+                  <li>
+                    <a
+                      href={node.canonicalPath ?? `/categories/${encodeURIComponent(node.slug)}`}
+                      class="inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >{node.name}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+          <section aria-labelledby="cartEmptyPopularTitle" data-cart-empty-popular hidden>
+            <h2 id="cartEmptyPopularTitle" class="mb-3 text-base font-semibold text-foreground">{emptyCartCopy.popularNow}</h2>
+            <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4"></ul>
+          </section>
+        </div>
       </div>
     </div>
   </div>

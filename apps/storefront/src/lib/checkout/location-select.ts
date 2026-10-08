@@ -46,26 +46,43 @@ function isLocationOption(value: unknown): value is LocationOption {
   );
 }
 
-/** Reads one location level from the public API; `null` means the read failed. */
+/** Waits before each repeat of a read that failed in transit (a cold or restarting API). */
+export const LOCATION_RETRY_DELAYS_MS = [400, 1200] as const;
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Reads one location level from the public API; `null` means the read failed.
+ * A failure in transit (no connection, a 5xx or a 429) repeats after a short
+ * wait, and a repeat bypasses the browser cache so a stored failure is never
+ * served again; a refusal (4xx) or an unreadable answer is final.
+ */
 export async function fetchLocationOptions(
   apiBaseUrl: string,
   level: LocationLevel,
   parentId: string,
   fetchImpl: typeof fetch = fetch,
+  delays: readonly number[] = LOCATION_RETRY_DELAYS_MS,
 ): Promise<LocationOption[] | null> {
   const param = level === "zones" ? "cityId" : "zoneId";
-  try {
-    const response = await fetchImpl(
-      `${apiBaseUrl}/locations/${level}?${param}=${encodeURIComponent(parentId)}`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!response.ok) return null;
-    const body = (await response.json()) as { success?: unknown; data?: unknown };
-    return body.success === true && Array.isArray(body.data)
-      ? body.data.filter(isLocationOption)
-      : null;
-  } catch {
-    return null;
+  const url = `${apiBaseUrl}/locations/${level}?${param}=${encodeURIComponent(parentId)}`;
+  for (let attempt = 0; ; attempt += 1) {
+    let transient = true;
+    try {
+      const response = await fetchImpl(url, {
+        headers: { Accept: "application/json" },
+        ...(attempt > 0 ? { cache: "reload" as const } : {}),
+      });
+      transient = response.status === 429 || response.status >= 500;
+      if (response.ok) {
+        const body = (await response.json()) as { success?: unknown; data?: unknown };
+        return body.success === true && Array.isArray(body.data) ? body.data.filter(isLocationOption) : null;
+      }
+    } catch {
+      // No connection, or an answer that is not JSON: repeat once the API is back.
+    }
+    const delay = delays[attempt];
+    if (!transient || delay === undefined) return null;
+    await wait(delay);
   }
 }
 

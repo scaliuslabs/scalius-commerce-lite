@@ -71,8 +71,7 @@ const guide = content && hasRenderableHtmlContent(content.html) ? content : null
 const { descriptionPlacement, surface, phoneBanner } = resolved.blocks.listing;
 const descriptionAbove = descriptionPlacement === "above";
 // The page behind the results (Dawn: the page colour). The side gutters are
-// the container's: the cards line up with the header and the title (`gutter`
-// stays in stored themes; both of its values read the container gutter).
+// the container's: the cards line up with the header and the title.
 const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", muted: "bg-muted/30" };
 ---
 

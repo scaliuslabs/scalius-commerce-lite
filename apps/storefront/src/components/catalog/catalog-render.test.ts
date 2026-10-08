@@ -357,12 +357,11 @@ const pillRowListingTheme = () => mallWith({
   phoneBar: "pill-row",
   maxColumns: 4,
 });
-/** Fabrilife: a ruled department rail and the phone's Filter and Sort row pinned to the bottom. */
+/** Fabrilife: a ruled department rail. */
 const ruledRailListingTheme = () => mallWith({
   filters: { style: "sidebar-comfortable", openByDefault: true, searchPlacement: "same", ruled: true },
   toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"],
   paging: "infinite",
-  phoneBar: "bottom",
 });
 /** Apple Gadgets: price first in a comfortable rail, the category banner on computers only. */
 const comfortableListingTheme = () => mallWith({
@@ -958,7 +957,8 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(dropdowns.every((dropdown) => !dropdown.hasAttribute("open"))).toBe(true);
     expect(dropdowns.slice(0, 4).some((dropdown) => dropdown.hasAttribute("data-bar-overflow"))).toBe(false);
     expect(dropdowns.slice(4).every((dropdown) => dropdown.hasAttribute("data-bar-overflow"))).toBe(true);
-    expect(form.querySelector("button[data-catalog-bar-more]")!.textContent!.trim()).toBe(`More filters (${dropdowns.length - 4})`);
+    // It counts what is applied behind it, never the groups it holds.
+    expect(form.querySelector("button[data-catalog-bar-more]")!.textContent!.trim()).toBe("More filters");
     // The bar sits above the grid (no column beside it).
     expect(document.querySelector("[data-catalog-layout]")!.getAttribute("data-catalog-layout")).toBe("bar");
   });
@@ -1408,10 +1408,8 @@ describe("listing page", () => {
     theme.blocks.listing.filters = { style: "sidebar-dense", openByDefault: true, searchPlacement: "same", ruled: false };
     const document = await categoryPage(theme);
     expect(document.querySelector("[data-catalog-rail='fashion']")).toBeNull();
-    // The pinned phone row is its own choice (`phoneBar`), kept with any facet style.
-    expect(document.querySelector("[data-catalog-fashion-phone-bar]")).not.toBeNull();
     expect(document.querySelector("[data-filter-style='sidebar-dense']")).not.toBeNull();
-    theme.blocks.listing.phoneBar = "standard";
-    expect((await categoryPage(theme)).querySelector("[data-catalog-fashion-phone-bar]")).toBeNull();
+    // No bar is pinned to the bottom of a phone: it would sit above the tab bar.
+    expect(document.querySelector("[data-catalog-fashion-phone-bar]")).toBeNull();
   });
 });

@@ -62,7 +62,6 @@ const LISTING_DEFAULTS = {
   searchLayout: "same",
   descriptionPlacement: "below",
   surface: "muted",
-  gutter: "inset",
   band: "standard",
   phoneBar: "standard",
   links: "chips",
