@@ -1251,7 +1251,7 @@ function renderCartLine(
 
   return `
       <li class="py-3 first:pt-0"><div class="flex gap-3">
-          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${safeImage}" alt="" class="h-full w-full object-contain object-center" /></div>
+          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${safeImage}" alt="" width="80" height="80" loading="lazy" decoding="async" class="h-full w-full object-contain object-center" /></div>
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>

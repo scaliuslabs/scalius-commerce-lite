@@ -3,8 +3,9 @@
 // computers, accordions on phones (a 48px summary, hairline dividers, no
 // extra gap between them). Each group is a native <details>, open in the
 // markup so computers and no-JavaScript readers see every link; below 64rem
-// the script folds them, and on computers the summary is a plain heading
-// (no "+" and no toggling). Links keep body size everywhere.
+// a tiny inline script right after the nav folds them before the first paint
+// (a deferred script would fold them after it and shift the footer). On
+// computers the summary is a plain heading (no "+" and no toggling). Links keep body size everywhere.
 import RecursiveFooterLink from "../RecursiveFooterLink.astro";
 import type { FooterMenu } from "@/lib/api";
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 const { menus, label } = Astro.props;
+const foldScript = `(function(){var m=matchMedia("(min-width: 64rem)");var s=function(){document.querySelectorAll(".footer-menu").forEach(function(d){d.open=m.matches})};if(!m.matches)s();m.addEventListener("change",s)})()`;
 ---
 
 {
@@ -30,6 +32,7 @@ const { menus, label } = Astro.props;
         </details>
       ))}
     </nav>
+    <script is:inline set:html={foldScript} />
   )
 }
 
@@ -114,15 +117,3 @@ const { menus, label } = Astro.props;
     }
   }
 </style>
-
-<script>
-  const wideFooter = window.matchMedia("(min-width: 64rem)");
-  const syncFooterMenus = () => {
-    document.querySelectorAll<HTMLDetailsElement>(".footer-menu").forEach((menu) => {
-      menu.open = wideFooter.matches;
-    });
-  };
-  // Phones start folded; computers keep every group open.
-  if (!wideFooter.matches) syncFooterMenus();
-  wideFooter.addEventListener("change", syncFooterMenus);
-</script>

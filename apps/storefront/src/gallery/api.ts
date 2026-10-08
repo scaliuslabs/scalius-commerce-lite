@@ -270,6 +270,10 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (checkoutApp) return checkoutApps(entry);
   const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
   if (productApp) return productApps(entry);
+  if (path === "/api/v1/products/recommendations") {
+    const limit = Math.min(Math.max(Number(search.get("limit")) || 8, 1), 20);
+    return { reason: search.get("productIds") ? "also_bought" : "popular", products: cardProducts(limit, 3) };
+  }
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
   if (product) {
     const scenario = productScenarioOf(decodeURIComponent(product[1]!));
