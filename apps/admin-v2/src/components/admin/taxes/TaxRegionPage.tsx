@@ -202,6 +202,7 @@ function RateForm({ rate, country, regions, config }: {
           <Input
             id="tax-rate-percent"
             inputMode="decimal"
+            suffix="%"
             value={draft.percent}
             placeholder="15"
             aria-describedby="tax-rate-percent-note"

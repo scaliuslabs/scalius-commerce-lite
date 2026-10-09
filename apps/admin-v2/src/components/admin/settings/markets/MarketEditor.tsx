@@ -26,7 +26,7 @@ import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NumberInput } from "~/components/ui/number-input";
+import { NumberInput, PercentInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
@@ -489,7 +489,7 @@ function PricingCard({ values, canEdit, backupIncrement, adjustmentError, setVal
         <>
           {own ? null : <p className="text-body text-muted-foreground">{t("sameCurrencyRate", { currency: values.currencyCode })}</p>}
           <SettingsField id="market-adjustment" label={t("adjustment")} help={t("adjustmentHelp")} error={adjustmentError}>
-            <NumberInput
+            <PercentInput
               id="market-adjustment"
               className="max-w-32"
               disabled={!canEdit}

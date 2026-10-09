@@ -26,6 +26,7 @@ export const formMessages = defineMessages({
     clearDate: "Clear date",
     wholeUnits: "This store prices in whole amounts. Leave out the decimals.",
     optional: "(optional)",
+    daysUnit: "days",
   },
   bn: {
     nameLength: "৩ থেকে ১০০ অক্ষর লিখুন।",
@@ -51,5 +52,6 @@ export const formMessages = defineMessages({
     clearDate: "তারিখ মুছুন",
     wholeUnits: "এই স্টোরে দাম পূর্ণ সংখ্যায় হয়। দশমিক বাদ দিন।",
     optional: "(ঐচ্ছিক)",
+    daysUnit: "দিন",
   },
 });

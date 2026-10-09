@@ -358,7 +358,7 @@ describe("PaymentCard", () => {
       await act(async () => submit.click());
       expect(mocks.refund).not.toHaveBeenCalled();
       expect(amount.getAttribute("aria-invalid")).toBe("true");
-      expect(document.querySelector("#refundAmount-help")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
+      expect(document.querySelector("#refundAmount-error")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
     });
 
     it("takes a cash refund typed in Bangla digits", async () => {

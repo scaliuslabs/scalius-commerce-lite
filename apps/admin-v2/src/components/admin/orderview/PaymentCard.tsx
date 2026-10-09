@@ -118,7 +118,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
   const g = useMessages(giftCardOrderMessages);
-  const { fmt, symbol } = useCurrency();
+  const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
   const orderActions = useOrderActionPermissions();
@@ -732,25 +732,25 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </DialogHeader>
           <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
             {refundMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(refundMutation.error)}</AlertDescription></Alert> : null}
-            <Field id="refundAmount" label={<>{t("refund.amount", { symbol })}</>}>
+            <Field
+              id="refundAmount"
+              label={t("refund.amount")}
+              error={refundAmountError ?? undefined}
+              help={order.refundDue > 0
+                ? t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
+                : t("refund.max", { amount: money(paid) })}
+            >
               <MoneyInput
                 currencyCode={order.currencyCode ?? ""}
                 id="refundAmount"
                 value={refundAmount}
                 disabled={isRefundLocked}
-                aria-invalid={Boolean(refundAmountError) || undefined}
-                aria-describedby="refundAmount-help"
                 onValueChange={(value) => {
                   setRefundAmount(value);
                   if (refundAmountError) setRefundAmountError(null);
                 }}
                 onBlur={() => setRefundAmountError(refundAmount === null ? null : refundAmountProblem())}
               />
-              <p id="refundAmount-help" className={refundAmountError ? "text-destructive" : "text-muted-foreground"}>
-                {refundAmountError ?? (order.refundDue > 0
-                  ? t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
-                  : t("refund.max", { amount: money(paid) }))}
-              </p>
             </Field>
             <Field id="refundReason" label={t("refund.reason")}>
               <SearchableSelect

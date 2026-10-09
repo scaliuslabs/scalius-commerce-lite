@@ -54,7 +54,7 @@ export const policiesMessages = defineMessages({
     finite: "নির্দিষ্ট দিনের মধ্যে ফেরত নেওয়া হয়",
     unlimited: "যেকোনো সময় ফেরত নেওয়া হয়",
     noReturns: "ফেরত নেওয়া হয় না",
-    days: "ফেরতের সময় (দিন)",
+    days: "ফেরতের সময়",
     daysInvalid: "১ থেকে ৩৬৫-এর মধ্যে পূর্ণ দিন লিখুন।",
     fees: "ফেরতের ডেলিভারি খরচ",
     free: "কাস্টমারের জন্য ফ্রি",

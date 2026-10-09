@@ -337,7 +337,7 @@ describe("markets settings", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Adjusted product prices"));
     const adjusted = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Adjusted product prices"))!;
     act(() => adjusted.querySelector<HTMLButtonElement>("button[role=radio]")!.click());
-    await vi.waitFor(() => expect(container.textContent).toContain("Price adjustment (%)"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Price adjustment"));
     const input = container.querySelector<HTMLInputElement>("#market-adjustment")!;
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     act(() => {
