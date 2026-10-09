@@ -99,7 +99,7 @@ describe("editor presence", () => {
     await act(async () => root.render(<Editor />));
     const slot = host.querySelector("[data-slot=presence]")!;
     expect(slot).not.toBeNull();
-    expect(slot.className).toContain("w-24");
+    expect(slot.className).toContain("w-26");
     expect(slot.children).toHaveLength(0);
 
     await act(async () => connection.presence(KEY, [

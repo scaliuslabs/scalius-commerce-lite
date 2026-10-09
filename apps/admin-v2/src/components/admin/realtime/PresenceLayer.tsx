@@ -90,10 +90,14 @@ export function saveOutcome(save: RemoteSave, dirty: boolean, mine: readonly str
 
 // ── The banner ───────────────────────────────────────────────────────────
 
-function EditingBanner({ editors, presenceKey }: { editors: RealtimePresence[]; presenceKey: string }) {
+function EditingBanner({ editors, presenceKey, dismissedFor, setDismissedFor }: {
+  editors: RealtimePresence[];
+  presenceKey: string;
+  /** Dismissed for these people; someone new editing brings it back. */
+  dismissedFor: ReadonlySet<string>;
+  setDismissedFor(people: ReadonlySet<string>): void;
+}) {
   const t = useMessages(realtimeMessages);
-  // Dismissed for these people; someone new editing brings it back.
-  const [dismissedFor, setDismissedFor] = useState<ReadonlySet<string>>(() => new Set());
   if (editors.length === 0 || editors.every((person) => dismissedFor.has(person.id))) return null;
   const names = editors.length > 3
     ? t("andOthers", { name: editors[0]!.name || "?", count: editors.length - 1 })
@@ -300,14 +304,17 @@ function FieldRings({ presenceKey, people }: { presenceKey: string; people: Real
 
 export default function PresenceLayer({ presence }: { presence: EditorPresenceValue }) {
   const editors = presence.others.filter((person) => person.editing);
+  const [dismissedFor, setDismissedFor] = useState<ReadonlySet<string>>(() => new Set());
   // One zero-size, absolutely placed box: it is no flex item and takes no gap or margin
   // wherever an editor puts it. The rings measure from it; the notices are fixed to the view.
   return (
     <div data-slot="presence-layer" className="pointer-events-none absolute size-0">
       <FieldRings presenceKey={presence.presenceKey} people={presence.others} />
       <div className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-full max-w-xl flex-col gap-2 px-3">
-        {presence.remoteSave ? <SaveNotice key={presence.remoteSave.at} presence={presence} /> : null}
-        <EditingBanner editors={editors} presenceKey={presence.presenceKey} />
+        {/* One notice at a time: a save notice already names who is working here. */}
+        {presence.remoteSave
+          ? <SaveNotice key={presence.remoteSave.at} presence={presence} />
+          : <EditingBanner editors={editors} presenceKey={presence.presenceKey} dismissedFor={dismissedFor} setDismissedFor={setDismissedFor} />}
       </div>
     </div>
   );

@@ -409,14 +409,14 @@ const PresenceLayer = lazy(() => import("~/components/admin/realtime/PresenceLay
 
 /**
  * The avatars beside the page title (`data-slot="presence"`). The box is
- * always there on a saved record, sized for three avatars and "+N", so people
+ * always there on a saved record, sized for three avatars and "+N" (104 by 28 px), so people
  * arriving never move the page.
  */
 export function PresenceSlot() {
   const presence = useEditorPresenceContext();
   if (!presence) return null;
   return (
-    <div data-slot="presence" className="flex h-7 w-24 shrink-0 items-center">
+    <div data-slot="presence" className="flex h-7 w-26 shrink-0 items-center">
       {presence.others.length > 0 ? (
         <Suspense fallback={null}>
           <PresenceAvatars people={presence.others} prefix={presencePrefixOf(presence.presenceKey)} />

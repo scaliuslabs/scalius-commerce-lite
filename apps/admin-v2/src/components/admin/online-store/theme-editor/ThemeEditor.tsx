@@ -823,7 +823,7 @@ export function ThemeEditor({ workspace, refetch }: {
         market={(
           <>
             {phone ? null : (
-              <div data-slot="presence" className="flex h-7 w-24 shrink-0 items-center">
+              <div data-slot="presence" className="flex h-7 w-26 shrink-0 items-center">
                 {editors.others.length > 0 ? <PresenceAvatars people={editors.others} /> : null}
               </div>
             )}
