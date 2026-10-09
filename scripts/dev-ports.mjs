@@ -71,6 +71,32 @@ export function devOrigins(ports = readDevPorts()) {
   };
 }
 
+function isLoopbackOrigin(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.origin === String(value);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Dashboard UI preview (docs/ADMIN-QUALITY.md): a dashboard served from
+ * another local port (a worktree's `vite` on 4400) talks to the shared local
+ * API, which trusts one dashboard origin, the one in its Platform settings
+ * (Better Auth's trusted origins, the cookie-origin guard and the realtime
+ * check all read it). The Vite dev proxy therefore presents the Platform
+ * dashboard origin as the request's Origin. Only loopback origins on both
+ * sides are ever rewritten, so the API's checks stay as they are and nothing
+ * outside a developer's machine is affected (this file is dev tooling and
+ * never ships in a bundle).
+ */
+export function previewProxyOrigin(requestOrigin, platformDashboardOrigin) {
+  if (!requestOrigin || requestOrigin === platformDashboardOrigin) return requestOrigin;
+  if (!isLoopbackOrigin(requestOrigin) || !isLoopbackOrigin(platformDashboardOrigin)) return requestOrigin;
+  return platformDashboardOrigin;
+}
+
 const PLATFORM_FIELDS = ["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"];
 
 function sqlString(value) {

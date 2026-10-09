@@ -1,0 +1,13 @@
+{
+  "terms": [
+    "scalius", "shopify", "bkash", "nagad", "rocket", "upay", "pathao", "steadfast", "redx", "paperfly", "sslcommerz", "stripe", "paypal",
+    "google", "facebook", "meta", "instagram", "tiktok", "whatsapp", "messenger", "twilio", "cloudflare", "turso", "postgres", "postgresql",
+    "sqlite", "github", "gmail", "visa", "mastercard", "amex", "inter", "noto", "wcag", "pos", "iphone", "android", "chrome", "safari",
+    "sku", "gtin", "ean", "upc", "isbn", "url", "uri", "api", "sdk", "cli", "mcp", "html", "css", "json", "csv", "pdf", "xml", "seo", "otp",
+    "sms", "cod", "utc", "gmt", "qr", "dns", "ssl", "tls", "http", "https", "smtp", "oauth", "jwt", "uuid", "ios", "usb", "wifi", "id", "ids",
+    "bdt", "usd", "eur", "gbp", "inr", "kg", "lbs", "lb", "oz", "cm", "mm", "px", "sku", "hex", "rgb", "webp", "png", "jpg", "jpeg", "svg",
+    "gif", "mp4", "markdown", "ai", "gpt", "llm", "zip", "bn", "en"
+  ],
+  "phrases": ["Local Admin", "Scalius Local", "Scalius Admin"],
+  "patterns": ["^[A-Z]{2,8}$", "^[A-Z][a-z]+[A-Z]"]
+}
