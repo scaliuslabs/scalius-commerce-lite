@@ -1,6 +1,6 @@
 # Dashboard design system
 
-Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify admin (Polaris). The discipline follows Cloudflare Kumo's design rules (a reference, not a dependency). The primitives are shadcn/ui on Radix (`src/components/ui/`). Token values, the type scale and motion are in `src/styles/global.css`, and copy is in `src/i18n/`. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway.
+Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify admin (Polaris). The discipline follows Cloudflare Kumo's design rules (a reference, not a dependency). The primitives are shadcn/ui on Radix (`src/components/ui/`). Token values, the type scale and motion are in `src/styles/global.css`, and copy is in `src/i18n/`. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway. [The polish bar](#the-polish-bar) gives every rule an ID and a check: `lint`, `harness` (`pnpm quality:admin`) or `review`.
 
 Dark mode is only the token file. Never write `dark:` (lint). Never use palette colours such as `bg-red-500` (lint, `no-raw-colors`).
 
@@ -166,6 +166,197 @@ Write sides as the reading direction sees them, so a right-to-left language mirr
 - Make touch targets at least 24px, and rows and buttons at least 40px.
 - Use `loading` on async actions, so a double submit is impossible.
 - Check the Bangla render: no clipped marks, buttons grow.
+
+## The polish bar
+
+The measurable bar for every screen, at any data size: 0 rows or 1,000,000. Each rule has an ID (cite it in reviews and audits) and one check:
+
+- `lint`: ESLint, `scripts/check-source-policies.mjs` or a catalog test fails the build.
+- `harness`: `pnpm quality:admin` measures it in a real browser (390, 768, 1024, 1440 px; en and bn; light and dark). The check after `→` is the definition the harness implements. `±1` means one CSS pixel.
+- `review`: a person checks it against this text and the reference.
+
+A `lint` or `harness` check that does not exist yet is work for Wave B and the harness. Until it lands, review the rule. A screen passes the bar when it has zero `harness` failures at every width and language, and zero open P1 or P2 findings in `audit/polish-2026-10/`.
+
+Reference: the expanded variant row (product page, Variants): labels above fields, one control height, help under its field, an aligned two-column grid on a quiet inset card, the SKU as a mono subtitle, numbers in fixed-width fields.
+
+Harness hooks. Shared components carry these `data-slot` names; the harness selects by them: `page-header`, `page-title` (the `h1`), `page-actions`, `card`, `inset`, `field`, `field-label`, `field-control`, `field-help`, `field-error`, `index-table`, `bulk-bar`, `pagination`, `empty-state`, `error-state`, `skeleton`, `presence`, `offline-banner`, `read-only-notice`, plus the existing `topbar`, `dialog-content`, `dialog-footer`, `sheet-footer`, `alert`, `[data-save-bar]` and `#admin-main-scroll`. A screen that hand-builds one of these parts fails the harness, because the part has no slot.
+
+### Spacing and alignment
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| S1 | Use the 4px scale only: 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48. | lint (`no-arbitrary-values`) |
+| S2 | Label to control: 4px (`gap-1`). | harness → for each `label[for]` above its control: `control.top − label.bottom` = 4 ±1 |
+| S3 | Control to help or error: 4px. Error replaces help; it never stacks under it. | harness → `[data-slot=field-help],[data-slot=field-error]`: `top − control.bottom` = 4 ±1; never both visible in one field |
+| S4 | Field to field in a card: 16px vertical (`gap-4`). In an inset card: 12px (`gap-3`). | harness → vertical gap between sibling `[data-slot=field]` = 16 ±1 (12 ±1 inside `[data-slot=inset]`) |
+| S5 | Fields side by side share one grid: equal columns, 16px gap (12px inset), tops aligned. Never mix a ½ and a ⅓ column in one card section. | harness → sibling fields in a row: equal width ±1 and equal `top` ±1 |
+| S6 | Card padding 16px (`p-4`); card to card 16px; page side padding 12/16/24px (`px-3 sm:px-4 md:px-6`). | harness → `[data-slot=card]` padding-inline 16; sibling cards 16 apart |
+| S7 | Inside one card, every section and row starts at the same inline edge as the card title. | harness → `left` of the first text in each row of a card = card title `left` ±1 |
+| S8 | Page widths by page type: index `max-w-7xl`; detail and form `max-w-5xl` (⅔ + ⅓ from 1024px); settings `max-w-3xl`; one-card task `max-w-2xl`. | harness → `main > *` width per route type table in `docs/platform/SCREEN-CENSUS.md` |
+| S9 | Help text aligns to the field's start edge, never centred or end-aligned. | harness → `field-help` `text-align` = start |
+
+### Field
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| F1 | One `Field` primitive (`components/ui/field.tsx`): label, control, help, error. Never write a local `Field`, `FormItem` with `space-y-*`, or a bare `<Label>` beside a control. | lint → no `function *Field(` outside `components/ui`; no `space-y-*` on a parent of `Label` |
+| F2 | The label is above the control, sentence case, 1–3 words, `text-body font-medium`. A single checkbox or switch puts its label after the control on the same line. | review |
+| F3 | Units and currency are a prefix or suffix inside the control (`৳`, `g`, `%`), never in the label ("Price (৳)"). | harness → no visible `label` text matches `/\(.{1,3}\)$/` |
+| F4 | Money, quantities, weights and percentages use `MoneyInput`/`NumberInput`: tabular digits, a fixed width (`w-40`, `w-32` for quantities) in dense rows, full column width in forms. | review |
+| F5 | Codes (SKU, barcode, order number, tracking) are `font-mono` in fields and subtitles, never bold. | review |
+| F6 | Placeholder shows an example, never the label or an instruction. | review |
+| F7 | Optional fields say "(optional)" in the label; required fields have no star. | review |
+| F8 | Validate on blur, then on every change while the field is invalid; on a failed submit focus the first invalid field. | harness → submit an empty required form: `document.activeElement` is the first `[aria-invalid=true]` |
+| F9 | A yes/no that saves with the form is a `Checkbox`; a setting that applies at once is a `Switch`. Never both styles for the same kind of choice in one card. | review |
+
+### Controls and buttons
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| C1 | One control height: 36px from 640px, 44px below it, for inputs, selects, date fields and buttons beside them. Bangla keeps the height; the line grows inside it. | harness → visible `input,textarea[rows="1"],button[role=combobox]` heights ∈ {36} (≥640) or {44} (<640) |
+| C2 | Controls in one row have one height. `size="sm"` (32px) only in table cells, card headers and menus with no field beside them. | harness → elements of one flex row whose boxes overlap vertically by >50%: max height − min height ≤ 1 |
+| C3 | One primary button per view: the page, each open dialog, each sheet. When the save bar shows, the page has no other primary. | harness → visible `.shadow-button-primary` outside overlays ≤ 1; in each `[role=dialog]` ≤ 1 |
+| C4 | Order: secondary actions, then the primary at the end. More than two secondary actions go into "More actions". | harness → `[data-slot=page-actions]`: ≤ 3 visible buttons; primary is last |
+| C5 | Never a disabled primary as the only cue. Disabled buttons say why (tooltip or help line). | review |
+| C6 | Touch targets: ≥24×24px everywhere, ≥44px tall below 640px. A 16px checkbox gets a 24px (44px on phones) hit area. | harness → `button,a[href],[role=checkbox],[role=switch],[role=radio],[role=tab]`: hit box ≥ 24×24; ≥ 44 tall under 640 |
+| C7 | Icon-only buttons have an accessible name and a tooltip. | harness → every visible `button` has text, `aria-label` or `aria-labelledby` |
+| C8 | Links are `text-link`. Underline only on hover, except inside running text. | review |
+
+### Card and form section
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| K1 | A card has a title (`text-heading-sm`) and, at most, one sentence of description. Its one action sits in the title row (`CardHeading`). | review |
+| K2 | Sections inside a card are separated by `border-t` and 16px, never by nested cards. | lint (rule 13) |
+| K3 | A quiet inset (`bg-muted rounded-lg p-3`, no shadow) holds detail that belongs to one row (expanded variant, address, line item). | review |
+| K4 | A collapsible card shows its state in one line when closed ("Not a gift card", "2 bundles"). | review |
+| K5 | Never place text directly on the page background, except the page title and the empty first-run card. | review |
+
+### Index table
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| T1 | Every list uses `IndexTable` (today `DataTable` + `ResourceListPage`): never a hand-built `<Table>` for a list of records. | lint → `components/ui/table` imported only by the data-table kit and read-only summaries on the allowlist |
+| T2 | Anatomy, top to bottom: page header, view tabs, toolbar (search, filters, sort, columns), rows, pagination. One toolbar layout for every list: search, a "Filters" button, a sort menu, a columns menu. | review |
+| T3 | Row height: 52px for rows with a two-line title or a thumbnail, 40px for single-line lists; every row on a page has the same height. | harness → `tbody tr` heights: max − min ≤ 1 |
+| T4 | Cells align to the row's vertical centre, including the title cell. | harness → each `td` content box centre = row centre ±2 |
+| T5 | Numbers, money and counts align end and use tabular digits; their heading aligns end too. | harness → `td[data-numeric],th[data-numeric]` `text-align: end`, `font-variant-numeric` includes `tabular-nums` |
+| T6 | An end-aligned column is followed by ≥24px before a start-aligned column. Put numeric columns at the end of the row where possible. | harness → numeric cell content right edge to next cell content left edge ≥ 24 |
+| T7 | Free text truncates at the column's max width with the whole value in a tooltip or `title`. Names may take two lines. Codes never wrap. | harness → every element with `text-overflow: ellipsis` or `-webkit-line-clamp` and overflow has `title` or `aria-describedby` |
+| T8 | Column widths follow content: an ID column is as wide as its widest ID, never wider than the name column. | harness → `th` width of an ID/date column ≤ width of the primary column |
+| T9 | Sticky header under the top bar; on horizontal scroll the checkbox and title columns stick. | harness → scroll `#admin-main-scroll` 600px: first `thead th` `top` = topbar bottom ±1 |
+| T10 | Selection: a checkbox column; Shift+click selects a range. With rows selected, the bulk bar replaces the toolbar in place and stays in view (sticky) while the list scrolls. | harness → select a row, scroll to the end: `[data-slot=bulk-bar]` is inside the viewport |
+| T11 | "Select all N" selects the whole filtered set by query, not by gathering rows. At scale the label reads "All 52,341 matching products". | review (needs the API's select-by-filter bulk action) |
+| T12 | Default page size 50; the choice is kept per list. One pagination component (`pagination` slot): range label, then Previous/Next. Hide Previous/Next when there is one page. | harness → `[data-slot=pagination]` buttons absent when total ≤ page size |
+| T13 | Counts above 1,000 that the API caps read "1,000+"; an exact count is shown only when the API counts it. Never a client-side count of a partial page. | harness → mocked capped total: range label ends with "+" |
+| T14 | Phones (<640px container) show cards: title, then one secondary line, then status; the row menu stays. The name keeps priority over the phone number. | review |
+| T15 | Rows open by a real link (`<a href>`), so Cmd-click and middle-click open a new tab. | harness → each row has an `a[href]` to its detail page |
+
+### Detail and form page
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| P1 | Header: back link, title (wraps, never truncates), status badges, one meta line ("Placed Oct 8 at 3:42 PM · Online store"), then secondary actions, "More actions", previous/next. | review |
+| P2 | Two columns from 1024px: main ⅔ (the record's content), side ⅓ (status, organization, notes). On phones the side column's status card comes first, the rest after. | harness → at 1440: side column width / main width = 0.5 ±0.05 |
+| P3 | One composer per purpose: a record has one place to write a team note. | review |
+| P4 | Save is only in the contextual save bar (and Cmd/Ctrl+S). No second Save at the page bottom. | harness → no visible `main button` named Save while `[data-save-bar]` exists |
+| P5 | A create page shows its create action (save bar or a footer primary) before the first edit. | review |
+
+### Overlays and feedback
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| O1 | Dialog: title (names the object), one sentence, body, footer with ≤2 buttons, primary last. Widths: 512px default, 640px for forms, 800px for pickers. | lint (footer ≤2: existing review) · harness → `[data-slot=dialog-content]` width ∈ {512, 640, 800} from 640px |
+| O2 | A dialog holds at most 5 fields; more is a page or a sheet. Never a dialog over a dialog. | harness → never two `[role=dialog][data-state=open]` |
+| O3 | Destructive confirmation: `AlertDialog`, title "Delete 'Cotton panjabi'?" with the name in quotes, the consequence in one sentence, the destructive button names the action. | review |
+| O4 | Sheet: right side, 448px, header, scrolling body, bordered footer. For previews and side tasks that keep the list visible. | review |
+| O5 | Toast: noun + past verb, ≤3 words, bottom centre, 4s; 10s with an action. Never for errors that block work (banner) or for validation (field). | lint → catalog test: `toast.*` keys ≤ 3 words |
+| O6 | Status badge: always a word, a tone from the status table, never colour alone. | lint (existing) |
+
+### States
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| E1 | First-run empty (nothing created yet): one card, icon, an action title ("Add your first product"), one sentence, one primary action, a help link. No table headers, tabs, search or totals around it. | harness → mocked empty list: no `thead`, `[role=tablist]`, search input or second primary in `main` |
+| E2 | Filtered empty: inside the table, "No orders match these filters", one sentence, "Clear filters". | harness → search a nonsense term: `[data-slot=empty-state]` contains a "Clear filters" button |
+| E3 | Section empty (a card with nothing yet): one muted line, no icon, no illustration. | review |
+| L1 | Cold load (a deep link): the shell, the page title and a skeleton paint within 300ms of the app's first render, before data arrives. Never a blank page with a spinner. | harness → API delayed 3s: within 1s of navigation `[data-slot=topbar]` and `h1` are visible |
+| L2 | Skeleton shape equals content: the real page title, card titles and table headings; rows to the page size or the viewport; no layout shift on arrival. | harness → API delayed 2s: CLS of `main` from skeleton to data ≤ 0.02 |
+| L3 | Show a skeleton or spinner only after 300ms; keep it at least 300ms once shown. | harness → API delayed 200ms: no `.animate-pulse` or `.animate-spin` ever visible |
+| L4 | Refetch keeps the old rows readable: no dimming overlay; a 2px progress line or the button's own spinner. | harness → during a refetch, `main` has no element with `bg-background/50` covering rows |
+| R1 | One `ErrorState` for a failed read: the page title stays, what failed ("Couldn't load orders"), why when known, Retry, and where to go. Never "Nothing changed" for a read. | harness → main read returns 500: `[data-slot=error-state]` contains `h1` text, a Retry button; topbar and navigation stay |
+| R2 | Not found names the record and links to its list: "This gift card doesn't exist or was deleted" + "Back to gift cards". | harness → `/admin/<resource>/missing-id`: `[data-slot=error-state] a[href$=<list route>]` |
+| R3 | Partial data: when one read of several fails, the others render; the failed card shows a one-line error with Retry. | harness → fail one secondary read: other cards still render |
+| R4 | No permission for the page: a page that names the area and the person to ask (the store owner's name). | review |
+| R5 | View-only permission on a page: one `ReadOnlyNotice` banner at the top; values show as plain text, not disabled inputs; no create, delete or save controls. | harness → view-only session: no enabled control that would send a mutating request; `[data-slot=read-only-notice]` present |
+| R6 | Offline: a banner under the top bar within 2s ("You're offline. Your changes stay here until you reconnect."); saves wait, never fail silently; reads retry on reconnect. | harness → `context.setOffline(true)`: `[data-slot=offline-banner]` visible within 2s |
+
+### Copy
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| Y1 | Plain words, newcomer-first, sentence case, no jargon (no cron strings, raw IDs, HTTP codes, "Nothing changed"). | review · lint → catalog test bans `cron`, `HTTP`, `null`, `undefined`, `Error:` |
+| Y2 | Buttons: verb + noun ("Add product"), no articles, no "Please", no "!". | lint → catalog test: button keys match `^[A-Z][a-z]+( [^ ]+){0,3}$` and have no `!` |
+| Y3 | Titles of empty states are actions; error titles say what failed in ≤6 words. | review |
+| Y4 | Use "…" (one character) for loading and for menu items that open a dialog. | lint → catalog test bans `...` |
+| Y5 | Every visible word comes from the catalogs in both languages; app, theme and seed defaults that show in the dashboard are translated too. | harness → bn: visible text matching `/\b[A-Za-z]{4,}( [a-z]{3,})+/` outside data cells and the allowlist = 0 |
+
+### Motion and latency
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| M1 | Every press shows a visual response within 100ms (pressed state, spinner in the button, optimistic change). | harness → click a primary action with the API delayed 2s: within 100ms the button has `aria-busy` or the target changed |
+| M2 | Optimistic updates for reversible single-record changes (status, tag, assign, toggle); roll back with an error toast on failure. | review |
+| M3 | Hover is instant; animate only transform, opacity or size; ≤200ms; reduced motion turns it off. | lint (existing rule 7) |
+| M4 | Mutations under 500ms show no toast-level spinner; longer work (export, import, bulk on >90 rows) runs as a job with progress and a done toast. | review |
+
+### Keyboard and focus
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| Q1 | Every action reachable by Tab, in reading order; the focus ring is 2px `ring-ring` and never hidden under the top bar or save bar. | harness → Tab through `main`: each focused element's top ≥ topbar bottom and its outline is visible |
+| Q2 | `Esc` closes the top overlay and returns focus to its trigger. | harness → open each dialog, press Esc: `document.activeElement` is the trigger |
+| Q3 | Shortcuts come from `shortcuts.ts`: `Cmd/Ctrl+K` search, `/` list search, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` send or submit, `?` the list. Index lists add `J`/`K` to move and `X` to select (Linear). | review |
+| Q4 | Menus, listboxes and tabs move with arrow keys; Home/End jump. | review (Radix) |
+
+### Collaboration
+
+Presence must be impossible to miss, as in Figma, Google Docs and Linear.
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| W1 | Avatars of everyone on the record sit in the page header beside the title: 28px circles, a stable colour per person, initials, the name on hover and focus, at most 3 then "+N". The space is reserved, so arriving people never move the page. | harness → inject presence: `[data-slot=page-header] [data-slot=presence]` holds ≥1 avatar with an accessible name; `main` CLS = 0 |
+| W2 | When someone else is editing the same record, a banner under the header says "Rahim is editing this product. You can both edit; changes to different fields combine." | harness → inject presence: `[data-slot=presence-banner]` visible |
+| W3 | A field another person has focused shows a 2px ring in their colour and their first name on a tag at its top end. | review (needs field-level presence in the hub) |
+| W4 | After a merged save, one notice: "Rahim saved changes. Your edits are kept." with "Load latest"; a same-field clash opens the merge choice dialog. | harness → inject `saved`: `[data-slot=alert]` with "Load latest" |
+| W5 | Lists show presence: a small avatar on a row someone has open (orders, products, inbox conversations). | review |
+| W6 | Presence appears on every editor and on order and conversation pages, not only on forms. | review |
+
+### Bangla and long text
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| N1 | No clipped text: no fixed height on an element that holds text; Bangla vowel signs never cut. | harness → bn: every visible text element with `overflow: hidden` has `scrollHeight ≤ clientHeight + 1` |
+| N2 | No horizontal page scroll at any width ≥ 360px. | harness → `document.scrollingElement` and `#admin-main-scroll`: `scrollWidth ≤ clientWidth` |
+| N3 | Buttons, tabs, labels and headings never truncate; they wrap or grow. Placeholders fit their field in both languages. | harness → no `button,label,[role=tab],h1,h2,h3` with `scrollWidth > clientWidth`; input placeholder width ≤ input content width |
+| N4 | Long names: two lines then an ellipsis in lists, wrap in titles; long codes and URLs break anywhere (`overflow-wrap: anywhere`). | review |
+| N5 | A filter row that does not fit wraps under the search; on phones filters fold into one "Filters" button. | harness → 390px: the toolbar is ≤ 2 rows tall (≤ 96px) |
+| N6 | Copy fits Bangla: budget 30% more width than English for buttons and tabs. | review |
+
+### Large stores
+
+Every list and picker must work at 100,000 rows.
+
+| ID | Rule | Check |
+| --- | --- | --- |
+| X1 | Server paging for every list: ≤100 rows in the DOM per table; no request for "all" records. | lint → no query option with `limit` ≥ 500 outside the allowlist · harness → `tbody tr` ≤ 100 |
+| X2 | Search, filter and sort run on the server, debounced 300ms, with the previous rows kept while it loads. | review |
+| X3 | Pickers (products, customers, collections, categories, countries, places) search on the server and page (`SearchableSelect` `load`). A picker never downloads its whole list. | review |
+| X4 | A list inside one record (variants, line items, menu items, zone areas) shows the first 50 and searches or pages beyond; >100 rows render virtualized. | review |
+| X5 | Counts that the API caps show "1,000+"; totals and sums come from the API, never from a page. | harness (T13) |
+| X6 | Bulk actions on a filtered set run as one server job with progress, not as client loops over rows. | review |
+| X7 | Exports and imports run in the background with a progress row and a notice when done. | review |
+| X8 | The theme editor, navigation editor and category tree stay usable with 5,000 products, 500 categories and 200 menu items: lazy children, search, no full-tree render. | review |
 
 ## Lint
 
