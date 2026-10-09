@@ -1,12 +1,11 @@
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useCurrency } from "~/hooks/use-currency";
 import { inventoryValuationQueryOptions } from "~/lib/api-query-options/inventory-costs";
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
-import { resourceMessages } from "~/i18n/resource";
 
 /**
  * What the stock on hand is worth at current unit costs: the total, each
@@ -15,7 +14,6 @@ import { resourceMessages } from "~/i18n/resource";
  */
 export function ValuationSummary() {
   const t = useMessages(inventoryMessages);
-  const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();
   const valuation = useQuery(inventoryValuationQueryOptions());
   const data = valuation.data;
@@ -33,10 +31,7 @@ export function ValuationSummary() {
         {valuation.isPending ? (
           <Skeleton className="h-7 w-40" />
         ) : !data ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-body text-destructive">{t("valueFailed")}</p>
-            <Button type="button" variant="outline" size="sm" loading={valuation.isFetching} onClick={() => void valuation.refetch()}>{r("retry")}</Button>
-          </div>
+          <ErrorState layout="inline" title={t("valueFailed")} error={valuation.error} onRetry={() => void valuation.refetch()} />
         ) : (
           <>
             <div className="space-y-1">

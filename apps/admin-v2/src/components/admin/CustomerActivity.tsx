@@ -1,3 +1,4 @@
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -15,7 +16,6 @@ import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
-import { resourceMessages } from "~/i18n/resource";
 
 const PAGE = { orders: 10, history: 10 } as const;
 
@@ -164,7 +164,6 @@ function changedFields(current: Snapshot, previous: Snapshot | undefined) {
 /** Orders and the change log for one customer (Shopify's customer timeline). */
 export function CustomerActivity({ customerId }: { customerId: string }) {
   const t = useMessages(customerPageMessages);
-  const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
   const { fmt } = useCurrency();
   const orders = useInfiniteQuery({
@@ -184,10 +183,9 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
   if (orders.isError) {
     return (
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-          {t("loadFailed")}
-          <Button variant="outline" size="sm" onClick={() => void orders.refetch()}>{tr("retry")}</Button>
-        </CardHeader>
+        <CardContent className="pt-4">
+          <ErrorState layout="inline" title={t("loadFailed")} error={orders.error} onRetry={() => void orders.refetch()} />
+        </CardContent>
       </Card>
     );
   }

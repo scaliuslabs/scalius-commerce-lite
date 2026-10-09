@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryFormOptionsQueryOptions, categoryQueryOptions } from "~/lib/api-query-options/categories";
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
         staleTime: Infinity,
       })
       .catch(nullForAdminApiNotFound);
-    if (!category) throw redirect({ to: "/admin/categories" });
+    if (!category) throw notFound();
     if (category.deletedAt != null) {
       throw redirect({
         to: "/admin/categories",

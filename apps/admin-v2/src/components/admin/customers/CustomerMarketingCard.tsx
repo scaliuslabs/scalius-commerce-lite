@@ -1,3 +1,4 @@
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -164,10 +165,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
       </CardHeader>
       <CardContent className="space-y-4">
         {marketing.isError ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-body text-muted-foreground">{t("loadMarketingFailed")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void marketing.refetch()}>{r("retry")}</Button>
-          </div>
+          <ErrorState layout="inline" title={t("loadMarketingFailed")} error={marketing.error} onRetry={() => void marketing.refetch()} />
         ) : !marketing.data ? (
           <div className="space-y-3">
             {MARKETING_CHANNELS.map((item) => <Skeleton key={item} className="h-5 w-full" />)}

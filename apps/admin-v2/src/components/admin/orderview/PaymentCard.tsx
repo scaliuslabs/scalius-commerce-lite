@@ -1,3 +1,4 @@
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
@@ -438,12 +439,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </dl>
 
         {isHydrated && paymentsQuery.isError ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-muted-foreground">{t("history.failed")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={refetchPayments} disabled={historyFetching}>
-              {r("retry")}
-            </Button>
-          </div>
+          <ErrorState layout="inline" title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
         ) : null}
 
         {canShowRecoveryLink ? (

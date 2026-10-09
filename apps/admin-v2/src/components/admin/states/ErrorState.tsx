@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { statesMessages } from "~/i18n/states";
+import { readAdminApiError } from "~/lib/admin-api-error";
 import { classifyFailure, retriesWhenOnline, type FailureKind } from "./failure";
 import { useRetryWhenOnline } from "./online-status";
 import { StateBlock, type StateIcon } from "./StateBlock";
@@ -78,7 +79,11 @@ export function ErrorState({
     ?? (kind === "updated" ? t("updatedTitle")
       : what ? t("loadTitle", { what })
         : layout === "page" ? t("pageTitle") : t("sectionTitle"));
-  const reason = description ?? (kind === "updated" ? t("updatedBody") : t(REASONS[kind] ?? "reason.broken"));
+  // A refusal (4xx) carries its own reason ("This order is being edited by Rahim").
+  const status = readAdminApiError(error)?.status ?? 0;
+  const refusal = status >= 400 && status < 500 && error instanceof Error && error.message ? error.message : null;
+  const reason = description
+    ?? (kind === "updated" ? t("updatedBody") : refusal ?? t(REASONS[kind] ?? "reason.broken"));
 
   if (layout === "inline") {
     return (

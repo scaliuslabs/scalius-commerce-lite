@@ -1,9 +1,10 @@
 /* eslint-disable shadcn/no-inline-styles, shadcn/no-unknown-classes -- the invoices are white paper documents (screen and
    print) that must not follow the dashboard theme, so they carry their own print stylesheet. */
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import {
   INVOICE_CSS,
   InvoiceSheet,
@@ -12,7 +13,6 @@ import {
 } from "~/components/admin/orderview/InvoiceSheet";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
 import { pageHead } from "~/i18n/page-titles";
@@ -94,17 +94,19 @@ function InvoicesPage() {
 
 function InvoicesError({ error, reset }: { error: Error; reset: () => void }) {
   const t = useMessages(orderDetailMessages);
-  const r = useMessages(resourceMessages);
+  const router = useRouter();
   return (
-    <main className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 className="text-heading-lg font-semibold">{t("invoice.loadFailed")}</h1>
-      {error.message ? <p className="text-body text-muted-foreground">{error.message}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={reset}>{r("retry")}</Button>
-        <Button variant="outline" asChild>
-          <Link to="/admin/orders">{t("backToOrders")}</Link>
-        </Button>
-      </div>
+    <main className="mx-auto max-w-2xl px-3 py-12 sm:px-4">
+      <ErrorState
+        error={error}
+        layout="page"
+        title={t("invoice.loadFailed")}
+        onRetry={() => {
+          reset();
+          void router.invalidate();
+        }}
+        backTo={{ to: "/admin/orders", label: t("backToOrders") }}
+      />
     </main>
   );
 }

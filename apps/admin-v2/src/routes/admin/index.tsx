@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -104,23 +105,13 @@ function HomePage() {
   const sms = useQuery({ ...homeSmsQueryOptions(), enabled: isSuperAdmin || permissions.has(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW) });
   const setupGuide = useQuery(setupGuideQueryOptions());
 
-  if (summary.isError) {
-    return (
-      <div>
-        <PageHeader title={t("home")} />
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-            {t("loadFailed")}
-            <Button variant="outline" size="sm" onClick={() => void summary.refetch()}>{t("retry")}</Button>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-  if (!summary.data) return <PageHeader title={t("home")} />;
-
-  const { stats, recentOrders } = summary.data;
-  const month = stats.currentMonth;
+  // One failed read never blanks Home (polish bar R3): its own cards say so
+  // with Retry, the setup guide, sales strip and to-dos still render.
+  const summaryError = summary.isError ? (
+    <ErrorState layout="inline" title={t("loadFailed")} error={summary.error} onRetry={() => void summary.refetch()} />
+  ) : null;
+  const recentOrders = summary.data?.recentOrders;
+  const month = summary.data?.stats.currentMonth;
 
   // Sales numbers come from Analytics (the same definitions); a role without
   // "View analytics" sees order counts only, and the API sends it no money.
@@ -151,8 +142,9 @@ function HomePage() {
         <>
           <div className="grid grid-cols-2 gap-3">
             <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
-            <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} />
+            {month ? <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} /> : null}
           </div>
+          {summaryError}
           <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
         </>
       )}
@@ -168,7 +160,11 @@ function HomePage() {
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              {recentOrders.length === 0 ? (
+              {summaryError && !recentOrders ? (
+                <div className="px-4 pb-4">{summaryError}</div>
+              ) : !recentOrders ? (
+                <RecentOrdersSkeleton />
+              ) : recentOrders.length === 0 ? (
                 <p className="px-4 pb-4 text-body text-muted-foreground">{t("noOrders")}</p>
               ) : (
                 <ul className="divide-y border-t">
@@ -242,6 +238,20 @@ function HomePage() {
       {/* Active apps' widgets, each isolated and loaded once in view. */}
       <AppHomeWidgets />
     </div>
+  );
+}
+
+/** Recent orders' rows before the summary arrives: the list's own row height. */
+function RecentOrdersSkeleton() {
+  return (
+    <ul aria-busy="true" className="divide-y border-t">
+      {[0, 1, 2, 3, 4].map((row) => (
+        <li key={row} className="flex min-h-11 items-center gap-3 px-4 py-2 md:min-h-10">
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-16" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

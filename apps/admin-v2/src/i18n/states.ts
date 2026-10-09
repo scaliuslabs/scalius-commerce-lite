@@ -94,7 +94,7 @@ export const statesMessages = defineMessages({
   },
   bn: {
     loading: "লোড হচ্ছে…",
-    emptyHelp: "কোনো প্রশ্ন? কমিউনিটিতে জিজ্ঞেস করুন।",
+    emptyHelp: "প্রশ্ন আছে? কমিউনিটিকে জিজ্ঞাসা করুন।",
     filteredTitle: "এই ফিল্টারে কিছু মেলেনি",
     filteredBody: "ফিল্টার বা খোঁজার শব্দ বদলে দেখুন।",
     clearFilters: "ফিল্টার মুছুন",

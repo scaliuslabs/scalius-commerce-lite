@@ -1,28 +1,23 @@
-import { AlertTriangle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
-import { settingsMessages } from "~/i18n/settings";
+import { ErrorState } from "~/components/admin/states/ErrorState";
+import { Card } from "~/components/ui/card";
 
-/** Load failure for one card. Saving stays locked until it loads. */
+/**
+ * One settings card whose read failed (polish bar R3): the card keeps its
+ * place with one line and Retry, the other cards still render, and saving
+ * stays locked until it loads.
+ */
 export function SettingsLoadFailure({
   title,
+  error,
   onRetry,
 }: {
   title: string;
+  error?: unknown;
   onRetry: () => void | Promise<unknown>;
 }) {
-  const t = useMessages(settingsMessages);
   return (
-    <Alert variant="destructive" role="alert">
-      <AlertTriangle className="size-4" aria-hidden="true" />
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>
-        <p>{t("loadFailed")}</p>
-        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void onRetry()}>
-          {t("retry")}
-        </Button>
-      </AlertDescription>
-    </Alert>
+    <Card className="p-4">
+      <ErrorState layout="inline" title={title} error={error} onRetry={() => void onRetry()} />
+    </Card>
   );
 }
