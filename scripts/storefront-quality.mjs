@@ -28,6 +28,8 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeQualityReport } from "./storefront-quality/report.mjs";
+import { summarizeResults } from "./quality-shared/report-kit.mjs";
+import { CLS_INIT, focusVisibleCheck, globMatch } from "./quality-shared/page-checks.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -35,7 +37,6 @@ const DEFAULT_WIDTHS = [390, 768, 1280, 1440];
 const VIEWPORT_HEIGHT = 900;
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const GATING_IMPACTS = new Set(["serious", "critical"]);
-const IMPACT_WEIGHT = { critical: 10, serious: 5, moderate: 2, minor: 1 };
 const DIFF_THRESHOLD = 0.005;
 
 function parseArgs(argv) {
@@ -72,7 +73,6 @@ function loadAllowlist() {
   return list;
 }
 
-const globMatch = (pattern, value) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`).test(value);
 
 function allowed(allowlist, entryId, rule, width) {
   return allowlist.find((item) => globMatch(item.entry, entryId) && globMatch(item.rule, rule) && (!item.widths || item.widths.includes(width))) ?? null;
@@ -80,28 +80,6 @@ function allowed(allowlist, entryId, rule, width) {
 
 // ─── In-page checks (run in the browser) ──────────────────────────────────
 
-/**
- * Collects layout shifts from navigation start (CLS without the session
- * window: the total, which is the stricter number for a short page load).
- */
-const CLS_INIT = () => {
-  window.__galleryCls = 0;
-  window.__galleryShifts = [];
-  try {
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        if (entry.hadRecentInput) continue;
-        window.__galleryCls += entry.value;
-        const source = entry.sources?.[0]?.node;
-        if (source && window.__galleryShifts.length < 5) {
-          window.__galleryShifts.push(source.nodeType === 1 ? source.tagName.toLowerCase() + (source.id ? `#${source.id}` : "") + (source.className && typeof source.className === "string" ? `.${source.className.trim().split(/\s+/).slice(0, 2).join(".")}` : "") : "text");
-        }
-      }
-    }).observe({ type: "layout-shift", buffered: true });
-  } catch {
-    // No layout-shift support: CLS reads as 0.
-  }
-};
 
 /** The harness's own checks in the focus region; returns findings without width/gating. */
 function pageChecks({ focus, locale, dir }) {
@@ -241,43 +219,6 @@ function pageChecks({ focus, locale, dir }) {
   return { findings, metrics: { scrollWidth, clientWidth: width, interactive: interactive.length } };
 }
 
-/** Focus each marked control by script after a Tab press and compare its look with and without focus. */
-function focusVisibleCheck() {
-  const keys = ["outlineStyle", "outlineWidth", "outlineColor", "boxShadow", "borderTopColor", "borderBottomColor", "borderTopWidth", "backgroundColor", "color", "textDecorationLine"];
-  const ringKeys = ["outlineStyle", "outlineWidth", "outlineColor", "boxShadow"];
-  // The control and its pseudo-elements, its two nearest ancestors fully, and
-  // rings up to six levels up (a card draws a stretched link's ring).
-  const snapshot = (element) => {
-    const parts = [];
-    let node = element;
-    for (let depth = 0; node && depth < 7; depth += 1, node = node.parentElement) {
-      const style = getComputedStyle(node);
-      parts.push((depth < 3 ? keys : ringKeys).map((key) => style[key]).join("|"));
-      if (depth === 0) {
-        for (const pseudo of ["::before", "::after"]) {
-          const decoration = getComputedStyle(node, pseudo);
-          parts.push(`${decoration.outlineStyle}|${decoration.boxShadow}|${decoration.borderTopColor}|${decoration.backgroundColor}|${decoration.opacity}`);
-        }
-      }
-    }
-    return parts.join("||");
-  };
-  const missing = [];
-  let judged = 0;
-  for (const element of document.querySelectorAll("[data-quality-focus]")) {
-    element.blur();
-    const before = snapshot(element);
-    element.focus({ preventScroll: true });
-    if (document.activeElement !== element) continue;
-    if (!element.matches(":focus-visible")) continue;
-    judged += 1;
-    const after = snapshot(element);
-    if (before === after) missing.push(element);
-    element.blur();
-  }
-  const describe = (element) => element.tagName.toLowerCase() + (element.id ? `#${element.id}` : "") + (element.getAttribute("aria-label") ? `[aria-label="${element.getAttribute("aria-label")}"]` : element.textContent?.trim() ? ` "${element.textContent.trim().slice(0, 40)}"` : "");
-  return { judged, missing: missing.slice(0, 10).map(describe), count: missing.length };
-}
 
 // ─── Screenshots and diffs ────────────────────────────────────────────────
 
@@ -537,49 +478,6 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
 
 // ─── Summary ──────────────────────────────────────────────────────────────
 
-function summarize(results) {
-  const byRule = {};
-  const byFamily = {};
-  let gatingFindings = 0;
-  for (const entry of results) {
-    const family = (byFamily[entry.family] ??= { entries: 0, failingEntries: 0, findings: 0 });
-    family.entries += 1;
-    if (entry.failing) family.failingEntries += 1;
-    const rulesSeen = new Set();
-    for (const width of Object.values(entry.widths)) {
-      for (const finding of width.findings) {
-        const rule = (byRule[finding.rule] ??= { findings: 0, entries: 0, impact: finding.impact, gating: false, source: finding.source });
-        rule.findings += finding.count;
-        if (IMPACT_WEIGHT[finding.impact] > IMPACT_WEIGHT[rule.impact]) rule.impact = finding.impact;
-        if (finding.gating) {
-          rule.gating = true;
-          gatingFindings += 1;
-        }
-        if (!rulesSeen.has(finding.rule)) {
-          rulesSeen.add(finding.rule);
-          rule.entries += 1;
-        }
-        family.findings += finding.count;
-      }
-    }
-  }
-  const score = (entry) => Object.values(entry.widths).reduce((total, width) => total + width.findings
-    .filter((finding) => !["visual-diff", "screenshot"].includes(finding.rule))
-    .reduce((sum, finding) => sum + (IMPACT_WEIGHT[finding.impact] ?? 1) * Math.min(finding.count, 10), 0), 0) + (entry.error ? 50 : 0);
-  const worst = results
-    .map((entry) => ({ id: entry.id, family: entry.family, score: score(entry), findings: Object.values(entry.widths).reduce((total, width) => total + width.findings.length, 0) }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 15);
-  return {
-    entries: results.length,
-    failingEntries: results.filter((entry) => entry.failing).length,
-    gatingFindings,
-    byRule: Object.fromEntries(Object.entries(byRule).sort((left, right) => right[1].findings - left[1].findings)),
-    byFamily: Object.fromEntries(Object.entries(byFamily).sort((left, right) => right[1].findings - left[1].findings)),
-    worst,
-  };
-}
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
@@ -655,7 +553,7 @@ async function main() {
       const unanswered = new Map(index.entries.map((entry) => [entry.id, entry.unanswered]));
       for (const result of results) result.unanswered = unanswered.get(result.id) ?? [];
     }
-    const summary = summarize(results);
+    const summary = summarizeResults(results, { ignoreRules: ["visual-diff", "screenshot"] });
     const report = { generatedAt: new Date().toISOString(), baseUrl, mode: gallery ? "fixture" : "base-url", widths: args.widths, durationSeconds: Math.round((Date.now() - started) / 1000), summary, entries: results };
     writeFileSync(join(args.out, "results.json"), `${JSON.stringify(report, null, 2)}\n`);
     const reportFile = writeQualityReport(args.out, report);

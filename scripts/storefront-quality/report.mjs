@@ -3,25 +3,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const esc = (value) =>
-  String(value ?? "").replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
-  );
+import { REPORT_STYLE as STYLE, anchor, esc, impactClass, num, safeUrl, table } from "../quality-shared/report-kit.mjs";
 
-/** Only allow http(s) and relative URLs in href/src; anything else becomes "#". */
-const safeUrl = (value) => {
-  const url = String(value ?? "").trim();
-  if (!url) return "#";
-  if (/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^https?:/i.test(url)) return "#";
-  return url;
-};
-
-const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
-const IMPACTS = ["critical", "serious", "moderate", "minor"];
-const impactClass = (impact) => (IMPACTS.includes(impact) ? impact : "minor");
-// Entries are anchored by a sanitized id so summary links can jump to a card.
-const anchor = (id) => `e-${String(id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+// A plain number is a viewport width; the dashboard harness keys "390 en".
+const widthLabel = (key) => (/^\d+$/.test(String(key)) ? `${key} px` : String(key));
 
 function entryStatus(entry) {
   if (entry.error) return "ERROR";
@@ -53,10 +38,10 @@ function renderWidth(entry, width) {
     : "";
   const m = data.metrics;
   const metrics = m
-    ? `<p class="metrics">CLS ${num(m.cls).toFixed(3)}, scroll ${num(m.scrollWidth)}/${num(m.clientWidth)} px</p>`
+    ? `<p class="metrics">CLS ${num(m.cls).toFixed(3)}, scroll ${num(m.scrollWidth)}/${num(m.clientWidth)} px${m.settledMs !== undefined && m.settledMs !== null ? `, first paint ${num(m.fcpMs)} ms, settled ${num(m.settledMs)} ms` : ""}</p>`
     : "";
-  return `<section class="w" data-width="${esc(width)}" aria-label="${esc(width)} pixels">
-    <h4>${esc(width)} px <span class="n">${findings.length ? `${findings.length} finding${findings.length === 1 ? "" : "s"}` : "clean"}</span></h4>
+  return `<section class="w" data-width="${esc(width)}" aria-label="${esc(widthLabel(width))}">
+    <h4>${esc(widthLabel(width))} <span class="n">${findings.length ? `${findings.length} finding${findings.length === 1 ? "" : "s"}` : "clean"}</span></h4>
     ${shot}${diff}${metrics}
     ${findings.length ? `<ul class="findings">${findings.map(renderFinding).join("")}</ul>` : ""}
   </section>`;
@@ -78,63 +63,6 @@ function renderEntry(entry, widths) {
   </article>`;
 }
 
-const table = (head, rows, empty) =>
-  rows.length
-    ? `<table><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table>`
-    : `<p class="empty">${esc(empty)}</p>`;
-
-const STYLE = `
-:root{--bg:#f6f7f9;--fg:#15181d;--muted:#566070;--card:#fff;--line:#d5dae1;--accent:#1d4ed8;--fail:#b42318;--pass:#146c43;--warn:#92400e;--code:#eef1f5}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1216;--fg:#e8ebef;--muted:#a3adba;--card:#171b21;--line:#2c333d;--accent:#8ab4ff;--fail:#ff8a80;--pass:#6fd5a0;--warn:#f5b971;--code:#222831}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:1800px;margin:0 auto;padding:16px}
-a{color:var(--accent)}
-:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-h1{margin:0 0 4px;font-size:1.6rem}h2{font-size:1.15rem;margin:28px 0 8px}h3{margin:0;font-size:1.05rem}h4{margin:0 0 6px;font-size:.9rem}
-code,pre{font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
-code{background:var(--code);padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}
-.sub{color:var(--muted);margin:0}.sub span{margin-right:14px}
-.strip{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 16px;min-width:150px}
-.stat b{display:block;font-size:1.7rem;line-height:1.2}.stat.bad b{color:var(--fail)}
-.tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
-.tables>div{overflow-x:auto}
-table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);font-size:13.5px}
-th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{background:var(--code)}td.r,th.r{text-align:right}
-.filters{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line)}
-.filters label{display:flex;flex-direction:column;font-size:12.5px;color:var(--muted);gap:2px}
-.filters label.inline{flex-direction:row;align-items:center;gap:6px;font-size:14px;color:var(--fg)}
-input[type=search],select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);min-width:150px;max-width:100%}
-input[type=checkbox]{width:18px;height:18px}
-#count{margin-left:auto;color:var(--muted);font-size:13.5px}
-.card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--pass);border-radius:8px;margin:16px 0;padding:12px}
-.card.fail{border-left-color:var(--fail)}.card.error{border-left-color:var(--fail)}.card.allowlisted{border-left-color:var(--warn)}
-.card header{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
-.meta{flex-basis:100%;margin:2px 0;color:var(--muted);font-size:13px}.meta>*{margin-right:12px}
-.note{flex-basis:100%;margin:0;color:var(--warn);font-size:13px}
-.badge{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1.5px solid currentColor}
-.badge.fail,.badge.error{color:var(--fail)}.badge.pass{color:var(--pass)}.badge.allowlisted{color:var(--warn)}
-pre.error{background:var(--code);color:var(--fail);padding:8px;border-radius:6px;overflow:auto;white-space:pre-wrap;margin:8px 0}
-.widths{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:10px}
-.w{min-width:0}
-.w img{display:block;width:100%;max-height:420px;object-fit:contain;object-position:top;background:var(--code);border:1px solid var(--line);border-radius:4px}
-.noshot{padding:30px 8px;text-align:center;color:var(--muted);background:var(--code);border-radius:4px;font-size:13px}
-.n{font-weight:400;color:var(--muted);margin-left:6px}
-.diff,.metrics{margin:4px 0;font-size:12.5px;color:var(--muted)}.diff a{margin-left:6px}
-.findings{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px}
-.finding{border-top:1px solid var(--line);padding:5px 0}
-.msg{display:block;color:var(--muted)}.count{color:var(--muted)}
-.gate{font-size:11px;color:var(--fail);font-weight:700}
-.chip{display:inline-block;font-size:11px;font-weight:700;padding:0 6px;border-radius:4px;border:1px solid currentColor}
-.chip.critical{color:var(--fail)}.chip.serious{color:#c2410c}.chip.moderate{color:var(--warn)}.chip.minor{color:var(--muted)}
-@media(prefers-color-scheme:dark){.chip.serious{color:#fdba74}}
-.nodes{margin:4px 0 0;padding-left:16px}.nodes li{margin:2px 0}
-details summary{cursor:pointer;color:var(--accent)}
-.empty{color:var(--muted)}
-[hidden]{display:none!important}
-`;
 
 const SCRIPT = `
 (function(){
@@ -236,13 +164,13 @@ export function renderQualityReport(results) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Storefront quality report</title>
+<title>${esc(r.title ?? "Storefront quality report")}</title>
 <style>${STYLE}</style>
 </head>
 <body>
 <main>
-<h1>Storefront quality report</h1>
-<p class="sub"><span>Generated <time datetime="${esc(r.generatedAt)}">${esc(r.generatedAt)}</time></span><span>Base URL <code>${esc(r.baseUrl)}</code></span><span>Mode ${esc(r.mode)}</span><span>Widths ${esc(widths.join(", "))} px</span></p>
+<h1>${esc(r.title ?? "Storefront quality report")}</h1>
+<p class="sub"><span>Generated <time datetime="${esc(r.generatedAt)}">${esc(r.generatedAt)}</time></span><span>Base URL <code>${esc(r.baseUrl)}</code></span><span>Mode ${esc(r.mode)}</span><span>Widths ${esc(widths.map(widthLabel).join(", "))}</span></p>
 <div class="strip" role="group" aria-label="Summary">
   <div class="stat"><b>${num(summary.entries ?? entries.length)}</b>entries audited</div>
   <div class="stat${num(summary.failingEntries) ? " bad" : ""}"><b>${num(summary.failingEntries)}</b>failing entries</div>
@@ -258,7 +186,7 @@ export function renderQualityReport(results) {
   <label>Search id or title<input id="f-q" type="search" autocomplete="off"></label>
   <label>Family<select id="f-family"><option value="">All families</option>${families.map(option).join("")}</select></label>
   <label>Rule<select id="f-rule"><option value="">All rules</option>${rules.map(option).join("")}</select></label>
-  <label>Width<select id="f-width"><option value="">All widths</option>${widths.map((w) => `<option value="${esc(w)}">${esc(w)} px</option>`).join("")}</select></label>
+  <label>Width<select id="f-width"><option value="">All widths</option>${widths.map((w) => `<option value="${esc(w)}">${esc(widthLabel(w))}</option>`).join("")}</select></label>
   <label class="inline"><input id="f-fail" type="checkbox">Failing only</label>
   <span id="count" role="status" aria-live="polite"></span>
 </form>
