@@ -95,7 +95,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
         </Suspense>
         {/* The store menu: badge and name, like Shopify's store switcher. */}
         <UserMenu user={user} side="bottom">
-          <button type="button" aria-label={storeLabel ? undefined : t("accountMenu")} className={cn(TOP_BAR_BUTTON, "min-w-0 gap-2 px-1.5")}>
+          <button type="button" aria-label={storeLabel || t("accountMenu")} className={cn(TOP_BAR_BUTTON, "min-w-0 gap-2 px-1.5")}>
             <StoreBadge name={store.name} className="size-7 rounded-lg md:size-6 md:rounded-md" />
             {storeLabel ? <span className="hidden max-w-40 truncate text-nav font-medium xl:inline">{storeLabel}</span> : null}
           </button>

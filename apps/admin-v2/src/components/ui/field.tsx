@@ -47,8 +47,9 @@ export function Field({ label, id, help, error, optional, hideLabel, labelAction
   const hasHelp = !hasError && help !== undefined && help !== null && help !== false && help !== "";
   const noteId = !hasError && !hasHelp ? undefined : fixedNoteId ?? (hasError ? `${controlId}-error` : `${controlId}-help`);
   const state = React.useMemo<FieldControlState>(
-    () => ({ id: controlId, describedBy: noteId, invalid: hasError }),
-    [controlId, noteId, hasError],
+    // A field with no label (the card title names it) lends no id: a picker inside keeps its own name.
+    () => ({ id: label === undefined && id === undefined ? undefined : controlId, describedBy: noteId, invalid: hasError }),
+    [label, id, controlId, noteId, hasError],
   );
   const labelNode = label === undefined ? null : (
     <Label data-slot="field-label" id={`${controlId}-field-label`} htmlFor={controlId} className={cn(hideLabel && "sr-only")}>

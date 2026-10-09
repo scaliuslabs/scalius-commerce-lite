@@ -15,14 +15,14 @@ const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      "peer group -m-3.5 inline-flex size-11 shrink-0 items-center justify-center rounded-lg outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:-m-1 sm:size-6",
+      "peer group -m-3.5 inline-flex size-11 shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:-m-1 sm:size-6",
       className,
     )}
     {...props}
   >
     <span
       aria-hidden="true"
-      className="flex size-4 items-center justify-center rounded border border-input bg-card group-hover:border-muted-foreground group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1 group-aria-invalid:border-destructive group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground group-data-[state=indeterminate]:border-primary group-data-[state=indeterminate]:bg-primary group-data-[state=indeterminate]:text-primary-foreground"
+      className="flex size-4 items-center justify-center rounded border border-input bg-card group-hover:border-muted-foreground group-aria-invalid:border-destructive group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground group-data-[state=indeterminate]:border-primary group-data-[state=indeterminate]:bg-primary group-data-[state=indeterminate]:text-primary-foreground"
     >
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
         <Check className="size-3.5 group-data-[state=indeterminate]:hidden" strokeWidth={3} />

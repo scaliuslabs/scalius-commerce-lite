@@ -2,7 +2,8 @@ import * as React from "react";
 
 /** What a `Field` tells the control inside it. */
 export interface FieldControlState {
-  id: string;
+  /** Unset when the field has no label and no id of its own: nothing would point at it. */
+  id?: string;
   /** The help or the error under the control (never both). */
   describedBy?: string;
   invalid: boolean;
