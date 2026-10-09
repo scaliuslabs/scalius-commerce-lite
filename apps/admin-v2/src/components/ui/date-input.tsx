@@ -4,6 +4,7 @@ import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
+import { useFieldControl } from "./field-context";
 import { fieldClassName } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
@@ -30,7 +31,9 @@ type DateInputProps = {
  * which reads as two different days in two countries. The value is the same
  * "YYYY-MM-DD" a native date field holds; the calendar opens below the field.
  */
-export function DateInput({ value, onValueChange, min, max, id, disabled = false, className, ...aria }: DateInputProps) {
+export function DateInput(fieldProps: DateInputProps) {
+  // Inside a `Field`, the button takes the field's id, help and invalid state.
+  const { value, onValueChange, min, max, id, disabled = false, className, ...aria } = useFieldControl(fieldProps);
   const t = useMessages(formMessages);
   const [open, setOpen] = React.useState(false);
   const day = parseDateOnly(value);

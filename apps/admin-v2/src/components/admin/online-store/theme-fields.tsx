@@ -16,7 +16,6 @@ import {
   type StorefrontThemeFallback,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { formatNumber, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -36,6 +35,7 @@ import {
   type ThemeBlockSlot,
 } from "./theme-settings";
 import { useThemeReveal } from "./theme-reveal";
+import { Field } from "~/components/ui/field";
 
 export type Theme = StorefrontThemeDocument;
 export type SetTheme = (next: Theme | ((theme: Theme) => Theme)) => void;
@@ -84,8 +84,7 @@ function ColorField({
     onChange(next.trim().toLowerCase());
   };
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label}>
       <div className="flex items-center gap-2">
         <label
           style={{ "--swatch": valid ? value : "transparent" } as CSSProperties}
@@ -116,7 +115,7 @@ function ColorField({
           {errors.map((error) => <p key={error} className="text-body text-destructive">{error}</p>)}
         </div>
       ) : null}
-    </div>
+    </Field>
   );
 }
 

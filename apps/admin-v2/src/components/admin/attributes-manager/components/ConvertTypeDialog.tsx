@@ -11,7 +11,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -19,6 +18,7 @@ import { queryKeys } from "~/lib/query-keys";
 import type { AttributeDto } from "~/lib/api-query-options/attributes";
 import { formatNumber, useMessages } from "~/i18n";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
+import { Field } from "~/components/ui/field";
 
 type Result = ApiResult<typeof postApiV1AdminAttributesByIdConvertType>;
 
@@ -84,8 +84,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
         </DialogHeader>
         <div className="space-y-4">
           {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
-          <div className="space-y-2">
-            <Label htmlFor="convert-type">{t("newType")}</Label>
+          <Field id="convert-type" label={t("newType")} help={<>{t(`typeHelp_${valueType}`)}</>}>
             <SearchableSelect
               id="convert-type"
               value={valueType}
@@ -97,11 +96,9 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
               triggerClassName="w-full"
               options={ATTRIBUTE_VALUE_TYPES.map((type) => ({ value: type, label: t(`type_${type}`), disabled: type === attribute.valueType }))}
             />
-            <p className="text-body text-muted-foreground">{t(`typeHelp_${valueType}`)}</p>
-          </div>
+          </Field>
           {valueType === "number" ? (
-            <div className="space-y-2">
-              <Label htmlFor="convert-unit">{t("unit")}</Label>
+            <Field id="convert-unit" label={t("unit")}>
               <Input
                 id="convert-unit"
                 maxLength={ATTRIBUTE_UNIT_MAX_LENGTH}
@@ -113,7 +110,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
                   setPreview(null);
                 }}
               />
-            </div>
+            </Field>
           ) : null}
           {preview ? (
             <div className="space-y-1 rounded-lg border p-3 text-body" aria-live="polite">

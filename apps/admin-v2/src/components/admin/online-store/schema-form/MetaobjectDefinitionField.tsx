@@ -7,11 +7,11 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { metaobjectMessages } from "~/i18n/metaobjects";
 import { metaobjectDefinitionsQueryOptions } from "~/lib/api-query-options/metaobjects";
+import { Field } from "~/components/ui/field";
 
 export function MetaobjectDefinitionField({ id, label, help, value, onChange, error }: {
   id: string;
@@ -44,8 +44,7 @@ export function MetaobjectDefinitionField({ id, label, help, value, onChange, er
   ];
   const note = error ?? hint ?? help;
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label}>
       <SearchableSelect
         id={id}
         value={value}
@@ -70,6 +69,6 @@ export function MetaobjectDefinitionField({ id, label, help, value, onChange, er
           {t("pickerManage")}
         </Link>
       ) : null}
-    </div>
+    </Field>
   );
 }

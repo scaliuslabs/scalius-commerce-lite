@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AddressField, AddressRules } from "@scalius/shared/address";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field, FieldGroup, FieldRow, ChoiceField } from "~/components/ui/field";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
@@ -126,11 +126,9 @@ export function AddressFields({
   const error = (field: AddressProblemField) => errors[field];
 
   return (
-    <div className="grid gap-3">
-      <div className="grid gap-2">
-        <Label htmlFor={id("country")}>{t("country")}</Label>
+    <FieldGroup>
+      <Field id={id("country")} label={t("country")} error={error("countryCode")}>
         <SearchableSelect
-          id={id("country")}
           value={value.countryCode}
           selectedLabel={countryName(value.countryCode)}
           options={countryOptions}
@@ -139,36 +137,29 @@ export function AddressFields({
           placeholder={t("selectCountry")}
           searchPlaceholder={t("searchCountries")}
           emptyMessage={t("noCountries")}
-          aria-invalid={error("countryCode") ? true : undefined}
           triggerClassName="w-full"
         />
-        <FieldError id={id("country")} message={error("countryCode")} />
-      </div>
+      </Field>
       {showRecipient ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <FieldRow>
           {RECIPIENT_FIELDS.map((field) => (
             <TextField key={field} id={id(field)} label={field === "name" && nameLabel ? nameLabel : t(field)} value={value[field]} disabled={disabled}
               error={error(field)} onChange={(next) => set(field, next)} />
           ))}
-        </div>
+        </FieldRow>
       ) : null}
       {usesLocationPicker(value.countryCode) && !canonicalOnly ? (
         <>
-          <div className="grid gap-2">
-            <Label htmlFor={id("line1")}>{t("line1")}</Label>
+          <Field id={id("line1")} label={t("line1")} error={error("line1")}>
             <Textarea
-              id={id("line1")}
               ref={line1Ref}
               rows={2}
               value={value.line1}
               disabled={disabled}
               onChange={(event) => set("line1", event.target.value)}
               onKeyDown={onLine1KeyDown}
-              aria-invalid={error("line1") ? true : undefined}
-              aria-describedby={error("line1") ? `${id("line1")}-error` : undefined}
             />
-            <FieldError id={id("line1")} message={error("line1")} />
-          </div>
+          </Field>
           <LocationPicker
             ids={{ city: id("city"), zone: id("zone"), area: id("area") }}
             required={{ city: true, zone: true }}
@@ -194,7 +185,7 @@ export function AddressFields({
       ) : (
         <CountryFields value={value} onChange={onChange} errors={errors} id={id} disabled={disabled} />
       )}
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -217,7 +208,7 @@ function CountryFields({
   if (rules.isPending) {
     // The usual shape (two lines, a city row, a region and postal row) so the dialog barely moves.
     return (
-      <div className="grid gap-3" aria-busy="true" aria-label={t("rulesLoading")}>
+      <div className="flex flex-col gap-4 in-data-[slot=inset]:gap-3" aria-busy="true" aria-label={t("rulesLoading")}>
         {[0, 1, 2].map((row) => <Skeleton key={row} className="h-16 w-full" />)}
       </div>
     );
@@ -233,17 +224,15 @@ function CountryFields({
   return (
     <>
       {rows.map((row) => (
-        <div key={row.join("-")} className={row.length > 1 ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
+        <FieldRow key={row.join("-")} className={row.length > 1 ? undefined : "@md:grid-cols-1"}>
           {row.map((field) => {
             const label = t(addressFieldLabelKey(field, data));
             if (field === "adminArea" && data.adminAreas.length > 0) {
               const options = data.adminAreas.map((area) => ({ value: area.code, label: area.name, keywords: [area.code] }));
               const current = data.adminAreas.find((area) => area.code === value.adminArea);
               return (
-                <div key={field} className="grid gap-2">
-                  <Label htmlFor={id(field)}>{label}</Label>
+                <Field key={field} id={id(field)} label={label} error={errors[field]}>
                   <SearchableSelect
-                    id={id(field)}
                     value={value.adminArea}
                     selectedLabel={current?.name ?? (value.adminArea || undefined)}
                     options={options}
@@ -254,12 +243,9 @@ function CountryFields({
                     placeholder={t("select")}
                     searchPlaceholder={t("search")}
                     emptyMessage={t("noMatches")}
-                    aria-invalid={errors[field] ? true : undefined}
-                    aria-describedby={errors[field] ? `${id(field)}-error` : undefined}
                     triggerClassName="w-full"
                   />
-                  <FieldError id={id(field)} message={errors[field]} />
-                </div>
+                </Field>
               );
             }
             return (
@@ -277,7 +263,7 @@ function CountryFields({
               />
             );
           })}
-        </div>
+        </FieldRow>
       ))}
     </>
   );
@@ -315,28 +301,17 @@ function TextField({
   disabled?: boolean;
   autoComplete?: string;
 }) {
-  const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(" ") || undefined;
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={hint} error={error}>
       <Input
-        id={id}
         value={value}
         required={required}
         disabled={disabled}
         autoComplete={autoComplete ?? "off"}
         onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
       />
-      {hint ? <p id={`${id}-hint`} className="text-body text-muted-foreground">{hint}</p> : null}
-      <FieldError id={id} message={error} />
-    </div>
+    </Field>
   );
-}
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  return message ? <p id={`${id}-error`} className="text-body text-destructive">{message}</p> : null;
 }
 
 /**
@@ -351,15 +326,12 @@ export function SkipAddressValidation({ id, checked, onCheckedChange, disabled }
 }) {
   const t = useMessages(addressMessages);
   return (
-    <div className="flex items-start gap-2">
-      <span className="flex h-lh items-center">
-        <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(next) => onCheckedChange(next === true)}
-          aria-describedby={`${id}-help`} />
-      </span>
-      <div className="grid gap-1">
-        <Label htmlFor={id}>{t("skipValidation")}</Label>
-        <p id={`${id}-help`} className="text-body text-muted-foreground">{t("skipValidationHelp")}</p>
-      </div>
-    </div>
+    <ChoiceField
+      id={id}
+      label={t("skipValidation")}
+      help={t("skipValidationHelp")}
+      control={<Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(next) => onCheckedChange(next === true)}
+          aria-describedby={`${id}-help`} />}
+    />
   );
 }

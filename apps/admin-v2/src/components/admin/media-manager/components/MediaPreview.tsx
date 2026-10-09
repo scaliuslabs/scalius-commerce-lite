@@ -5,7 +5,6 @@ import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { VideoPlayer } from "~/components/ui/video-player";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -17,6 +16,7 @@ import type { LibraryMediaFile, MediaFile } from "../types";
 import { formatDate, formatDuration, formatFileSize, formatFileType } from "../utils";
 import { resolveSavedPoster } from "../utils/poster";
 import { MediaUsage } from "./MediaUsage";
+import { Field } from "~/components/ui/field";
 
 interface MediaPreviewProps {
   open: boolean;
@@ -134,15 +134,12 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
                 </Button>
               </div>
               <div className="flex flex-col gap-4 border-t p-4 md:overflow-y-auto md:border-s md:border-t-0">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="media-filename">{t("fileName")}</Label>
+                <Field id="media-filename" label={t("fileName")}>
                   <Input id="media-filename" maxLength={255} value={filename} onChange={(event) => setFilename(event.target.value)} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="media-description">{t(isVideo ? "videoDescription" : "altText")}</Label>
+                </Field>
+                <Field id="media-description" label={t(isVideo ? "videoDescription" : "altText")} help={t(isVideo ? "videoDescriptionHelp" : "altTextHelp")}>
                   <Textarea id="media-description" rows={4} maxLength={isVideo ? 2000 : 500} value={description} onChange={(event) => setDescription(event.target.value)} />
-                  <p className="text-body text-muted-foreground">{t(isVideo ? "videoDescriptionHelp" : "altTextHelp")}</p>
-                </div>
+                </Field>
                 {isVideo ? (
                   <div className="flex flex-col gap-1.5">
                     <span className="text-body font-medium">{t("coverImage")}</span>

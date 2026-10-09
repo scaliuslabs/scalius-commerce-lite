@@ -94,6 +94,7 @@ import { BillingSection } from "./order-form/BillingSection";
 import { addressMessages } from "@/i18n/address";
 import { locationMessages } from "@/i18n/location";
 import { addressRulesQueryOptions } from "@/lib/api-query-options/address-rules";
+import { Page } from "~/components/admin/resource/Page";
 
 type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
 type ManualOrderAmendmentInput = { id: string } &
@@ -704,7 +705,7 @@ function OrderEditor({
   const amendError = amendMutation.error ? orderErrorMessage(amendMutation.error) : null;
 
   return (
-    <>
+    <Page width="form">
       <PageHeader title={pageTitle} backTo={backTo} />
       {canSave ? null : <ReadOnlyNotice />}
       <Form {...form}>
@@ -794,6 +795,6 @@ function OrderEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </Page>
   );
 }

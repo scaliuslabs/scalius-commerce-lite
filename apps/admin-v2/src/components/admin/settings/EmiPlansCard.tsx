@@ -4,9 +4,8 @@ import { getApiV1AdminSettingsEmi, putApiV1AdminSettingsEmi } from "@scalius/api
 import { EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "@scalius/shared/emi";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { NumberInput } from "~/components/ui/number-input";
+import { NumberInput, PercentInput } from "~/components/ui/number-input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -19,6 +18,7 @@ import { settingsMessages } from "~/i18n/settings";
 import { emiMessages } from "~/i18n/settings-emi";
 import { SettingsCard, SettingsCardLoading } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { Field } from "~/components/ui/field";
 
 type EmiDocument = ApiResult<typeof getApiV1AdminSettingsEmi>;
 type EmiValues = Omit<EmiDocument, "revision">;
@@ -45,7 +45,7 @@ export function emiPlanProblems(values: EmiValues, t: (key: "planProvider" | "pl
 export function EmiPlansCard() {
   const t = useMessages(emiMessages);
   const common = useMessages(settingsMessages);
-  const { code, symbol } = useCurrency();
+  const { code } = useCurrency();
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const problemsOf = (values: EmiValues) => emiPlanProblems(values, t);
   const { values, setValue, isLoaded, isLoadError, refetch } = useSettingsForm<EmiValues, EmiDocument>({
@@ -88,8 +88,7 @@ export function EmiPlansCard() {
               const idFor = (field: string) => `emi-${plan.id}-${field}`;
               return (
                 <li key={plan.id} className="grid gap-3 p-3 sm:grid-cols-12">
-                  <div className="space-y-1 sm:col-span-4">
-                    <Label htmlFor={idFor("provider")}>{t("provider")}</Label>
+                  <Field id={idFor("provider")} label={t("provider")} className="sm:col-span-4">
                     <Input
                       id={idFor("provider")}
                       maxLength={60}
@@ -98,19 +97,16 @@ export function EmiPlansCard() {
                       disabled={!canEdit}
                       onChange={(event) => update(plan.id, { provider: event.target.value })}
                     />
-                  </div>
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label htmlFor={idFor("months")}>{t("months")}</Label>
+                  </Field>
+                  <Field id={idFor("months")} label={t("months")} className="sm:col-span-2">
                     <NumberInput id={idFor("months")} integer value={plan.months} disabled={!canEdit} onValueChange={(months) => update(plan.id, { months: months ?? Number.NaN })} />
-                  </div>
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label htmlFor={idFor("fee")}>{t("fee")}</Label>
-                    <NumberInput id={idFor("fee")} value={plan.feePercentage} disabled={!canEdit} onValueChange={(fee) => update(plan.id, { feePercentage: fee ?? 0 })} />
-                  </div>
-                  <div className="space-y-1 sm:col-span-3">
-                    <Label htmlFor={idFor("min")}>{t("minAmount", { symbol })}</Label>
+                  </Field>
+                  <Field id={idFor("fee")} label={t("fee")} className="sm:col-span-2">
+                    <PercentInput id={idFor("fee")} value={plan.feePercentage} disabled={!canEdit} onValueChange={(fee) => update(plan.id, { feePercentage: fee ?? 0 })} />
+                  </Field>
+                  <Field id={idFor("min")} label={t("minAmount")} className="sm:col-span-3">
                     <MoneyInput id={idFor("min")} currencyCode={code} value={plan.minAmount} disabled={!canEdit} onValueChange={(minAmount) => update(plan.id, { minAmount: minAmount ?? 0 })} />
-                  </div>
+                  </Field>
                   <div className="flex items-end justify-end sm:col-span-1">
                     {canEdit ? (
                       <Button

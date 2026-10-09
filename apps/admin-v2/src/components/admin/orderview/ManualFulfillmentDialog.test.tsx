@@ -15,6 +15,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 vi.mock("~/hooks/use-order-action-permissions", () => ({
   useOrderActionPermissions: () => ({ canUpdateOrderCod: mocks.canUpdateCod }),
 }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ code: "BDT", symbol: "৳", priceIncrementMinor: 100 }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = orderDetailMessages.en;

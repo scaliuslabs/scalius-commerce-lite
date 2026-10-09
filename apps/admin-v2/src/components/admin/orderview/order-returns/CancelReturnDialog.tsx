@@ -9,13 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderErrorMessage, useCancelOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import { createReturnCommandKey } from "./shared";
+import { Field } from "~/components/ui/field";
 
 export function CancelReturnDialog({
   orderReturn,
@@ -53,10 +53,9 @@ export function CancelReturnDialog({
           <DialogDescription>{t("returns.cancelHelp")}</DialogDescription>
         </DialogHeader>
         {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
-        <div className="space-y-2">
-          <Label htmlFor={`cancel-return-notes-${orderReturn.id}`}>{t("returns.reason")}</Label>
+        <Field id={`cancel-return-notes-${orderReturn.id}`} label={t("returns.reason")}>
           <Textarea id={`cancel-return-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
-        </div>
+        </Field>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{t("returns.keep")}</Button>
           <Button type="button" variant="destructive" onClick={submit} loading={mutation.isPending}>

@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -38,6 +38,7 @@ import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { Field } from "~/components/ui/field";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -212,22 +213,17 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("title")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t(isArticle ? "titlePlaceholder_article" : "titlePlaceholder_page")} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field label={t("title")} error={fieldState.error?.message}>
+                    <Input placeholder={t(isArticle ? "titlePlaceholder_article" : "titlePlaceholder_page")} {...field} />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name="content"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("content")}</FormLabel>
+                render={({ field, fieldState }) => (
+                  <Field label={t("content")} error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value}
@@ -239,28 +235,22 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                     ) : (
                       <RichContent content={field.value} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
               {isArticle ? (
                 <FormField
                   control={form.control}
                   name="excerpt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("excerpt")}</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          rows={3}
-                          maxLength={500}
-                          value={field.value ?? ""}
-                          onChange={(event) => field.onChange(event.target.value || null)}
-                        />
-                      </FormControl>
-                      <FormDescription>{t("excerptHelp")}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                  render={({ field, fieldState }) => (
+                    <Field label={t("excerpt")} help={t("excerptHelp")} error={fieldState.error?.message}>
+                      <Textarea
+                        rows={3}
+                        maxLength={500}
+                        value={field.value ?? ""}
+                        onChange={(event) => field.onChange(event.target.value || null)}
+                      />
+                    </Field>
                   )}
                 />
               ) : null}
@@ -275,8 +265,8 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="featuredImage"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     <FormImageUploadField
                       value={field.value}
                       onChange={field.onChange}
@@ -284,8 +274,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                       changeTriggerLabel={t("changeImage")}
                       placeholder={t("noImage")}
                     />
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -334,51 +323,44 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
             <CardHeader>
               <CardTitle>{t("visibility")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="publicationMode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <SearchableSelect
-                        triggerRef={field.ref}
-                        onBlur={field.onBlur}
-                        value={field.value}
-                        disabled={!canPublish}
-                        onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
-                        ariaLabel={t("visibility")}
-                        triggerClassName="w-full"
-                        options={[{ value: "draft", label: t("draft") }, { value: "published", label: t("visible") }, { value: "scheduled", label: t("scheduled") }]}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {!canPublish
-                        ? t("publishPermission")
-                        : t(field.value === "published" ? "visibleHelp" : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field
+                    help={!canPublish
+                      ? t("publishPermission")
+                      : t(field.value === "published" ? "visibleHelp" : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
+                    error={fieldState.error?.message}
+                  >
+                    <SearchableSelect
+                      triggerRef={field.ref}
+                      onBlur={field.onBlur}
+                      value={field.value}
+                      disabled={!canPublish}
+                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                      ariaLabel={t("visibility")}
+                      triggerClassName="w-full"
+                      options={[{ value: "draft", label: t("draft") }, { value: "published", label: t("visible") }, { value: "scheduled", label: t("scheduled") }]}
+                    />
+                  </Field>
                 )}
               />
               {publicationMode === "scheduled" ? (
                 <FormField
                   control={form.control}
                   name="publishedAt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("publishAt")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="datetime-local"
-                          disabled={!canPublish}
-                          value={toDateTimeLocalValue(field.value)}
-                          min={toDateTimeLocalValue(new Date())}
-                          onChange={(event) => field.onChange(event.target.value ? new Date(event.target.value) : null)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  render={({ field, fieldState }) => (
+                    <Field label={t("publishAt")} error={fieldState.error?.message}>
+                      <Input
+                        type="datetime-local"
+                        disabled={!canPublish}
+                        value={toDateTimeLocalValue(field.value)}
+                        min={toDateTimeLocalValue(new Date())}
+                        onChange={(event) => field.onChange(event.target.value ? new Date(event.target.value) : null)}
+                      />
+                    </Field>
                   )}
                 />
               ) : null}
@@ -402,28 +384,19 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 <FormField
                   control={form.control}
                   name="author"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("author")}</FormLabel>
-                      <FormControl>
-                        <Input value={field.value ?? ""} onChange={(event) => field.onChange(event.target.value || null)} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  render={({ field, fieldState }) => (
+                    <Field label={t("author")} error={fieldState.error?.message}>
+                      <Input value={field.value ?? ""} onChange={(event) => field.onChange(event.target.value || null)} />
+                    </Field>
                   )}
                 />
                 <FormField
                   control={form.control}
                   name="tags"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("tags")}</FormLabel>
-                      <FormControl>
-                        <ArticleTagsInput value={field.value} onChange={field.onChange} />
-                      </FormControl>
-                      <FormDescription>{t("tagsHelp")}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                  render={({ field, fieldState }) => (
+                    <Field label={t("tags")} help={t("tagsHelp")} error={fieldState.error?.message}>
+                      <ArticleTagsInput value={field.value} onChange={field.onChange} />
+                    </Field>
                   )}
                 />
               </CardContent>
@@ -442,14 +415,11 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                     control={form.control}
                     name={name}
                     render={({ field }) => (
-                      <FormItem>
+                      <Field label={t(name)}>
                         <div className="flex items-center justify-between gap-3">
-                          <FormLabel>{t(name)}</FormLabel>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
                         </div>
-                      </FormItem>
+                      </Field>
                     )}
                   />
                 ),

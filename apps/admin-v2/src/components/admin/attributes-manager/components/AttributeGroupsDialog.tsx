@@ -12,7 +12,7 @@ import { ATTRIBUTE_GROUP_NAME_MAX_LENGTH } from "@scalius/shared/catalog-attribu
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
@@ -137,14 +137,13 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
           {canEdit ? (
             <form
               method="post"
-              className="space-y-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 add();
               }}
             >
-              <Label htmlFor="attribute-group-name">{t("groupName")}</Label>
-              <div className="flex gap-2">
+              <Field id="attribute-group-name" label={t("groupName")}>
+                <div className="flex gap-2">
                 <Input
                   id="attribute-group-name"
                   maxLength={ATTRIBUTE_GROUP_NAME_MAX_LENGTH}
@@ -155,7 +154,8 @@ export function AttributeGroupsDialog({ open, onClose, canEdit }: { open: boolea
                 <Button type="submit" variant="outline" disabled={!newName.trim()} loading={run.isPending && Boolean(newName.trim())}>
                   {t("addGroup")}
                 </Button>
-              </div>
+                </div>
+              </Field>
             </form>
           ) : null}
           <DialogFooter>

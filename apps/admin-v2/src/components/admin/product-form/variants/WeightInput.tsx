@@ -19,6 +19,7 @@ export const WeightInput = forwardRef<HTMLInputElement, WeightInputProps>(({ gra
     <NumberInput
       ref={ref}
       {...props}
+      suffix={weightUnit}
       value={grams === null || grams === undefined || Number.isNaN(grams) ? grams : gramsToWeightUnit(grams, weightUnit)}
       // Text that isn't a number stays NaN, so the form still refuses it.
       onValueChange={(value) => onGramsChange(value !== null && Number.isNaN(value) ? Number.NaN : weightUnitToGrams(value, weightUnit))}

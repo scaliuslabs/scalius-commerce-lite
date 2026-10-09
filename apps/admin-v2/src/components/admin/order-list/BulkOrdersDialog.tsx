@@ -13,7 +13,6 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
@@ -27,6 +26,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
 import { planOrderBulkAction, type OrderBulkAction, type OrderBulkOutcome } from "./order-bulk-actions";
+import { Field } from "~/components/ui/field";
 
 export type BulkRunExtras = { courierName?: string; note?: string; providerId?: string };
 
@@ -59,8 +59,7 @@ function CourierPicker({ value, onChange, disabled }: { value: string; onChange:
   const readiness = selected ? resolveProviderReadiness(selected) : null;
   const ready = providers.filter((provider) => resolveProviderReadiness(provider).canCreateShipment);
   return (
-    <div className="space-y-2">
-      <Label htmlFor="bulk-ship-courier">{t("courier")}</Label>
+    <Field id="bulk-ship-courier" label={t("courier")}>
       <SearchableSelect
         id="bulk-ship-courier"
         value={value}
@@ -88,7 +87,7 @@ function CourierPicker({ value, onChange, disabled }: { value: string; onChange:
       {readiness && !readiness.canCreateShipment ? (
         <p className="text-body text-destructive">{getProviderReadinessMessage(readiness)}</p>
       ) : null}
-    </div>
+    </Field>
   );
 }
 
@@ -179,8 +178,7 @@ export function BulkOrdersDialog({
 
         {current === "send" ? (
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="bulk-send-courier">{t("courierNameOptional")}</Label>
+            <Field id="bulk-send-courier" label={t("courierNameOptional")}>
               <Input
                 id="bulk-send-courier"
                 value={courierName}
@@ -188,9 +186,8 @@ export function BulkOrdersDialog({
                 disabled={running}
                 onChange={(event) => setCourierName(event.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bulk-send-note">{t("noteOptional")}</Label>
+            </Field>
+            <Field id="bulk-send-note" label={t("noteOptional")}>
               <Textarea
                 id="bulk-send-note"
                 value={sendNote}
@@ -198,7 +195,7 @@ export function BulkOrdersDialog({
                 disabled={running}
                 onChange={(event) => setSendNote(event.target.value)}
               />
-            </div>
+            </Field>
           </div>
         ) : null}
         {current === "ship" && action !== null ? (

@@ -5,6 +5,7 @@ import { SaveErrorBanner, useSaveBar, type SaveBarEntry } from "~/components/adm
 import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { Page } from "~/components/admin/resource/Page";
 
 export { SettingsCard as SectionCard, SettingsField as Field } from "~/components/admin/settings/SettingsPage";
 
@@ -22,7 +23,7 @@ export function OnlineStorePage({
   children: ReactNode;
 }) {
   return (
-    <div className="@container mx-auto w-full max-w-3xl space-y-4 pb-10">
+    <Page width="settings" className="@container space-y-4 pb-10">
       <div className="flex min-h-11 flex-wrap items-center gap-2 lg:min-h-9">
         {back ? (
           <Link
@@ -38,7 +39,7 @@ export function OnlineStorePage({
       </div>
       <SaveErrorBanner />
       {children}
-    </div>
+    </Page>
   );
 }
 

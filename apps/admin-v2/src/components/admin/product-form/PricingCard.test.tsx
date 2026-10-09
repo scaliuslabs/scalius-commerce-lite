@@ -80,7 +80,7 @@ describe("PricingCard", () => {
 
   const label = (key: "costPerItem" | "profit" | "margin") => translate(productMessages, key);
   const valueOf = (key: "profit" | "margin") =>
-    Array.from(host.querySelectorAll("dt")).find((term) => term.textContent === label(key))?.nextElementSibling?.textContent;
+    Array.from(host.querySelectorAll('[data-slot="field-label"]')).find((term) => term.textContent === label(key))?.nextElementSibling?.textContent;
   const costInput = () => Array.from(host.querySelectorAll("label"))
     .find((element) => element.textContent === label("costPerItem"))
     ?.getAttribute("for");

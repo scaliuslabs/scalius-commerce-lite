@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
 import { useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { bulkUpdateCustomerTags } from "~/lib/api-mutations/customers";
 import { queryKeys } from "~/lib/query-keys";
@@ -18,6 +17,7 @@ import { customerBulkMessages } from "~/i18n/customer-bulk";
 import { customersMessages } from "~/i18n/customers";
 import { resourceMessages } from "~/i18n/resource";
 import { TagInput, type TagInputHandle } from "./TagInput";
+import { Field } from "~/components/ui/field";
 
 type Mode = "add" | "remove";
 
@@ -98,8 +98,7 @@ export function CustomerBulkActions({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{b("bulkTagsHelp", { count: CUSTOMER_TAGS_PER_REQUEST_MAX })}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="customer-bulk-tags">{t("tags")}</Label>
+          <Field id="customer-bulk-tags" label={t("tags")} help={t("tagsHelp")}>
             <TagInput
               id="customer-bulk-tags"
               value={tags}
@@ -110,8 +109,7 @@ export function CustomerBulkActions({
               handle={input}
               aria-describedby="customer-bulk-tags-help"
             />
-            <p id="customer-bulk-tags-help" className="text-body text-muted-foreground">{t("tagsHelp")}</p>
-          </div>
+          </Field>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={change.isPending} onClick={close}>{r("cancel")}</Button>
             <Button type="button" disabled={tags.length === 0 && !pending} loading={change.isPending} onClick={apply}>

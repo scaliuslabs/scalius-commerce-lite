@@ -55,6 +55,7 @@ import { countryName } from "~/lib/country-name";
 import { formatAddressLines } from "~/lib/location-presentation";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
+import { Field } from "~/components/ui/field";
 
 type CustomerAddress = CustomerDto["addresses"][number];
 
@@ -268,8 +269,7 @@ function AddressDialog({ customerId, editing, isOnlyAddress, onOpenChange, onSav
         >
           {failure ? <p role="alert" className="text-body text-destructive">{failure}</p> : null}
           <AddressFields idPrefix="customer-address" value={draft} onChange={setDraft} errors={errors} showRecipient disabled={pending} />
-          <div className="grid gap-2">
-            <Label htmlFor="customer-address-phone">{t("addressPhone")}</Label>
+          <Field id="customer-address-phone" label={t("addressPhone")}>
             <AdminPhoneInput
               id="customer-address-phone"
               value={phone}
@@ -281,7 +281,7 @@ function AddressDialog({ customerId, editing, isOnlyAddress, onOpenChange, onSav
             {phoneError || errors.phone ? (
               <p id="customer-address-phone-error" className="text-body text-destructive">{phoneError ?? errors.phone}</p>
             ) : null}
-          </div>
+          </Field>
           {!isOnlyAddress && !current?.isDefault ? (
             <div className="flex items-center gap-2">
               <Checkbox id="customer-address-default" checked={makeDefault} disabled={pending}

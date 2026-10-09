@@ -32,7 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
@@ -40,6 +39,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
+import { Field } from "~/components/ui/field";
 
 const REJECT_TEXT: Record<LicenceKeyRejectReason, "rejectTooLong" | "rejectInvalid" | "rejectDuplicate"> = {
   too_long: "rejectTooLong",
@@ -120,8 +120,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
           <DialogDescription>{t("importHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="licence-keys-text">{t("keysField")}</Label>
+          <Field id="licence-keys-text" label={t("keysField")}>
             <Textarea
               id="licence-keys-text"
               rows={8}
@@ -131,7 +130,7 @@ export function KeyImportDialog({ productId, target, onOpenChange, onChanged }: 
               aria-describedby="licence-keys-summary"
               onChange={(event) => changeText(event.target.value)}
             />
-          </div>
+          </Field>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p id="licence-keys-summary" className="text-body text-muted-foreground tabular-nums">
               {t("willImport", { count: parsed.keys.length })}

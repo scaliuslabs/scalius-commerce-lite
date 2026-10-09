@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { NumberInput } from "~/components/ui/number-input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -19,6 +18,7 @@ import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/or
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { Field } from "~/components/ui/field";
 
 /** Approve or reject each requested unit. The decision never changes stock. */
 export function ApproveReturnDialog({
@@ -97,10 +97,9 @@ export function ApproveReturnDialog({
               );
             })}
           </ul>
-          <div className="space-y-2">
-            <Label htmlFor={`approval-notes-${orderReturn.id}`}>{t("returns.notes")}</Label>
+          <Field id={`approval-notes-${orderReturn.id}`} label={t("returns.notes")}>
             <Textarea id={`approval-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
-          </div>
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>

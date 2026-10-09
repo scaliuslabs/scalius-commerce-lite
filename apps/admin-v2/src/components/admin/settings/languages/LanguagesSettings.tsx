@@ -49,6 +49,7 @@ import { SettingsCard, SettingsCardLoading } from "../SettingsPage";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { AppProviderStatus } from "../AppProviderStatus";
 import { appProvidersQuery } from "~/lib/api-query-options/settings-screens";
+import { Field } from "~/components/ui/field";
 
 export function LanguagesSettings() {
   const t = useMessages(translationsMessages);
@@ -260,8 +261,7 @@ function AddLanguageDialog({ open, onOpenChange, taken }: { open: boolean; onOpe
           <DialogDescription>{t("addDescription")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="add-language">{t("language")}</Label>
+          <Field id="add-language" label={t("language")}>
             <SearchableSelect
               id="add-language"
               value={locale}
@@ -271,7 +271,7 @@ function AddLanguageDialog({ open, onOpenChange, taken }: { open: boolean; onOpe
               emptyMessage={t("noLanguageFound")}
               onValueChange={(value) => setLocale(value)}
             />
-          </div>
+          </Field>
           <div className="flex items-center gap-2">
             <Checkbox id="add-language-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
             <Label htmlFor="add-language-publish">{t("publishNow")}</Label>

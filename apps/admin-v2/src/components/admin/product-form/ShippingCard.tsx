@@ -1,6 +1,6 @@
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
 import { useMessages } from "~/i18n";
@@ -9,6 +9,7 @@ import { productMessages } from "~/i18n/products";
 import type { ProductFulfilmentMode } from "./fulfilment-mode";
 import { useProductKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
+import { Field } from "~/components/ui/field";
 
 const HELP = {
   physical: "fulfilmentPhysicalHelp",
@@ -74,12 +75,9 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
               control={form.control}
               name="freeDelivery"
               render={({ field }) => (
-                <FormItem className="flex items-center justify-between">
-                  <FormLabel>{t("freeDelivery")}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
+                <Field label={t("freeDelivery")} className="flex items-center justify-between">
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </Field>
               )}
             />
           </div>

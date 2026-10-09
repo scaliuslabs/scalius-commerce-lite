@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Progress } from "~/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { Textarea } from "~/components/ui/textarea";
@@ -45,9 +44,12 @@ import { printPurchaseOrder } from "./PurchaseOrderPrint";
 import { formatDay, formatMoment, lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-status";
-import { CostInput, Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
+import { CostInput } from "~/components/admin/shared/MoneyInput";
+import { Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SupplierPicker, type SupplierChoice } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
+import { Field, FieldRow } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 type DialogName = "details" | "cancel" | null;
 
@@ -131,11 +133,11 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
   ) : null;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <PageHeader
         backTo="/admin/inventory/purchase-orders"
         title={order.displayNumber}
-        badge={<PurchaseOrderStatusBadge status={order.status} />}
+        status={<PurchaseOrderStatusBadge status={order.status} />}
         actions={(
           <>
             {/* The printout and the CSV are the supplier's copy, with every cost. */}
@@ -301,7 +303,7 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
         isLoading={status.isPending}
         onConfirm={cancel}
       />
-    </div>
+    </Page>
   );
 }
 
@@ -498,17 +500,14 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
               });
             }}
           />
-          <div className="space-y-2">
-            <Label htmlFor="po-details-supplier">{t("supplier")}</Label>
+          <Field id="po-details-supplier" label={t("supplier")}>
             <SupplierPicker id="po-details-supplier" value={supplier} onChange={setSupplier} canAdd />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="po-details-expected">{t("expectedArrival")}</Label>
+          </Field>
+          <FieldRow>
+            <Field id="po-details-expected" label={t("expectedArrival")}>
               <DateInput id="po-details-expected" value={expectedOn} onValueChange={setExpectedOn} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="po-details-reference">{t("reference")}</Label>
+            </Field>
+            <Field id="po-details-reference" label={t("reference")}>
               <Input
                 id="po-details-reference"
                 maxLength={100}
@@ -516,12 +515,11 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
                 value={reference}
                 onChange={(event) => setReference(event.target.value)}
               />
-            </div>
-          </div>
+            </Field>
+          </FieldRow>
           <div className="grid gap-4 sm:grid-cols-3">
             {(["shipping", "otherCosts", "tax"] as const).map((key) => (
-              <div key={key} className="space-y-2">
-                <Label htmlFor={`po-details-${key}`}>{t(key)}</Label>
+              <Field key={key} id={`po-details-${key}`} label={t(key)}>
                 <CostInput
                   id={`po-details-${key}`}
                   value={costs[key]}
@@ -529,14 +527,13 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
                   aria-invalid={extraCostValid(costs[key], decimals) ? undefined : true}
                   onValueChange={(value) => setCosts((current) => ({ ...current, [key]: value }))}
                 />
-              </div>
+              </Field>
             ))}
           </div>
           {!costsValid ? <p className="text-body text-destructive">{t("fixCosts")}</p> : null}
-          <div className="space-y-2">
-            <Label htmlFor="po-details-notes">{t("notes")}</Label>
+          <Field id="po-details-notes" label={t("notes")}>
             <Textarea id="po-details-notes" rows={3} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
-          </div>
+          </Field>
         </form>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={save.isPending} onClick={() => onOpenChange(false)}>{r("cancel")}</Button>

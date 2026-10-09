@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import {
   CUSTOMER_SEGMENT_DAYS_MAX,
@@ -9,7 +8,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
@@ -28,18 +26,9 @@ import {
   type ConditionProblem,
 } from "./segment-draft";
 import { DateInput } from "~/components/ui/date-input";
+import { Field, FieldRow } from "~/components/ui/field";
 
 const FULL = "w-full";
-
-/** A labelled control inside a filter row. */
-function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-    </div>
-  );
-}
 
 /**
  * One segment filter: its name, the controls for its rule and value(s), a
@@ -90,16 +79,16 @@ export function SegmentConditionRow({
           };
           return (
             <Field id={id} label={t(bound === "min" ? "atLeast" : "atMost")}>
-              {money ? <MoneyInput {...props} currencyCode={code} prefix={symbol} /> : <NumberInput {...props} integer />}
+              {money ? <MoneyInput {...props} currencyCode={code} /> : <NumberInput {...props} integer />}
             </Field>
           );
         };
         return (
           <>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <FieldRow>
               {input("min")}
               {input("max")}
-            </div>
+            </FieldRow>
             <p className="text-body text-muted-foreground">{t("rangeHelp")}</p>
           </>
         );
@@ -110,7 +99,7 @@ export function SegmentConditionRow({
         const relative = condition.op === "within_last" || condition.op === "not_within_last";
         return (
           <>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <FieldRow>
               <Field id={`${key}-op`} label={t("dateOp")}>
                 <SearchableSelect
                   id={`${key}-op`}
@@ -143,7 +132,7 @@ export function SegmentConditionRow({
                   />
                 </Field>
               )}
-            </div>
+            </FieldRow>
             {condition.field !== "customer_since" ? <p className="text-body text-muted-foreground">{t("neverOrderedNote")}</p> : null}
           </>
         );
@@ -202,7 +191,7 @@ export function SegmentConditionRow({
         );
       case "marketing_consent":
         return (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <FieldRow>
             <Field id={`${key}-channel`} label={t("consentChannel")}>
               <SearchableSelect
                 id={`${key}-channel`}
@@ -223,7 +212,7 @@ export function SegmentConditionRow({
                 triggerClassName={FULL}
               />
             </Field>
-          </div>
+          </FieldRow>
         );
       case "customer_type":
         return (
@@ -250,7 +239,7 @@ export function SegmentConditionRow({
       case "custom_field": {
         const fields = customerFields ?? [];
         return (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <FieldRow columns={3}>
             <Field id={`${key}-field`} label={t("customField")}>
               <SearchableSelect
                 id={`${key}-field`}
@@ -288,7 +277,7 @@ export function SegmentConditionRow({
                 />
               </Field>
             ) : null}
-          </div>
+          </FieldRow>
         );
       }
     }

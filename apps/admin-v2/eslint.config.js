@@ -45,6 +45,31 @@ const designRules = [
   },
 ];
 
+// Screens use Field, FieldSet and ChoiceField from components/ui/field (F1).
+const fieldRules = [
+  {
+    selector: ":matches(FunctionDeclaration[id.name=/Field$/], VariableDeclarator[id.name=/Field$/]):has(JSXOpeningElement[name.name='Label']):has(JSXOpeningElement[name.name=/^(Input|Textarea|SearchableSelect|NumberInput|MoneyInput|PercentInput|CostInput|DateInput)$/])",
+    message: "A local field copy: use Field, FieldSet or ChoiceField from components/ui/field (DESIGN.md F1).",
+  },
+  {
+    // A Label right inside an element whose className (one of its first four attributes) uses space-y.
+    selector: `:matches(${[0, 1, 2, 3].map((index) => `JSXElement[openingElement.attributes.${index}.value.value=/(^|\\s)space-y-/]`).join(", ")}) > JSXElement[openingElement.name.name='Label']`,
+    message: "A label stacked with space-y: use Field from components/ui/field (DESIGN.md F1, S2).",
+  },
+  {
+    selector: "JSXElement[openingElement.name.name='Label'] ~ JSXElement[openingElement.name.name=/^(Input|Textarea|SearchableSelect|NumberInput|MoneyInput|PercentInput|CostInput|DateInput)$/]",
+    message: "A bare Label beside a control: use Field from components/ui/field (DESIGN.md F1).",
+  },
+];
+
+// Icon-only buttons are named (C7): an icon size needs aria-label (or asChild with a named child).
+const buttonRules = [
+  {
+    selector: "JSXOpeningElement[name.name='Button']:has(JSXAttribute[name.name='size'] > Literal[value=/^icon/]):not(:has(JSXAttribute[name.name=/^(aria-label|aria-labelledby|asChild)$/]))",
+    message: "An icon-only Button needs an aria-label naming its action (DESIGN.md C7).",
+  },
+];
+
 // All dashboard choices use the viewport-aware SearchableSelect; screens toast
 // through ~/lib/toast, so sonner loads after a page's first render.
 const restrictedImports = (extraPaths = []) => ({
@@ -118,6 +143,14 @@ export default [
     files: ["src/components/ui/**/*.tsx"],
     ignores: ["src/**/*.test.tsx"],
     rules: designSystem("error"),
+  },
+  {
+    // One Field family (DESIGN.md F1): screens never hand-build a label stack.
+    files: ["src/**/*.tsx"],
+    ignores: ["src/**/*.test.tsx", "src/components/ui/**"],
+    rules: {
+      "no-restricted-syntax": ["error", ...designRules, ...fieldRules, ...buttonRules],
+    },
   },
   {
     files: ["src/**/*.{ts,tsx}"],

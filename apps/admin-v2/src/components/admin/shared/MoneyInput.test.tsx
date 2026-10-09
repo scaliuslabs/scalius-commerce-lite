@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const store = vi.hoisted(() => ({ code: "BDT", priceIncrementMinor: undefined as number | undefined }));
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ code: store.code, priceIncrementMinor: store.priceIncrementMinor }) }));
 
-import { Form, FormControl, FormField, FormItem, FormMessage } from "~/components/ui/form";
+import { Field } from "~/components/ui/field";
+import { Form, FormField } from "~/components/ui/form";
 import { translate } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
 import { useFormWithRefusals } from "~/lib/input-refusals";
@@ -71,13 +72,10 @@ describe("MoneyInput", () => {
                 key={name}
                 control={form.control}
                 name={name}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                       <MoneyInput aria-label={name} name={field.name} currencyCode={store.code} value={field.value} onValueChange={field.onChange} onBlur={field.onBlur} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             ))}

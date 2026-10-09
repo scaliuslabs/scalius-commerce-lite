@@ -183,7 +183,6 @@ function ItemInput(props: ItemProps) {
         <MoneyInput
           {...common}
           currencyCode={code}
-          prefix={symbol}
           value={props.value.trim() === "" || Number.isNaN(Number(props.value)) ? null : Number(props.value)}
           onValueChange={(value) => props.onChange(value === null ? "" : String(value))}
         />

@@ -205,7 +205,8 @@ describe("CategoryForm", () => {
   it("shows the save bar for edits and discards them back to the saved category", async () => {
     await render({ defaultValues: saved, isEdit: true });
     expect(document.querySelector("[data-save-bar]")).toBeNull();
-    expect(button("Save").disabled).toBe(true);
+    // Save lives only in the save bar (P4).
+    expect(queryButton("Save")).toBeUndefined();
 
     type(byLabel("Name"), "Panjabi and kurta");
     await settle();

@@ -97,7 +97,7 @@ afterEach(async () => {
 describe("editor presence", () => {
   it("reserves the avatar box, then shows named avatars without moving it", async () => {
     await act(async () => root.render(<Editor />));
-    const slot = host.querySelector("[data-slot=presence]")!;
+    const slot = host.querySelector("[data-slot=presence-avatars]")!;
     expect(slot).not.toBeNull();
     expect(slot.className).toContain("w-26");
     expect(slot.children).toHaveLength(0);

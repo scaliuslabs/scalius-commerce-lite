@@ -54,7 +54,7 @@ export function MetaobjectEntriesList({ definitionId }: { definitionId: string }
       <PageHeader
         backTo="/admin/metaobjects"
         title={definition?.name ?? t("pageTitle")}
-        badge={appOwned ? <Badge variant="info">{t("managedByAppName", { app: appName })}</Badge> : undefined}
+        status={appOwned ? <Badge variant="info">{t("managedByAppName", { app: appName })}</Badge> : undefined}
         actions={definition ? <>{typeAction}{total > 0 ? add : null}</> : null}
       />
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{definition?.description || t("entriesHelp")}</p>

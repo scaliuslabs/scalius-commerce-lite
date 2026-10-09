@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "~/components/ui/form";
+import { Form, FormField } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
 import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "~/components/admin/address/AddressFields";
@@ -35,6 +35,7 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useUpdateOrderDetails } from "~/lib/api-mutations/orders";
 import type { Order } from "./types";
+import { Field } from "~/components/ui/field";
 
 function isPhone(value: string): boolean {
   try {
@@ -151,36 +152,24 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
             <FormField
               control={form.control}
               name="customerName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("details.name")}</FormLabel>
-                  <FormControl><Input {...field} autoComplete="name" /></FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field label={t("details.name")} error={fieldState.error?.message}><Input {...field} autoComplete="name" /></Field>
               )}
             />
             <FormField
               control={form.control}
               name="customerPhone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("details.phone")}</FormLabel>
-                  <FormControl>
-                    <AdminPhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} required />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field label={t("details.phone")} error={fieldState.error?.message}>
+                  <AdminPhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} required />
+                </Field>
               )}
             />
             <FormField
               control={form.control}
               name="customerEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("details.email")}</FormLabel>
-                  <FormControl><Input {...field} type="email" autoComplete="email" /></FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field label={t("details.email")} error={fieldState.error?.message}><Input {...field} type="email" autoComplete="email" /></Field>
               )}
             />
             {ships ? (

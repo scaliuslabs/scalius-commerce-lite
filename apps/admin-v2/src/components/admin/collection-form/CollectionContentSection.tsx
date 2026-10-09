@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent } from "~/components/ui/card";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "~/components/ui/form";
+import { FormField } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { RichContent } from "~/components/ui/rich-content";
@@ -9,6 +9,7 @@ import { useMessages } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
 import type { CollectionFormInput, CollectionFormValues } from "./types";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Field } from "~/components/ui/field";
 
 interface CollectionContentSectionProps {
   form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
@@ -30,14 +31,10 @@ export function CollectionContentSection({ form, readOnly = false }: CollectionC
         <FormField
           control={form.control}
           name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("title")}</FormLabel>
-              <FormControl>
-                <Input placeholder={t("titlePlaceholder")} maxLength={100} required {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          render={({ field, fieldState }) => (
+            <Field label={t("title")} error={fieldState.error?.message}>
+              <Input placeholder={t("titlePlaceholder")} maxLength={100} required {...field} />
+            </Field>
           )}
         />
         <Tabs defaultValue="description">
@@ -56,23 +53,20 @@ export function CollectionContentSection({ form, readOnly = false }: CollectionC
               <FormField
                 control={form.control}
                 name={editor.value}
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     {readOnly ? (
                       <RichContent content={field.value || ""} />
                     ) : (
-                      <FormControl>
-                        <DeferredTiptapEditor
-                          content={field.value || ""}
-                          onChange={(html) => field.onChange(richTextOrNull(html))}
-                          placeholder={editor.placeholder}
-                          ariaLabel={`${t("description")}: ${editor.tab}`}
-                          compact
-                        />
-                      </FormControl>
+                      <DeferredTiptapEditor
+                        content={field.value || ""}
+                        onChange={(html) => field.onChange(richTextOrNull(html))}
+                        placeholder={editor.placeholder}
+                        ariaLabel={`${t("description")}: ${editor.tab}`}
+                        compact
+                      />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </TabsContent>

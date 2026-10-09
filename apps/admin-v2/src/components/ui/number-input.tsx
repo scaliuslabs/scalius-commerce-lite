@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Input } from "./input";
+import { cn } from "@scalius/shared/utils";
+import { Input, type InputProps } from "./input";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 
 /**
@@ -19,7 +20,7 @@ function sameNumber(a: number | null, b: number | null): boolean {
   return a === b || (a !== null && b !== null && Number.isNaN(a) && Number.isNaN(b));
 }
 
-type NumberInputProps = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" | "defaultValue"> & {
+type NumberInputProps = Omit<InputProps, "value" | "onChange" | "type" | "defaultValue"> & {
   value: number | null | undefined;
   /** Called only when the number changes: `null` for empty, `NaN` for text that isn't a number. */
   onValueChange: (value: number | null) => void;
@@ -57,7 +58,7 @@ function understood(text: string, wholeUnitsMessage: string | undefined): number
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, onFocus, onMouseUp, ...props }, ref) => {
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, onFocus, onMouseUp, className, ...props }, ref) => {
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
@@ -69,6 +70,9 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         inputMode={integer || wholeUnitsMessage ? "numeric" : "decimal"}
         autoComplete="off"
         {...props}
+        // Digits of one width, so amounts line up (F4).
+        // eslint-disable-next-line shadcn/no-restyle -- numbers are tabular in every number field
+        className={cn("tabular-nums", className)}
         value={text}
         // Typing replaces what is there ("0" then "25" is 25, never "025"); the mouse up that
         // ends the click must not clear the selection (Safari does).
@@ -112,3 +116,9 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
   },
 );
 NumberInput.displayName = "NumberInput";
+
+/** A percentage: a number with "%" inside the field (F3), never "(%)" in the label. */
+export const PercentInput = React.forwardRef<HTMLInputElement, Omit<NumberInputProps, "prefix" | "suffix">>((props, ref) => (
+  <NumberInput ref={ref} {...props} suffix="%" />
+));
+PercentInput.displayName = "PercentInput";

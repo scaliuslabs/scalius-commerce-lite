@@ -13,7 +13,6 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -22,6 +21,7 @@ import { priceListMessages, type PriceListMessageKey } from "~/i18n/price-lists"
 import { getServerFnError } from "~/lib/api-helpers";
 import { priceListChoicesQueryOptions, useCreatePriceList } from "~/lib/api-query-options/price-lists";
 import { KIND_HELP, KIND_LABEL, PRICE_LIST_KINDS, type PriceListKind } from "./price-list-form";
+import { Field } from "~/components/ui/field";
 
 type Problems = Partial<Record<"name" | "market" | "segment", PriceListMessageKey>>;
 
@@ -116,8 +116,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
           ) : (
             <form id="price-list-create-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
               {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
-              <div className="space-y-1.5">
-                <Label htmlFor="price-list-create-name">{t("name")}</Label>
+              <Field id="price-list-create-name" label={t("name")}>
                 <Input
                   id="price-list-create-name"
                   value={name}
@@ -131,7 +130,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                   }}
                 />
                 {note("name", t("nameHelp"))}
-              </div>
+              </Field>
               <fieldset className="space-y-1">
                 <legend className="mb-1 text-body font-medium">{t("type")}</legend>
                 <RadioGroup value={kind} onValueChange={(value) => setKind(value as PriceListKind)}>
@@ -147,8 +146,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                 </RadioGroup>
               </fieldset>
               {needsMarket ? null : (
-              <div className="space-y-1.5">
-                <Label htmlFor="price-list-create-market">{t("market")}</Label>
+              <Field id="price-list-create-market" label={t("market")}>
                 <SearchableSelect
                   id="price-list-create-market"
                   value={chosenMarket}
@@ -163,11 +161,10 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                   }}
                 />
                 {note("market", kind === "segment" ? undefined : t(markets.length === 0 ? "noOtherMarkets" : "marketPrimaryNote"))}
-              </div>
+              </Field>
               )}
               {kind === "segment" ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="price-list-create-segment">{t("segment")}</Label>
+                <Field id="price-list-create-segment" label={t("segment")}>
                   <SearchableSelect
                     id="price-list-create-segment"
                     value={segmentId}
@@ -182,7 +179,7 @@ export function CreatePriceListDialog({ open, onOpenChange, marketId: fixedMarke
                     }}
                   />
                   {note("segment", segments.length === 0 ? t("segmentNone") : undefined)}
-                </div>
+                </Field>
               ) : null}
             </form>
           )}

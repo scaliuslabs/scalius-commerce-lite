@@ -7,7 +7,7 @@ import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
 import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -26,6 +26,7 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { Category, ProductFormValues } from "./types";
+import { Field } from "~/components/ui/field";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
@@ -53,8 +54,7 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
           control={form.control}
           name="categoryId"
           render={({ field, fieldState }) => (
-            <FormItem>
-              <FormLabel>{t("category")}</FormLabel>
+            <Field label={t("category")} error={fieldState.error?.message}>
               <CategoryCombobox
                 categories={availableCategories}
                 selectedId={field.value}
@@ -65,16 +65,14 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
                   form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
                 }}
               />
-              <FormMessage />
-            </FormItem>
+            </Field>
           )}
         />
         <FormField
           control={form.control}
           name="brandId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel htmlFor="product-brand">{t("brand")}</FormLabel>
+          render={({ field, fieldState }) => (
+            <Field label={t("brand")} error={fieldState.error?.message}>
               <Suspense fallback={<Skeleton className="h-11 w-full sm:h-9" />}>
                 <BrandPicker
                   id="product-brand"
@@ -86,8 +84,7 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
                   }}
                 />
               </Suspense>
-              <FormMessage />
-            </FormItem>
+            </Field>
           )}
         />
       </CardContent>

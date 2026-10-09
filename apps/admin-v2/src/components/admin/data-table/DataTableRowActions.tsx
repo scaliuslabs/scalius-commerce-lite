@@ -96,12 +96,12 @@ export const DataTableRowActions = memo(function DataTableRowActions({
       data-state={open ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={open}
+      aria-label={menuLabel ?? t("actions")}
       disabled={isLoading}
       ref={triggerRef}
       onClick={isMenuRequested ? undefined : requestMenuOpen}
       onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
     >
-      <span className="sr-only">{menuLabel ?? t("actions")}</span>
       <MoreHorizontal className="h-4 w-4" />
     </Button>
   );

@@ -46,6 +46,7 @@ import {
   replaceAt,
   type MediaPreviews,
 } from "./resource-fields";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 type Values = Record<string, unknown>;
 
@@ -135,18 +136,14 @@ const KEY_WIDGETS: Readonly<Record<string, SettingWidget>> = {
   link: LinkWidget,
   href: LinkWidget,
   categoryId: ({ id, label, help, value, onChange, error }) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
       <CategorySelect id={id} value={String(value ?? "")} invalid={Boolean(error())} onChange={onChange} />
-      <Note id={id} help={help} error={error()} />
-    </div>
+    </Field>
   ),
   collectionId: ({ id, label, help, value, onChange, error }) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
       <CollectionSelect id={id} value={String(value ?? "")} invalid={Boolean(error())} onChange={onChange} />
-      <Note id={id} help={help} error={error()} />
-    </div>
+    </Field>
   ),
   categoryIds: ({ id, label, value, spec, parent, onChange, error }) => (
     <CategoryPicks
@@ -171,11 +168,9 @@ const KEY_WIDGETS: Readonly<Record<string, SettingWidget>> = {
   ),
   definitionId: MetaobjectDefinitionWidget,
   promotionId: ({ id, label, help, value, onChange, error }) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
       <PromotionSelect id={id} value={(value as string | null | undefined) ?? null} onChange={onChange} />
-      <Note id={id} help={help} error={error()} />
-    </div>
+    </Field>
   ),
 };
 
@@ -226,8 +221,7 @@ function TextSetting({ id, label, help, error, value, spec, onChange }: {
   // An optional text is absent, never an empty string.
   const change = (next: string) => onChange(next === "" && spec.optional ? undefined : next === "" && spec.nullable ? null : next);
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error} noteId={`${id}-note`}>
       {long ? (
         <Textarea
           id={id}
@@ -240,8 +234,7 @@ function TextSetting({ id, label, help, error, value, spec, onChange }: {
       ) : (
         <Input id={id} value={text} maxLength={spec.max ?? undefined} onChange={(event) => change(event.target.value)} {...described(id, help, error)} />
       )}
-      <Note id={id} help={help} error={error} />
-    </div>
+    </Field>
   );
 }
 
@@ -264,6 +257,7 @@ function NumberSetting({ id, label, help, error, value, spec, onChange }: {
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor={id}>{label}</Label>
           {/* The exact value can be typed too; the slider shows its range. */}
+          {/* eslint-disable-next-line no-restricted-syntax -- a range: its typed value sits on the label line, as in Shopify's theme editor */}
           <Input
             type="number"
             inputMode="numeric"
@@ -299,8 +293,7 @@ function NumberSetting({ id, label, help, error, value, spec, onChange }: {
     );
   }
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error} noteId={`${id}-note`}>
       <div className="flex items-center gap-1">
         <Button type="button" variant="outline" size="icon" aria-label={t("form.decrease", { name: label })} disabled={number <= spec.min} onClick={() => onChange(clamp(number - 1))}>
           <Minus aria-hidden="true" />
@@ -319,8 +312,7 @@ function NumberSetting({ id, label, help, error, value, spec, onChange }: {
           <Plus aria-hidden="true" />
         </Button>
       </div>
-      <Note id={id} help={help} error={error} />
-    </div>
+    </Field>
   );
 }
 
@@ -332,15 +324,12 @@ function SwitchSetting({ id, label, help, value, onChange }: {
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <Label htmlFor={id}>{label}</Label>
-        {help ? <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p> : null}
-      </div>
-      <span className="flex h-lh items-center">
-        <Switch id={id} checked={value} aria-describedby={help ? `${id}-note` : undefined} onCheckedChange={onChange} />
-      </span>
-    </div>
+    <ChoiceField
+      id={id}
+      label={label}
+      help={help}
+      control={<Switch id={id} checked={value} aria-describedby={help ? `${id}-help` : undefined} onCheckedChange={onChange} />}
+    />
   );
 }
 
@@ -363,8 +352,7 @@ function ChoiceSetting({ id, label, help, error, path, value, spec, onChange }: 
   // An optional choice without an unset option shows its first value (its default).
   const shown = value === undefined || value === null ? (unset ? "" : String(spec.values[0])) : String(value);
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label} help={help} error={error} noteId={`${id}-note`}>
       <SearchableSelect
         id={id}
         value={shown}
@@ -376,8 +364,7 @@ function ChoiceSetting({ id, label, help, error, path, value, spec, onChange }: 
         triggerClassName="w-full"
         aria-invalid={error ? true : undefined}
       />
-      <Note id={id} help={help} error={error} />
-    </div>
+    </Field>
   );
 }
 
@@ -639,8 +626,7 @@ function VariantFields({ id, label, help, spec, path, dataPath, value, onChange 
   const rest: ObjectSpec = { ...option.spec, fields: option.spec.fields.filter((field) => field.key !== spec.key) };
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor={id}>{name}</Label>
+      <Field id={id} label={name} help={note ? note : undefined}>
         <SearchableSelect
           id={id}
           value={option.value}
@@ -650,8 +636,7 @@ function VariantFields({ id, label, help, spec, path, dataPath, value, onChange 
           }}
           triggerClassName="w-full"
         />
-        {note ? <p className="text-body text-muted-foreground">{note}</p> : null}
-      </div>
+      </Field>
       {rest.fields.length > 0 ? (
         <ObjectFields spec={rest} path={path} dataPath={dataPath} value={(value ?? {}) as Values} onChange={onChange} />
       ) : null}

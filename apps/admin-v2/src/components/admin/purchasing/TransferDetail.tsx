@@ -17,6 +17,7 @@ import { formatDay, formatMoment, lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { Fact, LineProduct, useUnitsText } from "./purchasing-ui";
+import { Page } from "~/components/admin/resource/Page";
 
 /**
  * A transfer once shipped (or a draft for staff who can't edit): what left,
@@ -63,11 +64,11 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
   };
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <PageHeader
         backTo="/admin/inventory/transfers"
         title={transfer.displayNumber}
-        badge={<TransferStatusBadge status={transfer.status} />}
+        status={<TransferStatusBadge status={transfer.status} />}
         actions={canEdit && open ? (
           <>
             <Button type="button" variant="outline" disabled={command.isPending} onClick={() => setConfirmCancel(true)}>
@@ -171,7 +172,7 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
         isLoading={command.isPending}
         onConfirm={cancel}
       />
-    </div>
+    </Page>
   );
 }
 

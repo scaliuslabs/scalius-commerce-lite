@@ -5,7 +5,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderChannelText, orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -17,7 +17,6 @@ import {
 import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
-import { formatOrderTimestamp } from "./formatters";
 import { restockedUnits, shippedCancelReason, unitsWithCourier } from "./cancel-order";
 import type { Order } from "./types";
 
@@ -71,7 +70,6 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
   const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
   const cancelBlock = blocked.get("cancelled");
-  const placedAt = formatOrderTimestamp(order.createdAt);
   const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && options.length > 0;
   const nextStep = changeable && cancelBlock?.code === "with_courier" ? courierNextStep(order) : null;
 
@@ -128,12 +126,6 @@ export function OrderStatusCard({ order }: { order: Order }) {
           <p className="text-muted-foreground">
             {statusBlockText(cancelBlock, order, t)}{" "}
             <a href={nextStep.href} className="text-link hover:underline">{t(nextStep.label)}</a>
-          </p>
-        ) : null}
-        {placedAt ? <p className="text-muted-foreground">{t("status.placedAt", { date: placedAt })}</p> : null}
-        {order.channel ? (
-          <p className="text-muted-foreground">
-            {t("status.channel", { channel: orderChannelText(o, order.channel, order.channelSource) })}
           </p>
         ) : null}
       </CardContent>

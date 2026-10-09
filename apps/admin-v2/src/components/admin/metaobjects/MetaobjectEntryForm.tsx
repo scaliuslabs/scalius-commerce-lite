@@ -26,7 +26,7 @@ import { SaveBarProvider, SaveErrorBanner, useSaveBar, useSaveScope } from "~/co
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -56,6 +56,7 @@ import {
   updateEntryBody,
   type EntryForm,
 } from "./metaobject-entry-form";
+import { Page } from "~/components/admin/resource/Page";
 
 export function MetaobjectEntryForm({ definition, entry }: { definition: MetaobjectDefinition; entry: MetaobjectEntry | null }) {
   const t = useMessages(metaobjectMessages);
@@ -152,11 +153,11 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
     setForm((current) => ({ ...current, fields: { ...current.fields, [key]: draft } }));
 
   return (
-    <div className="pb-6">
+    <Page width="form" className="pb-6">
       <PageHeader
         backTo={listUrl}
         title={title}
-        badge={saved ? <StatusBadge status={base.status === "published" ? "active" : "draft"}>{t(base.status)}</StatusBadge> : undefined}
+        status={saved ? <StatusBadge status={base.status === "published" ? "active" : "draft"}>{t(base.status)}</StatusBadge> : undefined}
       />
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
@@ -179,12 +180,18 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
                     : edited.includes(field.key) || revealed ? problemText(type, found.problem) : null;
                   const note = problem ?? field.description ?? null;
                   return (
-                    <div key={field.key} className="space-y-1.5">
-                      <Label htmlFor={id}>
+                    <Field
+                      key={field.key}
+                      id={id}
+                      noteId={`${id}-note`}
+                      optional={!field.required}
+                      label={<>
                         {field.name}
-                        {field.required ? <span className="font-normal text-muted-foreground"> ({t("requiredMark")})</span> : null}
                         <span className="sr-only"> ({isCustomFieldListType(type) ? cf("listOf", { type: typeLabel }) : typeLabel})</span>
-                      </Label>
+                      </>}
+                      help={problem ? undefined : note}
+                      error={problem}
+                    >
                       <CustomFieldInput
                         id={id}
                         type={type}
@@ -196,10 +203,7 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
                         describedBy={note ? `${id}-note` : undefined}
                         label={field.name}
                       />
-                      {note ? (
-                        <p id={`${id}-note`} className={problem ? "text-body text-destructive" : "text-body text-muted-foreground"}>{note}</p>
-                      ) : null}
-                    </div>
+                    </Field>
                   );
                 })}
               </CardContent>
@@ -262,7 +266,7 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
         ) : null}
       </div>
       {canEdit && saved ? <DeleteEntry definition={definition} entry={saved} open={deleting} onOpenChange={setDeleting} /> : null}
-    </div>
+    </Page>
   );
 }
 

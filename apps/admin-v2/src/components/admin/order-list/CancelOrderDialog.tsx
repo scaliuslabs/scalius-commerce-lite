@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/cancel-order";
 import { useMessages } from "~/i18n";
@@ -20,6 +19,7 @@ import type { UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
 import { getOrderItems } from "~/lib/api-query-options/orders";
 import { queryKeys } from "~/lib/query-keys";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { Field } from "~/components/ui/field";
 
 export type CancelReason = NonNullable<UpdateOrderStatusInput["reason"]>;
 
@@ -68,8 +68,7 @@ export function CancelOrderDialog({
             ].filter(Boolean).join(" ")}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor="cancel-reason">{t("cancel.reason")}</Label>
+        <Field id="cancel-reason" label={t("cancel.reason")}>
           <SearchableSelect
             triggerClassName="w-full"
             id="cancel-reason"
@@ -78,7 +77,7 @@ export function CancelOrderDialog({
             placeholder={t("cancel.reasonPlaceholder")}
             options={CANCEL_REASONS.map((value) => ({ value, label: t(`cancel.reason.${value}`) }))}
           />
-        </div>
+        </Field>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("cancel.keep")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" disabled={pending} onClick={() => onConfirm(reason || undefined)}>

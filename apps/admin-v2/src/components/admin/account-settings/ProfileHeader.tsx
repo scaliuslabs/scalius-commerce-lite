@@ -6,13 +6,13 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { useSaveBar, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
 import { MediaManager, type MediaFile } from "../media-manager";
+import { Field } from "~/components/ui/field";
 
 /** The signed-in staff member shown on the account page. */
 export interface User {
@@ -120,8 +120,7 @@ export function ProfileHeader({ user }: { user: User }) {
               </Button>
             ) : null}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-name">{t("name")}</Label>
+          <Field id="profile-name" label={t("name")} error={nameInvalid ? t("nameTooShort") : undefined}>
             <Input
               id="profile-name"
               value={name}
@@ -132,8 +131,7 @@ export function ProfileHeader({ user }: { user: User }) {
               onBlur={() => setTouched(true)}
               onChange={(event) => setName(event.target.value)}
             />
-            {nameInvalid ? <p id="profile-name-error" className="text-body text-destructive">{t("nameTooShort")}</p> : null}
-          </div>
+          </Field>
           <div className="flex flex-col gap-1">
             <span className="text-body font-medium">{t("email")}</span>
             <span className="break-words text-body text-muted-foreground">{user.email}</span>

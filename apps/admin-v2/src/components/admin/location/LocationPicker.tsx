@@ -1,8 +1,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { cn } from "@scalius/shared/utils";
-import { Label } from "~/components/ui/label";
+import { Field, FieldGroup } from "~/components/ui/field";
 import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { locationMessages } from "~/i18n/location";
@@ -112,20 +111,17 @@ export function LocationPicker({
   };
 
   return (
-    <div className={cn("grid gap-3", className)}>
+    <FieldGroup className={className}>
       {LEVELS.map((level) => {
         const id = ids?.[level] ?? `${autoId}-${level}`;
         const query = levelQuery(level, value);
         const error = errors?.[level];
-        const errorId = `${id}-error`;
         const copy = COPY[level];
         const canClear = clearable?.[level] ?? (level === "area" || !required?.[level]);
         const externalRef = refs?.[level];
         return (
-          <div key={level} className="grid gap-2">
-            <Label htmlFor={id}>{t(copy.label)}</Label>
+          <Field key={level} id={id} label={t(copy.label)} error={error}>
             <SearchableSelect
-              id={id}
               triggerRef={(node) => {
                 triggers.current[level] = node;
                 if (typeof externalRef === "function") externalRef(node);
@@ -142,18 +138,11 @@ export function LocationPicker({
               placeholder={query ? t(copy.select) : t(level === "zone" ? "cityFirst" : "zoneFirst")}
               searchPlaceholder={t(copy.search)}
               emptyMessage={t(copy.empty)}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : undefined}
               triggerClassName="w-full"
             />
-            {error ? (
-              <p id={errorId} className="text-body text-destructive">
-                {error}
-              </p>
-            ) : null}
-          </div>
+          </Field>
         );
       })}
-    </div>
+    </FieldGroup>
   );
 }

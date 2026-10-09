@@ -90,6 +90,7 @@ import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Page } from "~/components/admin/resource/Page";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -433,12 +434,12 @@ function ProductEditor({
   ) : null;
 
   return (
-    <>
+    <Page width="form">
       <PageHeader
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
-        // Presence rides in the badge spot until PageHeader has its own `presence` slot (B1).
-        badge={isEdit ? <><ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /><PresenceSlot /></> : null}
+        status={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
+        presence={isEdit ? <PresenceSlot /> : null}
         actions={isEdit && productId ? (
           <>
             {moreActions}
@@ -547,14 +548,6 @@ function ProductEditor({
           </ProductEditorSlotsContext.Provider>
           </ProductSectionsProvider>
           </ProductKindRulesProvider>
-          {readOnly ? null : (
-            // Shopify repeats Save at the end of the page, under a divider.
-            <div className="flex justify-end border-t pt-4">
-              <Button type="submit" loading={Boolean(scope?.busy)} disabled={isEdit && !scope?.dirty}>
-                {s("save")}
-              </Button>
-            </div>
-          )}
         </form>
       </Form>
       <AlertDialog
@@ -608,7 +601,7 @@ function ProductEditor({
         }}
       />
       {appActions.dialogs}
-    </>
+    </Page>
   );
 }
 

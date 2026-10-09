@@ -22,6 +22,7 @@ import type { Order, OrderSupportRequest } from "./types";
 import { resolutionsFor, type Resolution } from "./request-resolutions";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
+import { Field } from "~/components/ui/field";
 
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 
@@ -183,10 +184,9 @@ export function ResolveDialog({
             )
           ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="support-request-note">{t("requests.note")}</Label>
+          <Field id="support-request-note" label={t("requests.note")}>
             <Textarea id="support-request-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
-          </div>
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>

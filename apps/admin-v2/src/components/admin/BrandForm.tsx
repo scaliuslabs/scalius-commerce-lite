@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
 import { toHandle } from "@scalius/shared/handle";
 import { postApiV1AdminBrands, putApiV1AdminBrandsById } from "@scalius/api-client/sdk";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -32,6 +32,7 @@ import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Field } from "~/components/ui/field";
 
 /** The saved brand as editor values (the logo as the file picker's value). */
 export function brandFormValues(brand: BrandDetail): BrandFormInput {
@@ -175,22 +176,17 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("name")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("namePlaceholder")} maxLength={120} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field label={t("name")} error={fieldState.error?.message}>
+                    <Input placeholder={t("namePlaceholder")} maxLength={120} {...field} />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("description")}</FormLabel>
+                render={({ field, fieldState }) => (
+                  <Field label={t("description")} error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
@@ -202,8 +198,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                     ) : (
                       <RichContent content={field.value ?? ""} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -217,8 +212,8 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="logo"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     <FormImageUploadField
                       value={field.value as never}
                       onChange={field.onChange}
@@ -227,8 +222,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                       changeTriggerLabel={t("changeLogo")}
                       placeholder={t("noLogo")}
                     />
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -271,23 +265,20 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
             <CardHeader>
               <CardTitle>{t("status")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="status"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <SearchableSelect
-                        value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
-                        triggerRef={field.ref}
-                        onBlur={field.onBlur}
-                        triggerClassName="w-full"
-                        options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }]}
-                      />
-                    </FormControl>
-                    <FormDescription>{t(status === "published" ? "activeHelp" : "draftHelp")}</FormDescription>
-                  </FormItem>
+                  <Field help={t(status === "published" ? "activeHelp" : "draftHelp")}>
+                    <SearchableSelect
+                      value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
+                      triggerRef={field.ref}
+                      onBlur={field.onBlur}
+                      triggerClassName="w-full"
+                      options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }]}
+                    />
+                  </Field>
                 )}
               />
               {committed ? (
@@ -308,22 +299,18 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="sortOrder"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        step={1}
-                        aria-label={t("sortOrder")}
-                        value={Number.isFinite(field.value) ? field.value : 0}
-                        onChange={(event) => field.onChange(event.target.value === "" ? 0 : Math.trunc(Number(event.target.value)))}
-                        onBlur={field.onBlur}
-                      />
-                    </FormControl>
-                    <FormDescription>{t("sortOrderHelp")}</FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field help={t("sortOrderHelp")} error={fieldState.error?.message}>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      step={1}
+                      aria-label={t("sortOrder")}
+                      value={Number.isFinite(field.value) ? field.value : 0}
+                      onChange={(event) => field.onChange(event.target.value === "" ? 0 : Math.trunc(Number(event.target.value)))}
+                      onBlur={field.onBlur}
+                    />
+                  </Field>
                 )}
               />
             </CardContent>

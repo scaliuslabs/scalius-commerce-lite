@@ -43,10 +43,13 @@ import {
 import { lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { PurchaseOrderStatusBadge } from "./purchasing-status";
-import { CostInput, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
+import { CostInput } from "~/components/admin/shared/MoneyInput";
+import { LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SkuPicker } from "./SkuPicker";
 import { SupplierPicker } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
+import { Field } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 type Busy = "save" | "order" | null;
 
@@ -204,29 +207,28 @@ export function PurchaseOrderEditor({ order, onReload }: {
       lines: current.lines.map((line) => (line.variantId === variantId ? { ...line, ...patch } : line)),
     }));
 
-  const extraField = (key: "shipping" | "otherCosts" | "tax") => (
+  const extraCostRow = (key: "shipping" | "otherCosts" | "tax") => (
     <div className="flex items-center justify-between gap-4">
       <Label htmlFor={`po-${key}`}>{t(key)}</Label>
-      <div className="space-y-1">
-        <CostInput
-          id={`po-${key}`}
-          className="w-36"
-          value={draft[key]}
-          placeholder="0"
-          aria-invalid={showErrors && validation.extras[key] ? true : undefined}
-          onValueChange={(value) => update({ [key]: value })}
-        />
-      </div>
+      {/* eslint-disable-next-line no-restricted-syntax -- a totals row, not a stacked field */}
+      <CostInput
+        id={`po-${key}`}
+        className="w-36"
+        value={draft[key]}
+        placeholder="0"
+        aria-invalid={showErrors && validation.extras[key] ? true : undefined}
+        onValueChange={(value) => update({ [key]: value })}
+      />
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="form">
       <UnsavedChangesGuard isDirty={dirty && !leaving} isSubmitting={busy !== null || remove.isPending} />
       <PageHeader
         backTo="/admin/inventory/purchase-orders"
         title={order?.displayNumber ?? t("newPurchaseOrder")}
-        badge={order ? <PurchaseOrderStatusBadge status={order.status} /> : null}
+        status={order ? <PurchaseOrderStatusBadge status={order.status} /> : null}
         actions={(
           <>
             {order ? (
@@ -264,17 +266,15 @@ export function PurchaseOrderEditor({ order, onReload }: {
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardContent className="grid gap-4 pt-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="po-supplier">{t("supplier")}</Label>
+              <Field id="po-supplier" label={t("supplier")}>
                 <SupplierPicker
                   id="po-supplier"
                   value={draft.supplier}
                   onChange={(supplier) => update({ supplier })}
                   canAdd
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor={activeLocations.length > 1 ? "po-destination" : undefined}>{t("destination")}</Label>
+              </Field>
+              <Field id={activeLocations.length > 1 ? "po-destination" : undefined} label={t("destination")} help={t("destinationHelp")}>
                 {activeLocations.length > 1 ? (
                   <SearchableSelect
                     id="po-destination"
@@ -288,8 +288,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
                 ) : (
                   <p className="flex min-h-9 items-center text-body">{destinationName || "—"}</p>
                 )}
-                <p className="text-body text-muted-foreground">{t("destinationHelp")}</p>
-              </div>
+              </Field>
             </CardContent>
           </Card>
 
@@ -298,16 +297,14 @@ export function PurchaseOrderEditor({ order, onReload }: {
               <CardTitle>{t("shipmentDetails")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="po-expected">{t("expectedArrival")}</Label>
+              <Field id="po-expected" label={t("expectedArrival")}>
                 <DateInput
                   id="po-expected"
                   value={draft.expectedOn}
                   onValueChange={(expectedOn) => update({ expectedOn })}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="po-reference">{t("reference")}</Label>
+              </Field>
+              <Field id="po-reference" label={t("reference")} help={t("referenceHelp")}>
                 <Input
                   id="po-reference"
                   maxLength={100}
@@ -316,8 +313,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
                   aria-describedby="po-reference-help"
                   onChange={(event) => update({ reference: event.target.value })}
                 />
-                <p id="po-reference-help" className="text-body text-muted-foreground">{t("referenceHelp")}</p>
-              </div>
+              </Field>
             </CardContent>
           </Card>
 
@@ -349,9 +345,9 @@ export function PurchaseOrderEditor({ order, onReload }: {
               <dl className="space-y-3">
                 <SummaryRow label={t("subtotal")} detail={unitsText(totals.units)}>{fmt(totals.subtotal)}</SummaryRow>
               </dl>
-              {extraField("shipping")}
-              {extraField("otherCosts")}
-              {extraField("tax")}
+              {extraCostRow("shipping")}
+              {extraCostRow("otherCosts")}
+              {extraCostRow("tax")}
               {showErrors && (validation.extras.shipping || validation.extras.otherCosts || validation.extras.tax) ? (
                 <p className="text-body text-destructive">{t("fixCosts")}</p>
               ) : null}
@@ -390,7 +386,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
         isLoading={remove.isPending}
         onConfirm={deleteDraft}
       />
-    </div>
+    </Page>
   );
 }
 

@@ -8,7 +8,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Skeleton } from "~/components/ui/skeleton";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
@@ -21,6 +20,7 @@ import { useMessages } from "~/i18n";
 import { accountMessages, type AccountMessageKey } from "~/i18n/account";
 import { accountFailureKey } from "./account-error";
 import type { User } from "./ProfileHeader";
+import { Field } from "~/components/ui/field";
 
 type Step = "method" | "password" | "qr" | "verify" | "codes";
 type Method = "totp" | "email";
@@ -244,10 +244,9 @@ export function TwoFactorSetup({ user }: { user: User }) {
     );
   } else if (step === "password") {
     content = (
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="two-step-password">{t("confirmYourPassword")}</Label>
+      <Field id="two-step-password" label={t("confirmYourPassword")}>
         <Input id="two-step-password" type="password" value={password} autoComplete="current-password" autoFocus disabled={busy} onChange={(event) => setPassword(event.target.value)} />
-      </div>
+      </Field>
     );
     footer = (
       <>
@@ -282,8 +281,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
     );
   } else if (step === "verify") {
     content = (
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="two-step-code">{t(method === "email" ? "enterEmailCode" : "enterAppCode")}</Label>
+      <Field id="two-step-code" label={t(method === "email" ? "enterEmailCode" : "enterAppCode")}>
         <Input
           id="two-step-code"
           value={code}
@@ -301,7 +299,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
             <Button type="button" variant="link" size="sm" disabled={busy} onClick={() => void resend()}>{t("resendCode")}</Button>
           </div>
         ) : null}
-      </div>
+      </Field>
     );
     footer = (
       <>

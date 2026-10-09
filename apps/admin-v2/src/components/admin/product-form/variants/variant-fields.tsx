@@ -4,8 +4,9 @@ import React from "react";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { NumberInput, PercentInput } from "@/components/ui/number-input";
+import { Field, FieldRow } from "~/components/ui/field";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +14,7 @@ import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { detectBarcodeType } from "@scalius/shared/barcode-identity";
 import { useCurrency } from "@/hooks/use-currency";
-import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
+import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { useMessages } from "~/i18n";
@@ -29,22 +30,6 @@ export type IssueFor = (variantId: string | undefined, field: DraftIssueField) =
 export function barcodePatch(value: string): Pick<DraftVariant, "barcode" | "barcodeType"> {
   const barcode = value.trim() ? value : null;
   return { barcode, barcodeType: barcode ? detectBarcodeType(barcode) : null };
-}
-
-/** A labelled field with its help and its problem underneath (one error indicator: text + border). */
-export function Field({ label, help, error, children }: {
-  label: string;
-  help?: string;
-  error?: string;
-  children: (invalid: boolean) => React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-body text-muted-foreground">
-      {label}
-      {children(Boolean(error))}
-      {error ? <span className="block text-destructive">{error}</span> : help ? <span className="block">{help}</span> : null}
-    </label>
-  );
 }
 
 /** A SKU's units at locations other than the default, which the quantity field does not edit. */
@@ -85,23 +70,23 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
       <NumberInput
         value={value}
         integer
-        aria-invalid={invalid}
+       
         aria-label={ariaLabel ?? t("quantity")}
         data-cell={cell}
         // Empty or not a number stays visible as a problem instead of turning into 0.
         onValueChange={(next) => onChange(next ?? Number.NaN)}
       />
       {committed > 0 && Number.isFinite(value) ? (
-        <p className="text-end text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
+        <p className="text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
           {t("availableToSell", { count: available })}
         </p>
       ) : null}
       {elsewhere?.breakdown ? (
-        <p className="text-end text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
+        <p className="text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
       ) : null}
       {incomingUnits > 0 ? (
         <p
-          className="text-end text-body text-muted-foreground tabular-nums"
+          className="text-body text-muted-foreground tabular-nums"
           title={t("incomingDetail", { orders: incoming!.purchaseOrders, transfers: incoming!.transfers })}
         >
           {t("incomingCount", { count: incomingUnits })}
@@ -208,10 +193,9 @@ export function VariantImagePicker({ value, images, onChange, label, allowNoChan
   );
 }
 
-function DiscountInput({ variant, name, invalid, onChange }: {
+function DiscountInput({ variant, name, onChange }: {
   variant: DraftVariant;
   name: string;
-  invalid: boolean;
   onChange: (patch: Partial<DraftVariant>) => void;
 }) {
   const t = useMessages(productMessages);
@@ -220,8 +204,10 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
     amount > 0 ? variant.discountType : "none",
   );
+  // The select is the field's control; the amount beside it has its own id.
+  const amountId = React.useId();
   return (
-    <div className="flex min-w-0 gap-1">
+    <div className="flex min-w-0 gap-2">
       <SearchableSelect
         value={mode}
         onValueChange={(next) => {
@@ -240,20 +226,20 @@ function DiscountInput({ variant, name, invalid, onChange }: {
       />
       {mode === "flat" ? (
         <MoneyInput
+          id={amountId}
           currencyCode={currencyCode}
           value={amount}
-          aria-invalid={invalid}
           aria-label={t("discountValueFor", { name })}
           onValueChange={(next) => onChange({ discountAmount: next ?? 0 })}
-          className="w-20"
+          className="w-28"
         />
       ) : mode === "percentage" ? (
-        <NumberInput
+        <PercentInput
+          id={amountId}
           value={amount}
-          aria-invalid={invalid}
           aria-label={t("discountValueFor", { name })}
           onValueChange={(next) => onChange({ discountPercentage: next ?? 0 })}
-          className="w-20"
+          className="w-28"
         />
       ) : null}
     </div>
@@ -271,7 +257,7 @@ export interface SkuCostField {
 /** Cost per item, with the profit and margin it gives underneath. */
 function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
   const t = useMessages(productMessages);
-  const { symbol, code, fmt } = useCurrency();
+  const { code, fmt } = useCurrency();
   const problem = costProblem(cost.value);
   const result = costMargin(cost.customerPays, cost.value, getDecimalPlaces(code));
   return (
@@ -280,15 +266,12 @@ function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
       help={result ? t("profitAndMargin", { profit: fmt(result.profit), margin: formatMargin(result.margin) }) : t("costHelp")}
       error={problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : undefined}
     >
-      {(invalid) => (
         <CostInput
-          symbol={symbol}
           value={cost.value}
-          aria-invalid={invalid}
+         
           aria-label={t("costFor", { name })}
           onValueChange={cost.onChange}
         />
-      )}
     </Field>
   );
 }
@@ -308,32 +291,27 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <FieldRow>
       <Field label={t("sku")} error={errorOf("sku")}>
-        {(invalid) => (
-          <Input value={variant.sku} aria-invalid={invalid} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
-        )}
+          <Input value={variant.sku} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
       </Field>
       {cost && !giftCard ? <CostField cost={cost} name={name} /> : null}
       {showDiscount ? (
         <Field label={t("discount")} error={errorOf("discount")}>
-          {(invalid) => <DiscountInput variant={variant} name={name} invalid={invalid} onChange={onChange} />}
+          <DiscountInput variant={variant} name={name} onChange={onChange} />
         </Field>
       ) : null}
       {/* Scan or type: the type is picked from the code, and can still be changed. */}
       <Field label={t("barcode")} help={isUnsavedSku && !variant.barcode ? t("barcodeHint") : undefined} error={errorOf("barcode")}>
-        {(invalid) => (
           <Input
             value={variant.barcode ?? ""}
-            aria-invalid={invalid}
+           
             aria-label={t("barcodeFor", { name })}
             autoComplete="off"
             onChange={(event) => onChange(barcodePatch(event.target.value))}
           />
-        )}
       </Field>
       <Field label={t("barcodeType")}>
-        {() => (
           <SearchableSelect
             value={variant.barcodeType ?? "none"}
             onValueChange={(value) => onChange(value === "none"
@@ -350,26 +328,23 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
               { value: "custom", label: t("barcodeCustom") },
             ]}
           />
-        )}
       </Field>
       {showWeight ? (
-        <Field label={t("weightGrams", { unit: weightUnit })} error={errorOf("weight")}>
-          {(invalid) => (
+        <Field label={t("weightGrams")} error={errorOf("weight")}>
             <WeightInput
               grams={variant.weight}
-              aria-invalid={invalid}
+             
               aria-label={t("weightFor", { name, unit: weightUnit })}
               onGramsChange={(weight) => onChange({ weight })}
             />
-          )}
         </Field>
       ) : null}
       {showInventory ? (
-        <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
+        <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8 @md:col-span-2">
           <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
           {t("trackQuantity")}
         </label>
       ) : null}
-    </div>
+    </FieldRow>
   );
 }

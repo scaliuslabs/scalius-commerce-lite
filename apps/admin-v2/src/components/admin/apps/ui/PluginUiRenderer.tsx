@@ -35,6 +35,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { DateInput } from "~/components/ui/date-input";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Separator } from "~/components/ui/separator";
@@ -528,14 +529,9 @@ function InputNode({ node }: { node: PluginUiInput }) {
       break;
   }
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>
-        {node.label}
-        {node.required ? <span className="font-normal text-muted-foreground"> {t("requiredMark")}</span> : null}
-      </Label>
+    <Field id={id} label={node.label} optional={!node.required} help={node.help} error={error} noteId={noteId}>
       {control}
-      {note}
-    </div>
+    </Field>
   );
 }
 
@@ -898,7 +894,7 @@ export function PluginUiRenderer({ document, host, variant, fallbackTitle, badge
             <>
               <PageHeader
                 title={(root.type === "page" ? root.title : undefined) || fallbackTitle || host.app.name}
-                badge={badge}
+                status={badge}
                 actions={root.type === "page" && root.actions?.length ? <ButtonRow buttons={root.actions} /> : undefined}
               />
               <div className="space-y-4">

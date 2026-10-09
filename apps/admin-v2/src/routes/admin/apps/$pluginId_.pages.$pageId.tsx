@@ -86,7 +86,7 @@ function TabbedAppPage({ app, page, tabs, search }: { app: Surfaces; page: Page;
   const active = tabs.find((tab) => tab.id === requested) ?? tabs[0]!;
   return (
     <>
-      <PageHeader title={page.title} badge={<ProvidedByChip pluginId={app.id} appName={app.name} />} />
+      <PageHeader title={page.title} status={<ProvidedByChip pluginId={app.id} appName={app.name} />} />
       <Tabs
         value={active.id}
         onValueChange={(next) => void navigate({ search: (next === tabs[0]!.id ? {} : { tab: next }) as never, replace: true })}

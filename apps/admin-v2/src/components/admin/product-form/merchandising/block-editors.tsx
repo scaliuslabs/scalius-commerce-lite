@@ -4,7 +4,7 @@ import type { ProductContentBlockType } from "@scalius/shared/product-content-bl
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldSet } from "~/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
@@ -37,15 +37,6 @@ const list = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[])
 
 function toPreview(file: MediaFile, kind: "image" | "video"): BlockMediaPreview {
   return { id: file.id, kind, url: file.url, altText: file.altText ?? null };
-}
-
-function Field({ label, children, id }: { label: string; id: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-    </div>
-  );
 }
 
 function TextField({ label, value, onChange, max, multiline, disabled, placeholder }: {
@@ -106,8 +97,7 @@ function MediaSlot({ label, mediaId, kind, media, onChange, onMediaChosen, disab
   const file = mediaId ? media.get(mediaId) : undefined;
   const Icon = kind === "video" ? Video : ImageIcon;
   return (
-    <div className="space-y-2">
-      <p className="text-body font-medium">{label}</p>
+    <FieldSet label={label}>
       <div className="flex items-center gap-3">
         <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground">
           {file && (file.kind === "image" || file.posterUrl) ? (
@@ -143,7 +133,7 @@ function MediaSlot({ label, mediaId, kind, media, onChange, onMediaChosen, disab
           )}
         </div>
       </div>
-    </div>
+    </FieldSet>
   );
 }
 
@@ -563,9 +553,8 @@ function DateTimeField({ label, help, value, onChange, disabled }: {
   const id = useId();
   const local = value ? toLocalInput(value) : "";
   return (
-    <Field label={label} id={id}>
+    <Field label={label} id={id} help={help}>
       <Input
-        id={id}
         type="datetime-local"
         value={local}
         disabled={disabled}
@@ -575,7 +564,6 @@ function DateTimeField({ label, help, value, onChange, disabled }: {
           onChange(date && !Number.isNaN(date.getTime()) ? date.toISOString() : null);
         }}
       />
-      <p className="text-body text-muted-foreground">{help}</p>
     </Field>
   );
 }

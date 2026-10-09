@@ -18,7 +18,6 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
@@ -241,8 +240,7 @@ function LocationsCard() {
         {SLOTS.map((slot) => {
           const key = slotKey(slot);
           return (
-            <div key={key} className="space-y-1.5">
-              <Label htmlFor={`menu-location-${key}`}>{slotLabel(slot)}</Label>
+            <Field key={key} id={`menu-location-${key}`} label={slotLabel(slot)}>
               <SearchableSelect
                 id={`menu-location-${key}`}
                 value={draft[key] || "none"}
@@ -253,7 +251,7 @@ function LocationsCard() {
                 options={menuOptions}
                 triggerClassName="w-full"
               />
-            </div>
+            </Field>
           );
         })}
       </div>

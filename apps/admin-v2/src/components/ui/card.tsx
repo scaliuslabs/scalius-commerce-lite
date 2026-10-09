@@ -4,7 +4,7 @@ import { cn } from "@scalius/shared/utils";
 
 /** Polaris card: white surface, 12px radius, bevel border and a soft shadow. */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-xl bg-card text-card-foreground shadow-card", className)} {...props} />
+  <div ref={ref} data-slot="card" className={cn("rounded-xl bg-card text-card-foreground shadow-card", className)} {...props} />
 ));
 Card.displayName = "Card";
 

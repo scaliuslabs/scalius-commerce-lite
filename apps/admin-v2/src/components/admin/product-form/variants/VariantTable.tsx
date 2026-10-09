@@ -7,6 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Inset } from "~/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -17,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { IdText } from "~/components/admin/data-table/cells";
 import { DataTableRowActions, type ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { cn } from "@scalius/shared/utils";
@@ -46,7 +47,7 @@ import {
 } from "./option-matrix-editor-model";
 import { useProductKindRules, isDigitalSku } from "../product-kind-rules";
 import { DigitalStockCell } from "../DigitalStock";
-import { CostInput, formatMargin } from "~/components/admin/inventory/cost-fields";
+import { formatMargin } from "~/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "~/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
@@ -576,7 +577,6 @@ const VariantRow = React.memo(function VariantRow({
           <span className="block text-body text-muted-foreground md:hidden">{t("price")}</span>
           <MoneyInput
             currencyCode={money.code}
-            prefix={money.symbol}
             value={variant.price}
             data-cell="price"
             aria-invalid={Boolean(priceError)}
@@ -629,7 +629,7 @@ const VariantRow = React.memo(function VariantRow({
         <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} />
       </div>
       {expanded ? (
-        <div className="col-span-full mt-2 rounded-md border bg-muted/30 p-3">
+        <Inset className="col-span-full mt-2">
           <AdvancedSkuFields
             variant={variant}
             name={name}
@@ -639,7 +639,7 @@ const VariantRow = React.memo(function VariantRow({
           />
           {/* Apps' cards for this saved SKU (`resource=variant`), inside the variant card. */}
           {customData ? <AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /> : null}
-        </div>
+        </Inset>
       ) : null}
     </div>
   );
@@ -716,7 +716,6 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
       <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
         <MoneyInput
           currencyCode={money.code}
-          prefix={money.symbol}
           value={commonPrice ?? null}
           placeholder={commonPrice === undefined ? t("mixedValues") : undefined}
           title={commonPrice === undefined ? range : undefined}
@@ -876,7 +875,6 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
         id={inputId}
         autoFocus
         currencyCode={money.code}
-        prefix={money.symbol}
         value={price}
         onValueChange={setPrice}
         className="w-36"
@@ -885,7 +883,7 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   } else if (panel === "cost") {
     ready = cost !== null && costProblem(cost) === null;
     apply = () => onCostApply(cost!);
-    field = <CostInput id={inputId} autoFocus symbol={money.symbol} value={cost} onValueChange={setCost} className="w-36" />;
+    field = <CostInput id={inputId} autoFocus value={cost} onValueChange={setCost} className="w-36" />;
   } else if (panel === "stock") {
     ready = stock !== null && Number.isInteger(stock) && stock >= 0 && trackedCount > 0;
     apply = () => onApply((variant) => (typedStock(variant) ? { stock: stock! } : {}));
