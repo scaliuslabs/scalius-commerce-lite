@@ -120,24 +120,33 @@ async function searchCustomers(db: Database, term: string): Promise<GlobalSearch
         textCondition(db, rowids, () => ftsMatch(db, "customers_fts", "customers", term), "customers"),
     ]);
     if (!match) return [];
-    const latestOrderName = sql<string | null>`(
-        SELECT ${orders.customerName} FROM ${orders}
-        WHERE ${orders.customerId} = ${customers.id} AND ${orders.deletedAt} IS NULL
-        ORDER BY ${orders.createdAt} DESC LIMIT 1
-    )`;
     const rows = await db.select({
         id: customers.id,
         name: customers.name,
         phone: customers.phone,
         email: customers.email,
         origin: customers.origin,
-        latestOrderName,
     })
         .from(customers)
         .where(and(isNull(customers.deletedAt), match))
         .orderBy(desc(customers.createdAt))
         .limit(GLOBAL_SEARCH_LIMIT);
-    return rows.map((row) => ({ ...row, phone: row.phone ?? null, email: row.email ?? null, latestOrderName: row.latestOrderName ?? null }));
+    // A guest record is titled by the buyer on its latest order: one lookup per
+    // guest (five at most) on the (customer_id, deleted_at, created_at) index.
+    const result: GlobalSearchResult["customers"] = [];
+    for (const row of rows) {
+        let latestOrderName: string | null = null;
+        if (row.origin === "order") {
+            const [latest] = await db.select({ name: orders.customerName })
+                .from(orders)
+                .where(and(eq(orders.customerId, row.id), sql`${orders.customerId} IS NOT NULL`, isNull(orders.deletedAt)))
+                .orderBy(desc(orders.customerId), desc(orders.deletedAt), desc(orders.createdAt))
+                .limit(1);
+            latestOrderName = latest?.name ?? null;
+        }
+        result.push({ ...row, phone: row.phone ?? null, email: row.email ?? null, latestOrderName });
+    }
+    return result;
 }
 
 async function searchProducts(db: Database, term: string): Promise<GlobalSearchResult["products"]> {
