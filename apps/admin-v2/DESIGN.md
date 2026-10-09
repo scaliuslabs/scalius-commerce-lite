@@ -323,13 +323,15 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 
 Presence must be impossible to miss, as in Figma, Google Docs and Linear.
 
+How to use it (`lib/realtime/store.tsx`): wrap the editor in `EditorPresenceProvider` (key, revision, dirty, `changedFields`, `onLoadLatest`); put `PresenceSlot` in the page header (`data-slot="presence"`, a reserved 96×28 box); mark the editor root with `data-presence-root={key}`; render `PresenceNotices` anywhere inside it (it takes no space: rings are absolutely placed, notices fixed at the bottom of the view). `FormContainer`, `SettingsPage`, the product editor and order detail already do. A field's key is its control's form `name`, else the nearest `data-field`: give custom controls (selects, comboboxes) a `data-field` on their field wrapper. Lists: `useListPresence("order")` once per list and `RowPresence` in the row's title cell. Colours: `--presence-1` … `--presence-6` (`presence-style.ts`).
+
 | ID | Rule | Check |
 | --- | --- | --- |
 | W1 | Avatars of everyone on the record sit in the page header beside the title: 28px circles, a stable colour per person, initials, the name on hover and focus, at most 3 then "+N". The space is reserved, so arriving people never move the page. | harness → inject presence: `[data-slot=page-header] [data-slot=presence]` holds ≥1 avatar with an accessible name; `main` CLS = 0 |
-| W2 | When someone else is editing the same record, a banner under the header says "Rahim is editing this product. You can both edit; changes to different fields combine." | harness → inject presence: `[data-slot=presence-banner]` visible |
-| W3 | A field another person has focused shows a 2px ring in their colour and their first name on a tag at its top end. | review (needs field-level presence in the hub) |
-| W4 | After a merged save, one notice: "Rahim saved changes. Your edits are kept." with "Load latest"; a same-field clash opens the merge choice dialog. | harness → inject `saved`: `[data-slot=alert]` with "Load latest" |
-| W5 | Lists show presence: a small avatar on a row someone has open (orders, products, inbox conversations). | review |
+| W2 | When someone else is editing the same record (unsaved changes or a field focused), a one-line banner says "Rahim is editing this product. Your changes to different fields merge automatically." It floats at the bottom of the view (never moves the fields), is dismissible, and comes back when someone new starts editing. | harness → inject presence with `editing`: `[data-slot=presence-banner]` visible; `main` CLS = 0 |
+| W3 | A field another person has focused shows a 2px ring in their colour and their first name on a tag at its top end. | review (the hub's `focus` message: field key only, rate-limited) |
+| W4 | When someone else saves: a dirty draft whose changed fields differ is merged at once, "Rahim saved Price and Stock: merged into your draft"; a clean editor reads "Rahim saved: reload to see the changes" with "Reload"; fields both changed read "…which you changed too" with "Load latest", and the save's clash opens the merge choice dialog. Field names link to the fields. | harness → inject `saved`: `[data-slot=alert]` with "Reload" |
+| W5 | Lists show presence: a small avatar and "Rahim is viewing" on a row someone has open (`RowPresence`; orders and products). | review |
 | W6 | Presence appears on every editor and on order and conversation pages, not only on forms. | review |
 
 ### Bangla and long text

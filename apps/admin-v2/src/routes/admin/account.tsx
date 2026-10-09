@@ -4,6 +4,8 @@ import { ProfileHeader } from "~/components/admin/account-settings/ProfileHeader
 import { ChangePasswordForm } from "~/components/admin/account-settings/ChangePasswordForm";
 import { TwoFactorSetup } from "~/components/admin/account-settings/TwoFactorSetup";
 import { AccountSessions } from "~/components/admin/account-settings/AccountSessions";
+import { ThisDeviceNotifications } from "~/components/admin/account-settings/ThisDeviceNotifications";
+import { webPushQuery } from "~/lib/web-push";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
 import { accountSecurityQueryOptions } from "~/lib/api-query-options/auth-management";
@@ -13,13 +15,20 @@ import { shellMessages } from "~/i18n/shell";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/account")({
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(accountSecurityQueryOptions()),
+  loader: async ({ context: { queryClient } }) => {
+    const [security] = await Promise.all([
+      queryClient.ensureQueryData(accountSecurityQueryOptions()),
+      // "Notifications on this device" appears whole; it shows its own state if this read fails.
+      queryClient.ensureQueryData(webPushQuery).catch(() => null),
+    ]);
+    return security;
+  },
   head: () => pageHead("account"),
   errorComponent: RouteErrorComponent,
   component: AccountPage,
 });
 
-/** My account: profile, password, two-step verification and signed-in devices, in one column. */
+/** My account: profile, password, two-step verification, notifications on this device and signed-in devices, in one column. */
 function AccountPage() {
   const t = useMessages(shellMessages);
   const { user } = Route.useRouteContext();
@@ -39,6 +48,7 @@ function AccountPage() {
           <ProfileHeader user={accountUser} />
           <ChangePasswordForm />
           <TwoFactorSetup user={accountUser} />
+          <ThisDeviceNotifications />
           <AccountSessions />
         </div>
       </div>

@@ -48,6 +48,10 @@ export const STAFF_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/web-push/devices/*": {
     DELETE: { allowAnyAdmin: true },
   },
+  // A test notification to one of the caller's own browsers (rate-limited in the route).
+  "/api/v1/admin/web-push/devices/*/test": {
+    POST: { allowAnyAdmin: true },
+  },
   "/api/v1/admin/fcm-token-cleanup": {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },

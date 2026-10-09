@@ -1,8 +1,7 @@
-// Web Push service worker for the dashboard's staff notifications (Settings →
-// Notifications → "Notifications on this device"). The page registers it with a
-// scope of its own (`<dashboard base>/web-push/`), apart from the optional
-// Firebase worker, so the two never replace each other. The server sends a JSON
-// payload `{ title, body, url?, tag? }`; `url` is an absolute dashboard address.
+// Web Push service worker for the dashboard's staff notifications (My account →
+// "Notifications on this device"). The page registers it with a scope of its own
+// (`<dashboard base>/web-push/`). The server sends a JSON payload
+// `{ title, body, url?, tag? }`; `url` is an absolute dashboard address.
 
 // This file sits at the dashboard root, e.g. "/" or "/dashboard/".
 const dashboardRoot = new URL("./", self.location.href).href;
@@ -20,14 +19,22 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
   const text = (value) => (typeof value === "string" ? value : "");
+  const title = text(payload.title) || "Scalius";
   event.waitUntil(
-    self.registration.showNotification(text(payload.title) || "Scalius", {
-      body: text(payload.body),
-      icon,
-      badge: icon,
-      tag: text(payload.tag) || undefined,
-      data: { url: text(payload.url) },
-    }),
+    (async () => {
+      await self.registration.showNotification(title, {
+        body: text(payload.body),
+        icon,
+        badge: icon,
+        tag: text(payload.tag) || undefined,
+        data: { url: text(payload.url) },
+      });
+      // Open dashboard tabs list it in the bell too (components/admin/NotificationDropdown.tsx).
+      const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const tab of windows) {
+        if (tab.url.startsWith(dashboardRoot)) tab.postMessage({ type: "scalius:push", title, body: text(payload.body), url: text(payload.url) });
+      }
+    })(),
   );
 });
 

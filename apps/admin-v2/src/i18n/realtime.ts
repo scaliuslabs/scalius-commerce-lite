@@ -44,7 +44,7 @@ export const realtimeMessages = defineMessages({
     editingTheme: "{names} এই থিম এডিট করছেন।",
     editingSettings: "{names} এই সেটিংস এডিট করছেন।",
     mergeHint: "আলাদা ঘরের পরিবর্তনগুলো নিজে থেকেই মিলে যাবে।",
-    savedMerged: "{name} {fields} সেভ করেছেন: আপনার ড্রাফটে মেলানো হয়েছে",
+    savedMerged: "{name} {fields} সেভ করেছেন: আপনার খসড়ায় মেলানো হয়েছে",
     savedReloadFields: "{name} {fields} সেভ করেছেন: পরিবর্তন দেখতে রিলোড করুন",
     savedReload: "{name} সেভ করেছেন: পরিবর্তন দেখতে রিলোড করুন",
     savedBoth: "{name} {fields} সেভ করেছেন, যা আপনিও বদলেছেন",

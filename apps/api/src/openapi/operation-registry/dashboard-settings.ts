@@ -126,6 +126,10 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     risk: "destructive",
     reason: "Removes one of the signed-in staff member's own browsers from the dashboard; an agent has no browser.",
   },
+  "dashboard.web_push.device_test": {
+    exposure: "excluded",
+    reason: "Shows a test notification on one of the signed-in staff member's own browsers, where the person checks it arrived; an agent has no browser.",
+  },
   "dashboard.notifications.fcm_token_cleanup": {
     exposure: "excluded",
     risk: "destructive",

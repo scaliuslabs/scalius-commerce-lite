@@ -54,6 +54,8 @@ export interface PushDevice {
   deviceLabel: string | null;
   lastSuccessAt: Date | null;
   createdAt: Date;
+  /** Sends that failed in a row since the last delivery (0 when the last one arrived). */
+  failureCount: number;
 }
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -148,6 +150,7 @@ export async function listStaffPushDevices(db: Database, userId: string): Promis
     deviceLabel: pushSubscriptions.deviceLabel,
     lastSuccessAt: pushSubscriptions.lastSuccessAt,
     createdAt: pushSubscriptions.createdAt,
+    failureCount: pushSubscriptions.failureCount,
   }).from(pushSubscriptions)
     .where(ownerCondition({ audience: "staff", userId }))
     .orderBy(sql`${pushSubscriptions.updatedAt} DESC`, asc(pushSubscriptions.id));
@@ -156,7 +159,34 @@ export async function listStaffPushDevices(db: Database, userId: string): Promis
     deviceLabel: row.deviceLabel,
     lastSuccessAt: row.lastSuccessAt === null ? null : new Date(Number(row.lastSuccessAt) * 1_000),
     createdAt: new Date(Number(row.createdAt) * 1_000),
+    failureCount: Number(row.failureCount ?? 0),
   }));
+}
+
+/**
+ * Sends a test notification to one of a staff member's own browsers and
+ * keeps the subscription's delivery status true (as any send does). Null
+ * when the device is not theirs (or no longer exists).
+ */
+export async function sendStaffTestPush(
+  db: Database,
+  sender: WebPushSender,
+  userId: string,
+  deviceId: string,
+  notification: Pick<PushNotification, "title" | "body">,
+): Promise<WebPushOutcome | null> {
+  const [subscription] = await db.select({
+    id: pushSubscriptions.id,
+    endpoint: pushSubscriptions.endpoint,
+    p256dh: pushSubscriptions.p256dh,
+    auth: pushSubscriptions.auth,
+  }).from(pushSubscriptions)
+    .where(and(ownerCondition({ audience: "staff", userId }), eq(pushSubscriptions.id, deviceId)))
+    .limit(1);
+  if (!subscription) return null;
+  // One tag: a second test replaces the first on the device instead of piling up.
+  const payload = webPushPayload({ ...notification, tag: "scalius-test-push" });
+  return deliverWebPush(db, sender, subscription, payload, { urgency: "high" });
 }
 
 /** Removes one of a staff member's own devices by id. */

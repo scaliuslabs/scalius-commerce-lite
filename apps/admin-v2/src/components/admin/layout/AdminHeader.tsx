@@ -9,7 +9,7 @@ import { ariaKeys, comboCaps, SHORTCUTS } from "./shortcuts";
 import { StoreBadge, useStoreIdentity } from "./store-identity";
 import { useShell } from "./shell";
 
-// Push notifications pull in Firebase; they load after the shell.
+// The bell and its list load after the shell.
 const NotificationDropdown = lazy(() =>
   import("@/components/admin/NotificationDropdown").then((module) => ({ default: module.NotificationDropdown })),
 );
@@ -90,7 +90,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
         {/* Help, as Shopify's: its menu loads the first time it is asked for. */}
         <HelpButton onShortcuts={() => setHelpOpen(true)} label={t("help")} />
         <Suspense fallback={<span className="size-11 shrink-0 md:size-8" />}>
-          <NotificationDropdown userId={user.id} />
+          <NotificationDropdown />
         </Suspense>
         {/* The store menu: badge and name, like Shopify's store switcher. */}
         <UserMenu user={user} side="bottom">
