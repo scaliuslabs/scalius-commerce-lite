@@ -62,6 +62,9 @@ export function AdminNavigationProgressView({ active }: { active: boolean }) {
 }
 
 export function AdminNavigationProgress() {
-  const isNavigating = useRouterState({ select: (state) => state.isLoading });
+  // Loading, or showing a page's skeleton while its data arrives.
+  const isNavigating = useRouterState({
+    select: (state) => state.isLoading || state.matches.some((match) => match.status === "pending"),
+  });
   return <AdminNavigationProgressView active={isNavigating} />;
 }

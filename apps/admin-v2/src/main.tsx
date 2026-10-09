@@ -9,15 +9,19 @@ import { beginBootSessionRead, endBootSessionRead } from "./lib/auth-guards";
 
 const router = getRouter();
 
-// Resolve the first route, including its session guard and any redirect,
-// before anything renders: the blank index.html shell stays up until then,
-// so protected content never flashes for a signed-out visitor.
+// The first load answers every guard, including a redirect to sign-in, from
+// the session read index.html started. Nothing protected renders before that
+// read: the router commits a page only once its guards have passed (and then
+// either its data or, after `defaultPendingMs`, its skeleton inside the
+// shell); until then the boot spinner stays.
 beginBootSessionRead();
-void router.load().finally(() => {
+const stop = router.subscribe("onResolved", () => {
+  stop();
   endBootSessionRead();
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <RouterProvider router={router} />
-    </StrictMode>,
-  );
 });
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <RouterProvider router={router} />
+  </StrictMode>,
+);

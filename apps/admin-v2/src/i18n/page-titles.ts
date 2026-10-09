@@ -162,9 +162,17 @@ export const pageTitleMessages = defineMessages({
 
 export type PageTitleKey = keyof (typeof pageTitleMessages)["en"];
 
+const TITLE_SUFFIX = " · Scalius";
+
 /** The tab title for any page: "Orders · Scalius". */
 export function titleHead(title: string) {
-  return { meta: [{ title: title ? `${title} · Scalius` : "Scalius" }] };
+  return { meta: [{ title: title ? `${title}${TITLE_SUFFIX}` : "Scalius" }] };
+}
+
+/** The page title a route's `head` set ("Orders"), or "" when it set none. */
+export function titleFromHead(meta: ReadonlyArray<{ title?: string } | undefined> | undefined): string {
+  const title = meta?.find((entry) => entry?.title)?.title ?? "";
+  return title.endsWith(TITLE_SUFFIX) ? title.slice(0, -TITLE_SUFFIX.length) : "";
 }
 
 /** Route `head` for a page title key, in the dashboard language. */

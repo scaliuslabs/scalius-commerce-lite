@@ -25,6 +25,9 @@ import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-ur
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
+import { BootSpinner } from "@/components/admin/states/PageSkeleton";
+import { OfflineBanner } from "@/components/admin/states/OfflineBanner";
+import { useOfflineNavigation } from "@/components/admin/states/offline-navigation";
 
 // Asks the API what the store uses once the first page is up.
 const StoreReachProbe = lazy(() => import("~/lib/store-reach-probe"));
@@ -50,6 +53,10 @@ export const Route = createFileRoute("/admin")({
     }
     return authContext;
   },
+  // The shell never shows a pending view: until its session guard answers,
+  // the boot spinner stays; after that each page shows its own skeleton.
+  pendingMs: Number.POSITIVE_INFINITY,
+  pendingComponent: BootSpinner,
   // The navigation's "View store" eye and store row, and the store's time
   // zone and units (every date and weight): read alongside the page's own data.
   loader: ({ context: { queryClient } }) => {
@@ -84,6 +91,8 @@ function AdminLayout() {
   // So is the new-store setup step (Shopify's "Tell us about your store").
   const matchRoute = useMatchRoute();
   const fullWindow = Boolean(matchRoute({ to: "/admin/online-store/theme/editor" }) || matchRoute({ to: "/admin/welcome" }));
+  const { online, waiting } = useOfflineNavigation();
+  const offlineBanner = online ? null : <OfflineBanner waiting={waiting} />;
 
   if (fullWindow) {
     return (
@@ -91,8 +100,11 @@ function AdminLayout() {
         <AdminSessionSync />
         <RealtimeLoader userId={user.id} permissions={permissions} />
         <ShellProvider>
-          <div id="admin-main-scroll" tabIndex={-1} className="h-svh overflow-clip outline-none">
-            <Outlet />
+          <div className="flex h-svh flex-col">
+            {offlineBanner}
+            <div id="admin-main-scroll" tabIndex={-1} className="min-h-0 flex-1 overflow-clip outline-none">
+              <Outlet />
+            </div>
           </div>
         </ShellProvider>
         <DeferredToaster />
@@ -132,6 +144,7 @@ function AdminLayout() {
             <AdminHeader user={user} />
             <div className="relative flex min-h-0 flex-1 flex-col overflow-clip rounded-t-xl bg-background text-foreground md:mb-2 md:ms-2 md:me-2 md:rounded-xl nav:ms-0 print:m-0 print:overflow-visible">
               <AdminNavigationProgress />
+              {offlineBanner}
               <main
                 id="admin-main-scroll"
                 tabIndex={-1}

@@ -1,15 +1,10 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderView } from "~/components/admin/OrderView";
-import { Button } from "~/components/ui/button";
-import { translate, useMessages } from "~/i18n";
-import { saveBarMessages } from "~/i18n/save-bar";
-import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderToastMessages } from "~/i18n/order-toasts";
-import { resourceMessages } from "~/i18n/resource";
+import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import type { Order, OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
 import {
@@ -19,8 +14,6 @@ import {
   type OrderShipmentDto,
 } from "~/lib/api-query-options/orders";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
-import { classifyAdminError } from "~/lib/admin-api-error";
-import { useOrderListReturnHref } from "~/lib/order-list-return";
 import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,
@@ -113,7 +106,8 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
     return { name: formatOrderNumber(order.orderNumber, order.id) };
   },
   head: ({ loaderData }) => titleHead(loaderData?.name ?? ""),
-  errorComponent: OrderDetailErrorComponent,
+  // Opened from a push, an email or the list, the page draws its own shape at once while the order loads.
+  pendingComponent: () => <PageSkeleton kind="detail" main={[4, 3, 2]} side={[3, 2, 2]} />,
   component: OrderViewPage,
 });
 
@@ -162,33 +156,3 @@ function OrderViewPage() {
   return <OrderView order={fullOrder} />;
 }
 
-/** A missing order can't be retried; an unreachable server can. */
-function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  const t = useMessages(orderDetailMessages);
-  const r = useMessages(resourceMessages);
-  const router = useRouter();
-  const backTo = useOrderListReturnHref();
-  // Say what happened: no answer (connection), our fault (server), no such order, or no access.
-  const kind = classifyAdminError(error);
-  const notFound = kind === "notFound";
-  const [title, help] = kind === "notFound" ? [t("notFound"), t("notFoundHelp")]
-    : kind === "network" ? [translate(orderToastMessages, "error.network"), t("error.networkHelp")]
-      : kind === "server" ? [t("loadFailed"), translate(saveBarMessages, "serverError")]
-        : [t("loadFailed"), error.message];
-  return (
-    <section className="mx-auto max-w-xl space-y-4 rounded-xl bg-card p-6 shadow-card">
-      <div className="space-y-1">
-        <h1 className="text-heading-lg font-semibold">{title}</h1>
-        <p className="text-body text-muted-foreground">{help}</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {notFound ? null : (
-          <Button type="button" onClick={() => { reset(); void router.invalidate(); }}>{r("retry")}</Button>
-        )}
-        <Button asChild variant={notFound ? "default" : "outline"}>
-          <Link to={backTo}>{t("backToOrders")}</Link>
-        </Button>
-      </div>
-    </section>
-  );
-}

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useRef, useState } from "react";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
 import { productFieldLabel } from "~/components/admin/product-form/utils";
@@ -7,6 +7,7 @@ import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/v
 import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
 import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
+import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
@@ -55,9 +56,12 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
-    if (!product || (product as ProductDetail).deletedAt) throw redirect({ to: "/admin/products" });
+    // A missing or trashed product says so and links back to the list (polish bar R2).
+    if (!product || (product as ProductDetail).deletedAt) throw notFound();
   },
   head: () => pageHead("product"),
+  // Opened from a link, the page draws its own shape at once while the product loads.
+  pendingComponent: () => <PageSkeleton kind="detail" main={[3, 1, 2, 3]} side={[2, 2, 2]} />,
   errorComponent: RouteErrorComponent,
   component: EditProductPage,
 });

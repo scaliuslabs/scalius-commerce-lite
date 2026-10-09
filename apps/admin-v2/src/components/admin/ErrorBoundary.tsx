@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { ErrorState } from "~/lib/route-error";
+import { ErrorState } from "./states/ErrorState";
 
 interface ErrorBoundaryProps {
   children: ReactNode;

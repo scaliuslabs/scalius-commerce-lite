@@ -21,14 +21,16 @@ export function isOnline(): boolean {
 }
 
 export function classifyFailure(error: unknown, online = isOnline()): FailureKind {
+  if (error == null) return online ? "broken" : "offline";
   // A page's code that failed to download offline is a connection problem, not a deploy.
   if (isRecoverableRouteLoadError(error)) return online ? "updated" : "offline";
+  // The browser itself says it is offline: whatever came back, that is the cause.
+  if (!online) return "offline";
   const status = readAdminApiError(error)?.status ?? null;
   if (status === 404 || status === 410) return "notFound";
   if (status === 403) return "forbidden";
   if (status === 502 || status === 503 || status === 504) return "unavailable";
   if (status !== null) return "broken";
-  if (!online) return "offline";
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (NO_ANSWER.test(message) || (error instanceof Error && NO_ANSWER_NAMES.has(error.name))) return "unreachable";
   return "broken";

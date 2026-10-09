@@ -1,137 +1,21 @@
 /**
- * Page-level error, not-found and no-access states: an icon, one heading,
- * one sentence and one action. Route error boundaries render them inside the
- * admin shell; the router's defaults render them full page when the shell
- * itself failed.
+ * The router's error, not-found and pending views, built from the one state
+ * family (components/admin/states). Route boundaries render them inside the
+ * admin shell; the router's defaults render them full page when the root, or
+ * the shell's own session guard, is what failed.
  */
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, useRouter } from "@tanstack/react-router";
-import { CloudOff, FileQuestion, Lock, RefreshCw, ServerCrash, TriangleAlert, type LucideIcon } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { useMessages } from "~/i18n";
-import { appMessages } from "~/i18n/app";
-import {
-  isRecoverableRouteLoadError,
-  reloadRecoverableRouteOnce,
-  RECOVERABLE_ROUTE_RELOAD_KEY,
-} from "./recoverable-route-error";
+import { useEffect, type ReactNode } from "react";
+import { rootRouteId, useMatch, useRouter } from "@tanstack/react-router";
+import { BootSpinner, PageSkeleton, type PageSkeletonKind } from "~/components/admin/states/PageSkeleton";
+import { ErrorState } from "~/components/admin/states/ErrorState";
+import { NoPermissionState, PageNotFound, RecordNotFound } from "~/components/admin/states/NotFound";
+import { classifyFailure } from "~/components/admin/states/failure";
+import { recordResource } from "~/components/admin/states/record-resource";
+import { titleFromHead } from "~/i18n/page-titles";
+import { reloadRecoverableRouteOnce } from "./recoverable-route-error";
 
-export function PageState({
-  icon: Icon,
-  title,
-  body,
-  action,
-  secondary,
-  fullPage = false,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  action: ReactNode;
-  secondary?: ReactNode;
-  fullPage?: boolean;
-}) {
-  const content = (
-    <>
-      <div className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        <Icon aria-hidden="true" className="size-6" />
-      </div>
-      <div className="flex max-w-sm flex-col gap-1">
-        <h1 className="text-heading-lg">{title}</h1>
-        <p className="text-body text-muted-foreground">{body}</p>
-      </div>
-      <div className="flex flex-col items-center gap-2">
-        {action}
-        {secondary}
-      </div>
-    </>
-  );
-  // Inside the shell the page already sits in its <main>.
-  return fullPage ? (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-4 py-20 text-center text-foreground">
-      {content}
-    </main>
-  ) : (
-    <div className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center">{content}</div>
-  );
-}
-
-/** "Go to Home": the one way out of a page that doesn't exist or isn't yours. */
-export function NotFoundState({ fullPage = false, forbidden = false }: { fullPage?: boolean; forbidden?: boolean }) {
-  const t = useMessages(appMessages);
-  return (
-    <PageState
-      fullPage={fullPage}
-      icon={forbidden ? Lock : FileQuestion}
-      title={t(forbidden ? "forbiddenTitle" : "notFoundTitle")}
-      body={t(forbidden ? "forbiddenBody" : "notFoundBody")}
-      action={
-        <Button asChild>
-          <Link to="/admin">{t("goHome")}</Link>
-        </Button>
-      }
-    />
-  );
-}
-
-/**
- * Copies what support needs to find the fault: the error's name and message,
- * the page path (never its query) and the time. No stack trace on screen.
- */
-function CopyDetailsButton({ error }: { error: Error }) {
-  const t = useMessages(appMessages);
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    const details = [`${error.name}: ${error.message}`, window.location.pathname, new Date().toISOString()].join("\n");
-    void navigator.clipboard?.writeText(details).then(() => setCopied(true), () => undefined);
-  };
-  return (
-    <Button variant="ghost" size="sm" onClick={copy}>
-      {copied ? t("copied") : t("copyDetails")}
-    </Button>
-  );
-}
-
-const FAILURES = {
-  offline: { icon: CloudOff, title: "offlineTitle", body: "offlineBody" },
-  unavailable: { icon: ServerCrash, title: "unavailableTitle", body: "unavailableBody" },
-  broken: { icon: TriangleAlert, title: "errorTitle", body: "errorBody" },
-} as const;
-
-/** A page that failed to render or load: say so plainly, offer a retry, keep the details copyable. */
-export function ErrorState({ error, onRetry, fullPage }: { error: Error; onRetry: () => void; fullPage?: boolean }) {
-  const t = useMessages(appMessages);
-  const failure = classifyFailure(error);
-  const { icon, title, body } = FAILURES[failure];
-  return (
-    <PageState
-      fullPage={fullPage}
-      icon={icon}
-      title={t(title)}
-      body={t(body)}
-      action={<Button onClick={onRetry}>{t("tryAgain")}</Button>}
-      secondary={failure === "broken" ? <CopyDetailsButton error={error} /> : null}
-    />
-  );
-}
-
-function httpStatus(error: unknown): number | null {
-  const status = typeof error === "object" && error !== null ? Number(Reflect.get(error, "status")) : NaN;
-  return Number.isInteger(status) ? status : null;
-}
-
-/**
- * Whose problem it is: the merchant's connection (the request never got an
- * answer), Scalius being down or too slow (a gateway error or a read that
- * timed out), or a fault in the page itself.
- */
-function classifyFailure(error: unknown): keyof typeof FAILURES {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
-  const message = error instanceof Error ? error.message : String(error);
-  if (/failed to fetch|load failed|networkerror|network request failed/i.test(message)) return "offline";
-  const status = httpStatus(error);
-  if (status === 502 || status === 503 || status === 504) return "unavailable";
-  return "broken";
+function FullPage({ children }: { children: ReactNode }) {
+  return <main className="min-h-dvh bg-background px-3 py-12 text-foreground sm:px-4 md:px-6"><div className="mx-auto max-w-2xl">{children}</div></main>;
 }
 
 export function RouteErrorComponent({
@@ -143,43 +27,54 @@ export function RouteErrorComponent({
   reset: () => void;
   fullPage?: boolean;
 }) {
-  const t = useMessages(appMessages);
   const router = useRouter();
-  const updated = isRecoverableRouteLoadError(error);
+  const pageTitle = useMatch({ strict: false, select: (match) => titleFromHead(match.meta) });
+  const kind = classifyFailure(error);
 
   useEffect(() => {
     // A deploy replaced the bundle this tab was using: reload once by itself.
-    if (!updated) return;
+    // Never offline: a reload then is the browser's blank error page.
+    if (kind !== "updated") return;
     reloadRecoverableRouteOnce({
       error,
       pathname: window.location.pathname,
       storage: window.sessionStorage,
       reload: () => window.location.reload(),
     });
-  }, [error, updated]);
+  }, [error, kind]);
 
-  if (updated) {
-    const reload = () => {
-      window.sessionStorage.removeItem(RECOVERABLE_ROUTE_RELOAD_KEY);
-      window.location.reload();
-    };
-    return (
-      <PageState
-        fullPage={fullPage}
-        icon={RefreshCw}
-        title={t("updatedTitle")}
-        body={t("updatedBody")}
-        action={<Button onClick={reload}>{t("reload")}</Button>}
-      />
-    );
-  }
-
-  const status = httpStatus(error);
-  if (status === 404 || status === 403) return <NotFoundState fullPage={fullPage} forbidden={status === 403} />;
+  if (kind === "notFound") return fullPage ? <PageNotFound fullPage /> : <RecordNotFound />;
+  if (kind === "forbidden") return <NoPermissionState fullPage={fullPage} />;
 
   const retry = () => {
     reset();
     void router.invalidate();
   };
-  return <ErrorState error={error} onRetry={retry} fullPage={fullPage} />;
+  const view = <ErrorState error={error} kind={kind} layout="page" pageTitle={pageTitle || undefined} onRetry={retry} />;
+  return fullPage ? <FullPage>{view}</FullPage> : view;
+}
+
+/** No route matched, or a loader threw `notFound()`: name the record when the route shows one. */
+export function RouteNotFoundComponent() {
+  const fullPath = useMatch({ strict: false, select: (match) => (match.routeId === rootRouteId ? null : match.fullPath) });
+  if (fullPath === null) return <PageNotFound fullPage />;
+  return recordResource(fullPath) ? <RecordNotFound /> : <PageNotFound />;
+}
+
+/** Which skeleton a route shows while its loader runs. */
+export function pendingKindForPath(fullPath: string): PageSkeletonKind | null {
+  if (!fullPath.startsWith("/admin")) return null;
+  if (fullPath.startsWith("/admin/settings")) return "settings";
+  return fullPath.includes("$") ? "detail" : "page";
+}
+
+/**
+ * A route still loading after `defaultPendingMs` shows its page's shape
+ * inside the shell (polish bar L1); a standalone page shows the quiet boot
+ * spinner.
+ */
+export function RoutePendingComponent() {
+  const fullPath = useMatch({ strict: false, select: (match) => match.fullPath });
+  const kind = pendingKindForPath(fullPath);
+  return kind ? <PageSkeleton kind={kind} /> : <BootSpinner />;
 }
