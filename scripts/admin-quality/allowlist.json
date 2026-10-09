@@ -1,0 +1,8 @@
+{
+  "findings": [],
+  "network": [],
+  "console": [
+    { "match": "WebSocket|\\[vite\\]|Download the React DevTools", "reason": "Dev-server noise, not the dashboard" },
+    { "match": "^Failed to load resource", "reason": "The same failure is reported as a network finding with its address" }
+  ]
+}

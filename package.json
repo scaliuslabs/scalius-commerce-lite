@@ -51,6 +51,7 @@
     "perf:storefront": "node scripts/storefront-perf.mjs",
     "gallery:storefront": "node apps/storefront/scripts/gallery-server.mjs",
     "quality:storefront": "node scripts/storefront-quality.mjs",
+    "quality:admin": "node scripts/admin-quality.mjs",
     "fidelity:check": "node scripts/storefront-fidelity/check.mjs",
     "check:dist-secrets": "node scripts/check-dist-secrets.mjs",
     "check:build-canaries": "node scripts/check-build-canaries.mjs",
