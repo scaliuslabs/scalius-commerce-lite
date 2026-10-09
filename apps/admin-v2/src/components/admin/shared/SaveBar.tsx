@@ -1,3 +1,5 @@
+import { classifyFailure, isOnline } from "~/components/admin/states/failure";
+import { useOnlineStatus } from "~/components/admin/states/online-status";
 import {
   createContext,
   useCallback,
@@ -153,13 +155,17 @@ const SaveErrorsContext = createContext<SaveFailure & {
 /** What went wrong, in words a merchant can act on. */
 function describeSaveError(error: unknown): string {
   if (readSettingsRevisionConflict(error)) return translate(saveBarMessages, "conflict");
+  // Offline, nothing is wrong with the form: say the edits wait here.
+  if (!isOnline()) return translate(saveBarMessages, "offlineKept");
   return getServerFnError(error);
 }
 
 /** Offline, timed out or a server fault: nothing for the merchant to fix, so Retry. */
 function isConnectionFailure(error: unknown): boolean {
+  if (!isOnline()) return true;
   if (error instanceof AdminApiResponseError) return error.status >= 500;
-  return error instanceof Error && ["TypeError", "AbortError", "TimeoutError"].includes(error.name);
+  const kind = classifyFailure(error);
+  return kind === "unreachable" || kind === "unavailable";
 }
 
 function failureKind(failure: SaveFailure): SaveFailureKind | null {
@@ -504,10 +510,11 @@ const SAVE_BUTTON =
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
   const { dirty, busy, invalid, failure, revealed } = state;
+  const online = useOnlineStatus();
   // The bar says what happened and the one action that helps (Polaris: the bar mirrors the banner).
   const message =
     failure === "conflict" ? t("conflictBar")
-      : failure === "connection" ? t("retryBar")
+      : failure === "connection" ? t(online ? "retryBar" : "offlineBar")
         : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
           : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
