@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Archive, ChevronLeft, ChevronRight, MessageCircle, MoreHorizontal, Phone } from "lucide-react";
+import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -150,13 +150,6 @@ export function OrderView({ order }: { order: Order }) {
             meta={orderMeta}
             actions={
               <>
-                {actions.canPrintInvoices ? (
-                  <Button variant="outline" asChild>
-                    <Link to="/invoice/$orderId" params={{ orderId: order.id }} target="_blank" rel="noopener noreferrer">
-                      {t("printInvoice")}
-                    </Link>
-                  </Button>
-                ) : null}
                 {canEdit ? (
                   editBlockedReason ? (
                     <Tooltip>
@@ -182,20 +175,23 @@ export function OrderView({ order }: { order: Order }) {
                     {t("unarchive")}
                   </Button>
                 ) : null}
-                {canArchive || appActions.entries.length > 0 ? (
+                {actions.canPrintInvoices || canArchive || appActions.entries.length > 0 ? (
+                  // Polaris: secondary actions past the first fold into a named "More actions" menu (C4).
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={t("moreActions")}
-                        title={t("moreActions")}
-                        loading={appActions.pending !== null}
-                      >
-                        <MoreHorizontal className="size-4" />
+                      <Button variant="outline" loading={appActions.pending !== null}>
+                        {t("moreActions")}
+                        <ChevronDown className="size-4" aria-hidden />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {actions.canPrintInvoices ? (
+                        <DropdownMenuItem asChild>
+                          <Link to="/invoice/$orderId" params={{ orderId: order.id }} target="_blank" rel="noopener noreferrer">
+                            {t("printInvoice")}
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : null}
                       {canArchive ? (
                         <DropdownMenuItem
                           disabled={archiveMutation.isPending}

@@ -97,7 +97,8 @@ export function OrderTimelineCard({ order }: { order: Order }) {
             />
             <div className="flex items-center justify-between gap-2">
               {mutation.isError ? <p role="alert" className="text-destructive">{orderErrorMessage(mutation.error)}</p> : <span />}
-              <Button type="submit" size="sm" disabled={!comment.trim()} loading={mutation.isPending}>
+              {/* Secondary until there is something to post (the page keeps one primary, C3). */}
+              <Button type="submit" size="sm" variant={comment.trim() ? "default" : "outline"} disabled={!comment.trim()} loading={mutation.isPending}>
                 {t("timeline.post")}
               </Button>
             </div>

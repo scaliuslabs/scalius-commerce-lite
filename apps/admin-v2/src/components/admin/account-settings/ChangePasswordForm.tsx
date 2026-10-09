@@ -113,7 +113,8 @@ export function ChangePasswordForm() {
           </div>
         </CardContent>
         <CardFooter className="justify-end">
-          <Button type="submit" loading={saving} disabled={!isHydrated || !values.current || !values.next || !values.confirm}>
+          {/* Secondary: the page's one primary is "Turn on" two-step verification (C3); Save shows what is missing (C5). */}
+          <Button type="submit" variant="outline" loading={saving} disabled={!isHydrated}>
             {t("changePassword")}
           </Button>
         </CardFooter>
