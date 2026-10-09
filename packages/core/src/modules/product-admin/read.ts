@@ -17,6 +17,7 @@ import {
     cappedPagination,
     planKeysetPage,
 } from "../../utils/keyset";
+import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -76,52 +77,33 @@ const PRODUCT_KEYSET_SORTS = {
     updatedAt: { column: products.updatedAt, kind: "number", nullable: false },
 } as const satisfies Record<ProductListSort, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean }>;
 
-/**
- * Returns a paginated, searchable list of products for the admin dashboard.
- * Includes variant counts, image counts, and primary image URLs.
- */
-export async function listProducts(db: Database, options: {
+/** The filters of the dashboard's product list, shared by the list and its "all matching" bulk actions. */
+export interface ProductListFilter {
     search?: string;
     categoryId?: string;
-    page?: number;
-    limit?: number;
-    /** Rows after this cursor (`pageInfo.endCursor`); excludes `before` and `page` beyond 1. */
-    after?: string;
-    /** Rows before this cursor (`pageInfo.startCursor`). */
-    before?: string;
     showTrashed?: boolean;
-    /** "active" = sold on the storefront, "draft" = hidden. */
     status?: "active" | "draft";
-    sort?: ProductListSort;
-    order?: "asc" | "desc";
-    /** Agent summaries omit large text/media projections before they leave SQL. */
-    agentSummary?: boolean;
-    /** Compact dashboard lists can omit rich text while preserving the default API contract. */
-    includeDescription?: boolean;
-    /** Only products published (`published`, the default) or not published (`unpublished`) to this sales channel. */
     salesChannelId?: string;
     salesChannelState?: "published" | "unpublished";
     /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
     appCondition?: SQL;
-}) {
+}
+
+/**
+ * The list's WHERE conditions and, for a text search, its relevance order.
+ * The same conditions pick the rows of an "all matching" bulk action, so it
+ * acts on exactly what the list shows.
+ */
+export function productListConditions(db: Database, filter: ProductListFilter): { conditions: SQL[]; rankExpression: SQL | undefined } {
     const {
         search,
         categoryId,
-        page = 1,
-        limit = 10,
-        after,
-        before,
         showTrashed = false,
         status,
-        sort = "updatedAt",
-        order = "desc",
-        agentSummary = false,
-        includeDescription = true,
         salesChannelId,
         salesChannelState = "published",
-    } = options;
-
-    const whereConditions: SQL[] = options.appCondition ? [options.appCondition] : [];
+    } = filter;
+    const whereConditions: SQL[] = filter.appCondition ? [filter.appCondition] : [];
 
     if (showTrashed) {
         whereConditions.push(sql`${products.deletedAt} IS NOT NULL`);
@@ -132,7 +114,7 @@ export async function listProducts(db: Database, options: {
         whereConditions.push(eq(products.isActive, status === "active"));
     }
 
-    let rankExpression = undefined;
+    let rankExpression: SQL | undefined;
     if (search) {
         const barcodeKey = getBarcodeIdentityKey(search);
 
@@ -185,6 +167,88 @@ export async function listProducts(db: Database, options: {
         whereConditions.push(salesChannelState === "published" ? published : sql`NOT ${published}`);
     }
 
+    return { conditions: whereConditions, rankExpression };
+}
+
+/**
+ * One slice of an "all matching" bulk action (`utils/bulk-matching.ts`): the
+ * next `limit` products the list's filter matches after `cursor`, in id
+ * order, with the revision each write claims.
+ */
+export async function listMatchingProductClaims(
+    db: Database,
+    filter: ProductListFilter,
+    cursor: string | undefined,
+    limit: number = BULK_MATCHING_SLICE,
+): Promise<{ claims: Array<{ id: string; expectedAggregateRevision: number }>; next: string | null }> {
+    const { conditions } = productListConditions(db, filter);
+    const after = matchingSliceCondition(products.id, cursor);
+    const rows = await db
+        .select({ id: products.id, aggregateRevision: products.aggregateRevision })
+        .from(products)
+        .where(and(...conditions, ...(after ? [after] : [])))
+        .orderBy(asc(products.id))
+        .limit(limit);
+    return {
+        claims: rows.map((row) => ({ id: row.id, expectedAggregateRevision: row.aggregateRevision })),
+        next: nextMatchingCursor(rows, limit),
+    };
+}
+
+/**
+ * Returns a paginated, searchable list of products for the admin dashboard.
+ * Includes variant counts, image counts, and primary image URLs.
+ */
+export async function listProducts(db: Database, options: {
+    search?: string;
+    categoryId?: string;
+    page?: number;
+    limit?: number;
+    /** Rows after this cursor (`pageInfo.endCursor`); excludes `before` and `page` beyond 1. */
+    after?: string;
+    /** Rows before this cursor (`pageInfo.startCursor`). */
+    before?: string;
+    showTrashed?: boolean;
+    /** "active" = sold on the storefront, "draft" = hidden. */
+    status?: "active" | "draft";
+    sort?: ProductListSort;
+    order?: "asc" | "desc";
+    /** Agent summaries omit large text/media projections before they leave SQL. */
+    agentSummary?: boolean;
+    /** Compact dashboard lists can omit rich text while preserving the default API contract. */
+    includeDescription?: boolean;
+    /** Only products published (`published`, the default) or not published (`unpublished`) to this sales channel. */
+    salesChannelId?: string;
+    salesChannelState?: "published" | "unpublished";
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
+}) {
+    const {
+        search,
+        categoryId,
+        page = 1,
+        limit = 10,
+        after,
+        before,
+        showTrashed = false,
+        status,
+        sort = "updatedAt",
+        order = "desc",
+        agentSummary = false,
+        includeDescription = true,
+        salesChannelId,
+        salesChannelState = "published",
+    } = options;
+
+    const { conditions: whereConditions, rankExpression } = productListConditions(db, {
+        search,
+        categoryId,
+        showTrashed,
+        status,
+        salesChannelId,
+        salesChannelState,
+        appCondition: options.appCondition,
+    });
     const whereClause =
         whereConditions.length > 0 ? and(...whereConditions) : undefined;
 

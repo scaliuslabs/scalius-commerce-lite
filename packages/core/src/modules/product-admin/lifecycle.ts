@@ -472,6 +472,28 @@ export async function bulkDeleteProducts(
     }
 }
 
+/**
+ * Restores several trashed products, each with its own revision claim and
+ * its own batch (a restore may repair the default SKU), one after another.
+ * A product that cannot be restored is reported, never a reason to stop.
+ */
+export async function bulkRestoreProducts(
+    db: Database,
+    productClaims: ProductAggregateRevisionClaim[],
+): Promise<{ outcomes: Array<{ id: string; status: "restored" | "blocked"; code: string | null; message: string | null }> }> {
+    const outcomes: Array<{ id: string; status: "restored" | "blocked"; code: string | null; message: string | null }> = [];
+    for (const claim of productClaims) {
+        try {
+            await restoreProduct(db, claim.id, claim.expectedAggregateRevision);
+            outcomes.push({ id: claim.id, status: "restored", code: null, message: null });
+        } catch (error) {
+            if (!(error instanceof AppError)) throw error;
+            outcomes.push({ id: claim.id, status: "blocked", code: error.code, message: error.message });
+        }
+    }
+    return { outcomes };
+}
+
 export type ProductBulkChanges = { isActive?: boolean; categoryId?: string };
 
 export type ProductBulkUpdateResult = {
