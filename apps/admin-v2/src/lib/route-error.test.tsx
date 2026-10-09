@@ -142,5 +142,7 @@ describe("route pending view", () => {
     expect(pendingKindForPath("/admin/settings/users/$userId")).toBe("settings");
     expect(pendingKindForPath("/admin/analytics")).toBe("page");
     expect(pendingKindForPath("/invoice/$orderId")).toBeNull();
+    // The shell itself keeps the boot spinner until its session guard answers.
+    expect(pendingKindForPath("/admin")).toBeNull();
   });
 });

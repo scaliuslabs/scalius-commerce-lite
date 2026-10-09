@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderView } from "~/components/admin/OrderView";
-import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import type { Order, OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
 import {
@@ -106,8 +105,6 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
     return { name: formatOrderNumber(order.orderNumber, order.id) };
   },
   head: ({ loaderData }) => titleHead(loaderData?.name ?? ""),
-  // Opened from a push, an email or the list, the page draws its own shape at once while the order loads.
-  pendingComponent: () => <PageSkeleton kind="detail" main={[4, 3, 2]} side={[3, 2, 2]} />,
   component: OrderViewPage,
 });
 

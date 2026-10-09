@@ -7,7 +7,6 @@ import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/v
 import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
 import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
-import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
@@ -60,8 +59,6 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
     if (!product || (product as ProductDetail).deletedAt) throw notFound();
   },
   head: () => pageHead("product"),
-  // Opened from a link, the page draws its own shape at once while the product loads.
-  pendingComponent: () => <PageSkeleton kind="detail" main={[3, 1, 2, 3]} side={[2, 2, 2]} />,
   errorComponent: RouteErrorComponent,
   component: EditProductPage,
 });

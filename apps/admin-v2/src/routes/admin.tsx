@@ -25,7 +25,6 @@ import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-ur
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
-import { BootSpinner } from "@/components/admin/states/PageSkeleton";
 import { OfflineBanner } from "@/components/admin/states/OfflineBanner";
 import { useOfflineNavigation } from "@/components/admin/states/offline-navigation";
 
@@ -56,7 +55,6 @@ export const Route = createFileRoute("/admin")({
   // The shell never shows a pending view: until its session guard answers,
   // the boot spinner stays; after that each page shows its own skeleton.
   pendingMs: Number.POSITIVE_INFINITY,
-  pendingComponent: BootSpinner,
   // The navigation's "View store" eye and store row, and the store's time
   // zone and units (every date and weight): read alongside the page's own data.
   loader: ({ context: { queryClient } }) => {

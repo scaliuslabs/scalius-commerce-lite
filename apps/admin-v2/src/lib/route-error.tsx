@@ -61,20 +61,33 @@ export function RouteNotFoundComponent(): JSX.Element {
   return recordResource(fullPath) ? <RecordNotFound /> : <PageNotFound />;
 }
 
-/** Which skeleton a route shows while its loader runs. */
+/** Which skeleton a route shows while its loader runs; null for the shell itself and standalone pages. */
 export function pendingKindForPath(fullPath: string): PageSkeletonKind | null {
-  if (!fullPath.startsWith("/admin")) return null;
+  if (!fullPath.startsWith("/admin/")) return null;
   if (fullPath.startsWith("/admin/settings")) return "settings";
   return fullPath.includes("$") ? "detail" : "page";
 }
 
 /**
+ * Pages opened most from links (a push, an email, a list) draw their own
+ * card layout: rows per card, main column then side column. Kept here, not
+ * in the route files, so no route's pending view becomes a chunk of its own
+ * that a cold or offline load would first have to download.
+ */
+const PAGE_SHAPES: Record<string, { main: number[]; side: number[] }> = {
+  "/admin/orders/$orderId/": { main: [4, 3, 2], side: [3, 2, 2] },
+  "/admin/products/$productId/edit": { main: [3, 1, 2, 3], side: [2, 2, 2] },
+  "/admin/customers/$customerId/edit": { main: [3, 3], side: [2, 2] },
+};
+
+/**
  * A route still loading after `defaultPendingMs` shows its page's shape
- * inside the shell (polish bar L1); a standalone page shows the quiet boot
- * spinner.
+ * inside the shell (polish bar L1); the shell's own guard and standalone
+ * pages show the quiet boot spinner.
  */
 export function RoutePendingComponent(): JSX.Element {
   const fullPath = useMatch({ strict: false, select: (match): string => match.fullPath });
   const kind = pendingKindForPath(fullPath);
-  return kind ? <PageSkeleton kind={kind} /> : <BootSpinner />;
+  if (!kind) return <BootSpinner />;
+  return <PageSkeleton kind={kind} {...PAGE_SHAPES[fullPath]} />;
 }
