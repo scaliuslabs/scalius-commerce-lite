@@ -71,10 +71,13 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           </span>
           <span className="shrink-0 font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
         </span>
+        {/* The name keeps its room; the phone takes what is left and is cut first (T14). */}
         <span className="flex items-center justify-between gap-3 text-body">
-          <span className="min-w-0 truncate">{order.customerName}</span>
+          <span title={order.customerName} className="max-w-full shrink-0 truncate">{order.customerName}</span>
           {order.customerPhone ? (
-            <span className="shrink-0 font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone, getStoreRegion())}</span>
+            <span title={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="min-w-0 truncate font-mono text-muted-foreground">
+              {formatPhoneForDisplay(order.customerPhone, getStoreRegion())}
+            </span>
           ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1">

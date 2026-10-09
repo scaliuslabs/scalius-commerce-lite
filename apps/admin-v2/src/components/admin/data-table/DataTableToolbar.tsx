@@ -110,7 +110,8 @@ export function DataTableToolbar({
       {bulkBar}
       <div data-bulk-hidden={bulk ? "" : undefined} className="px-2 py-2 data-[bulk-hidden]:hidden">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1">
+          {/* Phones: the search has its own row, the buttons share the next (N5). */}
+          <div className="relative min-w-[220px] flex-1 max-sm:basis-full">
             <Search className="absolute inset-s-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
@@ -118,8 +119,8 @@ export function DataTableToolbar({
               aria-label={searchPlaceholder ?? t("search")}
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              // eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon and clear button
-              className="ps-8 pe-11 sm:pe-9"
+              // eslint-disable-next-line shadcn/no-restyle, shadcn/require-static-classes -- room for the inline search icon and, with text, the clear button
+              className={localSearch ? "ps-8 pe-11 sm:pe-9" : "ps-8 pe-3"}
             />
             {localSearch && (
               <button
