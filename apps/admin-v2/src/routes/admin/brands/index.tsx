@@ -31,7 +31,7 @@ import { brandMessages } from "~/i18n/brands";
 import { pageHead } from "~/i18n/page-titles";
 
 const STATUSES = ["published", "draft"] as const;
-const validateBase = createListSearchValidator(["name", "sortOrder", "createdAt", "updatedAt"] as const, { sort: "updatedAt" });
+const validateBase = createListSearchValidator(["name", "sortOrder", "createdAt", "updatedAt"] as const, { sort: "updatedAt", list: "brands" });
 
 function validateBrandSearch(search: SearchValidatorInput) {
   return { ...validateBase(search), status: normalizeOptionalEnumSearchParam(search.status, STATUSES) };
@@ -118,7 +118,6 @@ function BrandsPage() {
       appActions="brand"
       countLabel={(count) => t("brandCount", { count })}
       query={listQuery(search, term)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="brands"
       columns={columns}
       invalidate={[queryKeys.brands.all]}

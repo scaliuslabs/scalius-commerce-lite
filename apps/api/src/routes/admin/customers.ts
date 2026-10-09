@@ -13,6 +13,7 @@ import {
     permanentlyDeleteCustomer,
     restoreCustomer,
     bulkDeleteCustomers,
+    bulkRestoreCustomers,
     buildCustomerOrderMetricsProjection,
     customerKind,
     latestOrderNameSql,
@@ -31,7 +32,9 @@ import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
-import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
+import { customerListFilterQuery, customerListFiltersFromQuery, customerMatchingSchema, readCustomerSlice } from "./customer-marketing";
+import { matchingResultSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -199,7 +202,8 @@ const bulkDeleteRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        customerIds: z.array(z.string()),
+                        customerIds: z.array(z.string().min(1).max(128)).min(1).max(90).optional(),
+                        matching: customerMatchingSchema.optional(),
                         permanent: z.boolean().default(false)
                     })
                 }
@@ -207,15 +211,61 @@ const bulkDeleteRoute = createRoute({
         }
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "Customers moved to trash or deleted; with `matching`, where the next slice starts",
+            content: { "application/json": { schema: successEnvelope(z.object({ matching: matchingResultSchema.optional() })) } },
+        },
+        ...errorResponses,
     }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
-    const { customerIds, permanent } = c.req.valid("json");
-    await bulkDeleteCustomers(db, customerIds, permanent);
-    return noContent(c);
+    const { customerIds: listed, matching, permanent } = c.req.valid("json");
+    requireOneSelection(listed, matching);
+    // A permanent delete reads only customers without orders: the others stay in Trash.
+    const slice = matching ? await readCustomerSlice(db, matching, { trashed: permanent, deletableOnly: permanent }) : null;
+    const customerIds = slice ? slice.ids : listed!;
+    if (customerIds.length > 0) await bulkDeleteCustomers(db, customerIds, permanent);
+    return ok(c, slice ? { matching: { processed: customerIds.length, skipped: 0, next: slice.next } satisfies MatchingResult } : {});
+});
+
+// ── Bulk Restore Customers ──
+
+app.openapi(createRoute({
+    operationId: "dashboard.customers.bulk_restore",
+    method: "post",
+    path: "/bulk-restore",
+    tags: ["Admin - Customers"],
+    summary: "Restore several trashed customers",
+    description: "Restores the listed customers, or one slice of the trashed customers a filter matches (`matching`). A guest record merged into an account stays merged.",
+    request: {
+        body: { required: true, content: { "application/json": { schema: z.object({
+            customerIds: z.array(z.string().min(1).max(128)).min(1).max(90).optional(),
+            matching: customerMatchingSchema.optional(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Customers restored",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                restored: z.array(z.string()),
+                blocked: z.array(z.string()),
+                matching: matchingResultSchema.optional(),
+            })) } },
+        },
+        ...errorResponses,
+    },
+}), async (c) => {
+    const db = c.get("db");
+    const { customerIds: listed, matching } = c.req.valid("json");
+    requireOneSelection(listed, matching);
+    const slice = matching ? await readCustomerSlice(db, matching, { trashed: true, limit: planLimits().lists.bulkPerRowSlice }) : null;
+    const result = await bulkRestoreCustomers(db, slice ? slice.ids : listed!, staffId(c));
+    return ok(c, {
+        ...result,
+        ...(slice ? { matching: { processed: result.restored.length, skipped: result.blocked.length, next: slice.next } satisfies MatchingResult } : {}),
+    });
 });
 
 // ── Get Customer By ID ──

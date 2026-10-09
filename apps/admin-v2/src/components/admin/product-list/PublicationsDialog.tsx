@@ -1,6 +1,7 @@
 // The products list's "Make available / unavailable on channels" (Shopify's
 // bulk publish): choose channels, then the selected products are published
-// to or unpublished from them, 90 products per call.
+// to or unpublished from them, 90 products per call, or every product the
+// list's filter matches, one server slice at a time.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -8,7 +9,8 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Skeleton } from "~/components/ui/skeleton";
-import { inChunks } from "~/components/admin/resource/ResourceListPage";
+import { inChunks, type BulkRun } from "~/components/admin/resource/ResourceListPage";
+import type { BulkTarget } from "~/lib/bulk-selection";
 import { useMessages } from "~/i18n";
 import { salesChannelsMessages } from "~/i18n/sales-channels";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -19,9 +21,12 @@ import {
   setProductPublications,
 } from "~/lib/api-query-options/sales-channels";
 
-export function PublicationsDialog({ action, productIds, onClose, onDone }: {
+export function PublicationsDialog({ action, target, filter, bulk, onClose, onDone }: {
   action: "publish" | "unpublish";
-  productIds: string[];
+  target: BulkTarget<{ id: string }>;
+  /** The list's filter, for a `matching` target. */
+  filter: Record<string, unknown>;
+  bulk: BulkRun;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -30,10 +35,21 @@ export function PublicationsDialog({ action, productIds, onClose, onDone }: {
   const { data: channels, isError } = useQuery(salesChannelsQueryOptions());
   const [chosen, setChosen] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const count = productIds.length;
+  const count = target.kind === "rows" ? target.rows.length : target.count;
 
   const run = useMutation({
-    mutationFn: () => inChunks(productIds, (chunk) => setProductPublications({ action, productIds: chunk, channelIds: chosen })),
+    mutationFn: async () => {
+      if (target.kind === "rows") {
+        await inChunks(target.rows.map((row) => row.id), (chunk) => setProductPublications({ action, productIds: chunk, channelIds: chosen }));
+        return;
+      }
+      // Every matching product: the dialog closes and the bulk bar shows the progress.
+      onClose();
+      await bulk.matching(t(action === "publish" ? "makingAvailable" : "makingUnavailable"), async (cursor) => {
+        const result = await setProductPublications({ action, channelIds: chosen, matching: { filter, ...(cursor ? { cursor } : {}) } });
+        return result.matching ?? { processed: 0, skipped: 0, next: null };
+      });
+    },
     onSuccess: () => {
       toast.success(t(action === "publish" ? "published" : "unpublished"));
       onDone();

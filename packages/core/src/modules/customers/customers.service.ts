@@ -12,7 +12,8 @@ import {
     firstCustomerAddressId,
     orders,
 } from "@scalius/database/schema";
-import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { sql, isNull, asc, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { containsText } from "../../utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
@@ -111,6 +112,90 @@ export function customerListFilterSql(filters: CustomerListFilters = {}): SQL[] 
     return conditions;
 }
 
+/** The customers list's filters, shared by the list and its "all matching" bulk actions. */
+export interface CustomerListFilter {
+    search?: string;
+    showTrashed?: boolean;
+    filters?: CustomerListFilters;
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
+}
+
+/** The list's WHERE conditions: the same rows for the list and for an "all matching" bulk action. */
+export function customerListConditions(db: Database, filter: CustomerListFilter): SQL[] {
+    const { search = "", showTrashed = false } = filter;
+    const whereConditions: SQL[] = filter.appCondition ? [filter.appCondition] : [];
+    if (showTrashed) {
+        // A retired guest record (all its orders joined an account) is merged, not trashed.
+        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`);
+    } else {
+        whereConditions.push(sql`${customers.deletedAt} IS NULL`);
+    }
+    if (search) {
+        const digitsOnly = search.replace(/[^0-9]/g, "");
+        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
+        const ftsCondition = ftsMatch(db, "customers_fts", "customers", search);
+
+        if (looksLikePhone && ftsCondition) {
+            whereConditions.push(sql`(${ftsCondition} OR ${containsText(customers.phone, digitsOnly)})`);
+        } else if (looksLikePhone) {
+            whereConditions.push(containsText(customers.phone, digitsOnly));
+        } else if (ftsCondition) {
+            whereConditions.push(ftsCondition);
+        }
+    }
+
+    whereConditions.push(...customerListFilterSql(filter.filters));
+    return whereConditions;
+}
+
+/**
+ * One slice of an "all matching" bulk action (`utils/bulk-matching.ts`): the
+ * next `limit` customer ids the list's filter matches after `cursor`.
+ * `deletableOnly` keeps to customers with no orders (only they can be
+ * deleted permanently), so the walk never stops on a blocked row.
+ */
+export async function listMatchingCustomerIds(
+    db: Database,
+    filter: CustomerListFilter,
+    cursor: string | undefined,
+    limit: number = BULK_MATCHING_SLICE,
+    options: { deletableOnly?: boolean } = {},
+): Promise<{ ids: string[]; next: string | null }> {
+    const conditions = customerListConditions(db, filter);
+    const after = matchingSliceCondition(customers.id, cursor);
+    if (after) conditions.push(after);
+    if (options.deletableOnly) {
+        conditions.push(sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id})`);
+        conditions.push(sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.accountOwnerCustomerId} = ${customers.id})`);
+    }
+    // Filters read `customer_order_stats` (segments), as the list does.
+    const rows = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+        .where(and(...conditions))
+        .orderBy(asc(customers.id))
+        .limit(limit);
+    return { ids: rows.map((row) => row.id), next: nextMatchingCursor(rows, limit) };
+}
+
+/** Restores several trashed customers one by one; a merged guest record stays merged and is reported. */
+export async function bulkRestoreCustomers(db: Database, ids: readonly string[], actorId: string | null = null): Promise<{ restored: string[]; blocked: string[] }> {
+    const restored: string[] = [];
+    const blocked: string[] = [];
+    for (const id of ids) {
+        try {
+            await restoreCustomer(db, id, actorId);
+            restored.push(id);
+        } catch (error) {
+            if (!(error instanceof ValidationError) && !(error instanceof NotFoundError)) throw error;
+            blocked.push(id);
+        }
+    }
+    return { restored, blocked };
+}
+
 /**
  * Order facts come from `customer_order_stats` (trigger-maintained: real
  * orders only, not `incomplete` or deleted), so the list, its sorting and
@@ -147,28 +232,7 @@ export async function listCustomers(
     } = options;
     const limit = Math.min(Math.max(rawLimit, 1), 100);
 
-    const whereConditions: (SQL | undefined)[] = options.appCondition ? [options.appCondition] : [];
-    if (showTrashed) {
-        // A retired guest record (all its orders joined an account) is merged, not trashed.
-        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`);
-    } else {
-        whereConditions.push(sql`${customers.deletedAt} IS NULL`);
-    }
-    if (search) {
-        const digitsOnly = search.replace(/[^0-9]/g, "");
-        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
-        const ftsCondition = ftsMatch(db, "customers_fts", "customers", search);
-
-        if (looksLikePhone && ftsCondition) {
-            whereConditions.push(sql`(${ftsCondition} OR ${containsText(customers.phone, digitsOnly)})`);
-        } else if (looksLikePhone) {
-            whereConditions.push(containsText(customers.phone, digitsOnly));
-        } else if (ftsCondition) {
-            whereConditions.push(ftsCondition);
-        }
-    }
-
-    whereConditions.push(...customerListFilterSql(options.filters));
+    const whereConditions = customerListConditions(db, { search, showTrashed, filters: options.filters, appCondition: options.appCondition });
 
     const whereClause =
         whereConditions.length > 0
@@ -579,31 +643,33 @@ async function findActiveCustomerWithPhone(db: Database, phone: string, exceptId
 }
 
 export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {
+    if (ids.length === 0) return;
+    // One bound value for the whole id set: a list of 90 ids used twice would
+    // bind 180 values, over D1's 100.
+    const idSet = JSON.stringify(ids);
+    const inSet = (column: SQLWrapper) => sql`${column} IN (SELECT CAST(value AS TEXT) FROM json_each(${idSet}))`;
     if (permanent) {
         const referencedOrder = await db
             .select({ id: orders.id })
             .from(orders)
-            .where(or(
-                inArray(orders.customerId, ids),
-                inArray(orders.accountOwnerCustomerId, ids),
-            ))
+            .where(or(inSet(orders.customerId), inSet(orders.accountOwnerCustomerId)))
             .limit(1)
             .get();
         if (referencedOrder) {
             throw new ValidationError("Customers with order history cannot be permanently deleted. Keep those customers archived.");
         }
         await db.batch([
-            db.delete(customerSessions).where(inArray(customerSessions.customerId, ids)),
-            db.delete(customerHistory).where(inArray(customerHistory.customerId, ids)),
-            db.delete(customers).where(inArray(customers.id, ids)),
+            db.delete(customerSessions).where(inSet(customerSessions.customerId)),
+            db.delete(customerHistory).where(inSet(customerHistory.customerId)),
+            db.delete(customers).where(inSet(customers.id)),
         ] as Parameters<Database["batch"]>[0]);
     } else {
         await db.batch([
-            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids)),
+            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inSet(customers.id)),
             db
                 .update(customerSessions)
                 .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                .where(and(inArray(customerSessions.customerId, ids), isNull(customerSessions.revokedAt))),
+                .where(and(inSet(customerSessions.customerId), isNull(customerSessions.revokedAt))),
         ] as Parameters<Database["batch"]>[0]);
     }
 }

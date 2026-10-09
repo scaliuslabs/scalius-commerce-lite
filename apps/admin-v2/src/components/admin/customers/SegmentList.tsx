@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, UsersRound } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,15 +11,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { Skeleton } from "~/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { useStaticTable } from "~/components/admin/data-table/use-static-table";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { customerSegmentsQueryOptions, type CustomerSegment } from "~/lib/api-query-options/customers";
 import { useMessages } from "~/i18n";
 import { customerSegmentMessages } from "~/i18n/customer-segments";
-import { resourceMessages } from "~/i18n/resource";
 import { DeleteSegmentDialog, SegmentMemberCount, useSegmentExport } from "./segment-actions";
 
 /**
@@ -30,7 +29,6 @@ import { DeleteSegmentDialog, SegmentMemberCount, useSegmentExport } from "./seg
  */
 export function SegmentList() {
   const t = useMessages(customerSegmentMessages);
-  const r = useMessages(resourceMessages);
   const navigate = useNavigate();
   const canEdit = usePermissions().hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
   const segments = useQuery(customerSegmentsQueryOptions());
@@ -43,87 +41,90 @@ export function SegmentList() {
     </Button>
   ) : null;
 
+  const columns = useMemo<ColumnDef<CustomerSegment, unknown>[]>(() => [
+    {
+      id: "name",
+      header: t("segment"),
+      meta: { primary: true, minWidth: 240, maxWidth: 520 },
+      cell: ({ row }) => {
+        const segment = row.original;
+        const note = segment.description
+          || (segment.promotionCount === 1 ? t("usedByOne") : segment.promotionCount > 1 ? t("usedBy", { count: segment.promotionCount }) : "");
+        return (
+          <span className="block min-w-0">
+            <Link
+              to="/admin/customers/segments/$segmentId"
+              params={{ segmentId: segment.id }}
+              title={segment.name}
+              className="block truncate font-medium text-foreground hover:underline"
+            >
+              {segment.name}
+            </Link>
+            {note ? <span title={note} className="block truncate text-muted-foreground">{note}</span> : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: "customers",
+      header: t("customers"),
+      meta: { numeric: true, keep: true, minWidth: 110 },
+      cell: ({ row }) => <SegmentMemberCount segmentId={row.original.id} />,
+    },
+    {
+      id: "actions",
+      header: () => null,
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={t("actionsFor", { name: row.original.name })} title={t("actionsFor", { name: row.original.name })}>
+              <MoreHorizontal aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void navigate({ to: "/admin/customers", search: { segmentId: row.original.id } as never })}>
+              {t("viewCustomers")}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={exporter.busy !== null} onSelect={() => void exporter.run(row.original.id)}>
+              {t("export")}
+            </DropdownMenuItem>
+            {canEdit ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(row.original)}>
+                  {t("delete")}
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+    // `exporter.busy` re-renders the menus; `t` follows the language.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [canEdit, exporter.busy, t]);
+  const { table } = useStaticTable(rows, columns);
+  const nothingYet = !segments.isPending && !segments.isError && rows.length === 0;
+
   return (
     <div className="pb-8">
-      <PageHeader title={t("segments")} actions={rows.length > 0 ? create : null} />
-      {segments.isError ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-body">{t("loadFailed")}</p>
-          <Button variant="outline" size="sm" onClick={() => void segments.refetch()}>{t("retry")}</Button>
-        </Card>
-      ) : segments.isPending ? (
-        <Card className="space-y-3 p-4">
-          {[0, 1, 2].map((index) => <Skeleton key={index} className="h-10 w-full" />)}
-        </Card>
-      ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState icon={UsersRound} title={t("emptyTitle")} description={t("emptyBody")} action={create} help />
-        </Card>
+      <PageHeader title={t("segments")} actions={nothingYet ? null : create} />
+      {nothingYet ? (
+        <EmptyState icon={UsersRound} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
       ) : (
-        <Card className="overflow-clip">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead data-pin="primary">{t("segment")}</TableHead>
-                <TableHead data-numeric="">{t("customers")}</TableHead>
-                <TableHead data-pin="actions"><span className="sr-only">{r("actions")}</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((segment) => (
-                <TableRow key={segment.id}>
-                  <TableCell data-pin="primary">
-                    <Link
-                      to="/admin/customers/segments/$segmentId"
-                      params={{ segmentId: segment.id }}
-                      className="line-clamp-2 break-words font-medium text-foreground hover:underline"
-                    >
-                      {segment.name}
-                    </Link>
-                    {segment.description ? (
-                      <span className="line-clamp-2 break-words text-muted-foreground">{segment.description}</span>
-                    ) : null}
-                    {segment.promotionCount > 0 ? (
-                      <span className="block text-muted-foreground">
-                        {segment.promotionCount === 1 ? t("usedByOne") : t("usedBy", { count: segment.promotionCount })}
-                      </span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell data-numeric="">
-                    <SegmentMemberCount segmentId={segment.id} />
-                  </TableCell>
-                  <TableCell data-pin="actions">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label={t("actionsFor", { name: segment.name })}>
-                          <MoreHorizontal aria-hidden="true" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onSelect={() => void navigate({ to: "/admin/customers", search: { segmentId: segment.id } as never })}
-                        >
-                          {t("viewCustomers")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem disabled={exporter.busy !== null} onSelect={() => void exporter.run(segment.id)}>
-                          {t("export")}
-                        </DropdownMenuItem>
-                        {canEdit ? (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(segment)}>
-                              {t("delete")}
-                            </DropdownMenuItem>
-                          </>
-                        ) : null}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <DataTable
+          variant="card"
+          table={table}
+          isLoading={segments.isPending}
+          isFetching={segments.isFetching}
+          error={segments.isError ? segments.error : undefined}
+          onRetry={() => void segments.refetch()}
+          what={t("segments")}
+          layoutKey="segments"
+          defaultSortLabel={false}
+          paginate={false}
+          getRowHref={(segment) => `/admin/customers/segments/${segment.id}`}
+        />
       )}
       <DeleteSegmentDialog segment={deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }} />
     </div>

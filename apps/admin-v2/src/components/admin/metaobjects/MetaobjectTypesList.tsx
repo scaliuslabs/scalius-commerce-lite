@@ -1,87 +1,96 @@
 // Content → Content types: every content type (the merchant's and the apps')
 // with its entry count and whether the online store can show it. A type opens
 // on its entries.
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FileText } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { useStaticTable } from "~/components/admin/data-table/use-static-table";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
-import { Skeleton } from "~/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { metaobjectMessages } from "~/i18n/metaobjects";
-import { resourceMessages } from "~/i18n/resource";
 import { metaobjectDefinitionsQueryOptions } from "~/lib/api-query-options/metaobjects";
+
+type ContentType = NonNullable<Awaited<ReturnType<NonNullable<ReturnType<typeof metaobjectDefinitionsQueryOptions>["queryFn"]>>>>[number];
 
 export function MetaobjectTypesList() {
   const t = useMessages(metaobjectMessages);
-  const r = useMessages(resourceMessages);
   const canEdit = usePermissions().hasPermission(PERMISSIONS.METAOBJECTS_EDIT);
   const types = useQuery(metaobjectDefinitionsQueryOptions());
-  const rows = types.data ?? [];
+  const rows = useMemo(() => types.data ?? [], [types.data]);
   const create = canEdit ? (
     <Button asChild>
       <Link to="/admin/metaobjects/new">{t("create")}</Link>
     </Button>
   ) : null;
 
+  const columns = useMemo<ColumnDef<ContentType, unknown>[]>(() => [
+    {
+      id: "name",
+      header: t("columnName"),
+      meta: { primary: true, minWidth: 220, maxWidth: 420 },
+      cell: ({ row }) => (
+        <span className="block min-w-0">
+          <Link
+            to="/admin/metaobjects/$definitionId"
+            params={{ definitionId: row.original.id }}
+            title={row.original.name}
+            className="block truncate font-medium text-foreground hover:underline"
+          >
+            {row.original.name}
+          </Link>
+          <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+            <code title={row.original.handle} className="min-w-0 truncate">{row.original.handle}</code>
+            {row.original.owner === "app" ? <Badge variant="info">{t("managedByApp")}</Badge> : null}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "entries",
+      header: t("columnEntries"),
+      meta: { numeric: true, priority: 70, minWidth: 110 },
+      cell: ({ row }) => t("entryCount", { count: row.original.entryCount }),
+    },
+    {
+      id: "store",
+      header: t("columnStore"),
+      meta: { mobile: "status", priority: 60, minWidth: 140 },
+      cell: ({ row }) => (row.original.storefrontAccess
+        ? <Badge variant="success">{t("shownOnStore")}</Badge>
+        : <Badge variant="secondary">{t("privateType")}</Badge>),
+    },
+  ], [t]);
+  const { table } = useStaticTable(rows, columns);
+  const nothingYet = !types.isPending && !types.isError && rows.length === 0;
+
   return (
     <div className="pb-8">
-      <PageHeader title={t("pageTitle")} actions={rows.length > 0 ? create : null} />
+      <PageHeader title={t("pageTitle")} actions={nothingYet ? null : create} />
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("pageDescription")}</p>
-      {types.isError ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-body">{t("loadFailed")}</p>
-          <Button variant="outline" size="sm" onClick={() => void types.refetch()}>{r("retry")}</Button>
-        </Card>
-      ) : types.isPending ? (
-        <Card className="space-y-3 p-4">
-          {[0, 1, 2].map((index) => <Skeleton key={index} className="h-10 w-full" />)}
-        </Card>
-      ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState icon={FileText} title={t("emptyTitle")} description={t("emptyBody")} action={create} help />
-        </Card>
+      {nothingYet ? (
+        <EmptyState icon={FileText} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
       ) : (
-        <Card className="overflow-clip">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead data-pin="primary">{t("columnName")}</TableHead>
-                <TableHead data-numeric="">{t("columnEntries")}</TableHead>
-                <TableHead>{t("columnStore")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((type) => (
-                <TableRow key={type.id}>
-                  <TableCell data-pin="primary">
-                    <Link
-                      to="/admin/metaobjects/$definitionId"
-                      params={{ definitionId: type.id }}
-                      className="line-clamp-2 break-words font-medium text-foreground hover:underline"
-                    >
-                      {type.name}
-                    </Link>
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
-                      <code className="break-all">{type.handle}</code>
-                      {type.owner === "app" ? <Badge variant="info">{t("managedByApp")}</Badge> : null}
-                    </span>
-                  </TableCell>
-                  <TableCell data-numeric="">{t("entryCount", { count: type.entryCount })}</TableCell>
-                  <TableCell>
-                    {type.storefrontAccess ? <Badge variant="success">{t("shownOnStore")}</Badge> : <Badge variant="secondary">{t("privateType")}</Badge>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <DataTable
+          variant="card"
+          table={table}
+          isLoading={types.isPending}
+          isFetching={types.isFetching}
+          error={types.isError ? types.error : undefined}
+          onRetry={() => void types.refetch()}
+          what={t("pageTitle")}
+          layoutKey="content-types"
+          defaultSortLabel={false}
+          paginate={false}
+          getRowHref={(type) => `/admin/metaobjects/${type.id}`}
+        />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { Gift } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { NameText } from "~/components/admin/data-table/cells";
 import { serverTableFeatures, useTable, type ColumnDef } from "~/components/admin/data-table/table-config";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
@@ -15,9 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { giftCardsMessages } from "~/i18n/gift-cards";
-import { resourceMessages } from "~/i18n/resource";
 import {
   giftCardsQueryOptions,
   giftCardSummaryQueryOptions,
@@ -27,7 +27,7 @@ import { useListSearch } from "~/lib/list-search";
 import { IssueGiftCardDialog } from "./IssueGiftCardDialog";
 import { GiftCardStatusBadge } from "./gift-card-fields";
 import { formatGiftCardLastDay, formatGiftCardMoney, maskedGiftCard } from "./gift-card-format";
-import { GIFT_CARD_TABS, giftCardListQuery, giftCardSearchTerm, type GiftCardTab } from "./gift-card-list-state";
+import { GIFT_CARD_LIST, GIFT_CARD_TABS, giftCardListQuery, giftCardPageSize, giftCardSearchTerm, type GiftCardTab } from "./gift-card-list-state";
 
 const TAB_LABEL = {
   all: "tabAll",
@@ -76,7 +76,6 @@ export function GiftCardList({ tab, onTabChange }: {
   onTabChange: (tab: GiftCardTab) => void;
 }) {
   const t = useMessages(giftCardsMessages);
-  const r = useMessages(resourceMessages);
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.GIFT_CARDS_MANAGE);
   const [issueOpen, setIssueOpen] = useState(false);
@@ -84,14 +83,16 @@ export function GiftCardList({ tab, onTabChange }: {
   const [term, setTerm] = useListSearch("giftCards");
   // Keyset pages: the cursors that opened each page so far ("" is the first).
   const [cursors, setCursors] = useState<string[]>([""]);
-  useEffect(() => setCursors([""]), [tab, term]);
+  const [pageSize, setPageSize] = useState(giftCardPageSize);
+  useEffect(() => setCursors([""]), [tab, term, pageSize]);
 
   const query = useQuery({
-    ...giftCardsQueryOptions(giftCardListQuery(tab, term, cursors.at(-1) ?? "")),
+    ...giftCardsQueryOptions(giftCardListQuery(tab, term, cursors.at(-1) ?? "", pageSize)),
     placeholderData: keepPreviousData,
   });
   const items = query.data?.items ?? [];
   const nextCursor = query.data?.nextCursor ?? null;
+  const total = query.data?.total ?? 0;
   const filtered = tab !== "all" || Boolean(term);
 
   const columns = useMemo<ColumnDef<GiftCardSummary, unknown>[]>(() => [
@@ -99,7 +100,7 @@ export function GiftCardList({ tab, onTabChange }: {
       id: "card",
       header: t("columnCard"),
       enableSorting: false,
-      meta: { primary: true, mobile: "primary", minWidth: 140 },
+      meta: { primary: true, mobile: "primary", minWidth: 140, maxWidth: 200 },
       cell: ({ row }) => (
         <Link
           to="/admin/gift-cards/$giftCardId"
@@ -118,7 +119,7 @@ export function GiftCardList({ tab, onTabChange }: {
       cell: ({ row }) => {
         const { customer, recipientName } = row.original;
         if (customer) return <NameText name={customer.name} detail={recipientName ? t("recipientShort", { name: recipientName }) : undefined} />;
-        if (recipientName) return <span className="truncate">{t("recipientShort", { name: recipientName })}</span>;
+        if (recipientName) return <span className="block truncate" title={t("recipientShort", { name: recipientName })}>{t("recipientShort", { name: recipientName })}</span>;
         return <span className="text-muted-foreground">—</span>;
       },
     },
@@ -126,7 +127,7 @@ export function GiftCardList({ tab, onTabChange }: {
       id: "balance",
       header: t("columnBalance"),
       enableSorting: false,
-      meta: { numeric: true, mobile: "secondary", priority: 90, minWidth: 150 },
+      meta: { money: true, mobile: "secondary", minWidth: 150 },
       cell: ({ row }) => (
         <span className="whitespace-nowrap">
           {formatGiftCardMoney(row.original.balanceMinor, row.original.currencyCode)}
@@ -162,8 +163,12 @@ export function GiftCardList({ tab, onTabChange }: {
     getRowId: (row) => row.id,
     manualPagination: true,
     manualSorting: true,
-    rowCount: items.length,
-    state: { pagination: { pageIndex: 0, pageSize: Math.max(1, items.length) }, sorting: [] },
+    rowCount: total,
+    state: { pagination: { pageIndex: cursors.length - 1, pageSize }, sorting: [] },
+    onPaginationChange: (updater) => {
+      const next = typeof updater === "function" ? updater({ pageIndex: cursors.length - 1, pageSize }) : updater;
+      if (next.pageSize !== pageSize) setPageSize(next.pageSize);
+    },
   });
 
   const clearFilters = () => {
@@ -172,70 +177,59 @@ export function GiftCardList({ tab, onTabChange }: {
   };
 
   const issueButton = canManage ? <Button type="button" onClick={() => setIssueOpen(true)}>{t("issueGiftCard")}</Button> : null;
+  // No card issued yet: the first-run card alone, no tabs, search or balance (E1).
+  const nothingYet = !filtered && !query.isPending && !query.isError && total === 0 && items.length === 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <PageHeader title={t("pageTitle")} actions={issueButton} />
+    <div className="mx-auto max-w-7xl space-y-4">
+      <PageHeader title={t("pageTitle")} actions={nothingYet ? undefined : issueButton} />
+      {nothingYet ? (
+        <EmptyState icon={Gift} title={t("emptyTitle")} description={t("emptyBody")} action={issueButton ?? undefined} />
+      ) : (
+      <>
       <OutstandingBalanceCard />
-      <Card className="overflow-clip">
-        <IndexTabs
-          tabs={GIFT_CARD_TABS.map((value) => ({ value, label: t(TAB_LABEL[value]) }))}
-          value={tab}
-          onChange={onTabChange}
-        />
-        <div className="px-2 pt-2">
-          <DataTableToolbar
-            searchValue={term}
-            onSearchChange={(value) => setTerm(giftCardSearchTerm(value))}
-            searchPlaceholder={t("searchPlaceholder")}
-          />
-        </div>
-        <DataTable
-          variant="bare"
-          table={table}
-          isLoading={query.isPending}
-          isFetching={query.isFetching}
-          error={query.isError ? query.error : undefined}
-          onRetry={() => void query.refetch()}
-          paginate={false}
-          defaultSortLabel={false}
-          layoutKey="gift-cards"
-          getRowHref={(card) => `/admin/gift-cards/${card.id}`}
-          emptyState={{
-            icon: Gift,
-            title: filtered ? t("emptyFilteredTitle") : t("emptyTitle"),
-            description: filtered ? t("emptyFilteredBody") : t("emptyBody"),
-            action: filtered ? (
-              <Button type="button" variant="outline" size="sm" onClick={clearFilters}>{t("clearFilters")}</Button>
-            ) : issueButton ?? undefined,
-          }}
-        />
-        {cursors.length > 1 || nextCursor ? (
-          <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
-            <span className="text-body text-muted-foreground">{t("pageNumber", { page: formatNumber(cursors.length) })}</span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={cursors.length <= 1 || query.isFetching}
-                onClick={() => setCursors((history) => history.slice(0, -1))}
-              >
-                {r("previous")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!nextCursor || query.isFetching}
-                onClick={() => nextCursor && setCursors((history) => (history.at(-1) === nextCursor ? history : [...history, nextCursor]))}
-              >
-                {r("next")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Card>
+      <DataTable
+        variant="card"
+        table={table}
+        isLoading={query.isPending}
+        isFetching={query.isFetching}
+        error={query.isError ? query.error : undefined}
+        onRetry={() => void query.refetch()}
+        what={t("whatGiftCards")}
+        defaultSortLabel={false}
+        layoutKey={GIFT_CARD_LIST}
+        getRowHref={(card) => `/admin/gift-cards/${card.id}`}
+        cursorPaging={{
+          total,
+          totalIsCapped: query.data?.totalIsCapped,
+          offset: (cursors.length - 1) * pageSize,
+          pageInfo: {
+            hasNextPage: Boolean(nextCursor),
+            hasPreviousPage: cursors.length > 1,
+            startCursor: cursors.length > 1 ? cursors.at(-1)! : null,
+            endCursor: nextCursor,
+          },
+          onPrevious: () => setCursors((history) => history.slice(0, -1)),
+          onNext: (cursor) => setCursors((history) => (history.at(-1) === cursor ? history : [...history, cursor])),
+        }}
+        toolbar={
+          <>
+            <IndexTabs
+              tabs={GIFT_CARD_TABS.map((value) => ({ value, label: t(TAB_LABEL[value]) }))}
+              value={tab}
+              onChange={onTabChange}
+            />
+            <DataTableToolbar
+              searchValue={term}
+              onSearchChange={(value) => setTerm(giftCardSearchTerm(value))}
+              searchPlaceholder={t("searchPlaceholder")}
+            />
+          </>
+        }
+        emptyState={<FilteredEmptyState title={t("emptyFilteredTitle")} description={t("emptyFilteredBody")} onClearFilters={clearFilters} />}
+      />
+      </>
+      )}
       <IssueGiftCardDialog open={issueOpen} onOpenChange={setIssueOpen} />
     </div>
   );

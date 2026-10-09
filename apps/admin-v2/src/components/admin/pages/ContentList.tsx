@@ -95,7 +95,6 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       list={contentListName(type)}
       appActions={isBlog ? undefined : "page"}
       query={contentListQuery(type, search, term)}
-      pageQuery={(page, limit) => contentListQuery(type, { ...search, page, limit }, term)}
       dataKey="pages"
       columns={columns}
       invalidate={INVALIDATE}
@@ -110,12 +109,12 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       rowTo={editTo}
       rowLabel={(row) => row.title}
       viewUrl={(row) => (isPageLive(row) ? getStorefrontPath(isBlog ? `/blog/${row.slug}` : `/${row.slug}`) : undefined)}
-      bulkActions={canPublish ? (rows, done) => (
+      bulkActions={canPublish ? (target, done) => target.kind !== "rows" ? null : (
         <>
-          <Button variant="outline" size="sm" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows, live: true }, success: t("published") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows: target.rows, live: true }, success: t("published") }, { onSuccess: done })}>
             {t("publish")}
           </Button>
-          <Button variant="outline" size="sm" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows, live: false }, success: t("movedToDraft") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows: target.rows, live: false }, success: t("movedToDraft") }, { onSuccess: done })}>
             {t("unpublish")}
           </Button>
         </>

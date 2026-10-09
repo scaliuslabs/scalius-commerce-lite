@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin/reviews/")({
   validateSearch: validateReviewSearch,
   loaderDeps: ({ search }) => ({ list: reviewListQuery(search), productId: search.productId }),
   loader: async ({ context: { queryClient }, deps }) => {
-    void queryClient.prefetchInfiniteQuery(reviewListQueryOptions(deps.list));
+    void queryClient.prefetchQuery(reviewListQueryOptions(deps.list));
     await warmRouteQuery(queryClient, reviewSummaryQueryOptions(deps.productId));
   },
   head: () => pageHead("reviews"),

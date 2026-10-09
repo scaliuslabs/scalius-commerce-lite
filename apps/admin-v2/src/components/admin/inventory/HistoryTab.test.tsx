@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({ list: vi.fn(), locations: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
+  useNavigate: () => () => undefined,
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -154,16 +155,18 @@ describe("inventory history search", () => {
     await settle();
 
     expect(mocks.list).toHaveBeenLastCalledWith({ query: expect.objectContaining({ movementLocationId: "loc_branch" }) });
-    const lines = [...host.querySelectorAll("li p.tabular-nums")].map((line) => line.textContent);
     const at = translate(inventoryMessages, "onHandAtLocation", { location: "Banani store" });
     const all = translate(inventoryMessages, "onHandAllLocations");
-    expect(lines).toEqual([
-      `${at} -3 (5 → 2)`,
-      `${all} 15 → 12`,
-      `${at} +4`,
-      `${all} 8 → 12`,
+    // The change cell shows the main change; its title names every count it moved.
+    const titles = [...host.querySelectorAll("[title]")]
+      .map((node) => node.getAttribute("title"))
+      .filter((title) => title?.startsWith(at));
+    expect(titles).toEqual([
+      `${at} -3 5 → 2\n${all} 15 → 12`,
+      `${at} +4\n${all} 8 → 12`,
     ]);
-    expect(host.querySelector(`[aria-label="${translate(inventoryMessages, "location")}"]`)).not.toBeNull();
+    // The location filter is set: the Filters button counts it.
+    expect([...host.querySelectorAll("button")].some((node) => node.textContent?.includes("(1)"))).toBe(true);
   });
 
   it("says how many licence keys were imported, never the key pool's id", async () => {

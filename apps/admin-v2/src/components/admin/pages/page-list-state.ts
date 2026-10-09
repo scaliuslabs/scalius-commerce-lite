@@ -14,7 +14,7 @@ export type PageStatusFilter = (typeof PAGE_STATUS_FILTERS)[number];
 
 const validateBasePageSearch = createListSearchValidator(
   ["title", "createdAt", "updatedAt"] as const,
-  { sort: "updatedAt" },
+  { sort: "updatedAt", list: "content" },
 );
 
 export function validatePageSearch(search: SearchValidatorInput) {

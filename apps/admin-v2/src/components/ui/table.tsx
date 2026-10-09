@@ -51,15 +51,35 @@ const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes
 );
 TableBody.displayName = "TableBody";
 
-const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn("group border-b hover:bg-muted data-[state=selected]:bg-accent data-[state=selected]:hover:bg-secondary", className)}
-      {...props}
-    />
-  ),
-);
+/**
+ * Row density (polish bar T3): "default" rows hold a two-line title or a
+ * 40px thumbnail (52px in English), "compact" rows one line (40px). Every
+ * row of a list has its density's height whatever its data, so rows never
+ * jump; the height follows the language's line height (Bangla is taller).
+ */
+export type RowDensity = "default" | "compact";
+
+/**
+ * A list row: `density` fixes its height, `clickable` shows it opens on a
+ * click, `still` keeps a row that is not a record (a skeleton, an empty or
+ * error state) from lighting up on hover.
+ */
+const TableRow = React.forwardRef<
+  HTMLTableRowElement,
+  React.HTMLAttributes<HTMLTableRowElement> & { density?: RowDensity; clickable?: boolean; still?: boolean }
+>(({ className, density, clickable, still, ...props }, ref) => (
+  <tr
+    ref={ref}
+    data-density={density}
+    data-clickable={clickable || undefined}
+    data-still={still || undefined}
+    className={cn(
+      "group border-b hover:bg-muted data-[clickable]:cursor-pointer data-[density=compact]:h-[calc(1lh+20px)] data-[density=default]:h-[calc(2lh+12px)] data-[state=selected]:bg-accent data-[state=selected]:hover:bg-secondary data-[still]:hover:bg-transparent",
+      className,
+    )}
+    {...props}
+  />
+));
 TableRow.displayName = "TableRow";
 
 /*

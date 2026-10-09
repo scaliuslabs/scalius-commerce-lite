@@ -5,7 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { patchApiV1AdminInventoryAlerts, putApiV1AdminInventoryDefaultAlertLevel } from "@scalius/api-client/sdk";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
+import { BellOff } from "lucide-react";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -16,7 +19,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { apiData } from "~/lib/api";
 import { inventoryQueryOptions, type InventoryAlert, type InventoryOverview } from "~/lib/api-query-options/inventory";
-import { createDataSelector } from "~/lib/list-helpers";
+import { DEFAULT_PAGE_SIZE, createDataSelector, readSavedPageSize } from "~/lib/list-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
@@ -137,7 +140,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
   const { inventory: permissions } = useCatalogActionPermissions();
   const { q: search, alert: status } = filters;
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(() => readSavedPageSize("inventory-alerts") ?? DEFAULT_PAGE_SIZE);
   const [storeLevelOpen, setStoreLevelOpen] = useState(false);
   useEffect(() => setPage(1), [search, status]);
 
@@ -224,7 +227,6 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
     onSortingChange: () => undefined,
     enableRowSelection: false,
     enableSorting: false,
-    defaultPageSize: 50,
   });
 
   const overview = rawData as InventoryOverview | undefined;
@@ -256,23 +258,26 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
       error={error}
       onRetry={() => void refetch()}
       itemLabel={t("alertsItem")}
-      pageSizeOptions={[20, 50, 100]}
+      what={t("alertsItem")}
       mobileCardRenderer={mobileCard}
       layoutKey="inventory-alerts"
-      toolbar={<div className="px-2 pt-2"><DataTableToolbar
+      toolbar={<DataTableToolbar
           searchValue={search}
           onSearchChange={(value) => onFiltersChange({ q: value })}
           searchPlaceholder={t("searchProducts")}
+          filterCount={status !== "active" ? 1 : 0}
+          onClearFilters={() => onFiltersChange({ alert: "active" })}
           filters={(
-            <SearchableSelect
-              triggerClassName="w-auto min-w-40"
-              ariaLabel={t("alertStatus")}
-              value={status}
-              onValueChange={(value) => onFiltersChange({ alert: value as AlertFilter })}
-              options={ALERT_FILTERS.map((value) => ({ value, label: t(ALERT_LABEL[value]) }))}
-            />
+            <FilterControl label={t("alertStatus")}>
+              <SearchableSelect
+                ariaLabel={t("alertStatus")}
+                value={status}
+                onValueChange={(value) => onFiltersChange({ alert: value as AlertFilter })}
+                options={ALERT_FILTERS.map((value) => ({ value, label: t(ALERT_LABEL[value]) }))}
+              />
+            </FilterControl>
           )}
-          actions={overview ? (
+          extra={overview ? (
             <StoreAlertLevel
               level={overview.defaultLowStockThreshold ?? null}
               canEdit={permissions.canAdjustStock}
@@ -280,28 +285,21 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
               onOpenChange={setStoreLevelOpen}
             />
           ) : null}
-        /></div>}
+        />}
       emptyState={search || status !== "active"
-        ? {
-            title: r("noResults"),
-            description: r("noResultsHint"),
-            action: (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onFiltersChange({ q: "", alert: "active" })}
-              >
-                {t("clearFilters")}
-              </Button>
-            ),
-          }
-        : {
-            title: t("noAlerts"),
-            description: t("noAlertsHint"),
-            action: permissions.canAdjustStock
+        ? <FilteredEmptyState onClearFilters={() => onFiltersChange({ q: "", alert: "active" })} />
+        : (
+          <EmptyState
+            card={false}
+            help={false}
+            icon={BellOff}
+            title={t("noAlerts")}
+            description={t("noAlertsHint")}
+            action={permissions.canAdjustStock
               ? <Button type="button" variant="outline" onClick={() => setStoreLevelOpen(true)}>{t("setAlertLevels")}</Button>
-              : undefined,
-          }}
+              : undefined}
+          />
+        )}
     />
   );
 }

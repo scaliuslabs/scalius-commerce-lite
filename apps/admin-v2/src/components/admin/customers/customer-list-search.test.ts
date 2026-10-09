@@ -23,7 +23,7 @@ describe("customers list URL state", () => {
 
   it("reads the tab, channel, tag and segment and drops anything else", () => {
     const search = validate({ view: "subscribers", channel: "sms", tag: " VIP ", segmentId: "seg_abc123", page: "2" });
-    expect(search).toMatchObject({ view: "subscribers", channel: "sms", tag: "vip", segmentId: "seg_abc123", page: 2, sort: "updatedAt", limit: 20 });
+    expect(search).toMatchObject({ view: "subscribers", channel: "sms", tag: "vip", segmentId: "seg_abc123", page: 2, sort: "updatedAt", limit: 50 });
 
     expect(validate({ view: "everyone", channel: "fax", segmentId: "cus_1", tag: "x".repeat(41) })).toMatchObject({
       view: undefined,

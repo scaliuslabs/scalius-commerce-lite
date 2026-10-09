@@ -1,32 +1,35 @@
-import { useEffect, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import type { ReviewRejectionReason } from "@scalius/shared/reviews";
-import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableToolbar, IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
+import { ListDate } from "~/components/admin/data-table/ListDate";
+import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
+import { serverTableFeatures, useTable, type ColumnDef, type RowSelectionState } from "~/components/admin/data-table/table-config";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Progress } from "~/components/ui/progress";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Skeleton } from "~/components/ui/skeleton";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { formatNumber, useMessages } from "~/i18n";
 import { reviewsMessages } from "~/i18n/reviews";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
+  REVIEW_PAGE_SIZE,
   reviewListQueryOptions,
   reviewSummaryQueryOptions,
   type AdminReview,
   type ProductReviewStats,
 } from "~/lib/api-query-options/reviews";
-import { formatOrderDate } from "../orderview/formatters";
 import { RejectReviewsDialog } from "./RejectReviewsDialog";
 import { ReviewSettingsDialog } from "./ReviewSettingsDialog";
 import { ReviewSheet } from "./ReviewSheet";
@@ -52,14 +55,21 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
   const tab = reviewTab(search);
   const query = reviewListQuery(search);
   const summary = useQuery(reviewSummaryQueryOptions(search.productId));
-  const list = useInfiniteQuery(reviewListQueryOptions(query));
-  const items = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(search.q || search.rating || search.productId);
-
-  // A selection belongs to the list it was made on.
+  // A selection and the pages walked belong to the list they were made on.
   const scope = JSON.stringify(query);
-  const [selected, setSelected] = useState<string[]>([]);
-  useEffect(() => setSelected([]), [scope]);
+  const [cursors, setCursors] = useState<string[]>([""]);
+  const [selection, setSelection] = useState<RowSelectionState>({});
+  useEffect(() => {
+    setCursors([""]);
+    setSelection({});
+  }, [scope]);
+  const list = useQuery({ ...reviewListQueryOptions(query, cursors.at(-1) ?? ""), placeholderData: keepPreviousData });
+  const items = useMemo(() => list.data?.items ?? [], [list.data]);
+  const nextCursor = list.data?.nextCursor ?? null;
+  const filtered = Boolean(search.q || search.rating || search.productId);
+  const selected = Object.keys(selection).filter((id) => selection[id]);
+  const setSelected = (update: (ids: string[]) => string[]) =>
+    setSelection((current) => Object.fromEntries(update(Object.keys(current).filter((id) => current[id])).map((id) => [id, true])));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rejecting, setRejecting] = useState<string[] | null>(null);
   const moderate = useModerateReviews();
@@ -99,40 +109,78 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
   }
 
   const busy = (action: ModerationAction) => moderate.isPending && moderate.variables?.action === action;
-  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
   const counts = summary.data;
+
+  const columns = useMemo<ColumnDef<AdminReview, unknown>[]>(() => [
+    ...(canModerate ? [createSelectColumn<AdminReview>({ getLabel: (row) => t("selectReview", { name: (row as AdminReview).authorName }) })] : []),
+    {
+      id: "review",
+      header: t("review"),
+      meta: { primary: true, minWidth: 260, maxWidth: 560 },
+      cell: ({ row }) => <ReviewCell review={row.original} onOpen={() => onSearchChange({ review: row.original.id })} />,
+    },
+    {
+      id: "product",
+      header: t("product"),
+      meta: { priority: 70, minWidth: 200, maxWidth: 280 },
+      cell: ({ row }) => <ProductCell review={row.original} search={search} />,
+    },
+    {
+      id: "date",
+      header: t("date"),
+      meta: { priority: 50, minWidth: 140 },
+      cell: ({ row }) => <ListDate value={row.original.createdAt} />,
+    },
+    // `t` follows the language; the search only names the product filter link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [canModerate, t, search.productId, search.status]);
+
+  const table = useTable({
+    features: serverTableFeatures,
+    data: items,
+    columns,
+    getRowId: (row) => row.id,
+    manualPagination: true,
+    manualSorting: true,
+    rowCount: -1,
+    state: { pagination: { pageIndex: cursors.length - 1, pageSize: REVIEW_PAGE_SIZE }, sorting: [], rowSelection: selection },
+    enableRowSelection: canModerate,
+    onRowSelectionChange: (updater) => setSelection((current) => (typeof updater === "function" ? updater(current) : updater)),
+  });
 
   const bulkActions = (
     <>
-      <span className="text-body">{t("selected", { count: selected.length })}</span>
       {tab === "pending" ? (
-        <Button type="button" size="sm" variant="outline" loading={busy("publish")} onClick={() => run(selected, "publish")}>
+        <Button type="button" variant="outline" loading={busy("publish")} onClick={() => run(selected, "publish")}>
           {t("publish")}
         </Button>
       ) : null}
       {tab === "pending" || tab === "published" ? (
-        <Button type="button" size="sm" variant="outline" disabled={moderate.isPending} onClick={() => setRejecting(selected)}>
+        <Button type="button" variant="outline" disabled={moderate.isPending} onClick={() => setRejecting(selected)}>
           {t("reject")}
         </Button>
       ) : null}
       {tab === "rejected" ? (
-        <Button type="button" size="sm" variant="outline" loading={busy("restore")} onClick={() => run(selected, "restore")}>
+        <Button type="button" variant="outline" loading={busy("restore")} onClick={() => run(selected, "restore")}>
           {t("restore")}
         </Button>
       ) : null}
     </>
   );
 
+  const filterCount = (search.rating ? 1 : 0) + (search.productId ? 1 : 0);
   const filters = (
     <>
-      <SearchableSelect
-        ariaLabel={t("ratingFilter")}
-        value={search.rating ? String(search.rating) : "all"}
-        onValueChange={(value) => onSearchChange({ rating: value === "all" ? undefined : (Number(value) as ReviewSearch["rating"]) }, { replace: true })}
-        triggerClassName="w-36"
-        options={[{ value: "all", label: t("rating.all") }, ...[5, 4, 3, 2, 1].map((rating) => ({ value: String(rating), label: t("ratingOption", { count: rating }) }))]}
-      />
+      <FilterControl label={t("ratingFilter")}>
+        <SearchableSelect
+          ariaLabel={t("ratingFilter")}
+          value={search.rating ? String(search.rating) : "all"}
+          onValueChange={(value) => onSearchChange({ rating: value === "all" ? undefined : (Number(value) as ReviewSearch["rating"]) }, { replace: true })}
+          options={[{ value: "all", label: t("rating.all") }, ...[5, 4, 3, 2, 1].map((rating) => ({ value: String(rating), label: t("ratingOption", { count: rating }) }))]}
+        />
+      </FilterControl>
       {canPickProduct ? (
+        <FilterControl label={t("productFilter")}>
         <SearchableSelect
           load={reviewProductLoader}
           queryKey={["reviews", "product-filter"]}
@@ -144,8 +192,8 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
           emptyMessage={t("productEmpty")}
           ariaLabel={t("productFilter")}
           clearable
-          triggerClassName="w-56"
         />
+        </FilterControl>
       ) : null}
     </>
   );
@@ -162,97 +210,68 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
         {search.productId && counts?.product ? (
           <ProductRatingCard stats={counts.product} onShowAll={() => onSearchChange({ productId: undefined })} />
         ) : null}
-        <Card className="overflow-clip">
-          <IndexTabs
-            label={t("title")}
-            tabs={REVIEW_TABS.map((value) => ({
-              value,
-              label: counts ? t("tabCount", { label: t(`tab.${value}`), count: counts[value] }) : t(`tab.${value}`),
-            }))}
-            value={tab}
-            onChange={(value) => onSearchChange({ status: value === "pending" ? undefined : value })}
-          />
-          <div className="px-2 pt-2">
-            <DataTableToolbar
-              searchValue={search.q ?? ""}
-              onSearchChange={(value) => onSearchChange({ q: value.trim() || undefined }, { replace: true })}
-              searchPlaceholder={t("search")}
-              selectedCount={selected.length}
-              bulkActions={canModerate ? bulkActions : undefined}
-              filters={filters}
-            />
-          </div>
-          {list.isPending ? (
-            <ul aria-busy className="divide-y border-t">
-              {Array.from({ length: 5 }, (_, index) => (
-                <li key={index} className="flex flex-col gap-2 px-3 py-3">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-4 w-full" />
-                </li>
-              ))}
-            </ul>
-          ) : list.isError ? (
-            <div className="flex flex-col items-start gap-2 border-t p-4">
-              <p className="text-body text-destructive">{t("loadFailed")}</p>
-              <Button type="button" size="sm" variant="outline" onClick={() => void list.refetch()}>{t("retry")}</Button>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="border-t">
-              <EmptyState
-                icon={Star}
-                title={filtered ? t("empty.filtered") : t(`empty.${tab}`)}
-                description={filtered ? t("empty.filteredBody") : t(`empty.${tab}Body`)}
-                action={filtered ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onSearchChange({ q: undefined, rating: undefined, productId: undefined })}
-                  >
-                    {t("clearFilters")}
-                  </Button>
-                ) : undefined}
-              />
-            </div>
-          ) : (
+        {/* Nothing reviewed yet: the first-run card alone (E1). */}
+        {!filtered && !list.isPending && !list.isError && counts && counts.pending + counts.published + counts.rejected === 0 ? (
+          <EmptyState icon={Star} title={t("empty.pending")} description={t("empty.pendingBody")} />
+        ) : (
+        <DataTable
+          variant="card"
+          table={table}
+          isLoading={list.isPending}
+          isFetching={list.isFetching}
+          error={list.isError ? list.error : undefined}
+          onRetry={() => void list.refetch()}
+          what={t("whatReviews")}
+          defaultSortLabel={false}
+          layoutKey="reviews"
+          pageSizeOptions={[REVIEW_PAGE_SIZE]}
+          cursorPaging={{
+            total: filtered || !counts ? null : counts[tab],
+            offset: (cursors.length - 1) * REVIEW_PAGE_SIZE,
+            pageInfo: {
+              hasNextPage: Boolean(nextCursor),
+              hasPreviousPage: cursors.length > 1,
+              startCursor: cursors.length > 1 ? cursors.at(-1)! : null,
+              endCursor: nextCursor,
+            },
+            onPrevious: () => setCursors((history) => history.slice(0, -1)),
+            onNext: (cursor) => setCursors((history) => (history.at(-1) === cursor ? history : [...history, cursor])),
+          }}
+          toolbar={(
             <>
-              <div className="flex items-center gap-3 border-t bg-muted px-3 py-1.5 text-caption font-medium text-muted-foreground">
-                {canModerate ? (
-                  <Checkbox
-                    aria-label={t("selectAll")}
-                    checked={allSelected ? true : selected.length > 0 ? "indeterminate" : false}
-                    onCheckedChange={(checked) => setSelected(checked === true ? items.map((item) => item.id) : [])}
-                  />
-                ) : null}
-                <span className="flex-1">{t("review")}</span>
-                <span className="hidden w-64 shrink-0 md:block">{t("product")}</span>
-              </div>
-              <ul className="divide-y border-t">
-                {items.map((review) => (
-                  <ReviewRow
-                    key={review.id}
-                    review={review}
-                    search={search}
-                    active={review.id === search.review}
-                    selectable={canModerate}
-                    selected={selected.includes(review.id)}
-                    onSelect={(checked) =>
-                      setSelected((current) => (checked ? [...current, review.id] : current.filter((id) => id !== review.id)))
-                    }
-                    onOpen={() => onSearchChange({ review: review.id })}
-                  />
-                ))}
-              </ul>
-              {list.hasNextPage ? (
-                <div className="flex justify-center border-t p-3">
-                  <Button type="button" size="sm" variant="ghost" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
-                    {t("loadMore")}
-                  </Button>
-                </div>
-              ) : null}
+              <IndexTabs
+                label={t("title")}
+                tabs={REVIEW_TABS.map((value) => ({
+                  value,
+                  label: counts ? t("tabCount", { label: t(`tab.${value}`), count: counts[value] }) : t(`tab.${value}`),
+                }))}
+                value={tab}
+                onChange={(value) => onSearchChange({ status: value === "pending" ? undefined : value })}
+              />
+              <DataTableToolbar
+                searchValue={search.q ?? ""}
+                onSearchChange={(value) => onSearchChange({ q: value.trim() || undefined }, { replace: true })}
+                searchPlaceholder={t("search")}
+                bulkBar={canModerate && selected.length > 0 ? (
+                  <IndexBulkBar status={t("selected", { count: selected.length })} actions={bulkActions} onClear={() => setSelection({})} />
+                ) : undefined}
+                filters={filters}
+                filterCount={filterCount}
+                onClearFilters={() => onSearchChange({ rating: undefined, productId: undefined })}
+              />
             </>
           )}
-        </Card>
+          emptyState={filtered ? (
+            <FilteredEmptyState
+              title={t("empty.filtered")}
+              description={t("empty.filteredBody")}
+              onClearFilters={() => onSearchChange({ q: undefined, rating: undefined, productId: undefined })}
+            />
+          ) : (
+            <FilteredEmptyState title={t(`empty.${tab}`)} description={t(`empty.${tab}Body`)} />
+          )}
+        />
+        )}
       </div>
 
       <ReviewSheet
@@ -274,76 +293,51 @@ export function ReviewsPage({ search, onSearchChange }: { search: ReviewSearch; 
   );
 }
 
-function ReviewRow({
-  review,
-  search,
-  active,
-  selectable,
-  selected,
-  onSelect,
-  onOpen,
-}: {
-  review: AdminReview;
-  search: ReviewSearch;
-  active: boolean;
-  selectable: boolean;
-  selected: boolean;
-  onSelect: (checked: boolean) => void;
-  onOpen: () => void;
-}) {
+/** The review: stars and title on the first line, the text on the second; it opens the review sheet. */
+function ReviewCell({ review, onOpen }: { review: AdminReview; onOpen: () => void }) {
   const t = useMessages(reviewsMessages);
+  const flags = review.status === "pending" && review.checkFlags.length > 0;
   return (
-    <li
-      data-state={active || selected ? "selected" : undefined}
-      className="flex items-start gap-3 px-3 py-3 hover:bg-accent data-[state=selected]:bg-accent"
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full min-w-0 flex-col rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {selectable ? (
-        <span className="flex h-lh items-center">
-          <Checkbox
-            checked={selected}
-            onCheckedChange={(checked) => onSelect(checked === true)}
-            aria-label={t("selectReview", { name: review.authorName })}
-          />
-        </span>
-      ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="flex flex-wrap items-center gap-2">
-            <ReviewStars rating={review.rating} />
-            {review.title ? <span className="min-w-0 break-words font-medium">{review.title}</span> : null}
-          </span>
-          {review.body ? <span className="line-clamp-2 break-words text-muted-foreground">{review.body}</span> : null}
-          <span className="flex flex-wrap items-center gap-2 text-body text-muted-foreground">
-            {t("byline", { name: review.authorName, date: formatOrderDate(review.createdAt) ?? "" })}
-            <Badge variant="success">{t("verified")}</Badge>
-          </span>
-          {review.status === "pending" ? <CheckFlagChips flags={review.checkFlags} /> : null}
-          {review.status === "rejected" && review.moderationReason ? (
-            <span className="text-body text-muted-foreground">{t("rejectedFor", { reason: t(`reason.${review.moderationReason}`) })}</span>
-          ) : null}
-        </button>
-        <div className="flex min-w-0 items-start gap-3 md:w-64 md:shrink-0">
-          <ProductThumb imageUrl={review.product.imageUrl} />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="line-clamp-2 break-words">{review.product.name}</span>
-            {review.variantLabel ? <span className="truncate text-body text-muted-foreground">{review.variantLabel}</span> : null}
-            {search.productId !== review.product.id ? (
-              <Link
-                to="/admin/reviews"
-                search={{ status: search.status, productId: review.product.id }}
-                className="text-body text-link hover:underline"
-              >
-                {t("productReviews")}
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </li>
+      <span className="flex min-w-0 items-center gap-2">
+        <ReviewStars rating={review.rating} />
+        <span title={review.title ?? undefined} className="min-w-0 truncate font-medium">{review.title ?? review.authorName}</span>
+        <Badge variant="success" className="shrink-0">{t("verified")}</Badge>
+        {flags ? <CheckFlagChips flags={review.checkFlags} /> : null}
+      </span>
+      <span title={review.body ?? undefined} className="block truncate text-muted-foreground">
+        {review.status === "rejected" && review.moderationReason
+          ? t("rejectedFor", { reason: t(`reason.${review.moderationReason}`) })
+          : review.body || review.authorName}
+      </span>
+    </button>
+  );
+}
+
+/** The product reviewed (with its variant), and a link to that product's reviews. */
+function ProductCell({ review, search }: { review: AdminReview; search: ReviewSearch }) {
+  const t = useMessages(reviewsMessages);
+  const name = review.variantLabel ? `${review.product.name} · ${review.variantLabel}` : review.product.name;
+  return (
+    <span className="flex min-w-0 items-center gap-3">
+      <ProductThumb imageUrl={review.product.imageUrl} />
+      <span className="flex min-w-0 flex-col">
+        <span title={name} className="truncate">{name}</span>
+        {search.productId !== review.product.id ? (
+          <Link
+            to="/admin/reviews"
+            search={{ status: search.status, productId: review.product.id }}
+            className="truncate text-body text-link hover:underline"
+          >
+            {t("productReviews")}
+          </Link>
+        ) : null}
+      </span>
+    </span>
   );
 }
 

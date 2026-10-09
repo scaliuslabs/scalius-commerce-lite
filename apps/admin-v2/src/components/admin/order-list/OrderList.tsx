@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { Archive, Blocks, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
@@ -12,10 +12,10 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { DataTable } from "~/components/admin/data-table/DataTable";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
-import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
 import { appActionMessages } from "~/i18n/app-actions";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
@@ -32,7 +32,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
 import { getOrderColumns } from "./order-columns";
 import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
-import { useOrderExportDialog } from "./order-export";
+import { OrdersFirstRunContext, useOrderExportDialog } from "./order-export";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
@@ -42,7 +42,7 @@ import {
   orderSearchSortUpdates,
   type OrderListSearch,
 } from "./order-list-search";
-import { OrderListToolbar } from "./OrderListToolbar";
+import { OrderListToolbar, OrderSortMenu } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
 import { useLiveOrderList } from "./use-live-order-list";
@@ -131,7 +131,6 @@ export function OrderList({
     onPaginationChange: (_page, limit) => onChange({ page: 1, limit }),
     onSortingChange: () => undefined,
     enableSorting: false,
-    defaultPageSize: 10,
   });
 
   const pageRows = table.getRowModel().rows;
@@ -243,8 +242,13 @@ export function OrderList({
     ...appMoreActions,
   ].filter((action) => action !== null);
 
-  const bulkButtons = (
+  const selectionStatus = (
     <>
+      <span>
+        {allSelected
+          ? t(totalIsCapped ? "firstSelected" : "allSelected", { count: selectedCount })
+          : tr("selected", { count: selectedCount })}
+      </span>
       {pageFullySelected && !allSelected && pagination.total > pageRows.length ? (
         <Button variant="link" onClick={() => setAllMatchingKey(filtersKey)}>
           {totalIsCapped
@@ -252,6 +256,10 @@ export function OrderList({
           : t("selectAllMatching", { count: pagination.total })}
         </Button>
       ) : null}
+    </>
+  );
+  const bulkButtons = (
+    <>
       {!showArchived && !allSelected && orderActions.canChangeOrderStatus ? (
         <Button variant="outline" onClick={() => openBulk("confirm")} disabled={actions.busy}>
           <CircleCheck className="h-4 w-4" />
@@ -272,7 +280,7 @@ export function OrderList({
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label={tr("moreActions")} title={tr("moreActions")}>
+          <Button variant="outline" size="icon" className="shrink-0" aria-label={tr("moreActions")} title={tr("moreActions")}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -300,6 +308,11 @@ export function OrderList({
   };
   // No order has ever been placed: an empty state, not a table of nothing.
   const nothingYet = !isLoading && !isError && !filtered && !showArchived && pagination.total === 0 && pageRows.length === 0;
+  const reportFirstRun = useContext(OrdersFirstRunContext);
+  useEffect(() => {
+    reportFirstRun(nothingYet);
+    return () => reportFirstRun(false);
+  }, [nothingYet, reportFirstRun]);
   const cancelOrder = actions.cancelOrder;
   const cancelLoaded = useOpenedOnce(cancelOrder !== null);
   const bulkLoaded = useOpenedOnce(actions.dialog !== null);
@@ -309,6 +322,7 @@ export function OrderList({
     <>
       {nothingYet ? (
         <EmptyState
+          card={false}
           icon={ShoppingBag}
           title={t("emptyTitle")}
           description={t("emptyBody")}
@@ -317,7 +331,6 @@ export function OrderList({
               <Link to="/admin/orders/new">{t("createOrder")}</Link>
             </Button>
           ) : undefined}
-          help
         />
       ) : (
       <DataTable
@@ -328,9 +341,10 @@ export function OrderList({
         isLoading={isLoading}
         error={isError ? error : null}
         onRetry={() => void refetch()}
+        what={t("itemLabel")}
         itemLabel={t("itemLabel")}
-        pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
+        sortMenu={<OrderSortMenu search={search} term={term} onChange={onChange} />}
         cursorPaging={{
           total: pagination.total,
           totalIsCapped,
@@ -340,7 +354,7 @@ export function OrderList({
           onPrevious: (startCursor) => onChange({ before: startCursor, after: undefined, page: 1 }),
         }}
         layoutKey="orders"
-        toolbar={<div className="px-2 pt-2"><OrderListToolbar
+        toolbar={<OrderListToolbar
             search={search}
             term={term}
             onSearch={(value) => {
@@ -350,43 +364,19 @@ export function OrderList({
             }}
             onChange={onChange}
             appFilterable={appList.filterable.length > 0}
-            selectedCount={selectedRows.length}
             live={live}
-            bulkActions={
-              <div className="hidden flex-wrap items-center gap-2 md:flex">
-                <span className="text-body font-medium">
-                  {allSelected
-                    ? t(totalIsCapped ? "firstSelected" : "allSelected", { count: selectedCount })
-                    : tr("selected", { count: selectedCount })}
-                </span>
-                {bulkButtons}
-              </div>
-            }
-          /></div>}
-        emptyState={{
-          icon: ShoppingBag,
-          title: showArchived ? t("archivedEmptyTitle") : filtered ? t("noMatchTitle") : t("emptyTitle"),
-          description: showArchived
-            ? t("archivedEmptyBody")
-            : filtered
-              ? tr("noResultsHint")
-              : t("emptyBody"),
-          action: filtered || showArchived ? (
-            <Button variant="outline" onClick={clearFilters}>
-              {t("clearFilters")}
-            </Button>
-          ) : orderActions.canCreateOrders ? (
-            <Button asChild>
-              <Link to="/admin/orders/new">{t("createOrder")}</Link>
-            </Button>
-          ) : undefined,
-        }}
+            bulkBar={selectedRows.length > 0 ? <IndexBulkBar status={selectionStatus} actions={bulkButtons} onClear={clearAll} /> : undefined}
+          />}
+        emptyState={(
+          <FilteredEmptyState
+            title={showArchived ? t("archivedEmptyTitle") : filtered ? t("noMatchTitle") : t("emptyTitle")}
+            description={showArchived ? t("archivedEmptyBody") : filtered ? undefined : t("emptyBody")}
+            onClearFilters={filtered || showArchived ? clearFilters : undefined}
+          />
+        )}
       />
       )}
 
-      <SelectionSheet count={selectedCount} clearLabel={t("clearSelection")} onClear={clearAll}>
-        {bulkButtons}
-      </SelectionSheet>
       {appActions.dialogs}
 
       {cancelLoaded ? (

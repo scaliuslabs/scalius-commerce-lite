@@ -166,6 +166,8 @@ app.openapi(createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         items: z.array(giftCardSummarySchema),
         nextCursor: z.string().nullable(),
+        total: z.number().int().nonnegative().openapi({ description: "Cards the filter matches: exact up to the count cap (1,000; 10,000 on a Paid deployment), else the cap with totalIsCapped." }),
+        totalIsCapped: z.boolean(),
       })) } },
     },
     ...errorResponses,
@@ -173,7 +175,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const query = c.req.valid("query");
   const page = await listGiftCardsForStaff(c.get("db"), query);
-  return ok(c, { items: page.items.map(presentSummary), nextCursor: page.nextCursor });
+  return ok(c, { items: page.items.map(presentSummary), nextCursor: page.nextCursor, total: page.total, totalIsCapped: page.totalIsCapped });
 });
 
 // ── Liability summary ──

@@ -1,95 +1,111 @@
 // Products › Price lists (docs/MARKETS-DESIGN.md D5), Medusa's price lists
 // list: each list with its type, market, state, SKU count and schedule. A
 // list opens on its own page; a new one starts as a draft.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Tag } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { useStaticTable } from "~/components/admin/data-table/use-static-table";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
-import { Skeleton } from "~/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { formatNumber, useMessages } from "~/i18n";
 import { priceListMessages } from "~/i18n/price-lists";
-import { resourceMessages } from "~/i18n/resource";
-import { priceListsQueryOptions } from "~/lib/api-query-options/price-lists";
+import { priceListsQueryOptions, type PriceListSummary } from "~/lib/api-query-options/price-lists";
 import { CreatePriceListDialog } from "./CreatePriceListDialog";
 import { KIND_LABEL, scheduleText } from "./price-list-form";
 
 export function PriceListsList() {
   const t = useMessages(priceListMessages);
-  const r = useMessages(resourceMessages);
   const canEdit = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_EDIT);
   const lists = useQuery(priceListsQueryOptions());
   const [creating, setCreating] = useState(false);
-  const rows = lists.data ?? [];
+  const rows = useMemo(() => lists.data ?? [], [lists.data]);
   const create = canEdit ? <Button onClick={() => setCreating(true)}>{t("create")}</Button> : null;
+
+  const columns = useMemo<ColumnDef<PriceListSummary, unknown>[]>(() => [
+    {
+      id: "name",
+      header: t("columnName"),
+      meta: { primary: true, minWidth: 220, maxWidth: 420 },
+      cell: ({ row }) => (
+        <span className="block min-w-0">
+          <Link
+            to="/admin/price-lists/$priceListId"
+            params={{ priceListId: row.original.id }}
+            title={row.original.name}
+            className="block truncate font-medium text-foreground hover:underline"
+          >
+            {row.original.name}
+          </Link>
+          {row.original.description ? <span title={row.original.description} className="block truncate text-muted-foreground">{row.original.description}</span> : null}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: t("columnStatus"),
+      meta: { mobile: "status", priority: 90, minWidth: 110 },
+      cell: ({ row }) => <StatusBadge status={row.original.state}>{t(row.original.state)}</StatusBadge>,
+    },
+    {
+      id: "type",
+      header: t("columnType"),
+      meta: { priority: 60, minWidth: 180, maxWidth: 260 },
+      cell: ({ row }) => {
+        const list = row.original;
+        const where = list.kind === "segment" && list.segmentName
+          ? t("segmentOf", { segment: list.segmentName, market: list.marketName })
+          : list.marketName;
+        return (
+          <span className="block min-w-0">
+            <span className="block truncate">{t(KIND_LABEL[list.kind])}</span>
+            <span title={where ?? undefined} className="block truncate text-muted-foreground">{where}</span>
+          </span>
+        );
+      },
+    },
+    {
+      id: "prices",
+      header: t("columnPrices"),
+      meta: { numeric: true, priority: 70, minWidth: 90 },
+      cell: ({ row }) => formatNumber(row.original.variantCount),
+    },
+    {
+      id: "schedule",
+      header: t("columnSchedule"),
+      meta: { priority: 40, minWidth: 180 },
+      cell: ({ row }) => <span className="block truncate" title={scheduleText(row.original, t)}>{scheduleText(row.original, t)}</span>,
+    },
+  ], [t]);
+  const { table } = useStaticTable(rows, columns);
+  const nothingYet = !lists.isPending && !lists.isError && rows.length === 0;
 
   return (
     <div className="pb-8">
-      <PageHeader title={t("pageTitle")} actions={rows.length > 0 ? create : null} />
+      <PageHeader title={t("pageTitle")} actions={nothingYet ? null : create} />
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("pageDescription")}</p>
-      {lists.isError ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-body">{t("loadFailed")}</p>
-          <Button variant="outline" size="sm" onClick={() => void lists.refetch()}>{r("retry")}</Button>
-        </Card>
-      ) : lists.isPending ? (
-        <Card className="space-y-3 p-4">
-          {[0, 1, 2].map((index) => <Skeleton key={index} className="h-10 w-full" />)}
-        </Card>
-      ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState icon={Tag} title={t("emptyTitle")} description={t("emptyBody")} action={create} help />
-        </Card>
+      {nothingYet ? (
+        <EmptyState icon={Tag} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
       ) : (
-        <Card className="overflow-clip">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead data-pin="primary">{t("columnName")}</TableHead>
-                <TableHead>{t("columnStatus")}</TableHead>
-                <TableHead>{t("columnType")}</TableHead>
-                <TableHead data-numeric="">{t("columnPrices")}</TableHead>
-                <TableHead>{t("columnSchedule")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((list) => (
-                <TableRow key={list.id}>
-                  <TableCell data-pin="primary">
-                    <Link
-                      to="/admin/price-lists/$priceListId"
-                      params={{ priceListId: list.id }}
-                      className="line-clamp-2 break-words font-medium text-foreground hover:underline"
-                    >
-                      {list.name}
-                    </Link>
-                    {list.description ? <span className="line-clamp-1 break-words text-muted-foreground">{list.description}</span> : null}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={list.state}>{t(list.state)}</StatusBadge>
-                  </TableCell>
-                  <TableCell>
-                    <span className="block">{t(KIND_LABEL[list.kind])}</span>
-                    <span className="block text-muted-foreground">
-                      {list.kind === "segment" && list.segmentName
-                        ? t("segmentOf", { segment: list.segmentName, market: list.marketName })
-                        : list.marketName}
-                    </span>
-                  </TableCell>
-                  <TableCell data-numeric="">{formatNumber(list.variantCount)}</TableCell>
-                  <TableCell>{scheduleText(list, t)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <DataTable
+          variant="card"
+          table={table}
+          isLoading={lists.isPending}
+          isFetching={lists.isFetching}
+          error={lists.isError ? lists.error : undefined}
+          onRetry={() => void lists.refetch()}
+          what={t("pageTitle")}
+          layoutKey="price-lists"
+          defaultSortLabel={false}
+          paginate={false}
+          getRowHref={(list) => `/admin/price-lists/${list.id}`}
+        />
       )}
       {canEdit ? <CreatePriceListDialog open={creating} onOpenChange={setCreating} /> : null}
     </div>

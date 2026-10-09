@@ -220,7 +220,10 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     scope: (picked: Scope) => scopeLabel(picked, items),
     segments: segmentLabel,
   };
-  const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
+  // The live and scheduled discounts this one may combine with (a page of each).
+  const live = useQuery(discountsQueryOptions({ view: "active", limit: 90 }));
+  const later = useQuery(discountsQueryOptions({ view: "scheduled", limit: 90 }));
+  const allDiscounts = [...(live.data?.discounts ?? []), ...(later.data?.discounts ?? [])];
   const preview = combinationPreview(draft, allDiscounts, discount?.id);
   const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length, priceIncrementMinor);
   // Each product's highest price buyers pay: an amount above all of them makes every item free.

@@ -4,20 +4,9 @@ import { flexRender, type Cell, type Column, type Header, type TableRowData } fr
 import { columnAttributes } from "./column-attributes";
 import { layoutColumnOf } from "./column-layout";
 
-import { TableCell, TableHead, TableRow } from "../../ui/table";
+import { TableCell, TableHead, TableRow, type RowDensity } from "../../ui/table";
 
-/**
- * Row density (T3): "default" rows hold a two-line title or a 40px thumbnail
- * (52px in English), "compact" rows one line (40px). Every row of a list has
- * its density's height whatever its data, so rows never jump; the height
- * follows the language's line height (Bangla lines are taller).
- */
-export type RowDensity = "default" | "compact";
-
-export const ROW_HEIGHT: Record<RowDensity, string> = {
-  default: "h-[calc(2lh+12px)]",
-  compact: "h-[calc(1lh+20px)]",
-};
+export type { RowDensity } from "../../ui/table";
 
 interface DataTableBodyRowProps<TData extends TableRowData> {
   cells: Cell<TData, unknown>[];
@@ -63,7 +52,8 @@ function DataTableBodyRowInner<TData extends TableRowData>({
     <TableRow
       data-state={isSelected ? "selected" : undefined}
       onClick={rowClickHandler(onOpen)}
-      className={cn(ROW_HEIGHT[density], onOpen && "cursor-pointer")}
+      density={density}
+      clickable={Boolean(onOpen)}
     >
       {includeDragColumn && <TableCell className="w-[40px] px-2" />}
       {cells.map((cell, index) => (

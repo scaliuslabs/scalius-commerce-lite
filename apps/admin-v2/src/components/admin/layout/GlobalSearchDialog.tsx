@@ -159,8 +159,13 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
   const collections = useQuery(lookup("collections", "/admin/collections", () => apiData(getApiV1AdminCollections({ query: listQuery }))));
   const categories = useQuery(lookup("categories", "/admin/categories", () => apiData(getApiV1AdminCategories({ query: listQuery }))));
   const pages = useQuery(lookup("pages", "/admin/pages", () => apiData(getApiV1AdminPages({ query: listQuery }))));
-  // Every discount is one small list the Discounts page caches too; match codes and titles here.
-  const discounts = useQuery({ ...discountsQueryOptions(), enabled: searching && canOpen("/admin/discounts") });
+  // Discounts are searched on the server too (name, title, or a code from its start).
+  const discounts = useQuery({
+    ...discountsQueryOptions({ search: lookupTerm, limit: PER_TYPE }),
+    enabled: searching && canOpen("/admin/discounts"),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
   // Active apps' pages and providers: the shell's cached surfaces read (apps.view).
   const surfacesT = useMessages(appSurfacesMessages);
   const apps = useQuery({ ...appSurfacesQueryOptions(), enabled: open && canOpen("/admin/apps") }).data;
@@ -233,8 +238,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
   const records = useMemo<Entry[]>(() => {
     if (!searching) return [];
     const draft = t("draft");
-    const discountMatches = (discounts.data ?? []).filter((discount) =>
-      [discount.name, ...discount.codes.map(({ code }) => code)].some((value) => value.toLowerCase().includes(lookupTerm.toLowerCase())));
+    const discountMatches = discounts.data?.discounts ?? [];
     return [
       ...(orders.data?.orders ?? []).map((order) => ({
         id: `o:${order.id}`,

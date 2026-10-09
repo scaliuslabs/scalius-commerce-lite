@@ -33,7 +33,7 @@ import { pageHead } from "~/i18n/page-titles";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
-  { sort: "name", order: "asc" },
+  { sort: "name", order: "asc", list: "attributes" },
 );
 
 function listQuery(search: ReturnType<typeof validateAttributeSearch>, term: string) {
@@ -149,7 +149,6 @@ function AttributesPage() {
         list="attributes"
         countLabel={(count) => t("attributeCount", { count })}
         query={listQuery(search, term)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
         dataKey="attributes"
         columns={columns}
         invalidate={INVALIDATE}

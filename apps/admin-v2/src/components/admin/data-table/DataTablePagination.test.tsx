@@ -88,17 +88,21 @@ describe("DataTablePagination", () => {
     expect(onPrevious).toHaveBeenCalledExactlyOnceWith("start-cursor");
   });
 
-  it("disables an arrow with no page behind it, and both while the page info is unknown", async () => {
+  it("leaves Previous and Next out when everything fits on one page or the page info is unknown (T12)", async () => {
     await render({ rows: 50, rowCount: 90, cursorPaging: { total: 90, offset: 0, pageInfo: pageInfo({ hasPreviousPage: false, hasNextPage: false }), onNext: vi.fn(), onPrevious: vi.fn() } });
-    expect(button("Previous").disabled).toBe(true);
-    expect(button("Next").disabled).toBe(true);
+    expect(host.querySelector("[data-slot=pagination]")).not.toBeNull();
+    expect(host.querySelector("nav")).toBeNull();
     await render({ rows: 50, rowCount: 90, cursorPaging: { total: 90, offset: 0, pageInfo: undefined, onNext: vi.fn(), onPrevious: vi.fn() } });
-    expect(button("Previous").disabled).toBe(true);
-    expect(button("Next").disabled).toBe(true);
-    // A page flagged as having a neighbour but carrying no cursor to reach it stays disabled.
+    expect(host.querySelector("nav")).toBeNull();
+    // A page flagged as having a neighbour but carrying no cursor to reach it keeps that arrow disabled.
     await render({ rows: 50, rowCount: 90, cursorPaging: { total: 90, offset: 0, pageInfo: pageInfo({ endCursor: null }), onNext: vi.fn(), onPrevious: vi.fn() } });
     expect(button("Next").disabled).toBe(true);
     expect(button("Previous").disabled).toBe(false);
+  });
+
+  it("reads the range alone for a list the API does not count", async () => {
+    await render({ rows: 50, rowCount: -1, cursorPaging: { total: null, offset: 50, pageInfo: pageInfo(), onNext: vi.fn(), onPrevious: vi.fn() } });
+    expect(host.querySelector("[aria-live='polite']")!.textContent).toBe("51–100");
   });
 
   it("announces the range politely to screen readers and hides the footer for an empty list", async () => {

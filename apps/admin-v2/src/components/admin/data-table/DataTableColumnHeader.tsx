@@ -69,7 +69,7 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   }
 
   const sorted = column.getIsSorted();
-  const numeric = isNumericColumn(column);
+  const numeric = isNumericColumn(column as Column<TData, unknown>);
 
   // Polaris IndexTable heading: the same caption type as a plain heading,
   // with the sort arrow beside it; the whole label is the button.

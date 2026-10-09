@@ -4,6 +4,8 @@ import { defineMessages } from "./index";
 export const customerBulkMessages = defineMessages({
   en: {
     addTags: "Add tags",
+    addingTags: "Adding tags…",
+    removingTags: "Removing tags…",
     removeTags: "Remove tags",
     addTagsTitle: "Add tags to {count, plural, one {# customer} other {# customers}}",
     addTagsTitleOne: "Add tags to 1 customer",
@@ -30,6 +32,8 @@ export const customerBulkMessages = defineMessages({
   },
   bn: {
     addTags: "ট্যাগ যোগ করুন",
+    addingTags: "ট্যাগ যোগ হচ্ছে…",
+    removingTags: "ট্যাগ সরানো হচ্ছে…",
     removeTags: "ট্যাগ সরান",
     addTagsTitle: "{count} জন কাস্টমারের সাথে ট্যাগ যোগ করুন",
     addTagsTitleOne: "১ জন কাস্টমারের সাথে ট্যাগ যোগ করুন",

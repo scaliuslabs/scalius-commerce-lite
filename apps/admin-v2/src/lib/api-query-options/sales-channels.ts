@@ -70,8 +70,8 @@ export async function saveProductChannels(productId: string, channelIds: string[
 }
 
 /** The products list: up to 90 products on the chosen channels per call. */
-export async function setProductPublications(body: BulkPublicationsBody): Promise<void> {
-  await apiData(postApiV1AdminProductsPublications({ body }));
+export async function setProductPublications(body: BulkPublicationsBody) {
+  return apiData(postApiV1AdminProductsPublications({ body }));
 }
 
 /** What a publication write changes on screen: product counts per channel and the product lists. */

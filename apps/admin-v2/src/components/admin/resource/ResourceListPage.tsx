@@ -26,13 +26,14 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { dataTableMessages } from "~/i18n/data-table";
+import { FilteredEmptyState } from "~/components/admin/states/EmptyState";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
 
 // The trash and delete confirmation loads the first time it is asked for;
 // apps' bulk menu as soon as an app offers this list a bulk action.
 // The first-run card loads only for a list with nothing in it.
-const EmptyState = lazy(() => import("./EmptyState").then((module) => ({ default: module.EmptyState })));
+const EmptyState = lazy(() => import("~/components/admin/states/EmptyState").then((module) => ({ default: module.EmptyState })));
 const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 const loadAppActions = () => import("~/components/admin/apps/ui/AppActions");
 const AppBulkActionsMenu = lazy(() => loadAppActions().then((module) => ({ default: module.AppBulkActionsMenu })));
@@ -109,7 +110,10 @@ export interface ResourceListPageProps<T extends { id: string }> {
   density?: RowDensity;
   /** Query keys refreshed after any trash, restore, delete or bulk action. */
   invalidate: readonly QueryKey[];
+  /** The first-run card (E1): an action title ("Add your first product"), one sentence, the create action. */
   empty: { icon: ComponentType<{ className?: string }>; title: string; description: string; action?: ReactNode };
+  /** What the rows are, for a failed read: "products" reads "Couldn't load products". */
+  what?: string;
   /** Extra tabs next to All, stored in `search[views.param]`. */
   views?: { param: string; tabs: ReadonlyArray<IndexTab<string>> };
   /** Says what the search matches, e.g. "Search by title, SKU or barcode". */
@@ -127,6 +131,12 @@ export interface ResourceListPageProps<T extends { id: string }> {
    * `run.matching` (or `useBulkRun`), never by gathering rows.
    */
   bulkActions?: (target: BulkTarget<T>, done: () => void, run: BulkRun) => ReactNode;
+  /**
+   * `bulkActions` (and `lifecycle.runMatching`) act on a `matching` target:
+   * the list offers "Select all N matching" (T11). Without it, selection
+   * stays on the page.
+   */
+  matchingBulk?: boolean;
   /** The resource apps' bulk actions run on (`bulk: true` manifest actions, apps.use). */
   appActions?: AppTarget;
   rowTo?: (row: T) => string | undefined;
@@ -231,7 +241,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
           action: { label: t("undo"), onClick: () => { mutation.mutate({ action: "restore", target }); } },
         });
       } else {
-        toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"), { description });
+        const message = t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted");
+        if (description) toast.success(message, { description });
+        else toast.success(message);
       }
       clearAll();
     },
@@ -321,7 +333,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     clearSelection();
   };
   const capped = pagination.totalIsCapped === true;
-  const supportsMatching = trashed ? Boolean(lifecycle?.runMatching) : Boolean(lifecycle?.runMatching || props.bulkActions);
+  const supportsMatching = Boolean(props.matchingBulk && (trashed ? lifecycle?.runMatching : true));
   const canSelectAll = supportsMatching && pageAllSelected && !allMatching && pagination.total > selectedRows.length;
   const target: BulkTarget<T> = allMatching
     ? { kind: "matching", count: pagination.total, capped }
@@ -347,30 +359,20 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     setSearch({ ...Object.fromEntries(filterParams.map((param) => [param, undefined])), page: 1 });
   const filtered = Boolean(term) || currentView !== "all" || filterCount > 0;
   const Icon = props.empty.icon;
-  const emptyState = trashed
-    ? { icon: Icon, title: t("trashEmpty"), description: "" }
-    : filtered
-      ? {
-          icon: Icon,
-          title: t("noResults"),
-          description: t("noResultsHint"),
-          action: (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setTerm("");
-                setSearch({
-                  ...(viewParam ? { [viewParam]: undefined } : {}),
-                  ...Object.fromEntries(filterParams.map((param) => [param, undefined])),
-                  page: 1,
-                });
-              }}
-            >
-              {t("clearFilters")}
-            </Button>
-          ),
-        }
-      : props.empty;
+  const emptyState = trashed ? (
+    <FilteredEmptyState title={t("trashEmpty")} description="" />
+  ) : filtered ? (
+    <FilteredEmptyState
+      onClearFilters={() => {
+        setTerm("");
+        setSearch({
+          ...(viewParam ? { [viewParam]: undefined } : {}),
+          ...Object.fromEntries(filterParams.map((param) => [param, undefined])),
+          page: 1,
+        });
+      }}
+    />
+  ) : null;
 
   const running = progress !== null;
   const someDeletable = target.kind === "matching" || !lifecycle?.canDeleteRow || target.rows.some((row) => lifecycle.canDeleteRow!(row));
@@ -443,11 +445,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     <div className="pb-8">
       <PageHeader title={props.title} actions={trashed || nothingYet ? undefined : props.actions} />
       {nothingYet ? (
-        <div className="overflow-clip rounded-xl bg-card shadow-card">
-          <Suspense fallback={null}>
-            <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} help />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} />
+        </Suspense>
       ) : (
       <DataTable
         variant="card"
@@ -456,6 +456,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         isLoading={isLoading}
         error={error}
         onRetry={() => void refetch()}
+        what={props.what}
         layoutKey={props.list}
         density={props.density}
         defaultSortLabel={props.defaultSortLabel ?? tableCopy("recentlyUpdated")}

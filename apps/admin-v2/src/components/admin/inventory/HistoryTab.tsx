@@ -1,13 +1,17 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { Calendar as CalendarIcon, Download } from "lucide-react";
 import type { DateRange } from "react-day-picker";
+import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
+import { ListDate } from "~/components/admin/data-table/ListDate";
+import { serverTableFeatures, useTable, type ColumnDef } from "~/components/admin/data-table/table-config";
+import { FilteredEmptyState } from "~/components/admin/states";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Skeleton } from "~/components/ui/skeleton";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
 import { hasSeveralLocations, inventoryLocationsQueryOptions } from "~/lib/api-query-options/inventory-locations";
@@ -18,11 +22,11 @@ import { cn } from "@scalius/shared/utils";
 import { IdText } from "~/components/admin/data-table/cells";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
-import { resourceMessages } from "~/i18n/resource";
 import { toDate } from "./AlertsTab";
 import { describeMovementNote } from "./movement-note";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
+  MOVEMENT_PAGE_SIZE,
   MOVEMENT_TYPES,
   movementsQuery,
   type InventoryFilters,
@@ -104,8 +108,9 @@ function MovementDetails({ movement }: { movement: InventoryMovement }) {
     ...(document ? [t(document.label, { number: document.number })] : []),
     ...(keys ? [t(keys.label, { count: keys.count })] : []),
   ];
+  const whole = [...parts, ...(note ? [`“${note}”`] : [])].join(" · ");
   return (
-    <p className="truncate text-body text-muted-foreground">
+    <p title={whole} className="truncate text-body text-muted-foreground">
       {parts.join(" · ")}
       {movement.orderId ? (
         <>
@@ -145,9 +150,9 @@ function HistoryDateFilter({ from, to, onChange }: {
   const format = (date: Date) => formatDateTime(date, { dateStyle: "medium", timeZone: undefined });
   const label = !range?.from ? t("anyDate") : range.to ? `${format(range.from)} – ${format(range.to)}` : format(range.from);
   const trigger = (
-    <Button type="button" variant="outline" className="w-auto min-w-40 justify-start" aria-label={t("dateRangeLabel", { range: label })} onClick={() => setLoadPicker(true)}>
+    <Button id="inventory-history-date" type="button" variant="outline" className="w-full justify-start" aria-label={t("dateRangeLabel", { range: label })} onClick={() => setLoadPicker(true)}>
       <CalendarIcon className="h-4 w-4" />
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>{label}</span>
     </Button>
   );
   if (!loadPicker) return trigger;
@@ -164,7 +169,6 @@ function HistoryDateFilter({ from, to, onChange }: {
 
 export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
   const t = useMessages(inventoryMessages);
-  const r = useMessages(resourceMessages);
   const { q: search, type, from: startDate, to: endDate } = filters;
   // Where stock moved shows (and filters) only once a store has more than one location.
   const { data: locations } = useQuery(inventoryLocationsQueryOptions(true));
@@ -185,6 +189,87 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
   const pageInfo = query.data?.pageInfo;
   const nextCursor = pageInfo?.hasMore ? pageInfo.nextCursor : null;
   const filtered = Boolean(search || startDate || endDate || type !== "all" || locationId);
+  const filterCount = [type !== "all", Boolean(startDate || endDate), Boolean(locationId)].filter(Boolean).length;
+
+  const columns = useMemo<ColumnDef<InventoryMovement, unknown>[]>(() => [
+    {
+      id: "product",
+      header: t("product"),
+      meta: { primary: true, minWidth: 240, maxWidth: 420 },
+      cell: ({ row }) => {
+        const movement = row.original;
+        const name = `${movement.productName ?? t("unknownProduct")}${movement.optionLabel ? ` · ${movement.optionLabel}` : ""}`;
+        return (
+          <span className="block min-w-0">
+            <span title={name} className="block truncate font-medium">{name}</span>
+            <MovementDetails movement={movement} />
+          </span>
+        );
+      },
+    },
+    {
+      id: "type",
+      header: t("changeType"),
+      meta: { priority: 70, minWidth: 140 },
+      cell: ({ row }) => (
+        <Badge variant="outline">
+          {MOVEMENT_TYPES.includes(row.original.type as MovementType)
+            ? t(`type_${row.original.type as MovementType}`)
+            : t("typeOther")}
+        </Badge>
+      ),
+    },
+    {
+      id: "sku",
+      header: t("sku"),
+      meta: { priority: 40, minWidth: 120 },
+      // A SKU without a code (removed long ago) shows no code, never part of its internal id.
+      cell: ({ row }) => <IdText value={row.original.variantSku} copy />,
+    },
+    {
+      id: "change",
+      header: t("columnChange"),
+      meta: { numeric: true, priority: 90, minWidth: 120 },
+      cell: ({ row }) => {
+        const changes = counterChanges(row.original, severalLocations);
+        const main = changes.find((change) => change.delta !== null) ?? changes[0]!;
+        const describe = (change: CounterChange) => [
+          t(change.label, { location: change.location ?? "" }),
+          change.delta !== null ? `${change.delta > 0 ? "+" : ""}${formatNumber(change.delta)}` : null,
+          change.previous !== null && change.next !== null ? `${formatNumber(change.previous)} → ${formatNumber(change.next)}` : null,
+        ].filter(Boolean).join(" ");
+        return (
+          <span className="block" title={changes.map(describe).join("\n")}>
+            {main.delta !== null ? (
+              <span className={cn("block font-medium", main.delta < 0 && "text-destructive")}>
+                {main.delta > 0 ? "+" : ""}{formatNumber(main.delta)}
+              </span>
+            ) : null}
+            {main.previous !== null && main.next !== null ? (
+              <span className="block text-muted-foreground">{formatNumber(main.previous)} → {formatNumber(main.next)}</span>
+            ) : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: "date",
+      header: t("date"),
+      meta: { keep: true, minWidth: 150 },
+      cell: ({ row }) => <ListDate value={toDate(row.original.createdAt)} />,
+    },
+  ], [severalLocations, t]);
+
+  const table = useTable({
+    features: serverTableFeatures,
+    data: movements,
+    columns,
+    getRowId: (row) => row.id,
+    manualPagination: true,
+    manualSorting: true,
+    rowCount: -1,
+    state: { pagination: { pageIndex: cursors.length - 1, pageSize: MOVEMENT_PAGE_SIZE }, sorting: [] },
+  });
 
   const exportCsv = async () => {
     if (exporting) return;
@@ -219,148 +304,83 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
   };
 
   return (
-    <div className="p-3">
-      <DataTableToolbar
-        searchValue={search}
-        onSearchChange={(value) => onFiltersChange({ q: value })}
-        searchPlaceholder={t("searchProducts")}
-        filters={(
-          <>
-            <SearchableSelect
-              triggerClassName="w-auto min-w-40"
-              ariaLabel={t("changeType")}
-              value={type}
-              onValueChange={(value) => onFiltersChange({ type: value as MovementFilter })}
-              options={[{ value: "all", label: t("typeAll") }, ...MOVEMENT_TYPES.map((value) => ({ value, label: t(`type_${value}`) }))]}
-            />
-            <HistoryDateFilter from={startDate} to={endDate} onChange={onFiltersChange} />
-            {severalLocations ? (
-              <SearchableSelect
-                triggerClassName="w-auto min-w-40"
-                ariaLabel={t("location")}
-                value={locationId || ALL_LOCATIONS}
-                onValueChange={(value) => onFiltersChange({ location: value === ALL_LOCATIONS ? "" : value })}
-                options={[
-                  { value: ALL_LOCATIONS, label: t("allLocations") },
-                  // Archived locations keep their history.
-                  ...(locations ?? []).map((location) => ({
-                    value: location.id,
-                    label: location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name,
-                  })),
-                ]}
-              />
-            ) : null}
-          </>
-        )}
-        actions={(
-          <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={() => void exportCsv()}>
-            <Download />
-            {exporting ? t("exporting") : t("export")}
-          </Button>
-        )}
-      />
-
-      <div className={cn("-mx-3 border-y", query.isFetching && movements.length > 0 && "opacity-60")} aria-busy={query.isFetching}>
-        {query.isError ? (
-          <div className="space-y-3 p-6 text-center">
-            <p className="text-body text-destructive">{r("loadFailed")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>{r("retry")}</Button>
-          </div>
-        ) : query.isLoading ? (
-          <ul role="status" aria-label={t("loading")} className="divide-y">
-            {[0, 1, 2, 3, 4].map((row) => (
-              <li key={row} className="space-y-1 px-3 py-2">
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-5 w-1/2" />
-              </li>
-            ))}
-          </ul>
-        ) : movements.length === 0 ? (
-          <div className="p-6 text-center">
-            <p className="text-body font-medium">{filtered ? r("noResults") : t("noHistory")}</p>
-            <p className="text-body text-muted-foreground">{filtered ? r("noResultsHint") : t("noHistoryHint")}</p>
-            {filtered ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4"
-                onClick={() => onFiltersChange({ q: "", type: "all", from: "", to: "", location: "" })}
-              >
-                {t("clearFilters")}
-              </Button>
-            ) : null}
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {movements.map((movement) => (
-              <li key={movement.id} className="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:items-start sm:gap-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <Badge variant="outline" className="shrink-0">
-                      {MOVEMENT_TYPES.includes(movement.type as MovementType)
-                        ? t(`type_${movement.type as MovementType}`)
-                        : t("typeOther")}
-                    </Badge>
-                    <span className="line-clamp-2 min-w-0 break-words text-body font-medium">
-                      {movement.productName ?? t("unknownProduct")}
-                      {movement.optionLabel ? (
-                        <span className="font-normal text-muted-foreground"> · {movement.optionLabel}</span>
-                      ) : null}
-                    </span>
-                    {/* A SKU without a code (removed long ago) shows no code, never part of its internal id. */}
-                    {movement.variantSku ? <IdText value={movement.variantSku} copy className="text-muted-foreground" /> : null}
-                  </div>
-                  <MovementDetails movement={movement} />
-                </div>
-                <div className="shrink-0 space-y-1 sm:text-end">
-                  {counterChanges(movement, severalLocations).map((change) => (
-                    <p key={change.label} className="text-body tabular-nums">
-                      <span className="text-muted-foreground">{t(change.label, { location: change.location ?? "" })} </span>
-                      {change.delta !== null ? (
-                        <span className={cn("font-medium", change.delta < 0 && "text-destructive")}>
-                          {change.delta > 0 ? "+" : ""}{formatNumber(change.delta)}
-                        </span>
-                      ) : null}
-                      {change.previous !== null && change.next !== null ? (
-                        <span className="text-muted-foreground">
-                          {change.delta !== null ? " (" : ""}{formatNumber(change.previous)} → {formatNumber(change.next)}{change.delta !== null ? ")" : ""}
-                        </span>
-                      ) : null}
-                    </p>
-                  ))}
-                  <p className="text-body text-muted-foreground">
-                    {formatDateTime(toDate(movement.createdAt), { dateStyle: "medium", timeStyle: "short" })}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-3">
-        <span className="text-body text-muted-foreground">{t("historyPage", { page: cursors.length })}</span>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={cursors.length <= 1 || query.isFetching}
-            onClick={() => setCursors((history) => history.slice(0, -1))}
-          >
-            {r("previous")}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!nextCursor || query.isFetching}
-            onClick={() => nextCursor && setCursors((history) => history.at(-1) === nextCursor ? history : [...history, nextCursor])}
-          >
-            {r("next")}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <DataTable
+      variant="bare"
+      table={table}
+      isLoading={query.isPending}
+      isFetching={query.isFetching}
+      error={query.isError ? query.error : undefined}
+      onRetry={() => void query.refetch()}
+      what={t("whatHistory")}
+      defaultSortLabel={false}
+      layoutKey="inventory-history"
+      getRowHref={(movement) => (movement.productId ? `/admin/products/${movement.productId}/edit` : undefined)}
+      pageSizeOptions={[MOVEMENT_PAGE_SIZE]}
+      cursorPaging={{
+        total: null,
+        offset: (cursors.length - 1) * MOVEMENT_PAGE_SIZE,
+        pageInfo: {
+          hasNextPage: Boolean(nextCursor),
+          hasPreviousPage: cursors.length > 1,
+          startCursor: cursors.length > 1 ? cursors.at(-1)! : null,
+          endCursor: nextCursor,
+        },
+        onPrevious: () => setCursors((history) => history.slice(0, -1)),
+        onNext: (cursor) => setCursors((history) => (history.at(-1) === cursor ? history : [...history, cursor])),
+      }}
+      toolbar={(
+        <DataTableToolbar
+          searchValue={search}
+          onSearchChange={(value) => onFiltersChange({ q: value })}
+          searchPlaceholder={t("searchProducts")}
+          filterCount={filterCount}
+          onClearFilters={() => onFiltersChange({ type: "all", from: "", to: "", location: "" })}
+          filters={(
+            <>
+              <FilterControl label={t("changeType")}>
+                <SearchableSelect
+                  ariaLabel={t("changeType")}
+                  value={type}
+                  onValueChange={(value) => onFiltersChange({ type: value as MovementFilter })}
+                  options={[{ value: "all", label: t("typeAll") }, ...MOVEMENT_TYPES.map((value) => ({ value, label: t(`type_${value}`) }))]}
+                />
+              </FilterControl>
+              <div className="flex min-w-0 flex-col gap-1">
+                <label htmlFor="inventory-history-date" className="text-body font-medium">{t("date")}</label>
+                <HistoryDateFilter from={startDate} to={endDate} onChange={onFiltersChange} />
+              </div>
+              {severalLocations ? (
+                <FilterControl label={t("location")}>
+                  <SearchableSelect
+                    ariaLabel={t("location")}
+                    value={locationId || ALL_LOCATIONS}
+                    onValueChange={(value) => onFiltersChange({ location: value === ALL_LOCATIONS ? "" : value })}
+                    options={[
+                      { value: ALL_LOCATIONS, label: t("allLocations") },
+                      // Archived locations keep their history.
+                      ...(locations ?? []).map((location) => ({
+                        value: location.id,
+                        label: location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name,
+                      })),
+                    ]}
+                  />
+                </FilterControl>
+              ) : null}
+            </>
+          )}
+          extra={(
+            <Button type="button" variant="outline" loading={exporting} onClick={() => void exportCsv()}>
+              <Download />
+              {t("export")}
+            </Button>
+          )}
+        />
+      )}
+      emptyState={filtered ? (
+        <FilteredEmptyState onClearFilters={() => onFiltersChange({ q: "", type: "all", from: "", to: "", location: "" })} />
+      ) : (
+        <FilteredEmptyState title={t("noHistory")} description={t("noHistoryHint")} />
+      )}
+    />
   );
 }

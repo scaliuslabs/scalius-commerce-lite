@@ -18,7 +18,6 @@ import {
 import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn, useColumnLayout, useElementWidth } from "./column-layout";
 import { ColumnLayoutContext, ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
 import { TableSortMenu } from "./DataTableSortMenu";
-import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
   TableBody,
@@ -27,14 +26,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { DataTablePagination, type DataTableCursorPaging } from "./DataTablePagination";
 import { DataTableRefetchBar } from "./DataTableRefetchBar";
-import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
+import { ErrorState } from "~/components/admin/states";
 import { DataTableBodyRow, DataTableHeadCell, rowClickHandler, type RowDensity } from "./DataTableBodyRow";
 import { useNavigate } from "@tanstack/react-router";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
@@ -56,9 +54,12 @@ interface DataTableProps<TData extends TableRowData> {
   isFetching: boolean;
   isLoading: boolean;
   toolbar?: ReactNode;
-  emptyState?: EmptyStateConfig;
+  /** Where the rows go when there are none: a `FilteredEmptyState` (E2). */
+  emptyState?: ReactNode;
   error?: unknown;
   onRetry?: () => void;
+  /** What the rows are, for the failed read's title: "orders" reads "Couldn't load orders". */
+  what?: string;
   mobileCardRenderer?: (row: Row<TData>) => ReactNode;
   itemLabel?: string;
   pageSizeOptions?: readonly number[];
@@ -123,6 +124,7 @@ export function DataTable<TData extends TableRowData>({
   emptyState,
   error,
   onRetry,
+  what,
   mobileCardRenderer,
   itemLabel,
   pageSizeOptions,
@@ -196,17 +198,7 @@ export function DataTable<TData extends TableRowData>({
   };
   const headerLayout = { toggle: layout.toggle, isHiddenByChoice: layout.isHiddenByChoice };
 
-  const renderErrorState = () => (
-    <div data-slot="error-state" className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <AlertTriangle className="mb-3 h-10 w-10 text-destructive" />
-      <p className="text-body font-medium text-foreground">{t("loadFailed")}</p>
-      {onRetry && (
-        <Button type="button" variant="outline" className="mt-4" onClick={onRetry}>
-          {t("retry")}
-        </Button>
-      )}
-    </div>
-  );
+  const renderErrorState = () => <ErrorState layout="card" error={error} what={what} onRetry={onRetry} />;
 
   const skeletonRows = (includeDragColumn: boolean) => (
     <DataTableInitialRows
@@ -239,7 +231,7 @@ export function DataTable<TData extends TableRowData>({
       </TableHeader>
       <TableBody className={cn(showInitialLoading && !skeletonShown && "invisible")}>
         {showError ? (
-          <TableRow className="hover:bg-transparent">
+          <TableRow still>
             <TableCell colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}>
               {renderErrorState()}
             </TableCell>
@@ -259,9 +251,9 @@ export function DataTable<TData extends TableRowData>({
             />
           ))
         ) : (
-          <TableRow className="hover:bg-transparent">
+          <TableRow still>
             <TableCell colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}>
-              <DataTableEmptyState config={emptyState} />
+              {emptyState}
             </TableCell>
           </TableRow>
         )}
@@ -332,7 +324,7 @@ export function DataTable<TData extends TableRowData>({
                 );
               })
             ) : (
-              <DataTableEmptyState config={emptyState} />
+              emptyState
             )}
           </div>
         ) : showError || showInitialLoading || !sortable ? (

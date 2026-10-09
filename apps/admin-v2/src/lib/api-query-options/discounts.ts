@@ -13,11 +13,17 @@ export type DiscountRecord = ApiResult<typeof getApiV1AdminDiscountsById>;
 export type DiscountInput = ApiBody<typeof postApiV1AdminDiscounts>;
 export type DiscountUpdateInput = ApiBody<typeof putApiV1AdminDiscountsById>;
 
-/** Every discount (code and automatic) in one list, newest edits first. */
-export const discountsQueryOptions = () =>
+export type DiscountListQuery = NonNullable<Parameters<typeof getApiV1AdminDiscounts>[0]>["query"];
+export type DiscountListItem = ApiResult<typeof getApiV1AdminDiscounts>["discounts"][number];
+
+/**
+ * One page of discounts, searched, filtered and sorted on the server: each
+ * row has its first code only (`codeCount` says how many more).
+ */
+export const discountsQueryOptions = (query: DiscountListQuery = {}) =>
   queryOptions({
-    queryKey: queryKeys.discounts.list(),
-    queryFn: async () => (await apiData(getApiV1AdminDiscounts({ query: {} }))).discounts,
+    queryKey: queryKeys.discounts.list(query as Record<string, unknown>),
+    queryFn: () => apiData(getApiV1AdminDiscounts({ query })),
     staleTime: 30_000,
   });
 

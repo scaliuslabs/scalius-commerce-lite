@@ -3,7 +3,7 @@ import { Skeleton } from "../../ui/skeleton";
 import { TableCell, TableRow } from "../../ui/table";
 import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn } from "./column-layout";
 import { columnAttributes, isNumericColumn } from "./column-attributes";
-import { ROW_HEIGHT, type RowDensity } from "./DataTableBodyRow";
+import type { RowDensity } from "../../ui/table";
 import type { Column, TableRowData } from "./table-config";
 
 /** Skeleton rows are capped where a page of real rows is (X1: at most 100 in the DOM). */
@@ -50,7 +50,9 @@ export function DataTableInitialRows<TData extends TableRowData>({
       key={`initial-loading-row-${rowIndex}`}
       aria-hidden="true"
       data-slot="skeleton"
-      className={cn("pointer-events-none hover:bg-transparent", ROW_HEIGHT[density])}
+      density={density}
+      still
+      className="pointer-events-none"
     >
       {includeDragColumn ? <TableCell className="w-[40px] px-2" /> : null}
       {columns.map((column, columnIndex) => (

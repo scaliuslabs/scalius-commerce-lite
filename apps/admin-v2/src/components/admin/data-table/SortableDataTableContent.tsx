@@ -32,8 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
-import { DataTableHeadCell, ROW_HEIGHT, type RowDensity } from "./DataTableBodyRow";
+import { DataTableHeadCell, type RowDensity } from "./DataTableBodyRow";
 import { getSortableStyle } from "../shared/sortable-style";
 import { useMessages } from "~/i18n";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -46,7 +45,7 @@ export interface SortableDataTableContentProps<TData extends TableRowData> {
   hasRows: boolean;
   showInitialLoading: boolean;
   density: RowDensity;
-  emptyState?: EmptyStateConfig;
+  emptyState?: ReactNode;
   onReorder?: (oldIndex: number, newIndex: number) => void;
   /** Names a row for its reorder handle; rows are numbered without it. */
   getRowLabel?: (row: TData) => string;
@@ -80,7 +79,7 @@ function SortableTableRow<TData extends TableRowData>({
       // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
       style={style}
       data-state={row.getIsSelected() || isDragging ? "selected" : undefined}
-      className={ROW_HEIGHT[density]}
+      density={density}
     >
       <TableCell className="w-[40px] px-2">
         <div
@@ -177,12 +176,12 @@ export function SortableDataTableContent<TData extends TableRowData>({
                 </SortableTableRow>
               ))
             ) : (
-              <TableRow>
+              <TableRow still>
                 <TableCell
                   colSpan={columns.length + 1}
                   className="h-24 text-center"
                 >
-                  {showInitialLoading ? null : <DataTableEmptyState config={emptyState} />}
+                  {showInitialLoading ? null : emptyState}
                 </TableCell>
               </TableRow>
             )}

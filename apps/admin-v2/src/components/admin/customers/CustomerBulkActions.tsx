@@ -10,7 +10,8 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
-import { useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { useResourceMutation, type BulkRun } from "~/components/admin/resource/ResourceListPage";
+import type { BulkTarget } from "~/lib/bulk-selection";
 import { bulkUpdateCustomerTags } from "~/lib/api-mutations/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
@@ -26,15 +27,22 @@ const BULK_TAG_CUSTOMERS = 500;
 
 /**
  * The customers list's bulk actions: add or remove tags on the selected
- * customers (one dialog), and export them.
+ * customers (one dialog), and export them. On "all matching" customers the
+ * tags go to every customer the list's filter matches, slice by slice on the
+ * server; the export then exports the filter.
  */
 export function CustomerBulkActions({
-  rows,
+  target,
+  filter,
+  run,
   done,
   canEdit,
   onExport,
 }: {
-  rows: ReadonlyArray<{ id: string }>;
+  target: BulkTarget<{ id: string }>;
+  /** The list's filter, for a `matching` target. */
+  filter: Record<string, unknown>;
+  run: BulkRun;
   done: () => void;
   canEdit: boolean;
   onExport: () => void;
@@ -46,10 +54,19 @@ export function CustomerBulkActions({
   const [tags, setTags] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const input = useRef<TagInputHandle>(null);
-  const count = rows.length;
+  const count = target.kind === "rows" ? target.rows.length : target.count;
 
   const change = useResourceMutation(async ({ mode: action, tags: chosen }: { mode: Mode; tags: string[] }) => {
-    const ids = rows.map((row) => row.id);
+    const changes = action === "add" ? { add: chosen } : { remove: chosen };
+    if (target.kind === "matching") {
+      setMode(null);
+      await run.matching(b(action === "add" ? "addingTags" : "removingTags"), async (cursor) => {
+        const result = await bulkUpdateCustomerTags({ ...changes, matching: { filter, ...(cursor ? { cursor } : {}) } });
+        return (result as { matching?: { processed: number; skipped: number; next: string | null } }).matching ?? { processed: 0, skipped: 0, next: null };
+      });
+      return;
+    }
+    const ids = target.rows.map((row) => row.id);
     for (let start = 0; start < ids.length; start += BULK_TAG_CUSTOMERS) {
       const customerIds = ids.slice(start, start + BULK_TAG_CUSTOMERS);
       await bulkUpdateCustomerTags(action === "add" ? { customerIds, add: chosen } : { customerIds, remove: chosen });
@@ -86,11 +103,11 @@ export function CustomerBulkActions({
     <>
       {canEdit ? (
         <>
-          <Button type="button" variant="outline" size="sm" onClick={() => open("add")}>{b("addTags")}</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => open("remove")}>{b("removeTags")}</Button>
+          <Button type="button" variant="outline" onClick={() => open("add")}>{b("addTags")}</Button>
+          <Button type="button" variant="outline" onClick={() => open("remove")}>{b("removeTags")}</Button>
         </>
       ) : null}
-      <Button type="button" variant="outline" size="sm" onClick={onExport}>{t("export")}</Button>
+      <Button type="button" variant="outline" onClick={onExport}>{t("export")}</Button>
 
       <Dialog open={mode !== null} onOpenChange={(next) => { if (!next) close(); }}>
         <DialogContent>
@@ -98,7 +115,7 @@ export function CustomerBulkActions({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{b("bulkTagsHelp", { count: CUSTOMER_TAGS_PER_REQUEST_MAX })}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1">
             <Label htmlFor="customer-bulk-tags">{t("tags")}</Label>
             <TagInput
               id="customer-bulk-tags"

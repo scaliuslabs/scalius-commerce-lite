@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { useAppResourceColumns } from "~/components/admin/apps/ui/list-columns";
 import { fetchCustomerTags, customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
@@ -11,7 +12,6 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
 
-const TRIGGER = "w-full shrink-0 sm:w-auto sm:min-w-40";
 
 // Loads only when an active app has a column to filter by.
 const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter").then((module) => ({ default: module.AppListFilter })));
@@ -48,6 +48,7 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
   return (
     <>
       {search.view === "subscribers" ? (
+        <FilterControl label={t("labelChannel")}>
         <SearchableSelect
           value={search.channel ?? "any"}
           onValueChange={(value) => set({ channel: value === "any" ? undefined : value })}
@@ -58,9 +59,10 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
           placeholder={t("anyChannel")}
           searchPlaceholder={t("filterChannel")}
           ariaLabel={t("filterChannel")}
-          triggerClassName={TRIGGER}
         />
+        </FilterControl>
       ) : null}
+      <FilterControl label={t("labelTag")}>
       <SearchableSelect
         value={search.tag ?? ""}
         selectedLabel={search.tag}
@@ -72,8 +74,9 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
         emptyMessage={t("noTagsFound")}
         ariaLabel={t("filterTag")}
         clearable
-        triggerClassName={TRIGGER}
       />
+      </FilterControl>
+      <FilterControl label={t("labelSegment")}>
       <SearchableSelect
         value={search.segmentId ?? ""}
         onValueChange={(value) => set({ segmentId: value || undefined })}
@@ -84,11 +87,11 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
         ariaLabel={t("filterSegment")}
         busy={segments.isPending}
         clearable
-        triggerClassName={TRIGGER}
       />
+      </FilterControl>
       {appFilterable ? (
-        <Suspense fallback={<Skeleton className="h-9 w-full sm:w-80" />}>
-          <AppListFilter resource="customer" value={search.appFilter} onChange={(appFilter) => set({ appFilter })} />
+        <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+          <AppListFilter labelled resource="customer" value={search.appFilter} onChange={(appFilter) => set({ appFilter })} />
         </Suspense>
       ) : null}
     </>
