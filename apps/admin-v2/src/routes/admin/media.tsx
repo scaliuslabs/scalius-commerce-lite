@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useListSearch } from "~/lib/list-search";
-import { PageLoadingSkeleton } from "~/components/admin/shared/LoadingFallback";
+import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import {
   mediaRouteSearchToWorkspaceState,
   mediaWorkspaceStateToRouteSearch,
@@ -51,7 +51,7 @@ function MediaPage() {
   }, [navigate, setTerm, workspaceState]);
 
   return (
-    <Suspense fallback={<PageLoadingSkeleton />}>
+    <Suspense fallback={<PageSkeleton kind="index" rows={6} />}>
       <MediaManagerPage
         workspaceState={workspaceState}
         onWorkspaceStateChange={handleWorkspaceStateChange}

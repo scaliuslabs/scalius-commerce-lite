@@ -278,7 +278,7 @@ describe("CollectionForm", () => {
     permissionMock.canEdit = false;
     await renderSaved();
 
-    expect(host.textContent).toContain("You can view this but not change it.");
+    expect(host.textContent).toContain("You can view this page but not change it.");
     expect(host.querySelector("fieldset")?.disabled).toBe(true);
     expect(() => button("Save")).toThrow();
   });

@@ -1,3 +1,4 @@
+import { ErrorState } from "~/components/admin/states/ErrorState";
 import JsBarcode from "jsbarcode";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Printer, Trash2 } from "lucide-react";
@@ -312,7 +313,7 @@ export function BarcodeLabelWorkspace({
           </CardHeader>
           <CardContent>
             {previewQuery.isError ? (
-              <p className="text-body text-destructive">{r("loadFailed")}</p>
+              <ErrorState layout="inline" error={previewQuery.error} onRetry={() => void previewQuery.refetch()} />
             ) : previewQuery.isLoading ? (
               <LoadingRows count={Math.min(selectedVariantIds.length, 5)} />
             ) : selectedVariants.length === 0 ? (
@@ -493,7 +494,7 @@ export function BarcodeLabelWorkspace({
           />
           <div className="max-h-96 overflow-y-auto">
             {pickerQuery.isError ? (
-              <p className="py-4 text-body text-destructive">{r("loadFailed")}</p>
+              <div className="py-4"><ErrorState layout="inline" error={pickerQuery.error} onRetry={() => void pickerQuery.refetch()} /></div>
             ) : pickerQuery.isLoading ? (
               <LoadingRows count={5} />
             ) : pickerVariants.length === 0 ? (

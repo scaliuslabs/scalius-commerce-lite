@@ -247,7 +247,7 @@ describe("PageForm", () => {
     granted.delete("pages.edit");
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
 
-    expect(document.body.textContent).toContain("You can view this but not change it.");
+    expect(document.body.textContent).toContain("You can view this page but not change it.");
     expect(document.querySelector("fieldset")?.disabled).toBe(true);
     expect(queryButton("Save")).toBeUndefined();
     expect(document.body.textContent).toContain("Measure your chest.");
