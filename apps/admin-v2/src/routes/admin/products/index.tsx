@@ -21,7 +21,9 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { productsQueryOptions } from "~/lib/api-query-options/products";
-import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
+import { categoryQueryOptions } from "~/lib/api-query-options/categories";
+import { getApiV1AdminCategories } from "@scalius/api-client/sdk";
+import type { SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { channelsInUse, salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -117,6 +119,16 @@ export const Route = createFileRoute("/admin/products/")({
 
 const claim = (row: ProductListItem) => ({ id: row.id, expectedAggregateRevision: row.aggregateRevision });
 
+const CATEGORY_PAGE = 50;
+/** Categories for the filter, searched and paged on the server. */
+const loadCategories: SearchableSelectLoader = async ({ search: typed, page, signal }) => {
+  const result = await apiData(getApiV1AdminCategories({ query: { search: typed, page, limit: CATEGORY_PAGE }, signal }));
+  return {
+    options: result.categories.map((category) => ({ value: category.id, label: category.name })),
+    hasMore: page < result.pagination.totalPages,
+  };
+};
+
 function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -128,7 +140,8 @@ function ProductsPage() {
   const { products: can } = useCatalogActionPermissions();
   const duplicate = useDuplicateProduct();
   const [importing, setImporting] = useState(false);
-  const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
+  // X3: the category filter searches on the server and pages; a store may have hundreds.
+  const { data: chosenCategory } = useQuery({ ...categoryQueryOptions(search.category ?? ""), enabled: Boolean(search.category) });
   const { data: channelData } = useQuery(salesChannelsQueryOptions());
   const c = useMessages(salesChannelNamesMessages);
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
@@ -190,15 +203,15 @@ function ProductsPage() {
           <>
           <FilterControl label={t("category")}>
           <SearchableSelect
-            value={search.category ?? "all"}
+            value={search.category ?? ""}
+            selectedLabel={chosenCategory?.name}
+            clearable
+            load={loadCategories}
+            queryKey={["products", "category-filter"]}
             onValueChange={(value) => void navigate({
               to: "/admin/products",
-              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1, ...NO_CURSOR })) as never,
+              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value || undefined, page: 1, ...NO_CURSOR })) as never,
             })}
-            options={[
-              { value: "all", label: t("allCategories") },
-              ...(categoryData?.categories ?? []).map((category) => ({ value: category.id, label: category.name })),
-            ]}
             placeholder={t("allCategories")}
             searchPlaceholder={t("searchCategories")}
             emptyMessage={r("noResults")}
@@ -206,7 +219,7 @@ function ProductsPage() {
           />
           </FilterControl>
           {showChannels ? (
-          <FilterControl label={c("filterChannel")}>
+          <FilterControl label={c("channelLabel")}>
           <SearchableSelect
             value={channelFilter}
             onValueChange={(value) => {
