@@ -6,8 +6,22 @@ import { layoutColumnOf } from "./column-layout";
 
 import { TableCell, TableHead, TableRow } from "../../ui/table";
 
+/**
+ * Row density (T3): "default" rows hold a two-line title or a 40px thumbnail
+ * (52px in English), "compact" rows one line (40px). Every row of a list has
+ * its density's height whatever its data, so rows never jump; the height
+ * follows the language's line height (Bangla lines are taller).
+ */
+export type RowDensity = "default" | "compact";
+
+export const ROW_HEIGHT: Record<RowDensity, string> = {
+  default: "h-[calc(2lh+12px)]",
+  compact: "h-[calc(1lh+20px)]",
+};
+
 interface DataTableBodyRowProps<TData extends TableRowData> {
   cells: Cell<TData, unknown>[];
+  density: RowDensity;
   isSelected: boolean;
   includeDragColumn: boolean;
   /** The row has a checkbox column (pinned columns are offset by it). */
@@ -15,7 +29,6 @@ interface DataTableBodyRowProps<TData extends TableRowData> {
   onOpen?: (event: MouseEvent) => void;
 }
 
-// Clicks on these keep their own meaning instead of opening the row.
 /**
  * Clicks that belong to a control, not the row. Menus, selects and dialogs
  * opened from a row are portaled, but React still bubbles their clicks to the
@@ -40,6 +53,7 @@ export function rowClickHandler(open: ((event: MouseEvent) => void) | undefined)
 
 function DataTableBodyRowInner<TData extends TableRowData>({
   cells,
+  density,
   isSelected,
   includeDragColumn,
   hasSelect,
@@ -49,11 +63,11 @@ function DataTableBodyRowInner<TData extends TableRowData>({
     <TableRow
       data-state={isSelected ? "selected" : undefined}
       onClick={rowClickHandler(onOpen)}
-      className={onOpen ? "cursor-pointer" : undefined}
+      className={cn(ROW_HEIGHT[density], onOpen && "cursor-pointer")}
     >
       {includeDragColumn && <TableCell className="w-[40px] px-2" />}
-      {cells.map((cell) => (
-        <TableCell key={cell.id} {...columnAttributes(cell.column, hasSelect)}>
+      {cells.map((cell, index) => (
+        <TableCell key={cell.id} {...columnAttributes(cell.column, hasSelect, cells[index - 1]?.column)}>
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </TableCell>
       ))}
@@ -70,6 +84,7 @@ export const DataTableBodyRow = memo(
   DataTableBodyRowInner,
   (previous, next) =>
     previous.isSelected === next.isSelected &&
+    previous.density === next.density &&
     previous.includeDragColumn === next.includeDragColumn &&
     previous.hasSelect === next.hasSelect &&
     Boolean(previous.onOpen) === Boolean(next.onOpen) &&
@@ -84,17 +99,20 @@ export const DataTableBodyRow = memo(
  */
 export function DataTableHeadCell<TData extends TableRowData>({
   column,
+  previous,
   header,
   hasSelect,
   holdWidth = false,
 }: {
   column: Column<TData, unknown>;
+  /** The column shown just before this one. */
+  previous?: Column<TData, unknown>;
   header: Header<TData, unknown> | undefined;
   hasSelect: boolean;
   holdWidth?: boolean;
 }) {
   const size = column.getSize();
-  const { style: _cap, className: _padding, ...attributes } = columnAttributes(column, hasSelect);
+  const { style: _cap, className: _padding, ...attributes } = columnAttributes(column, hasSelect, previous);
   const maxWidth = column.columnDef.meta?.maxWidth;
   return (
     <TableHead

@@ -1,38 +1,27 @@
-// The column menu's controls: "Sort by" and "Columns" (show, hide, reorder by
-// drag or with the arrow keys on the handle) and "Reset to default". Loaded
-// when the menu first opens, or on hover or focus of its button.
+// The columns menu's controls: show, hide, reorder by drag or with the arrow
+// keys on the handle, and "Reset to default". Loaded when the menu first
+// opens, or on hover or focus of its button.
 import { Suspense, lazy, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
+import { Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import type { SortableListProps } from "~/components/admin/shared/SortableList";
 import { useMessages } from "~/i18n";
 import { dataTableMessages } from "~/i18n/data-table";
 import { isPrimaryColumn, type ColumnLayout } from "./column-layout";
-import { columnLabel, sortableColumns } from "./DataTableColumnMenu";
+import { columnLabel } from "./DataTableColumnMenu";
 import type { Table, TableRowData } from "./table-config";
 
 const SortableList = lazy(() => import("~/components/admin/shared/SortableList").then((module) => ({ default: module.SortableList }))) as <T extends { id: string }>(
   props: SortableListProps<T>,
 ) => ReactNode;
 
-/** The sort the list uses when none is chosen (radio value). */
-const DEFAULT_SORT = "__default";
-
 export interface ColumnMenuPanelProps<TData extends TableRowData> {
   table: Table<TData>;
   layout: ColumnLayout<TData>;
-  defaultSortLabel?: string | false;
 }
 
-export function ColumnMenuPanel<TData extends TableRowData>({ table, layout, defaultSortLabel }: ColumnMenuPanelProps<TData>) {
+export function ColumnMenuPanel<TData extends TableRowData>({ layout }: ColumnMenuPanelProps<TData>) {
   const t = useMessages(dataTableMessages);
-  const sortable = sortableColumns(table);
-  const sorting = table.state.sorting[0];
-  // A sort on a field that is not a column here (e.g. the route's "updatedAt") is the list's default order.
-  const sortColumn = sorting ? sortable.find((column) => column.id === sorting.id) : undefined;
   // The title column is always first and always shown: a fixed row above the
   // sortable list, so neither drag nor arrow keys can put a column above it.
   const title = layout.arrangeable.find(isPrimaryColumn);
@@ -53,49 +42,7 @@ export function ColumnMenuPanel<TData extends TableRowData>({ table, layout, def
   return (
     <>
       <div data-slot="column-menu-body" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3">
-        {sortable.length > 0 ? (
-          <section className="space-y-2" aria-labelledby="table-sort-heading">
-            <h2 id="table-sort-heading" className="text-body font-medium">{t("sortBy")}</h2>
-            <RadioGroup
-              aria-label={t("sortField")}
-              value={sortColumn?.id ?? (defaultSortLabel === false ? "" : DEFAULT_SORT)}
-              onValueChange={(id) =>
-                id === DEFAULT_SORT ? table.setSorting([]) : table.getColumn(id)?.toggleSorting(sorting?.desc ?? false)}
-            >
-              {/* The list's own order, so the current sort is always one of the choices. */}
-              {defaultSortLabel === false ? null : (
-                <div className="flex min-h-9 items-center gap-2">
-                  <RadioGroupItem value={DEFAULT_SORT} id="table-sort-default" />
-                  <Label htmlFor="table-sort-default">{defaultSortLabel ?? t("defaultSort")}</Label>
-                </div>
-              )}
-              {sortable.map((column) => (
-                <div key={column.id} className="flex min-h-9 items-center gap-2">
-                  <RadioGroupItem value={column.id} id={`table-sort-${column.id}`} />
-                  <Label htmlFor={`table-sort-${column.id}`}>{columnLabel(column)}</Label>
-                </div>
-              ))}
-            </RadioGroup>
-            <div className="grid grid-cols-2 gap-2">
-              {([false, true] as const).map((desc) => (
-                <Button
-                  key={String(desc)}
-                  type="button"
-                  size="sm"
-                  variant={sortColumn && Boolean(sorting?.desc) === desc ? "secondary" : "ghost"}
-                  aria-pressed={Boolean(sortColumn) && Boolean(sorting?.desc) === desc}
-                  disabled={!sortColumn}
-                  onClick={() => sortColumn?.toggleSorting(desc)}
-                >
-                  {desc ? <ArrowDown /> : <ArrowUp />}
-                  {t(desc ? "descending" : "ascending")}
-                </Button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className={cn("space-y-2", sortable.length > 0 && "border-t pt-3")} aria-labelledby="table-columns-heading">
+        <section className="space-y-2" aria-labelledby="table-columns-heading">
           <h2 id="table-columns-heading" className="text-body font-medium">{t("columns")}</h2>
           {title ? (
             <div data-column-fixed={title.id} className="flex min-h-9 items-center gap-1 rounded-md">

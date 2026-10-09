@@ -72,9 +72,14 @@ TableRow.displayName = "TableRow";
  * - `data-capped` with `--column-max`: the cell's content is at most that
  *   wide, so a long name truncates instead of widening its column (an auto
  *   table never makes a column narrower than its widest unbreakable line).
+ * - `data-after-numeric`: a start-aligned column right after an end-aligned
+ *   number gets 24px before its text, so "৳1,250" never touches "Paid" (T6).
+ *
+ * The header sticks under `--index-sticky-top` (the list's sticky bulk bar
+ * while rows are selected, else 0).
  */
 const LAYOUT =
-  "data-[capped]:*:max-w-(--column-max) data-[numeric]:whitespace-nowrap data-[numeric]:text-end data-[numeric]:tabular-nums data-[pin=actions]:w-px data-[pin=actions]:whitespace-nowrap data-[pin=actions]:text-end data-[pin=primary]:min-w-40 in-data-[scrolls]:data-[pin]:sticky data-[pin=select]:inset-s-0 data-[pin=primary]:inset-s-0 data-[pin=primary]:data-[after-select]:inset-s-10 data-[pin=actions]:inset-e-0 in-data-[scrolls]:data-[pin=primary]:before:pointer-events-none in-data-[scrolls]:data-[pin=primary]:before:absolute in-data-[scrolls]:data-[pin=primary]:before:inset-y-0 in-data-[scrolls]:data-[pin=primary]:before:-inset-e-3 in-data-[scrolls]:data-[pin=primary]:before:w-3 in-data-[scrolls]:data-[pin=primary]:before:bg-linear-to-r in-data-[scrolls]:data-[pin=primary]:before:from-foreground/10 in-data-[scrolls]:data-[pin=primary]:before:to-transparent in-data-[scrolls]:data-[pin=actions]:before:pointer-events-none in-data-[scrolls]:data-[pin=actions]:before:absolute in-data-[scrolls]:data-[pin=actions]:before:inset-y-0 in-data-[scrolls]:data-[pin=actions]:before:-inset-s-3 in-data-[scrolls]:data-[pin=actions]:before:w-3 in-data-[scrolls]:data-[pin=actions]:before:bg-linear-to-l in-data-[scrolls]:data-[pin=actions]:before:from-foreground/10 in-data-[scrolls]:data-[pin=actions]:before:to-transparent";
+  "data-[after-numeric]:ps-6 data-[capped]:*:max-w-(--column-max) data-[numeric]:whitespace-nowrap data-[numeric]:text-end data-[numeric]:tabular-nums data-[pin=actions]:w-px data-[pin=actions]:whitespace-nowrap data-[pin=actions]:text-end data-[pin=primary]:min-w-40 in-data-[scrolls]:data-[pin]:sticky data-[pin=select]:inset-s-0 data-[pin=primary]:inset-s-0 data-[pin=primary]:data-[after-select]:inset-s-10 data-[pin=actions]:inset-e-0 in-data-[scrolls]:data-[pin=primary]:before:pointer-events-none in-data-[scrolls]:data-[pin=primary]:before:absolute in-data-[scrolls]:data-[pin=primary]:before:inset-y-0 in-data-[scrolls]:data-[pin=primary]:before:-inset-e-3 in-data-[scrolls]:data-[pin=primary]:before:w-3 in-data-[scrolls]:data-[pin=primary]:before:bg-linear-to-r in-data-[scrolls]:data-[pin=primary]:before:from-foreground/10 in-data-[scrolls]:data-[pin=primary]:before:to-transparent in-data-[scrolls]:data-[pin=actions]:before:pointer-events-none in-data-[scrolls]:data-[pin=actions]:before:absolute in-data-[scrolls]:data-[pin=actions]:before:inset-y-0 in-data-[scrolls]:data-[pin=actions]:before:-inset-s-3 in-data-[scrolls]:data-[pin=actions]:before:w-3 in-data-[scrolls]:data-[pin=actions]:before:bg-linear-to-l in-data-[scrolls]:data-[pin=actions]:before:from-foreground/10 in-data-[scrolls]:data-[pin=actions]:before:to-transparent";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
@@ -83,7 +88,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         // Sticky with its own 1px bottom rule: a collapsed `border-b` would scroll away.
         // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
-        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
+        "sticky top-[var(--index-sticky-top,0px)] z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle in-data-[scrolls]:top-0 text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
         LAYOUT,
         className,
       )}

@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Column, TableRowData } from "./table-config";
+import { isNumericColumn } from "./column-attributes";
 import { cn } from "@scalius/shared/utils";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { DataTableColumnHeaderMenuProps } from "./DataTableColumnHeaderMenu";
@@ -68,7 +69,7 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   }
 
   const sorted = column.getIsSorted();
-  const numeric = Boolean(column.columnDef.meta?.numeric);
+  const numeric = isNumericColumn(column);
 
   // Polaris IndexTable heading: the same caption type as a plain heading,
   // with the sort arrow beside it; the whole label is the button.
