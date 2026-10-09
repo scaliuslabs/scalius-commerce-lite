@@ -23,7 +23,7 @@ export const TIMING_INIT = () => {
   let stableSince = null;
   const tick = () => {
     const now = performance.now();
-    const main = document.querySelector("main");
+    const main = document.querySelector("main") || document.body;
     const height = main ? main.scrollHeight : 0;
     const visibleSkeletons = [...document.querySelectorAll(SKELETON)].filter((element) => {
       const rect = element.getBoundingClientRect();
@@ -95,7 +95,7 @@ export function collectFacts() {
   };
 
   // Main content.
-  const main = document.querySelector("main");
+  const main = document.querySelector("main") || document.body;
   if (main) {
     facts.main = { exists: true, textLength: main.innerText.trim().length, hasMedia: Boolean(main.querySelector("img,svg,canvas,video,input,textarea,select")) };
   }
@@ -211,6 +211,116 @@ export function collectFacts() {
     if (facts.clips.length >= 200) break;
   }
 
+  // ── Polish bar geometry (apps/admin-v2/DESIGN.md, "The polish bar") ────────
+  const phone = window.innerWidth < 640;
+  const rectOf = (element) => element.getBoundingClientRect();
+  const round = (value) => Math.round(value * 10) / 10;
+
+  // C1: one control height, 36px from 640px and 44px below.
+  const targetHeight = phone ? 44 : 36;
+  facts.controlSizes = { target: targetHeight, wrong: [] };
+  for (const element of document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]), textarea[rows="1"], [role=combobox]')) {
+    if (!visible(element) || element.closest(".ProseMirror,[role=listbox],[cmdk-root]")) continue;
+    const box = rectOf(element);
+    if (box.width < 24) continue;
+    if (Math.abs(box.height - targetHeight) > 1) facts.controlSizes.wrong.push(`${describe(element)} (${round(box.height)}px)`);
+  }
+
+  // C6: touch targets, at least 24x24, and 44px tall below 640px.
+  facts.touch = [];
+  for (const element of document.querySelectorAll("button, a[href], [role=checkbox], [role=switch], [role=radio], [role=tab]")) {
+    if (!visible(element)) continue;
+    const style = getComputedStyle(element);
+    if (element.tagName === "A" && style.display === "inline") continue; // a link inside running text
+    let box = rectOf(element);
+    // A small checkbox or radio counts with the label that wraps it.
+    const wrapper = element.closest("label");
+    if (wrapper && box.height < 44) {
+      const wrapped = rectOf(wrapper);
+      box = { width: Math.max(box.width, wrapped.width), height: Math.max(box.height, wrapped.height) };
+    }
+    if (box.width <= 2 || box.height <= 2 || /\bsr-only\b/.test(String(element.className))) continue; // a skip link is off screen until focused
+    const small = box.width < 24 - 0.5 || box.height < 24 - 0.5;
+    const shortOnPhone = phone && element.tagName !== "A" && box.height < 44 - 0.5;
+    if (small || shortOnPhone) facts.touch.push(`${describe(element)} (${round(box.width)}x${round(box.height)}px)`);
+  }
+
+  // C3: one primary button per view and per open dialog.
+  const isOverlay = (element) => element.closest("[role=dialog],[role=alertdialog]");
+  facts.primaries = { page: [], dialogs: [] };
+  facts.primaries.page = [...document.querySelectorAll(".shadow-button-primary")].filter((element) => visible(element) && !isOverlay(element)).map(describe);
+  for (const dialog of document.querySelectorAll("[role=dialog],[role=alertdialog]")) {
+    if (!visible(dialog)) continue;
+    const inside = [...dialog.querySelectorAll(".shadow-button-primary")].filter(visible);
+    if (inside.length > 1) facts.primaries.dialogs.push(inside.map(describe).join(" + "));
+  }
+
+  // O1, O2: dialog widths, and never a dialog over a dialog.
+  facts.dialogs = [...document.querySelectorAll("[role=dialog],[role=alertdialog]")].filter((element) => visible(element) && element.getAttribute("data-state") !== "closed").map((element) => ({ sel: describe(element), width: Math.round(rectOf(element).width), height: Math.round(rectOf(element).height) }));
+  facts.viewportWidth = window.innerWidth;
+
+  // T3, T5, T15: list rows.
+  facts.rowHeights = [];
+  facts.numeric = [];
+  facts.rowLinks = [];
+  for (const table of document.querySelectorAll("main table")) {
+    if (!visible(table)) continue;
+    const rows = [...table.querySelectorAll("tbody tr")].filter(visible);
+    if (rows.length > 1) {
+      const heights = rows.map((row) => rectOf(row).height);
+      const min = Math.min(...heights);
+      const max = Math.max(...heights);
+      if (max - min > 1) facts.rowHeights.push({ sel: describe(table), min: round(min), max: round(max), rows: rows.length });
+    }
+    for (const cell of table.querySelectorAll("td[data-numeric], th[data-numeric]")) {
+      if (!visible(cell)) continue;
+      const style = getComputedStyle(cell);
+      const alignedEnd = /^(end|right|-webkit-right)$/.test(style.textAlign);
+      const tabular = style.fontVariantNumeric.includes("tabular-nums");
+      if (!alignedEnd || (cell.tagName === "TD" && !tabular)) facts.numeric.push(`${describe(cell)} (text-align ${style.textAlign}, ${tabular ? "tabular" : "proportional"} digits)`);
+    }
+    const withoutLink = rows.filter((row) => !row.querySelector("a[href]"));
+    if (rows.length && withoutLink.length === rows.length) facts.rowLinks.push(describe(table));
+  }
+  facts.numeric = facts.numeric.slice(0, 10);
+
+  // N3: buttons, tabs, labels and headings never truncate.
+  facts.labelClips = [];
+  for (const element of document.querySelectorAll("button, label, [role=tab], h1, h2, h3")) {
+    if (!visible(element) || !(element.textContent ?? "").trim()) continue;
+    if (element.scrollWidth > element.clientWidth + 1 && !/\bsr-only\b/.test(String(element.className))) facts.labelClips.push(`${describe(element)} "${element.textContent.trim().slice(0, 40)}" (${element.scrollWidth}px in ${element.clientWidth}px)`);
+    if (facts.labelClips.length >= 20) break;
+  }
+
+  // F3: units belong inside the control, not in the label.
+  facts.unitLabels = [...document.querySelectorAll("label")].filter((element) => visible(element) && /\(.{1,3}\)\s*$/.test((element.textContent ?? "").trim())).map((element) => `${describe(element)} "${element.textContent.trim().slice(0, 40)}"`).slice(0, 10);
+
+  // S2, S3: label to control 4px, control to help 4px.
+  facts.gaps = { label: [], help: [] };
+  for (const label of document.querySelectorAll("label[for]")) {
+    const control = document.getElementById(label.getAttribute("for"));
+    if (!control || !visible(label) || !visible(control)) continue;
+    const a = rectOf(label);
+    const b = rectOf(control);
+    const overlapsX = a.left < b.right && b.left < a.right;
+    if (!overlapsX || a.bottom > b.top + 1) continue; // after the control (checkbox) or beside it
+    const gap = b.top - a.bottom;
+    if (gap < 48 && Math.abs(gap - 4) > 1) facts.gaps.label.push(`${describe(control)} (${round(gap)}px under its label)`);
+  }
+  for (const control of document.querySelectorAll("[aria-describedby]")) {
+    if (!visible(control) || !control.matches("input,textarea,select,[role=combobox],button")) continue;
+    const help = document.getElementById(control.getAttribute("aria-describedby").split(/\s+/)[0]);
+    if (!help || !visible(help) || help.closest("[role=tooltip]")) continue;
+    const gap = rectOf(help).top - rectOf(control).bottom;
+    if (gap >= 0 && gap < 48 && Math.abs(gap - 4) > 1) facts.gaps.help.push(`${describe(control)} (${round(gap)}px above its help)`);
+  }
+  facts.gaps.label = facts.gaps.label.slice(0, 10);
+  facts.gaps.help = facts.gaps.help.slice(0, 10);
+
+  // N2: the main scroller does not scroll sideways either.
+  const scroller = document.querySelector("#admin-main-scroll");
+  facts.scrollerOverflow = scroller && scroller.scrollWidth > scroller.clientWidth + 1 ? { scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth } : null;
+
   // Visible text and the text attributes, for the leak and language rules.
   const dataSelector = "td, [role=gridcell], .rich-content, .ProseMirror, [data-user-content], [contenteditable=true]";
   const codeSelector = "code, kbd, samp, pre";
@@ -252,6 +362,8 @@ export function markFocused() {
     offscreen: rect.width === 0 || rect.height === 0,
     dialog: Boolean(element.closest("[role=dialog],[role=alertdialog]")),
     inDocument: element.isConnected,
+    // Q1: a focused control in main must not sit under the top bar.
+    underTopBar: Boolean(element.closest("main")) && Boolean(document.querySelector("[data-slot=topbar]")) && rect.top < document.querySelector("[data-slot=topbar]").getBoundingClientRect().bottom - 1,
   };
 }
 

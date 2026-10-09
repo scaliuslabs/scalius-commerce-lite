@@ -135,7 +135,7 @@ const FILE_AND_DOMAIN_ENDINGS = new Set([
 
 const LEAK_PATTERNS = [
   { kind: "icu", test: (text) => /\{\s*\w+\s*,\s*(plural|select|selectordinal)\b/.test(text), label: "ICU syntax" },
-  { kind: "placeholder", test: (text) => /\{\{?\s*[A-Za-z_]\w*\s*\}\}?/.test(text), label: "an unfilled {placeholder}" },
+  { kind: "placeholder", test: (text) => /(?<!\{)\{\s*[A-Za-z_]\w*\s*\}(?!\})/.test(text), label: "an unfilled {placeholder}" },
   { kind: "undefined", test: (text) => /\bundefined\b/.test(text), label: "undefined" },
   { kind: "nan", test: (text) => /\bNaN\b/.test(text), label: "NaN" },
   { kind: "infinity", test: (text) => /(^|[^A-Za-z])-?Infinity\b/.test(text), label: "Infinity" },

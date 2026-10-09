@@ -47,7 +47,7 @@
         "measure": "open-menu"
       }
     ],
-    "waitFor": "[role=menu]"
+    "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
   },
   {
     "id": "products-sort-columns",
@@ -74,7 +74,7 @@
         "measure": "open-menu"
       }
     ],
-    "waitFor": "[role=menu]"
+    "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
   },
   {
     "id": "products-import",

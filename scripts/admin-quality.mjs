@@ -12,7 +12,7 @@
  *
  *   pnpm quality:admin [--base-url http://localhost:4323/admin]
  *     [--routes /admin/products*,orders] [--family products,settings]
- *     [--widths 390,768,1440] [--locales en,bn] [--out .quality/admin]
+ *     [--widths 390,768,1024,1440] [--locales en,bn] [--out .quality/admin]
  *     [--concurrency 3] [--no-shots] [--no-surfaces] [--list]
  *
  * Exit code 1 on any gating finding that is not in
@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { globMatch } from "./quality-shared/page-checks.mjs";
 import { summarizeResults } from "./quality-shared/report-kit.mjs";
+import { RULES } from "./admin-quality/rules.mjs";
 import { writeQualityReport } from "./storefront-quality/report.mjs";
 import { auditPage, compileLanguageAllowlist, errorScreenPatterns } from "./admin-quality/audit.mjs";
 import { readAdminCredentials, signInStorageState } from "./admin-quality/auth.mjs";
@@ -40,7 +41,7 @@ const LOCALE_KEY = "scalius.dashboard.locale";
 const JOB_TIMEOUT_MS = 120_000;
 
 function parseArgs(argv) {
-  const args = { baseUrl: DEFAULT_BASE_URL, routes: [], families: [], widths: [390, 768, 1440], locales: ["en", "bn"], out: join(ROOT, ".quality/admin"), concurrency: 3, shots: true, surfaces: true, list: false };
+  const args = { baseUrl: DEFAULT_BASE_URL, routes: [], families: [], widths: [390, 768, 1024, 1440], locales: ["en", "bn"], out: join(ROOT, ".quality/admin"), concurrency: 3, shots: true, surfaces: true, list: false };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     const value = () => {
@@ -230,6 +231,7 @@ async function main() {
     const entries = jobs.map((job) => results.get(job.id)).filter(Boolean);
     const summary = summarizeResults(entries, { ignoreRules: ["screenshot"] });
     summary.skipped = skipped;
+    for (const [rule, value] of Object.entries(summary.byRule)) value.polish = RULES[rule]?.polish ?? [];
     const all = entries.flatMap((entry) => Object.values(entry.widths).map((variant) => variant.metrics));
     summary.timing = {
       firstRenderMs: { median: median(all.map((m) => m.fcpMs)), p95: percentile(all.map((m) => m.fcpMs), 0.95) },
@@ -244,7 +246,7 @@ async function main() {
     const reportFile = writeQualityReport(args.out, report);
     console.log(`\n${summary.entries} routes and surfaces, ${summary.failingEntries} failing, ${summary.gatingFindings} gating findings (${report.durationSeconds}s)`);
     for (const [rule, value] of Object.entries(summary.byRule).slice(0, 30)) {
-      console.log(`  ${rule.padEnd(24)} ${String(value.findings).padStart(6)} findings in ${String(value.entries).padStart(4)} routes${value.gating ? "  (gating)" : ""}`);
+      console.log(`  ${rule.padEnd(24)} ${String(value.findings).padStart(6)} findings in ${String(value.entries).padStart(4)} routes${value.gating ? "  (gating)" : ""}${value.polish?.length ? `  [${value.polish.join(", ")}]` : ""}`);
     }
     for (const item of skipped) console.log(`  skipped ${item.path}: ${item.reason}`);
     console.log(`Report: ${reportFile}`);

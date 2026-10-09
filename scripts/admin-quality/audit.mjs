@@ -14,7 +14,7 @@ import {
   skeletonShapeFinding,
 } from "./analysis.mjs";
 import { collectFacts, installResponseProbe, markFocused, readResponse } from "./page-facts.mjs";
-import { isGating } from "./rules.mjs";
+import { isGating, polishIds } from "./rules.mjs";
 
 export const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const VIEWPORT_HEIGHT = 900;
@@ -96,6 +96,9 @@ async function runAxe(page, axeSource) {
 export function judgeFacts(facts, { locale, languageAllow }) {
   const findings = [];
   const { page } = facts;
+  if (facts.scrollerOverflow) {
+    findings.push(finding("overflow-page", "serious", `The main scroller scrolls sideways: ${facts.scrollerOverflow.scrollWidth}px of content in ${facts.scrollerOverflow.clientWidth}px.`, ["#admin-main-scroll"]));
+  }
   if (page.scrollWidth > page.clientWidth + 1 || facts.offenders.length) {
     findings.push(finding(
       "overflow-page", "serious",
@@ -125,6 +128,22 @@ export function judgeFacts(facts, { locale, languageAllow }) {
   for (const item of controlHeightFindings(facts.controls)) findings.push(finding("control-height", "moderate", item.message, item.nodes));
   for (const item of fieldAlignmentFindings(facts.fields)) findings.push(finding("field-misaligned", "moderate", item.message, item.nodes));
 
+  // The polish bar's geometry rules.
+  if (facts.controlSizes.wrong.length) findings.push(finding("control-size", "moderate", `Fields should be ${facts.controlSizes.target}px tall at this width.`, facts.controlSizes.wrong, facts.controlSizes.wrong.length));
+  if (facts.touch.length) findings.push(finding("touch-target", "moderate", "Touch targets under 24x24 px (or under 44 px tall on a phone).", facts.touch, facts.touch.length));
+  if (facts.primaries.page.length > 1) findings.push(finding("multiple-primary", "moderate", `${facts.primaries.page.length} primary buttons in one view.`, facts.primaries.page));
+  if (facts.primaries.dialogs.length) findings.push(finding("multiple-primary", "moderate", "More than one primary button in an open dialog.", facts.primaries.dialogs));
+  if (facts.dialogs.length > 1) findings.push(finding("dialog-stack", "moderate", `${facts.dialogs.length} dialogs are open at once.`, facts.dialogs.map((item) => item.sel)));
+  const oddDialogs = facts.viewportWidth >= 640 ? facts.dialogs.filter((item) => ![448, 512, 640, 800].includes(item.width)) : [];
+  if (oddDialogs.length) findings.push(finding("dialog-width", "minor", "A dialog is not 448, 512, 640 or 800 px wide.", oddDialogs.map((item) => `${item.sel} (${item.width}px)`)));
+  if (facts.rowHeights.length) findings.push(finding("row-height", "moderate", "Rows of one table differ in height.", facts.rowHeights.map((item) => `${item.sel}: ${item.min}-${item.max}px over ${item.rows} rows`)));
+  if (facts.numeric.length) findings.push(finding("numeric-align", "moderate", "A numeric column is not end-aligned with tabular digits.", facts.numeric));
+  if (facts.rowLinks.length) findings.push(finding("row-link", "minor", "No row of this table opens by a real link (Cmd-click, middle-click).", facts.rowLinks));
+  if (facts.labelClips.length) findings.push(finding("label-truncated", "moderate", "A button, tab, label or heading is wider than its box.", facts.labelClips, facts.labelClips.length));
+  if (facts.unitLabels.length) findings.push(finding("unit-in-label", "moderate", "A label carries its unit in brackets.", facts.unitLabels));
+  if (facts.gaps.label.length) findings.push(finding("label-gap", "moderate", "A label is not 4 px above its control.", facts.gaps.label));
+  if (facts.gaps.help.length) findings.push(finding("help-gap", "moderate", "Help or error text is not 4 px under its control.", facts.gaps.help));
+
   const leaks = findLeaks(facts.texts);
   if (leaks.length) findings.push(finding("leaked-value", "serious", `A visible value is ${[...new Set(leaks.map((leak) => leak.label))].join(", ")}.`, leaks.map((leak) => `${leak.kind}: "${leak.text}" in ${leak.sel}`), leaks.length));
 
@@ -152,6 +171,8 @@ async function tabThrough(page, { insideDialog }) {
   // A dialog with one control keeps Tab on it by design: only a page can strand focus.
   const stuck = insideDialog ? [] : path.filter((item, index) => index > 0 && item.sel && item.sel === path[index - 1].sel);
   const lost = path.filter((item) => !item.sel);
+  const covered = path.filter((item) => item.underTopBar);
+  if (covered.length) findings.push(finding("focus-obscured", "serious", "A focused control sits under the top bar.", [...new Set(covered.map((item) => item.sel))]));
   const leaked = insideDialog ? path.filter((item) => item.sel && !item.dialog) : [];
   if (stuck.length) findings.push(finding("focus-trap", "serious", "Tab pressed twice left focus on the same element.", [...new Set(stuck.map((item) => item.sel))]));
   if (lost.length >= 3) findings.push(finding("focus-trap", "serious", `Focus left the page ${lost.length} times in ${FOCUS_STEPS} Tab presses.`, ["document.body"], lost.length));
@@ -206,6 +227,19 @@ async function runSurfaceSteps(page, surface) {
   if (surface.waitFor) await page.locator(surface.waitFor).first().waitFor({ state: "visible", timeout: 5_000 });
   await page.waitForTimeout(400);
   return measured;
+}
+
+/** Q2: Esc closes the surface and focus returns to the control that opened it. */
+async function checkFocusReturn(page, surface, findings) {
+  const step = (surface.steps ?? []).find((item) => item.click);
+  if (!step) return;
+  const trigger = page.locator(step.click).first();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(350);
+  const closed = (await page.locator(surface.waitFor).first().isVisible().catch(() => false)) === false;
+  if (!closed) return; // Esc does not close it: another rule's business
+  const returned = await trigger.evaluate((element) => element === document.activeElement).catch(() => false);
+  if (!returned) findings.push(finding("focus-return", "serious", "Esc closed the surface but focus did not return to its trigger.", [step.click]));
 }
 
 async function screenshot(page, file) {
@@ -288,6 +322,7 @@ export async function auditPage({ context, job, width, locale, baseOrigin, axeSo
       findings.push(...focus.findings);
       metrics.tabStops = focus.tabStops;
     }
+    if (job.surface) await checkFocusReturn(page, job.surface, findings);
     if (!job.surface) {
       const measured = await genericInteractions(page);
       metrics.interactions = Object.fromEntries(measured.map((item) => [item.name, item.ms === null ? null : Math.round(item.ms)]));
@@ -326,6 +361,8 @@ function finalize(findings) {
   for (const item of findings) {
     item.help ??= null;
     item.gating = isGating(item);
+    item.polish = polishIds(item);
+    if (item.polish.length) item.message = `[${item.polish.join(", ")}] ${item.message}`;
   }
   return findings;
 }

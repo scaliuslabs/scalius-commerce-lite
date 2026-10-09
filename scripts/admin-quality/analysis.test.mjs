@@ -11,7 +11,7 @@ import {
   findLeaks,
   skeletonShapeFinding,
 } from "./analysis.mjs";
-import { RULES, isGating } from "./rules.mjs";
+import { NOT_AUTOMATED, RULES, isGating, polishIds } from "./rules.mjs";
 
 const allow = compileLanguageAllowlist(JSON.parse(readFileSync(fileURLToPath(new URL("./language-allowlist.json", import.meta.url)), "utf8")));
 
@@ -86,6 +86,7 @@ describe("leaked values", () => {
     expect(leak("[object Object]")).toEqual(["object"]);
     expect(leak("Invalid Date")).toEqual(["invalid-date"]);
     expect(leak("Hello {name}")).toEqual(["placeholder"]);
+    expect(leak("Hi {{customer_name}}, welcome")).toEqual([]);
   });
   it("leaves ordinary copy, files, domains and numbers", () => {
     for (const text of ["Orders", "image.png", "www.example.com", "v1.2.3", "Save changes.", "1.5 kg", "e.g. yourshop.com", "Undefined behaviour is fine in prose? no: Undefined"]) {
@@ -142,12 +143,29 @@ describe("skeleton shape", () => {
 describe("rules", () => {
   it("gates only the rules marked gating, and axe serious or critical", () => {
     expect(isGating({ rule: "overflow-page", source: "harness" })).toBe(true);
-    expect(isGating({ rule: "clipped-text", source: "harness" })).toBe(false);
+    expect(isGating({ rule: "clipped-text", source: "harness" })).toBe(true);
+    expect(isGating({ rule: "wrong-language", source: "harness" })).toBe(false);
     expect(isGating({ rule: "button-name", source: "axe", impact: "critical" })).toBe(true);
     expect(isGating({ rule: "region", source: "axe", impact: "moderate" })).toBe(false);
   });
   it("lists every rule in the docs", () => {
     const doc = readFileSync(fileURLToPath(new URL("../../docs/ADMIN-QUALITY.md", import.meta.url)), "utf8");
     for (const rule of Object.keys(RULES).filter((id) => id !== "axe")) expect(doc, `docs/ADMIN-QUALITY.md must list ${rule}`).toContain(`\`${rule}\``);
+  });
+  it("names a real DESIGN.md rule id for every polish mapping", () => {
+    const design = readFileSync(fileURLToPath(new URL("../../apps/admin-v2/DESIGN.md", import.meta.url)), "utf8");
+    const ids = new Set([...design.matchAll(/^\| ([A-Z]\d+) \|/gm)].map((match) => match[1]));
+    expect(ids.size).toBeGreaterThan(90);
+    for (const [rule, value] of Object.entries(RULES)) for (const id of value.polish) expect(ids.has(id), `${rule} names ${id}`).toBe(true);
+    for (const entry of NOT_AUTOMATED) expect(ids.has(entry.split(" ")[0]), `${entry} is not a DESIGN.md rule`).toBe(true);
+  });
+  it("maps findings to polish ids", () => {
+    expect(polishIds({ rule: "control-size", source: "harness" })).toEqual(["C1"]);
+    expect(polishIds({ rule: "button-name", source: "axe" })).toEqual(["C7"]);
+    expect(polishIds({ rule: "region", source: "axe" })).toEqual([]);
+  });
+  it("gates geometry and copy-leak rules, not heuristics or timing", () => {
+    for (const rule of ["control-size", "touch-target", "row-height", "leaked-value", "label-gap"]) expect(RULES[rule].gating, rule).toBe(true);
+    for (const rule of ["wrong-language", "field-misaligned", "load-settled", "focus-visible", "interaction-latency"]) expect(RULES[rule].gating, rule).toBe(false);
   });
 });

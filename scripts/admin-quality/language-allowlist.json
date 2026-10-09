@@ -6,7 +6,7 @@
     "sku", "gtin", "ean", "upc", "isbn", "url", "uri", "api", "sdk", "cli", "mcp", "html", "css", "json", "csv", "pdf", "xml", "seo", "otp",
     "sms", "cod", "utc", "gmt", "qr", "dns", "ssl", "tls", "http", "https", "smtp", "oauth", "jwt", "uuid", "ios", "usb", "wifi", "id", "ids",
     "bdt", "usd", "eur", "gbp", "inr", "kg", "lbs", "lb", "oz", "cm", "mm", "px", "sku", "hex", "rgb", "webp", "png", "jpg", "jpeg", "svg",
-    "gif", "mp4", "markdown", "ai", "gpt", "llm", "zip", "bn", "en"
+    "localhost", "english", "ctrl", "shift", "alt", "cmd", "gif", "mp4", "markdown", "ai", "gpt", "llm", "zip", "bn", "en"
   ],
   "phrases": ["Local Admin", "Scalius Local", "Scalius Admin"],
   "patterns": ["^[A-Z]{2,8}$", "^[A-Z][a-z]+[A-Z]"]
