@@ -79,7 +79,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 | Need | Use |
 | --- | --- |
-| Action | `Button`. Variants: `default` primary, `outline` secondary, `secondary` neutral, `ghost` tertiary and icon, `link` plain, `destructive` critical. Sizes (phone/`sm` up): `default` 44/36px, `sm` 36/32, `lg` 44, `icon` 44/36, `icon-sm` 44/28. |
+| Action | `Button`. Variants: `default` primary, `outline` secondary, `secondary` neutral, `ghost` tertiary and icon, `link` plain, `destructive` critical. Sizes (phone/`sm` up): `default` 44/36px, `sm` 44/32 (phones get the 44px touch height, C6), `lg` 44, `icon` 44/36, `icon-sm` 44/28. |
 | Section | `Card` with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. |
 | Status | `Badge`. Use `default` (strong) only for counts, and the tone variants per the status table below. |
 | Page message | `Alert`, with a tone variant. |

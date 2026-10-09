@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
+import { Field } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
@@ -38,9 +39,9 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
   ];
 
   return (
-    <div className="space-y-2">
-      <SearchableSelect
-        id="product-warranty-policy"
+    <div className="flex flex-col items-start gap-3">
+      <Field id="product-warranty-policy" className="self-stretch" help={selected ? warrantySummary(t, selected) : undefined}>
+        <SearchableSelect
         ariaLabel={t("policy")}
         options={options}
         value={value ?? NONE}
@@ -50,9 +51,9 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
         emptyMessage={t("noPolicies")}
         onValueChange={(next) =>
           form.setValue("warrantyPolicyId", next === NONE ? null : next, { shouldDirty: true })}
-      />
-      {selected ? <p className="text-body text-muted-foreground">{warrantySummary(t, selected)}</p> : null}
-      <Link to="/admin/settings/policies/warranty" className="inline-block text-body text-link hover:underline">
+        />
+      </Field>
+      <Link to="/admin/settings/policies/warranty" className="inline-flex min-h-6 items-center rounded-md text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t("managePolicies")}
       </Link>
     </div>

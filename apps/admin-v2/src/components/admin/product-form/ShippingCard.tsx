@@ -2,14 +2,14 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMessages } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
 import type { ProductFulfilmentMode } from "./fulfilment-mode";
 import { useProductKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
-import { Field } from "~/components/ui/field";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 const HELP = {
   physical: "fulfilmentPhysicalHelp",
@@ -52,12 +52,10 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
             <p className="text-body text-muted-foreground">{g("fulfilmentForced")}</p>
           </div>
         ) : (
-          <div className="space-y-1">
+          <Field id="product-fulfilment" help={t(HELP[mode])}>
             <SearchableSelect
-              id="product-fulfilment"
               ariaLabel={t("fulfilment")}
               value={mode}
-              aria-describedby="product-fulfilment-help"
               onValueChange={(value) => {
                 const next = choices.find((choice) => choice === value);
                 if (next) form.setValue("fulfillmentKind", next, { shouldDirty: true });
@@ -65,8 +63,7 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
               triggerClassName="w-full"
               options={choices.map((choice) => ({ value: choice, label: t(`fulfilmentMode.${choice}`) }))}
             />
-            <p id="product-fulfilment-help" className="text-body text-muted-foreground">{t(HELP[mode])}</p>
-          </div>
+          </Field>
         )}
         <div ref={weightSlot} className="empty:hidden" />
         {ships ? (
@@ -75,9 +72,11 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
               control={form.control}
               name="freeDelivery"
               render={({ field }) => (
-                <Field label={t("freeDelivery")} className="flex items-center justify-between">
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </Field>
+                <ChoiceField
+                  id="product-free-delivery"
+                  label={t("freeDelivery")}
+                  control={<Checkbox id="product-free-delivery" checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />}
+                />
               )}
             />
           </div>

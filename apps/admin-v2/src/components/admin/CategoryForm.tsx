@@ -391,7 +391,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 control={form.control}
                 name="listingTemplate"
                 render={({ field }) => (
-                  <Field label={t("template")} help={t("templateHelp")}>
+                  <Field id="category-template" label={t("template")} help={t("templateHelp")}>
                     <TemplateSelect
                       id="category-template"
                       kind="listing"

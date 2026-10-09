@@ -171,12 +171,13 @@ function FormFields({ language, disabled }: { language: Language | undefined; di
   });
   return FORM_FIELDS.map(([key, label]) => (
     <label key={key} className="flex min-h-11 items-start gap-3 py-3 text-body">
+      <span className="flex h-lh items-center">
       <Checkbox
-        className="mt-0.5"
         checked={draft[key]}
         disabled={disabled}
         onCheckedChange={(checked) => setDraft((current) => ({ ...current, [key]: checked === true }))}
       />
+      </span>
       {t(label)}
     </label>
   ));
@@ -479,12 +480,13 @@ export function CustomerRequestsCard() {
         </label>
       ))}
       <label className="flex min-h-11 items-start gap-3 border-t border-border pt-4 py-3 text-body">
+        <span className="flex h-lh items-center">
         <Checkbox
-          className="mt-0.5"
           checked={values.visibility === "show_unavailable"}
           disabled={!canEdit}
           onCheckedChange={(checked) => setValue("visibility", checked === true ? "show_unavailable" : "eligible_only")}
         />
+        </span>
         {t("showUnavailable")}
       </label>
       <SettingsField id="request-intro" label={t("intro")}>

@@ -173,7 +173,7 @@ function ListRow({ to, params, label, value, note }: {
   const body = (
     <span className="min-w-0 flex-1">
       <span className="block text-body font-medium">{label}</span>
-      {value ? <span className="block truncate text-body text-muted-foreground">{value}</span> : null}
+      {value ? <span className="block truncate text-body text-muted-foreground" title={typeof value === "string" ? value : undefined}>{value}</span> : null}
       {note ? <span className="block text-body text-muted-foreground">{note}</span> : null}
     </span>
   );

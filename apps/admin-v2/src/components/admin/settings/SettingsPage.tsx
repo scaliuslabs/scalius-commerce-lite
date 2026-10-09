@@ -217,7 +217,7 @@ export function SettingsRow({
     >
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium">{label}</span>
-        {value ? <span className="block truncate text-body text-muted-foreground">{value}</span> : null}
+        {value ? <span className="block truncate text-body text-muted-foreground" title={typeof value === "string" ? value : undefined}>{value}</span> : null}
       </span>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>

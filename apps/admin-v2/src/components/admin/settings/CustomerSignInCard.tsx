@@ -99,12 +99,13 @@ export function CustomerSignInCard() {
             <span className="text-muted-foreground">{t(phoneless ? "phoneDigitalOptional" : "phoneLocked")}</span>
           </div>
           <label className="flex min-h-11 items-start gap-3 py-3 text-body">
+            <span className="flex h-lh items-center">
             <Checkbox
-              className="mt-0.5"
               checked={phoneless}
               disabled={!canEdit || (!phoneless && !phonelessAllowed)}
               onCheckedChange={(checked) => set({ ...identity, phoneOptionalForDigital: checked === true })}
             />
+            </span>
             <span className="space-y-1">
               <span className="block">{t("phoneOptionalDigital")}</span>
               <span className="block text-muted-foreground">{t("phoneOptionalDigitalHelp")}</span>
@@ -175,12 +176,13 @@ export function CustomerSignInCard() {
             return (
               <div key={channel}>
                 <label className="flex min-h-11 items-start gap-3 py-3 text-body">
+                  <span className="flex h-lh items-center">
                   <Checkbox
-                    className="mt-0.5"
                     checked={on}
                     disabled={disabled}
                     onCheckedChange={() => set(toggleChannel(identity, channel))}
                   />
+                  </span>
                   {t(CHANNEL_LABEL[channel])}
                 </label>
                 {hint ? (

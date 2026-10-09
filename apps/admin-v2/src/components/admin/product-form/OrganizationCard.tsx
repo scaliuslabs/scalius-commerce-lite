@@ -72,7 +72,7 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
           control={form.control}
           name="brandId"
           render={({ field, fieldState }) => (
-            <Field label={t("brand")} error={fieldState.error?.message}>
+            <Field id="product-brand" label={t("brand")} error={fieldState.error?.message}>
               <Suspense fallback={<Skeleton className="h-11 w-full sm:h-9" />}>
                 <BrandPicker
                   id="product-brand"
