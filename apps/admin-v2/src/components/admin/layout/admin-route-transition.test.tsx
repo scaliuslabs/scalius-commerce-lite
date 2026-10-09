@@ -16,7 +16,7 @@ import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "~/router";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 describe("admin route transition presentation (polish bar L1, L3)", () => {
   let host: HTMLDivElement;
@@ -68,7 +68,7 @@ describe("admin route transition presentation (polish bar L1, L3)", () => {
     await router.load();
     await act(async () => root.render(<RouterProvider router={router} />));
 
-    let navigation: Promise<void> | undefined;
+    let navigation: Promise<unknown> | undefined;
     await act(async () => {
       navigation = router.navigate({ to: "/admin/slow" as never });
       await Promise.resolve();
@@ -87,7 +87,7 @@ describe("admin route transition presentation (polish bar L1, L3)", () => {
     await router.load();
     await act(async () => root.render(<RouterProvider router={router} />));
 
-    let navigation: Promise<void> | undefined;
+    let navigation: Promise<unknown> | undefined;
     await act(async () => {
       navigation = router.navigate({ to: "/admin/slow" as never });
       await Promise.resolve();

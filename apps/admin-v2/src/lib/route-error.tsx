@@ -4,7 +4,7 @@
  * admin shell; the router's defaults render them full page when the root, or
  * the shell's own session guard, is what failed.
  */
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type JSX, type ReactNode } from "react";
 import { rootRouteId, useMatch, useRouter } from "@tanstack/react-router";
 import { BootSpinner, PageSkeleton, type PageSkeletonKind } from "~/components/admin/states/PageSkeleton";
 import { ErrorState } from "~/components/admin/states/ErrorState";
@@ -26,7 +26,7 @@ export function RouteErrorComponent({
   error: Error;
   reset: () => void;
   fullPage?: boolean;
-}) {
+}): JSX.Element {
   const router = useRouter();
   const pageTitle = useMatch({ strict: false, select: (match) => titleFromHead(match.meta) });
   const kind = classifyFailure(error);
@@ -55,7 +55,7 @@ export function RouteErrorComponent({
 }
 
 /** No route matched, or a loader threw `notFound()`: name the record when the route shows one. */
-export function RouteNotFoundComponent() {
+export function RouteNotFoundComponent(): JSX.Element {
   const fullPath = useMatch({ strict: false, select: (match) => (match.routeId === rootRouteId ? null : match.fullPath) });
   if (fullPath === null) return <PageNotFound fullPage />;
   return recordResource(fullPath) ? <RecordNotFound /> : <PageNotFound />;
@@ -73,8 +73,8 @@ export function pendingKindForPath(fullPath: string): PageSkeletonKind | null {
  * inside the shell (polish bar L1); a standalone page shows the quiet boot
  * spinner.
  */
-export function RoutePendingComponent() {
-  const fullPath = useMatch({ strict: false, select: (match) => match.fullPath });
+export function RoutePendingComponent(): JSX.Element {
+  const fullPath = useMatch({ strict: false, select: (match): string => match.fullPath });
   const kind = pendingKindForPath(fullPath);
   return kind ? <PageSkeleton kind={kind} /> : <BootSpinner />;
 }

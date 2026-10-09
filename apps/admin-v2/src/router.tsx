@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type JSX, type ReactNode } from "react";
 import { createRouter, rootRouteId, useMatch, type ErrorComponentProps } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
@@ -19,7 +19,7 @@ export const ROUTE_PENDING_MIN_MS = 300;
 // Errors render where the failure happened: inside the admin shell or the
 // sign-in card while those layouts stand, full page when the root, or the
 // shell's own session guard, is what failed.
-function DefaultErrorComponent(props: ErrorComponentProps) {
+function DefaultErrorComponent(props: ErrorComponentProps): JSX.Element {
   const routeId = useMatch({ strict: false, select: (match) => match.routeId });
   return <RouteErrorComponent {...props} fullPage={routeId === rootRouteId || routeId === "/admin"} />;
 }

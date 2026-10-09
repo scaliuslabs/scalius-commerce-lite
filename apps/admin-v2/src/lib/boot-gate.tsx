@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { JSX, ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { BootSpinner } from "~/components/admin/states/PageSkeleton";
 
@@ -7,7 +7,7 @@ import { BootSpinner } from "~/components/admin/states/PageSkeleton";
  * so the dashboard mounts at once (and can paint a page's skeleton while its
  * data loads) without ever showing an empty frame before the session guard.
  */
-export function BootGate({ children }: { children: ReactNode }) {
+export function BootGate({ children }: { children: ReactNode }): JSX.Element {
   const started = useRouterState({ select: (state) => state.matches.length > 0 });
   return (
     <>
