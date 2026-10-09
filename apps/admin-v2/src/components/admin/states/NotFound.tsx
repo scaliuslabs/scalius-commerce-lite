@@ -7,6 +7,7 @@ import { useMessages } from "~/i18n";
 import { statesMessages } from "~/i18n/states";
 import { recordListHref, recordResource, type RecordResource } from "./record-resource";
 import { StateBlock } from "./StateBlock";
+import { useStoreOwnerName } from "./store-owner";
 
 /** A page-sized state: a card on the page, or the whole window when the shell itself is gone. */
 function PageCard({ fullPage, children }: { fullPage: boolean; children: ReactNode }) {
@@ -79,7 +80,7 @@ export function PageNotFound({ fullPage = false }: { fullPage?: boolean }) {
  */
 export function NoPermissionState({
   area,
-  ownerName,
+  ownerName: given,
   description,
   action,
   fullPage = false,
@@ -91,6 +92,8 @@ export function NoPermissionState({
   fullPage?: boolean;
 }) {
   const t = useMessages(statesMessages);
+  const fetched = useStoreOwnerName(given === undefined && description === undefined);
+  const ownerName = given === undefined ? fetched : given;
   return (
     <PageCard fullPage={fullPage}>
       <StateBlock

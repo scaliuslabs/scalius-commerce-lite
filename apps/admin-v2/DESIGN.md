@@ -150,6 +150,17 @@ Code: `components/admin/orderview/status-badges.ts` (`statusBadgeVariant(status,
 
 Record states `archived`, `hidden` and `inactive` are `secondary`. A cancelled, refunded, returned or incomplete order shows only its status badge (`orderBadgeVisibility`).
 
+## Read-only mode
+
+Staff who can view a page but not edit it (polish bar R5) see one consistent page:
+
+1. `ReadOnlyNotice` (`components/admin/states`) once, under the page header: an info banner, "You can view this page but not change it", and who grants edit access (the store owner's name from `/rbac/my-permissions`, else "the store owner").
+2. Values are text, never disabled inputs: every field renders through `Field` with `readOnly`, which draws `ReadOnlyValue` (the value, "—" when empty, codes in mono, money and dates formatted) in the field's place with its label. Rich text renders as content. A disabled control is for a choice that is unavailable now, not for missing permission.
+3. Nothing that writes is drawn: no save bar (an editor registers no save entry), no create, delete, upload, reorder or status controls, no primary action in the header, and "More actions" keeps only reading actions (view, print, copy link). Navigation, search, filters and exports that only read stay.
+4. One switch per page: the page reads its edit permission once (`useHasPermission(...)`) and passes `readOnly` down; components never check permissions for their own copy of the rule.
+
+The harness checks it with a view-only session: `[data-slot=read-only-notice]` is present and no enabled control would send a mutating request.
+
 ## Right to left
 
 Write sides as the reading direction sees them, so a right-to-left language mirrors the page:

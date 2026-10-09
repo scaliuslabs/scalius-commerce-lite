@@ -11,6 +11,7 @@ import { OfflineBanner } from "./OfflineBanner";
 import { ReadOnlyNotice } from "./ReadOnlyNotice";
 import { PageSkeleton } from "./PageSkeleton";
 
+vi.mock("./store-owner", () => ({ useStoreOwnerName: () => null }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
 }));

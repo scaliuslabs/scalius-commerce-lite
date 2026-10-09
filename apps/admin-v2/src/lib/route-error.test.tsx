@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invalidate = vi.fn(async () => undefined);
 const match = { routeId: "/admin/orders/_list/", fullPath: "/admin/orders/", params: {}, meta: [{ title: "Orders · Scalius" }] };
+vi.mock("~/components/admin/states/store-owner", () => ({ useStoreOwnerName: () => null }));
 vi.mock("@tanstack/react-router", () => ({
   rootRouteId: "__root__",
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
