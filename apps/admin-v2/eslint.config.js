@@ -47,7 +47,7 @@ const designRules = [
 
 // All dashboard choices use the viewport-aware SearchableSelect; screens toast
 // through ~/lib/toast, so sonner loads after a page's first render.
-const restrictedImports = (extraPaths = []) => ({
+const restrictedImports = (extraPaths = [], extraPatterns = []) => ({
   "no-restricted-imports": [
     "error",
     {
@@ -57,10 +57,37 @@ const restrictedImports = (extraPaths = []) => ({
           group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select", "**/native-select", "**/native-select.*", "**/components/ui/select.*"],
           message: "Legacy selects were removed: use SearchableSelect.",
         },
+        ...extraPatterns,
       ],
     },
   ],
 });
+
+// Polish bar T1: every list of records is the index-table kit. The raw table
+// is the kit's, plus line editors and read-only summaries inside one record
+// (order lines, a report, a delivery log) on this allowlist.
+const TABLE_OWNERS = [
+  "src/components/ui/**",
+  "src/components/admin/data-table/**",
+  "src/components/admin/analytics/ReportTable.tsx",
+  "src/components/admin/apps/AppActivity.tsx",
+  "src/components/admin/apps/ui/PluginUiRenderer.tsx",
+  "src/components/admin/attributes-manager/components/AttributeValueEditor.tsx",
+  "src/components/admin/price-lists/PriceListPrices.tsx",
+  "src/components/admin/purchasing/PurchaseOrderDetail.tsx",
+  "src/components/admin/purchasing/PurchaseOrderEditor.tsx",
+  "src/components/admin/purchasing/ReceiveLines.tsx",
+  "src/components/admin/purchasing/TransferDetail.tsx",
+  "src/components/admin/purchasing/TransferEditor.tsx",
+  "src/components/admin/settings/languages/LanguagesSettings.tsx",
+  "src/components/admin/settings/markets/MarketsList.tsx",
+  "src/components/admin/settings/webhooks/WebhookDeliveriesSheet.tsx",
+  "src/components/admin/taxes/TaxesSettings.tsx",
+];
+const rawTable = {
+  group: ["**/components/ui/table", "~/components/ui/table", "@/components/ui/table", "**/ui/table"],
+  message: "Lists of records use the index-table kit (components/admin/data-table, DESIGN.md Tables, T1).",
+};
 const sonnerToast = { name: "sonner", importNames: ["toast"], message: "Import toast from ~/lib/toast: sonner loads after a page's first render." };
 
 const designSystem = (level) => ({
@@ -127,5 +154,10 @@ export default [
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/**/*.test.{ts,tsx}", "src/lib/toast.ts"],
     rules: restrictedImports([sonnerToast]),
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}", "src/lib/toast.ts", ...TABLE_OWNERS],
+    rules: restrictedImports([sonnerToast], [rawTable]),
   },
 ];

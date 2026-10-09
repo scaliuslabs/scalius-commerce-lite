@@ -45,6 +45,8 @@ export function useDiscountColumns(): ColumnDef<DiscountListItem, unknown>[] {
   return [
     {
       id: "title",
+      // Sorted on the server by name (the column needs a value to be sortable).
+      accessorFn: (row) => discountTitle(row),
       header: sortHeader(t("columnTitle")),
       meta: { primary: true, minWidth: 220, maxWidth: 360 },
       cell: ({ row }) => {

@@ -14,7 +14,7 @@ export function CustomerCell({ customer, to }: { customer: CustomerTitleInput; t
   const t = useMessages(customersMessages);
   const { title, detail, detailIsPhone } = customerTitle(customer, t);
   return (
-    <div className="min-h-[2lh] min-w-0">
+    <div className="min-w-0">
       <ResourceRowLink to={to} lines={1} title={title}>{title}</ResourceRowLink>
       {detail ? <span title={detail} className={cn("block truncate text-muted-foreground", detailIsPhone && "font-mono")}>{detail}</span> : null}
     </div>
