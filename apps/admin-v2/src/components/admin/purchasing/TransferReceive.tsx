@@ -13,6 +13,7 @@ import { receiptFingerprint, useOperationKeys } from "./operation-key";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
+import { Page } from "~/components/admin/resource/Page";
 
 export function transferReceivableLines(transfer: Transfer): ReceivableLine[] {
   return transfer.lines.map((line) => ({
@@ -74,12 +75,12 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
   };
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <UnsavedChangesGuard isDirty={receipt.units > 0} isSubmitting={receive.isPending} />
       <PageHeader
         backTo={`/admin/inventory/transfers/${transfer.id}`}
         title={t("receiveTitle", { number: transfer.displayNumber })}
-        badge={<TransferStatusBadge status={transfer.status} />}
+        status={<TransferStatusBadge status={transfer.status} />}
         actions={open ? (
           <Button type="button" loading={receive.isPending} disabled={receive.isPending} onClick={submit}>
             {receipt.units === 1 ? t("receiveCountOne") : receipt.units > 1 ? t("receiveCount", { count: receipt.units }) : t("receive")}
@@ -124,6 +125,6 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
           </Card>
         )}
       </div>
-    </div>
+    </Page>
   );
 }

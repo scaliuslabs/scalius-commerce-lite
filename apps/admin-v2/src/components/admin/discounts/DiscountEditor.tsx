@@ -307,7 +307,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
       <PageHeader
         backTo="/admin/discounts"
         title={discount ? heading || t(`type_${draft.type}`) : t("newTitle")}
-        badge={displayRecord ? <DiscountStatusBadge discount={displayRecord} /> : null}
+        status={displayRecord ? <DiscountStatusBadge discount={displayRecord} /> : null}
         // An ended discount can't go live: extend its end date instead.
         actions={displayRecord && canToggle && status !== "archived" && discountStatus(displayRecord) !== "expired" ? (
           <Button

@@ -27,7 +27,7 @@ import {
   type BuyerInputDraft,
   type BuyerInputIssue,
 } from "./buyer-inputs";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 
 const TYPE_LABELS = {
   text: "inputType.text",
@@ -166,7 +166,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
               </Label>
             </div>
             {text || draft.type === "checkbox" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <FieldRow>
                 {text ? (
                   <Field id="buyer-input-maxLength" label={t("inputLimit")}>
                     <NumberInput
@@ -197,7 +197,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                     {errorFor("price") ?? t(draft.type === "checkbox" ? "inputPriceHelpCheckbox" : "inputPriceHelp")}
                   </p>
                 </Field>
-              </div>
+              </FieldRow>
             ) : null}
             {draft.type === "select" ? (
               <fieldset className="space-y-2">

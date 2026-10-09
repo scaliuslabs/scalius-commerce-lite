@@ -42,6 +42,7 @@ import { useDocumentDraft } from "../online-store/shared";
 import { useCheckoutFlowForm } from "./PaymentsSettings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { FieldRow } from "~/components/ui/field";
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
 type FieldKey = "showOrderNotesField" | "showAreaField";
@@ -293,7 +294,7 @@ function LanguageForm({ language }: { language: Language | null }) {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="language-name" label={t("name")}>
           <Input id="language-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
         </SettingsField>
@@ -310,7 +311,7 @@ function LanguageForm({ language }: { language: Language | null }) {
               })}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
       {(["isActive", "isDefault"] as const).map((key) => (
         <label key={key} className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
           {key === "isActive" ? t("useAtCheckout") : t("useAsFallback")}

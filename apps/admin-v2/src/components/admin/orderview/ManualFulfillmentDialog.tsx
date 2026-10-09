@@ -25,7 +25,7 @@ import { counterCashDue, lineFulfillmentType, unfulfilledUnits, type ManualFulfi
 import { formatCurrencyAmount } from "./formatters";
 import { LineProperties } from "./LineProperties";
 import type { Order } from "./types";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 
 // The helpers the page decides with live in fulfilment-groups.ts: this dialog loads on demand.
@@ -201,7 +201,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
           </div>
           {kind === "ship" ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <FieldRow>
                 <Field id="fulfill-courier" label={t("shipments.courier")}>
                   <Input id="fulfill-courier" value={courierName} placeholder={t("fulfill.defaultCourier")} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={120} />
                 </Field>
@@ -246,7 +246,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
                     ? <p id="fulfill-amount-error" className="text-destructive">{errors.amount}</p>
                     : <p id="fulfill-amount-help" className="text-muted-foreground">{t("fulfill.amountHelp")}</p>}
                 </Field>
-              </div>
+              </FieldRow>
               <Field id="fulfill-note" label={t("fulfill.note")}>
                 <Textarea id="fulfill-note" value={note} onChange={(e) => setNote(e.target.value)} disabled={mutation.isPending} maxLength={500} />
               </Field>

@@ -31,7 +31,7 @@ import { attributeGroupsQueryOptions, type AttributeDto } from "~/lib/api-query-
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
@@ -169,7 +169,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
             {serverError?.field === "form" ? (
               <p role="alert" className="text-body text-destructive">{serverError.message}</p>
             ) : null}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow>
               <Field id="attribute-name" label={t("name")} error={errors.name ? errors.name : undefined}>
                 <Input
                   id="attribute-name"
@@ -203,8 +203,8 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                   {errors.slug ?? t(autoHandle === undefined ? "handleHelp" : "handleAuto")}
                 </p>
               </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            </FieldRow>
+            <FieldRow>
               <Field id="attribute-type" label={a("type")} help={<>{a(`typeHelp_${valueType}`)}</>}>
                 {attribute ? (
                   <div className="flex items-center gap-2">
@@ -254,7 +254,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                   options={ATTRIBUTE_FACET_DISPLAYS.filter((display) => isAttributeFacetDisplayAllowed(valueType, display)).map((display) => ({ value: display, label: a(`display_${display}`) }))}
                 />
               </Field>
-            </div>
+            </FieldRow>
             {hasPresets ? (
             <div className="flex flex-col gap-2">
             <Field id="attribute-value" label={t("presetValues")} help={duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}>

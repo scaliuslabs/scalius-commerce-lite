@@ -265,7 +265,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
             <CardHeader>
               <CardTitle>{t("status")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="status"

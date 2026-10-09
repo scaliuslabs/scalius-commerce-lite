@@ -332,7 +332,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             <CardHeader>
               <CardTitle>{t("status")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="status"

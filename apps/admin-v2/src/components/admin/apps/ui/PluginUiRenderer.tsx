@@ -894,7 +894,7 @@ export function PluginUiRenderer({ document, host, variant, fallbackTitle, badge
             <>
               <PageHeader
                 title={(root.type === "page" ? root.title : undefined) || fallbackTitle || host.app.name}
-                badge={badge}
+                status={badge}
                 actions={root.type === "page" && root.actions?.length ? <ButtonRow buttons={root.actions} /> : undefined}
               />
               <div className="space-y-4">

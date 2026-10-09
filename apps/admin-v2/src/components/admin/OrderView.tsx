@@ -16,7 +16,8 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { editLockMessageKey, orderEditLockMessages } from "~/i18n/order-edit-locks";
-import { orderMessages } from "~/i18n/orders";
+import { orderChannelText, orderMessages } from "~/i18n/orders";
+import { formatOrderTimestamp } from "./orderview/formatters";
 import { useMarkOrderDelivered, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { orderSkipReason } from "./order-list/order-bulk-actions";
 import { useArchiveOrdersWithUndo } from "./order-list/use-order-list-mutations";
@@ -47,6 +48,7 @@ import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { Page } from "~/components/admin/resource/Page";
 
 /** Item locks that the order's state already explains; the others get a reason. */
 const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
@@ -123,6 +125,13 @@ export function OrderView({ order }: { order: Order }) {
     </Button>
   ) : null;
 
+  // The header's one meta line (P1): when and where the order was placed.
+  const placedAt = formatOrderTimestamp(order.createdAt);
+  const orderMeta = [
+    placedAt ? t("status.placedAt", { date: placedAt }) : null,
+    order.channel ? orderChannelText(o, order.channel, order.channelSource) : null,
+  ].filter(Boolean).join(" · ") || undefined;
+
   return (
     <ErrorBoundary
       fallback={
@@ -133,11 +142,12 @@ export function OrderView({ order }: { order: Order }) {
       }
     >
       <TooltipProvider>
-        <div className="space-y-4 pb-24 lg:pb-0">
+        <Page width="detail" className="space-y-4 pb-24 lg:pb-0">
           <PageHeader
             backTo={backTo}
             title={o("order", { number: name })}
-            badge={<OrderHeaderBadges order={order} />}
+            status={<OrderHeaderBadges order={order} />}
+            meta={orderMeta}
             actions={
               <>
                 {actions.canPrintInvoices ? (
@@ -253,7 +263,7 @@ export function OrderView({ order }: { order: Order }) {
               <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />
             </div>
           </div>
-        </div>
+        </Page>
 
         <PhoneActionBar>
           {contact ? (

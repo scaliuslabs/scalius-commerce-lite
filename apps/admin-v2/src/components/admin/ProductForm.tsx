@@ -89,6 +89,7 @@ import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { useTranslateMenuItem } from "./translations/TranslateMenuItem";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Page } from "~/components/admin/resource/Page";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -432,11 +433,11 @@ function ProductEditor({
   ) : null;
 
   return (
-    <>
+    <Page width="form">
       <PageHeader
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
-        badge={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
+        status={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
         actions={isEdit && productId ? (
           <>
             {moreActions}
@@ -598,7 +599,7 @@ function ProductEditor({
         }}
       />
       {appActions.dialogs}
-    </>
+    </Page>
   );
 }
 

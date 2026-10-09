@@ -67,6 +67,7 @@ import {
   useSaveFailure,
   useWriteFailure,
 } from "./tax-shared";
+import { FieldRow } from "~/components/ui/field";
 
 const configurationQuery = taxConfigurationQueryOptions();
 const taxSettingsQuery = taxSettingsQueryOptions();
@@ -502,14 +503,14 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
           <DialogTitle>{t("tryIt")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <SettingsField id="tax-try-price" label={t("price")}>
               <Input id="tax-try-price" type="number" min="0" step="0.01" inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} />
             </SettingsField>
             <SettingsField id="tax-try-delivery" label={t("deliveryCharge")}>
               <Input id="tax-try-delivery" type="number" min="0" step="0.01" inputMode="decimal" value={delivery} onChange={(event) => setDelivery(event.target.value)} />
             </SettingsField>
-          </div>
+          </FieldRow>
           <SettingsField id="tax-try-group" label={t("rateGroup")}>
             <SearchableSelect
               id="tax-try-group"
@@ -545,7 +546,7 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
               onChange={setLocation}
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow>
               {areas.length > 0 ? (
                 <SettingsField id="tax-try-admin-area" label={t("adminArea")}>
                   <SearchableSelect
@@ -561,7 +562,7 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
               <SettingsField id="tax-try-postal" label={t("postalCode")}>
                 <Input id="tax-try-postal" maxLength={40} value={postalCode} onChange={(event) => setPostalCode(event.target.value)} />
               </SettingsField>
-            </div>
+            </FieldRow>
           )}
           <Button type="button" loading={preview.isPending} disabled={!ready} onClick={() => preview.mutate()}>
             {t("calculate")}

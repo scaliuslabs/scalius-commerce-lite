@@ -189,7 +189,7 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
             {app.name}
           </span>
         )}
-        badge={<AppStatusBadge app={app} />}
+        status={<AppStatusBadge app={app} />}
         actions={actions}
       />
       <div className="space-y-4">

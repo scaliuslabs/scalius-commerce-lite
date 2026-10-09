@@ -37,6 +37,7 @@ import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
 import { Field } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -162,7 +163,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
         <CardHeader>
           <CardTitle>{t("contact")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <FormField
             control={form.control}
             name="name"
@@ -215,7 +216,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CardHeader>
             <CardTitle>{ta("firstAddress")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <p className="text-body text-muted-foreground">{ta("firstAddressHelp")}</p>
             <AddressFields
               idPrefix="new-customer-address"
@@ -268,7 +269,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <div className="space-y-4">{details}</div>
         </div>
       ) : (
-        <div className="mx-auto max-w-2xl space-y-4">{details}</div>
+        <Page width="task" className="space-y-4">{details}</Page>
       )}
     </FormContainer>
   );

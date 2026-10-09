@@ -16,6 +16,7 @@ import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem 
 import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-status";
 import { ReceiveLines, readReceipt, type ReceivableLine, type ReceiveQuantities } from "./ReceiveLines";
 import { ChoiceField } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 export function receivableLines(order: PurchaseOrder): ReceivableLine[] {
   return order.lines.map((line) => ({
@@ -88,12 +89,12 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
   };
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <UnsavedChangesGuard isDirty={receipt.units > 0} isSubmitting={receive.isPending} />
       <PageHeader
         backTo={`/admin/inventory/purchase-orders/${order.id}`}
         title={t("receiveTitle", { number: order.displayNumber })}
-        badge={<PurchaseOrderStatusBadge status={order.status} />}
+        status={<PurchaseOrderStatusBadge status={order.status} />}
         actions={open ? (
           <Button type="button" loading={receive.isPending} disabled={receive.isPending} onClick={submit}>
             {receipt.units === 1 ? t("receiveCountOne") : receipt.units > 1 ? t("receiveCount", { count: receipt.units }) : t("receive")}
@@ -154,6 +155,6 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
           </Card>
         )}
       </div>
-    </div>
+    </Page>
   );
 }

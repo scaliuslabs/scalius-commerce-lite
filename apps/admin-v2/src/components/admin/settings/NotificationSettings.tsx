@@ -60,6 +60,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { usePushIssueText } from "./push-issue-text";
 import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { FieldRow } from "~/components/ui/field";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 export const MASKED_VALUE = "••••••••••••";
@@ -562,7 +563,7 @@ function WhatsAppFields() {
           onChange={(event) => auth.setValue("whatsappTemplateName", event.target.value)}
         />
       </SettingsField>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="wa-order-template" label={t("waOrderTemplate")}>
           <Input
             id="wa-order-template"
@@ -579,7 +580,7 @@ function WhatsAppFields() {
             onChange={(event) => setTemplate("languageCode", event.target.value)}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
     </>
   );
 }

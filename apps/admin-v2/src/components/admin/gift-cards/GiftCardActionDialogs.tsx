@@ -25,7 +25,7 @@ import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import type { GiftCardDetail } from "~/lib/api-query-options/gift-cards";
 import { GiftCardCustomerPicker } from "./GiftCardCustomerPicker";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 import { adjustmentFor, type AdjustDirection, type AdjustErrors } from "./gift-card-drafts";
 import {
   formatGiftCardMoney,
@@ -152,7 +152,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
       submitLabel={t("save")}
       onSubmit={submit}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <FieldRow>
         <Field id="gift-card-adjust-direction" label={t("direction")}>
           <SearchableSelect
             id="gift-card-adjust-direction"
@@ -179,7 +179,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
             }}
           />
         </Field>
-      </div>
+      </FieldRow>
       <p className="text-body tabular-nums text-muted-foreground" aria-live="polite">
         {t("newBalance", { amount: formatGiftCardMoney(preview ?? card.balanceMinor, card.currencyCode) })}
       </p>

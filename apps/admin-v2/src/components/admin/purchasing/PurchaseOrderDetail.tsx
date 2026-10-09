@@ -48,7 +48,8 @@ import { CostInput } from "~/components/admin/shared/MoneyInput";
 import { Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SupplierPicker, type SupplierChoice } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 type DialogName = "details" | "cancel" | null;
 
@@ -132,11 +133,11 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
   ) : null;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <PageHeader
         backTo="/admin/inventory/purchase-orders"
         title={order.displayNumber}
-        badge={<PurchaseOrderStatusBadge status={order.status} />}
+        status={<PurchaseOrderStatusBadge status={order.status} />}
         actions={(
           <>
             {/* The printout and the CSV are the supplier's copy, with every cost. */}
@@ -302,7 +303,7 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
         isLoading={status.isPending}
         onConfirm={cancel}
       />
-    </div>
+    </Page>
   );
 }
 
@@ -502,7 +503,7 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
           <Field id="po-details-supplier" label={t("supplier")}>
             <SupplierPicker id="po-details-supplier" value={supplier} onChange={setSupplier} canAdd />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <Field id="po-details-expected" label={t("expectedArrival")}>
               <DateInput id="po-details-expected" value={expectedOn} onValueChange={setExpectedOn} />
             </Field>
@@ -515,7 +516,7 @@ function PurchaseOrderDetailsDialog({ order, open, onOpenChange, onReload }: {
                 onChange={(event) => setReference(event.target.value)}
               />
             </Field>
-          </div>
+          </FieldRow>
           <div className="grid gap-4 sm:grid-cols-3">
             {(["shipping", "otherCosts", "tax"] as const).map((key) => (
               <Field key={key} id={`po-details-${key}`} label={t(key)}>

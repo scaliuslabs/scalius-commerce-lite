@@ -26,7 +26,7 @@ import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { resourceMessages } from "~/i18n/resource";
 import { resolveDestinationZoneId } from "@scalius/core/modules/delivery/browser";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 
 const discountGuidanceId = "manual-order-discount-guidance";
 const discountErrorId = "manual-order-discount-error";
@@ -170,7 +170,7 @@ export function SummarySection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {hasPhysical ? null : <p className="text-body text-muted-foreground">{t("noDeliveryNeeded")}</p>}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FieldRow>
           {hasPhysical && (rates.length > 0 || savedOption) ? (
             <Field id="order-delivery-method" label={t("deliveryMethod")}>
               <SearchableSelect
@@ -268,7 +268,7 @@ export function SummarySection() {
               </Field>
             )}
           />
-        </div>
+        </FieldRow>
 
         {ruleErrors ? (
           <Alert variant="destructive">

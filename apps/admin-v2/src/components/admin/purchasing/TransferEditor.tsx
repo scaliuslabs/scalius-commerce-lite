@@ -47,6 +47,7 @@ import {
 } from "./transfer-draft";
 import { DateInput } from "~/components/ui/date-input";
 import { Field } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 type Busy = "save" | "ship" | null;
 /** Per-line on-hand at the origin is read per product; past this many products it isn't shown. */
@@ -271,12 +272,12 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const full = draft.lines.length >= PURCHASING_MAX_LINES;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="form">
       <UnsavedChangesGuard isDirty={dirty && !leaving} isSubmitting={busy !== null || remove.isPending} />
       <PageHeader
         backTo="/admin/inventory/transfers"
         title={transfer?.displayNumber ?? t("newTransfer")}
-        badge={transfer ? <TransferStatusBadge status={transfer.status} /> : null}
+        status={transfer ? <TransferStatusBadge status={transfer.status} /> : null}
         actions={(
           <>
             {transfer ? (
@@ -498,6 +499,6 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
         isLoading={remove.isPending}
         onConfirm={deleteDraft}
       />
-    </div>
+    </Page>
   );
 }

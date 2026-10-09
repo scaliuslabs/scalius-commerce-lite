@@ -323,7 +323,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
             <CardHeader>
               <CardTitle>{t("visibility")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="publicationMode"

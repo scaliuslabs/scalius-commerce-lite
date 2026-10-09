@@ -49,6 +49,7 @@ import { SkuPicker } from "./SkuPicker";
 import { SupplierPicker } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
 import { Field } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 type Busy = "save" | "order" | null;
 
@@ -222,12 +223,12 @@ export function PurchaseOrderEditor({ order, onReload }: {
   );
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="form">
       <UnsavedChangesGuard isDirty={dirty && !leaving} isSubmitting={busy !== null || remove.isPending} />
       <PageHeader
         backTo="/admin/inventory/purchase-orders"
         title={order?.displayNumber ?? t("newPurchaseOrder")}
-        badge={order ? <PurchaseOrderStatusBadge status={order.status} /> : null}
+        status={order ? <PurchaseOrderStatusBadge status={order.status} /> : null}
         actions={(
           <>
             {order ? (
@@ -385,7 +386,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
         isLoading={remove.isPending}
         onConfirm={deleteDraft}
       />
-    </div>
+    </Page>
   );
 }
 

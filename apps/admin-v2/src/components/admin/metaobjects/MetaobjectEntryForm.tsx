@@ -56,6 +56,7 @@ import {
   updateEntryBody,
   type EntryForm,
 } from "./metaobject-entry-form";
+import { Page } from "~/components/admin/resource/Page";
 
 export function MetaobjectEntryForm({ definition, entry }: { definition: MetaobjectDefinition; entry: MetaobjectEntry | null }) {
   const t = useMessages(metaobjectMessages);
@@ -152,11 +153,11 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
     setForm((current) => ({ ...current, fields: { ...current.fields, [key]: draft } }));
 
   return (
-    <div className="pb-6">
+    <Page width="form" className="pb-6">
       <PageHeader
         backTo={listUrl}
         title={title}
-        badge={saved ? <StatusBadge status={base.status === "published" ? "active" : "draft"}>{t(base.status)}</StatusBadge> : undefined}
+        status={saved ? <StatusBadge status={base.status === "published" ? "active" : "draft"}>{t(base.status)}</StatusBadge> : undefined}
       />
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
@@ -265,7 +266,7 @@ function EntryFormPage({ definition, initial }: { definition: MetaobjectDefiniti
         ) : null}
       </div>
       {canEdit && saved ? <DeleteEntry definition={definition} entry={saved} open={deleting} onOpenChange={setDeleting} /> : null}
-    </div>
+    </Page>
   );
 }
 

@@ -3,6 +3,7 @@ import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
+import { Page } from "@/components/admin/resource/Page";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
@@ -147,6 +148,7 @@ export function FormContainer<
     <ErrorBoundary>
       <SaveBarProvider unsavedLabel={unsavedLabel} savedMessage={savedMessage}>
         <Form {...form}>
+          <Page width="form">
           <EditorForm
             form={form}
             saving={isSubmitting}
@@ -155,12 +157,13 @@ export function FormContainer<
             savedValues={savedValues}
             reload={reload}
             className={formClassName}
-            header={<PageHeader backTo={backUrl} badge={badge} title={heading} actions={actions} />}
+            header={<PageHeader backTo={backUrl} status={badge} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
             presenceKey={presenceKey}
           >
             {children}
           </EditorForm>
+          </Page>
         </Form>
       </SaveBarProvider>
     </ErrorBoundary>

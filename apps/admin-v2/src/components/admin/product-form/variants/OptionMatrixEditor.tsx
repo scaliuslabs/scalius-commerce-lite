@@ -956,14 +956,14 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           />
         </label>
         <div className="ms-auto flex shrink-0 items-center gap-0.5">
-          <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
-            <ArrowUp className="h-4 w-4" /><span className="sr-only">{t("moveOptionUp")}</span>
+          <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)} aria-label={t("moveOptionUp")} title={t("moveOptionUp")}>
+            <ArrowUp className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="ghost" size="icon" disabled={!canMoveDown} onClick={() => onMove(1)}>
-            <ArrowDown className="h-4 w-4" /><span className="sr-only">{t("moveOptionDown")}</span>
+          <Button type="button" variant="ghost" size="icon" disabled={!canMoveDown} onClick={() => onMove(1)} aria-label={t("moveOptionDown")} title={t("moveOptionDown")}>
+            <ArrowDown className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
-            <Trash2 className="h-4 w-4" /><span className="sr-only">{t("removeOption")}</span>
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label={t("removeOption")} title={t("removeOption")}>
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>

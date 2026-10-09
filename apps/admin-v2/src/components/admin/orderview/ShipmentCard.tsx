@@ -48,7 +48,7 @@ import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
 import { canMarkDelivered, isPartSent } from "./primary-action";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
 type EvidenceSource = "courier_portal" | "courier_support";
@@ -180,14 +180,14 @@ function CourierCheckDialog({
             />
           </Field>
           {outcome === "confirmed_existing" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow>
               <Field id="courier-consignment" label={t("courier.consignmentId")}>
                 <Input id="courier-consignment" value={externalId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setExternalId(e.target.value); edited(); }} />
               </Field>
               <Field id="courier-tracking" label={t("shipments.trackingId")}>
                 <Input id="courier-tracking" value={trackingId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setTrackingId(e.target.value); edited(); }} />
               </Field>
-            </div>
+            </FieldRow>
           ) : null}
           <Field id="courier-source" label={t("courier.source")}>
             <SearchableSelect

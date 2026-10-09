@@ -62,6 +62,14 @@ const fieldRules = [
   },
 ];
 
+// Icon-only buttons are named (C7): an icon size needs aria-label (or asChild with a named child).
+const buttonRules = [
+  {
+    selector: "JSXOpeningElement[name.name='Button']:has(JSXAttribute[name.name='size'] > Literal[value=/^icon/]):not(:has(JSXAttribute[name.name=/^(aria-label|aria-labelledby|asChild)$/]))",
+    message: "An icon-only Button needs an aria-label naming its action (DESIGN.md C7).",
+  },
+];
+
 // All dashboard choices use the viewport-aware SearchableSelect; screens toast
 // through ~/lib/toast, so sonner loads after a page's first render.
 const restrictedImports = (extraPaths = []) => ({
@@ -141,7 +149,7 @@ export default [
     files: ["src/**/*.tsx"],
     ignores: ["src/**/*.test.tsx", "src/components/ui/**"],
     rules: {
-      "no-restricted-syntax": ["error", ...designRules, ...fieldRules],
+      "no-restricted-syntax": ["error", ...designRules, ...fieldRules, ...buttonRules],
     },
   },
   {

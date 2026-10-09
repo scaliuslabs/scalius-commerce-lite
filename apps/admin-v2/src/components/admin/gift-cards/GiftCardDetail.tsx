@@ -15,6 +15,7 @@ import { AdjustBalanceDialog, EditDetailsDialog, ExpiryDialog, giftCardErrorText
 import { GiftCardStatusBadge } from "./gift-card-fields";
 import { formatGiftCardLastDay, formatGiftCardMoney } from "./gift-card-format";
 import { useResendGiftCard, useUpdateGiftCard } from "./use-gift-card-mutations";
+import { Page } from "~/components/admin/resource/Page";
 
 type DialogName = "adjust" | "expiry" | "details" | "disable" | null;
 
@@ -155,11 +156,11 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
   ) : null;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <Page width="detail">
       <PageHeader
         backTo="/admin/gift-cards"
         title={t("detailTitle", { last4: card.last4 })}
-        badge={<GiftCardStatusBadge card={card} />}
+        status={<GiftCardStatusBadge card={card} />}
         actions={actions}
       />
       {!canManage ? (
@@ -256,7 +257,7 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
           />
         </>
       ) : null}
-    </div>
+    </Page>
   );
 }
 

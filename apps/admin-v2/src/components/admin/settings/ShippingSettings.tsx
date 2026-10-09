@@ -35,6 +35,7 @@ import { useSaveBar } from "../shared/SaveBar";
 import { AppProviderSetupButton, ProvidedByChip } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { FieldRow } from "~/components/ui/field";
 
 function refreshCheckout(queryClient: ReturnType<typeof useQueryClient>, key: readonly unknown[]) {
   return Promise.all([
@@ -187,7 +188,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="courier-name" label={t("courierName")}>
           <Input id="courier-name" value={draft.name} placeholder={courierLabel} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
         </SettingsField>
@@ -201,7 +202,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
             options={typeOptions}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
       <label className="flex min-h-11 items-center justify-between gap-4 text-body">
         <span>
           <span className="block font-medium">{t("courierOn")}</span>

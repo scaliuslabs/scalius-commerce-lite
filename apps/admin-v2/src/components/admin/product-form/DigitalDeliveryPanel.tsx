@@ -49,7 +49,7 @@ import {
 } from "./digital-upload";
 import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
 import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
-import { Field } from "~/components/ui/field";
+import { Field, FieldRow } from "~/components/ui/field";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -456,7 +456,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
           <Field id="digital-file-name" label={t("nameLabel")} error={checked && nameIssue ? nameIssue : undefined}>
             <Input id="digital-file-name" value={name} maxLength={200} aria-invalid={checked && nameIssue ? true : undefined} onChange={(event) => setName(event.target.value)} />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <Field id="digital-file-limit" label={t("downloadsLabel")}>
               <SearchableSelect
                 id="digital-file-limit"
@@ -487,7 +487,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                 </>
               ) : null}
             </Field>
-          </div>
+          </FieldRow>
           {save.isError ? <p role="alert" className="text-body text-destructive">{digitalErrorText(save.error, t)}</p> : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={save.isPending} onClick={() => onOpenChange(false)}>{r("cancel")}</Button>
