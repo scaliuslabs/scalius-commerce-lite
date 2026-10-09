@@ -12,6 +12,7 @@ import {
   devOrigins,
   localStorefrontWorkerConfig,
   platformSyncSql,
+  previewProxyOrigin,
   readDevPorts,
   storefrontBindingProblems,
   verifyStorefrontBinding,
@@ -188,5 +189,25 @@ describe("local API worker name and the storefront binding", () => {
     await expect(verifyStorefrontBinding({ storefrontUrl: "http://localhost:4531/", fetchImpl: answer(page("http://localhost:4531/")) })).resolves.toBe(true);
     await expect(verifyStorefrontBinding({ storefrontUrl: "http://localhost:4531", fetchImpl: answer(page("http://localhost:4322/")) })).rejects.toThrow(/binding check failed for http:\/\/localhost:4531/);
     await expect(verifyStorefrontBinding({ storefrontUrl: "http://localhost:4531", fetchImpl: answer("oops", 503) })).rejects.toThrow(/answered 503/);
+  });
+});
+
+describe("dashboard UI preview origin", () => {
+  it("presents the Platform dashboard origin for another loopback dashboard port", () => {
+    expect(previewProxyOrigin("http://localhost:4400", "http://localhost:4323")).toBe("http://localhost:4323");
+    expect(previewProxyOrigin("http://127.0.0.1:4401", "http://localhost:4323")).toBe("http://localhost:4323");
+  });
+
+  it("leaves the dashboard's own origin, a missing Origin and any non-loopback origin alone", () => {
+    expect(previewProxyOrigin("http://localhost:4323", "http://localhost:4323")).toBe("http://localhost:4323");
+    expect(previewProxyOrigin(undefined, "http://localhost:4323")).toBeUndefined();
+    expect(previewProxyOrigin("https://evil.example", "http://localhost:4323")).toBe("https://evil.example");
+    expect(previewProxyOrigin("http://localhost.evil.example:4400", "http://localhost:4323")).toBe("http://localhost.evil.example:4400");
+    expect(previewProxyOrigin("null", "http://localhost:4323")).toBe("null");
+  });
+
+  it("never rewrites toward a non-loopback Platform dashboard", () => {
+    expect(previewProxyOrigin("http://localhost:4400", "https://admin.shop.example")).toBe("http://localhost:4400");
+    expect(previewProxyOrigin("http://localhost:4400", "")).toBe("http://localhost:4400");
   });
 });

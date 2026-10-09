@@ -1,0 +1,95 @@
+[
+  {
+    "id": "shortcuts-help",
+    "title": "Keyboard shortcuts dialog",
+    "route": "/admin",
+    "steps": [
+      {
+        "press": "?",
+        "measure": "open-dialog"
+      }
+    ],
+    "waitFor": "[role=dialog]",
+    "modal": true
+  },
+  {
+    "id": "command-palette",
+    "title": "Search and command palette",
+    "route": "/admin",
+    "steps": [
+      {
+        "press": "ControlOrMeta+k",
+        "measure": "open-dialog"
+      }
+    ],
+    "waitFor": "[role=dialog]",
+    "modal": true
+  },
+  {
+    "id": "notifications",
+    "title": "Notifications menu",
+    "route": "/admin",
+    "steps": [
+      {
+        "click": "[data-slot=topbar] .justify-end button:nth-of-type(2)",
+        "measure": "open-menu"
+      }
+    ],
+    "waitFor": "[role=dialog],[role=menu],[data-radix-popper-content-wrapper]"
+  },
+  {
+    "id": "store-menu",
+    "title": "Store and account menu",
+    "route": "/admin",
+    "steps": [
+      {
+        "click": "[data-slot=topbar] .justify-end button:last-of-type",
+        "measure": "open-menu"
+      }
+    ],
+    "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
+  },
+  {
+    "id": "products-sort-columns",
+    "title": "Products: sort and columns",
+    "route": "/admin/products",
+    "steps": [
+      {
+        "click": "button[aria-label='Sort and columns']",
+        "measure": "open-popover"
+      }
+    ],
+    "waitFor": "[role=dialog],[data-radix-popper-content-wrapper]",
+    "locales": [
+      "en"
+    ]
+  },
+  {
+    "id": "products-row-menu",
+    "title": "Products: row actions menu",
+    "route": "/admin/products",
+    "steps": [
+      {
+        "click": "main [aria-haspopup=menu]:visible",
+        "measure": "open-menu"
+      }
+    ],
+    "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
+  },
+  {
+    "id": "products-import",
+    "title": "Products: import dialog",
+    "route": "/admin/products",
+    "steps": [
+      {
+        "click": "main button:has-text('Import')",
+        "measure": "open-dialog"
+      }
+    ],
+    "waitFor": "[role=dialog]",
+    "modal": true,
+    "locales": [
+      "en"
+    ]
+  }
+]
