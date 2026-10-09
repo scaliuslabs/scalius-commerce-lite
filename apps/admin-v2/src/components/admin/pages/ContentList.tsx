@@ -17,7 +17,8 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation, type BulkRun } from "~/components/admin/resource/ResourceListPage";
+import type { BulkTarget } from "~/lib/bulk-selection";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { ListDate } from "~/components/admin/data-table/ListDate";
@@ -41,13 +42,27 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
   const isBlog = type === "article";
   const base = isBlog ? "/admin/articles" : "/admin/pages";
   const editTo = (row: PageListItem) => (canEdit ? `${base}/${row.id}/edit` : undefined);
+  // The list's filter as "all matching" actions send it (the API reads the pages itself).
+  const matchingFilter = {
+    contentType: type,
+    ...(term ? { search: term } : {}),
+    ...(search.status && !search.trashed ? { status: search.status } : {}),
+  };
+  const matchingSlice = (cursor: string | undefined) => ({ matching: { filter: matchingFilter, ...(cursor ? { cursor } : {}) } });
   const publish = useResourceMutation(
-    ({ rows, live }: { rows: PageListItem[]; live: boolean }) =>
-      inChunks(rows, (chunk) =>
-        live
-          ? apiData(postApiV1AdminPagesBulkPublish({ body: { pages: claims(chunk) } }))
-          : apiData(postApiV1AdminPagesBulkUnpublish({ body: { pages: claims(chunk) } })),
-      ),
+    async ({ target, live, run }: { target: BulkTarget<PageListItem>; live: boolean; run: BulkRun }) => {
+      const send = (body: Parameters<typeof postApiV1AdminPagesBulkPublish>[0]["body"]) => apiData(live
+        ? postApiV1AdminPagesBulkPublish({ body })
+        : postApiV1AdminPagesBulkUnpublish({ body }));
+      if (target.kind === "rows") {
+        await inChunks(target.rows, (chunk) => send({ pages: claims(chunk) }));
+        return;
+      }
+      await run.matching(t(live ? "publishing" : "unpublishing"), async (cursor) => {
+        const result = await send(matchingSlice(cursor));
+        return result.matching ?? { processed: 0, skipped: 0, next: null };
+      });
+    },
     INVALIDATE,
   );
 
@@ -109,12 +124,13 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       rowTo={editTo}
       rowLabel={(row) => row.title}
       viewUrl={(row) => (isPageLive(row) ? getStorefrontPath(isBlog ? `/blog/${row.slug}` : `/${row.slug}`) : undefined)}
-      bulkActions={canPublish ? (target, done) => target.kind !== "rows" ? null : (
+      matchingBulk
+      bulkActions={canPublish ? (target, done, run) => (
         <>
-          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows: target.rows, live: true }, success: t("published") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { target, live: true, run }, success: t("published") }, { onSuccess: done })}>
             {t("publish")}
           </Button>
-          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { rows: target.rows, live: false }, success: t("movedToDraft") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={publish.isPending} onClick={() => publish.mutate({ variables: { target, live: false, run }, success: t("movedToDraft") }, { onSuccess: done })}>
             {t("unpublish")}
           </Button>
         </>
@@ -128,6 +144,12 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
           action === "restore"
             ? apiData(postApiV1AdminPagesBulkRestore({ body: { pages: claims(rows) } }))
             : apiData(postApiV1AdminPagesBulkDelete({ body: { pages: claims(rows), permanent: action === "delete" } })),
+        runMatching: async (action, cursor) => {
+          const result = action === "restore"
+            ? await apiData(postApiV1AdminPagesBulkRestore({ body: matchingSlice(cursor) }))
+            : await apiData(postApiV1AdminPagesBulkDelete({ body: { ...matchingSlice(cursor), permanent: action === "delete" } }));
+          return result.matching ?? { processed: 0, skipped: 0, next: null };
+        },
       }}
     />
   );

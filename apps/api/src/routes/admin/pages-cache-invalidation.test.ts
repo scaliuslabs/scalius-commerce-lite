@@ -113,13 +113,13 @@ describe("admin page write behavior", () => {
     { label: "published create", path: "", method: "POST", body: createPageBody(), status: 201 },
     { label: "draft create", path: "", method: "POST", body: createPageBody({ isPublished: false }), status: 201 },
     { label: "update", path: "/page_1", method: "PUT", body: { expectedRevision: 1, title: "About Scalius" }, status: 200 },
-    { label: "bulk publish", path: "/bulk-publish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-    { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-    { label: "bulk restore", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
+    { label: "bulk publish", path: "/bulk-publish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 200 },
+    { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 200 },
+    { label: "bulk restore", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 200 },
     { label: "restore", path: "/page_1/restore", method: "POST", body: { expectedRevision: 1 }, status: 200 },
     { label: "soft delete", path: "/page_1", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
     { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
-    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 204 },
+    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 200 },
   ])("returns success after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp();
 

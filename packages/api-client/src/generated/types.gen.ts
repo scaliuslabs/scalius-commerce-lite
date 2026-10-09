@@ -25035,10 +25035,24 @@ export type PostApiV1AdminPagesResponse = PostApiV1AdminPagesResponses[keyof Pos
 
 export type PostApiV1AdminPagesBulkDeleteData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         permanent?: boolean;
     };
     path?: never;
@@ -25081,19 +25095,51 @@ export type PostApiV1AdminPagesBulkDeleteError = PostApiV1AdminPagesBulkDeleteEr
 
 export type PostApiV1AdminPagesBulkDeleteResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkDeleteResponse = PostApiV1AdminPagesBulkDeleteResponses[keyof PostApiV1AdminPagesBulkDeleteResponses];
 
 export type PostApiV1AdminPagesBulkPublishData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -25135,19 +25181,51 @@ export type PostApiV1AdminPagesBulkPublishError = PostApiV1AdminPagesBulkPublish
 
 export type PostApiV1AdminPagesBulkPublishResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkPublishResponse = PostApiV1AdminPagesBulkPublishResponses[keyof PostApiV1AdminPagesBulkPublishResponses];
 
 export type PostApiV1AdminPagesBulkUnpublishData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -25189,19 +25267,51 @@ export type PostApiV1AdminPagesBulkUnpublishError = PostApiV1AdminPagesBulkUnpub
 
 export type PostApiV1AdminPagesBulkUnpublishResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkUnpublishResponse = PostApiV1AdminPagesBulkUnpublishResponses[keyof PostApiV1AdminPagesBulkUnpublishResponses];
 
 export type PostApiV1AdminPagesBulkRestoreData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -25243,9 +25353,27 @@ export type PostApiV1AdminPagesBulkRestoreError = PostApiV1AdminPagesBulkRestore
 
 export type PostApiV1AdminPagesBulkRestoreResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkRestoreResponse = PostApiV1AdminPagesBulkRestoreResponses[keyof PostApiV1AdminPagesBulkRestoreResponses];

@@ -2,6 +2,7 @@
 // All DB queries and business logic for the CMS pages domain.
 
 import { pages } from "@scalius/database/schema";
+import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import {
   sql,
   asc,
@@ -216,6 +217,56 @@ function isPageSlugConstraintError(error: unknown): boolean {
 // Queries
 // ─────────────────────────────────────────
 
+/** The pages and blog posts list's filters, shared by the list and its "all matching" bulk actions. */
+export interface PageListFilter {
+  search?: string;
+  showTrashed?: boolean;
+  status?: AdminPageStatus;
+  contentType?: ContentEntryType;
+}
+
+/** The list's WHERE conditions: the same rows for the list and for an "all matching" bulk action. */
+export function pageListConditions(db: Database, filter: PageListFilter): (SQL | undefined)[] {
+  const { search = "", showTrashed = false, status, contentType = "page" } = filter;
+  const conditions: (SQL | undefined)[] = [];
+  conditions.push(eq(pages.contentType, contentType));
+  if (search) {
+    const cond = ftsMatch(db, "pages_fts", "pages", search);
+    if (cond) conditions.push(cond);
+  }
+  if (showTrashed) {
+    conditions.push(isNotNull(pages.deletedAt));
+  } else {
+    conditions.push(isNull(pages.deletedAt));
+    conditions.push(adminPageStatusCondition(status));
+  }
+  return conditions;
+}
+
+/**
+ * One slice of an "all matching" bulk action (`utils/bulk-matching.ts`): the
+ * next `limit` pages the filter matches after `cursor`, in id order, with the
+ * revision each write claims.
+ */
+export async function listMatchingPageClaims(
+  db: Database,
+  filter: PageListFilter,
+  cursor: string | undefined,
+  limit: number = BULK_MATCHING_SLICE,
+): Promise<{ claims: PageRevisionClaim[]; next: string | null }> {
+  const after = matchingSliceCondition(pages.id, cursor);
+  const rows = await db
+    .select({ id: pages.id, revision: pages.revision })
+    .from(pages)
+    .where(and(...pageListConditions(db, filter), ...(after ? [after] : [])))
+    .orderBy(asc(pages.id))
+    .limit(limit);
+  return {
+    claims: rows.map((row) => ({ id: row.id, expectedRevision: row.revision })),
+    next: nextMatchingCursor(rows, limit),
+  };
+}
+
 export async function listPages(
   db: Database,
   options: {
@@ -240,18 +291,7 @@ export async function listPages(
     order = "desc",
   } = options;
 
-  const conditions: (SQL | undefined)[] = [];
-  conditions.push(eq(pages.contentType, contentType));
-  if (search) {
-    const cond = ftsMatch(db, "pages_fts", "pages", search);
-    if (cond) conditions.push(cond);
-  }
-  if (showTrashed) {
-    conditions.push(isNotNull(pages.deletedAt));
-  } else {
-    conditions.push(isNull(pages.deletedAt));
-    conditions.push(adminPageStatusCondition(status));
-  }
+  const conditions = pageListConditions(db, { search, showTrashed, status, contentType });
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
   const offset = (page - 1) * limit;

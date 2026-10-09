@@ -84670,22 +84670,109 @@
                     "minItems": 1,
                     "maxItems": 90
                   },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  },
                   "permanent": {
                     "type": "boolean",
                     "default": false
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -84824,19 +84911,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -84975,19 +85149,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -85126,19 +85387,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
