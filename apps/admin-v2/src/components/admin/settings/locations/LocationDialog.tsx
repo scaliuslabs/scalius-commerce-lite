@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { settingsLocationsMessages, type SettingsLocationsMessageKey } from "~/i18n/settings-locations";
@@ -20,6 +19,7 @@ import {
   type InventoryLocation,
   type InventoryLocationBody,
 } from "~/lib/api-query-options/inventory-locations";
+import { Field } from "~/components/ui/field";
 
 const KINDS = ["warehouse", "store", "other"] as const;
 type Kind = (typeof KINDS)[number];
@@ -131,8 +131,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
       : field === "code" ? errors.code ?? (codeTaken && draft.code.trim() ? "codeTaken" : undefined) : undefined;
     const id = `inventory-location-${field}`;
     return (
-      <div className="space-y-1.5">
-        <Label htmlFor={id}>{t(label)}</Label>
+      <Field id={id} label={t(label)}>
         <Input
           id={id}
           type={options.type ?? "text"}
@@ -147,7 +146,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
         ) : options.help ? (
           <p id={`${id}-note`} className="text-body text-muted-foreground">{options.help}</p>
         ) : null}
-      </div>
+      </Field>
     );
   };
 
@@ -164,8 +163,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
               {text("name", "name", { maxLength: 80 })}
               {text("code", "code", { maxLength: 24, help: t("codeHelp") })}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="inventory-location-kind">{t("kind")}</Label>
+            <Field id="inventory-location-kind" label={t("kind")}>
               <SearchableSelect
                 id="inventory-location-kind"
                 triggerClassName="w-full"
@@ -175,7 +173,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
                 }}
                 options={KINDS.map((kind) => ({ value: kind, label: t(`kind.${kind}`) }))}
               />
-            </div>
+            </Field>
             {text("addressLine1", "addressLine1", { maxLength: 200 })}
             {text("addressLine2", "addressLine2", { maxLength: 200 })}
             <div className="grid gap-4 sm:grid-cols-2">

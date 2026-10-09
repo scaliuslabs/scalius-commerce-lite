@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { CustomerActivity } from "./CustomerActivity";
@@ -166,24 +166,18 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("name")}</FormLabel>
-                <FormControl>
-                  <Input required autoComplete="off" {...field} />
-                </FormControl>
-                {record?.kind === "guest" ? <FormDescription>{t("guestNameHint")}</FormDescription> : null}
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("name")} help={record?.kind === "guest" ? t("guestNameHint") : undefined} error={fieldState.error?.message}>
+                <Input required autoComplete="off" {...field} />
+              </Field>
             )}
           />
           <FormField
             control={form.control}
             name="phone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("phone")}</FormLabel>
-                <FormControl>
+            render={({ field, fieldState }) => (
+              <div className="flex flex-col gap-2">
+                <Field label={t("phone")} help={phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
                   <AdminPhoneInput
                     value={field.value}
                     onChange={(value) => {
@@ -192,11 +186,9 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                     }}
                     required={phoneRequired}
                   />
-                </FormControl>
-                {phoneRequired ? null : <FormDescription>{t("phoneOptionalHint")}</FormDescription>}
-                <FormMessage />
+                </Field>
                 {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
-              </FormItem>
+              </div>
             )}
           />
           <FormField

@@ -12,7 +12,6 @@ import {
 } from "~/components/ui/dialog";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
 import { Progress } from "~/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useCurrency } from "~/hooks/use-currency";
@@ -29,6 +28,7 @@ import { sampleCsv } from "./sample-csv";
 import { saveCsv } from "./export-download";
 import { INVENTORY_SEARCH_DEFAULTS } from "../inventory/inventory-search";
 import { useImportSession } from "./use-import-session";
+import { Label } from "~/components/ui/label";
 
 type MessageKey = keyof typeof storeTransferMessages.en;
 type Messages = (key: MessageKey, vars?: Record<string, string | number>) => string;
@@ -51,7 +51,7 @@ function ModeChoice<T extends string>({ value, onChange, options, label }: {
             <span className="flex h-lh items-center">
               <RadioGroupItem id={`${id}-${option.value}`} value={option.value} aria-describedby={`${id}-${option.value}-help`} />
             </span>
-            <div className="space-y-0.5">
+            <div className="flex min-w-0 flex-col gap-1">
               <Label htmlFor={`${id}-${option.value}`}>{option.label}</Label>
               <p id={`${id}-${option.value}-help`} className={cn("text-body text-muted-foreground", option.value !== value && "sr-only")}>{option.help}</p>
             </div>

@@ -11,7 +11,6 @@ import {
 } from "~/components/ui/card";
 import { FormField } from "~/components/ui/form";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
-import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
@@ -173,8 +172,7 @@ export function SummarySection() {
         {hasPhysical ? null : <p className="text-body text-muted-foreground">{t("noDeliveryNeeded")}</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           {hasPhysical && (rates.length > 0 || savedOption) ? (
-            <div className="space-y-2">
-              <Label htmlFor="order-delivery-method">{t("deliveryMethod")}</Label>
+            <Field id="order-delivery-method" label={t("deliveryMethod")}>
               <SearchableSelect
                 id="order-delivery-method"
                 triggerClassName="w-full"
@@ -201,7 +199,7 @@ export function SummarySection() {
                   { value: CUSTOM_CHARGE, label: t("customCharge") },
                 ]}
               />
-            </div>
+            </Field>
           ) : null}
 
           {hasPhysical ? <FormField

@@ -31,6 +31,7 @@ import { attributeGroupsQueryOptions, type AttributeDto } from "~/lib/api-query-
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { attributeTypeMessages } from "~/i18n/attribute-types";
+import { Field } from "~/components/ui/field";
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
@@ -169,8 +170,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
               <p role="alert" className="text-body text-destructive">{serverError.message}</p>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="attribute-name">{t("name")}</Label>
+              <Field id="attribute-name" label={t("name")} error={errors.name ? errors.name : undefined}>
                 <Input
                   id="attribute-name"
                   autoFocus
@@ -182,10 +182,8 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                   onBlur={() => setChecked((current) => ({ ...current, name: true }))}
                   onChange={(event) => setName(event.target.value)}
                 />
-                {errors.name ? <p id="attribute-name-error" className="text-body text-destructive">{errors.name}</p> : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="attribute-handle">{t("handle")}</Label>
+              </Field>
+              <Field id="attribute-handle" label={t("handle")}>
                 <Input
                   id="attribute-handle"
                   maxLength={100}
@@ -204,11 +202,10 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 <p id="attribute-handle-help" className={errors.slug ? "text-body text-destructive" : "text-body text-muted-foreground"}>
                   {errors.slug ?? t(autoHandle === undefined ? "handleHelp" : "handleAuto")}
                 </p>
-              </div>
+              </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="attribute-type">{a("type")}</Label>
+              <Field id="attribute-type" label={a("type")} help={<>{a(`typeHelp_${valueType}`)}</>}>
                 {attribute ? (
                   <div className="flex items-center gap-2">
                     <p id="attribute-type" className="min-w-0 flex-1 text-body">{a(`type_${valueType}`)}</p>
@@ -227,11 +224,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                     options={ATTRIBUTE_VALUE_TYPES.map((type) => ({ value: type, label: a(`type_${type}`) }))}
                   />
                 )}
-                <p className="text-body text-muted-foreground">{a(`typeHelp_${valueType}`)}</p>
-              </div>
+              </Field>
               {valueType === "number" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="attribute-unit">{a("unit")}</Label>
+                <Field id="attribute-unit" label={a("unit")}>
                   <Input
                     id="attribute-unit"
                     maxLength={ATTRIBUTE_UNIT_MAX_LENGTH}
@@ -239,10 +234,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                     value={unit}
                     onChange={(event) => setUnit(event.target.value)}
                   />
-                </div>
+                </Field>
               ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="attribute-group">{a("group")}</Label>
+              <Field id="attribute-group" label={a("group")} help={a("groupHelp")}>
                 <SearchableSelect
                   id="attribute-group" value={groupId ?? ""} onValueChange={(value) => setGroupId(value || null)}
                   triggerClassName="w-full"
@@ -252,20 +246,18 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                     ...(groupId && groupData && !groupData.groups.some((group) => group.id === groupId) ? [{ value: groupId, label: groupId }] : []),
                   ]}
                 />
-                <p className="text-body text-muted-foreground">{a("groupHelp")}</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="attribute-display">{a("filterDisplay")}</Label>
+              </Field>
+              <Field id="attribute-display" label={a("filterDisplay")}>
                 <SearchableSelect
                   id="attribute-display" value={facetDisplay} onValueChange={(value) => setFacetDisplay(value as AttributeFacetDisplay)}
                   triggerClassName="w-full"
                   options={ATTRIBUTE_FACET_DISPLAYS.filter((display) => isAttributeFacetDisplayAllowed(valueType, display)).map((display) => ({ value: display, label: a(`display_${display}`) }))}
                 />
-              </div>
+              </Field>
             </div>
             {hasPresets ? (
-            <div className="space-y-2">
-              <Label htmlFor="attribute-value">{t("presetValues")}</Label>
+            <div className="flex flex-col gap-2">
+            <Field id="attribute-value" label={t("presetValues")} help={duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}>
               <div className="flex gap-2">
                 <Input
                   id="attribute-value"
@@ -287,9 +279,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                   {t("addValue")}
                 </Button>
               </div>
-              <p id="attribute-value-help" className="text-body text-muted-foreground">
-                {duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}
-              </p>
+            </Field>
               {options.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {options.map((option) => (

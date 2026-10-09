@@ -11,7 +11,6 @@ import {
   type ResolvedStorefrontThemeLayout,
   type StorefrontProductModule,
 } from "@scalius/shared/storefront-theme";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -21,6 +20,7 @@ import { BlockSettingsFields, FitNote, useFitReason, variantRenders, type SetThe
 import { BuyBoxSketch, ProductPageSketch, VisualChoice } from "../ThemeChoices";
 import { blockFallback, blockVariant, setBlockVariant, toggleProductModule } from "../theme-settings";
 import { SwitchField } from "./ListingPanels";
+import { Field } from "~/components/ui/field";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 type Product = Theme["blocks"]["product"];
@@ -90,9 +90,7 @@ export function ProductMainSettings({ theme, resolved, media, setDraft }: {
           checked={sticky.phoneTop === "anchor-bar"}
           onCheckedChange={(checked) => setSticky({ phoneTop: checked ? "anchor-bar" : "none" })}
         />
-        <div className="space-y-1">
-          <Label htmlFor="theme-sticky-desktop">{t("stickyDesktop")}</Label>
-          <p className="text-body text-muted-foreground">{t("stickyDesktopHelp")}</p>
+        <Field id="theme-sticky-desktop" label={t("stickyDesktop")} help={t("stickyDesktopHelp")}>
           <SearchableSelect
             id="theme-sticky-desktop"
             value={sticky.desktop}
@@ -100,7 +98,7 @@ export function ProductMainSettings({ theme, resolved, media, setDraft }: {
             onValueChange={(desktop) => setSticky({ desktop: desktop as Product["sticky"]["desktop"] })}
             triggerClassName="w-full"
           />
-        </div>
+        </Field>
       </div>
     </div>
   );

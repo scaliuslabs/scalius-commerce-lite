@@ -1,34 +1,9 @@
-import type { ReactNode } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Label } from "~/components/ui/label";
+import { ChoiceField } from "~/components/ui/field";
 import { useMessages } from "~/i18n";
 import { giftCardsMessages } from "~/i18n/gift-cards";
 import { GIFT_CARD_STATUS_BADGE, giftCardDisplayStatus } from "./gift-card-format";
-
-/** Label, control, then the error (or the help) under it, tied to the control by id. */
-export function GiftCardField({ id, label, help, error, children }: {
-  id: string;
-  label: string;
-  help?: string;
-  error?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error ? <p id={`${id}-error`} className="text-body text-destructive">{error}</p> : null}
-      {!error && help ? <p id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
-    </div>
-  );
-}
-
-/** The `aria-describedby` for a GiftCardField's control. */
-export function fieldDescribedBy(id: string, error: string | undefined, help: boolean): string | undefined {
-  if (error) return `${id}-error`;
-  return help ? `${id}-help` : undefined;
-}
 
 export function GiftCardCheckRow({ id, label, help, checked, disabled, onChange }: {
   id: string;
@@ -39,8 +14,11 @@ export function GiftCardCheckRow({ id, label, help, checked, disabled, onChange 
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-lh items-center">
+    <ChoiceField
+      id={id}
+      label={label}
+      help={help}
+      control={(
         <Checkbox
           id={id}
           checked={checked}
@@ -48,12 +26,8 @@ export function GiftCardCheckRow({ id, label, help, checked, disabled, onChange 
           aria-describedby={help ? `${id}-help` : undefined}
           onCheckedChange={(value) => onChange(value === true)}
         />
-      </span>
-      <div className="min-w-0 space-y-1">
-        <Label htmlFor={id}>{label}</Label>
-        {help ? <p id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
-      </div>
-    </div>
+      )}
+    />
   );
 }
 

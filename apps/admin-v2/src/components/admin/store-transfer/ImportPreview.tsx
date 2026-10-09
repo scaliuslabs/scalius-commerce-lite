@@ -4,13 +4,13 @@ import type { ExtraOptionStrategy } from "@scalius/shared/store-transfer/product
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
-import { Label } from "~/components/ui/label";
 import { Progress } from "~/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Alert } from "~/components/ui/alert";
 import { formatNumber, useLocale, useMessages } from "~/i18n";
 import { importIssueMessages, storeTransferMessages } from "~/i18n/store-transfer";
+import { ChoiceField } from "~/components/ui/field";
 
 /** Problems shown inline; the rest are in the downloadable report. */
 export const PREVIEW_ISSUE_LIMIT = 50;
@@ -117,28 +117,14 @@ export function ImportPreview(props: ImportPreviewProps) {
               ["skip", t("option3Skip"), t("option3SkipHelp")],
               ["fold", t("option3Fold"), t("option3FoldHelp")],
             ] as const).map(([value, label, help]) => (
-              <div key={value} className="flex items-start gap-2">
-                <span className="flex h-lh items-center"><RadioGroupItem id={`import-option3-${value}`} value={value} aria-describedby={`import-option3-${value}-help`} /></span>
-                <div className="space-y-0.5">
-                  <Label htmlFor={`import-option3-${value}`}>{label}</Label>
-                  <p id={`import-option3-${value}-help`} className="text-body text-muted-foreground">{help}</p>
-                </div>
-              </div>
+              <ChoiceField key={value} id={`import-option3-${value}`} label={label} help={help} control={<RadioGroupItem id={`import-option3-${value}`} value={value} aria-describedby={`import-option3-${value}-help`} />} />
             ))}
           </RadioGroup>
         </fieldset>
       ) : null}
 
       {props.roundPrices && props.roundPrices.count > 0 ? (
-        <div className="flex items-start gap-2">
-          <span className="flex h-lh items-center">
-            <Checkbox id="import-round-prices" checked={props.roundPrices.value} onCheckedChange={(checked) => props.roundPrices!.onChange(checked === true)} aria-describedby="import-round-prices-help" />
-          </span>
-          <div className="space-y-0.5">
-            <Label htmlFor="import-round-prices">{t("roundPrices")}</Label>
-            <p id="import-round-prices-help" className="text-body text-muted-foreground">{t("roundPricesHelp", { count: props.roundPrices.count })}</p>
-          </div>
-        </div>
+        <ChoiceField id="import-round-prices" label={t("roundPrices")} help={t("roundPricesHelp", { count: props.roundPrices.count })} control={<Checkbox id="import-round-prices" checked={props.roundPrices.value} onCheckedChange={(checked) => props.roundPrices!.onChange(checked === true)} aria-describedby="import-round-prices-help" />} />
       ) : null}
 
       {props.unsupported.length > 0 ? (

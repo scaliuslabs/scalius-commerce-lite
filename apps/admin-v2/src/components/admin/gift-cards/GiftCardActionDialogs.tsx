@@ -25,7 +25,7 @@ import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import type { GiftCardDetail } from "~/lib/api-query-options/gift-cards";
 import { GiftCardCustomerPicker } from "./GiftCardCustomerPicker";
-import { fieldDescribedBy, GiftCardField } from "./gift-card-fields";
+import { Field } from "~/components/ui/field";
 import { adjustmentFor, type AdjustDirection, type AdjustErrors } from "./gift-card-drafts";
 import {
   formatGiftCardMoney,
@@ -153,7 +153,7 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
       onSubmit={submit}
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <GiftCardField id="gift-card-adjust-direction" label={t("direction")}>
+        <Field id="gift-card-adjust-direction" label={t("direction")}>
           <SearchableSelect
             id="gift-card-adjust-direction"
             value={direction}
@@ -165,26 +165,25 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
             triggerClassName="w-full"
             options={[{ value: "increase", label: t("increase") }, { value: "decrease", label: t("decrease") }]}
           />
-        </GiftCardField>
-        <GiftCardField id="gift-card-adjust-amount" label={t("amount")} error={shown("amount")}>
+        </Field>
+        <Field id="gift-card-adjust-amount" label={t("amount")} error={shown("amount")}>
           <MoneyInput
             id="gift-card-adjust-amount"
             currencyCode={card.currencyCode}
             value={amount}
             disabled={mutation.isPending}
             aria-invalid={errors.amount ? true : undefined}
-            aria-describedby={fieldDescribedBy("gift-card-adjust-amount", shown("amount"), false)}
             onValueChange={(value) => {
               setAmount(value);
               setErrors((current) => ({ ...current, amount: undefined }));
             }}
           />
-        </GiftCardField>
+        </Field>
       </div>
       <p className="text-body tabular-nums text-muted-foreground" aria-live="polite">
         {t("newBalance", { amount: formatGiftCardMoney(preview ?? card.balanceMinor, card.currencyCode) })}
       </p>
-      <GiftCardField id="gift-card-adjust-reason" label={t("reason")} help={t("reasonHelp")} error={shown("reason")}>
+      <Field id="gift-card-adjust-reason" label={t("reason")} help={t("reasonHelp")} error={shown("reason")}>
         <Textarea
           id="gift-card-adjust-reason"
           value={reason}
@@ -192,13 +191,12 @@ export function AdjustBalanceDialog({ card, open, onOpenChange }: {
           maxLength={GIFT_CARD_LIMITS.maxNoteLength}
           disabled={mutation.isPending}
           aria-invalid={errors.reason ? true : undefined}
-          aria-describedby={fieldDescribedBy("gift-card-adjust-reason", shown("reason"), true)}
           onChange={(event) => {
             setReason(event.target.value);
             setErrors((current) => ({ ...current, reason: undefined }));
           }}
         />
-      </GiftCardField>
+      </Field>
     </ActionDialog>
   );
 }
@@ -280,20 +278,19 @@ export function ExpiryDialog({ card, open, onOpenChange }: {
         </div>
       </RadioGroup>
       {mode === "date" ? (
-        <GiftCardField id="gift-card-expiry-day" label={t("expiryDate")} help={t("expiryHelp")} error={error}>
+        <Field id="gift-card-expiry-day" label={t("expiryDate")} help={t("expiryHelp")} error={error}>
           <DateInput
             id="gift-card-expiry-day"
             min={todayStoreDay()}
             value={day}
             disabled={mutation.isPending}
             aria-invalid={invalid ? true : undefined}
-            aria-describedby={fieldDescribedBy("gift-card-expiry-day", error, true)}
             onValueChange={(next) => {
               setDay(next);
               setInvalid(false);
             }}
           />
-        </GiftCardField>
+        </Field>
       ) : null}
     </ActionDialog>
   );
@@ -354,7 +351,7 @@ export function EditDetailsDialog({ card, open, onOpenChange }: {
       submitLabel={t("save")}
       onSubmit={submit}
     >
-      <GiftCardField id="gift-card-edit-customer" label={t("customer")} help={t("customerHelp")}>
+      <Field id="gift-card-edit-customer" label={t("customer")} help={t("customerHelp")}>
         <GiftCardCustomerPicker
           id="gift-card-edit-customer"
           value={customer?.id ?? ""}
@@ -363,8 +360,8 @@ export function EditDetailsDialog({ card, open, onOpenChange }: {
           describedBy="gift-card-edit-customer-help"
           onChange={setCustomer}
         />
-      </GiftCardField>
-      <GiftCardField id="gift-card-edit-note" label={t("note")} help={t("noteHelp")}>
+      </Field>
+      <Field id="gift-card-edit-note" label={t("note")} help={t("noteHelp")}>
         <Textarea
           id="gift-card-edit-note"
           value={note}
@@ -374,7 +371,7 @@ export function EditDetailsDialog({ card, open, onOpenChange }: {
           aria-describedby="gift-card-edit-note-help"
           onChange={(event) => setNote(event.target.value)}
         />
-      </GiftCardField>
+      </Field>
     </ActionDialog>
   );
 }

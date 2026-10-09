@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
@@ -47,6 +46,7 @@ import {
   type TransferDraftLine,
 } from "./transfer-draft";
 import { DateInput } from "~/components/ui/date-input";
+import { Field } from "~/components/ui/field";
 
 type Busy = "save" | "ship" | null;
 /** Per-line on-hand at the origin is read per product; past this many products it isn't shown. */
@@ -326,8 +326,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardContent className="grid gap-4 pt-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="transfer-origin">{t("origin")}</Label>
+              <Field id="transfer-origin" label={t("origin")} help={t("originHelp")}>
                 <SearchableSelect
                   id="transfer-origin"
                   triggerClassName="w-full"
@@ -338,10 +337,8 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                   }}
                   options={locationOptions}
                 />
-                <p className="text-body text-muted-foreground">{t("originHelp")}</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="transfer-destination">{t("destination")}</Label>
+              </Field>
+              <Field id="transfer-destination" label={t("destination")}>
                 <SearchableSelect
                   id="transfer-destination"
                   triggerClassName="w-full"
@@ -359,7 +356,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                 ) : (
                   <p className="text-body text-muted-foreground">{t("transferDestinationHelp")}</p>
                 )}
-              </div>
+              </Field>
             </CardContent>
           </Card>
 
@@ -448,12 +445,10 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
               <CardTitle>{t("shipmentDetails")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="transfer-expected">{t("expectedArrival")}</Label>
+              <Field id="transfer-expected" label={t("expectedArrival")}>
                 <DateInput id="transfer-expected" value={draft.expectedOn} onValueChange={(expectedOn) => update({ expectedOn })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="transfer-reference">{t("reference")}</Label>
+              </Field>
+              <Field id="transfer-reference" label={t("reference")}>
                 <Input
                   id="transfer-reference"
                   maxLength={100}
@@ -461,7 +456,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                   value={draft.reference}
                   onChange={(event) => update({ reference: event.target.value })}
                 />
-              </div>
+              </Field>
               <p className="border-t pt-4 text-body text-muted-foreground tabular-nums">{unitsText(totalUnits)}</p>
             </CardContent>
           </Card>

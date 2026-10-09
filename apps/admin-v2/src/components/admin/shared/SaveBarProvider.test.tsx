@@ -116,9 +116,26 @@ describe("page save bar", () => {
     expect(toast.success).toHaveBeenCalledWith("Customer created");
   });
 
-  it("ignores Ctrl/⌘+S when nothing changed", async () => {
+  it("shows a new record's bar before any edit, and Save then checks what it still needs (P5)", async () => {
     const entry = { dirty: false, save: vi.fn(async () => undefined), discard: vi.fn() };
     render(entry);
+    expect(barText()).toContain("Unsaved customer");
+    const discard = [...document.querySelectorAll<HTMLButtonElement>("[data-save-bar] button")].find((button) => button.textContent === "Discard")!;
+    expect(discard.disabled).toBe(true);
+
+    await pressSave();
+    expect(entry.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores Ctrl/⌘+S when nothing changed on a saved record", async () => {
+    const entry = { dirty: false, save: vi.fn(async () => undefined), discard: vi.fn() };
+    act(() => {
+      root.render(
+        <SaveBarProvider savedMessage="Customer saved">
+          <Card {...entry} />
+        </SaveBarProvider>,
+      );
+    });
     expect(document.querySelector("[data-save-bar]")).toBeNull();
 
     await pressSave();

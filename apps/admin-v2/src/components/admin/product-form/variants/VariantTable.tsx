@@ -7,6 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Inset } from "~/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -628,7 +629,7 @@ const VariantRow = React.memo(function VariantRow({
         <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} />
       </div>
       {expanded ? (
-        <div className="col-span-full mt-2 rounded-md border bg-muted/30 p-3">
+        <Inset className="col-span-full mt-2">
           <AdvancedSkuFields
             variant={variant}
             name={name}
@@ -638,7 +639,7 @@ const VariantRow = React.memo(function VariantRow({
           />
           {/* Apps' cards for this saved SKU (`resource=variant`), inside the variant card. */}
           {customData ? <AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /> : null}
-        </div>
+        </Inset>
       ) : null}
     </div>
   );

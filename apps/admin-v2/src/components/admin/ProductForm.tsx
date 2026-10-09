@@ -545,14 +545,6 @@ function ProductEditor({
           </ProductEditorSlotsContext.Provider>
           </ProductSectionsProvider>
           </ProductKindRulesProvider>
-          {readOnly ? null : (
-            // Shopify repeats Save at the end of the page, under a divider.
-            <div className="flex justify-end border-t pt-4">
-              <Button type="submit" loading={Boolean(scope?.busy)} disabled={isEdit && !scope?.dirty}>
-                {s("save")}
-              </Button>
-            </div>
-          )}
         </form>
       </Form>
       <AlertDialog

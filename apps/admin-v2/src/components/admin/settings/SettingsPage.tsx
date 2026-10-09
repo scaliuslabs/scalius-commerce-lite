@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SaveErrorBanner, SaveScope, useSaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
 import { useMessages } from "~/i18n";
@@ -151,8 +151,9 @@ export function SettingsCardLoading() {
 }
 
 /**
- * Label, control and one line of help or error. Give the control
- * `aria-describedby={`${id}-note`}` so the note is read with it.
+ * A settings `Field` that shows its error once the merchant leaves the field
+ * (or presses Save), and the server's error for it after a rejected save. Its
+ * help or error is `<id>-note`.
  */
 export function SettingsField({
   id,
@@ -180,6 +181,7 @@ export function SettingsField({
   };
   const clientShown = error && (left || server.revealed) ? error : null;
   const shown = clientShown ?? server.error;
+  // A control that does not read its `Field` (a plain button, a switch) still gets the state.
   const isControl = isValidElement<{ id?: string }>(children) && children.props.id === id;
   const control = !isControl
     ? children
@@ -189,8 +191,13 @@ export function SettingsField({
         ? cloneElement(children as ReactElement<Record<string, unknown>>, { "aria-invalid": false })
         : children;
   return (
-    <div
-      className="space-y-1.5"
+    <Field
+      id={id}
+      label={label}
+      help={help}
+      error={shown}
+      noteId={`${id}-note`}
+      announceError
       onBlur={(event) => {
         const target = event.target as { value?: unknown };
         if (edited || (typeof target.value === "string" && target.value.trim())) setLeft(true);
@@ -198,14 +205,8 @@ export function SettingsField({
       onInput={onEdit}
       onChange={onEdit}
     >
-      <Label htmlFor={id}>{label}</Label>
       {control}
-      {shown ? (
-        <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p>
-      ) : help ? (
-        <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
-      ) : null}
-    </div>
+    </Field>
   );
 }
 

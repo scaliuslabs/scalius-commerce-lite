@@ -29,6 +29,7 @@ import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useSaveWarrantyPolicy, type WarrantyPolicy, type WarrantyPolicyBody } from "../../warranty/warranty-api";
 import { warrantySummary } from "../../warranty/warranty-format";
+import { Field } from "~/components/ui/field";
 
 interface Draft {
   name: string;
@@ -149,8 +150,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
           </DialogHeader>
           <form id="warranty-policy-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
             {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-name">{t("name")}</Label>
+            <Field id="warranty-policy-name" label={t("name")}>
               <Input
                 id="warranty-policy-name"
                 value={draft.name}
@@ -160,7 +160,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 onChange={(event) => set("name", event.target.value)}
               />
               {fieldNote("name", t("nameHelp"))}
-            </div>
+            </Field>
             <fieldset className="space-y-2">
               <legend className="text-body font-medium">{t("provider")}</legend>
               <RadioGroup value={draft.provider} onValueChange={(value) => set("provider", value as WarrantyProvider)}>
@@ -172,8 +172,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 ))}
               </RadioGroup>
             </fieldset>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-durationValue">{t("duration")}</Label>
+            <Field id="warranty-policy-durationValue" label={t("duration")}>
               <div className="flex gap-2">
                 <NumberInput
                   id="warranty-policy-durationValue"
@@ -194,9 +193,8 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 />
               </div>
               {fieldNote("durationValue")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-replacementDays">{t("replacement")}</Label>
+            </Field>
+            <Field id="warranty-policy-replacementDays" label={t("replacement")}>
               <NumberInput
                 id="warranty-policy-replacementDays"
                 integer
@@ -207,9 +205,8 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 onValueChange={(value) => set("replacementDays", value)}
               />
               {fieldNote("replacementDays", t("replacementHelp"))}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-terms">{t("terms")}</Label>
+            </Field>
+            <Field id="warranty-policy-terms" label={t("terms")}>
               <Textarea
                 id="warranty-policy-terms"
                 rows={5}
@@ -219,7 +216,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 onChange={(event) => set("terms", event.target.value)}
               />
               {fieldNote("terms", t("termsHelp"))}
-            </div>
+            </Field>
             {preview ? <p className="rounded-lg bg-muted px-3 py-2 text-body">{preview}</p> : null}
           </form>
           <DialogFooter>

@@ -46,6 +46,7 @@ import {
   type CustomFieldDefinition,
 } from "~/lib/api-query-options/custom-fields";
 import { localDateTime } from "~/components/admin/custom-fields/custom-field-draft";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 /** Scalar types with a list form (all but true/false and JSON). */
 const LISTABLE = new Set<string>(CUSTOM_FIELD_SCALAR_TYPES.filter((type) => type !== "boolean" && type !== "json"));
@@ -240,8 +241,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
     const item = customFieldItemType(type);
     const inputType = boundKind === "length" ? "text" : item === "date" ? "date" : item === "date_time" ? "datetime-local" : "text";
     return (
-      <div className="space-y-1.5">
-        <Label htmlFor={id}>{t(label)}</Label>
+      <Field id={id} label={t(label)}>
         <Input
           id={id}
           type={inputType}
@@ -250,7 +250,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
           aria-invalid={errors.validations ? true : undefined}
           onChange={(event) => set(side, event.target.value)}
         />
-      </div>
+      </Field>
     );
   };
 
@@ -263,8 +263,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
           </DialogHeader>
           <form id="custom-field-definition-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
             {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
-            <div className="space-y-1.5">
-              <Label htmlFor="custom-field-definition-name">{t("name")}</Label>
+            <Field id="custom-field-definition-name" label={t("name")} error={errors.name ? errors.name : undefined}>
               <Input
                 id="custom-field-definition-name"
                 value={draft.name}
@@ -273,10 +272,8 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                 aria-describedby={errors.name ? "custom-field-definition-name-note" : undefined}
                 onChange={(event) => set("name", event.target.value)}
               />
-              {errors.name ? <p id="custom-field-definition-name-note" className="text-body text-destructive">{errors.name}</p> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="custom-field-definition-key">{t("key")}</Label>
+            </Field>
+            <Field id="custom-field-definition-key" label={t("key")}>
               <Input
                 id="custom-field-definition-key"
                 value={draft.key}
@@ -294,18 +291,16 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
               <p id="custom-field-definition-key-note" className={keyError ? "text-body text-destructive" : "text-body text-muted-foreground"}>
                 {keyError ?? t("keyHelp", { binding })}
               </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="custom-field-definition-description">{t("fieldDescription")}</Label>
+            </Field>
+            <Field id="custom-field-definition-description" label={t("fieldDescription")}>
               <Input
                 id="custom-field-definition-description"
                 value={draft.description}
                 maxLength={300}
                 onChange={(event) => set("description", event.target.value)}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="custom-field-definition-type">{t("type")}</Label>
+            </Field>
+            <Field id="custom-field-definition-type" label={t("type")} help={creating ? undefined : t("typeFixed")}>
               <SearchableSelect
                 id="custom-field-definition-type"
                 triggerClassName="w-full"
@@ -319,8 +314,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                 }}
                 options={CUSTOM_FIELD_SCALAR_TYPES.map((item) => ({ value: item, label: t(`type.${item}` as CustomFieldMessageKey) }))}
               />
-              {creating ? null : <p className="text-body text-muted-foreground">{t("typeFixed")}</p>}
-            </div>
+            </Field>
             {LISTABLE.has(draft.itemType) ? (
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -332,18 +326,20 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                 <Label htmlFor="custom-field-definition-list">{t("list")}</Label>
               </div>
             ) : null}
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="custom-field-definition-storefront">{t("storefrontVisible")}</Label>
-                <p className="text-body text-muted-foreground">{storefrontAllowed ? t("storefrontHelp") : t("storefrontNever")}</p>
-              </div>
+            <ChoiceField
+              id="custom-field-definition-storefront"
+              controlAt="end"
+              label={t("storefrontVisible")}
+              help={storefrontAllowed ? t("storefrontHelp") : t("storefrontNever")}
+              control={(
               <Switch
                 id="custom-field-definition-storefront"
                 checked={storefrontAllowed && draft.storefrontVisible}
                 disabled={!storefrontAllowed}
                 onCheckedChange={(value) => set("storefrontVisible", value)}
               />
-            </div>
+              )}
+            />
             {boundKind || customFieldSupportsRegex(type) || customFieldSupportsChoices(type) ? (
               <fieldset className="space-y-4 border-t pt-4">
                 <legend className="sr-only">{t("validations")}</legend>
@@ -355,8 +351,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                   </div>
                 ) : null}
                 {customFieldSupportsRegex(type) ? (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="custom-field-definition-regex">{t("regex")}</Label>
+                  <Field id="custom-field-definition-regex" label={t("regex")} help={t("regexHelp")}>
                     <Input
                       id="custom-field-definition-regex"
                       value={draft.regex}
@@ -366,12 +361,10 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                       aria-describedby="custom-field-definition-regex-note"
                       onChange={(event) => set("regex", event.target.value)}
                     />
-                    <p id="custom-field-definition-regex-note" className="text-body text-muted-foreground">{t("regexHelp")}</p>
-                  </div>
+                  </Field>
                 ) : null}
                 {customFieldSupportsChoices(type) ? (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="custom-field-definition-choices">{t("choices")}</Label>
+                  <Field id="custom-field-definition-choices" label={t("choices")} help={t("choicesHelp")}>
                     <Textarea
                       id="custom-field-definition-choices"
                       rows={3}
@@ -379,8 +372,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                       aria-describedby="custom-field-definition-choices-note"
                       onChange={(event) => set("choices", event.target.value)}
                     />
-                    <p id="custom-field-definition-choices-note" className="text-body text-muted-foreground">{t("choicesHelp")}</p>
-                  </div>
+                  </Field>
                 ) : null}
                 {errors.validations ? (
                   <p id="custom-field-definition-validations" tabIndex={-1} className="text-body text-destructive">{errors.validations}</p>

@@ -23,7 +23,8 @@ import { giftCardsMessages } from "~/i18n/gift-cards";
 import { getServerFnError } from "~/lib/api-helpers";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { GiftCardCustomerPicker } from "./GiftCardCustomerPicker";
-import { fieldDescribedBy, GiftCardCheckRow, GiftCardField } from "./gift-card-fields";
+import { GiftCardCheckRow } from "./gift-card-fields";
+import { Field } from "~/components/ui/field";
 import {
   EMPTY_ISSUE_DRAFT,
   issueFieldForServerPath,
@@ -179,17 +180,16 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
               {mutation.isError && !serverIssue ? (
                 <Alert variant="destructive"><AlertDescription>{getServerFnError(mutation.error, t("issueFailed"))}</AlertDescription></Alert>
               ) : null}
-              <GiftCardField id="gift-card-amount" label={t("amount")} error={error("amount")}>
+              <Field id="gift-card-amount" label={t("amount")} error={error("amount")}>
                 <MoneyInput
                   id="gift-card-amount"
                   currencyCode={currencyCode}
                   value={draft.amount}
                   disabled={busy}
                   aria-invalid={error("amount") ? true : undefined}
-                  aria-describedby={fieldDescribedBy("gift-card-amount", error("amount"), false)}
                   onValueChange={(amount) => update({ amount })}
                 />
-              </GiftCardField>
+              </Field>
 
               <div className="space-y-2">
                 <GiftCardCheckRow
@@ -200,21 +200,20 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                   onChange={(hasExpiry) => update({ hasExpiry })}
                 />
                 {draft.hasExpiry ? (
-                  <GiftCardField id="gift-card-expiry" label={t("expiryDate")} help={t("expiryHelp")} error={error("expiry")}>
+                  <Field id="gift-card-expiry" label={t("expiryDate")} help={t("expiryHelp")} error={error("expiry")}>
                     <DateInput
                       id="gift-card-expiry"
                       min={todayStoreDay()}
                       value={draft.expiryDay}
                       disabled={busy}
                       aria-invalid={error("expiry") ? true : undefined}
-                      aria-describedby={fieldDescribedBy("gift-card-expiry", error("expiry"), true)}
                       onValueChange={(expiryDay) => update({ expiryDay })}
                     />
-                  </GiftCardField>
+                  </Field>
                 ) : null}
               </div>
 
-              <GiftCardField id="gift-card-customer" label={t("customer")} help={t("customerHelp")}>
+              <Field id="gift-card-customer" label={t("customer")} help={t("customerHelp")}>
                 <GiftCardCustomerPicker
                   id="gift-card-customer"
                   value={draft.customer?.id ?? ""}
@@ -223,7 +222,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                   describedBy="gift-card-customer-help"
                   onChange={(customer) => update({ customer })}
                 />
-              </GiftCardField>
+              </Field>
 
               <fieldset className="space-y-3 border-t pt-4">
                 <legend className="sr-only">{t("recipientTitle")}</legend>
@@ -231,7 +230,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                   <p className="text-heading-sm">{t("recipientTitle")}</p>
                   <p className="text-body text-muted-foreground">{t("recipientHelp")}</p>
                 </div>
-                <GiftCardField id="gift-card-recipient-name" label={t("recipientName")}>
+                <Field id="gift-card-recipient-name" label={t("recipientName")}>
                   <Input
                     id="gift-card-recipient-name"
                     value={draft.recipientName}
@@ -240,9 +239,9 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                     disabled={busy}
                     onChange={(event) => update({ recipientName: event.target.value })}
                   />
-                </GiftCardField>
+                </Field>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <GiftCardField id="gift-card-deliver-by" label={t("deliverBy")}>
+                  <Field id="gift-card-deliver-by" label={t("deliverBy")}>
                     <SearchableSelect
                       id="gift-card-deliver-by"
                       value={draft.deliverBy}
@@ -251,9 +250,9 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                       triggerClassName="w-full"
                       options={[{ value: "email", label: t("deliverByEmail") }, { value: "sms", label: t("deliverBySms") }]}
                     />
-                  </GiftCardField>
+                  </Field>
                   <div className="sm:col-span-2">
-                    <GiftCardField
+                    <Field
                       id="gift-card-contact"
                       label={t(draft.deliverBy === "email" ? "recipientEmail" : "recipientPhone")}
                       error={error("contact")}
@@ -267,13 +266,12 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                         autoComplete="off"
                         disabled={busy}
                         aria-invalid={error("contact") ? true : undefined}
-                        aria-describedby={fieldDescribedBy("gift-card-contact", error("contact"), false)}
                         onChange={(event) => update({ contact: event.target.value })}
                       />
-                    </GiftCardField>
+                    </Field>
                   </div>
                 </div>
-                <GiftCardField
+                <Field
                   id="gift-card-message"
                   label={t("message")}
                   help={t("messageHelp", { max: GIFT_CARD_LIMITS.maxMessageLength })}
@@ -287,11 +285,11 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                     aria-describedby="gift-card-message-help"
                     onChange={(event) => update({ message: event.target.value })}
                   />
-                </GiftCardField>
+                </Field>
               </fieldset>
 
               <div className="space-y-4 border-t pt-4">
-                <GiftCardField id="gift-card-note" label={t("note")} help={t("noteHelp")}>
+                <Field id="gift-card-note" label={t("note")} help={t("noteHelp")}>
                   <Textarea
                     id="gift-card-note"
                     value={draft.note}
@@ -301,7 +299,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                     aria-describedby="gift-card-note-help"
                     onChange={(event) => update({ note: event.target.value })}
                   />
-                </GiftCardField>
+                </Field>
                 <div className="space-y-1">
                   <GiftCardCheckRow
                     id="gift-card-notify"

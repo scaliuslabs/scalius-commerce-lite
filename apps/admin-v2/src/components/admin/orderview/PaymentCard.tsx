@@ -66,6 +66,7 @@ import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
+import { Field } from "~/components/ui/field";
 
 type CodAction = "collected" | "failed" | "returned";
 type CodFailureReason = Extract<ApiBody<typeof postApiV1AdminOrdersByIdCod>, { action: "failed" }>["reason"];
@@ -645,8 +646,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               <p className="text-muted-foreground">{t("cod.amountToCollect")}</p>
               <p className="text-heading-md font-semibold tabular-nums">{money(cashCollectionAmount)}</p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="collectedBy">{t("cod.collectedBy")}</Label>
+            <Field id="collectedBy" label={t("cod.collectedBy")} error={collectorError ? collectorError : undefined}>
               <Input
                 id="collectedBy"
                 placeholder={t("cod.collectorPlaceholder")}
@@ -658,8 +658,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 onChange={(e) => setCollectedBy(e.target.value)}
                 onBlur={() => setCollectorError(collectedBy.trim() ? null : t("cod.collectorRequired"))}
               />
-              {collectorError ? <p id="collectedBy-error" className="text-destructive">{collectorError}</p> : null}
-            </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
@@ -678,8 +677,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </DialogHeader>
           <div className="space-y-4">
             {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
-            <div className="space-y-2">
-              <Label htmlFor="failReason">{t("cod.failureReason")}</Label>
+            <Field id="failReason" label={t("cod.failureReason")}>
               <SearchableSelect
                 triggerClassName="w-full"
                 id="failReason"
@@ -687,11 +685,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 onValueChange={(value) => setFailReason(value as CodFailureReason)}
                 options={COD_FAILURE_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "cod.reason.", reason) }))}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="failNotes">{t("cod.notes")}</Label>
+            </Field>
+            <Field id="failNotes" label={t("cod.notes")}>
               <Textarea id="failNotes" value={failNotes} maxLength={500} onChange={(e) => setFailNotes(e.target.value)} />
-            </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
@@ -735,8 +732,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </DialogHeader>
           <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
             {refundMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(refundMutation.error)}</AlertDescription></Alert> : null}
-            <div className="space-y-2">
-              <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
+            <Field id="refundAmount" label={<>{t("refund.amount", { symbol })}</>}>
               <MoneyInput
                 currencyCode={order.currencyCode ?? ""}
                 id="refundAmount"
@@ -755,9 +751,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                   ? t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
                   : t("refund.max", { amount: money(paid) }))}
               </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="refundReason">{t("refund.reason")}</Label>
+            </Field>
+            <Field id="refundReason" label={t("refund.reason")}>
               <SearchableSelect
                 triggerClassName="w-full"
                 id="refundReason"
@@ -765,7 +760,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 onValueChange={setRefundReason}
                 options={REFUND_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "refund.reason.", reason) }))}
               />
-            </div>
+            </Field>
             <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} disabled={isRefundLocked} />
             {requiresManualSettlementConfirmation ? (
               <div className="flex items-start gap-3">

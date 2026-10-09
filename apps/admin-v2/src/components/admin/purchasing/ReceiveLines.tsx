@@ -3,7 +3,7 @@ import { ScanBarcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { NumberInput } from "~/components/ui/number-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { useIsMobile } from "~/hooks/use-mobile";
@@ -175,15 +175,11 @@ export function ReceiveLines({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <Label htmlFor="receive-scan">{t("scanLabel")}</Label>
-        <div className="relative">
-          <ScanBarcode aria-hidden className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <CardContent className="space-y-1">
+        <Field id="receive-scan" label={t("scanLabel")} help={t("scanHelp")}>
           <Input
             ref={scanRef}
-            id="receive-scan"
-            // eslint-disable-next-line shadcn/no-restyle -- room for the scanner icon inside the field
-            className="ps-9"
+            prefix={<ScanBarcode aria-hidden className="size-4" />}
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -195,8 +191,7 @@ export function ReceiveLines({
             onChange={(event) => setCode(event.target.value)}
             onKeyDown={onScanKey}
           />
-        </div>
-        <p id="receive-scan-help" className="text-body text-muted-foreground">{t("scanHelp")}</p>
+        </Field>
         <p
           id="receive-scan-status"
           role="status"

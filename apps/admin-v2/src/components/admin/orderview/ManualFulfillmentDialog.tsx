@@ -13,7 +13,6 @@ import {
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
@@ -26,6 +25,8 @@ import { counterCashDue, lineFulfillmentType, unfulfilledUnits, type ManualFulfi
 import { formatCurrencyAmount } from "./formatters";
 import { LineProperties } from "./LineProperties";
 import type { Order } from "./types";
+import { Field } from "~/components/ui/field";
+import { Label } from "~/components/ui/label";
 
 // The helpers the page decides with live in fulfilment-groups.ts: this dialog loads on demand.
 export { canSendWithOwnCourier, remainingToSend, type ManualFulfillmentKind } from "./fulfilment-groups";
@@ -201,16 +202,13 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
           {kind === "ship" ? (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="fulfill-courier">{t("shipments.courier")}</Label>
+                <Field id="fulfill-courier" label={t("shipments.courier")}>
                   <Input id="fulfill-courier" value={courierName} placeholder={t("fulfill.defaultCourier")} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={120} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fulfill-tracking">{t("shipments.trackingId")}</Label>
+                </Field>
+                <Field id="fulfill-tracking" label={t("shipments.trackingId")}>
                   <Input id="fulfill-tracking" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={180} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fulfill-trackingUrl">{t("fulfill.trackingUrl")}</Label>
+                </Field>
+                <Field id="fulfill-trackingUrl" label={t("fulfill.trackingUrl")} error={errors.trackingUrl ? errors.trackingUrl : undefined}>
                   <Input
                     id="fulfill-trackingUrl"
                     type="url"
@@ -227,10 +225,8 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
                     disabled={mutation.isPending}
                     autoComplete="off"
                   />
-                  {errors.trackingUrl ? <p id="fulfill-trackingUrl-error" className="text-destructive">{errors.trackingUrl}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
+                </Field>
+                <Field id="fulfill-amount" label={t("fulfill.amount")}>
                   <MoneyInput
                     currencyCode={order.currencyCode ?? ""}
                     // What the rider collects: cash, on the cash-on-delivery increment.
@@ -249,12 +245,11 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
                   {errors.amount
                     ? <p id="fulfill-amount-error" className="text-destructive">{errors.amount}</p>
                     : <p id="fulfill-amount-help" className="text-muted-foreground">{t("fulfill.amountHelp")}</p>}
-                </div>
+                </Field>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="fulfill-note">{t("fulfill.note")}</Label>
+              <Field id="fulfill-note" label={t("fulfill.note")}>
                 <Textarea id="fulfill-note" value={note} onChange={(e) => setNote(e.target.value)} disabled={mutation.isPending} maxLength={500} />
-              </div>
+              </Field>
             </>
           ) : null}
           {cashDue !== null ? (
@@ -268,8 +263,8 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
                   aria-describedby="fulfill-cash-help"
                 />
               </span>
-              <div className="space-y-1">
-                <Label htmlFor="fulfill-cash"><span className="tabular-nums">{t("handover.cashReceived", { amount: money(cashDue) })}</span></Label>
+              <div className="flex min-w-0 flex-col gap-1">
+                <Label htmlFor="fulfill-cash">{t("handover.cashReceived", { amount: money(cashDue) })}</Label>
                 <p id="fulfill-cash-help" className="text-muted-foreground">{t(cashTaken ? "handover.cashHelp" : "handover.cashLaterHelp")}</p>
               </div>
             </div>

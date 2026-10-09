@@ -32,7 +32,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { Skeleton } from "~/components/ui/skeleton";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -223,11 +223,17 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
           ?? (customFieldItemType(definition.type) === "json" ? t("jsonHelp", { example: "{\"size\": \"M\"}" }) : null)
           ?? (customFieldItemType(definition.type) === "date_time" ? t("dateTimeHelp") : null);
         return (
-          <div key={definition.id} className="space-y-1.5">
-            <Label htmlFor={id}>
+          <Field
+            key={definition.id}
+            id={id}
+            noteId={`${id}-note`}
+            label={<>
               {definition.name}
               <span className="sr-only"> ({isCustomFieldListType(definition.type) ? t("listOf", { type: typeLabel }) : typeLabel})</span>
-            </Label>
+            </>}
+            help={problem ? undefined : note}
+            error={problem}
+          >
             <CustomFieldInput
               id={id}
               type={definition.type}
@@ -246,10 +252,7 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
               describedBy={note ? `${id}-note` : undefined}
               label={definition.name}
             />
-            {note ? (
-              <p id={`${id}-note`} className={problem ? "text-body text-destructive" : "text-body text-muted-foreground"}>{note}</p>
-            ) : null}
-          </div>
+          </Field>
         );
       })}
       {!inScope && dirty ? (

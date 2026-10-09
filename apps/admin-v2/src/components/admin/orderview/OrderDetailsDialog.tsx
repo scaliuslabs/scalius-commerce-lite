@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "~/components/ui/form";
+import { Form, FormField } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
 import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "~/components/admin/address/AddressFields";
@@ -152,12 +152,8 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
             <FormField
               control={form.control}
               name="customerName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("details.name")}</FormLabel>
-                  <FormControl><Input {...field} autoComplete="name" /></FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field label={t("details.name")} error={fieldState.error?.message}><Input {...field} autoComplete="name" /></Field>
               )}
             />
             <FormField
@@ -172,12 +168,8 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
             <FormField
               control={form.control}
               name="customerEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("details.email")}</FormLabel>
-                  <FormControl><Input {...field} type="email" autoComplete="email" /></FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field label={t("details.email")} error={fieldState.error?.message}><Input {...field} type="email" autoComplete="email" /></Field>
               )}
             />
             {ships ? (

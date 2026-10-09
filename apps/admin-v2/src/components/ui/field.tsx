@@ -25,6 +25,10 @@ type FieldProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
   optional?: boolean;
   /** Keeps the label for screen readers only (a field in a table row whose column says it). */
   hideLabel?: boolean;
+  /** The help or error element's id, when another part of the page refers to it (default `<id>-help`, `<id>-error`). */
+  noteId?: string;
+  /** Reads the error out as it appears (a field checked when it is left, not on a submit that lists every error). */
+  announceError?: boolean;
   /** A link at the end of the label line ("Manage policies"). Text size, never a button. */
   labelAction?: React.ReactNode;
   children: React.ReactNode;
@@ -35,19 +39,19 @@ type FieldProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
  * under it, 4px apart (S2, S3). The control gets the field's id, its help or
  * error as `aria-describedby`, and `aria-invalid` while there is an error.
  */
-export function Field({ label, id, help, error, optional, hideLabel, labelAction, className, children, ...props }: FieldProps) {
+export function Field({ label, id, help, error, optional, hideLabel, labelAction, noteId: fixedNoteId, announceError = false, className, children, ...props }: FieldProps) {
   const t = useMessages(formMessages);
   const ownId = React.useId();
   const controlId = id ?? ownId;
   const hasError = error !== undefined && error !== null && error !== false && error !== "";
   const hasHelp = !hasError && help !== undefined && help !== null && help !== false && help !== "";
-  const noteId = hasError ? `${controlId}-error` : hasHelp ? `${controlId}-help` : undefined;
+  const noteId = !hasError && !hasHelp ? undefined : fixedNoteId ?? (hasError ? `${controlId}-error` : `${controlId}-help`);
   const state = React.useMemo<FieldControlState>(
     () => ({ id: controlId, describedBy: noteId, invalid: hasError }),
     [controlId, noteId, hasError],
   );
   const labelNode = label === undefined ? null : (
-    <Label data-slot="field-label" id={`${controlId}-label`} htmlFor={controlId} className={cn(hideLabel && "sr-only")}>
+    <Label data-slot="field-label" id={`${controlId}-field-label`} htmlFor={controlId} className={cn(hideLabel && "sr-only")}>
       {label}
       {optional ? <span className="font-normal text-muted-foreground"> {t("optional")}</span> : null}
     </Label>
@@ -64,7 +68,7 @@ export function Field({ label, id, help, error, optional, hideLabel, labelAction
         <div data-slot="field-control">{children}</div>
       </FieldContext.Provider>
       {hasError ? (
-        <p data-slot="field-error" id={noteId} className="text-body text-destructive">{error}</p>
+        <p data-slot="field-error" id={noteId} role={announceError ? "alert" : undefined} className="text-body text-destructive">{error}</p>
       ) : hasHelp ? (
         <p data-slot="field-help" id={noteId} className="text-body text-muted-foreground">{help}</p>
       ) : null}
@@ -75,23 +79,65 @@ export function Field({ label, id, help, error, optional, hideLabel, labelAction
 /**
  * A single checkbox, switch or radio with its label after it on the same line
  * (F2), and help under the label. The control is passed as `control` and must
- * carry `id`.
+ * carry `id`. A switch for a setting that applies at once may sit at the end
+ * of the row instead (`controlAt="end"`), as in Shopify's settings.
  */
-export function ChoiceField({ id, label, help, control, className }: {
+export function ChoiceField({ id, label, help, control, controlAt = "start", className }: {
   id: string;
   label: React.ReactNode;
   help?: React.ReactNode;
   control: React.ReactNode;
+  controlAt?: "start" | "end";
   className?: string;
 }) {
   return (
-    <div data-slot="field" className={cn("flex min-w-0 items-start gap-2", className)}>
+    <div data-slot="field" className={cn("flex min-w-0 items-start gap-2", controlAt === "end" && "flex-row-reverse justify-between gap-3", className)}>
       {/* The control sits on the label's first line (rule 10). */}
       <div data-slot="field-control" className="flex h-lh shrink-0 items-center text-body">{control}</div>
       <div className="flex min-w-0 flex-col gap-1">
-        <Label data-slot="field-label" htmlFor={id} className="font-normal">{label}</Label>
+        <Label data-slot="field-label" htmlFor={id}>{label}</Label>
         {help ? <p data-slot="field-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The text action at the end of a field's label line (`labelAction`):
+ * "Generate code", "Manage policies", "Done". One text line high, so the label
+ * stays 4px above its control.
+ */
+export function FieldAction({ className, type = "button", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type={type}
+      className={cn("rounded-md text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50", className)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A label over a group of controls that is not one input (a choice list, a
+ * picker with its own buttons): the label names the group for screen readers.
+ */
+export function FieldSet({ label, help, error, className, children }: {
+  label: React.ReactNode;
+  help?: React.ReactNode;
+  error?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const id = React.useId();
+  return (
+    <div role="group" aria-labelledby={`${id}-label`} data-slot="field" className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <span id={`${id}-label`} data-slot="field-label" className="text-body font-medium">{label}</span>
+      <div data-slot="field-control">{children}</div>
+      {error ? (
+        <p data-slot="field-error" className="text-body text-destructive">{error}</p>
+      ) : help ? (
+        <p data-slot="field-help" className="text-body text-muted-foreground">{help}</p>
+      ) : null}
     </div>
   );
 }
@@ -127,19 +173,32 @@ export function FieldRow({ columns = 2, className, ...props }: React.HTMLAttribu
  * the field's label over plain text, never a disabled input (R5). An empty
  * value reads "—".
  */
-export function ReadOnlyValue({ label, value, help, mono = false, className }: {
+export function ReadOnlyValue({ label, value, help, mono = false, numeric = false, besideControls = false, className }: {
   label: React.ReactNode;
   value: React.ReactNode;
   help?: React.ReactNode;
   /** Codes (SKU, barcode, tracking): monospace, broken anywhere (F5, N4). */
   mono?: boolean;
+  /** Money and counts: tabular digits. */
+  numeric?: boolean;
+  /** In a row of inputs: the value sits on the inputs' line (36px, 44px on phones). */
+  besideControls?: boolean;
   className?: string;
 }) {
   const empty = value === null || value === undefined || value === "";
   return (
     <div data-slot="field" className={cn("flex min-w-0 flex-col gap-1", className)}>
       <span data-slot="field-label" className="text-body font-medium">{label}</span>
-      <div data-slot="field-control" className={cn("text-body wrap-anywhere", mono && "font-mono", empty && "text-muted-foreground")}>
+      <div
+        data-slot="field-control"
+        className={cn(
+          "text-body wrap-anywhere",
+          besideControls && "flex min-h-11 items-center sm:min-h-9",
+          mono && "font-mono",
+          numeric && "tabular-nums",
+          empty && "text-muted-foreground",
+        )}
+      >
         {empty ? "—" : value}
       </div>
       {help ? <p data-slot="field-help" className="text-body text-muted-foreground">{help}</p> : null}

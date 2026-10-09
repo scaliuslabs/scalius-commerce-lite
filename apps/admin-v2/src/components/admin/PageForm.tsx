@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
-import { FormField, FormItem, FormControl, FormDescription, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -327,27 +327,24 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="publicationMode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <SearchableSelect
-                        triggerRef={field.ref}
-                        onBlur={field.onBlur}
-                        value={field.value}
-                        disabled={!canPublish}
-                        onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
-                        ariaLabel={t("visibility")}
-                        triggerClassName="w-full"
-                        options={[{ value: "draft", label: t("draft") }, { value: "published", label: t("visible") }, { value: "scheduled", label: t("scheduled") }]}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {!canPublish
-                        ? t("publishPermission")
-                        : t(field.value === "published" ? "visibleHelp" : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field
+                    help={!canPublish
+                      ? t("publishPermission")
+                      : t(field.value === "published" ? "visibleHelp" : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
+                    error={fieldState.error?.message}
+                  >
+                    <SearchableSelect
+                      triggerRef={field.ref}
+                      onBlur={field.onBlur}
+                      value={field.value}
+                      disabled={!canPublish}
+                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                      ariaLabel={t("visibility")}
+                      triggerClassName="w-full"
+                      options={[{ value: "draft", label: t("draft") }, { value: "published", label: t("visible") }, { value: "scheduled", label: t("scheduled") }]}
+                    />
+                  </Field>
                 )}
               />
               {publicationMode === "scheduled" ? (

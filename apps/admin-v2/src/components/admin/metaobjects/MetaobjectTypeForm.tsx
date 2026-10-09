@@ -65,6 +65,7 @@ import {
   type TypeProblemCode,
 } from "./metaobject-form";
 import { useAppName } from "./use-app-name";
+import { ChoiceField } from "~/components/ui/field";
 
 export function MetaobjectTypeForm({ definition }: { definition: MetaobjectDefinition | null }) {
   const t = useMessages(metaobjectMessages);
@@ -368,20 +369,20 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
                   <CardTitle>{t("storefrontTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <Label htmlFor="metaobject-storefront">{t("storefrontAccess")}</Label>
-                      <p id="metaobject-storefront-note" className="text-body text-muted-foreground">{t("storefrontHelp")}</p>
-                    </div>
-                    <span className="flex h-lh items-center">
+                  <ChoiceField
+                    id="metaobject-storefront"
+                    controlAt="end"
+                    label={t("storefrontAccess")}
+                    help={t("storefrontHelp")}
+                    control={(
                       <Switch
                         id="metaobject-storefront"
                         checked={draft.storefrontAccess}
-                        aria-describedby="metaobject-storefront-note"
+                        aria-describedby="metaobject-storefront-help"
                         onCheckedChange={(value) => update({ storefrontAccess: value })}
                       />
-                    </span>
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             </div>

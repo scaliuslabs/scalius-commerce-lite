@@ -11,7 +11,6 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -24,6 +23,7 @@ import {
 } from "~/lib/order-return-workflow";
 import type { Order } from "../types";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { Field } from "~/components/ui/field";
 
 /** Request a return. This never refunds money or changes stock. */
 export function CreateReturnDialog({
@@ -88,8 +88,7 @@ export function CreateReturnDialog({
         </DialogHeader>
         <div className="space-y-4">
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
-          <div className="space-y-2">
-            <Label htmlFor="return-reason">{t("returns.reason")}</Label>
+          <Field id="return-reason" label={t("returns.reason")} error={errors.reason ? errors.reason : undefined}>
             <Input
               id="return-reason"
               value={reason}
@@ -100,8 +99,7 @@ export function CreateReturnDialog({
               aria-invalid={Boolean(errors.reason) || undefined}
               aria-describedby={errors.reason ? "return-reason-error" : undefined}
             />
-            {errors.reason ? <p id="return-reason-error" className="text-destructive">{errors.reason}</p> : null}
-          </div>
+          </Field>
           <div className="space-y-2">
             <ul className="divide-y rounded-lg border">
               {eligibleItems.map((item) => {
@@ -132,10 +130,9 @@ export function CreateReturnDialog({
             </ul>
             {errors.quantity ? <p id="return-qty-error" className="text-destructive">{errors.quantity}</p> : null}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="return-notes">{t("returns.notes")}</Label>
+          <Field id="return-notes" label={t("returns.notes")}>
             <Textarea id="return-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
-          </div>
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>

@@ -104,8 +104,12 @@ export interface SaveScopeState {
   failure: SaveFailureKind | null;
   /** Save was pressed while fields were invalid; their messages are showing. */
   revealed: boolean;
-  /** Saves every dirty entry; false when any failed (their edits are kept). */
-  saveAll: () => Promise<boolean>;
+  /**
+   * Saves every dirty entry; false when any failed (their edits are kept).
+   * `all` also saves untouched entries: Save on a new record before any edit,
+   * which shows what it still needs.
+   */
+  saveAll: (options?: { all?: boolean }) => Promise<boolean>;
   discardAll: () => void;
   /**
    * The merchant fixed what these banner lines said: takes them off (the
@@ -273,8 +277,9 @@ export function SaveScope({
     failed: failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0,
     failure: failureKind(failure),
     revealed: failure.reveal > 0,
-    async saveAll() {
-      if (list.some((entry) => entry.dirty && entry.invalid)) {
+    async saveAll(options) {
+      const all = options?.all === true;
+      if (list.some((entry) => (all || entry.dirty) && entry.invalid)) {
         // Shopify: Save stays pressable; it shows what to fix instead of saving.
         setFailure((previous) => ({ ...previous, reveal: previous.reveal + 1 }));
         return false;
@@ -289,7 +294,7 @@ export function SaveScope({
       try {
         // Cards are separate documents: save each, keep the edits of any that fail.
         for (const entry of [...entries.current.values()]) {
-          if (!entry.dirty) continue;
+          if (!entry.dirty && !all) continue;
           try {
             await entry.save();
           } catch (error) {
@@ -511,11 +516,14 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
         : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
           : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const saveRef = useRef(state.saveAll);
-  saveRef.current = state.saveAll;
+  // A new record shows its bar before the first edit (P5), as Shopify's "Unsaved product" does.
+  const shown = dirty || unsavedLabel !== undefined;
+  const save = () => state.saveAll({ all: !dirty });
+  const saveRef = useRef(save);
+  saveRef.current = save;
   // ⌘S / Ctrl+S saves the page from any field while the bar shows. Esc never discards.
   useEffect(() => {
-    if (!dirty) return;
+    if (!shown) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!matchesShortcut("save", event)) return;
       event.preventDefault();
@@ -523,7 +531,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dirty, busy]);
+  }, [shown, busy]);
   // Signed out mid-edit: keep the page and its edits; sign in again in a new tab, then Save.
   useEffect(() => {
     if (!dirty) return;
@@ -562,7 +570,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
           setConfirmDiscard(false);
         }}
       />
-      {dirty && slot
+      {shown && slot
         ? createPortal(
             // Shopify's contextual save bar: the search pill turns into it, same
             // place, size and shape (on phones the pill's row between Menu and
@@ -582,7 +590,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                 <button
                   type="button"
                   className={DISCARD_BUTTON}
-                  disabled={busy}
+                  disabled={busy || !dirty}
                   onClick={() => setConfirmDiscard(true)}
                 >
                   {t("discard")}
@@ -592,7 +600,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                   className={SAVE_BUTTON}
                   disabled={busy}
                   aria-busy={busy || undefined}
-                  onClick={() => void state.saveAll()}
+                  onClick={() => void save()}
                 >
                   <span className={busy ? "invisible" : undefined}>{t("save")}</span>
                   {busy ? (

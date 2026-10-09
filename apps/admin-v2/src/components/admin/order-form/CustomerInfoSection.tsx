@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrderForm } from "./OrderFormContext";
@@ -223,24 +223,11 @@ export function CustomerInfoSection() {
           <FormField
             control={form.control}
             name="customerPhone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("phone")}</FormLabel>
-                <FormControl>
-                  <AdminPhoneInput
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.customerPhoneRef.current = el;
-                    }}
-                    name={field.name}
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {returning
+            render={({ field, fieldState }) => (
+              <Field
+                label={t("phone")}
+                error={fieldState.error?.message}
+                help={returning
                     ? isGuestRecord(returning.customer)
                       ? [
                           returning.customer.totalOrders === 1
@@ -255,9 +242,19 @@ export function CustomerInfoSection() {
                           returning.filled ? t("filledFromCustomer") : null,
                         ].filter(Boolean).join(" ")
                     : t("phoneHelp")}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+              >
+                <AdminPhoneInput
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.customerPhoneRef.current = el;
+                  }}
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
+                />
+              </Field>
             )}
           />
           <FormField

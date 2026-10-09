@@ -41,6 +41,7 @@ import {
   translationRows,
   type TranslationRow,
 } from "./translation-form";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 export interface TranslationEditorProps {
   type: TranslationEditorType;
@@ -135,7 +136,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, view }: TranslationEd
           <p className="text-body text-muted-foreground">{t("noSourceText")}</p>
         ) : null}
         {rows.map((row, index) => (
-          <FieldRow
+          <TranslationEntry
             key={draftKey(row)}
             row={row}
             first={index === 0}
@@ -148,14 +149,9 @@ function EditorForm({ type, id, locale, marketId, canEdit, view }: TranslationEd
         ))}
         {view.resource.sourceSlug !== null ? (
           <div className="grid gap-2 border-t pt-4 md:grid-cols-2 md:gap-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-body font-medium">{t("field_slug")}</span>
-              <code className="break-all text-muted-foreground">{slugPath}</code>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label htmlFor={`slug-${id}`} className="sr-only">{t("field_slug")}</Label>
+            <ReadOnlyValue label={t("field_slug")} value={slugPath} mono />
+            <Field id={`slug-${id}`} label={t("field_slug")} hideLabel help={marketId !== null ? t("slugMarketHelp") : t("slugHelp", { path: slugPath ?? "" })}>
               <Input
-                id={`slug-${id}`}
                 value={slug}
                 onChange={(event) => setSlug(event.target.value.toLowerCase())}
                 disabled={!canEdit || marketId !== null}
@@ -163,10 +159,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, view }: TranslationEd
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className="text-body text-muted-foreground">
-                {marketId !== null ? t("slugMarketHelp") : t("slugHelp", { path: slugPath ?? "" })}
-              </p>
-            </div>
+            </Field>
           </div>
         ) : null}
       </div>
@@ -224,7 +217,7 @@ function EditorForm({ type, id, locale, marketId, canEdit, view }: TranslationEd
   );
 }
 
-function FieldRow({ row, first, value, onChange, disabled, sourceName, targetName }: {
+function TranslationEntry({ row, first, value, onChange, disabled, sourceName, targetName }: {
   row: TranslationRow;
   first: boolean;
   value: string;

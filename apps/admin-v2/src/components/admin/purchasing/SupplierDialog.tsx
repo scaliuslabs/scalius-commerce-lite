@@ -10,13 +10,13 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import { resourceMessages } from "~/i18n/resource";
 import { useSaveSupplier, type Supplier } from "~/lib/api-query-options/purchasing";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
+import { Field, FieldRow } from "~/components/ui/field";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -95,9 +95,6 @@ export function SupplierDialog({
     );
   };
 
-  const fieldError = (id: string, message: string | null) =>
-    message ? <p id={id} className="text-body text-destructive">{message}</p> : null;
-
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!save.isPending) onOpenChange(next); }}>
       <DialogContent>
@@ -116,8 +113,7 @@ export function SupplierDialog({
           }}
         >
           <PurchasingProblemBanner problem={problem} staleText={t("supplierChanged")} failedText={t("supplierSaveFailed")} />
-          <div className="space-y-2">
-            <Label htmlFor="supplier-name">{t("supplierName")}</Label>
+          <Field id="supplier-name" label={t("supplierName")} error={errors.name}>
             <Input
               id="supplier-name"
               maxLength={120}
@@ -127,11 +123,9 @@ export function SupplierDialog({
               aria-describedby={errors.name ? "supplier-name-error" : undefined}
               onChange={(event) => set("name")(event.target.value)}
             />
-            {fieldError("supplier-name-error", errors.name)}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="supplier-contact">{t("contactName")}</Label>
+          </Field>
+          <FieldRow>
+            <Field id="supplier-contact" label={t("contactName")}>
               <Input
                 id="supplier-contact"
                 maxLength={120}
@@ -139,9 +133,8 @@ export function SupplierDialog({
                 value={fields.contactName}
                 onChange={(event) => set("contactName")(event.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="supplier-phone">{t("phone")}</Label>
+            </Field>
+            <Field id="supplier-phone" label={t("phone")}>
               <Input
                 id="supplier-phone"
                 type="tel"
@@ -151,10 +144,9 @@ export function SupplierDialog({
                 value={fields.phone}
                 onChange={(event) => set("phone")(event.target.value)}
               />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="supplier-email">{t("email")}</Label>
+            </Field>
+          </FieldRow>
+          <Field id="supplier-email" label={t("email")} error={errors.email}>
             <Input
               id="supplier-email"
               type="email"
@@ -165,10 +157,8 @@ export function SupplierDialog({
               aria-describedby={errors.email ? "supplier-email-error" : undefined}
               onChange={(event) => set("email")(event.target.value)}
             />
-            {fieldError("supplier-email-error", errors.email)}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="supplier-notes">{t("notes")}</Label>
+          </Field>
+          <Field id="supplier-notes" label={t("notes")}>
             <Textarea
               id="supplier-notes"
               maxLength={2000}
@@ -176,7 +166,7 @@ export function SupplierDialog({
               value={fields.notes}
               onChange={(event) => set("notes")(event.target.value)}
             />
-          </div>
+          </Field>
         </form>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={save.isPending} onClick={() => onOpenChange(false)}>{r("cancel")}</Button>

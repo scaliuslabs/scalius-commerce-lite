@@ -205,7 +205,7 @@ describe("reviews screens", () => {
     const options = [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')];
     expect(options.map((option) => option.textContent?.trim())).toEqual([en["reason.spam"], en["reason.abusive"], en["reason.personal_info"], en["reason.off_topic"], en["reason.not_about_product"]]);
     await act(async () => options.find((option) => option.textContent?.trim() === en["reason.off_topic"])!.click());
-    expect(reason.getAttribute("aria-invalid")).toBe("false");
+    expect(reason.getAttribute("aria-invalid")).not.toBe("true");
     expect(submit.disabled).toBe(false);
     await act(async () => submit.click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));

@@ -48,6 +48,7 @@ import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
 import { canMarkDelivered, isPartSent } from "./primary-action";
+import { Field } from "~/components/ui/field";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
 type EvidenceSource = "courier_portal" | "courier_support";
@@ -168,8 +169,7 @@ function CourierCheckDialog({
           <DialogDescription>{t("courier.checkHelp", { courier: courierName(order, order.shipmentRecovery?.providerType) })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="courier-outcome">{t("courier.outcome")}</Label>
+          <Field id="courier-outcome" label={t("courier.outcome")}>
             <SearchableSelect
               triggerClassName="w-full"
               id="courier-outcome"
@@ -178,21 +178,18 @@ function CourierCheckDialog({
               onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}
               options={OUTCOMES.map((value) => ({ value, label: t(`courier.outcome.${value}`) }))}
             />
-          </div>
+          </Field>
           {outcome === "confirmed_existing" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="courier-consignment">{t("courier.consignmentId")}</Label>
+              <Field id="courier-consignment" label={t("courier.consignmentId")}>
                 <Input id="courier-consignment" value={externalId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setExternalId(e.target.value); edited(); }} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="courier-tracking">{t("shipments.trackingId")}</Label>
+              </Field>
+              <Field id="courier-tracking" label={t("shipments.trackingId")}>
                 <Input id="courier-tracking" value={trackingId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setTrackingId(e.target.value); edited(); }} />
-              </div>
+              </Field>
             </div>
           ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="courier-source">{t("courier.source")}</Label>
+          <Field id="courier-source" label={t("courier.source")}>
             <SearchableSelect
               triggerClassName="w-full"
               id="courier-source"
@@ -201,9 +198,8 @@ function CourierCheckDialog({
               onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}
               options={EVIDENCE_SOURCES.map((value) => ({ value, label: t(`courier.source.${value}`) }))}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="courier-evidence">{t("courier.details")}</Label>
+          </Field>
+          <Field id="courier-evidence" label={t("courier.details")}>
             <Textarea
               id="courier-evidence"
               value={evidenceNote}
@@ -212,7 +208,7 @@ function CourierCheckDialog({
               placeholder={t("courier.detailsPlaceholder")}
               onChange={(e) => { setEvidenceNote(e.target.value); edited(); }}
             />
-          </div>
+          </Field>
           {mutation.isError ? <p role="alert" className="text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
           <div className="flex items-start gap-3">
             <span className="flex h-5 items-center">
@@ -438,10 +434,9 @@ export function BookCourier({ order, focusRequest, guard }: {
   return (
     <div className="space-y-2">
       {notice}
-      <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <SearchableSelect
-          id="book-courier"
+      <Field id="book-courier" label={t("shipments.courier")}>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <SearchableSelect
           triggerRef={triggerRef}
           value={providerId}
           onValueChange={(value) => { setProviderId(value); mutation.reset(); }}
@@ -465,8 +460,9 @@ export function BookCourier({ order, focusRequest, guard }: {
           disabled={!providerId || readiness?.canCreateShipment === false || read.status !== "ready" || locked || missingArea}
         >
           {t("shipments.book")}
-        </Button>
-      </div>
+          </Button>
+        </div>
+      </Field>
       {blocker ? <p className="text-muted-foreground">{blocker}</p> : null}
       {leftOut}
       {missingArea ? <p className="text-muted-foreground">{t("shipments.needsArea")}</p> : null}

@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { NumberInput } from "~/components/ui/number-input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { formatNumber, useMessages } from "~/i18n";
@@ -32,6 +31,7 @@ import {
 } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 interface ReceiptDraft { received: number; restock: number }
 
@@ -193,9 +193,8 @@ export function ReceiveReturnDialog({
                     </p>
                   </div>
                   {line.inventoryTracked ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      <Label className="grid">
-                        <span>{t("returns.received")}</span>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field id={`${line.id}-received`} label={t("returns.received")}>
                         <NumberInput
                           integer
                           aria-label={t("returns.receivedQty", { name })}
@@ -205,9 +204,8 @@ export function ReceiveReturnDialog({
                           disabled={mutation.isPending}
                           onValueChange={setReceived}
                         />
-                      </Label>
-                      <Label className="grid">
-                        <span>{t("returns.restock")}</span>
+                      </Field>
+                      <Field id={`${line.id}-restock`} label={t("returns.restock")}>
                         <NumberInput
                           integer
                           aria-label={t("returns.restockQty", { name })}
@@ -220,22 +218,21 @@ export function ReceiveReturnDialog({
                             [line.id]: { ...current, restock: typedQuantity(value) },
                           }))}
                         />
-                      </Label>
-                      <div className="grid gap-1 font-medium">
-                        <span>{t("returns.damaged")}</span>
-                        {/* Derived from valid quantities only: nothing to show next to an error (R3-ORD-16). */}
-                        {receivedError || restockError ? (
-                          <p className="py-2 font-normal text-muted-foreground">—</p>
-                        ) : (
-                          <p className="py-2 font-normal tabular-nums" aria-label={t("returns.damagedQty", { count: current.received - current.restock })}>
+                      </Field>
+                      {/* Derived from valid quantities only: nothing to show next to an error (R3-ORD-16). */}
+                      <ReadOnlyValue
+                        besideControls
+                        numeric
+                        label={t("returns.damaged")}
+                        value={receivedError || restockError ? null : (
+                          <span aria-label={t("returns.damagedQty", { count: current.received - current.restock })}>
                             {formatNumber(current.received - current.restock)}
-                          </p>
+                          </span>
                         )}
-                      </div>
+                      />
                     </div>
                   ) : (
-                    <Label className="grid max-w-40">
-                      <span>{t("returns.received")}</span>
+                    <Field id={`${line.id}-received`} label={t("returns.received")} className="max-w-40">
                       <NumberInput
                         integer
                         aria-label={t("returns.receivedQty", { name })}
@@ -245,7 +242,7 @@ export function ReceiveReturnDialog({
                         disabled={mutation.isPending}
                         onValueChange={setReceived}
                       />
-                    </Label>
+                    </Field>
                   )}
                   {receivedError || restockError ? <p id={errorId} className="text-destructive">{receivedError ?? restockError}</p> : null}
                 </li>
@@ -253,8 +250,7 @@ export function ReceiveReturnDialog({
             })}
           </ul>
           {pickLocation ? (
-            <div className="space-y-2">
-              <Label htmlFor={`receipt-location-${orderReturn.id}`}>{t("returns.restockAt")}</Label>
+            <Field id={`receipt-location-${orderReturn.id}`} label={t("returns.restockAt")}>
               <SearchableSelect
                 id={`receipt-location-${orderReturn.id}`}
                 triggerClassName="w-full"
@@ -274,12 +270,11 @@ export function ReceiveReturnDialog({
                     })),
                 ]}
               />
-            </div>
+            </Field>
           ) : null}
-          <div className="space-y-2">
-            <Label htmlFor={`receipt-notes-${orderReturn.id}`}>{t("returns.notes")}</Label>
+          <Field id={`receipt-notes-${orderReturn.id}`} label={t("returns.notes")}>
             <Textarea id={`receipt-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
-          </div>
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>

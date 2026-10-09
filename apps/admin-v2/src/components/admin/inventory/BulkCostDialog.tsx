@@ -10,7 +10,6 @@ import {
 } from "~/components/ui/dialog";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
 import type { InventoryVariant } from "~/lib/api-query-options/inventory";
 import {
   costProblem,
@@ -24,6 +23,7 @@ import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { CostInput } from "~/components/admin/shared/MoneyInput";
+import { Field } from "~/components/ui/field";
 
 type Costs = ReadonlyMap<string, number | null>;
 
@@ -156,8 +156,7 @@ export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: B
           ) : null}
 
           {rows.length > 1 ? (
-            <div className="space-y-2">
-              <Label htmlFor="inventory-bulk-cost-all">{t("setAllTo")}</Label>
+            <Field id="inventory-bulk-cost-all" label={t("setAllTo")}>
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <CostInput id="inventory-bulk-cost-all" value={all} onValueChange={setAll} />
@@ -174,7 +173,7 @@ export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: B
                   {t("applyToAll")}
                 </Button>
               </div>
-            </div>
+            </Field>
           ) : null}
 
           <ul className="divide-y border-y">

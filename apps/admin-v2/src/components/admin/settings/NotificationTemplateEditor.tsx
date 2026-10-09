@@ -37,7 +37,6 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -56,6 +55,7 @@ import { notificationEventMessages } from "~/i18n/notification-events";
 import { notificationTemplateMessages, notificationsMessages } from "~/i18n/settings-notifications";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { Field } from "~/components/ui/field";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -204,8 +204,7 @@ function TestSmsDialog({
             void send();
           }}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="test-sms-phone">{t("testPhone")}</Label>
+          <Field id="test-sms-phone" label={t("testPhone")} error={error ? error : undefined}>
             <AdminPhoneInput
               id="test-sms-phone"
               value={phone}
@@ -217,8 +216,7 @@ function TestSmsDialog({
               }}
               onBlur={() => setLeft(true)}
             />
-            {error ? <p id="test-sms-phone-note" role="alert" className="text-body text-destructive">{error}</p> : null}
-          </div>
+          </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
             <Button type="submit" loading={sending}>{t("send")}</Button>

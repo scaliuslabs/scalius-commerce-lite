@@ -44,15 +44,11 @@ vi.mock("~/components/ui/card", () => ({
 }));
 
 vi.mock("~/components/ui/form", () => ({
-  FormControl: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
-  FormDescription: (props: React.HTMLAttributes<HTMLParagraphElement>) => <p {...props} />,
-  FormItem: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
-  FormLabel: (props: React.LabelHTMLAttributes<HTMLLabelElement>) => <label {...props} />,
-  FormMessage: () => null,
   FormField: ({ name, render }: {
     name: "shippingCharge" | "discountAmount";
-    render: (input: { field: Record<string, unknown> }) => React.ReactNode;
+    render: (input: { field: Record<string, unknown>; fieldState: { error?: { message?: string } } }) => React.ReactNode;
   }) => render({
+    fieldState: {},
     field: name === "discountAmount"
       ? {
           name,

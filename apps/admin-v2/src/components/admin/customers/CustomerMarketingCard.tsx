@@ -35,6 +35,7 @@ import { customerMarketingMessages } from "~/i18n/customer-marketing";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
 import { CONSENT_BADGE, consentFacts, suggestedConsentChange } from "./marketing-display";
+import { Field } from "~/components/ui/field";
 
 /** Consent log entries shown before "Show all". */
 const HISTORY_PREVIEW = 3;
@@ -229,8 +230,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
                 </p>
               ) : null}
             </fieldset>
-            <div className="space-y-1.5">
-              <Label htmlFor="consent-note">{change === "subscribed" ? t("consentNote") : t("consentNoteOptional")}</Label>
+            <Field id="consent-note" label={change === "subscribed" ? t("consentNote") : t("consentNoteOptional")}>
               <Textarea
                 id="consent-note"
                 rows={3}
@@ -246,7 +246,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
               {noteMissing ? (
                 <p id="consent-note-error" role="alert" className="text-body text-destructive">{t("consentNoteRequired")}</p>
               ) : null}
-            </div>
+            </Field>
             {save.isError ? (
               <p role="alert" className="text-body text-destructive">{getServerFnError(save.error, r("actionFailed"))}</p>
             ) : null}

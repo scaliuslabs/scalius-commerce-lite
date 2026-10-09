@@ -6,6 +6,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
+import { Field } from "~/components/ui/field";
 
 export const linePropertyFieldId = (key: string) => `line-property-${key}`;
 
@@ -58,16 +59,12 @@ export function LinePropertyFields({ schema, values, onChange, error, surcharge 
           );
         }
         return (
-          <div key={field.key} className="space-y-1">
-            <Label htmlFor={id}>
-              {field.type === "select" ? label : `${label}${extra(field.priceMinor)}`}
-            </Label>
+          <div key={field.key} className="flex flex-col gap-1">
+            <Field id={id} label={field.type === "select" ? label : `${label}${extra(field.priceMinor)}`} help={field.help} error={invalid ? error!.message : undefined}>
             {field.type === "select" ? (
               <SearchableSelect
                 id={id}
                 value={value}
-                aria-invalid={invalid || undefined}
-                aria-describedby={describedBy}
                 onValueChange={(next) => onChange(field.key, next)}
                 triggerClassName="w-full"
                 placeholder={t("chooseOption")}
@@ -82,8 +79,6 @@ export function LinePropertyFields({ schema, values, onChange, error, surcharge 
                 rows={3}
                 value={value}
                 maxLength={field.maxLength}
-                aria-invalid={invalid || undefined}
-                aria-describedby={describedBy}
                 onChange={(event) => onChange(field.key, event.target.value)}
               />
             ) : (
@@ -92,18 +87,15 @@ export function LinePropertyFields({ schema, values, onChange, error, surcharge 
                 value={value}
                 maxLength={field.maxLength}
                 autoComplete="off"
-                aria-invalid={invalid || undefined}
-                aria-describedby={describedBy}
                 onChange={(event) => onChange(field.key, event.target.value)}
               />
             )}
+            </Field>
             {field.type === "select" ? null : (
               <p className="text-end text-body text-muted-foreground tabular-nums" aria-live="polite">
                 {t("characterCount", { count: [...value].length, max: field.maxLength })}
               </p>
             )}
-            {help}
-            {message}
           </div>
         );
       })}

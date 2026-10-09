@@ -41,8 +41,7 @@ interface Preferences {
 function FeedLink({ id, label, url }: { id: string; label: string; url: string }) {
   const t = useMessages(onlineStoreMessages);
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label}>
       <div className="flex gap-2">
         <Input id={id} value={url} readOnly />
         <Button
@@ -61,7 +60,7 @@ function FeedLink({ id, label, url }: { id: string; label: string; url: string }
           <Copy />
         </Button>
       </div>
-    </div>
+    </Field>
   );
 }
 

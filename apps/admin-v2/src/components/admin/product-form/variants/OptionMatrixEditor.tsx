@@ -74,7 +74,8 @@ import { DigitalStockStatus } from "../DigitalStock";
 import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
 import { useProductEditorSlots } from "../editor-slots";
 import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
-import { barcodePatch, Field, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
+import { Field, FieldRow } from "~/components/ui/field";
+import { barcodePatch, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
 import { VariantTable, type VariantCosts } from "./VariantTable";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
@@ -706,13 +707,11 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       {digitalSimple ? (
         <DigitalStockStatus productId={productId} variantId={defaultSku?.id} tracked={shownSimpleSku.trackInventory} />
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <FieldRow>
         {shownSimpleSku.trackInventory && !digitalSimple ? (
           <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
-            {(invalid) => (
               <InventoryQuantityInput
                 ariaLabel={quantityLabel ?? t("quantity")}
-                invalid={invalid}
                 value={simpleSku.stock - simpleElsewhere}
                 committed={simpleCommitted}
                 elsewhere={defaultSku ? stockElsewhere.get(defaultSku.id) : undefined}
@@ -722,46 +721,36 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                   setSimpleStockEdited(true);
                 }}
               />
-            )}
           </Field>
         ) : null}
         <Field label={t("sku")} error={issueFor(undefined, "sku")}>
-          {(invalid) => (
             <Input
               value={simpleSku.sku}
-              aria-invalid={invalid}
               placeholder={productId ? undefined : t("skuAuto")}
               onChange={(event) => updateSimple({ sku: event.target.value })}
             />
-          )}
         </Field>
         <Field label={t("barcode")} help={productId ? undefined : t("barcodeHint")} error={issueFor(undefined, "barcode")}>
-          {(invalid) => (
             <Input
               value={simpleSku.barcode ?? ""}
-              aria-invalid={invalid}
               inputMode="text"
               autoComplete="off"
               onChange={(event) => updateSimple(barcodePatch(event.target.value))}
             />
-          )}
         </Field>
-      </div>
+      </FieldRow>
     </>
   );
   // Only what is packed is weighed (never a download, a service or a gift card).
   const simpleWeight = kindRules.showWeight ? (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Field label={t("weightGrams", { unit: weightUnit })} error={issueFor(undefined, "weight")}>
-        {(invalid) => (
+    <FieldRow>
+      <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
           <WeightInput
             grams={simpleSku.weight}
-            aria-invalid={invalid}
             onGramsChange={(weight) => updateSimple({ weight })}
           />
-        )}
       </Field>
-    </div>
+    </FieldRow>
   ) : null;
 
   return (

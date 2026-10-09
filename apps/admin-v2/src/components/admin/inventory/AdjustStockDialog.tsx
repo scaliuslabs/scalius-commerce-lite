@@ -16,7 +16,6 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData } from "~/lib/api";
@@ -26,15 +25,16 @@ import type { InventoryLocation, VariantInventoryLevels } from "~/lib/api-query-
 import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
+import { Field } from "~/components/ui/field";
 
 type AdjustmentMode = "relative" | "stocktake";
-type Field = "quantity" | "reason" | "alertLevel" | "location";
+type ProblemField = "quantity" | "reason" | "alertLevel" | "location";
 
 const INCREASE_REASONS: readonly InventoryAdjustmentReason[] = ["received", "return", "correction", "other"];
 const DECREASE_REASONS: readonly InventoryAdjustmentReason[] = ["damage", "theft", "correction", "other"];
 const ALERT_LEVEL_MAX = 1_000_000;
 // API body paths → the field that shows the problem.
-const FIELD_BY_PATH: Record<string, Field> = {
+const FIELD_BY_PATH: Record<string, ProblemField> = {
   delta: "quantity",
   newStock: "quantity",
   reason: "reason",
@@ -102,7 +102,7 @@ export function AdjustStockDialog({
   const [notes, setNotes] = useState("");
   // Validation appears once the merchant has typed, not on open.
   const [touched, setTouched] = useState(false);
-  const [serverErrors, setServerErrors] = useState<Partial<Record<Field, string>>>({});
+  const [serverErrors, setServerErrors] = useState<Partial<Record<ProblemField, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const fieldRefs = {
@@ -126,7 +126,7 @@ export function AdjustStockDialog({
   const alertLevelValid = alertLevel === null || (isWhole(alertLevel) && alertLevel >= 0 && alertLevel <= ALERT_LEVEL_MAX);
   const alertLevelChanged = alertLevel !== (variant?.lowStockThreshold ?? null);
 
-  const localErrors: Partial<Record<Field, string>> = {
+  const localErrors: Partial<Record<ProblemField, string>> = {
     ...(touched && !isWhole(entered) ? { quantity: t("wholeNumber") } : {}),
     ...(targetStock !== null && targetStock < 0 ? { quantity: t("belowZero") } : {}),
     ...(!alertLevelValid ? { alertLevel: t("alertLevelInvalid") } : {}),
@@ -142,7 +142,7 @@ export function AdjustStockDialog({
     (effectiveDelta !== 0 || alertLevelChanged),
   );
 
-  const clearServerError = (field: Field) =>
+  const clearServerError = (field: ProblemField) =>
     setServerErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
 
   const operationKeyForIntent = (fingerprint: string) => {
@@ -224,10 +224,6 @@ export function AdjustStockDialog({
     }
   };
 
-  const fieldError = (field: Field, id: string) => errors[field]
-    ? <p id={id} className="text-body text-destructive">{errors[field]}</p>
-    : null;
-
   return (
     <Dialog open={open && variant !== null} onOpenChange={(next) => { if (!next) onClose(); }}>
       <DialogContent>
@@ -250,13 +246,11 @@ export function AdjustStockDialog({
             }}
           >
             {pickLocation ? (
-              <div className="space-y-2">
-                <Label htmlFor="inventory-adjustment-location">{t("location")}</Label>
+              <Field id="inventory-adjustment-location" label={t("location")} error={errors.location}>
                 <SearchableSelect
                   triggerClassName="w-full"
                   triggerRef={fieldRefs.location}
                   id="inventory-adjustment-location"
-                  aria-invalid={errors.location ? true : undefined}
                   value={locationId}
                   onValueChange={(value) => {
                     if (!activeLocations.some((candidate) => candidate.id === value)) return;
@@ -271,8 +265,7 @@ export function AdjustStockDialog({
                     label: candidate.isDefault ? t("locationDefault", { name: candidate.name }) : candidate.name,
                   }))}
                 />
-                {fieldError("location", "inventory-adjustment-location-error")}
-              </div>
+              </Field>
             ) : null}
 
             {/* Every number names its scope: with several locations the chosen
@@ -299,8 +292,7 @@ export function AdjustStockDialog({
               ))}
             </dl>
 
-            <div className="space-y-2">
-              <Label htmlFor="inventory-adjustment-mode">{t("adjustment")}</Label>
+            <Field id="inventory-adjustment-mode" label={t("adjustment")} help={t(mode === "stocktake" ? "modeStocktakeHelp" : "modeRelativeHelp")}>
               <SearchableSelect
                 triggerClassName="w-full"
                 id="inventory-adjustment-mode"
@@ -316,15 +308,25 @@ export function AdjustStockDialog({
                   { value: "stocktake", label: t("modeStocktake") },
                 ]}
               />
-              <p className="text-body text-muted-foreground">
-                {t(mode === "stocktake" ? "modeStocktakeHelp" : "modeRelativeHelp")}
-              </p>
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="inventory-adjustment-amount">
-                {t(mode === "stocktake" ? "counted" : "quantity")}
-              </Label>
+            <Field
+              id="inventory-adjustment-amount"
+              label={t(mode === "stocktake" ? "counted" : "quantity")}
+              error={errors.quantity ?? (newAvailable < 0 ? t("shortForOrders", { count: Math.abs(newAvailable) }) : undefined)}
+              help={effectiveDelta === 0 ? undefined : pickLocation && location
+                ? t("newLocationStockPreview", {
+                  change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
+                  location: location.name,
+                  stock: targetStock!,
+                  available: newAvailable,
+                })
+                : t("newStockPreview", {
+                  change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
+                  stock: targetStock!,
+                  available: newAvailable,
+                })}
+            >
               <div className="flex items-center gap-2">
                 {mode === "relative" ? (
                   <Button
@@ -345,8 +347,6 @@ export function AdjustStockDialog({
                   id="inventory-adjustment-amount"
                   integer
                   value={entered}
-                  aria-invalid={errors.quantity ? true : undefined}
-                  aria-describedby={errors.quantity ? "inventory-adjustment-amount-error" : undefined}
                   onValueChange={mode === "stocktake"
                     ? (next) => {
                         setTouched(true);
@@ -368,41 +368,14 @@ export function AdjustStockDialog({
                   </Button>
                 ) : null}
               </div>
-              {/* The line appears only with something to say: no empty gap above Reason. */}
-              {errors.quantity ? (
-                <p id="inventory-adjustment-amount-error" role="alert" className="text-body text-destructive">
-                  {errors.quantity}
-                </p>
-              ) : effectiveDelta !== 0 ? (
-                <p className="text-body text-muted-foreground">
-                  {pickLocation && location
-                    ? t("newLocationStockPreview", {
-                      change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                      location: location.name,
-                      stock: targetStock!,
-                      available: newAvailable,
-                    })
-                    : t("newStockPreview", {
-                      change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                      stock: targetStock!,
-                      available: newAvailable,
-                    })}
-                </p>
-              ) : null}
-              {!errors.quantity && newAvailable < 0 ? (
-                <p className="text-body text-destructive">{t("shortForOrders", { count: Math.abs(newAvailable) })}</p>
-              ) : null}
-            </div>
+            </Field>
 
             {mode === "relative" ? (
-              <div className="space-y-2">
-                <Label htmlFor="inventory-adjustment-reason">{t("reason")}</Label>
+              <Field id="inventory-adjustment-reason" label={t("reason")} error={errors.reason}>
                 <SearchableSelect
                   triggerClassName="w-full"
                   triggerRef={fieldRefs.reason}
                   id="inventory-adjustment-reason"
-                  aria-invalid={errors.reason ? true : undefined}
-                  aria-describedby={errors.reason ? "inventory-adjustment-reason-error" : undefined}
                   value={reason}
                   onValueChange={(value) => {
                     // Ignore the empty value a select can report while its options change.
@@ -412,45 +385,42 @@ export function AdjustStockDialog({
                   }}
                   options={reasonOptions.map((value) => ({ value, label: t(`reason_${value}`) }))}
                 />
-                {fieldError("reason", "inventory-adjustment-reason-error")}
-              </div>
+              </Field>
             ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="inventory-adjustment-notes">{t("note")}</Label>
+            <Field id="inventory-adjustment-notes" label={t("note")}>
               <Input
                 id="inventory-adjustment-notes"
                 maxLength={500}
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="space-y-2 border-t pt-4">
-              <Label htmlFor="inventory-alert-level">{t("alertLevel")}</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="shrink-0 text-body">{t("alertWhen")}</span>
-                <NumberInput
-                  ref={fieldRefs.alertLevel}
-                  id="inventory-alert-level"
-                  integer
-                  className="w-24"
-                  value={alertLevel}
-                  placeholder={storeLevel ? formatNumber(storeLevel) : undefined}
-                  aria-invalid={errors.alertLevel ? true : undefined}
-                  aria-describedby={errors.alertLevel ? "inventory-alert-level-error" : "inventory-alert-level-help"}
-                  onValueChange={(next) => {
-                    clearServerError("alertLevel");
-                    setAlertLevel(next);
-                  }}
-                />
-                <span className="text-body">{t("alertOrFewer")}</span>
-              </div>
-              {fieldError("alertLevel", "inventory-alert-level-error") ?? (
-                <p id="inventory-alert-level-help" className="text-body text-muted-foreground">
-                  {storeLevel ? t("alertLevelDefaultHelp", { level: storeLevel }) : t("alertLevelHelp")}
-                </p>
-              )}
+            <div className="border-t pt-4">
+              <Field
+                id="inventory-alert-level"
+                label={t("alertLevel")}
+                error={errors.alertLevel}
+                help={storeLevel ? t("alertLevelDefaultHelp", { level: storeLevel }) : t("alertLevelHelp")}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="shrink-0 text-body">{t("alertWhen")}</span>
+                  <NumberInput
+                    ref={fieldRefs.alertLevel}
+                    id="inventory-alert-level"
+                    integer
+                    className="w-24"
+                    value={alertLevel}
+                    placeholder={storeLevel ? formatNumber(storeLevel) : undefined}
+                    onValueChange={(next) => {
+                      clearServerError("alertLevel");
+                      setAlertLevel(next);
+                    }}
+                  />
+                  <span className="text-body">{t("alertOrFewer")}</span>
+                </div>
+              </Field>
             </div>
           </form>
         ) : null}

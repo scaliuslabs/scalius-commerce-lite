@@ -19,7 +19,6 @@ import { Button } from "~/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -27,6 +26,7 @@ import { navigationResourcesQueryOptions, type NavigationResourceOption } from "
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import type { Theme } from "../theme-fields";
 import { STORE_PAGE_KINDS, samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
+import { Field } from "~/components/ui/field";
 
 export function usePageName() {
   const t = useMessages(themeEditorMessages);
@@ -142,12 +142,10 @@ export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
             if (valid) onCreate(handle, title.trim());
           }}
         >
-          <div className="space-y-1">
-            <Label htmlFor="new-landing-title">{t("landingTitle")}</Label>
+          <Field id="new-landing-title" label={t("landingTitle")}>
             <Input id="new-landing-title" value={title} maxLength={STOREFRONT_LANDING_TITLE_MAX} onChange={(event) => setTitle(event.target.value)} autoFocus />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="new-landing-slug">{t("landingSlug")}</Label>
+          </Field>
+          <Field id="new-landing-slug" label={t("landingSlug")}>
             <Input
               id="new-landing-slug"
               value={handle}
@@ -159,7 +157,7 @@ export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
             <p id="landing-slug-help" className={handle !== "" && !handleValid ? "text-body text-destructive" : "text-body text-muted-foreground"}>
               {handle !== "" && !handleValid ? t(taken ? "landingSlugTaken" : "landingSlugInvalid") : t("landingSlugHelp", { path: `/pages/${handle || "…"}` })}
             </p>
-          </div>
+          </Field>
         </form>
         <DialogFooter>
           <Button type="submit" form="new-landing-form" disabled={!valid}>{t("addLanding")}</Button>

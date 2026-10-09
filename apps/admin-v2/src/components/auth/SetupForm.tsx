@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import { authFailureMessage, emailError, newPasswordError, type AuthMessage } from "./auth-error";
-import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
+import { AuthAlert, AuthHeader, PasswordInput, linkClassName } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 
 type FieldName = "name" | "email" | "password" | "confirmPassword" | "setupKey";
 
@@ -104,7 +105,6 @@ export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?:
           setValues((current) => ({ ...current, [name]: value }));
           if (errors[name]) setErrors((current) => ({ ...current, [name]: null }));
         },
-        ...describedBy(`setup-${name}`, message, name === "password" ? t("passwordHint") : name === "setupKey" ? t("setupKeyHint") : undefined),
       },
     };
   }
@@ -132,14 +132,14 @@ export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?:
         <Field id="setup-email" label={t("email")} error={email.message}>
           <Input {...email.input} type="email" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} />
         </Field>
-        <Field id="setup-password" label={t("password")} error={password.message} hint={t("passwordHint")}>
+        <Field id="setup-password" label={t("password")} error={password.message} help={t("passwordHint")}>
           <PasswordInput {...password.input} autoComplete="new-password" />
         </Field>
         <Field id="setup-confirmPassword" label={t("confirmPassword")} error={confirm.message}>
           <PasswordInput {...confirm.input} autoComplete="new-password" />
         </Field>
         {setupTokenRequired ? (
-          <Field id="setup-setupKey" label={t("setupKey")} error={setupKey.message} hint={t("setupKeyHint")}>
+          <Field id="setup-setupKey" label={t("setupKey")} error={setupKey.message} help={t("setupKeyHint")}>
             <PasswordInput {...setupKey.input} autoComplete="off" />
           </Field>
         ) : null}

@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
@@ -76,16 +76,16 @@ export function OrderFulfillmentLocation({ order }: { order: Order }) {
               );
             }}
           >
-            <Label htmlFor="order-fulfillment-location">{t("location.label")}</Label>
-            <SearchableSelect
-              id="order-fulfillment-location"
+            <Field id="order-fulfillment-location" label={t("location.label")}>
+              <SearchableSelect
               triggerClassName="w-full"
               value={choice}
               onValueChange={(value) => {
                 if (active.some((location) => location.id === value)) setChoice(value);
               }}
               options={active.map((location) => ({ value: location.id, label: label(location) }))}
-            />
+              />
+            </Field>
           </form>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={save.isPending} onClick={() => setOpen(false)}>

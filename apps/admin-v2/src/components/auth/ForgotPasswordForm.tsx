@@ -6,7 +6,8 @@ import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import { authFailureMessage, emailError, type AuthMessage } from "./auth-error";
-import { AuthAlert, AuthHeader, Field, SignOutButton, describedBy, linkClassName } from "./auth-ui";
+import { AuthAlert, AuthHeader, SignOutButton, linkClassName } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 
 /**
  * Requests a reset link. A signed-in admin who must change their password
@@ -101,7 +102,6 @@ export function ForgotPasswordForm({ signedInEmail }: { signedInEmail?: string }
               setEmail(event.target.value);
               setFieldError(null);
             }}
-            {...describedBy("email", emailMessage)}
           />
         </Field>
         <Button type="submit" className="w-full" loading={isLoading}>

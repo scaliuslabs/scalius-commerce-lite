@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "~/lib/toast";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 
@@ -34,7 +34,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { ChoiceField, Field, FieldAction, FieldRow, FieldSet } from "~/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -55,61 +55,23 @@ import {
 } from "~/lib/api-mutations/discounts";
 import { DateInput } from "~/components/ui/date-input";
 
-function Field({
-  id,
-  label,
-  help,
-  warning,
-  error,
-  action,
-  children,
-}: {
-  id: string;
-  label: string;
-  help?: string;
-  warning?: string;
-  error?: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      {action ? (
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor={id}>{label}</Label>
-          {action}
-        </div>
-      ) : <Label htmlFor={id}>{label}</Label>}
-      {children}
-      {error ? (
-        <p id={`${id}-error`} className="text-body text-destructive">{error}</p>
-      ) : warning ? (
-        <p id={`${id}-help`} className="text-body text-warning">{warning}</p>
-      ) : help ? (
-        <p id={`${id}-help`} className="text-body text-muted-foreground">{help}</p>
-      ) : null}
-    </div>
-  );
-}
-
 type NumericField = "value" | "freeShippingMinimum" | "minimumValue" | "buyValue" | "getQuantity" | "getValue" | "usesPerOrder" | "totalUses";
 
-/** A number field that takes Bangla digits too (typed ১০ becomes 10). */
-function NumberInput({ id, value, error, whole, onValue }: {
-  id: string;
+/** A number field that takes Bangla digits too (typed ১০ becomes 10); the symbol or "%" sits inside it (F3). */
+function NumberInput({ value, whole, prefix, suffix, onValue }: {
   value: string;
-  error?: string;
   whole?: boolean;
+  prefix?: string;
+  suffix?: string;
   onValue: (value: string) => void;
 }) {
   return (
     <Input
-      id={id}
       inputMode={whole ? "numeric" : "decimal"}
       autoComplete="off"
+      prefix={prefix}
+      suffix={suffix}
       value={value}
-      aria-invalid={error ? true : undefined}
-      aria-describedby={error ? `${id}-error` : undefined}
       onChange={(event) => onValue(latinDigits(event.target.value))}
     />
   );
@@ -121,25 +83,11 @@ function CheckRow({ id, label, checked, onChange }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-lh items-center">
-        <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} />
-      </span>
-      <Label htmlFor={id}>{label}</Label>
-    </div>
-  );
+  return <ChoiceField id={id} label={label} control={<Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} />} />;
 }
 
 function RadioRow({ value, id, label }: { value: string; id: string; label: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-lh items-center">
-        <RadioGroupItem value={value} id={id} />
-      </span>
-      <Label htmlFor={id}>{label}</Label>
-    </div>
-  );
+  return <ChoiceField id={id} label={label} control={<RadioGroupItem value={value} id={id} />} />;
 }
 
 /** The API rejected the code because another discount already uses it. */
@@ -239,10 +187,16 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     id: string,
     field: NumericField,
     label: string,
-    { whole, help }: { whole?: boolean; help?: string } = {},
+    { whole, help, money, percent }: { whole?: boolean; help?: string; money?: boolean; percent?: boolean } = {},
   ) => (
     <Field id={id} label={label} help={help} error={shown(field)}>
-      <NumberInput id={id} whole={whole} value={draft[field]} error={shown(field)} onValue={(value) => update({ [field]: value })} />
+      <NumberInput
+        whole={whole}
+        prefix={money ? symbol : undefined}
+        suffix={percent ? "%" : undefined}
+        value={draft[field]}
+        onValue={(value) => update({ [field]: value })}
+      />
     </Field>
   );
 
@@ -385,10 +339,10 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                 <CardTitle>{t(`type_${draft.type}`)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>{t("methodLabel")}</Label>
+                <div className="flex flex-col gap-1">
+                  <span id="discount-method-label" className="text-body font-medium">{t("methodLabel")}</span>
                   <Tabs value={draft.method} onValueChange={(method) => update({ method: method as DiscountDraft["method"] })}>
-                    <TabsList>
+                    <TabsList aria-labelledby="discount-method-label">
                       <TabsTrigger value="code">{t("methodCodeTab")}</TabsTrigger>
                       <TabsTrigger value="automatic">{t("methodAutomaticTab")}</TabsTrigger>
                     </TabsList>
@@ -400,29 +354,22 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     label={t("codeLabel")}
                     help={t("codeHelp")}
                     error={codeError}
-                    action={(
-                      <Button type="button" variant="link" size="sm" className="-my-2 -me-2.5" onClick={() => update({ code: generateDiscountCode() })}>
-                        {t("generateCode")}
-                      </Button>
+                    labelAction={(
+                      <FieldAction onClick={() => update({ code: generateDiscountCode() })}>{t("generateCode")}</FieldAction>
                     )}
                   >
                     <Input
-                      id="discount-code"
                       value={draft.code}
                       autoComplete="off"
                       maxLength={50}
-                      aria-invalid={codeError ? true : undefined}
-                      aria-describedby={codeError ? "discount-code-error" : undefined}
                       onChange={(event) => update({ code: event.target.value.toUpperCase() })}
                     />
                   </Field>
                 ) : (
                   <Field id="discount-title" label={t("titleLabel")} help={t("titleHelp")} error={shown("title")}>
                     <Input
-                      id="discount-title"
                       value={draft.title}
                       maxLength={160}
-                      aria-invalid={shown("title") ? true : undefined}
                       onChange={(event) => update({ title: event.target.value })}
                     />
                   </Field>
@@ -434,23 +381,29 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
               <Card>
                 <CardHeader><CardTitle>{t("valueCard")}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <Field
-                    id="discount-value"
-                    label={`${t("valueLabel")} (${draft.valueKind === "percentage" ? "%" : symbol})`}
-                    error={shown("value")}
-                    warning={aboveEveryPrice ? t("warnAboveEveryPrice") : undefined}
-                  >
-                    <div className="grid gap-3 sm:grid-cols-2">
+                  <FieldRow>
+                    <Field id="discount-value-kind" label={t("valueKindLabel")}>
                       <SearchableSelect
                         value={draft.valueKind}
                         onValueChange={(valueKind) => update({ valueKind: valueKind as DiscountDraft["valueKind"] })}
-                        ariaLabel={t("valueCard")}
                         triggerClassName="w-full"
                         options={[{ value: "percentage", label: t("percentage") }, { value: "fixed", label: t("fixedAmount") }]}
                       />
-                      <NumberInput id="discount-value" value={draft.value} error={shown("value")} onValue={(value) => update({ value })} />
-                    </div>
-                  </Field>
+                    </Field>
+                    <Field
+                      id="discount-value"
+                      label={t("valueLabel")}
+                      error={shown("value")}
+                      help={aboveEveryPrice ? <span className="text-warning">{t("warnAboveEveryPrice")}</span> : undefined}
+                    >
+                      <NumberInput
+                        prefix={draft.valueKind === "percentage" ? undefined : symbol}
+                        suffix={draft.valueKind === "percentage" ? "%" : undefined}
+                        value={draft.value}
+                        onValue={(value) => update({ value })}
+                      />
+                    </Field>
+                  </FieldRow>
                   {draft.type === "products" ? (
                     <>
                       {draft.valueKind === "fixed" ? (
@@ -461,15 +414,14 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                           onChange={(oncePerOrder) => update({ oncePerOrder })}
                         />
                       ) : null}
-                      <div className="space-y-2">
-                        <Label>{t("appliesTo")}</Label>
+                      <FieldSet label={t("appliesTo")}>
                         <ScopeField
                           scope={draft.appliesTo}
                           disabled={!canSave}
                           error={shown("appliesTo")}
                           onChange={(appliesTo) => update({ appliesTo })}
                         />
-                      </div>
+                      </FieldSet>
                     </>
                   ) : null}
                   <CheckRow
@@ -479,7 +431,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     onChange={(freeShipping) => update({ freeShipping })}
                   />
                   {draft.freeShipping
-                    ? numberField("free-shipping-minimum", "freeShippingMinimum", t("freeShippingMinimum", { symbol }), { help: t("freeShippingMinimumHelp") })
+                    ? numberField("free-shipping-minimum", "freeShippingMinimum", t("freeShippingMinimum"), { money: true, help: t("freeShippingMinimumHelp") })
                     : null}
                 </CardContent>
               </Card>
@@ -494,11 +446,10 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                       <RadioRow value="quantity" id="buy-quantity" label={t("buyQuantity")} />
                       <RadioRow value="amount" id="buy-amount" label={t("buyAmount")} />
                     </RadioGroup>
-                    {numberField("buy-value", "buyValue", t(draft.buyKind === "quantity" ? "quantity" : "amount"), { whole: draft.buyKind === "quantity" })}
-                    <div className="space-y-2">
-                      <Label>{t("anyItemsFrom")}</Label>
+                    {numberField("buy-value", "buyValue", t(draft.buyKind === "quantity" ? "quantity" : "amount"), { whole: draft.buyKind === "quantity", money: draft.buyKind === "amount" })}
+                    <FieldSet label={t("anyItemsFrom")}>
                       <ScopeField scope={draft.buyScope} disabled={!canSave} error={shown("buyScope")} onChange={(buyScope) => update({ buyScope })} />
-                    </div>
+                    </FieldSet>
                   </CardContent>
                 </Card>
                 <Card>
@@ -506,18 +457,16 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                   <CardContent className="space-y-4">
                     <p className="text-body text-muted-foreground">{t("getsHelp")}</p>
                     {numberField("get-quantity", "getQuantity", t("quantity"), { whole: true })}
-                    <div className="space-y-2">
-                      <Label>{t("anyItemsFrom")}</Label>
+                    <FieldSet label={t("anyItemsFrom")}>
                       <ScopeField scope={draft.getScope} disabled={!canSave} error={shown("getScope")} onChange={(getScope) => update({ getScope })} />
-                    </div>
-                    <div className="space-y-3">
-                      <Label>{t("discountedValue")}</Label>
+                    </FieldSet>
+                    <FieldSet label={t("discountedValue")}>
                       <RadioGroup value={draft.getValueKind} onValueChange={(getValueKind) => update({ getValueKind: getValueKind as DiscountDraft["getValueKind"] })}>
                         <RadioRow value="percentage" id="get-percentage" label={t("percentage")} />
                         <RadioRow value="free" id="get-free" label={t("free")} />
                       </RadioGroup>
-                      {draft.getValueKind === "percentage" ? numberField("get-value", "getValue", `${t("valueLabel")} (%)`) : null}
-                    </div>
+                      </FieldSet>
+                      {draft.getValueKind === "percentage" ? numberField("get-value", "getValue", t("valueLabel"), { percent: true }) : null}
                     <CheckRow
                       id="uses-per-order"
                       label={t("limitUsesPerOrder")}
@@ -534,11 +483,12 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                 <CardContent className="space-y-4">
                   <RadioGroup value={draft.minimum} onValueChange={(minimum) => update({ minimum: minimum as DiscountDraft["minimum"], minimumValue: "" })}>
                     <RadioRow value="none" id="minimum-none" label={t("noMinimum")} />
-                    <RadioRow value="amount" id="minimum-amount" label={t("minimumAmount", { symbol })} />
+                    <RadioRow value="amount" id="minimum-amount" label={t("minimumAmount")} />
                     <RadioRow value="quantity" id="minimum-quantity" label={t("minimumQuantity")} />
                   </RadioGroup>
                   {draft.minimum !== "none" ? numberField("minimum-value", "minimumValue", t(draft.minimum === "amount" ? "amount" : "quantity"), {
                     whole: draft.minimum === "quantity",
+                    money: draft.minimum === "amount",
                     help: draft.type === "products" ? t("minimumScopeHelp") : undefined,
                   }) : null}
                 </CardContent>
@@ -596,49 +546,40 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
             <Card>
               <CardHeader><CardTitle>{t("datesCard")}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <FieldRow>
                   <Field id="start-date" label={t("startDate")} error={shown("startDate")}>
                     <DateInput
-                      id="start-date"
                       value={draft.startDate}
-                      aria-invalid={shown("startDate") ? true : undefined}
                       onValueChange={(startDate) => update({ startDate })}
                     />
                   </Field>
                   <Field id="start-time" label={t("startTime")}>
-                    <Input id="start-time" type="time" value={draft.startTime} onChange={(event) => update({ startTime: event.target.value })} />
+                    <Input type="time" value={draft.startTime} onChange={(event) => update({ startTime: event.target.value })} />
                   </Field>
-                </div>
+                </FieldRow>
                 <CheckRow id="set-end" label={t("setEndDate")} checked={draft.hasEnd} onChange={(hasEnd) => update({ hasEnd })} />
                 {draft.hasEnd ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <FieldRow>
                     <Field id="end-date" label={t("endDate")} error={shown("endDate")}>
                       <DateInput
-                        id="end-date"
                         value={draft.endDate}
-                        aria-invalid={shown("endDate") ? true : undefined}
                         onValueChange={(endDate) => update({ endDate })}
                       />
                     </Field>
                     <Field id="end-time" label={t("endTime")}>
-                      <Input id="end-time" type="time" value={draft.endTime} onChange={(event) => update({ endTime: event.target.value })} />
+                      <Input type="time" value={draft.endTime} onChange={(event) => update({ endTime: event.target.value })} />
                     </Field>
-                  </div>
+                  </FieldRow>
                 ) : null}
               </CardContent>
             </Card>
 
-            {/* Shopify repeats Save at the end of the page, under a divider. */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              {discount && canDelete ? (
+            {/* Save lives in the save bar (P4); deleting stays at the end of the page. */}
+            {discount && canDelete ? (
+              <div className="flex border-t pt-4">
                 <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>{t("delete")}</Button>
-              ) : <span />}
-              {canSave ? (
-                <Button type="submit" loading={Boolean(scope?.busy)} disabled={!scope?.dirty}>
-                  {t("save")}
-                </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </fieldset>
 
           {/* eslint-disable-next-line no-restricted-syntax -- a side column of bordered cards, not a bar */}

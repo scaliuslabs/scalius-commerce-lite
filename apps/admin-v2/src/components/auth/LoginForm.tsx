@@ -9,7 +9,8 @@ import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import type { DashboardSignedOut } from "~/lib/auth-guards";
 import { authFailureMessage, emailError, type AuthMessage } from "./auth-error";
-import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
+import { AuthAlert, AuthHeader, PasswordInput, linkClassName } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 
 export interface LoginFormSignInFacts {
   /** Password sign-in is switched off while an identity provider owns sign-in. */
@@ -127,7 +128,6 @@ function PasswordLoginForm({ notice }: { notice: AuthMessage | null }) {
             onBlur={() => {
               if (email.trim()) setFieldErrors((current) => ({ ...current, email: emailError(email) }));
             }}
-            {...describedBy("email", emailMessage)}
           />
         </Field>
         <Field id="password" label={t("password")} error={passwordMessage}>
@@ -140,7 +140,6 @@ function PasswordLoginForm({ notice }: { notice: AuthMessage | null }) {
               setPassword(event.target.value);
               if (fieldErrors.password) setFieldErrors((current) => ({ ...current, password: null }));
             }}
-            {...describedBy("password", passwordMessage)}
           />
         </Field>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

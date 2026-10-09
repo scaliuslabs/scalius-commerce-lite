@@ -20,12 +20,11 @@ import {
   AuthAlert,
   AuthHeader,
   CodeInput,
-  Field,
   SignOutButton,
-  describedBy,
   linkClassName,
   useResendCooldown,
 } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 
 const METHOD_LINKS: Record<VerifyTwoFactorMethod, AuthMessageKey> = {
   totp: "useAuthenticator",
@@ -210,7 +209,6 @@ export function TwoFactorForm() {
                 setCode(event.target.value);
                 setFieldError(null);
               }}
-              {...describedBy("backup-code", codeMessage)}
             />
           </Field>
         ) : (
@@ -221,7 +219,7 @@ export function TwoFactorForm() {
               value={code}
               autoFocus
               invalid={Boolean(codeMessage)}
-              describedById={codeMessage ? "code-message" : undefined}
+              describedById={codeMessage ? "code-error" : undefined}
               onChange={(next) => {
                 setCode(next);
                 setFieldError(null);

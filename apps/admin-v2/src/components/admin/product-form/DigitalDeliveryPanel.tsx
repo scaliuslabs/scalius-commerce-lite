@@ -26,7 +26,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
@@ -50,6 +49,7 @@ import {
 } from "./digital-upload";
 import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
 import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
+import { Field } from "~/components/ui/field";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -453,14 +453,11 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
             submit();
           }}
         >
-          <div className="space-y-1">
-            <Label htmlFor="digital-file-name">{t("nameLabel")}</Label>
+          <Field id="digital-file-name" label={t("nameLabel")} error={checked && nameIssue ? nameIssue : undefined}>
             <Input id="digital-file-name" value={name} maxLength={200} aria-invalid={checked && nameIssue ? true : undefined} onChange={(event) => setName(event.target.value)} />
-            {checked && nameIssue ? <p className="text-body text-destructive">{nameIssue}</p> : null}
-          </div>
+          </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="digital-file-limit">{t("downloadsLabel")}</Label>
+            <Field id="digital-file-limit" label={t("downloadsLabel")}>
               <SearchableSelect
                 id="digital-file-limit"
                 value={limited ? "limited" : "unlimited"}
@@ -474,9 +471,8 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                   {checked && limitIssue ? <p className="text-body text-destructive">{limitIssue}</p> : null}
                 </>
               ) : null}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="digital-file-access">{t("accessLabel")}</Label>
+            </Field>
+            <Field id="digital-file-access" label={t("accessLabel")}>
               <SearchableSelect
                 id="digital-file-access"
                 value={expires ? "days" : "forever"}
@@ -490,7 +486,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                   {checked && daysIssue ? <p className="text-body text-destructive">{daysIssue}</p> : null}
                 </>
               ) : null}
-            </div>
+            </Field>
           </div>
           {save.isError ? <p role="alert" className="text-body text-destructive">{digitalErrorText(save.error, t)}</p> : null}
           <DialogFooter>

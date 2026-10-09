@@ -4,13 +4,13 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
 import type { MediaFolder } from "../types";
+import { Field } from "~/components/ui/field";
 
 interface FolderBrowserProps {
   folders: MediaFolder[];
@@ -106,10 +106,9 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
               void save();
             }}
           >
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="media-folder-name">{t("folderName")}</Label>
+            <Field id="media-folder-name" label={t("folderName")}>
               <Input id="media-folder-name" value={name} maxLength={100} autoFocus onChange={(event) => setName(event.target.value)} />
-            </div>
+            </Field>
             <DialogFooter>
               <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog(null)}>{r("cancel")}</Button>
               <Button type="submit" loading={busy} disabled={!name.trim()}>

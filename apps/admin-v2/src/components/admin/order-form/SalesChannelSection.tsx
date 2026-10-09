@@ -4,7 +4,6 @@ import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
@@ -43,8 +42,7 @@ export function SalesChannelSection() {
         <CardDescription>{t("salesChannelHelp")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor={SOURCE_CHOICE_ID}>{t("source")}</Label>
+        <Field id={SOURCE_CHOICE_ID} label={t("source")}>
           <SearchableSelect
             id={SOURCE_CHOICE_ID}
             triggerClassName="w-full"
@@ -62,7 +60,7 @@ export function SalesChannelSection() {
               label: source === "other" ? t("sourceOther") : orderChannelSourceLabel(o, source),
             }))}
           />
-        </div>
+        </Field>
         {choice === "other" ? (
           <FormField
             control={form.control}

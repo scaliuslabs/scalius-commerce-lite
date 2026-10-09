@@ -11,7 +11,6 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { canonicalStorefrontLink } from "@scalius/shared/storefront-theme";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { MediaManager, type MediaFile } from "~/components/admin/media-manager";
 import { useServerFieldError } from "~/components/admin/shared/SaveBar";
@@ -23,6 +22,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import { mediaPreview, moveAt, removeAt, type SectionMediaPreview } from "./media-previews";
+import { Field } from "~/components/ui/field";
 
 export { mediaPreview, moveAt, removeAt, replaceAt, useMediaPreviews, type MediaPreviews, type SectionMediaPreview } from "./media-previews";
 
@@ -54,8 +54,7 @@ export function LinkField({ id, label, help, value, onChange, error, nullable = 
     onChange(next);
   };
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label}>
       <div className="flex gap-2">
         <Input
           id={id}
@@ -97,7 +96,7 @@ export function LinkField({ id, label, help, value, onChange, error, nullable = 
       ) : help ? (
         <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
       ) : null}
-    </div>
+    </Field>
   );
 }
 

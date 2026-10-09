@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
-import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import type { SettingWidgetProps } from "./SchemaSettingsForm";
+import { Field } from "~/components/ui/field";
 
 // The picker and its copy load when a Content types section is first edited.
 const MetaobjectDefinitionField = lazy(() =>
@@ -13,10 +13,9 @@ export function MetaobjectDefinitionWidget({ id, label, help, value, onChange, e
   return (
     <Suspense
       fallback={(
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <Field id={id} label={label}>
           <Skeleton className="h-11 w-full sm:h-9" />
-        </div>
+        </Field>
       )}
     >
       <MetaobjectDefinitionField

@@ -4,7 +4,7 @@ import { toast } from "~/lib/toast";
 import { patchApiV1AdminCategoriesByIdParent } from "@scalius/api-client/sdk";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
@@ -64,11 +64,10 @@ export function MoveCategoryDialog({ target, onClose }: { target: MoveTarget | n
           <DialogTitle>{t("moveTitle", { name: target?.name ?? "" })}</DialogTitle>
           <DialogDescription>{t("moveBody")}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-4">
           {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
-          <Label htmlFor="move-category-parent">{t("parentCategory")}</Label>
-          <SearchableSelect
-            id="move-category-parent"
+          <Field id="move-category-parent" label={t("parentCategory")} help={t("path", { path: path ? `${path} › ${target?.name ?? ""}` : target?.name ?? "" })}>
+            <SearchableSelect
             value={parentId ?? ""}
             options={options}
             selectedLabel={path || undefined}
@@ -81,10 +80,8 @@ export function MoveCategoryDialog({ target, onClose }: { target: MoveTarget | n
               setError(null);
               setParentId(next || null);
             }}
-          />
-          <p className="text-body text-muted-foreground">
-            {t("path", { path: path ? `${path} › ${target?.name ?? ""}` : target?.name ?? "" })}
-          </p>
+            />
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={move.isPending} onClick={onClose}>{t("cancel")}</Button>

@@ -27,6 +27,7 @@ import {
   type BuyerInputDraft,
   type BuyerInputIssue,
 } from "./buyer-inputs";
+import { Field } from "~/components/ui/field";
 
 const TYPE_LABELS = {
   text: "inputType.text",
@@ -118,8 +119,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
         </DialogHeader>
         {draft ? (
           <form id="buyer-input-form" method="post" noValidate className="space-y-4" onSubmit={save}>
-            <div className="space-y-2">
-              <Label htmlFor="buyer-input-type">{t("inputTypeLabel")}</Label>
+            <Field id="buyer-input-type" label={t("inputTypeLabel")}>
               <SearchableSelect
                 id="buyer-input-type"
                 value={draft.type}
@@ -134,9 +134,8 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                 triggerClassName="w-full"
                 options={BUYER_INPUT_TYPES.map((type) => ({ value: type, label: t(TYPE_LABELS[type]) }))}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="buyer-input-label">{t("inputLabel")}</Label>
+            </Field>
+            <Field id="buyer-input-label" label={t("inputLabel")} error={labelError ? labelError : undefined}>
               <Input
                 id="buyer-input-label"
                 value={draft.label}
@@ -147,10 +146,8 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                 autoComplete="off"
                 onChange={(event) => update({ label: event.target.value })}
               />
-              {labelError ? <p id="buyer-input-label-error" className="text-body text-destructive">{labelError}</p> : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="buyer-input-help">{t("inputHelpText")}</Label>
+            </Field>
+            <Field id="buyer-input-help" label={t("inputHelpText")} error={errorFor("help") ? errorFor("help") : undefined}>
               <Input
                 id="buyer-input-help"
                 value={draft.help}
@@ -159,8 +156,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                 autoComplete="off"
                 onChange={(event) => update({ help: event.target.value })}
               />
-              {errorFor("help") ? <p className="text-body text-destructive">{errorFor("help")}</p> : null}
-            </div>
+            </Field>
             <div className="flex items-start gap-3">
               <span className="flex h-lh items-center">
                 <Checkbox id="buyer-input-required" checked={draft.required} onCheckedChange={(checked) => update({ required: checked === true })} />
@@ -172,8 +168,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
             {text || draft.type === "checkbox" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {text ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="buyer-input-maxLength">{t("inputLimit")}</Label>
+                  <Field id="buyer-input-maxLength" label={t("inputLimit")}>
                     <NumberInput
                       id="buyer-input-maxLength"
                       integer
@@ -186,10 +181,9 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                     <p id="buyer-input-maxLength-help" className={errorFor("maxLength") ? "text-body text-destructive" : "text-body text-muted-foreground"}>
                       {errorFor("maxLength") ?? t("inputLimitHelp", { max: maxLengthLimit(draft.type) })}
                     </p>
-                  </div>
+                  </Field>
                 ) : null}
-                <div className="space-y-2">
-                  <Label htmlFor="buyer-input-price">{t("inputPrice")}</Label>
+                <Field id="buyer-input-price" label={t("inputPrice")}>
                   <MoneyInput
                     id="buyer-input-price"
                     currencyCode={currencyCode}
@@ -202,7 +196,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
                   <p id="buyer-input-price-help" className={errorFor("price") ? "text-body text-destructive" : "text-body text-muted-foreground"}>
                     {errorFor("price") ?? t(draft.type === "checkbox" ? "inputPriceHelpCheckbox" : "inputPriceHelp")}
                   </p>
-                </div>
+                </Field>
               </div>
             ) : null}
             {draft.type === "select" ? (

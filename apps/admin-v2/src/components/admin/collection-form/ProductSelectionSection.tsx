@@ -194,7 +194,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
             <FormField
               control={form.control}
               name="config.productIds"
-              render={() => (
+              render={({ fieldState }) => (
                 <Field error={fieldState.error?.message}>
                   {selectedProducts.length > 0 ? (
                     <ol className="divide-y rounded-lg border" aria-label={t("products")}>
@@ -225,7 +225,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
             <FormField
               control={form.control}
               name="config.categoryIds"
-              render={() => (
+              render={({ fieldState }) => (
                 <Field error={fieldState.error?.message}>
                   {selectedCategories.length > 0 ? (
                     <ul className="divide-y rounded-lg border" aria-label={tc("categories")}>

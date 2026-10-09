@@ -14,7 +14,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
@@ -25,6 +24,7 @@ import { useOpenWarrantyClaim } from "../warranty/warranty-api";
 import { warrantyDate, warrantySummary } from "../warranty/warranty-format";
 import { ClaimStatusBadge } from "../warranty/ClaimStatusBadge";
 import type { Order } from "./types";
+import { Field } from "~/components/ui/field";
 
 export interface WarrantyLine {
   warrantyId: string;
@@ -189,8 +189,7 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
           <form id="warranty-claim-open" method="post" noValidate className="space-y-4" onSubmit={submit}>
             {open.error ? <Alert variant="destructive"><AlertDescription>{getServerFnError(open.error, t("claimFailed"))}</AlertDescription></Alert> : null}
             {expired ? <Alert><AlertDescription>{t("openClaimExpired")}</AlertDescription></Alert> : null}
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-claim-description">{t("description")}</Label>
+            <Field id="warranty-claim-description" label={t("description")} error={error ? t("descriptionRequired") : undefined}>
               <Textarea
                 id="warranty-claim-description"
                 rows={4}
@@ -203,8 +202,7 @@ function OpenClaimDialog({ orderId, line, onClose }: { orderId: string; line: Wa
                   setError(false);
                 }}
               />
-              {error ? <p id="warranty-claim-description-error" className="text-body text-destructive">{t("descriptionRequired")}</p> : null}
-            </div>
+            </Field>
           </form>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={open.isPending} onClick={requestClose}>{t("cancel")}</Button>
