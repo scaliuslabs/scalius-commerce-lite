@@ -5,7 +5,6 @@ import { toast } from "~/lib/toast";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import { describeValue, discountTypeOf, draftFromDiscount, type SummaryFormat } from "./discount-form";
 import { useScopeLabel } from "./ScopeField";
-import { IdText } from "~/components/admin/data-table/cells";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";

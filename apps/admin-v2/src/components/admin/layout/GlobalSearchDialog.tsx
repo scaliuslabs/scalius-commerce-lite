@@ -282,7 +282,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
         icon: FileText,
       })),
     ];
-  }, [categories.data, collections.data, customers.data, customerT, discounts.data, lookupTerm, orders.data, pages.data, products.data, searching, t]);
+  }, [categories.data, collections.data, customers.data, customerT, discounts.data, orders.data, pages.data, products.data, searching, t]);
 
   const recent = useMemo<Entry[]>(
     () => (open && !term ? readRecent().map((item) => ({ ...item, icon: Clock })) : []),

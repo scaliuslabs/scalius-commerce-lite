@@ -314,7 +314,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
       what={t("whatHistory")}
       defaultSortLabel={false}
       layoutKey="inventory-history"
-      getRowHref={(movement) => (movement.productId ? `/admin/products/${movement.productId}/edit` : undefined)}
+      getRowHref={(movement) => (typeof movement.productId === "string" && movement.productId ? `/admin/products/${movement.productId}/edit` : undefined)}
       pageSizeOptions={[MOVEMENT_PAGE_SIZE]}
       cursorPaging={{
         total: null,
