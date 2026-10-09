@@ -92,7 +92,9 @@ describe("route error page (polish bar R1)", () => {
     const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     const reset = show(new TypeError("Failed to fetch"));
     onLine.mockReturnValue(true);
-    act(() => window.dispatchEvent(new Event("online")));
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
     expect(reset).toHaveBeenCalledOnce();
     expect(invalidate).toHaveBeenCalledOnce();
     onLine.mockRestore();
