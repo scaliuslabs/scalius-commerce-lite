@@ -45570,10 +45570,50 @@ export type PostApiV1AdminOrdersByIdAmendmentsResponse = PostApiV1AdminOrdersByI
 
 export type PostApiV1AdminOrdersArchiveData = {
     body: {
-        orders: Array<{
+        orders?: Array<{
             id: string;
             expectedVersion: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: string;
+                /**
+                 * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+                 */
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
+                openRequest?: boolean;
+                paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
+                paymentMethod?: string;
+                fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+                /**
+                 * How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).
+                 */
+                deliveryMethod?: 'delivery' | 'pickup' | 'none';
+                /**
+                 * Where the order came from: online_store, admin (dashboard), pos, agent (AI agent) or app.
+                 */
+                channel?: 'online_store' | 'admin' | 'pos' | 'agent' | 'app';
+                /**
+                 * A stored source slug, e.g. facebook, whatsapp or walk_in.
+                 */
+                channelSource?: string;
+                paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                startDate?: string;
+                endDate?: string;
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -45603,9 +45643,27 @@ export type PostApiV1AdminOrdersArchiveError = PostApiV1AdminOrdersArchiveErrors
 
 export type PostApiV1AdminOrdersArchiveResponses = {
     /**
-     * No content
+     * Orders archived; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersArchiveResponse = PostApiV1AdminOrdersArchiveResponses[keyof PostApiV1AdminOrdersArchiveResponses];

@@ -155540,6 +155540,7 @@
           "Admin - Orders"
         ],
         "summary": "Archive completed orders without changing commerce state",
+        "description": "Archives the listed orders, or one slice of the finished orders the list's filter matches (`matching`): an order that cannot be archived now is skipped and counted.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -155567,19 +155568,192 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "status": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "view": {
+                            "type": "string",
+                            "enum": [
+                              "unfulfilled",
+                              "unpaid",
+                              "cod_to_collect",
+                              "delivery_failed",
+                              "returned",
+                              "ready_for_pickup"
+                            ],
+                            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
+                          },
+                          "openRequest": {
+                            "type": "boolean"
+                          },
+                          "paymentStatus": {
+                            "type": "string",
+                            "enum": [
+                              "unpaid",
+                              "partial",
+                              "paid",
+                              "partially_refunded",
+                              "refunded",
+                              "failed"
+                            ]
+                          },
+                          "paymentMethod": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "fulfillmentStatus": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "partial",
+                              "complete"
+                            ]
+                          },
+                          "deliveryMethod": {
+                            "type": "string",
+                            "enum": [
+                              "delivery",
+                              "pickup",
+                              "none"
+                            ],
+                            "description": "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical)."
+                          },
+                          "channel": {
+                            "type": "string",
+                            "enum": [
+                              "online_store",
+                              "admin",
+                              "pos",
+                              "agent",
+                              "app"
+                            ],
+                            "description": "Where the order came from: online_store, admin (dashboard), pos, agent (AI agent) or app."
+                          },
+                          "channelSource": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+                            "description": "A stored source slug, e.g. facebook, whatsapp or walk_in."
+                          },
+                          "paymentRecovery": {
+                            "type": "string",
+                            "enum": [
+                              "recoverable",
+                              "awaiting_payment",
+                              "processing",
+                              "needs_attention"
+                            ]
+                          },
+                          "startDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "orders"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Orders archived; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",

@@ -2,6 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     archiveOrders,
+    listMatchingArchivableOrders,
     bulkConfirmOrders,
     recordOrderEvent,
     archiveOrdersSchema,
@@ -9,6 +10,11 @@ import {
 } from "@scalius/core/modules/orders";
 import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilment";
 import { ok, noContent } from "../../../utils/api-response";
+import { AppError } from "../../../utils/api-error";
+import { matchingResultSchema, requireOneSelection, type MatchingResult } from "../../../schemas/bulk-matching";
+import { readMatchingCursor } from "@scalius/core/utils/bulk-matching";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { orderMatchingFilter, orderMatchingSchema } from "./list";
 import { successEnvelope, noContentResponse, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestCourierProviders } from "../../../plugins/providers/courier";
@@ -67,11 +73,18 @@ const archiveOrdersRoute = createRoute({
     path: "/archive",
     tags: ["Admin - Orders"],
     summary: "Archive completed orders without changing commerce state",
+    description: "Archives the listed orders, or one slice of the finished orders the list's filter matches (`matching`): an order that cannot be archived now is skipped and counted.",
     request: {
-        body: { content: { "application/json": { schema: archiveOrdersSchema } } }
+        body: { content: { "application/json": { schema: archiveOrdersSchema.extend({
+            orders: archiveOrdersSchema.shape.orders.optional(),
+            matching: orderMatchingSchema.optional(),
+        }) } } }
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "Orders archived; with `matching`, where the next slice starts",
+            content: { "application/json": { schema: successEnvelope(z.object({ matching: matchingResultSchema.optional() })) } },
+        },
         ...adminWriteErrorResponses,
         409: conflictResponse,
     }
@@ -81,11 +94,44 @@ app.openapi(archiveOrdersRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    await archiveOrders(db, data.orders);
-    for (const order of data.orders) {
-        await recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
+    requireOneSelection(data.orders, data.matching);
+    const archive = async (claims: Array<{ id: string; expectedVersion: number }>) => {
+        await archiveOrders(db, claims);
+        for (const order of claims) {
+            await recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
+        }
+    };
+    if (!data.matching) {
+        await archive(data.orders!);
+        return ok(c, {});
     }
-    return noContent(c);
+    // Each order checks its own returns and claims: a small slice on the Free plan.
+    const slice = await listMatchingArchivableOrders(
+        db,
+        await orderMatchingFilter(db, c.env, data.matching.filter),
+        readMatchingCursor(data.matching.cursor),
+        planLimits().lists.bulkPerRowSlice,
+    );
+    let processed = 0;
+    try {
+        if (slice.claims.length > 0) await archive(slice.claims);
+        processed = slice.claims.length;
+    } catch (error) {
+        if (!(error instanceof AppError)) throw error;
+        // One order in the slice cannot be archived now (a return in progress,
+        // a payment still open): archive the others one by one and skip it.
+        for (const claim of slice.claims) {
+            try {
+                await archive([claim]);
+                processed += 1;
+            } catch (single) {
+                if (!(single instanceof AppError)) throw single;
+            }
+        }
+    }
+    return ok(c, {
+        matching: { processed, skipped: slice.claims.length - processed, next: slice.next } satisfies MatchingResult,
+    });
 });
 
 // ─── POST /bulk-ship ─────────────────────────────────────────────────────────

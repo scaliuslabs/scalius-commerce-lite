@@ -5180,6 +5180,8 @@ export const postApiV1AdminOrdersByIdAmendments = <ThrowOnError extends boolean 
 
 /**
  * Archive completed orders without changing commerce state
+ *
+ * Archives the listed orders, or one slice of the finished orders the list's filter matches (`matching`): an order that cannot be archived now is skipped and counted.
  */
 export const postApiV1AdminOrdersArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersArchiveResponses, PostApiV1AdminOrdersArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersArchiveResponses, PostApiV1AdminOrdersArchiveErrors, ThrowOnError>({
     url: '/api/v1/admin/orders/archive',

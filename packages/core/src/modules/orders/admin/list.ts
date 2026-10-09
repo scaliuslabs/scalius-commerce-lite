@@ -15,7 +15,9 @@ import {
     FulfillmentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
-import { sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../../utils/bulk-matching";
+import { ARCHIVABLE_ORDER_STATUSES } from "../archive-policy";
 import { containsText } from "../../../utils/text-match";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
@@ -249,41 +251,32 @@ function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
     )})`;
 }
 
-/**
- * Returns a paginated, searchable list of orders for the admin dashboard.
- * Includes item counts and the latest shipment per order.
- */
-export async function listOrders(db: Database, options: {
+/** The order list's filters, shared by the list, its export and its "all matching" bulk actions. */
+export interface OrderListFilter {
     search?: string;
     status?: string;
+    view?: OrderListView;
+    openRequest?: boolean;
+    ids?: string[];
     paymentStatus?: string;
     paymentMethod?: string;
     fulfillmentStatus?: string;
     paymentRecovery?: OrderPaymentRecoveryFilter;
-    view?: OrderListView;
     deliveryMethod?: OrderDeliveryMethodFilter;
-    /** Where the order came from (`orders_channel_list_idx`). */
     channel?: OrderChannel;
-    /** A stored source slug (`facebook`, `walk_in`, …). */
     channelSource?: string;
-    openRequest?: boolean;
-    /** Exactly these orders (an export of a page or a selection). */
-    ids?: string[];
-    /** A numbered page; only the first `maxOffset` rows (plan limit) are reachable this way. */
-    page?: number;
-    limit?: number;
-    /** Rows after this cursor (`pageInfo.endCursor` of the previous page). Excludes `before` and `page`. */
-    after?: string;
-    /** Rows before this cursor (`pageInfo.startCursor` of the next page). */
-    before?: string;
     showArchived?: boolean;
-    sort?: OrderListSort;
-    order?: "asc" | "desc";
     startDate?: Date;
     endDate?: Date;
-    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
     appCondition?: SQL;
-}) {
+}
+
+/**
+ * The list's WHERE conditions and, for a search, its relevance order: one
+ * definition for the rows the list shows and the rows an "all matching"
+ * bulk action acts on.
+ */
+export function orderListConditions(db: Database, filter: OrderListFilter): { conditions: SQL[]; rankExpression: SQL | undefined } {
     const {
         search,
         status,
@@ -297,23 +290,14 @@ export async function listOrders(db: Database, options: {
         deliveryMethod,
         channel,
         channelSource,
-        page: rawPage = 1,
-        limit: rawLimit = 10,
-        after,
-        before,
         showArchived = false,
-        sort = "createdAt",
-        order = "desc",
         startDate,
         endDate,
-    } = options;
-    const page = normalizeListPositiveInteger(rawPage, 1);
-    const limit = normalizeListPositiveInteger(rawLimit, 10, MAX_ORDER_LIST_LIMIT);
-
+    } = filter;
     const whereConditions: SQL[] = [];
 
     whereConditions.push(sql`${orders.deletedAt} IS NULL`);
-    if (options.appCondition) whereConditions.push(options.appCondition);
+    if (filter.appCondition) whereConditions.push(filter.appCondition);
     if (ids) {
         // An explicit selection is exported as picked, archived or not.
         whereConditions.push(ids.length > 0 ? inArray(orders.id, ids) : sql`1 = 0`);
@@ -414,6 +398,121 @@ export async function listOrders(db: Database, options: {
         const endTs = Math.floor(endDate.getTime() / 1000);
         whereConditions.push(sql`${orders.createdAt} <= ${endTs}`);
     }
+
+    return { conditions: whereConditions, rankExpression };
+}
+
+/**
+ * One slice of "archive all matching orders" (`utils/bulk-matching.ts`): the
+ * next `limit` orders the list's filter matches after `cursor`, in id order,
+ * that archiving could take (a finished status, no live shipment claim),
+ * with the version each write claims.
+ */
+export async function listMatchingArchivableOrders(
+    db: Database,
+    filter: OrderListFilter,
+    cursor: string | undefined,
+    limit: number = BULK_MATCHING_SLICE,
+): Promise<{ claims: Array<{ id: string; expectedVersion: number }>; next: string | null }> {
+    const { conditions } = orderListConditions(db, { ...filter, showArchived: false, ids: undefined });
+    const after = matchingSliceCondition(orders.id, cursor);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const rows = await db
+        .select({ id: orders.id, version: orders.version })
+        .from(orders)
+        .where(and(
+            ...conditions,
+            ...(after ? [after] : []),
+            inArray(orders.status, [...ARCHIVABLE_ORDER_STATUSES]),
+            sql`(${orders.shipmentClaimId} IS NULL OR ${orders.shipmentClaimExpiresAt} IS NULL OR ${orders.shipmentClaimExpiresAt} <= ${nowSeconds})`,
+        ))
+        .orderBy(asc(orders.id))
+        .limit(limit);
+    return {
+        claims: rows.map((row) => ({ id: row.id, expectedVersion: row.version })),
+        next: nextMatchingCursor(rows, limit),
+    };
+}
+
+/**
+ * Returns a paginated, searchable list of orders for the admin dashboard.
+ * Includes item counts and the latest shipment per order.
+ */
+export async function listOrders(db: Database, options: {
+    search?: string;
+    status?: string;
+    paymentStatus?: string;
+    paymentMethod?: string;
+    fulfillmentStatus?: string;
+    paymentRecovery?: OrderPaymentRecoveryFilter;
+    view?: OrderListView;
+    deliveryMethod?: OrderDeliveryMethodFilter;
+    /** Where the order came from (`orders_channel_list_idx`). */
+    channel?: OrderChannel;
+    /** A stored source slug (`facebook`, `walk_in`, …). */
+    channelSource?: string;
+    openRequest?: boolean;
+    /** Exactly these orders (an export of a page or a selection). */
+    ids?: string[];
+    /** A numbered page; only the first `maxOffset` rows (plan limit) are reachable this way. */
+    page?: number;
+    limit?: number;
+    /** Rows after this cursor (`pageInfo.endCursor` of the previous page). Excludes `before` and `page`. */
+    after?: string;
+    /** Rows before this cursor (`pageInfo.startCursor` of the next page). */
+    before?: string;
+    showArchived?: boolean;
+    sort?: OrderListSort;
+    order?: "asc" | "desc";
+    startDate?: Date;
+    endDate?: Date;
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
+}) {
+    const {
+        search,
+        status,
+        view,
+        openRequest = false,
+        ids,
+        paymentStatus,
+        paymentMethod,
+        fulfillmentStatus,
+        paymentRecovery,
+        deliveryMethod,
+        channel,
+        channelSource,
+        page: rawPage = 1,
+        limit: rawLimit = 10,
+        after,
+        before,
+        showArchived = false,
+        sort = "createdAt",
+        order = "desc",
+        startDate,
+        endDate,
+    } = options;
+    const page = normalizeListPositiveInteger(rawPage, 1);
+    const limit = normalizeListPositiveInteger(rawLimit, 10, MAX_ORDER_LIST_LIMIT);
+
+    const { conditions: whereConditions, rankExpression } = orderListConditions(db, {
+        search,
+        status,
+        view,
+        openRequest,
+        ids,
+        paymentStatus,
+        paymentMethod,
+        fulfillmentStatus,
+        paymentRecovery,
+        deliveryMethod,
+        channel,
+        channelSource,
+        showArchived,
+        startDate,
+        endDate,
+        appCondition: options.appCondition,
+    });
 
     const whereClause = whereConditions.length > 0
         ? sql`${sql.join(whereConditions, sql` AND `)}`
