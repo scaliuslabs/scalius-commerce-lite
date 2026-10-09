@@ -11,16 +11,29 @@
 // most 10 tags a socket, fewer than the topics an owner hears); a notice
 // reaches only the sockets whose attachment's topics allow it. A store has
 // few sockets, so scanning them is cheap.
+//
+// Field presence: a socket reports the field it is in on one of its keys and
+// whether it has unsaved changes there (`focus`, rate-limited, never a
+// value). The hub keeps the latest report in the attachment and sends it
+// inside the key's presence, so a person who arrives late sees the same rings.
 import { DurableObject } from "cloudflare:workers";
 import {
+  MAX_FOCUS_PER_SECOND,
+  MAX_SAVED_FIELDS,
   MAX_WATCHED_KEYS,
+  PRESENCE_KEY_TOPICS,
   REALTIME_CLOSE_REAUTH,
   REALTIME_PING,
   REALTIME_PONG,
+  isFieldKey,
+  isPresenceListPrefix,
   isRealtimeTopic,
+  presenceKeyPrefix,
   presenceKeyTopic,
+  type PresenceListPrefix,
   type RealtimeChange,
   type RealtimePerson,
+  type RealtimePresence,
   type RealtimeServerMessage,
   type RealtimeTopic,
 } from "@scalius/shared/realtime";
@@ -56,6 +69,17 @@ interface SocketState {
   exp: number;
   /** Editors this socket has open (presence keys). */
   keys: string[];
+  /** Lists that show who has a record open (`order`): presence of every key with the prefix. */
+  lists?: PresenceListPrefix[];
+  /**
+   * What this socket last reported on one of its keys: `i` the key's index in
+   * `keys` (the attachment is limited to 2 KB, so the key is not repeated),
+   * `f` the focused field, `e` unsaved changes, `at` when (epoch seconds).
+   */
+  act?: { i: number; f: string | null; e: boolean; at: number };
+  /** Focus rate limit: the second of the last accepted report and how many that second. */
+  fw?: number;
+  fc?: number;
 }
 
 function userTag(userId: string): string {
@@ -181,39 +205,34 @@ export class RealtimeHub extends DurableObject<Env> {
     if (typeof message !== "string" || message.length > MAX_CLIENT_MESSAGE_BYTES) return;
     const state = readState(socket);
     if (!state) return;
-    if (state.exp <= nowSeconds()) {
+    const now = nowSeconds();
+    if (state.exp <= now) {
       socket.close(REALTIME_CLOSE_REAUTH, "Authenticate again");
       return;
     }
-    let parsed: { t?: unknown; keys?: unknown; key?: unknown; rev?: unknown };
+    let parsed: { t?: unknown; keys?: unknown; lists?: unknown; key?: unknown; rev?: unknown; fields?: unknown; field?: unknown; editing?: unknown };
     try {
       parsed = JSON.parse(message) as typeof parsed;
     } catch {
       return;
     }
     if (parsed.t === "watch" && Array.isArray(parsed.keys)) {
-      const topics = new Set(state.topics);
-      const next = [...new Set(parsed.keys)]
-        .filter((key): key is string => {
-          const topic = presenceKeyTopic(key);
-          return topic !== null && topics.has(topic);
-        })
-        .slice(0, MAX_WATCHED_KEYS);
-      const previous = state.keys;
-      state.keys = next;
-      socket.serializeAttachment(state);
-      const touched = new Set([...previous, ...next]);
-      for (const key of touched) this.broadcastPresence(key);
+      this.watch(socket, state, parsed.keys, parsed.lists);
+      return;
+    }
+    if (parsed.t === "focus") {
+      this.focus(socket, state, now, parsed.key, parsed.field, parsed.editing);
       return;
     }
     if (parsed.t === "saved" && typeof parsed.key === "string" && state.keys.includes(parsed.key)) {
       const rev = typeof parsed.rev === "number" && Number.isSafeInteger(parsed.rev) ? parsed.rev : null;
+      const fields = Array.isArray(parsed.fields) ? [...new Set(parsed.fields.filter(isFieldKey))].slice(0, MAX_SAVED_FIELDS) : [];
       const by: RealtimePerson = { id: state.userId, name: state.name };
-      const now = nowSeconds();
+      const notice: RealtimeServerMessage = { t: "saved", key: parsed.key, by, rev, ...(fields.length > 0 ? { fields } : {}) };
       for (const other of this.ctx.getWebSockets()) {
         if (other === socket) continue;
         const otherState = this.liveState(other, now);
-        if (otherState?.keys.includes(parsed.key)) send(other, { t: "saved", key: parsed.key, by, rev });
+        if (otherState?.keys.includes(parsed.key)) send(other, notice);
       }
     }
   }
@@ -231,16 +250,70 @@ export class RealtimeHub extends DurableObject<Env> {
     this.leave(socket);
   }
 
+  /** The editors and lists a socket has open. Keys and lists outside its topics are ignored. */
+  private watch(socket: HibernatableWebSocket, state: SocketState, keys: unknown[], lists: unknown): void {
+    const topics = new Set(state.topics);
+    const next = [...new Set(keys)]
+      .filter((key): key is string => {
+        const topic = presenceKeyTopic(key);
+        return topic !== null && topics.has(topic);
+      })
+      .slice(0, MAX_WATCHED_KEYS);
+    const nextLists = Array.isArray(lists)
+      ? [...new Set(lists.filter(isPresenceListPrefix))].filter((prefix) => topics.has(PRESENCE_KEY_TOPICS[prefix]))
+      : [];
+    const previous = state.keys;
+    const previousLists = state.lists ?? [];
+    // The reported field stays with its key; a key that closed takes it along.
+    const actKey = state.act ? previous[state.act.i] : undefined;
+    const actIndex = actKey === undefined ? -1 : next.indexOf(actKey);
+    state.keys = next;
+    if (nextLists.length > 0) state.lists = nextLists;
+    else delete state.lists;
+    if (state.act && actIndex >= 0) state.act = { ...state.act, i: actIndex };
+    else delete state.act;
+    if (!trySerialize(socket, state)) return;
+    for (const key of new Set([...previous, ...next])) {
+      // A key this socket stayed on has the same watchers: no new frame.
+      if (previous.includes(key) && next.includes(key)) continue;
+      this.broadcastPresence(key);
+    }
+    const added = nextLists.filter((prefix) => !previousLists.includes(prefix));
+    if (added.length > 0) this.sendListSnapshot(socket, added);
+  }
+
+  /** The field a socket is in on one of its keys, and whether it has unsaved changes there. */
+  private focus(socket: HibernatableWebSocket, state: SocketState, now: number, key: unknown, field: unknown, editing: unknown): void {
+    if (typeof key !== "string" || typeof editing !== "boolean") return;
+    if (field !== null && !isFieldKey(field)) return;
+    const index = state.keys.indexOf(key);
+    if (index < 0) return;
+    // Rate limit: a socket that reports too fast is ignored for the rest of the second.
+    if (state.fw === now && (state.fc ?? 0) >= MAX_FOCUS_PER_SECOND) return;
+    state.fc = state.fw === now ? (state.fc ?? 0) + 1 : 1;
+    state.fw = now;
+    const previousKey = state.act ? state.keys[state.act.i] : undefined;
+    const unchanged = state.act?.i === index && state.act.f === field && state.act.e === editing;
+    if (unchanged || (!state.act && field === null && !editing)) {
+      trySerialize(socket, state);
+      return;
+    }
+    if (field === null && !editing) delete state.act;
+    else state.act = { i: index, f: field, e: editing, at: now };
+    if (!trySerialize(socket, state)) return;
+    this.broadcastPresence(key);
+    if (previousKey !== undefined && previousKey !== key) this.broadcastPresence(previousKey);
+  }
+
   private leave(socket: HibernatableWebSocket): void {
     const state = readState(socket);
     if (!state || state.keys.length === 0) return;
     const keys = state.keys;
     state.keys = [];
-    try {
-      socket.serializeAttachment(state);
-    } catch {
-      // A closed socket may refuse writes; it is excluded below either way.
-    }
+    delete state.act;
+    delete state.lists;
+    // A closed socket may refuse writes; it is excluded below either way.
+    trySerialize(socket, state);
     for (const key of keys) this.broadcastPresence(key, socket);
   }
 
@@ -257,19 +330,85 @@ export class RealtimeHub extends DurableObject<Env> {
     return null;
   }
 
-  /** Everyone on `key` hears who is on it (one entry per person, however many tabs). */
+  /**
+   * Everyone on `key` hears who is on it (one entry per person, however many
+   * tabs). Sockets watching the key's list hear it too, without the field.
+   */
   private broadcastPresence(key: string, leaving?: HibernatableWebSocket): void {
-    const watchers: Array<{ socket: HibernatableWebSocket; state: SocketState }> = [];
+    const prefix = presenceKeyPrefix(key);
+    const watchers: HibernatableWebSocket[] = [];
+    const listeners: HibernatableWebSocket[] = [];
+    const states: SocketState[] = [];
     const now = nowSeconds();
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === leaving) continue;
       const state = this.liveState(socket, now);
-      if (state?.keys.includes(key)) watchers.push({ socket, state });
+      if (!state) continue;
+      if (state.keys.includes(key)) {
+        watchers.push(socket);
+        states.push(state);
+      } else if (prefix && state.lists?.some((list) => list === prefix)) {
+        listeners.push(socket);
+      }
     }
-    const people = new Map<string, RealtimePerson>();
-    for (const { state } of watchers) people.set(state.userId, { id: state.userId, name: state.name });
-    // Sorted, so every watcher sees the same order however the runtime lists sockets.
-    const list = [...people.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    for (const { socket } of watchers) send(socket, { t: "presence", key, people: list });
+    const people = presenceOf(key, states);
+    for (const socket of watchers) send(socket, { t: "presence", key, people });
+    if (listeners.length === 0) return;
+    const summary = withoutFields(people);
+    for (const socket of listeners) send(socket, { t: "presence", key, people: summary });
+  }
+
+  /** A socket that starts watching a list hears who has each of its records open now. */
+  private sendListSnapshot(socket: HibernatableWebSocket, prefixes: readonly PresenceListPrefix[]): void {
+    const now = nowSeconds();
+    const byKey = new Map<string, SocketState[]>();
+    for (const other of this.ctx.getWebSockets()) {
+      const state = this.liveState(other, now);
+      if (!state) continue;
+      for (const key of state.keys) {
+        const prefix = presenceKeyPrefix(key);
+        if (!prefix || !prefixes.some((list) => list === prefix)) continue;
+        byKey.set(key, [...(byKey.get(key) ?? []), state]);
+      }
+    }
+    for (const [key, states] of byKey) send(socket, { t: "presence", key, people: withoutFields(presenceOf(key, states)) });
   }
 }
+
+function trySerialize(socket: HibernatableWebSocket, state: SocketState): boolean {
+  try {
+    socket.serializeAttachment(state);
+    return true;
+  } catch {
+    // Over the attachment's size limit, or a closed socket: the change is dropped.
+    return false;
+  }
+}
+
+function withoutFields(people: readonly RealtimePresence[]): RealtimePresence[] {
+  return people.map(({ field: _field, ...person }) => person);
+}
+
+/**
+ * The people on `key` from the states of its sockets: one entry per person,
+ * sorted by id so every watcher sees the same order. A person is editing when
+ * any of their tabs is; their field is the one they reported last.
+ */
+export function presenceOf(key: string, states: readonly SocketState[]): RealtimePresence[] {
+  const people = new Map<string, RealtimePresence & { at: number }>();
+  for (const state of states) {
+    const act = state.act && state.keys[state.act.i] === key ? state.act : null;
+    const entry = people.get(state.userId) ?? { id: state.userId, name: state.name, at: -1 };
+    if (act && (act.e || act.f)) entry.editing = true;
+    if (act?.f && act.at >= entry.at) {
+      entry.field = act.f;
+      entry.at = act.at;
+    }
+    people.set(state.userId, entry);
+  }
+  return [...people.values()]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map(({ at: _at, ...person }) => person);
+}
+
+export type { SocketState as RealtimeSocketState };

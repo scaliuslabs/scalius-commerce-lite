@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
@@ -28,8 +28,13 @@ import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pageHead } from "~/i18n/page-titles";
 import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
-import { EditorPresence } from "~/lib/realtime/store";
-import { announceSave, presenceKey } from "~/lib/realtime/store";
+import { EditorPresenceProvider, PresenceNotices, announceSave, presenceKey } from "~/lib/realtime/store";
+
+/** Hands the form's "has unsaved changes" up to the presence around it. */
+function ProductPresence({ dirty, onDirty }: { dirty: boolean; onDirty: (dirty: boolean) => void }) {
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
+  return <PresenceNotices />;
+}
 
 /**
  * Fields that change together under the aggregate revision: the product's
@@ -303,6 +308,10 @@ function ProductEditor({ productId, initialProduct, categories }: {
     return latest.aggregateRevision;
   }, [categories, formSnapshot, productId, queryClient]);
 
+  // Presence: whether this page has unsaved changes, and which fields (for a clean merge of another save).
+  const [presenceDirty, setPresenceDirty] = useState(false);
+  const readChangedFields = useCallback(() => draftRef.current?.().changed ?? [], []);
+
   const applyMineToLatest = useCallback(async () => {
     if (!draftRef.current) return;
     setIsReloadingLatest(true);
@@ -347,6 +356,15 @@ function ProductEditor({ productId, initialProduct, categories }: {
 
   return (
     <SkuCostProvider store={costs}>
+    <EditorPresenceProvider
+      presenceKey={presenceKey("product", productId)}
+      revision={aggregateRevision}
+      dirty={presenceDirty}
+      changedFields={readChangedFields}
+      onLoadLatest={() => void (presenceDirty ? applyMineToLatest() : reloadLatest())}
+    >
+    {/* `contents`: marks the editor for field presence without adding a box. */}
+    <div data-presence-root={presenceKey("product", productId)} className="contents">
       <ProductForm
         key={formGeneration}
         categories={categories}
@@ -364,8 +382,12 @@ function ProductEditor({ productId, initialProduct, categories }: {
         onOpenRevisionConflict={() => setIsConflictOpen(true)}
         draftRef={draftRef}
         onProductSaved={(values, revision) => {
+          // The fields this save changed against the last saved version (names, never values).
+          const before = toFormValues(formSnapshot);
+          const changed = (Object.keys(values) as Array<keyof ProductFormValues>)
+            .filter((key) => JSON.stringify(values[key]) !== JSON.stringify(before[key]));
           handleProductSaved(values, revision);
-          announceSave(presenceKey("product", productId), revision);
+          announceSave(presenceKey("product", productId), revision, changed);
         }}
         optionMatrixIssue={matrixIssue}
         optionMatrixDirty={matrixDirty}
@@ -374,14 +396,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}
-        presence={(dirty) => (
-          <EditorPresence
-            presenceKey={presenceKey("product", productId)}
-            revision={aggregateRevision}
-            dirty={dirty}
-            onLoadLatest={() => void (dirty ? applyMineToLatest() : reloadLatest())}
-          />
-        )}
+        presence={(dirty) => <ProductPresence dirty={dirty} onDirty={setPresenceDirty} />}
         onDiscard={() => {
           if (revisionConflict) {
             void reloadLatest();
@@ -422,6 +437,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
           </Suspense>
         )}
       />
+    </div>
+    </EditorPresenceProvider>
       <ProductRevisionConflictDialog
         open={isConflictOpen}
         conflict={revisionConflict}

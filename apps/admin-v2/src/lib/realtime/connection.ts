@@ -17,8 +17,10 @@ import {
   REALTIME_PING,
   REALTIME_PONG,
   type RealtimeChange,
+  type PresenceListPrefix,
   type RealtimeClientMessage,
   type RealtimePerson,
+  type RealtimePresence,
   type RealtimeServerMessage,
 } from "@scalius/shared/realtime";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
@@ -27,8 +29,8 @@ export type RealtimeStatus = "connecting" | "open" | "closed";
 
 export interface RealtimeListener {
   changes?(items: RealtimeChange[]): void;
-  presence?(key: string, people: RealtimePerson[]): void;
-  saved?(key: string, by: RealtimePerson, rev: number | null): void;
+  presence?(key: string, people: RealtimePresence[]): void;
+  saved?(key: string, by: RealtimePerson, rev: number | null, fields: string[]): void;
   /** The socket (re)opened after a gap: refetch what may have changed meanwhile. */
   resync?(): void;
   status?(status: RealtimeStatus): void;
@@ -40,6 +42,9 @@ const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 /** After this many refusals in a row (signed out, no access), wait the longest step. */
 const REFUSALS_BEFORE_LONG_WAIT = 3;
+/** Focus reports per key at most every 200 ms: 5 a second, under the hub's 8. */
+const FOCUS_INTERVAL_MS = 200;
+const IDLE_FOCUS = JSON.stringify({ field: null, editing: false });
 
 type SocketLike = Pick<WebSocket, "send" | "close" | "readyState" | "addEventListener">;
 
@@ -60,6 +65,11 @@ export class RealtimeConnection {
   private socket: SocketLike | null = null;
   private listeners = new Set<RealtimeListener>();
   private keys = new Map<string, number>();
+  private lists = new Map<PresenceListPrefix, number>();
+  /** The focus state each key should have at the hub, and what this socket last sent. */
+  private focusWanted = new Map<string, string>();
+  private focusSent = new Map<string, string>();
+  private focusTimer: ReturnType<typeof setTimeout> | null = null;
   private status: RealtimeStatus = "closed";
   private attempts = 0;
   private everOpened = false;
@@ -116,15 +126,62 @@ export class RealtimeConnection {
     this.sendKeys();
     return () => {
       const count = (this.keys.get(key) ?? 1) - 1;
-      if (count <= 0) this.keys.delete(key);
-      else this.keys.set(key, count);
+      if (count <= 0) {
+        this.keys.delete(key);
+        this.focusWanted.delete(key);
+        this.focusSent.delete(key);
+      } else this.keys.set(key, count);
       this.sendKeys();
     };
   }
 
-  /** Tell the other editors on `key` that this one saved. */
-  announceSave(key: string, rev: number | null): void {
-    this.send({ t: "saved", key, rev });
+  /** A list that shows who has its records open is on screen (counted). */
+  watchList(prefix: PresenceListPrefix): () => void {
+    this.lists.set(prefix, (this.lists.get(prefix) ?? 0) + 1);
+    this.sendKeys();
+    return () => {
+      const count = (this.lists.get(prefix) ?? 1) - 1;
+      if (count <= 0) this.lists.delete(prefix);
+      else this.lists.set(prefix, count);
+      this.sendKeys();
+    };
+  }
+
+  /** Tell the other editors on `key` that this one saved, and which fields it changed (keys, never values). */
+  announceSave(key: string, rev: number | null, fields: readonly string[] = []): void {
+    this.send({ t: "saved", key, rev, ...(fields.length > 0 ? { fields: [...fields] } : {}) });
+  }
+
+  /**
+   * The field this tab is in on `key` (null for none) and whether it has
+   * unsaved changes there. Coalesced: at most one message per key every
+   * FOCUS_INTERVAL_MS, always ending on the latest state, under the hub's limit.
+   */
+  focus(key: string, field: string | null, editing: boolean): void {
+    if (!this.keys.has(key)) return;
+    this.focusWanted.set(key, JSON.stringify({ field, editing }));
+    if (this.focusTimer) return;
+    if (this.flushFocus()) this.focusTimer = setTimeout(this.focusTick, FOCUS_INTERVAL_MS);
+  }
+
+  /** Sends the latest state after a pause, and keeps pausing while there is more. */
+  private readonly focusTick = () => {
+    this.focusTimer = null;
+    if (this.flushFocus()) this.focusTimer = setTimeout(this.focusTick, FOCUS_INTERVAL_MS);
+  };
+
+  /** Sends each key's focus state that the hub does not have yet; true when it sent any. */
+  private flushFocus(): boolean {
+    if (!this.socket || this.status !== "open") return false;
+    let sent = false;
+    for (const [key, wanted] of this.focusWanted) {
+      if (this.focusSent.get(key) === wanted || (!this.focusSent.has(key) && wanted === IDLE_FOCUS)) continue;
+      const { field, editing } = JSON.parse(wanted) as { field: string | null; editing: boolean };
+      this.send({ t: "focus", key, field, editing });
+      this.focusSent.set(key, wanted);
+      sent = true;
+    }
+    return sent;
   }
 
   private readonly wake = () => {
@@ -169,6 +226,9 @@ export class RealtimeConnection {
       this.attempts = 0;
       this.setStatus("open");
       this.sendKeys();
+      // A new socket starts with no focus at the hub: send what is not idle again.
+      this.focusSent.clear();
+      if (this.flushFocus()) this.focusTimer = setTimeout(this.focusTick, FOCUS_INTERVAL_MS);
       this.pingTimer = setInterval(() => this.ping(), PING_MS);
       if (this.everOpened) this.emit((listener) => listener.resync?.());
       this.everOpened = true;
@@ -208,7 +268,7 @@ export class RealtimeConnection {
         this.emit((listener) => listener.presence?.(message.key, message.people ?? []));
         break;
       case "saved":
-        this.emit((listener) => listener.saved?.(message.key, message.by, message.rev ?? null));
+        this.emit((listener) => listener.saved?.(message.key, message.by, message.rev ?? null, Array.isArray(message.fields) ? message.fields : []));
         break;
       default:
         break;
@@ -255,7 +315,8 @@ export class RealtimeConnection {
   }
 
   private sendKeys(): void {
-    this.send({ t: "watch", keys: [...this.keys.keys()] });
+    const lists = [...this.lists.keys()];
+    this.send({ t: "watch", keys: [...this.keys.keys()], ...(lists.length > 0 ? { lists } : {}) });
   }
 
   private send(message: RealtimeClientMessage): void {
@@ -287,9 +348,11 @@ export class RealtimeConnection {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.pongTimer) clearTimeout(this.pongTimer);
+    if (this.focusTimer) clearTimeout(this.focusTimer);
     this.retryTimer = null;
     this.pingTimer = null;
     this.pongTimer = null;
+    this.focusTimer = null;
   }
 }
 

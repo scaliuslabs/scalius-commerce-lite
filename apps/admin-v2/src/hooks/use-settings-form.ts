@@ -192,7 +192,12 @@ export function useSettingsForm<
     },
     onSuccess: async ({ result, submitted: submittedValues, merged }) => {
       if (merged) void import("~/lib/merge-document").then(({ mergedMessage }) => toast.success(mergedMessage()));
-      if (scopeKey) announceSave(scopeKey, null);
+      if (scopeKey) {
+        // The fields this save changed (names, never values), so other viewers can say what merged.
+        const base = savedValuesRef.current as Record<string, unknown>;
+        const sent = submittedValues as Record<string, unknown>;
+        announceSave(scopeKey, null, Object.keys(sent).filter((key) => JSON.stringify(sent[key]) !== JSON.stringify(base[key])));
+      }
       const savedRevision = readRevision(result);
       const resolved = resolveSavedValues?.(result, submittedValues);
       const canonicalValues = resolved && withoutRevision(resolved);

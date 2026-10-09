@@ -163,6 +163,36 @@ describe("RealtimeHub in workerd", () => {
     for (const tab of tabs.slice(1)) tab.socket.close(1000);
   }, 60_000);
 
+  it("carries field presence through hibernatable attachments and tells list watchers", async () => {
+    const rahim = await connect("usr_rahim2", "Rahim", ["orders", "products"]);
+    const karim = await connect("usr_karim2", "Karim", ["orders", "products"]);
+    const clerk = await connect("usr_clerk2", "Clerk", ["orders"]);
+    await Promise.all([rahim, karim, clerk].map((client) => client.next((message) => message.t === "hello")));
+
+    clerk.socket.send(JSON.stringify({ t: "watch", keys: [], lists: ["order"] }));
+    rahim.socket.send(JSON.stringify({ t: "watch", keys: ["product:prd_7", "order:ord_7"] }));
+    karim.socket.send(JSON.stringify({ t: "watch", keys: ["product:prd_7"] }));
+    expect(await clerk.next((message) => message.t === "presence" && message.key === "order:ord_7")).toEqual({
+      t: "presence", key: "order:ord_7", people: [{ id: "usr_rahim2", name: "Rahim" }],
+    });
+    await karim.next((message) => message.t === "presence" && message.people.length === 2);
+
+    rahim.socket.send(JSON.stringify({ t: "focus", key: "product:prd_7", field: "price", editing: true }));
+    expect(await karim.next((message) => message.t === "presence" && message.people.some((person) => person.field === "price"))).toEqual({
+      t: "presence", key: "product:prd_7", people: [{ id: "usr_karim2", name: "Karim" }, { id: "usr_rahim2", name: "Rahim", editing: true, field: "price" }],
+    });
+
+    rahim.socket.send(JSON.stringify({ t: "saved", key: "product:prd_7", rev: 3, fields: ["price"] }));
+    expect(await karim.next((message) => message.t === "saved")).toEqual({
+      t: "saved", key: "product:prd_7", by: { id: "usr_rahim2", name: "Rahim" }, rev: 3, fields: ["price"],
+    });
+
+    rahim.socket.close(1000);
+    expect(await clerk.next((message) => message.t === "presence" && message.key === "order:ord_7")).toEqual({ t: "presence", key: "order:ord_7", people: [] });
+    karim.socket.close(1000);
+    clerk.socket.close(1000);
+  }, 60_000);
+
   it("refuses an upgrade without a proven identity", async () => {
     const response = await mf.dispatchFetch("http://hub/connect", { headers: { Upgrade: "websocket" } });
     expect(response.status).toBe(403);

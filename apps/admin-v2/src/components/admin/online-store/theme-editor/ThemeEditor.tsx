@@ -15,8 +15,8 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
-import { PresenceAvatars } from "~/components/admin/realtime/PresenceView";
-import { useEditorPresence } from "~/lib/realtime/store";
+import PresenceAvatars from "~/components/admin/realtime/PresenceAvatars";
+import { useEditorPresence, usePresenceReporter } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
@@ -207,6 +207,7 @@ export function ThemeEditor({ workspace, refetch }: {
   // Who else is in the editor; a save of theirs loads at once while this one has nothing unsaved
   // (with unsaved edits, the next autosave meets their revision and the conflict names them).
   const editors = useEditorPresence(THEME_PRESENCE_KEY, draft.saved.revision);
+  usePresenceReporter(THEME_PRESENCE_KEY, draft.unsavedEdits);
   const { remoteSave, dismissRemoteSave } = editors;
   useEffect(() => {
     if (!remoteSave) return;
@@ -821,7 +822,11 @@ export function ThemeEditor({ workspace, refetch }: {
         )}
         market={(
           <>
-            {phone ? null : <PresenceAvatars others={editors.others} />}
+            {phone ? null : (
+              <div data-slot="presence" className="flex h-7 w-24 shrink-0 items-center">
+                {editors.others.length > 0 ? <PresenceAvatars people={editors.others} /> : null}
+              </div>
+            )}
             <MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />
           </>
         )}

@@ -21,8 +21,7 @@ import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
 import { useQueryClient } from "@tanstack/react-query";
-import { EditorPresence } from "~/lib/realtime/store";
-import { PresenceScopeContext, presenceKey } from "~/lib/realtime/store";
+import { EditorPresenceProvider, PresenceNotices, PresenceScopeContext, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
 
 type SettingsNavTo = (typeof SETTINGS_NAV)[number]["to"];
@@ -56,7 +55,8 @@ export function SettingsPage({
   return (
     <PresenceScopeContext.Provider value={key}>
     <TargetCardContext.Provider value={hash}>
-      <div className="mx-auto w-full max-w-3xl space-y-4">
+    <SettingsPresence presenceKey={key}>
+      <div data-presence-root={key} className="mx-auto w-full max-w-3xl space-y-4">
         <div className="flex min-h-11 flex-wrap items-center gap-2 md:min-h-9">
           <Link
             to={back?.to ?? "/admin/settings"}
@@ -69,33 +69,43 @@ export function SettingsPage({
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
           {back ? null : <Icon className="hidden size-5 text-muted-foreground nav:block" aria-hidden="true" />}
-          <h1 className="me-auto text-heading-lg">{title ?? t(page)}</h1>
+          <div className="me-auto flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="text-heading-lg">{title ?? t(page)}</h1>
+            <PresenceSlot />
+          </div>
           {actions}
         </div>
         <SaveErrorBanner />
-        <SettingsPresence presenceKey={key} />
         {readOnly ? <p className="text-body text-muted-foreground">{common("readOnly")}</p> : null}
         {children}
+        <PresenceNotices />
       </div>
+    </SettingsPresence>
     </TargetCardContext.Provider>
     </PresenceScopeContext.Provider>
   );
 }
+
+/** Settings cards keep the fields they edited when the page reloads, so any save by someone else merges. */
+const NO_FIELDS = () => [];
 
 /**
  * Who else has this settings page open, and their saves. "Load latest"
  * refetches the page's documents; each card keeps the fields it has edited
  * (`useSettingsForm` merges unedited fields from the fresh read).
  */
-function SettingsPresence({ presenceKey: key }: { presenceKey: string }) {
+function SettingsPresence({ presenceKey: key, children }: { presenceKey: string; children: ReactNode }) {
   const scope = useSaveScope();
   const queryClient = useQueryClient();
   return (
-    <EditorPresence
+    <EditorPresenceProvider
       presenceKey={key}
       dirty={Boolean(scope?.dirty)}
+      changedFields={NO_FIELDS}
       onLoadLatest={() => void queryClient.invalidateQueries({ queryKey: ["settings"] })}
-    />
+    >
+      {children}
+    </EditorPresenceProvider>
   );
 }
 

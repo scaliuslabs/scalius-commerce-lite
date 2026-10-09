@@ -109,6 +109,16 @@
   --chart-4: #8051ff;
   --chart-5: #c70a24;
 
+  /* Presence: one colour per person (avatar, field ring, name tag). Each fill
+     passes AA with --presence-foreground and 3:1 as a ring on the card. */
+  --presence-1: #005bd3;
+  --presence-2: #047b5d;
+  --presence-3: #7340d8;
+  --presence-4: #c42d73;
+  --presence-5: #a14a00;
+  --presence-6: #0b6e8a;
+  --presence-foreground: #ffffff;
+
   --elevation-card: 0 1px 0 0 rgb(26 26 26 / 0.07), inset 0 -1px 0 0 rgb(0 0 0 / 0.08), inset 0 0 0 1px rgb(0 0 0 / 0.08);
   --elevation-button: inset 0 -1px 0 0 #b5b5b5, inset 0 0 0 1px rgb(0 0 0 / 0.1), inset 0 0.5px 0 1.5px #ffffff;
   --elevation-button-primary: inset 0 -1px 0 1px rgb(0 0 0 / 0.8), inset 0 0 0 1px rgb(48 48 48), inset 0 0.5px 0 1.5px rgb(255 255 255 / 0.25);
@@ -198,6 +208,14 @@
   --chart-4: #a98bff;
   --chart-5: #ff6b75;
 
+  --presence-1: #6aa8ff;
+  --presence-2: #4cc79a;
+  --presence-3: #b597ff;
+  --presence-4: #ff7aae;
+  --presence-5: #f0a050;
+  --presence-6: #4fc3e0;
+  --presence-foreground: #111111;
+
   --elevation-card: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 0 rgb(255 255 255 / 0.08);
   --elevation-button: inset 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 0 rgb(255 255 255 / 0.1);
   --elevation-button-primary: inset 0 -1px 0 0 rgb(0 0 0 / 0.25), inset 0 0 0 1px rgb(255 255 255 / 0.5);
@@ -256,6 +274,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-presence-1: var(--presence-1);
+  --color-presence-2: var(--presence-2);
+  --color-presence-3: var(--presence-3);
+  --color-presence-4: var(--presence-4);
+  --color-presence-5: var(--presence-5);
+  --color-presence-6: var(--presence-6);
+  --color-presence-foreground: var(--presence-foreground);
 
   /* Tones. `bg-{tone}` is the fill, `border-{tone}` the tinted border and
      `text-{tone}` the readable toned text (Tailwind reads the utility's own

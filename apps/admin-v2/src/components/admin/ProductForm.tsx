@@ -34,6 +34,7 @@ import {
   useSaveScope,
 } from "./shared/SaveBar";
 import { PageHeader } from "./resource/PageHeader";
+import { PresenceSlot } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
@@ -436,7 +437,8 @@ function ProductEditor({
       <PageHeader
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
-        badge={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
+        // Presence rides in the badge spot until PageHeader has its own `presence` slot (B1).
+        badge={isEdit ? <><ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /><PresenceSlot /></> : null}
         actions={isEdit && productId ? (
           <>
             {moreActions}

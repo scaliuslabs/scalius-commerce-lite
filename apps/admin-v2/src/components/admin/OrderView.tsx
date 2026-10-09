@@ -47,6 +47,7 @@ import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { EditorPresenceProvider, PresenceNotices, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 
 /** Item locks that the order's state already explains; the others get a reason. */
 const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
@@ -132,12 +133,16 @@ export function OrderView({ order }: { order: Order }) {
         </div>
       }
     >
+      {/* Who else has this order open (DESIGN.md W6), so two people don't handle it at once. */}
+      <EditorPresenceProvider presenceKey={presenceKey("order", order.id)} revision={order.version} dirty={false}>
       <TooltipProvider>
-        <div className="space-y-4 pb-24 lg:pb-0">
+        <div data-presence-root={presenceKey("order", order.id)} className="space-y-4 pb-24 lg:pb-0">
+          <PresenceNotices />
           <PageHeader
             backTo={backTo}
             title={o("order", { number: name })}
-            badge={<OrderHeaderBadges order={order} />}
+            // Presence rides in the badge spot until PageHeader has its own `presence` slot (B1).
+            badge={<><OrderHeaderBadges order={order} /><PresenceSlot /></>}
             actions={
               <>
                 {actions.canPrintInvoices ? (
@@ -280,6 +285,7 @@ export function OrderView({ order }: { order: Order }) {
         </PhoneActionBar>
         {cancelRequest.dialog}
       </TooltipProvider>
+      </EditorPresenceProvider>
     </ErrorBoundary>
   );
 }
