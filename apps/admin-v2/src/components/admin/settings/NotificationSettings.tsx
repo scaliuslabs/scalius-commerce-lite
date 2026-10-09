@@ -275,7 +275,8 @@ export function StaffNotificationsCard() {
           }))}
       />
       {!pushReady ? (
-        <p className="text-body text-muted-foreground">{t("notReady", { channel: t("push") })}</p>
+        // Staff push is Web Push: it needs the store's https address (Sending has no push row any more).
+        <p className="text-body text-muted-foreground">{push("reasonHttps")}</p>
       ) : null}
       {/* Staff push is set up per person, on their own devices (My account): one place, open to every staff member. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-4">
