@@ -277,6 +277,7 @@ function ScheduleField({ id, label, help, error, date, time, onChange }: {
           onValueChange={(next) => onChange(next, next ? time : "")}
         />
         <Input
+          id={`${id}-time`}
           type="time"
           aria-label={t("timeOf", { field: label })}
           className="w-auto min-w-0 flex-1"
@@ -285,7 +286,7 @@ function ScheduleField({ id, label, help, error, date, time, onChange }: {
           onChange={(event) => onChange(date, event.target.value)}
         />
         {date ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange("", "")}>{t("clearDate")}</Button>
+          <Button type="button" variant="ghost" onClick={() => onChange("", "")}>{t("clearDate")}</Button>
         ) : null}
       </div>
     </SettingsField>

@@ -50,6 +50,7 @@ import {
 import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
 import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
 import { Field, FieldRow } from "~/components/ui/field";
+import { formMessages } from "~/i18n/forms";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -397,6 +398,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
   onSaved: (asset: DigitalAssetDto) => void;
   onChanged: () => void;
 }) {
+  const forms = useMessages(formMessages);
   const t = useMessages(digitalMessages);
   const r = useMessages(resourceMessages);
   const [name, setName] = React.useState("");
@@ -457,7 +459,8 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
             <Input id="digital-file-name" value={name} maxLength={200} aria-invalid={checked && nameIssue ? true : undefined} onChange={(event) => setName(event.target.value)} />
           </Field>
           <FieldRow>
-            <Field id="digital-file-limit" label={t("downloadsLabel")}>
+            <Field id="digital-file-limit" label={t("downloadsLabel")} error={checked && limited && limitIssue ? limitIssue : undefined}>
+              <div className="flex flex-col gap-2">
               <SearchableSelect
                 id="digital-file-limit"
                 value={limited ? "limited" : "unlimited"}
@@ -466,13 +469,12 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                 options={[{ value: "limited", label: t("limited") }, { value: "unlimited", label: t("unlimited") }]}
               />
               {limited ? (
-                <>
-                  <NumberInput integer aria-label={t("downloadCountLabel")} value={limit} aria-invalid={checked && limitIssue ? true : undefined} onValueChange={setLimit} />
-                  {checked && limitIssue ? <p className="text-body text-destructive">{limitIssue}</p> : null}
-                </>
+                <NumberInput id="digital-file-limit-count" integer aria-label={t("downloadCountLabel")} value={limit} onValueChange={setLimit} />
               ) : null}
+              </div>
             </Field>
-            <Field id="digital-file-access" label={t("accessLabel")}>
+            <Field id="digital-file-access" label={t("accessLabel")} error={checked && expires && daysIssue ? daysIssue : undefined}>
+              <div className="flex flex-col gap-2">
               <SearchableSelect
                 id="digital-file-access"
                 value={expires ? "days" : "forever"}
@@ -481,11 +483,9 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                 options={[{ value: "forever", label: t("forever") }, { value: "days", label: t("limitedTime") }]}
               />
               {expires ? (
-                <>
-                  <NumberInput integer aria-label={t("daysLabel")} placeholder={t("daysLabel")} value={days} aria-invalid={checked && daysIssue ? true : undefined} onValueChange={setDays} />
-                  {checked && daysIssue ? <p className="text-body text-destructive">{daysIssue}</p> : null}
-                </>
+                <NumberInput id="digital-file-access-days" integer aria-label={t("daysLabel")} suffix={forms("daysUnit")} value={days} onValueChange={setDays} />
               ) : null}
+              </div>
             </Field>
           </FieldRow>
           {save.isError ? <p role="alert" className="text-body text-destructive">{digitalErrorText(save.error, t)}</p> : null}
