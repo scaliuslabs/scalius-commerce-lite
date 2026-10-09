@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useWatch } from "react-hook-form";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -11,6 +11,7 @@ import { orderFormMessages } from "@/i18n/order-form";
 import { orderChannelSourceLabel, orderMessages } from "@/i18n/orders";
 import { useOrderForm } from "./OrderFormContext";
 import { ORDER_SOURCE_CHOICES, type OrderSourceChoice } from "./types";
+import { Field } from "~/components/ui/field";
 
 const SOURCE_CHOICE_ID = "order-source";
 
@@ -66,20 +67,16 @@ export function SalesChannelSection() {
           <FormField
             control={form.control}
             name="sourceName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("sourceName")}</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    maxLength={ORDER_CHANNEL_SOURCE_MAX_LENGTH}
-                    placeholder={t("sourceNamePlaceholder")}
-                    autoComplete="off"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("sourceName")} error={fieldState.error?.message}>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  maxLength={ORDER_CHANNEL_SOURCE_MAX_LENGTH}
+                  placeholder={t("sourceNamePlaceholder")}
+                  autoComplete="off"
+                />
+              </Field>
             )}
           />
         ) : null}

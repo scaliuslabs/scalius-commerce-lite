@@ -22,10 +22,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { cn } from "@scalius/shared/utils";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "~/components/ui/form";
+import { Form, FormField } from "~/components/ui/form";
 import { getSortableStyle } from "../shared/sortable-style";
 import { translate, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { Field } from "~/components/ui/field";
 
 export interface RichContentItem {
   id: string;
@@ -115,13 +116,10 @@ function SortableRichContentItem({
             <FormField
               control={form.control}
               name="title"
-              render={({ field }) => (
-                <FormItem className="mb-0">
-                  <FormControl>
-                    <Input placeholder={t("sectionTitlePlaceholder")} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field error={fieldState.error?.message} className="mb-0">
+                  <Input placeholder={t("sectionTitlePlaceholder")} {...field} />
+                </Field>
               )}
             />
           </div>
@@ -140,22 +138,19 @@ function SortableRichContentItem({
             <FormField
               control={form.control}
               name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <DeferredTiptapEditor
-                      content={field.value || ""}
-                      onChange={(newContent: string) => {
-                        field.onChange(newContent);
-                        onUpdate(item.id, { content: newContent });
-                      }}
-                      placeholder={t("sectionContentPlaceholder")}
-                      ariaLabel={t("sectionContent", { name })}
-                      compact={true}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field error={fieldState.error?.message}>
+                  <DeferredTiptapEditor
+                    content={field.value || ""}
+                    onChange={(newContent: string) => {
+                      field.onChange(newContent);
+                      onUpdate(item.id, { content: newContent });
+                    }}
+                    placeholder={t("sectionContentPlaceholder")}
+                    ariaLabel={t("sectionContent", { name })}
+                    compact={true}
+                  />
+                </Field>
               )}
             />
           </div>

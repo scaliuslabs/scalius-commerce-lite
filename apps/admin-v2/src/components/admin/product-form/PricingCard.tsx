@@ -1,16 +1,10 @@
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { FormField } from "@/components/ui/form";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Label } from "@/components/ui/label";
-import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
+import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { useCurrency } from "@/hooks/use-currency";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -22,6 +16,7 @@ import { useProductKindRules } from "./product-kind-rules";
 import { useSkuCosts, type SkuCostStore } from "./sku-costs";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
+import { Field } from "~/components/ui/field";
 
 // A product-level discount is only edited on a product with options that already has one.
 const ProductDiscountFields = lazy(() => import("./ProductDiscountFields"));
@@ -141,48 +136,40 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
       <FormField
         control={form.control}
         name="price"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("priceLabel", { symbol })}</FormLabel>
-            <FormControl>
-              <MoneyInput
-                currencyCode={code}
-                ref={field.ref}
-                name={field.name}
-                placeholder="0.00"
-                value={pair.price}
-                onValueChange={(next) => change({ ...pair, price: next })}
-                onBlur={field.onBlur}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
+        render={({ field, fieldState }) => (
+          <Field label={<>{t("priceLabel", { symbol })}</>} error={fieldState.error?.message}>
+            <MoneyInput
+              currencyCode={code}
+              ref={field.ref}
+              name={field.name}
+              placeholder="0.00"
+              value={pair.price}
+              onValueChange={(next) => change({ ...pair, price: next })}
+              onBlur={field.onBlur}
+            />
+          </Field>
         )}
       />
       {compareAtAllowed ? (
         <FormField
           control={form.control}
           name="compareAtProblem"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("compareAtLabel", { symbol })}</FormLabel>
-              <FormControl>
-                <MoneyInput
-                  currencyCode={code}
-                  ref={field.ref}
-                  placeholder="0.00"
-                  value={pair.compareAt}
-                  onValueChange={(next) => change({ ...pair, compareAt: next })}
-                  // Said as the merchant leaves the field, not while they type.
-                  onBlur={() => {
-                    field.onBlur();
-                    void form.trigger("compareAtProblem");
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
+          render={({ field, fieldState }) => (
+            <Field label={<>{t("compareAtLabel", { symbol })}</>} error={fieldState.error?.message}>
+              <MoneyInput
+                currencyCode={code}
+                ref={field.ref}
+                placeholder="0.00"
+                value={pair.compareAt}
+                onValueChange={(next) => change({ ...pair, compareAt: next })}
+                // Said as the merchant leaves the field, not while they type.
+                onBlur={() => {
+                  field.onBlur();
+                  void form.trigger("compareAtProblem");
+                }}
+              />
               <p className="text-body text-muted-foreground">{t("compareAtHelp")}</p>
-            </FormItem>
+            </Field>
           )}
         />
       ) : null}
@@ -208,7 +195,6 @@ function ProductCostFields({ costs, customerPays }: { costs: SkuCostStore; custo
         <Label htmlFor={id}>{t("costPerItem")}</Label>
         <CostInput
           id={id}
-          symbol={symbol}
           value={cost}
           aria-invalid={problem ? true : undefined}
           aria-describedby={`${id}-help`}

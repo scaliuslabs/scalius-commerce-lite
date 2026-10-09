@@ -9,14 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
+import { FormField } from "~/components/ui/form";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -34,6 +27,7 @@ import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { resourceMessages } from "~/i18n/resource";
 import { resolveDestinationZoneId } from "@scalius/core/modules/delivery/browser";
+import { Field } from "~/components/ui/field";
 
 const discountGuidanceId = "manual-order-discount-guidance";
 const discountErrorId = "manual-order-discount-error";
@@ -213,64 +207,56 @@ export function SummarySection() {
           {hasPhysical ? <FormField
             control={form.control}
             name="shippingCharge"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("deliveryCharge")}</FormLabel>
-                <FormControl>
-                  <MoneyInput
-                    currencyCode={code}
-                    placeholder="0"
-                    name={field.name}
-                    disabled={field.disabled}
-                    onBlur={field.onBlur}
-                    value={field.value === 0 ? null : field.value}
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.shippingChargeRef.current = el;
-                    }}
-                    onValueChange={(value) => {
-                      // A typed charge is a custom charge, delivered to the address.
-                      customChosen.current = true;
-                      form.setValue("shippingMethodId", null, { shouldDirty: true });
-                      form.setValue("shippingMethodKind", null, { shouldDirty: true, shouldValidate: true });
-                      field.onChange(value ?? 0);
-                    }}
-                    onKeyDown={(e) => handleKeyDown(e, refs.discountAmountRef)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("deliveryCharge")} error={fieldState.error?.message}>
+                <MoneyInput
+                  currencyCode={code}
+                  placeholder="0"
+                  name={field.name}
+                  disabled={field.disabled}
+                  onBlur={field.onBlur}
+                  value={field.value === 0 ? null : field.value}
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.shippingChargeRef.current = el;
+                  }}
+                  onValueChange={(value) => {
+                    // A typed charge is a custom charge, delivered to the address.
+                    customChosen.current = true;
+                    form.setValue("shippingMethodId", null, { shouldDirty: true });
+                    form.setValue("shippingMethodKind", null, { shouldDirty: true, shouldValidate: true });
+                    field.onChange(value ?? 0);
+                  }}
+                  onKeyDown={(e) => handleKeyDown(e, refs.discountAmountRef)}
+                />
+              </Field>
             )}
           /> : null}
 
           <FormField
             control={form.control}
             name="discountAmount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("discount")}</FormLabel>
-                <FormControl>
-                  <MoneyInput
-                    currencyCode={code}
-                    placeholder="0"
-                    aria-invalid={discountNeedsCorrection || undefined}
-                    aria-describedby={discountNeedsCorrection
-                      ? `${discountGuidanceId} ${discountErrorId}`
-                      : discountGuidanceId}
-                    aria-errormessage={discountNeedsCorrection ? discountErrorId : undefined}
-                    name={field.name}
-                    disabled={field.disabled}
-                    onBlur={field.onBlur}
-                    value={field.value}
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.discountAmountRef.current = el;
-                    }}
-                    onValueChange={field.onChange}
-                    onKeyDown={(e) => handleKeyDown(e)}
-                  />
-                </FormControl>
-                <FormDescription id={discountGuidanceId}>{t("discountHelp")}</FormDescription>
+            render={({ field, fieldState }) => (
+              <Field label={t("discount")} help={t("discountHelp")} error={fieldState.error?.message}>
+                <MoneyInput
+                  currencyCode={code}
+                  placeholder="0"
+                  aria-invalid={discountNeedsCorrection || undefined}
+                  aria-describedby={discountNeedsCorrection
+                    ? `${discountGuidanceId} ${discountErrorId}`
+                    : discountGuidanceId}
+                  aria-errormessage={discountNeedsCorrection ? discountErrorId : undefined}
+                  name={field.name}
+                  disabled={field.disabled}
+                  onBlur={field.onBlur}
+                  value={field.value}
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.discountAmountRef.current = el;
+                  }}
+                  onValueChange={field.onChange}
+                  onKeyDown={(e) => handleKeyDown(e)}
+                />
                 {discountNeedsCorrection && discountLimit ? (
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <p id={discountErrorId} className="text-body font-medium text-destructive" role="alert">
@@ -281,8 +267,7 @@ export function SummarySection() {
                     </Button>
                   </div>
                 ) : null}
-                <FormMessage />
-              </FormItem>
+              </Field>
             )}
           />
         </div>

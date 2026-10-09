@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { MediaManager, type MediaFile } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -25,6 +25,7 @@ import { translate, useMessages } from "~/i18n";
 import { productMediaMessages } from "~/i18n/product-media";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues, ProductMediaItem } from "./types";
+import { Field } from "~/components/ui/field";
 
 const EMPTY_PRODUCT_MEDIA: ProductMediaItem[] = [];
 
@@ -112,8 +113,8 @@ export const ProductImagesSection = memo(function ProductImagesSection({
         <FormField
           control={form.control}
           name="media"
-          render={({ field }) => (
-            <FormItem>
+          render={({ field, fieldState }) => (
+            <Field error={fieldState.error?.message}>
               <div className="space-y-3">
                 {field.value.length > 0 ? (
                   <div className={cn("grid gap-2 sm:grid-cols-3 lg:grid-cols-4", readOnly ? "grid-cols-3" : "grid-cols-1")}>
@@ -180,8 +181,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   onSelectMultiple={(files) => field.onChange(addMedia(field.value, files))}
                 />}
               </div>
-              <FormMessage />
-            </FormItem>
+            </Field>
           )}
         />
       </CardContent>

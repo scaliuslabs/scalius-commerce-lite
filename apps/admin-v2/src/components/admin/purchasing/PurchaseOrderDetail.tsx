@@ -45,7 +45,8 @@ import { printPurchaseOrder } from "./PurchaseOrderPrint";
 import { formatDay, formatMoment, lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { isOpenPurchaseOrder, PurchaseOrderStatusBadge } from "./purchasing-status";
-import { CostInput, Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
+import { CostInput } from "~/components/admin/shared/MoneyInput";
+import { Fact, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SupplierPicker, type SupplierChoice } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
 

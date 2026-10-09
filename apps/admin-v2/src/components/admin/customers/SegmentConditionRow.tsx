@@ -90,7 +90,7 @@ export function SegmentConditionRow({
           };
           return (
             <Field id={id} label={t(bound === "min" ? "atLeast" : "atMost")}>
-              {money ? <MoneyInput {...props} currencyCode={code} prefix={symbol} /> : <NumberInput {...props} integer />}
+              {money ? <MoneyInput {...props} currencyCode={code} /> : <NumberInput {...props} integer />}
             </Field>
           );
         };

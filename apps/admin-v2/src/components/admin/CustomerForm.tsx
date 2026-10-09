@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { CustomerActivity } from "./CustomerActivity";
@@ -36,6 +36,7 @@ import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
+import { Field } from "~/components/ui/field";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -201,20 +202,16 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("email")}</FormLabel>
-                <FormControl>
-                  {/* Email is optional: clearing it removes it. */}
-                  <Input
-                    type="email"
-                    {...field}
-                    value={field.value || ""}
-                    onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("email")} error={fieldState.error?.message}>
+                {/* Email is optional: clearing it removes it. */}
+                <Input
+                  type="email"
+                  {...field}
+                  value={field.value || ""}
+                  onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
+                />
+              </Field>
             )}
           />
         </CardContent>

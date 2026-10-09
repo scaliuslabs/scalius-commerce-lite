@@ -5,7 +5,7 @@ import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +13,7 @@ import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { detectBarcodeType } from "@scalius/shared/barcode-identity";
 import { useCurrency } from "@/hooks/use-currency";
-import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
+import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { useMessages } from "~/i18n";
@@ -271,7 +271,7 @@ export interface SkuCostField {
 /** Cost per item, with the profit and margin it gives underneath. */
 function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
   const t = useMessages(productMessages);
-  const { symbol, code, fmt } = useCurrency();
+  const { code, fmt } = useCurrency();
   const problem = costProblem(cost.value);
   const result = costMargin(cost.customerPays, cost.value, getDecimalPlaces(code));
   return (
@@ -282,7 +282,6 @@ function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
     >
       {(invalid) => (
         <CostInput
-          symbol={symbol}
           value={cost.value}
           aria-invalid={invalid}
           aria-label={t("costFor", { name })}

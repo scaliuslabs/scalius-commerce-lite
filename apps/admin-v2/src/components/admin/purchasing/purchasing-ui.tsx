@@ -1,34 +1,7 @@
-import { forwardRef, type ComponentProps, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { cn } from "@scalius/shared/utils";
-import { NumberInput } from "~/components/ui/number-input";
-import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
-
-/**
- * A cost in the store currency with its symbol inside the field. Unlike
- * MoneyInput it keeps paisa in taka: costs are not cash amounts.
- */
-export const CostInput = forwardRef<HTMLInputElement, Omit<ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage">>(
-  ({ className, ...props }, ref) => {
-    const { symbol } = useCurrency();
-    return (
-      <div className={cn("relative", className)}>
-        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 inset-s-3 flex items-center text-body text-muted-foreground">
-          {symbol}
-        </span>
-        <NumberInput
-          ref={ref}
-          {...props}
-          // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
-          className="ps-7"
-        />
-      </div>
-    );
-  },
-);
-CostInput.displayName = "CostInput";
 
 /** "1 unit" / "12 units" in the dashboard language. */
 export function useUnitsText() {

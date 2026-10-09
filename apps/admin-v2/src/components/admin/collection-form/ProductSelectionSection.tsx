@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { FormControl, FormField, FormItem, FormMessage } from "~/components/ui/form";
+import { FormField } from "~/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
@@ -21,6 +21,7 @@ import {
   ProductThumbnail,
   useProductOptions,
 } from "./ProductPickerDialog";
+import { Field } from "~/components/ui/field";
 
 interface ProductSelectionSectionProps {
   form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
@@ -126,24 +127,22 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
           control={form.control}
           name="config.source"
           rules={{ deps: ["config.productIds", "config.categoryIds"] }}
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <RadioGroup value={field.value} onValueChange={field.onChange} aria-label={t("products")}>
-                  {sources.map((source) => (
-                    <label key={source.value} className="flex items-start gap-3">
-                      <span className="flex h-lh items-center">
-                        <RadioGroupItem value={source.value} />
-                      </span>
-                      <span>
-                        {source.label}
-                        <span className="block text-muted-foreground">{source.help}</span>
-                      </span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </FormControl>
-            </FormItem>
+          render={({ field, fieldState }) => (
+            <Field>
+              <RadioGroup value={field.value} onValueChange={field.onChange} aria-label={t("products")}>
+                {sources.map((source) => (
+                  <label key={source.value} className="flex items-start gap-3">
+                    <span className="flex h-lh items-center">
+                      <RadioGroupItem value={source.value} />
+                    </span>
+                    <span>
+                      {source.label}
+                      <span className="block text-muted-foreground">{source.help}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </Field>
           )}
         />
 
@@ -196,7 +195,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
               control={form.control}
               name="config.productIds"
               render={() => (
-                <FormItem>
+                <Field error={fieldState.error?.message}>
                   {selectedProducts.length > 0 ? (
                     <ol className="divide-y rounded-lg border" aria-label={t("products")}>
                       {selectedProducts.map((product, index) => (
@@ -219,8 +218,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
                   ) : (
                     <p className="rounded-lg border border-dashed px-3 py-4 text-center text-muted-foreground">{t("noProducts")}</p>
                   )}
-                  <FormMessage />
-                </FormItem>
+                </Field>
               )}
             />
           ) : (
@@ -228,7 +226,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
               control={form.control}
               name="config.categoryIds"
               render={() => (
-                <FormItem>
+                <Field error={fieldState.error?.message}>
                   {selectedCategories.length > 0 ? (
                     <ul className="divide-y rounded-lg border" aria-label={tc("categories")}>
                       {selectedCategories.map((category) => (
@@ -246,8 +244,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
                     <p className="rounded-lg border border-dashed px-3 py-4 text-center text-muted-foreground">{t("noCategories")}</p>
                   )}
                   {hasUnpublished ? <p className="text-warning">{t("publishCategories")}</p> : null}
-                  <FormMessage />
-                </FormItem>
+                </Field>
               )}
             />
           )}

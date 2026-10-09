@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { IdText } from "~/components/admin/data-table/cells";
 import { DataTableRowActions, type ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { cn } from "@scalius/shared/utils";
@@ -46,7 +46,7 @@ import {
 } from "./option-matrix-editor-model";
 import { useProductKindRules, isDigitalSku } from "../product-kind-rules";
 import { DigitalStockCell } from "../DigitalStock";
-import { CostInput, formatMargin } from "~/components/admin/inventory/cost-fields";
+import { formatMargin } from "~/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "~/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
@@ -576,7 +576,6 @@ const VariantRow = React.memo(function VariantRow({
           <span className="block text-body text-muted-foreground md:hidden">{t("price")}</span>
           <MoneyInput
             currencyCode={money.code}
-            prefix={money.symbol}
             value={variant.price}
             data-cell="price"
             aria-invalid={Boolean(priceError)}
@@ -716,7 +715,6 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
       <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
         <MoneyInput
           currencyCode={money.code}
-          prefix={money.symbol}
           value={commonPrice ?? null}
           placeholder={commonPrice === undefined ? t("mixedValues") : undefined}
           title={commonPrice === undefined ? range : undefined}
@@ -876,7 +874,6 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
         id={inputId}
         autoFocus
         currencyCode={money.code}
-        prefix={money.symbol}
         value={price}
         onValueChange={setPrice}
         className="w-36"
@@ -885,7 +882,7 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   } else if (panel === "cost") {
     ready = cost !== null && costProblem(cost) === null;
     apply = () => onCostApply(cost!);
-    field = <CostInput id={inputId} autoFocus symbol={money.symbol} value={cost} onValueChange={setCost} className="w-36" />;
+    field = <CostInput id={inputId} autoFocus value={cost} onValueChange={setCost} className="w-36" />;
   } else if (panel === "stock") {
     ready = stock !== null && Number.isInteger(stock) && stock >= 0 && trackedCount > 0;
     apply = () => onApply((variant) => (typedStock(variant) ? { stock: stock! } : {}));

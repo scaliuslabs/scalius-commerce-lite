@@ -1,12 +1,6 @@
 import { lazy, Suspense } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { RichContent } from "@/components/ui/rich-content";
@@ -18,6 +12,7 @@ import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Field } from "~/components/ui/field";
 
 const AdditionalInfoManager = lazy(() =>
   import("./AdditionalInfoManager").then((module) => ({
@@ -39,36 +34,28 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
         <FormField
           control={form.control}
           name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("title")}</FormLabel>
-              <FormControl>
-                <Input placeholder={t("titlePlaceholder")} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          render={({ field, fieldState }) => (
+            <Field label={t("title")} error={fieldState.error?.message}>
+              <Input placeholder={t("titlePlaceholder")} {...field} />
+            </Field>
           )}
         />
         <FormField
           control={form.control}
           name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("description")}</FormLabel>
+          render={({ field, fieldState }) => (
+            <Field label={t("description")} error={fieldState.error?.message}>
               {readOnly ? (
                 <RichContent content={field.value ?? ""} variant="compact" />
               ) : (
-                <FormControl>
-                  <DeferredTiptapEditor
-                    content={field.value || ""}
-                    onChange={(html) => field.onChange(richTextOrNull(html))}
-                    ariaLabel={t("description")}
-                    compact
-                  />
-                </FormControl>
+                <DeferredTiptapEditor
+                  content={field.value || ""}
+                  onChange={(html) => field.onChange(richTextOrNull(html))}
+                  ariaLabel={t("description")}
+                  compact
+                />
               )}
-              <FormMessage />
-            </FormItem>
+            </Field>
           )}
         />
       </CardContent>
@@ -109,11 +96,10 @@ export function AdditionalSectionsCard({ form, readOnly }: SectionProps) {
           <FormField
             control={form.control}
             name="additionalInfo"
-            render={({ field }) => (
-              <FormItem>
+            render={({ field, fieldState }) => (
+              <Field error={fieldState.error?.message}>
                 <AdditionalInfoManager initialContent={field.value ?? []} onContentChange={field.onChange} />
-                <FormMessage />
-              </FormItem>
+              </Field>
             )}
           />
         </Suspense>

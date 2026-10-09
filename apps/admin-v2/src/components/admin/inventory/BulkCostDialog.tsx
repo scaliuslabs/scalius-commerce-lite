@@ -11,7 +11,6 @@ import {
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { useCurrency } from "~/hooks/use-currency";
 import type { InventoryVariant } from "~/lib/api-query-options/inventory";
 import {
   costProblem,
@@ -24,7 +23,7 @@ import {
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
-import { CostInput } from "./cost-fields";
+import { CostInput } from "~/components/admin/shared/MoneyInput";
 
 type Costs = ReadonlyMap<string, number | null>;
 
@@ -57,7 +56,6 @@ interface BulkCostDialogProps {
 export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: BulkCostDialogProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
-  const { symbol } = useCurrency();
   // The rows as opened: a list refresh behind the dialog never moves them.
   const [rows] = useState(() => [...variants]);
   const [seen, setSeen] = useState<Costs>(() => new Map(rows.map((row) => [row.id, row.cost ?? null])));
@@ -162,7 +160,7 @@ export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: B
               <Label htmlFor="inventory-bulk-cost-all">{t("setAllTo")}</Label>
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
-                  <CostInput id="inventory-bulk-cost-all" symbol={symbol} value={all} onValueChange={setAll} />
+                  <CostInput id="inventory-bulk-cost-all" value={all} onValueChange={setAll} />
                 </div>
                 <Button
                   type="button"
@@ -195,7 +193,6 @@ export function BulkCostDialog({ variants, open, onClose, onSaved, onReload }: B
                     </div>
                     <div className="w-32 shrink-0">
                       <CostInput
-                        symbol={symbol}
                         value={typed.get(row.id) ?? null}
                         aria-label={t("costFor", { name })}
                         aria-invalid={problem ? true : undefined}

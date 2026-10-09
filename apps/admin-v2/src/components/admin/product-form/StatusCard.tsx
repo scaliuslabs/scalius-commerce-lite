@@ -2,13 +2,14 @@ import { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared/product-condition";
 import { useMessages } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+import { Field } from "~/components/ui/field";
 
 const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
   new: "conditionNew",
@@ -35,20 +36,17 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           control={form.control}
           name="isActive"
           render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <SearchableSelect
-                  value={field.value ? "active" : "draft"}
-                  onValueChange={(value) => field.onChange(value === "active")}
-                  ariaLabel={t("status")}
-                  triggerClassName="w-full"
-                  triggerRef={field.ref}
-                  onBlur={field.onBlur}
-                  options={[{ value: "active", label: t("statusActive") }, { value: "draft", label: t("statusDraft") }]}
-                />
-              </FormControl>
-              <FormDescription>{t(field.value ? "statusActiveHelp" : "statusDraftHelp")}</FormDescription>
-            </FormItem>
+            <Field help={t(field.value ? "statusActiveHelp" : "statusDraftHelp")}>
+              <SearchableSelect
+                value={field.value ? "active" : "draft"}
+                onValueChange={(value) => field.onChange(value === "active")}
+                ariaLabel={t("status")}
+                triggerClassName="w-full"
+                triggerRef={field.ref}
+                onBlur={field.onBlur}
+                options={[{ value: "active", label: t("statusActive") }, { value: "draft", label: t("statusDraft") }]}
+              />
+            </Field>
           )}
         />
 
@@ -56,19 +54,16 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           control={form.control}
           name="productCondition"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("condition")}</FormLabel>
-              <FormControl>
-                <SearchableSelect
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  triggerClassName="w-full"
-                  triggerRef={field.ref}
-                  onBlur={field.onBlur}
-                  options={PRODUCT_CONDITION_VALUES.map((condition) => ({ value: condition, label: t(CONDITION_LABELS[condition]) }))}
-                />
-              </FormControl>
-            </FormItem>
+            <Field label={t("condition")}>
+              <SearchableSelect
+                value={field.value}
+                onValueChange={field.onChange}
+                triggerClassName="w-full"
+                triggerRef={field.ref}
+                onBlur={field.onBlur}
+                options={PRODUCT_CONDITION_VALUES.map((condition) => ({ value: condition, label: t(CONDITION_LABELS[condition]) }))}
+              />
+            </Field>
           )}
         />
 

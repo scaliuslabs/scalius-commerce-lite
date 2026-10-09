@@ -43,7 +43,8 @@ import {
 import { lineName } from "./purchasing-format";
 import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem } from "./purchasing-problem";
 import { PurchaseOrderStatusBadge } from "./purchasing-status";
-import { CostInput, LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
+import { CostInput } from "~/components/admin/shared/MoneyInput";
+import { LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SkuPicker } from "./SkuPicker";
 import { SupplierPicker } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";

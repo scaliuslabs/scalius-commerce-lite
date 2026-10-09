@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField, FormItem, FormControl, FormDescription, FormMessage } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -42,6 +42,7 @@ import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Field } from "~/components/ui/field";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -201,22 +202,17 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("name")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("namePlaceholder")} maxLength={100} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field label={t("name")} error={fieldState.error?.message}>
+                    <Input placeholder={t("namePlaceholder")} maxLength={100} {...field} />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("description")}</FormLabel>
+                render={({ field, fieldState }) => (
+                  <Field label={t("description")} error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
@@ -228,8 +224,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     ) : (
                       <RichContent content={field.value ?? ""} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -243,8 +238,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="content"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
@@ -256,8 +251,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     ) : (
                       <RichContent content={field.value ?? ""} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -271,8 +265,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="image"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     <FormImageUploadField
                       value={field.value}
                       onChange={field.onChange}
@@ -280,8 +274,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       changeTriggerLabel={t("changeImage")}
                       placeholder={t("noImage")}
                     />
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -384,9 +377,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="parentId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="category-parent">{t("parentCategory")}</FormLabel>
+                render={({ field, fieldState }) => (
+                  <Field label={t("parentCategory")} error={fieldState.error?.message}>
                     <ParentCategorySelect
                       selfId={defaultValues?.id}
                       name={name ?? ""}
@@ -394,16 +386,14 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       onChange={field.onChange}
                       disabled={!canSave}
                     />
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name="listingTemplate"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="category-template">{t("template")}</FormLabel>
+                  <Field label={t("template")} help={t("templateHelp")}>
                     <TemplateSelect
                       id="category-template"
                       kind="listing"
@@ -411,8 +401,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       onChange={field.onChange}
                       disabled={!canSave}
                     />
-                    <FormDescription>{t("templateHelp")}</FormDescription>
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
