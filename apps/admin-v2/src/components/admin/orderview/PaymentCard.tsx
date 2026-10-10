@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -6,10 +7,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { MoneyInput } from "~/components/admin/shared/MoneyInput";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import {
@@ -34,7 +32,6 @@ import {
   paymentStatusLabel,
 } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
@@ -45,7 +42,6 @@ import {
   orderErrorMessage,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
-  useRefundOrder,
   useUpdateOrderCod,
 } from "~/lib/api-mutations/orders";
 import type { postApiV1AdminOrdersByIdCod } from "@scalius/api-client/sdk";
@@ -64,9 +60,11 @@ import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
 import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
 import { OrderSummaryRows } from "./OrderItemsCard";
-import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 import { Field } from "~/components/ui/field";
+
+// The refund form loads the first time it opens.
+const RefundDialog = lazy(() => import("./RefundDialog"));
 
 type CodAction = "collected" | "failed" | "returned";
 type CodFailureReason = Extract<ApiBody<typeof postApiV1AdminOrdersByIdCod>, { action: "failed" }>["reason"];
@@ -74,7 +72,6 @@ type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 
 const COD_FAILURE_REASONS: CodFailureReason[] = ["not_home", "refused", "no_cash", "wrong_address", "other"];
-const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
 const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
 /** A hosted gateway the buyer can be sent back to: any app's (apps are hosted only), or a retired built-in id one replaced. */
 function isRecoveryLinkGateway(value: string | null | undefined): boolean {
@@ -117,7 +114,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
-  const g = useMessages(giftCardOrderMessages);
   const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -132,13 +128,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
-  const [refundAmount, setRefundAmount] = useState<number | null>(null);
-  const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
-  const [refundReason, setRefundReason] = useState<string>("requested_by_customer");
-  const [refundSettlement, setRefundSettlement] = useState<RefundSettlement>("original");
-  const [manualSettlementConfirmed, setManualSettlementConfirmed] = useState(false);
-  // One key per opened refund dialog: a repeated submit replays the first refund.
-  const refundRequestKey = useRef("");
+  // Each opening mounts a fresh refund dialog (its own amount and request key).
+  const [refundSession, setRefundSession] = useState(0);
+  const refundLoaded = useOpenedOnce(refundOpen);
   const [codAction, setCodAction] = useState<CodAction | null>(null);
   const [collectedBy, setCollectedBy] = useState("");
   const [collectorError, setCollectorError] = useState<string | null>(null);
@@ -206,8 +198,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
   const hasCashPayment = isCOD || payments.some((payment) =>
     payment.paymentMethod === "cod" && payment.paymentType !== "refund" && payment.status === "succeeded");
-  // Store credit hands over a gift card, not cash: nothing to confirm.
-  const requiresManualSettlementConfirmation = hasCashPayment && refundSettlement === "original";
   const hasCashBalanceDueOnDelivery = plan?.status === "deposit_paid"
     && order.paymentStatus === "partial"
     && Number(order.balanceDue ?? 0) > 0;
@@ -247,7 +237,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const canOpenCollect = codRead.status === "ready" && codOpen && canRecordCodCollection && !isRefundLocked;
 
   const codMutation = useUpdateOrderCod();
-  const refundMutation = useRefundOrder();
   const refundCheckMutation = useReconcileRefundAttempt();
   const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
   const presentation = buildOrderPaymentPresentation({ orderStatus: order.status, balanceDue: order.balanceDue });
@@ -263,14 +252,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     setCodAction(action);
   };
   const openRefund = () => {
-    refundMutation.reset();
-    const owed = initialRefundAmount(order);
-    setRefundAmount(owed);
-    setRefundAmountError(null);
-    setRefundReason(owed === null ? "requested_by_customer" : "returned_items");
-    refundRequestKey.current = crypto.randomUUID();
-    setManualSettlementConfirmed(false);
-    setRefundSettlement("original");
+    setRefundSession((session) => session + 1);
     setRefundOpen(true);
   };
 
@@ -311,34 +293,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     });
   }
 
-  const refundValue = refundAmount ?? Number.NaN;
-  const refundAmountProblem = (): string | null =>
-    Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid
-      ? null
-      : t("refund.amountInvalid", { amount: money(paid) });
-
-  function handleIssueRefund(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (refundMutation.isPending || isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)) return;
-    const problem = refundAmountProblem();
-    setRefundAmountError(problem);
-    if (problem) {
-      document.getElementById("refundAmount")?.focus();
-      return;
-    }
-    refundMutation.mutate(
-      {
-        orderId: order.id,
-        requestKey: refundRequestKey.current,
-        amount: refundValue,
-        reason: refundReason,
-        manualSettlementConfirmed: requiresManualSettlementConfirmation ? true : undefined,
-        ...refundSettlementBody(refundSettlement),
-      },
-      { onSuccess: () => setRefundOpen(false) },
-    );
-  }
-
   async function handleCopyRecoveryLink() {
     let link: Awaited<ReturnType<typeof recoveryLinkMutation.mutateAsync>>;
     try {
@@ -355,13 +309,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     toast.success(t("recovery.copied"), { description: link.note || undefined });
   }
 
-  // Confirm buttons echo the live amount, e.g. "Record ৳500 cash refund", only while it is valid.
-  const refundAmountValid = Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid;
-  const refundConfirmLabel = refundSettlement === "store_credit"
-    ? refundAmountValid ? g("refundTo.issueAmount", { amount: money(refundValue) }) : g("refundTo.issue")
-    : refundAmountValid
-      ? t(requiresManualSettlementConfirmation ? "refund.recordCashAmount" : "refund.issueAmount", { amount: money(refundValue) })
-      : t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue");
   const collectTitle = t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
 
   const refreshButton = (
@@ -720,76 +667,20 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </DialogContent>
       </Dialog>
 
-      <Dialog open={refundOpen} onOpenChange={(open) => !refundMutation.isPending && setRefundOpen(open)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}</DialogTitle>
-            <DialogDescription>
-              {refundSettlement === "store_credit"
-                ? g("refundTo.description")
-                : t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}
-            </DialogDescription>
-          </DialogHeader>
-          <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
-            {refundMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(refundMutation.error)}</AlertDescription></Alert> : null}
-            <Field
-              id="refundAmount"
-              label={t("refund.amount")}
-              error={refundAmountError ?? undefined}
-              help={order.refundDue > 0
-                ? t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
-                : t("refund.max", { amount: money(paid) })}
-            >
-              <MoneyInput
-                currencyCode={order.currencyCode ?? ""}
-                id="refundAmount"
-                value={refundAmount}
-                disabled={isRefundLocked}
-                onValueChange={(value) => {
-                  setRefundAmount(value);
-                  if (refundAmountError) setRefundAmountError(null);
-                }}
-                onBlur={() => setRefundAmountError(refundAmount === null ? null : refundAmountProblem())}
-              />
-            </Field>
-            <Field id="refundReason" label={t("refund.reason")}>
-              <SearchableSelect
-                triggerClassName="w-full"
-                id="refundReason"
-                value={refundReason}
-                onValueChange={setRefundReason}
-                options={REFUND_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "refund.reason.", reason) }))}
-              />
-            </Field>
-            <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} disabled={isRefundLocked} />
-            {requiresManualSettlementConfirmation ? (
-              <div className="flex items-start gap-3">
-                <span className="flex h-lh items-center">
-                  <Checkbox
-                    id="manualSettlementConfirmed"
-                    checked={manualSettlementConfirmed}
-                    onCheckedChange={(checked) => setManualSettlementConfirmed(checked === true)}
-                  />
-                </span>
-                <Label htmlFor="manualSettlementConfirmed">{t("refund.manualConfirm")}</Label>
-              </div>
-            ) : null}
-          </form>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRefundOpen(false)} disabled={refundMutation.isPending}>
-              {r("cancel")}
-            </Button>
-            <Button
-              type="submit"
-              form="order-refund"
-              loading={refundMutation.isPending}
-              disabled={isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)}
-            >
-              {refundConfirmLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {refundLoaded ? (
+        <Suspense fallback={null}>
+          <RefundDialog
+            key={refundSession}
+            order={order}
+            open={refundOpen}
+            onOpenChange={setRefundOpen}
+            paid={paid}
+            money={money}
+            locked={isRefundLocked}
+            hasCashPayment={hasCashPayment}
+          />
+        </Suspense>
+      ) : null}
     </Card>
   );
 }
@@ -803,12 +694,6 @@ export function latestCourierName(order: Pick<Order, "shipments">): string {
   if (!latest) return "";
   const name = latest.providerType === "manual" ? latest.courierName : latest.providerName ?? latest.courierName;
   return name?.trim() ?? "";
-}
-
-/** Only what came back is owed; the rest of a refund is the merchant's call. */
-export function initialRefundAmount(order: Pick<Order, "refundDue" | "paidAmount">): number | null {
-  const owed = Math.min(Number(order.refundDue ?? 0), Number(order.paidAmount ?? 0));
-  return owed > 0 ? owed : null;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

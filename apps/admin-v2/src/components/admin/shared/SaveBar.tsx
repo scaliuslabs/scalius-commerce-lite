@@ -499,7 +499,7 @@ export function SaveBarProvider({
  * Shopify's save bar is the search pill itself (12px corners, 1px lighter
  * edge on the frame), so its buttons sit 4px inside its outer edge (1px
  * border + 3px) with 8px corners, concentric, 28px from md. On phones the bar
- * is a strip over the whole top bar with 44px buttons (C6).
+ * is a 52px pill over the top bar with 44px buttons (C6).
  * Discard is dark, Save white, in both themes.
  */
 const DISCARD_BUTTON =
@@ -581,7 +581,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-topbar-border bg-topbar-subdued px-2 ps-3 text-topbar-foreground md:inset-0 md:h-9 md:rounded-xl md:border md:p-0.75 md:ps-3"
+              className="absolute inset-x-1 top-0.5 z-30 flex h-13 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.5 ps-3 text-topbar-foreground md:inset-0 md:h-9 md:p-0.75"
             >
               <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
                 <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />

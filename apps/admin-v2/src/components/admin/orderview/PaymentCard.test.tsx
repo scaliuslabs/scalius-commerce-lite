@@ -10,6 +10,8 @@ import { setLocale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
 import { PaymentCard } from "./PaymentCard";
+// The refund dialog loads on first open; load it up front so a click shows it at once.
+import "./RefundDialog";
 
 const mocks = vi.hoisted(() => ({
   permissions: { canEditOrders: true, canRefundOrders: false, canUpdateOrderCod: false },

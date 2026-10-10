@@ -1,14 +1,8 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 
@@ -70,37 +64,18 @@ function ActionButton({ action }: { action: PageAction }) {
   );
 }
 
+// The menu loads with the first page that folds an action into it.
+const PageHeaderMenu = lazy(() => import("./PageHeaderMenu"));
+
 function MoreActions({ actions, className }: { actions: readonly PageAction[]; className?: string }) {
   const t = useMessages(resourceMessages);
   if (actions.length === 0) return null;
+  // Same button while the menu loads: nothing moves.
+  const placeholder = <Button type="button" variant="outline" className={className}>{t("moreActions")}<ChevronDown aria-hidden /></Button>;
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" className={className}>
-          {t("moreActions")}
-          <ChevronDown aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {actions.map((action) => (
-          action.to ? (
-            <DropdownMenuItem key={action.label} asChild disabled={action.disabled}>
-              <Link to={action.to}>{action.icon}{action.label}</Link>
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem
-              key={action.label}
-              disabled={action.disabled}
-              variant={action.destructive ? "destructive" : undefined}
-              onSelect={() => action.onAction?.()}
-            >
-              {action.icon}
-              {action.label}
-            </DropdownMenuItem>
-          )
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Suspense fallback={placeholder}>
+      <PageHeaderMenu actions={actions} className={className} />
+    </Suspense>
   );
 }
 

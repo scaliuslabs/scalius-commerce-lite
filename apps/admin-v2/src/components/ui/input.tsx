@@ -12,7 +12,7 @@ export const fieldClassName =
  * box takes the border, hover, focus ring, invalid and disabled looks of its input.
  */
 const affixBoxClassName =
-  "flex h-11 w-full min-w-0 cursor-text items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-body-lg text-foreground hover:border-muted-foreground has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-1 has-[input:focus-visible]:ring-ring has-[input:disabled]:cursor-not-allowed has-[input:disabled]:bg-muted has-[input:disabled]:opacity-60 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:bg-critical-surface sm:h-9 sm:text-body";
+  "flex h-11 w-full min-w-0 items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-body-lg text-foreground hover:border-muted-foreground focus-within:border-ring focus-within:ring-1 focus-within:ring-ring has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:bg-critical-surface sm:h-9 sm:text-body";
 
 type InputProps = Omit<React.ComponentProps<"input">, "prefix"> & {
   /** Inside the field before the value: a currency symbol ("৳"). Never put it in the label (F3). */
@@ -53,7 +53,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type,
       <input
         type={type}
         ref={ref}
-        className="h-11 min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed sm:h-9"
+        className="h-11 min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:h-9"
         {...props}
       />
       {suffix !== undefined ? <span aria-hidden="true" className="shrink-0 text-muted-foreground">{suffix}</span> : null}

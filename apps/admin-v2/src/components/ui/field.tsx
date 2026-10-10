@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
-import { formMessages } from "~/i18n/forms";
+import { fieldMessages } from "~/i18n/field";
 import { FieldContext, type FieldControlState } from "./field-context";
 import { Label } from "./label";
 
@@ -40,7 +40,7 @@ type FieldProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
  * error as `aria-describedby`, and `aria-invalid` while there is an error.
  */
 export function Field({ label, id, help, error, optional, hideLabel, labelAction, noteId: fixedNoteId, announceError = false, className, children, ...props }: FieldProps) {
-  const t = useMessages(formMessages);
+  const t = useMessages(fieldMessages);
   const ownId = React.useId();
   const controlId = id ?? ownId;
   const hasError = error !== undefined && error !== null && error !== false && error !== "";
@@ -143,14 +143,14 @@ export function FieldSet({ label, help, error, className, children }: {
   );
 }
 
-/** Fields stacked in a card: 16px apart, 12px inside an `Inset` (S4). */
+/** Fields stacked in a card: 16px apart; inside an `Inset` pass `className="gap-3"` (12px, S4). */
 export function FieldGroup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div data-slot="field-group" className={cn("flex min-w-0 flex-col gap-4 in-data-[slot=inset]:gap-3", className)} {...props} />;
+  return <div data-slot="field-group" className={cn("flex min-w-0 flex-col gap-4", className)} {...props} />;
 }
 
 /**
  * Fields side by side on one grid (S5): equal columns, tops aligned, 16px
- * apart (12px in an `Inset`). The row goes to one column when its own width
+ * apart (`className="gap-3"`, 12px, in an `Inset`). The row goes to one column when its own width
  * is narrow (a phone, a side column), not only when the window is.
  */
 export function FieldRow({ columns = 2, className, ...props }: React.HTMLAttributes<HTMLDivElement> & { columns?: 2 | 3 }) {
@@ -159,7 +159,7 @@ export function FieldRow({ columns = 2, className, ...props }: React.HTMLAttribu
       <div
         data-slot="field-row"
         className={cn(
-          "grid items-start gap-4 in-data-[slot=inset]:gap-3",
+          "grid items-start gap-4",
           columns === 3 ? "@lg:grid-cols-3" : "@md:grid-cols-2",
           className,
         )}
@@ -193,7 +193,7 @@ export function ReadOnlyValue({ label, value, help, mono = false, numeric = fals
       <div
         data-slot="field-control"
         className={cn(
-          "text-body wrap-anywhere",
+          "text-body break-words",
           besideControls && "flex min-h-11 items-center sm:min-h-9",
           mono && "font-mono",
           numeric && "tabular-nums",
@@ -209,7 +209,7 @@ export function ReadOnlyValue({ label, value, help, mono = false, numeric = fals
 
 /**
  * The quiet inset (K3): detail that belongs to one row of a card (an expanded
- * variant, an address, a line item). Fields inside it are 12px apart.
+ * variant, an address, a line item). Fields inside it are 12px apart (`gap-3`).
  */
 export function Inset({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div data-slot="inset" className={cn("min-w-0 rounded-lg border bg-muted/30 p-3", className)} {...props} />;

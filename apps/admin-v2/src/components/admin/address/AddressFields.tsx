@@ -208,7 +208,7 @@ function CountryFields({
   if (rules.isPending) {
     // The usual shape (two lines, a city row, a region and postal row) so the dialog barely moves.
     return (
-      <div className="flex flex-col gap-4 in-data-[slot=inset]:gap-3" aria-busy="true" aria-label={t("rulesLoading")}>
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label={t("rulesLoading")}>
         {[0, 1, 2].map((row) => <Skeleton key={row} className="h-16 w-full" />)}
       </div>
     );

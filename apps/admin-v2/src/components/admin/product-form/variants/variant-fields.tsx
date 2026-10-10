@@ -291,7 +291,7 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
   return (
-    <FieldRow>
+    <FieldRow className="gap-3">
       <Field label={t("sku")} error={errorOf("sku")}>
           <Input value={variant.sku} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
       </Field>
