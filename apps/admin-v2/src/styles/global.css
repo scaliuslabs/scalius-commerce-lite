@@ -437,7 +437,6 @@ html:lang(bn) {
   /* C8: a link inside running text is underlined, so colour is never its only cue (WCAG 1.4.1). */
   :where(p, dd) > a.text-link {
     text-decoration-line: underline;
-    text-underline-offset: 2px;
   }
 
   /* WCAG 2.4.7/2.4.11: one clear 2px ring for anything focusable by keyboard

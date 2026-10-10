@@ -92,9 +92,9 @@ export function ChoiceField({ id, label, help, control, controlAt = "start", cla
   className?: string;
 }) {
   return (
-    <div data-slot="field" className={cn("flex min-w-0 items-start gap-2", controlAt === "end" && "flex-row-reverse justify-between gap-3", className)}>
+    <div data-slot="field" className={cn("flex min-w-0 items-start gap-2", controlAt === "end" && "justify-between gap-3", className)}>
       {/* The control sits on the label's first line (rule 10). */}
-      <div data-slot="field-control" className="flex h-lh shrink-0 items-center text-body">{control}</div>
+      <div data-slot="field-control" className={cn("flex h-lh shrink-0 items-center text-body", controlAt === "end" && "order-last")}>{control}</div>
       <div className="flex min-w-0 flex-col gap-1">
         <Label data-slot="field-label" htmlFor={id}>{label}</Label>
         {help ? <p data-slot="choice-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
@@ -143,24 +143,31 @@ export function FieldSet({ label, help, error, className, children }: {
   );
 }
 
-/** Fields stacked in a card: 16px apart; inside an `Inset` pass `className="gap-3"` (12px, S4). */
-export function FieldGroup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div data-slot="field-group" className={cn("flex min-w-0 flex-col gap-4", className)} {...props} />;
+/** Fields stacked in a card: 16px apart; 12px inside an `Inset` (`inset`, S4). */
+export function FieldGroup({ inset = false, className, ...props }: React.HTMLAttributes<HTMLDivElement> & { inset?: boolean }) {
+  return <div data-slot="field-group" className={cn("flex min-w-0 flex-col", inset ? "gap-3" : "gap-4", className)} {...props} />;
 }
 
 /**
  * Fields side by side on one grid (S5): equal columns, tops aligned, 16px
- * apart (`className="gap-3"`, 12px, in an `Inset`). The row goes to one column when its own width
+ * apart (12px in an `Inset`: `inset`). Two columns go to one when the row's own width
  * is narrow (a phone, a side column), not only when the window is.
  */
-export function FieldRow({ columns = 2, className, ...props }: React.HTMLAttributes<HTMLDivElement> & { columns?: 2 | 3 }) {
+export function FieldRow({ columns = 2, inset = false, className, ...props }: React.HTMLAttributes<HTMLDivElement> & {
+  /** 1 keeps a lone field full width in a list of rows. */
+  columns?: 1 | 2 | 3;
+  /** Inside an `Inset`: 12px apart (S4). */
+  inset?: boolean;
+}) {
   return (
     <div className="@container min-w-0">
       <div
         data-slot="field-row"
         className={cn(
-          "grid items-start gap-4",
-          columns === 3 ? "@lg:grid-cols-3" : "@md:grid-cols-2",
+          "grid items-start",
+          inset ? "gap-3" : "gap-4",
+          // Three columns follow the window (sm), two follow the row's own width.
+          columns === 3 ? "sm:grid-cols-3" : columns === 2 ? "@md:grid-cols-2" : undefined,
           className,
         )}
         {...props}
@@ -209,7 +216,7 @@ export function ReadOnlyValue({ label, value, help, mono = false, numeric = fals
 
 /**
  * The quiet inset (K3): detail that belongs to one row of a card (an expanded
- * variant, an address, a line item). Fields inside it are 12px apart (`gap-3`).
+ * variant, an address, a line item). Fields inside it are 12px apart (`inset` on their FieldRow or FieldGroup).
  */
 export function Inset({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div data-slot="inset" className={cn("min-w-0 rounded-lg border bg-muted/30 p-3", className)} {...props} />;

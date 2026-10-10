@@ -15,6 +15,7 @@ export default function ProductDiscountFields({ form }: { form: UseFormReturn<Pr
   const { code } = useCurrency();
   const discountType = useWatch({ control: form.control, name: "discountType" });
   return (
+    <div className="flex flex-col gap-4">
     <FieldRow>
       <FormField
         control={form.control}
@@ -68,7 +69,8 @@ export default function ProductDiscountFields({ form }: { form: UseFormReturn<Pr
           </Field>
         )}
       />
-      <p className="text-body text-muted-foreground @md:col-span-2">{t("variantDiscountHint")}</p>
     </FieldRow>
+      <p className="text-body text-muted-foreground">{t("variantDiscountHint")}</p>
+    </div>
   );
 }

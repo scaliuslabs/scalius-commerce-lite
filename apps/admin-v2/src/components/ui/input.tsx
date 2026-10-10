@@ -7,13 +7,6 @@ import { useFieldControl } from "./field-context";
 export const fieldClassName =
   "w-full min-w-0 rounded-lg border border-input bg-card px-3 text-body-lg text-foreground placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:bg-critical-surface sm:text-body";
 
-/**
- * The same chrome drawn by a box around an input with a prefix or suffix: the
- * box takes the border, hover, focus ring, invalid and disabled looks of its input.
- */
-const affixBoxClassName =
-  "flex h-11 w-full min-w-0 items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-body-lg text-foreground hover:border-muted-foreground focus-within:border-ring focus-within:ring-1 focus-within:ring-ring has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:bg-critical-surface sm:h-9 sm:text-body";
-
 type InputProps = Omit<React.ComponentProps<"input">, "prefix"> & {
   /** Inside the field before the value: a currency symbol ("৳"). Never put it in the label (F3). */
   prefix?: React.ReactNode;
@@ -21,42 +14,37 @@ type InputProps = Omit<React.ComponentProps<"input">, "prefix"> & {
   suffix?: React.ReactNode;
 };
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, prefix, suffix, ...rest }, ref) => {
+/** Room for an affix: the field's 12px edge, the affix (its characters, or an icon's 16px) and a 6px gap. */
+const room = (affix: React.ReactNode) =>
+  `calc(1.125rem + ${typeof affix === "string" || typeof affix === "number" ? `${String(affix).length}ch` : "1rem"})`;
+
+const AFFIX = "pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground";
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, prefix, suffix, style, ...rest }, ref) => {
   const props = useFieldControl(rest);
-  if (prefix === undefined && suffix === undefined) {
-    return (
-      <input
-        type={type}
-        className={cn(
-          fieldClassName,
-          "flex h-11 py-1 file:border-0 file:bg-transparent file:text-body file:font-medium file:text-foreground sm:h-9",
-          className,
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
-  }
+  const affixed = prefix !== undefined || suffix !== undefined;
+  const input = (
+    <input
+      type={type}
+      className={cn(
+        fieldClassName,
+        "flex h-11 py-1 file:border-0 file:bg-transparent file:text-body file:font-medium file:text-foreground sm:h-9",
+        prefix !== undefined && "ps-(--affix-start)",
+        suffix !== undefined && "pe-(--affix-end)",
+        !affixed && className,
+      )}
+      style={affixed ? { ...style, "--affix-start": prefix === undefined ? undefined : room(prefix), "--affix-end": suffix === undefined ? undefined : room(suffix) } as React.CSSProperties : style}
+      ref={ref}
+      {...props}
+    />
+  );
+  if (!affixed) return input;
+  // The input is the whole field (its border, focus ring and invalid look); the affixes sit over its padding.
   return (
-    <div
-      data-slot="input-affix"
-      className={cn(affixBoxClassName, className)}
-      // A press on the symbol or the unit puts the caret in the input, as a press on the field would.
-      onMouseDown={(event) => {
-        if (event.target instanceof HTMLInputElement) return;
-        event.preventDefault();
-        event.currentTarget.querySelector("input")?.focus();
-      }}
-    >
-      {prefix !== undefined ? <span aria-hidden="true" className="shrink-0 text-muted-foreground">{prefix}</span> : null}
-      {/* The input keeps the full control height (C1); the box's border sits over its edges. */}
-      <input
-        type={type}
-        ref={ref}
-        className="h-11 min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:h-9"
-        {...props}
-      />
-      {suffix !== undefined ? <span aria-hidden="true" className="shrink-0 text-muted-foreground">{suffix}</span> : null}
+    <div data-slot="input-affix" className={cn("relative w-full min-w-0", className)}>
+      {prefix !== undefined ? <span aria-hidden="true" className={cn(AFFIX, "inset-s-3")}>{prefix}</span> : null}
+      {input}
+      {suffix !== undefined ? <span aria-hidden="true" className={cn(AFFIX, "inset-e-3")}>{suffix}</span> : null}
     </div>
   );
 });

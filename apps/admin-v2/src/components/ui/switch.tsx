@@ -4,8 +4,8 @@ import * as SwitchPrimitives from "@radix-ui/react-switch";
 import { cn } from "@scalius/shared/utils";
 
 /**
- * A 36x20 track with a 24px-tall hit area (44px on phones, C6), hanging
- * outside the track by negative margins so the layout keeps the track's size.
+ * A 36x20 track with a 24px-tall hit area (44px on phones, C6) that hangs
+ * outside the row by negative margins: the text beside a switch sets the row's height.
  */
 const Switch = React.forwardRef<
   React.ComponentRef<typeof SwitchPrimitives.Root>,
@@ -13,7 +13,7 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      "peer group -my-3 inline-flex h-11 w-9 shrink-0 cursor-pointer items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:-my-0.5 sm:h-6",
+      "peer group -my-3 inline-flex h-11 w-9 shrink-0 cursor-pointer items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:h-6",
       className,
     )}
     {...props}

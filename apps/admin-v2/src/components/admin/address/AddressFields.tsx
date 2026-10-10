@@ -224,7 +224,7 @@ function CountryFields({
   return (
     <>
       {rows.map((row) => (
-        <FieldRow key={row.join("-")} className={row.length > 1 ? undefined : "@md:grid-cols-1"}>
+        <FieldRow key={row.join("-")} columns={row.length > 1 ? 2 : 1}>
           {row.map((field) => {
             const label = t(addressFieldLabelKey(field, data));
             if (field === "adminArea" && data.adminAreas.length > 0) {

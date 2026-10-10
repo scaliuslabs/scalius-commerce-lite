@@ -53,7 +53,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
           form.setValue("warrantyPolicyId", next === NONE ? null : next, { shouldDirty: true })}
         />
       </Field>
-      <Link to="/admin/settings/policies/warranty" className="inline-flex min-h-6 items-center rounded-md text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link to="/admin/settings/policies/warranty" className="inline-flex items-center rounded-md py-0.5 text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t("managePolicies")}
       </Link>
     </div>

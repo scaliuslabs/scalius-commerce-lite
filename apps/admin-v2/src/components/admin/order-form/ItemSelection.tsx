@@ -120,7 +120,7 @@ export function ItemSelection({
 
       <div className="flex flex-col gap-1">
         {/* Keeps the button on the fields' line under their labels. */}
-        <span aria-hidden className="invisible hidden text-body font-medium @lg:block">{t("add")}</span>
+        <span aria-hidden className="invisible hidden text-body font-medium sm:block">{t("add")}</span>
         <Button
           type="button"
           onClick={handleAddItem}

@@ -291,7 +291,8 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
   return (
-    <FieldRow className="gap-3">
+    <div className="flex flex-col gap-3">
+    <FieldRow inset>
       <Field label={t("sku")} error={errorOf("sku")}>
           <Input value={variant.sku} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
       </Field>
@@ -305,7 +306,6 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
       <Field label={t("barcode")} help={isUnsavedSku && !variant.barcode ? t("barcodeHint") : undefined} error={errorOf("barcode")}>
           <Input
             value={variant.barcode ?? ""}
-           
             aria-label={t("barcodeFor", { name })}
             autoComplete="off"
             onChange={(event) => onChange(barcodePatch(event.target.value))}
@@ -333,18 +333,18 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
         <Field label={t("weightGrams")} error={errorOf("weight")}>
             <WeightInput
               grams={variant.weight}
-             
               aria-label={t("weightFor", { name, unit: weightUnit })}
               onGramsChange={(weight) => onChange({ weight })}
             />
         </Field>
       ) : null}
+    </FieldRow>
       {showInventory ? (
-        <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8 @md:col-span-2">
+        <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
           <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
           {t("trackQuantity")}
         </label>
       ) : null}
-    </FieldRow>
+    </div>
   );
 }
