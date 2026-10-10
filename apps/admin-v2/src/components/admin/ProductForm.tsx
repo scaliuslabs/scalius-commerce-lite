@@ -34,7 +34,6 @@ import {
   useSaveScope,
 } from "./shared/SaveBar";
 import { PageHeader } from "./resource/PageHeader";
-import { PresenceSlot } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
@@ -136,7 +135,7 @@ interface ProductFormProps {
   customizationSchemaInvalid?: boolean;
   /** The saved brand's name, for the brand picker. */
   brandName?: string | null;
-  /** Who else is editing and their saves (realtime presence), given whether this page has unsaved changes. */
+  /** The avatars for the header's presence slot (realtime presence), given whether this page has unsaved changes. */
   presence?: (dirty: boolean) => React.ReactNode;
 }
 
@@ -439,7 +438,7 @@ function ProductEditor({
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
         status={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
-        presence={isEdit ? <PresenceSlot /> : null}
+        presence={isEdit ? presence?.(productFormDirty || optionMatrixDirty || sections.dirty) : null}
         actions={isEdit && productId ? (
           <>
             {moreActions}
@@ -448,7 +447,6 @@ function ProductEditor({
         ) : null}
       />
       {readOnly ? <ReadOnlyNotice /> : null}
-      {presence?.(productFormDirty || optionMatrixDirty || sections.dirty)}
       <Form {...form}>
         <form
           method="post"

@@ -63,7 +63,7 @@ function BlockerNotice({ blocker }: { blocker: PushBlocker }) {
         <AlertTitle>{t("reasonHomeScreenTitle")}</AlertTitle>
         <AlertDescription>
           <p>{t("reasonHomeScreen")}</p>
-          <ol className="list-decimal space-y-1 ps-5">
+          <ol className="list-disc space-y-1 ps-5">
             <li>{t("homeScreenShare")}</li>
             <li>{t("homeScreenAdd")}</li>
             <li>{t("homeScreenOpen")}</li>

@@ -22,7 +22,7 @@ import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
 import { useQueryClient } from "@tanstack/react-query";
-import { EditorPresenceProvider, PresenceNotices, PresenceScopeContext, PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { PresenceScopeContext, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -56,22 +56,19 @@ export function SettingsPage({
   return (
     <PresenceScopeContext.Provider value={key}>
     <TargetCardContext.Provider value={hash}>
-    <SettingsPresence presenceKey={key}>
       <Page width="settings" data-presence-root={key} className="space-y-4">
         <PageHeader
           title={title ?? t(page)}
           backTo={back?.to ?? "/admin/settings"}
           backLabel={back?.label ?? t("settings")}
           backOnlyWithoutPanel={!back}
-          presence={<PresenceSlot />}
+          presence={<SettingsPresence presenceKey={key} />}
           actions={actions}
         />
         <SaveErrorBanner />
         {readOnly ? <p className="text-body text-muted-foreground">{common("readOnly")}</p> : null}
         {children}
-        <PresenceNotices />
       </Page>
-    </SettingsPresence>
     </TargetCardContext.Provider>
     </PresenceScopeContext.Provider>
   );
@@ -85,18 +82,16 @@ const NO_FIELDS = () => [];
  * refetches the page's documents; each card keeps the fields it has edited
  * (`useSettingsForm` merges unedited fields from the fresh read).
  */
-function SettingsPresence({ presenceKey: key, children }: { presenceKey: string; children: ReactNode }) {
+function SettingsPresence({ presenceKey: key }: { presenceKey: string }) {
   const scope = useSaveScope();
   const queryClient = useQueryClient();
   return (
-    <EditorPresenceProvider
+    <PresenceSlot
       presenceKey={key}
       dirty={Boolean(scope?.dirty)}
       changedFields={NO_FIELDS}
       onLoadLatest={() => void queryClient.invalidateQueries({ queryKey: ["settings"] })}
-    >
-      {children}
-    </EditorPresenceProvider>
+    />
   );
 }
 

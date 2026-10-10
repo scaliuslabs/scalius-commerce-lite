@@ -274,13 +274,6 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-presence-1: var(--presence-1);
-  --color-presence-2: var(--presence-2);
-  --color-presence-3: var(--presence-3);
-  --color-presence-4: var(--presence-4);
-  --color-presence-5: var(--presence-5);
-  --color-presence-6: var(--presence-6);
-  --color-presence-foreground: var(--presence-foreground);
 
   /* Tones. `bg-{tone}` is the fill, `border-{tone}` the tinted border and
      `text-{tone}` the readable toned text (Tailwind reads the utility's own
@@ -524,6 +517,37 @@ html:lang(bn) {
 
 [data-save-bar] {
   animation: save-bar-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+/* Field presence (components/admin/realtime/PresenceLayer.tsx, DESIGN.md W3):
+   the control someone else is in gets a ring in their colour, and its field a
+   name tag at the top end. Set and cleared by the presence layer. */
+[data-presence-ring] {
+  outline: 2px solid var(--presence);
+  outline-offset: 2px;
+}
+
+[data-presence-name] {
+  position: relative;
+}
+
+[data-presence-name]::after {
+  content: attr(data-presence-name);
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 0.375rem;
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 550;
+  background: var(--presence);
+  color: var(--presence-foreground);
+  pointer-events: none;
 }
 
 [data-save-bar]::after {

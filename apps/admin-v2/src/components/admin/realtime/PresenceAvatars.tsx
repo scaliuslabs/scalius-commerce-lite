@@ -5,12 +5,13 @@
  * else is there; the box around it (`PresenceSlot`) keeps the space.
  */
 import { formatList } from "@scalius/shared/locale-words";
+import type { CSSProperties } from "react";
 import type { RealtimePresence } from "@scalius/shared/realtime";
 import { cn } from "@scalius/shared/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { getLocale, useMessages } from "~/i18n";
 import { realtimeMessages } from "~/i18n/realtime";
-import { PRESENCE_FILL, initialsOf, presenceColour } from "./presence-style";
+import { initialsOf, presenceVar } from "./presence-style";
 
 const SHOWN = 3;
 
@@ -24,9 +25,9 @@ export function PersonAvatar({ person, className }: { person: RealtimePresence; 
           role="img"
           tabIndex={0}
           aria-label={label}
+          style={{ "--presence": presenceVar(person.id) } as CSSProperties}
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-full text-caption font-semibold text-presence-foreground ring-2 ring-card",
-            PRESENCE_FILL[presenceColour(person.id)],
+            "flex size-7 shrink-0 items-center justify-center rounded-full bg-(--presence) text-caption font-semibold text-(--presence-foreground) ring-2 ring-card",
             className,
           )}
         >
@@ -38,7 +39,7 @@ export function PersonAvatar({ person, className }: { person: RealtimePresence; 
   );
 }
 
-export default function PresenceAvatars({ people }: { people: readonly RealtimePresence[]; prefix?: string }) {
+export default function PresenceAvatars({ people }: { people: readonly RealtimePresence[] }) {
   const t = useMessages(realtimeMessages);
   const shown = people.length > SHOWN + 1 ? people.slice(0, SHOWN) : people.slice(0, SHOWN + 1);
   const rest = people.slice(shown.length);
@@ -46,7 +47,7 @@ export default function PresenceAvatars({ people }: { people: readonly RealtimeP
   return (
     <div className="flex items-center">
       {shown.map((person, index) => (
-        <PersonAvatar key={person.id} person={person} className={index > 0 ? "-ms-1" : undefined} />
+        <PersonAvatar key={person.id} person={person} className={index > 0 ? "-ms-2" : undefined} />
       ))}
       {rest.length > 0 ? (
         <Tooltip>
@@ -55,7 +56,7 @@ export default function PresenceAvatars({ people }: { people: readonly RealtimeP
               role="img"
               tabIndex={0}
               aria-label={t("othersHere", { names: restNames })}
-              className="-ms-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-card"
+              className="-ms-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-card"
             >
               <span aria-hidden="true">{t("morePeople", { count: rest.length })}</span>
             </span>

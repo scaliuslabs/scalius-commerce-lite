@@ -1,27 +1,15 @@
 /**
  * One stable colour per person (avatar, field ring, name tag), from their
  * staff id: the same person has the same colour in every browser. Tokens:
- * `--presence-1` … `--presence-6` in styles/global.css.
+ * `--presence-1` … `--presence-6` and `--presence-foreground` in
+ * styles/global.css (both themes). An element takes the person's colour as
+ * the `--presence` custom property (`presenceVar`) and paints with
+ * `bg-(--presence)`, `ring-(--presence)` and `text-(--presence-foreground)`:
+ * three utilities instead of one per colour.
  */
 import { getLocale } from "~/i18n";
 
-export const PRESENCE_FILL = [
-  "bg-presence-1",
-  "bg-presence-2",
-  "bg-presence-3",
-  "bg-presence-4",
-  "bg-presence-5",
-  "bg-presence-6",
-] as const;
-
-export const PRESENCE_RING = [
-  "ring-presence-1",
-  "ring-presence-2",
-  "ring-presence-3",
-  "ring-presence-4",
-  "ring-presence-5",
-  "ring-presence-6",
-] as const;
+const PRESENCE_COLOURS = 6;
 
 /** A small stable hash of the staff id (FNV-1a), into the palette. */
 export function presenceColour(id: string): number {
@@ -30,7 +18,12 @@ export function presenceColour(id: string): number {
     hash ^= id.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
-  return (hash >>> 0) % PRESENCE_FILL.length;
+  return (hash >>> 0) % PRESENCE_COLOURS;
+}
+
+/** The person's colour, for `style={{ "--presence": presenceVar(id) }}`. */
+export function presenceVar(id: string): string {
+  return `var(--presence-${presenceColour(id) + 1})`;
 }
 
 /** Up to two letters from a display name, for the avatar. */

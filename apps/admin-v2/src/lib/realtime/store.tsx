@@ -4,29 +4,17 @@
  * (components/admin/realtime/RealtimeBridge.tsx). Until it does (or when it
  * never can), subscriptions wait and editors simply show no presence.
  *
- * Presence on an editor (docs/platform/REALTIME.md, DESIGN.md W1–W6):
+ * Presence on an editor (docs/platform/REALTIME.md, DESIGN.md W1-W6): pass
  *
- *   <EditorPresenceProvider presenceKey={presenceKey("product", id)} …>
- *     <PageHeader presence={<PresenceSlot />} … />   avatars beside the title
- *     <PresenceNotices />                            banner, field rings, save notice
- *     <form data-presence-root={key}>…</form>        fields report focus
- *   </EditorPresenceProvider>
+ *   <PresenceSlot presenceKey={presenceKey("product", id)} revision dirty changedFields onLoadLatest />
  *
- * The visible parts load only when someone else is there or has saved, so an
- * editor alone pays for this file and an empty reserved box.
+ * as `PageHeader`'s `presence`, and mark the editor's root element with
+ * `data-presence-root={key}`. The slot reserves the avatars' space at once and
+ * loads everything else (avatars, the editing banner, field rings, the save
+ * notice, focus reporting) a moment later, so no route pays for it up front.
  */
-import {
-  createContext,
-  lazy,
-  Suspense,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import type { PresenceListPrefix, RealtimeChange, RealtimePerson, RealtimePresence, RealtimeTopic } from "@scalius/shared/realtime";
+import { createContext, lazy, Suspense, useEffect, useRef } from "react";
+import type { PresenceListPrefix, RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
 import type { RealtimeConnection, RealtimeListener } from "./connection";
 import { setRealtimeOpen } from "../admin-query-client";
 
@@ -41,11 +29,6 @@ export type PresencePrefix = "order" | "product" | "category" | "collection" | "
  */
 export function presenceKey(prefix: PresencePrefix, id: string): string {
   return `${prefix}:${id}`;
-}
-
-/** The record a key names (`product` of `product:prd_1`), for "editing this product". */
-export function presencePrefixOf(key: string): PresencePrefix {
-  return key.slice(0, key.indexOf(":")) as PresencePrefix;
 }
 
 type Connection = Pick<RealtimeConnection, "subscribe" | "watch" | "watchList" | "announceSave" | "focus" | "getStatus">;
@@ -175,6 +158,7 @@ export function realtimeUserId(): string | null {
  */
 export const PresenceScopeContext = createContext<string | null>(null);
 
+
 // ── Field keys ───────────────────────────────────────────────────────────
 // A field is named by its control's form `name` (or the nearest
 // `data-field`), the same in every browser and language. Generated ids
@@ -186,258 +170,38 @@ export function isFieldKey(value: unknown): value is string {
   return typeof value === "string" && FIELD_KEY.test(value);
 }
 
-/** The field key of a focused element, or null when it has no stable name. */
-export function fieldKeyOf(element: Element | null): string | null {
-  if (!element) return null;
-  const own = element.getAttribute("name") ?? element.getAttribute("data-field");
-  if (isFieldKey(own)) return own;
-  const holder = element.closest("[data-field]");
-  const named = holder?.getAttribute("data-field");
-  if (isFieldKey(named)) return named;
-  // A custom control (select trigger, combobox) beside its hidden named input.
-  const item = element.closest("[data-slot=field], [data-slot=form-item]");
-  const input = item?.querySelector("[name]")?.getAttribute("name");
-  return isFieldKey(input) ? input : null;
-}
 
-/**
- * The form names of a react-hook-form `dirtyFields` tree (`price`,
- * `seo.title`, `variants.0.sku`): what a save tells the others it changed.
- */
-export function changedFieldNames(dirty: unknown, prefix = ""): string[] {
-  if (dirty === true) return prefix ? [prefix] : [];
-  if (!dirty || typeof dirty !== "object") return [];
-  const names: string[] = [];
-  for (const [key, value] of Object.entries(dirty as Record<string, unknown>)) {
-    names.push(...changedFieldNames(value, prefix ? `${prefix}.${key}` : key));
-  }
-  return names;
-}
+// -- The visible parts, loaded after the first render --------------------
 
-/** The root element of the editor on `key` (`data-presence-root`). */
-export function presenceRoot(key: string): Element | null {
-  if (typeof document === "undefined") return null;
-  for (const root of document.querySelectorAll("[data-presence-root]")) {
-    if (root.getAttribute("data-presence-root") === key) return root;
-  }
-  return null;
-}
+const EditorPresenceView = lazy(() => import("~/components/admin/realtime/EditorPresenceView"));
 
-// ── One editor's presence ────────────────────────────────────────────────
-
-let saveStamp = 0;
-
-export interface RemoteSave {
-  by: RealtimePerson;
-  rev: number | null;
-  /** The fields they changed (form names), when their editor said. */
-  fields: string[];
-  /** When it arrived (epoch ms), unique per notice. */
-  at: number;
-}
-
-export interface EditorPresence {
-  /** Other staff on this editor now (never the viewer). */
-  others: RealtimePresence[];
-  /** The last save by someone else since this editor opened, until dismissed. */
-  remoteSave: RemoteSave | null;
-  dismissRemoteSave(): void;
-}
-
-/**
- * Presence and live save notices for one revision-fenced editor. `key` is
- * `presenceKey(prefix, id)`; null turns it off (a new, unsaved record).
- * `currentRev` drops a save notice for a revision this editor already has.
- */
-export function useEditorPresence(key: string | null, currentRev?: number | null): EditorPresence {
-  const [others, setOthers] = useState<RealtimePresence[]>([]);
-  const [remoteSave, setRemoteSave] = useState<RemoteSave | null>(null);
-  const rev = useRef(currentRev ?? null);
-  rev.current = currentRev ?? null;
-  useEffect(() => {
-    setOthers([]);
-    setRemoteSave(null);
-    if (!key) return;
-    const release = watchKey(key);
-    const unsubscribe = subscribeRealtime({
-      presence: (presenceKey, people) => {
-        if (presenceKey !== key) return;
-        setOthers(people.filter((person) => person.id !== realtimeUserId()));
-      },
-      saved: (savedKey, by, savedRev, fields) => {
-        if (savedKey !== key) return;
-        if (savedRev !== null && rev.current !== null && savedRev <= rev.current) return;
-        saveStamp = Math.max(saveStamp + 1, Date.now());
-        setRemoteSave({ by, rev: savedRev, fields, at: saveStamp });
-      },
-      status: (next) => {
-        if (next !== "open") setOthers([]);
-      },
-    });
-    return () => {
-      unsubscribe();
-      release();
-    };
-  }, [key]);
-  return { others, remoteSave, dismissRemoteSave: () => setRemoteSave(null) };
-}
-
-/**
- * Reports which field of the editor on `key` this tab is in, and whether its
- * draft is dirty: one document listener, scoped by `data-presence-root`.
- */
-export function usePresenceReporter(key: string | null, dirty: boolean): void {
-  const field = useRef<string | null>(null);
-  const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
-  useEffect(() => {
-    if (!key) return;
-    const inEditor = (target: EventTarget | null) =>
-      target instanceof Element && target.closest("[data-presence-root]")?.getAttribute("data-presence-root") === key;
-    const onFocusIn = (event: FocusEvent) => {
-      field.current = inEditor(event.target) ? fieldKeyOf(event.target as Element) : null;
-      reportFocus(key, field.current, dirtyRef.current);
-    };
-    const onFocusOut = (event: FocusEvent) => {
-      // Focus moving to another field reports there; leaving the editor clears the ring.
-      if (inEditor(event.relatedTarget)) return;
-      field.current = null;
-      reportFocus(key, null, dirtyRef.current);
-    };
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-      reportFocus(key, null, false);
-    };
-  }, [key]);
-  useEffect(() => {
-    if (key) reportFocus(key, field.current, dirty);
-  }, [key, dirty]);
-}
-
-export interface EditorPresenceValue extends EditorPresence {
-  presenceKey: string;
+export interface PresenceSlotProps {
+  /** `presenceKey(prefix, id)`; null for a new, unsaved record (renders nothing). */
+  presenceKey: string | null;
+  /** The revision this editor has: a save notice for it or an older one is dropped. */
+  revision?: number | null;
+  /** This editor has unsaved changes. */
   dirty: boolean;
   /** The fields this draft changed (form names), to tell a clean merge from a clash. */
   changedFields?: () => readonly string[];
   /** Loads the latest saved record under this draft's edits (a merge), or simply the latest when clean. */
   onLoadLatest?: () => void;
-}
-
-const EditorPresenceContext = createContext<EditorPresenceValue | null>(null);
-
-/** The presence of the editor around a component (null outside one, or for a new record). */
-export function useEditorPresenceContext(): EditorPresenceValue | null {
-  return useContext(EditorPresenceContext);
+  /** The banner, field rings and save notice; false for an editor that handles saves itself (the theme editor). */
+  notices?: boolean;
 }
 
 /**
- * Joins `presenceKey`, reports this tab's field and draft state, and gives
- * `PresenceSlot` and `PresenceNotices` below it the people and saves.
- * `presenceKey` null (a new record) renders the children alone.
+ * The avatars beside the page title (pass it as `PageHeader`'s `presence`).
+ * The box is always there on a saved record, sized for three avatars and
+ * "+N" (96 by 28 px), so people arriving never move the page.
  */
-export function EditorPresenceProvider({
-  presenceKey: key,
-  revision,
-  dirty,
-  changedFields,
-  onLoadLatest,
-  children,
-}: {
-  presenceKey: string | null;
-  revision?: number | null;
-  dirty: boolean;
-  changedFields?: () => readonly string[];
-  onLoadLatest?: () => void;
-  children: ReactNode;
-}) {
-  const presence = useEditorPresence(key, revision);
-  usePresenceReporter(key, dirty);
-  const { others, remoteSave, dismissRemoteSave } = presence;
-  const value = useMemo<EditorPresenceValue | null>(
-    () => (key ? { presenceKey: key, others, remoteSave, dismissRemoteSave, dirty, changedFields, onLoadLatest } : null),
-    // dismissRemoteSave is a fresh closure over a stable setter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key, others, remoteSave, dirty, changedFields, onLoadLatest],
-  );
-  return <EditorPresenceContext.Provider value={value}>{children}</EditorPresenceContext.Provider>;
-}
-
-// ── Presence in lists ────────────────────────────────────────────────────
-
-/**
- * Who else has each record of a list open ("Rahim is viewing" on an order
- * row), by record id, without the viewer. For list screens: pass the result
- * to `RowPresence` (components/admin/realtime/RowPresence.tsx) for one row.
- */
-export function useListPresence(prefix: PresenceListPrefix): ReadonlyMap<string, RealtimePresence[]> {
-  const [people, setPeople] = useState<ReadonlyMap<string, RealtimePresence[]>>(() => new Map());
-  useEffect(() => {
-    const release = watchPresenceList(prefix);
-    const head = `${prefix}:`;
-    const unsubscribe = subscribeRealtime({
-      presence: (key, list) => {
-        if (!key.startsWith(head)) return;
-        const others = list.filter((person) => person.id !== realtimeUserId());
-        setPeople((current) => {
-          const id = key.slice(head.length);
-          if (others.length === 0 && !current.has(id)) return current;
-          const next = new Map(current);
-          if (others.length === 0) next.delete(id);
-          else next.set(id, others);
-          return next;
-        });
-      },
-      status: (next) => {
-        if (next !== "open") setPeople(new Map());
-      },
-    });
-    return () => {
-      unsubscribe();
-      release();
-    };
-  }, [prefix]);
-  return people;
-}
-
-// ── The visible parts, loaded only when needed ───────────────────────────
-
-const PresenceAvatars = lazy(() => import("~/components/admin/realtime/PresenceAvatars"));
-const PresenceLayer = lazy(() => import("~/components/admin/realtime/PresenceLayer"));
-
-/**
- * The avatars beside the page title: pass it as `PageHeader`'s `presence`
- * (the header's `data-slot="presence"`). The box is always there on a saved
- * record, sized for three avatars and "+N" (104 by 28 px), so people
- * arriving never move the page.
- */
-export function PresenceSlot() {
-  const presence = useEditorPresenceContext();
-  if (!presence) return null;
+export function PresenceSlot(props: PresenceSlotProps) {
+  if (!props.presenceKey) return null;
   return (
-    <div data-slot="presence-avatars" className="flex h-7 w-26 shrink-0 items-center">
-      {presence.others.length > 0 ? (
-        <Suspense fallback={null}>
-          <PresenceAvatars people={presence.others} prefix={presencePrefixOf(presence.presenceKey)} />
-        </Suspense>
-      ) : null}
+    <div data-slot="presence-avatars" className="flex h-7 w-24 shrink-0 items-center">
+      <Suspense fallback={null}>
+        <EditorPresenceView {...props} presenceKey={props.presenceKey} />
+      </Suspense>
     </div>
-  );
-}
-
-/**
- * The banner when someone else edits this record, the rings on the fields
- * they are in, and the notice when they save. It floats over the page's end
- * and takes no space, so it never moves the fields under the merchant.
- */
-export function PresenceNotices() {
-  const presence = useEditorPresenceContext();
-  if (!presence || (presence.others.length === 0 && !presence.remoteSave)) return null;
-  return (
-    <Suspense fallback={null}>
-      <PresenceLayer presence={presence} />
-    </Suspense>
   );
 }

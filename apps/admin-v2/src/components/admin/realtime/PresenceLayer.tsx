@@ -1,6 +1,6 @@
 /**
  * What an editor shows once someone else is on it or has saved (loaded only
- * then, by `PresenceNotices` in lib/realtime/store.tsx). Calm by design, as in
+ * then, by EditorPresenceView.tsx). Calm by design, as in
  * Figma, Google Docs and Linear:
  *
  * - a one-line banner while someone else edits ("Rahim is editing this
@@ -11,21 +11,26 @@
  *   fields and this draft's do not overlap, else "reload to see the changes";
  *   the field names link to the fields (W4).
  *
- * Everything floats (notices fixed at the bottom of the view; absolutely
- * placed rings), so nothing here moves the page.
+ * Nothing here moves the page: notices are fixed at the bottom of the view,
+ * and a ring is an outline on the field itself.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Info, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatList } from "@scalius/shared/locale-words";
 import type { RealtimePresence } from "@scalius/shared/realtime";
-import { cn } from "@scalius/shared/utils";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { getLocale, useMessages } from "~/i18n";
 import { realtimeMessages } from "~/i18n/realtime";
-import { presencePrefixOf, presenceRoot, realtimeUserId, type EditorPresenceValue, type RemoteSave } from "~/lib/realtime/store";
+import { realtimeUserId, type PresencePrefix } from "~/lib/realtime/store";
+import type { EditorPresenceValue, RemoteSave } from "~/lib/realtime/editor-presence";
+import { presenceRoot } from "~/lib/realtime/presence-dom";
 import { PersonAvatar } from "./PresenceAvatars";
-import { PRESENCE_FILL, PRESENCE_RING, firstNameOf, presenceColour } from "./presence-style";
+import { firstNameOf, presenceVar } from "./presence-style";
+
+/** The record a key names (`product` of `product:prd_1`), for "editing this product". */
+function presencePrefixOf(key: string): PresencePrefix {
+  return key.slice(0, key.indexOf(":")) as PresencePrefix;
+}
 
 const EDITING_KEY = {
   order: "editingOrder",
@@ -116,11 +121,9 @@ function EditingBanner({ editors, presenceKey, dismissedFor, setDismissedFor }: 
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        aria-label={t("dismiss")}
         onClick={() => setDismissedFor(new Set(editors.map((person) => person.id)))}
       >
-        <X aria-hidden="true" />
+        {t("dismiss")}
       </Button>
     </div>
   );
@@ -131,8 +134,8 @@ function EditingBanner({ editors, presenceKey, dismissedFor, setDismissedFor }: 
 /** "price and stock", with each field a link that scrolls to it and focuses it. */
 function FieldLinks({ root, fields }: { root: Element | null; fields: readonly { field: string; label: string }[] }): ReactNode {
   // formatList places the connectors for the language; the markers become links.
-  const text = formatList(fields.map((_, index) => `\u0001${index}\u0001`), getLocale());
-  return text.split(/\u0001(\d+)\u0001/).map((part, index) =>
+  const text = formatList(fields.map((_, index) => `\uE000${index}\uE000`), getLocale());
+  return text.split(/\uE000(\d+)\uE000/).map((part, index) =>
     index % 2 === 1 ? (
       <button
         key={part}
@@ -171,7 +174,7 @@ function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
   const fields = labelled.length > 0 ? <FieldLinks root={root} fields={labelled} /> : null;
   // The sentence with the field links put where the catalog puts {fields}.
   const sentence = (key: "savedMerged" | "savedReloadFields" | "savedBoth") => {
-    const [before, after] = t(key, { name, fields: "\u0002" }).split("\u0002");
+    const [before, after] = t(key, { name, fields: "\uE001" }).split("\uE001");
     return <>{before}{fields}{after}</>;
   };
   const title = byYou
@@ -183,7 +186,6 @@ function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
         : (fields ? sentence("savedBoth") : t("savedChanges", { name }));
   return (
     <Alert variant="info" className="pointer-events-auto">
-      <Info />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
         {outcome === "both" ? <p>{t("savedBothHint")}</p> : null}
@@ -209,113 +211,63 @@ function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
 
 // ── Field rings ──────────────────────────────────────────────────────────
 
-interface Ring {
-  person: RealtimePresence;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-const RING_GAP = 3;
-
 /**
- * A ring around each field someone else is in. The layer is an absolutely
- * placed point inside the page's scroller, so rings scroll with the fields;
- * positions are measured again when the editor or the window resizes.
+ * A ring in the person's colour on each field someone else is in, and their
+ * first name on a tag at the field's top end (DESIGN.md W3). The field itself
+ * carries it (`data-presence-ring` on the control, `data-presence-name` on its
+ * field wrapper; styles/global.css), so it moves with the field and costs no
+ * measuring. The marks come off when they leave the field.
  */
 function FieldRings({ presenceKey, people }: { presenceKey: string; people: RealtimePresence[] }) {
-  const origin = useRef<HTMLDivElement>(null);
-  const [rings, setRings] = useState<Ring[]>([]);
   const focused = people.filter((person) => person.field);
   const signature = focused.map((person) => `${person.id}=${person.field}`).join("|");
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = presenceRoot(presenceKey);
-    if (!origin.current || !root || focused.length === 0) {
-      setRings([]);
-      return;
-    }
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      const base = origin.current?.getBoundingClientRect();
-      if (!base) return;
-      const rtl = document.documentElement.dir === "rtl";
-      const next: Ring[] = [];
-      for (const person of focused) {
-        const element = fieldElement(root, person.field!);
-        const box = element ? visibleBox(element) : null;
-        if (!box) continue;
-        const rect = box.getBoundingClientRect();
-        next.push({
-          person,
-          x: (rtl ? base.left - rect.right : rect.left - base.left) - RING_GAP,
-          y: rect.top - base.top - RING_GAP,
-          width: rect.width + RING_GAP * 2,
-          height: rect.height + RING_GAP * 2,
-        });
+    if (!root || focused.length === 0) return;
+    const marked: HTMLElement[] = [];
+    const mark = (element: HTMLElement, colour: string) => {
+      element.style.setProperty("--presence", colour);
+      marked.push(element);
+    };
+    for (const person of focused) {
+      const element = fieldElement(root, person.field!);
+      const box = element ? visibleBox(element) : null;
+      if (!box) continue;
+      const colour = presenceVar(person.id);
+      box.dataset.presenceRing = "";
+      mark(box, colour);
+      const holder = box.closest<HTMLElement>("[data-slot=field], [data-slot=form-item], [data-field]") ?? box.parentElement;
+      if (holder) {
+        holder.dataset.presenceName = firstNameOf(person.name);
+        mark(holder, colour);
       }
-      setRings(next);
-    };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
-    };
-    measure();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
-    observer?.observe(root);
-    window.addEventListener("resize", schedule);
+    }
     return () => {
-      if (frame) cancelAnimationFrame(frame);
-      observer?.disconnect();
-      window.removeEventListener("resize", schedule);
+      for (const element of marked) {
+        delete element.dataset.presenceRing;
+        delete element.dataset.presenceName;
+        element.style.removeProperty("--presence");
+      }
     };
     // `signature` names exactly who is in which field.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presenceKey, signature]);
-  return (
-    <div ref={origin} aria-hidden="true" className="absolute z-10 size-0">
-      {rings.map((ring) => {
-        const colour = presenceColour(ring.person.id);
-        return (
-          <div
-            key={ring.person.id}
-            className={cn("absolute inset-s-(--ring-x) top-(--ring-y) h-(--ring-h) w-(--ring-w) rounded-lg ring-2", PRESENCE_RING[colour])}
-            style={{
-              "--ring-x": `${ring.x}px`,
-              "--ring-y": `${ring.y}px`,
-              "--ring-w": `${ring.width}px`,
-              "--ring-h": `${ring.height}px`,
-            } as CSSProperties}
-          >
-            <span
-              className={cn(
-                "absolute -top-5 end-0 max-w-40 truncate rounded-md px-1.5 text-caption font-medium text-presence-foreground",
-                PRESENCE_FILL[colour],
-              )}
-            >
-              {firstNameOf(ring.person.name)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return null;
 }
 
 export default function PresenceLayer({ presence }: { presence: EditorPresenceValue }) {
   const editors = presence.others.filter((person) => person.editing);
   const [dismissedFor, setDismissedFor] = useState<ReadonlySet<string>>(() => new Set());
-  // One zero-size, absolutely placed box: it is no flex item and takes no gap or margin
-  // wherever an editor puts it. The rings measure from it; the notices are fixed to the view.
+  // The notices are fixed to the view: they take no space wherever an editor puts this.
   return (
-    <div data-slot="presence-layer" className="pointer-events-none absolute size-0">
+    <>
       <FieldRings presenceKey={presence.presenceKey} people={presence.others} />
-      <div className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-full max-w-xl flex-col gap-2 px-3">
+      <div data-slot="presence-layer" className="pointer-events-none fixed inset-x-0 bottom-4 z-40 mx-auto flex w-full max-w-xl flex-col gap-2 px-3">
         {/* One notice at a time: a save notice already names who is working here. */}
         {presence.remoteSave
           ? <SaveNotice key={presence.remoteSave.at} presence={presence} />
           : <EditingBanner editors={editors} presenceKey={presence.presenceKey} dismissedFor={dismissedFor} setDismissedFor={setDismissedFor} />}
       </div>
-    </div>
+    </>
   );
 }

@@ -9,15 +9,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RealtimePresence } from "@scalius/shared/realtime";
 import type { RealtimeListener } from "~/lib/realtime/connection";
-import {
-  EditorPresenceProvider,
-  PresenceNotices,
-  PresenceSlot,
-  attachRealtime,
-  changedFieldNames,
-  fieldKeyOf,
-  useListPresence,
-} from "~/lib/realtime/store";
+import { PresenceSlot, attachRealtime } from "~/lib/realtime/store";
+import { changedFieldNames } from "~/lib/realtime/changed-fields";
+import { fieldKeyOf } from "~/lib/realtime/presence-dom";
+import { useListPresence } from "~/lib/realtime/list-presence";
 import { fieldsOverlap, saveOutcome } from "./PresenceLayer";
 import { RowPresence } from "./RowPresence";
 import { setLocale } from "~/i18n";
@@ -55,6 +50,13 @@ let host: HTMLDivElement;
 let root: Root;
 let connection: ReturnType<typeof fakeConnection>;
 
+/** Renders and waits for the lazily loaded presence view. */
+async function renderEditor(element: React.ReactElement) {
+  await act(async () => root.render(element));
+  await vi.waitFor(() => expect(connection.watch).toHaveBeenCalled());
+  await flush();
+}
+
 async function flush() {
   await act(async () => {
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
@@ -64,9 +66,9 @@ async function flush() {
 
 function Editor({ dirty = false, changed = [] as string[], onLoadLatest }: { dirty?: boolean; changed?: string[]; onLoadLatest?: () => void }) {
   return (
-    <EditorPresenceProvider presenceKey={KEY} revision={4} dirty={dirty} changedFields={() => changed} onLoadLatest={onLoadLatest}>
+    <>
       <h1>Cotton panjabi</h1>
-      <PresenceSlot />
+      <PresenceSlot presenceKey={KEY} revision={4} dirty={dirty} changedFields={() => changed} onLoadLatest={onLoadLatest} />
       <form data-presence-root={KEY}>
         <label htmlFor="price">Price</label>
         <input id="price" name="price" />
@@ -74,8 +76,7 @@ function Editor({ dirty = false, changed = [] as string[], onLoadLatest }: { dir
         <input id="stock" name="stock" />
       </form>
       <input name="outside" />
-      <PresenceNotices />
-    </EditorPresenceProvider>
+    </>
   );
 }
 
@@ -96,10 +97,10 @@ afterEach(async () => {
 
 describe("editor presence", () => {
   it("reserves the avatar box, then shows named avatars without moving it", async () => {
-    await act(async () => root.render(<Editor />));
+    await renderEditor(<Editor />);
     const slot = host.querySelector("[data-slot=presence-avatars]")!;
     expect(slot).not.toBeNull();
-    expect(slot.className).toContain("w-26");
+    expect(slot.className).toContain("w-24");
     expect(slot.children).toHaveLength(0);
 
     await act(async () => connection.presence(KEY, [
@@ -108,20 +109,20 @@ describe("editor presence", () => {
       { id: "usr_sumi", name: "Sumi" },
     ]));
     await flush();
-    const avatars = [...slot.querySelectorAll("[role=img]")];
+    const avatars = [...slot.querySelectorAll("[role=img]")].filter((avatar) => !avatar.closest("[data-slot=presence-layer]"));
     expect(avatars.map((avatar) => avatar.getAttribute("aria-label"))).toEqual(["Rahim Ahmed, editing", "Sumi, viewing"]);
     expect(avatars[0]!.textContent).toBe("RA");
   });
 
   it("shows the editing banner, keeps it dismissed for the same people, and brings it back for someone new", async () => {
-    await act(async () => root.render(<Editor />));
+    await renderEditor(<Editor />);
     await act(async () => connection.presence(KEY, [{ id: "usr_rahim", name: "Rahim", editing: true }]));
     await flush();
     const banner = () => document.querySelector("[data-slot=presence-banner]");
     expect(banner()?.textContent).toContain("Rahim is editing this product.");
     expect(banner()?.textContent).toContain("Your changes to different fields merge automatically.");
 
-    await act(async () => (banner()!.querySelector("button[aria-label=Dismiss]") as HTMLButtonElement).click());
+    await act(async () => [...banner()!.querySelectorAll("button")].find((button) => button.textContent === "Dismiss")!.click());
     expect(banner()).toBeNull();
     await act(async () => connection.presence(KEY, [{ id: "usr_rahim", name: "Rahim", editing: true }, { id: "usr_sumi", name: "Sumi" }]));
     expect(banner()).toBeNull();
@@ -130,7 +131,7 @@ describe("editor presence", () => {
   });
 
   it("reports the field this tab is in, only inside its editor, never a value", async () => {
-    await act(async () => root.render(<Editor />));
+    await renderEditor(<Editor />);
     const price = host.querySelector<HTMLInputElement>("input[name=price]")!;
     price.value = "1200";
     await act(async () => price.focus());
@@ -144,7 +145,7 @@ describe("editor presence", () => {
 
   it("merges a save into a dirty draft at once when the fields differ, with links to them", async () => {
     const onLoadLatest = vi.fn();
-    await act(async () => root.render(<Editor dirty changed={["stock"]} onLoadLatest={onLoadLatest} />));
+    await renderEditor(<Editor dirty changed={["stock"]} onLoadLatest={onLoadLatest} />);
     await act(async () => connection.saved(KEY, ["price"]));
     await flush();
     expect(onLoadLatest).toHaveBeenCalledTimes(1);
@@ -165,7 +166,7 @@ describe("editor presence", () => {
 
   it("asks to reload a clean editor, and to load latest when both changed a field", async () => {
     const onLoadLatest = vi.fn();
-    await act(async () => root.render(<Editor onLoadLatest={onLoadLatest} />));
+    await renderEditor(<Editor onLoadLatest={onLoadLatest} />);
     await act(async () => connection.saved(KEY, []));
     await flush();
     expect(document.querySelector("[data-slot=alert]")?.textContent).toContain("Karim Uddin saved: reload to see the changes");

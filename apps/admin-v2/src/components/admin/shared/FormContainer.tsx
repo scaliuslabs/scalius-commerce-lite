@@ -7,7 +7,8 @@ import { Page } from "@/components/admin/resource/Page";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
-import { EditorPresenceProvider, PresenceNotices, PresenceSlot, announceSave, changedFieldNames } from "~/lib/realtime/store";
+import { PresenceSlot, announceSave } from "~/lib/realtime/store";
+import { changedFieldNames } from "~/lib/realtime/changed-fields";
 
 interface FormContainerProps<
   TFieldValues extends FieldValues,
@@ -70,7 +71,8 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   savedValues?: (result: unknown) => Partial<TFieldValues>;
   reload?: () => Promise<unknown>;
   className: string;
-  header: React.ReactNode;
+  /** The page header, given the presence avatars for its `presence` slot. */
+  header: (presence: React.ReactNode) => React.ReactNode;
   readOnlyNotice?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -89,14 +91,16 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   // Read while rendering, so react-hook-form keeps the tree current for the presence calls.
   void form.formState.dirtyFields;
   const loadedRevision = (form.formState.defaultValues as { revision?: unknown } | undefined)?.revision;
-  return (
-    <EditorPresenceProvider
+  const presence = (
+    <PresenceSlot
       presenceKey={presenceKey}
       revision={typeof loadedRevision === "number" ? loadedRevision : null}
       dirty={Boolean(scope?.dirty)}
       changedFields={() => changedFieldNames(form.formState.dirtyFields)}
       onLoadLatest={reload ? () => void reload() : undefined}
-    >
+    />
+  );
+  return (
     <form
       method="post"
       noValidate
@@ -108,7 +112,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
         if (event.target === event.currentTarget && scope?.dirty && !scope.busy) void scope.saveAll();
       }}
     >
-      {header}
+      {header(presence)}
       {/* A flex gap, so the banner's hidden placeholder adds no space. */}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
@@ -118,9 +122,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
           {children}
         </fieldset>
       </div>
-      <PresenceNotices />
     </form>
-    </EditorPresenceProvider>
   );
 }
 
@@ -163,7 +165,7 @@ export function FormContainer<
             savedValues={savedValues}
             reload={reload}
             className={formClassName}
-            header={<PageHeader backTo={backUrl} status={badge} presence={<PresenceSlot />} title={heading} actions={actions} />}
+            header={(presence) => <PageHeader backTo={backUrl} status={badge} presence={presence} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
             presenceKey={presenceKey}
           >
