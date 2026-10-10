@@ -629,6 +629,16 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 31,
         postgresStatements: 31,
       },
+      {
+        version: 128,
+        name: "0128_scale_reads",
+        // Five indexes and the five they replace, the customer_order_stats
+        // zero-row backfill and insert trigger, the review FTS table, its
+        // rebuild and four triggers (D1 only: Turso and PostgreSQL have no
+        // FTS5), the ledger.
+        sqliteStatements: 13,
+        postgresStatements: 13,
+      },
     ]);
   });
 
@@ -805,6 +815,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 125, name: "0125_plugin_lifecycle" },
           { version: 126, name: "0126_plugin_seams" },
           { version: 127, name: "0127_list_indexes" },
+          { version: 128, name: "0128_scale_reads" },
         ],
       });
     } finally {

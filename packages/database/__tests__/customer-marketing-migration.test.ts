@@ -151,8 +151,9 @@ describe(`${NAME} over a populated 0107 database`, () => {
   it("backfills order statistics from real orders only", () => {
     expect(stats(db, "cust_a")).toEqual({ orders_count: 2, total_spent_minor: 75_000, first_order_at: 1_700_000_000, last_order_at: 1_710_000_000 });
     expect(stats(db, "cust_b")).toEqual({ orders_count: 1, total_spent_minor: 0, first_order_at: 1_705_000_000, last_order_at: 1_705_000_000 });
-    expect(stats(db, "cust_none")).toBeUndefined();
-    expect(db.prepare("SELECT count(*) AS n FROM customer_order_stats").get()).toEqual({ n: 2 });
+    // The chain continues through 0128, which gives every customer its zero row.
+    expect(stats(db, "cust_none")).toEqual({ orders_count: 0, total_spent_minor: 0, first_order_at: null, last_order_at: null });
+    expect(db.prepare("SELECT count(*) AS n FROM customer_order_stats").get()).toEqual({ n: 3 });
   });
 
   it("keeps order statistics equal to a recomputation through every order write", () => {

@@ -285,7 +285,9 @@ export const productVariants = sqliteTable("product_variants", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     check("product_variants_fulfillment_kind_check", sql`${table.fulfillmentKind} IN ('physical', 'digital', 'service')`),
-    index("product_variants_product_id_idx").on(table.productId),
+    // A product's live (tracked) SKUs: more key columns than the store-wide
+    // track_inventory index, so SQLite (no statistics) picks it per product (0128).
+    index("product_variants_product_live_idx").on(table.productId, table.deletedAt, table.trackInventory),
     uniqueIndex("product_variants_sku_identity_uidx")
         .on(sql`lower(trim(${table.sku}))`),
     uniqueIndex("product_variants_barcode_identity_uidx")

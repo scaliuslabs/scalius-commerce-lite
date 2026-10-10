@@ -306,7 +306,8 @@ export const orders = sqliteTable("orders", {
         table.paymentStatus,
         table.updatedAt,
     ),
-    index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
+    // Home and activity sum a period from the index alone (migration 0128).
+    index("orders_sales_rollup_idx").on(table.deletedAt, table.createdAt, table.status, table.totalShopMinor, table.shopCurrency),
     index("orders_customer_phone_idx").on(table.customerPhone),
     index("orders_customer_email_normalized_idx").on(sql`lower(trim(${table.customerEmail}))`),
     index("orders_shipment_claim_idx")
