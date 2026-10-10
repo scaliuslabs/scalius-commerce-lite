@@ -63,7 +63,10 @@ export const productReviews = sqliteTable("product_reviews", {
         .where(sql`${table.status} IN ('pending', 'published')`),
     index("product_reviews_product_published_idx")
         .on(table.productId, table.status, sql`${table.publishedAt} DESC`, table.id),
-    index("product_reviews_status_created_idx").on(table.status, sql`${table.createdAt} DESC`, table.id),
+    // The moderation queue, newest first: a status tab and the All tab. Plain
+    // ascending columns, which SQLite walks backwards for (created_at, id) DESC.
+    index("product_reviews_status_list_idx").on(table.status, table.createdAt, table.id),
+    index("product_reviews_created_idx").on(table.createdAt, table.id),
     index("product_reviews_customer_idx")
         .on(table.customerId, sql`${table.createdAt} DESC`)
         .where(sql`${table.customerId} IS NOT NULL`),

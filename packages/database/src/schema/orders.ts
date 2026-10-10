@@ -256,23 +256,44 @@ export const orders = sqliteTable("orders", {
         .on(table.accountOwnerCustomerId)
         .where(sql`${table.accountOwnerCustomerId} IS NOT NULL`),
     index("orders_created_at_idx").on(table.createdAt),
-    index("orders_archive_list_idx").on(table.deletedAt, table.archivedAt, table.updatedAt),
-    index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
-    index("orders_payment_status_list_idx").on(
+    // The dashboard list (orders/admin/list.ts): every sort and filter it
+    // offers walks one of these in order, ending with the keyset tiebreaker
+    // `id`, inside the live (`deleted_at`) and archive (`archived_at`) state.
+    index("orders_list_updated_idx").on(table.deletedAt, table.archivedAt, table.updatedAt, table.id),
+    index("orders_list_created_idx").on(table.deletedAt, table.archivedAt, table.createdAt, table.id),
+    index("orders_list_total_idx").on(table.deletedAt, table.archivedAt, table.totalAmountMinor, table.id),
+    index("orders_list_customer_name_idx").on(table.deletedAt, table.archivedAt, table.customerName, table.id),
+    index("orders_list_status_idx").on(table.deletedAt, table.archivedAt, table.status, table.createdAt, table.id),
+    index("orders_list_payment_status_idx").on(
         table.deletedAt,
+        table.archivedAt,
         table.paymentStatus,
-        table.updatedAt,
+        table.createdAt,
+        table.id,
     ),
-    index("orders_payment_method_list_idx").on(
+    index("orders_list_payment_method_idx").on(
         table.deletedAt,
+        table.archivedAt,
         table.paymentMethod,
-        table.updatedAt,
+        table.createdAt,
+        table.id,
     ),
-    index("orders_fulfillment_list_idx").on(
+    index("orders_list_fulfillment_idx").on(
         table.deletedAt,
+        table.archivedAt,
         table.fulfillmentStatus,
-        table.updatedAt,
+        table.createdAt,
+        table.id,
     ),
+    // Archived orders only, newest first: the Archived view.
+    index("orders_list_archived_idx")
+        .on(table.deletedAt, table.createdAt, table.id)
+        .where(sql`${table.archivedAt} IS NOT NULL`),
+    // Pickup orders only: the Ready for pickup tab and the pickup filter.
+    index("orders_list_pickup_idx")
+        .on(table.deletedAt, table.archivedAt, table.createdAt, table.id)
+        .where(sql`${table.shippingMethodKind} = 'pickup'`),
+    index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
     index("orders_payment_queue_idx").on(
         table.deletedAt,
         table.paymentMethod,
@@ -294,7 +315,7 @@ export const orders = sqliteTable("orders", {
     index("orders_fulfillment_location_idx")
         .on(table.fulfillmentLocationId, table.inventoryAction)
         .where(sql`${table.fulfillmentLocationId} IS NOT NULL`),
-    index("orders_channel_list_idx").on(table.deletedAt, table.channel, table.updatedAt),
+    index("orders_list_channel_idx").on(table.deletedAt, table.archivedAt, table.channel, table.createdAt, table.id),
     // Orders of channels other than the online store (an app channel's
     // delete guard; small: most orders are the online store's).
     index("orders_sales_channel_idx")
@@ -1061,7 +1082,10 @@ export const codTracking = sqliteTable("cod_tracking", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    // Cash on delivery still out: the order list's COD tabs read it first.
+    index("cod_tracking_status_idx").on(table.codStatus, table.orderId),
+]);
 
 export const webhookEvents = sqliteTable("webhook_events", {
     id: text("id").primaryKey(),

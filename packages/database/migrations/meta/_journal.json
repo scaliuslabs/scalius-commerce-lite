@@ -890,6 +890,13 @@
       "when": 1791431265589,
       "tag": "0126_plugin_seams",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "6",
+      "when": 1791598342072,
+      "tag": "0127_list_indexes",
+      "breakpoints": true
     }
   ]
 }

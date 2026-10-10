@@ -230,6 +230,9 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     index("delivery_shipments_provider_status_idx").on(table.providerId, table.status),
     index("delivery_shipments_order_id_idx").on(table.orderId),
     index("delivery_shipments_external_id_idx").on(table.externalId),
+    // The order list's search by the courier's tracking or consignment id.
+    index("delivery_shipments_tracking_lookup_idx").on(sql`lower(${table.trackingId})`),
+    index("delivery_shipments_external_lookup_idx").on(sql`lower(${table.externalId})`),
 ]);
 
 export type Place = InferSelectModel<typeof places>;
