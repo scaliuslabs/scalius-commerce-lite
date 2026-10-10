@@ -5,7 +5,7 @@
 // GLOBAL_SEARCH_LIMIT rows. Nothing counts, and nothing scans a large table
 // with LIKE or instr (PostgreSQL, which has no FTS5, uses the bounded
 // fallback the list searches use).
-import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
     categories,
@@ -41,6 +41,17 @@ export interface GlobalSearchResult {
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Not trashed, as a filter no index may serve. Without table statistics (a
+ * fresh D1 has none) SQLite otherwise walks the `deleted_at, created_at`
+ * index of every live order to honour ORDER BY and checks each against the
+ * lookup: a million rows for a phone with old orders. The unary `+` keeps the
+ * lookup's own index (order number, phone, email, FTS5 rowids) in charge.
+ */
+const live = (column: SQLWrapper) => sql`+${column} IS NULL`;
+/** Newest first, sorted after the lookup (at most a few rows) instead of along a date index. */
+const newestFirst = (column: SQLWrapper) => sql`+${column} DESC`;
 
 /**
  * The stored forms a typed phone may have: "+8801712345678", "8801712345678",
@@ -105,8 +116,8 @@ async function searchOrders(db: Database, term: string): Promise<GlobalSearchRes
     if (!match) return [];
     return db.select({ id: orders.id, orderNumber: orders.orderNumber, customerName: orders.customerName, status: orders.status })
         .from(orders)
-        .where(and(isNull(orders.deletedAt), match))
-        .orderBy(desc(orders.createdAt))
+        .where(and(live(orders.deletedAt), match))
+        .orderBy(newestFirst(orders.createdAt))
         .limit(GLOBAL_SEARCH_LIMIT);
 }
 
@@ -128,8 +139,8 @@ async function searchCustomers(db: Database, term: string): Promise<GlobalSearch
         origin: customers.origin,
     })
         .from(customers)
-        .where(and(isNull(customers.deletedAt), match))
-        .orderBy(desc(customers.createdAt))
+        .where(and(live(customers.deletedAt), match))
+        .orderBy(newestFirst(customers.createdAt))
         .limit(GLOBAL_SEARCH_LIMIT);
     // A guest record is titled by the buyer on its latest order: one lookup per
     // guest (five at most) on the (customer_id, deleted_at, created_at) index.
@@ -172,8 +183,8 @@ async function searchProducts(db: Database, term: string): Promise<GlobalSearchR
     if (!match) return [];
     const rows = await db.select({ id: products.id, name: products.name, isActive: products.isActive })
         .from(products)
-        .where(and(isNull(products.deletedAt), match))
-        .orderBy(desc(products.updatedAt))
+        .where(and(live(products.deletedAt), match))
+        .orderBy(newestFirst(products.updatedAt))
         .limit(GLOBAL_SEARCH_LIMIT);
     // An exact SKU or barcode leads.
     return rows
@@ -227,7 +238,7 @@ async function searchCategories(db: Database, term: string): Promise<GlobalSearc
     if (!match) return [];
     return db.select({ id: categories.id, name: categories.name })
         .from(categories)
-        .where(and(isNull(categories.deletedAt), match))
+        .where(and(live(categories.deletedAt), match))
         .limit(GLOBAL_SEARCH_LIMIT);
 }
 
@@ -237,7 +248,7 @@ async function searchPages(db: Database, term: string): Promise<GlobalSearchResu
     if (!match) return [];
     return db.select({ id: pages.id, title: pages.title, contentType: pages.contentType })
         .from(pages)
-        .where(and(isNull(pages.deletedAt), match))
+        .where(and(live(pages.deletedAt), match))
         .limit(GLOBAL_SEARCH_LIMIT);
 }
 

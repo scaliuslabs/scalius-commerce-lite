@@ -1,6 +1,6 @@
 // Global search at large-store shape: 200k orders, 50k customers, 30k
-// products with 60k SKUs, 20k discount codes, ANALYZE'd as a long-running
-// store is. Opt in: GLOBAL_SEARCH_SCALE=1 (it builds ~400k rows);
+// products with 60k SKUs, 20k discount codes, searched twice: with no table
+// statistics (a fresh D1) and after ANALYZE (a long-running store). Opt in: GLOBAL_SEARCH_SCALE=1 (it builds ~400k rows);
 // GLOBAL_SEARCH_SCALE_REPORT=<file> writes each statement with its plan.
 import { writeFileSync } from "node:fs";
 import { OpenAPIHono } from "@hono/zod-openapi";
@@ -43,8 +43,6 @@ INSERT INTO promotions (id, name, method, status) VALUES ('promo_bulk', 'Eid bul
 WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${CODES})
 INSERT INTO promotion_codes (id, promotion_id, code, normalized_code)
 SELECT 'pc_' || i, 'promo_bulk', 'EID' || (100000 + i), 'EID' || (100000 + i) FROM n;
-
-ANALYZE;
 `;
 
 const enabled = process.env.GLOBAL_SEARCH_SCALE === "1";
@@ -69,27 +67,33 @@ describe.skipIf(!enabled)("global search at large-store shape", () => {
         });
         app.route("/admin/search", adminSearchRoutes);
 
-        const LARGE = /\bSCAN (orders|customers|products|product_variants|promotion_codes)\b(?! VIRTUAL)/;
+        // A scan of a large table, or a walk along an index constrained by
+        // deleted_at alone (every live row), grows with the store.
+        const LARGE = /\bSCAN (orders|customers|products|product_variants|promotion_codes)\b(?! VIRTUAL)|SEARCH (orders|customers|products) USING INDEX \w+ \(deleted_at=\?\)/;
         const report: string[] = [];
-        for (const term of ["#151234", "01700012345", "buyer123@shop.test", "rahim", "panjabi", "SKU-29999", "BC100012345", "EID1123", "eid"]) {
-            statements.length = 0;
-            const t0 = performance.now();
-            const response = await app.request(`/api/v1/admin/search/global?q=${encodeURIComponent(term)}`);
-            const ms = performance.now() - t0;
-            expect(response.status).toBe(200);
-            const data = ((await response.json()) as { data: GlobalSearchResult }).data;
-            for (const group of Object.values(data)) if (Array.isArray(group)) expect(group.length).toBeLessThanOrEqual(GLOBAL_SEARCH_LIMIT);
-            report.push(`\n### "${term}": ${ms.toFixed(1)} ms, ${statements.length} statements, ${Object.entries(data).filter(([, rows]) => Array.isArray(rows)).map(([kind, rows]) => `${kind} ${(rows as unknown[]).length}`).join(", ")}`);
-            for (const { query, values } of statements) {
-                expect(query).not.toMatch(/\bLIKE\b|\bGLOB\b/i);
-                expect(values.length).toBeLessThanOrEqual(100);
-                const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...(values as never[])) as Array<{ detail: string }>;
-                const details = plan.map((step) => step.detail).join(" | ");
-                expect(details, `${term}: ${query}`).not.toMatch(LARGE);
-                report.push(`- ${query.replace(/\s+/g, " ").slice(0, 110)}…\n  plan: ${details}`);
+        for (const stats of [false, true]) {
+            if (stats) sqlite.exec("ANALYZE");
+            report.push(`\n## ${stats ? "After ANALYZE" : "No table statistics (a fresh D1)"}`);
+            for (const term of ["#151234", "01700012345", "buyer123@shop.test", "rahim", "panjabi", "SKU-29999", "BC100012345", "EID1123", "eid"]) {
+                statements.length = 0;
+                const t0 = performance.now();
+                const response = await app.request(`/api/v1/admin/search/global?q=${encodeURIComponent(term)}`);
+                const ms = performance.now() - t0;
+                expect(response.status).toBe(200);
+                const data = ((await response.json()) as { data: GlobalSearchResult }).data;
+                for (const group of Object.values(data)) if (Array.isArray(group)) expect(group.length).toBeLessThanOrEqual(GLOBAL_SEARCH_LIMIT);
+                report.push(`\n### "${term}": ${ms.toFixed(1)} ms, ${statements.length} statements, ${Object.entries(data).filter(([, rows]) => Array.isArray(rows)).map(([kind, rows]) => `${kind} ${(rows as unknown[]).length}`).join(", ")}`);
+                for (const { query, values } of statements) {
+                    expect(query).not.toMatch(/\bLIKE\b|\bGLOB\b/i);
+                    expect(values.length).toBeLessThanOrEqual(100);
+                    const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...(values as never[])) as Array<{ detail: string }>;
+                    const details = plan.map((step) => step.detail).join(" | ");
+                    expect(details, `${term}: ${query}`).not.toMatch(LARGE);
+                    report.push(`- ${query.replace(/\s+/g, " ").slice(0, 110)}…\n  plan: ${details}`);
+                }
+                // Bounded cost: no lookup grows with the store.
+                expect(ms).toBeLessThan(250);
             }
-            // Bounded cost: no lookup grows with the store.
-            expect(ms).toBeLessThan(250);
         }
         if (process.env.GLOBAL_SEARCH_SCALE_REPORT) writeFileSync(process.env.GLOBAL_SEARCH_SCALE_REPORT, `seeded in ${seededIn}s\n${report.join("\n")}\n`);
         sqlite.close();
