@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -31,7 +31,7 @@ export function ValuationSummary() {
         {valuation.isPending ? (
           <Skeleton className="h-7 w-40" />
         ) : !data ? (
-          <ErrorState layout="inline" title={t("valueFailed")} error={valuation.error} onRetry={() => void valuation.refetch()} />
+          <InlineError title={t("valueFailed")} error={valuation.error} onRetry={() => void valuation.refetch()} />
         ) : (
           <>
             <div className="space-y-1">

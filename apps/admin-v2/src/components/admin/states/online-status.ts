@@ -1,5 +1,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { isOnline } from "./failure";
+
+/** Whether the browser says it is connected (true where it cannot say). */
+export function isOnline(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
 
 function subscribe(onChange: () => void): () => void {
   window.addEventListener("online", onChange);

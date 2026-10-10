@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { isOnline } from "./failure";
-import { useOnlineStatus } from "./online-status";
+import { isOnline, useOnlineStatus } from "./online-status";
 
 interface RouteNode {
   _componentsLoaded?: boolean;

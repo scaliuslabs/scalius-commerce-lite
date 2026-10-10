@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -184,7 +184,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
     return (
       <Card>
         <CardContent className="pt-4">
-          <ErrorState layout="inline" title={t("loadFailed")} error={orders.error} onRetry={() => void orders.refetch()} />
+          <InlineError title={t("loadFailed")} error={orders.error} onRetry={() => void orders.refetch()} />
         </CardContent>
       </Card>
     );

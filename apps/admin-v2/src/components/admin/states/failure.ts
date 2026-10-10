@@ -1,5 +1,8 @@
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { isRecoverableRouteLoadError } from "~/lib/recoverable-route-error";
+import { isOnline } from "./online-status";
+
+export { isOnline };
 
 /**
  * Why a read failed, so every screen words it the same way:
@@ -15,10 +18,6 @@ export type FailureKind = "offline" | "unreachable" | "unavailable" | "notFound"
 const NO_ANSWER = /failed to fetch|load failed|networkerror|network request failed|timed? ?out/i;
 // A TypeError is a fetch with no answer only when its message says so; otherwise it is a bug.
 const NO_ANSWER_NAMES = new Set(["AbortError", "TimeoutError"]);
-
-export function isOnline(): boolean {
-  return typeof navigator === "undefined" || navigator.onLine !== false;
-}
 
 export function classifyFailure(error: unknown, online = isOnline()): FailureKind {
   if (error == null) return online ? "broken" : "offline";

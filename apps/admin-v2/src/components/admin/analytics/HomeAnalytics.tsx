@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -65,7 +65,7 @@ export function HomeAnalytics() {
         overview.isError ? (
           <Card>
             <CardContent className="pt-4">
-<ErrorState layout="inline" title={t("loadFailed")} error={overview.error} onRetry={() => void overview.refetch()} />
+<InlineError title={t("loadFailed")} error={overview.error} onRetry={() => void overview.refetch()} />
 </CardContent>
           </Card>
         ) : (

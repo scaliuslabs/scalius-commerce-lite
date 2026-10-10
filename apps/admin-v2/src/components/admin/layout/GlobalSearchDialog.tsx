@@ -32,7 +32,7 @@ import { apiData } from "~/lib/api";
 import { appSurfacesQueryOptions } from "~/lib/api-query-options/apps";
 import { writeListSearch } from "~/lib/list-search";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
-import { statesMessages } from "~/i18n/states";
+import { recordNounMessages } from "~/i18n/record-nouns";
 import { LOCALES, setLocale, useLocale, useMessages } from "~/i18n";
 import { navKeywordMessages } from "~/i18n/nav-keywords";
 import { shellMessages } from "~/i18n/shell";
@@ -152,7 +152,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     staleTime: 30_000,
   });
   const orderT = useMessages(orderMessages);
-  const s = useMessages(statesMessages);
+  const s = useMessages(recordNounMessages);
   // Active apps' pages and providers: the shell's cached surfaces read (apps.view).
   const surfacesT = useMessages(appSurfacesMessages);
   const apps = useQuery({ ...appSurfacesQueryOptions(), enabled: open && canOpen("/admin/apps") }).data;

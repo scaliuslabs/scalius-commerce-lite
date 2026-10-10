@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
@@ -255,7 +255,7 @@ function MenuLevel({
   if (query.isError) {
     return (
       <div className="px-2 py-3">
-        <ErrorState layout="inline" title={t("loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+        <InlineError title={t("loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
       </div>
     );
   }

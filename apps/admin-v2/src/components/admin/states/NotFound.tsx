@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { statesMessages } from "~/i18n/states";
+import { recordNounMessages } from "~/i18n/record-nouns";
 import { recordListHref, recordResource, type RecordResource } from "./record-resource";
 import { StateBlock } from "./StateBlock";
 import { useStoreOwnerName } from "./store-owner";
@@ -27,6 +28,7 @@ function PageCard({ fullPage, children }: { fullPage: boolean; children: ReactNo
  */
 export function RecordNotFound({ resource: given }: { resource?: RecordResource }) {
   const t = useMessages(statesMessages);
+  const n = useMessages(recordNounMessages);
   const match = useMatch({ strict: false, select: (current) => ({ fullPath: current.fullPath, params: current.params }) });
   const resource = given ?? recordResource(match.fullPath);
   if (!resource) return <PageNotFound />;
@@ -36,13 +38,13 @@ export function RecordNotFound({ resource: given }: { resource?: RecordResource 
         slot="error-state"
         kind="not-found"
         icon={FileQuestion}
-        title={t("recordNotFound", { noun: t(`noun.${resource.noun}`) })}
+        title={t("recordNotFound", { noun: n(resource.noun) })}
         titleAs="h1"
         description={t("recordNotFoundBody")}
         actions={
           <Button asChild>
             <Link to={recordListHref(resource, match.params as Record<string, string>)}>
-              {t("backTo", { list: t(`list.${resource.noun}`) })}
+              {t("backTo", { list: n(`list.${resource.noun}`) })}
             </Link>
           </Button>
         }

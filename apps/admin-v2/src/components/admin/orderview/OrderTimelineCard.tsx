@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
@@ -107,7 +107,7 @@ export function OrderTimelineCard({ order }: { order: Order }) {
         {!hydrated || query.isLoading ? (
           <p className="text-muted-foreground">{t("read.loading")}</p>
         ) : query.isError ? (
-          <ErrorState layout="inline" title={t("timeline.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+          <InlineError title={t("timeline.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
         ) : events.length === 0 ? (
           <p className="text-muted-foreground">{t("timeline.empty")}</p>
         ) : (

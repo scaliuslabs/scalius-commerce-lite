@@ -18,7 +18,7 @@ import {
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import {
   Dialog,
   DialogContent,
@@ -119,7 +119,7 @@ function RecentActivity({ grantId, open }: { grantId: string; open: boolean }) {
   });
   let body: ReactNode;
   if (isError) {
-    body = <ErrorState layout="inline" title={t("activityFailed")} error={error} onRetry={() => void refetch()} />;
+    body = <InlineError title={t("activityFailed")} error={error} onRetry={() => void refetch()} />;
   } else if (!data) {
     body = (
       <p className="flex items-center gap-2 text-body text-muted-foreground">

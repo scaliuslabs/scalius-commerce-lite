@@ -4,7 +4,7 @@
 // Inside an editor's save scope it saves with the page's save bar; on a page
 // without one (the order page) it shows its own Save and Discard. A plugin's
 // fields are shown read-only: only the plugin writes its namespace.
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -186,7 +186,7 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
 
   if (isError) {
     return (
-      <ErrorState layout="inline" title={t("loadFailed")} onRetry={() => void refetch()} />
+      <InlineError title={t("loadFailed")} onRetry={() => void refetch()} />
     );
   }
   if (!fields) return <Skeleton className="h-16 w-full" />;

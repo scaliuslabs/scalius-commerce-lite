@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
@@ -439,7 +439,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </dl>
 
         {isHydrated && paymentsQuery.isError ? (
-          <ErrorState layout="inline" title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
+          <InlineError title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
         ) : null}
 
         {canShowRecoveryLink ? (

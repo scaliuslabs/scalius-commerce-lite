@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -122,7 +122,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
         {!isHydrated || query.isLoading ? (
           <p className="text-muted-foreground">{t("read.loading")}</p>
         ) : query.isError ? (
-          <ErrorState layout="inline" title={t("messages.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+          <InlineError title={t("messages.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
         ) : messages.length === 0 ? (
           <p className="text-muted-foreground">{t("messages.empty")}</p>
         ) : (

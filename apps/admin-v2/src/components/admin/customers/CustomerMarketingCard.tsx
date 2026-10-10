@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -165,7 +165,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
       </CardHeader>
       <CardContent className="space-y-4">
         {marketing.isError ? (
-          <ErrorState layout="inline" title={t("loadMarketingFailed")} error={marketing.error} onRetry={() => void marketing.refetch()} />
+          <InlineError title={t("loadMarketingFailed")} error={marketing.error} onRetry={() => void marketing.refetch()} />
         ) : !marketing.data ? (
           <div className="space-y-3">
             {MARKETING_CHANNELS.map((item) => <Skeleton key={item} className="h-5 w-full" />)}

@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
@@ -73,7 +73,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
         {!hydrated || query.isLoading ? (
           <p className="text-muted-foreground">{t("read.loading")}</p>
         ) : query.isError ? (
-          <ErrorState layout="inline" title={t("returns.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+          <InlineError title={t("returns.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
         ) : returns.length === 0 ? (
           <p className="text-muted-foreground">{t(canRequest ? "returns.emptyCanRequest" : "returns.empty")}</p>
         ) : (

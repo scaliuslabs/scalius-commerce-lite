@@ -8,7 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -108,7 +108,7 @@ function HomePage() {
   // One failed read never blanks Home (polish bar R3): its own cards say so
   // with Retry, the setup guide, sales strip and to-dos still render.
   const summaryError = summary.isError ? (
-    <ErrorState layout="inline" title={t("loadFailed")} error={summary.error} onRetry={() => void summary.refetch()} />
+    <InlineError title={t("loadFailed")} error={summary.error} onRetry={() => void summary.refetch()} />
   ) : null;
   const recentOrders = summary.data?.recentOrders;
   const month = summary.data?.stats.currentMonth;

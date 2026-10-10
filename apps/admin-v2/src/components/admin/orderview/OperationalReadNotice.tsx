@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -35,5 +35,5 @@ export function OperationalReadNotice({
       </div>
     );
   }
-  return <ErrorState layout="inline" title={label} onRetry={onRetry} />;
+  return <InlineError title={label} onRetry={onRetry} />;
 }

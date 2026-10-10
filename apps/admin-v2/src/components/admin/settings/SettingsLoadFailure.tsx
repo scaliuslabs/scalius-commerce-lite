@@ -1,4 +1,4 @@
-import { ErrorState } from "~/components/admin/states/ErrorState";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { Card } from "~/components/ui/card";
 
 /**
@@ -17,7 +17,7 @@ export function SettingsLoadFailure({
 }) {
   return (
     <Card className="p-4">
-      <ErrorState layout="inline" title={title} error={error} onRetry={() => void onRetry()} />
+      <InlineError title={title} error={error} onRetry={() => void onRetry()} />
     </Card>
   );
 }

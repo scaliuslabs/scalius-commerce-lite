@@ -8,6 +8,7 @@ import { statesMessages } from "~/i18n/states";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { classifyFailure, retriesWhenOnline, type FailureKind } from "./failure";
 import { useRetryWhenOnline } from "./online-status";
+import { InlineError } from "./InlineError";
 import { StateBlock, type StateIcon } from "./StateBlock";
 
 const ICONS: Record<FailureKind, StateIcon> = {
@@ -86,14 +87,7 @@ export function ErrorState({
     ?? (kind === "updated" ? t("updatedBody") : refusal ?? t(REASONS[kind] ?? "reason.broken"));
 
   if (layout === "inline") {
-    return (
-      <div data-slot="error-state" data-state-kind={kind} role="alert" className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-body text-muted-foreground">
-          <span className="font-medium text-foreground">{heading}</span> {reason}
-        </p>
-        {onRetry ? <Button type="button" variant="outline" onClick={onRetry}>{t("retry")}</Button> : null}
-      </div>
-    );
+    return <InlineError title={heading} kind={kind} description={reason} onRetry={onRetry} />;
   }
 
   const primary = layout === "page";
