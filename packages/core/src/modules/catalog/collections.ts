@@ -136,6 +136,25 @@ export async function listCollectionProductOptions(
         .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(whereClause);
+    const optionOrder = [
+        ...(selectedProductIds.length > 0
+            ? [asc(sql<number>`CASE WHEN ${products.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${selectedProductIdSet})
+            ) THEN 1 ELSE 0 END`)]
+            : []),
+        // Searches read A-Z; an open picker starts with the newest products.
+        ...(search ? [asc(products.name)] : [desc(products.createdAt)]),
+        asc(products.id),
+    ];
+    // The page's ids first, sorted on the narrow row: the SKU subqueries
+    // below then run for the page only, not for every product sorted.
+    const pageKeys = db
+        .select({ id: products.id })
+        .from(products)
+        .where(whereClause)
+        .orderBy(...optionOrder)
+        .limit(limit)
+        .offset(offset);
     const optionsQuery = db
         .select({
             id: products.id,
@@ -164,19 +183,8 @@ export async function listCollectionProductOptions(
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(whereClause)
-        .orderBy(
-            ...(selectedProductIds.length > 0
-                ? [asc(sql<number>`CASE WHEN ${products.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${selectedProductIdSet})
-                ) THEN 1 ELSE 0 END`)]
-                : []),
-            // Searches read A-Z; an open picker starts with the newest products.
-            ...(search ? [asc(products.name)] : [desc(products.createdAt)]),
-            asc(products.id),
-        )
-        .limit(limit)
-        .offset(offset);
+        .where(inArray(products.id, pageKeys))
+        .orderBy(...optionOrder);
 
     const [countRows = [], productOptions = [], visibleRows = []] = await (safeBatch(db, [
         countQuery,
