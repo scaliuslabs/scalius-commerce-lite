@@ -30,7 +30,7 @@ import { pageHead } from "~/i18n/page-titles";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
-  { sort: "sortOrder", order: "asc" },
+  { sort: "sortOrder", order: "asc", list: "collections" },
 );
 
 function listQuery(search: ReturnType<typeof validateCollectionSearch>, term: string) {
@@ -123,7 +123,6 @@ function CollectionsPage() {
       list="collections"
       countLabel={(count) => t("collectionCount", { count })}
       query={listQuery(search, term)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="collections"
       columns={columns}
       invalidate={INVALIDATE}
@@ -141,12 +140,12 @@ function CollectionsPage() {
           success: t("reordered"),
         });
       }}
-      bulkActions={can.canToggleStatus ? (rows, done) => (
+      bulkActions={can.canToggleStatus ? (target, done) => target.kind !== "rows" ? null : (
         <>
-          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "activate", ids: ids(rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "activate", ids: ids(target.rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
             {t("setActive")}
           </Button>
-          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "deactivate", ids: ids(rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
+          <Button variant="outline" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "deactivate", ids: ids(target.rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
             {t("setDraft")}
           </Button>
         </>

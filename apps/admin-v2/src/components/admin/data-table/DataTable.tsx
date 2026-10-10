@@ -17,7 +17,7 @@ import {
 } from "./table-config";
 import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn, useColumnLayout, useElementWidth } from "./column-layout";
 import { ColumnLayoutContext, ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
-import { AlertTriangle } from "lucide-react";
+import { TableSortMenu } from "./DataTableSortMenu";
 import {
   Table as UITable,
   TableBody,
@@ -26,22 +26,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { DataTablePagination, type DataTableCursorPaging } from "./DataTablePagination";
-import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
-import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
-import { DataTableBodyRow, DataTableHeadCell, rowClickHandler } from "./DataTableBodyRow";
-import { useNavigate } from "@tanstack/react-router";
+import { DataTableRefetchBar } from "./DataTableRefetchBar";
+import { DataTableBodyRow, DataTableHeadCell, rowClickHandler, type RowDensity } from "./DataTableBodyRow";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { CardRowContext } from "./RowLink";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
-import {
-  DataTableInitialCards,
-  DataTableInitialRows,
-} from "./DataTableInitialLoading";
+import { DataTableInitialCards, DataTableInitialRows } from "./DataTableInitialLoading";
+import { useShownAfter } from "./use-shown-after";
 import type { SortableDataTableContentProps } from "./SortableDataTableContent";
+
+// Only a failed read shows it: its own chunk, off the list's first render.
+const ErrorState = lazy(() => import("~/components/admin/states/ErrorState").then((module) => ({ default: module.ErrorState })));
 
 const SortableDataTableContent = lazy(async () => {
   const module = await import("./SortableDataTableContent");
@@ -57,13 +57,21 @@ interface DataTableProps<TData extends TableRowData> {
   isFetching: boolean;
   isLoading: boolean;
   toolbar?: ReactNode;
-  emptyState?: EmptyStateConfig;
+  /** Where the rows go when there are none: a `FilteredEmptyState` (E2). */
+  emptyState?: ReactNode;
   error?: unknown;
   onRetry?: () => void;
+  /** What the rows are, for the failed read's title: "orders" reads "Couldn't load orders". */
+  what?: string;
   mobileCardRenderer?: (row: Row<TData>) => ReactNode;
   itemLabel?: string;
-  pageSizeOptions?: number[];
+  pageSizeOptions?: readonly number[];
   className?: string;
+  /**
+   * Row height (T3): "default" for rows with a two-line title or a
+   * thumbnail (52px), "compact" for single-line lists (40px).
+   */
+  density?: RowDensity;
   /** Enable drag-and-drop row reordering. Rows must have an `id` field. */
   sortable?: boolean;
   /** Called after a drag-and-drop reorder with old and new index. */
@@ -78,19 +86,21 @@ interface DataTableProps<TData extends TableRowData> {
   /** Opens a row from a click anywhere on it (not on its checkbox, links or menu). */
   getRowHref?: (row: TData) => string | undefined;
   /**
-   * Names the list for the merchant's saved column choice (this browser
-   * only), e.g. "orders". Without it the choice lasts for the page.
+   * Names the list for the merchant's saved column choice and page size
+   * (this browser only), e.g. "orders". Without it the choice lasts for the page.
    */
   layoutKey?: string;
-  /** False for a list that shows every row at once (no page footer). */
+  /** False for a short list that shows every row at once (no page footer). */
   paginate?: boolean;
   /**
    * Previous/Next by the API's cursors with an approximate count ("51–100 of
    * 1,000+") for a list too large to count; without it the footer pages by number.
    */
   cursorPaging?: DataTableCursorPaging;
-  /** What the list is sorted by when no sort is chosen (the column menu's first choice); false for none. */
+  /** What the list is sorted by when no sort is chosen (the sort menu's first choice); false for none. */
   defaultSortLabel?: string | false;
+  /** A sort menu of the list's own (orders sort by fields that are not columns); default: the columns' sort. */
+  sortMenu?: ReactNode;
   /**
    * Below this width of the table's own container the rows become phone
    * cards: a 768px tablet with the sidebar open leaves a table too narrow for
@@ -102,6 +112,13 @@ interface DataTableProps<TData extends TableRowData> {
 /** The container width under which rows become cards, unless a list says otherwise. */
 export const CARD_LAYOUT_BELOW = 640;
 
+/**
+ * The index table (Polaris IndexTable): columns that step aside by priority
+ * as the width shrinks (the title and money never do), one row height per
+ * density, a sticky header, the skeleton of a full page, a progress line on
+ * refetch that keeps rows readable, phone cards and the one pager.
+ * `ResourceListPage` puts it in a page with tabs, search, filters and bulk actions.
+ */
 export function DataTable<TData extends TableRowData>({
   table,
   isFetching,
@@ -110,10 +127,12 @@ export function DataTable<TData extends TableRowData>({
   emptyState,
   error,
   onRetry,
+  what,
   mobileCardRenderer,
   itemLabel,
   pageSizeOptions,
   className,
+  density = "default",
   sortable = false,
   onReorder,
   getRowLabel,
@@ -123,6 +142,7 @@ export function DataTable<TData extends TableRowData>({
   paginate = true,
   cursorPaging,
   defaultSortLabel,
+  sortMenu,
   cardLayoutBelow = CARD_LAYOUT_BELOW,
 }: DataTableProps<TData>) {
   const t = useMessages(resourceMessages);
@@ -140,7 +160,12 @@ export function DataTable<TData extends TableRowData>({
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
   const showError = Boolean(error) && !isLoading;
-  const showInitialLoading = isLoading && !hasRows && !showError;
+  const loadingFirst = isLoading && !hasRows && !showError;
+  // L3: the skeleton shows only for a wait over 300ms, then for at least
+  // 300ms; before that its rows hold their place unseen, so nothing moves.
+  const skeletonShown = useShownAfter(loadingFirst);
+  const showInitialLoading = loadingFirst || (skeletonShown && !showError);
+  const pageSize = table.state.pagination.pageSize;
   // Columns in the merchant's order, minus those hidden by choice or to fit this width.
   const resultsRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(resultsRef);
@@ -170,25 +195,26 @@ export function DataTable<TData extends TableRowData>({
       return cell ? [cell] : [];
     });
   };
-  const columnMenu = <DataTableColumnMenu table={table} layout={layout} defaultSortLabel={defaultSortLabel} />;
+  const menus = {
+    sortMenu: sortMenu ?? <TableSortMenu table={table} defaultLabel={defaultSortLabel} />,
+    columnMenu: <DataTableColumnMenu table={table} layout={layout} />,
+  };
   const headerLayout = { toggle: layout.toggle, isHiddenByChoice: layout.isHiddenByChoice };
 
   const renderErrorState = () => (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <AlertTriangle className="mb-3 h-10 w-10 text-destructive/70" />
-      <p className="text-body font-medium text-foreground">{t("loadFailed")}</p>
-      {onRetry && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={onRetry}
-        >
-          {t("retry")}
-        </Button>
-      )}
-    </div>
+    <Suspense fallback={null}>
+      <ErrorState layout="card" error={error} what={what} onRetry={onRetry} />
+    </Suspense>
+  );
+
+  const skeletonRows = (includeDragColumn: boolean) => (
+    <DataTableInitialRows
+      columns={columns}
+      rowCount={pageSize}
+      density={density}
+      hasSelect={hasSelect}
+      includeDragColumn={includeDragColumn}
+    />
   );
 
   const renderDesktopTable = (includeDragColumn = false) => (
@@ -197,46 +223,44 @@ export function DataTable<TData extends TableRowData>({
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {includeDragColumn && <TableHead className="w-[40px]" />}
-            {columns.map((column) => (
-              <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} holdWidth={!showError && !hasRows && !showInitialLoading} />
+            {columns.map((column, index) => (
+              <DataTableHeadCell
+                key={column.id}
+                column={column}
+                previous={columns[index - 1]}
+                header={headers.get(column.id)}
+                hasSelect={hasSelect}
+                holdWidth={!showError && !hasRows && !showInitialLoading}
+              />
             ))}
           </TableRow>
         ))}
       </TableHeader>
-      <TableBody>
+      <TableBody className={cn(showInitialLoading && !skeletonShown && "invisible")}>
         {showError ? (
-          <TableRow>
-            <TableCell
-              colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}
-            >
+          <TableRow still>
+            <TableCell colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}>
               {renderErrorState()}
             </TableCell>
           </TableRow>
-        ) : hasRows ? (
-          rows.map((row) => {
-            return (
-              <DataTableBodyRow
-                key={row.id}
-                cells={cellsOf(row)}
-                isSelected={row.getIsSelected()}
-                includeDragColumn={includeDragColumn}
-                hasSelect={hasSelect}
-                onOpen={openRow(row)}
-              />
-            );
-          })
         ) : showInitialLoading ? (
-          <DataTableInitialRows
-            columnCount={visibleColumnCount + (includeDragColumn ? 1 : 0)}
-            includeDragColumn={includeDragColumn}
-          />
+          skeletonRows(includeDragColumn)
+        ) : hasRows ? (
+          rows.map((row) => (
+            <DataTableBodyRow
+              key={row.id}
+              cells={cellsOf(row)}
+              density={density}
+              isSelected={row.getIsSelected()}
+              includeDragColumn={includeDragColumn}
+              hasSelect={hasSelect}
+              onOpen={openRow(row)}
+            />
+          ))
         ) : (
-          <TableRow>
-            <TableCell
-              colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}
-              className="h-24 text-center"
-            >
-              <DataTableEmptyState config={emptyState} />
+          <TableRow still>
+            <TableCell colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}>
+              {emptyState}
             </TableCell>
           </TableRow>
         )}
@@ -256,16 +280,31 @@ export function DataTable<TData extends TableRowData>({
     const primary = cells.filter((cell) => isPrimaryColumn(cell.column));
     const secondary = slot("secondary").length
       ? slot("secondary")
-      : cells.filter((cell) => cell.column.columnDef.meta?.numeric).slice(0, 1);
+      : cells.filter((cell) => cell.column.columnDef.meta?.numeric || cell.column.columnDef.meta?.money).slice(0, 1);
     const select = cells.find((cell) => cell.column.id === SELECT_COLUMN);
     const actions = cells.find((cell) => cell.column.id === ACTIONS_COLUMN);
+    const href = getRowHref?.(row.original);
+    // The card's text is one link to the row (T14, C6: a 44px target), so its
+    // title renders as text inside it (`RowLink`).
+    const body = (
+      <CardRowContext.Provider value={Boolean(href)}>
+        {primary.map(render)}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{secondary.map(render)}</div>
+      </CardRowContext.Provider>
+    );
     return (
-      <div className="flex items-start gap-3 px-3 py-2.5">
-        {select ? <div className="mt-3 shrink-0">{render(select)}</div> : null}
-        <div className="min-w-0 flex-1 space-y-1">
-          {primary.map(render)}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{secondary.map(render)}</div>
-        </div>
+      <div className="flex items-center gap-3 px-3 py-1">
+        {select ? <div className="flex shrink-0 items-center">{render(select)}</div> : null}
+        {href ? (
+          <Link
+            to={href}
+            className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 rounded-md py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {body}
+          </Link>
+        ) : (
+          <div className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 py-1.5">{body}</div>
+        )}
         <div className="flex shrink-0 items-center gap-1">
           {slot("status").map(render)}
           {actions ? render(actions) : null}
@@ -277,25 +316,26 @@ export function DataTable<TData extends TableRowData>({
 
   return (
     <ColumnLayoutContext.Provider value={headerLayout}>
-    <div className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
-      <ColumnMenuContext.Provider value={columnMenu}>{toolbar}</ColumnMenuContext.Provider>
+    <div data-slot="index-table" className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
+      <ColumnMenuContext.Provider value={menus}>{toolbar}</ColumnMenuContext.Provider>
 
       <div
         ref={resultsRef}
         className={cn("relative", variant === "default" ? "rounded-md border" : "border-t")}
-        aria-busy={showInitialLoading || undefined}
+        aria-busy={showInitialLoading || (isFetching && !isLoading) || undefined}
         data-data-table-results=""
       >
         <span className="sr-only" role="status" aria-live="polite">
-          {showInitialLoading ? itemLabel ?? t("loading") : ""}
+          {showInitialLoading && skeletonShown ? itemLabel ?? t("loading") : ""}
         </span>
-        <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
+        <DataTableRefetchBar busy={isFetching && !isLoading && !showError} />
 
         {cardLayout ? (
-          // Mobile card view
-          <div className="divide-y">
+          <div className={cn("divide-y", showInitialLoading && !skeletonShown && "invisible")}>
             {showError ? (
               renderErrorState()
+            ) : showInitialLoading ? (
+              <DataTableInitialCards count={pageSize} />
             ) : hasRows ? (
               rows.map((row) => {
                 const open = openRow(row);
@@ -305,17 +345,13 @@ export function DataTable<TData extends TableRowData>({
                   </div>
                 );
               })
-            ) : showInitialLoading ? (
-              <DataTableInitialCards />
             ) : (
-              <DataTableEmptyState config={emptyState} />
+              emptyState
             )}
           </div>
-        ) : showError ? (
-          renderDesktopTable(sortable)
-        ) : showInitialLoading ? (
-          renderDesktopTable(sortable)
-        ) : sortable ? (
+        ) : showError || showInitialLoading || !sortable ? (
+          renderDesktopTable(sortable && !showError)
+        ) : (
           <Suspense fallback={renderDesktopTable(true)}>
             <SortableDataTableContent
               table={table as unknown as Table<TableRowData>}
@@ -323,25 +359,25 @@ export function DataTable<TData extends TableRowData>({
               rows={rows as unknown as Row<TableRowData>[]}
               hasRows={hasRows}
               showInitialLoading={showInitialLoading}
+              density={density}
               emptyState={emptyState}
               onReorder={onReorder}
               getRowLabel={getRowLabel as ((row: TableRowData) => string) | undefined}
             />
           </Suspense>
-        ) : (
-          renderDesktopTable()
         )}
       </div>
 
-      {!showError && paginate && (
+      {!showError && paginate && !showInitialLoading && (
         <DataTablePagination
           table={table}
           pageSizeOptions={pageSizeOptions}
           cursorPaging={cursorPaging}
+          layoutKey={layoutKey}
+          busy={isFetching}
         />
       )}
     </div>
     </ColumnLayoutContext.Provider>
   );
 }
-

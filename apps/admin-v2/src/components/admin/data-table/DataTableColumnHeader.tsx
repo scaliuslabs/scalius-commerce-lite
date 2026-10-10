@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Column, TableRowData } from "./table-config";
+import { isNumericColumn } from "./column-attributes";
 import { cn } from "@scalius/shared/utils";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { DataTableColumnHeaderMenuProps } from "./DataTableColumnHeaderMenu";
@@ -68,14 +69,14 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   }
 
   const sorted = column.getIsSorted();
-  const numeric = Boolean(column.columnDef.meta?.numeric);
+  const numeric = isNumericColumn(column as Column<TData, unknown>);
 
   // Polaris IndexTable heading: the same caption type as a plain heading,
   // with the sort arrow beside it; the whole label is the button.
   const trigger = (
     <button
       type="button"
-      className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 text-start outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
+      className="-mx-1 inline-flex h-6 items-center gap-1 rounded-md px-1 text-start outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
       data-state={open ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={open}

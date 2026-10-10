@@ -38,7 +38,7 @@ import { catalogMessages } from "~/i18n/catalog";
 import { pageHead } from "~/i18n/page-titles";
 
 const STATUSES = ["published", "draft", "internal"] as const;
-const validateBase = createListSearchValidator(["name", "status", "createdAt", "updatedAt"] as const, { sort: "updatedAt" });
+const validateBase = createListSearchValidator(["name", "status", "createdAt", "updatedAt"] as const, { sort: "updatedAt", list: "categories" });
 
 function validateCategorySearch(search: SearchValidatorInput) {
   return { ...validateBase(search), status: normalizeOptionalEnumSearchParam(search.status, STATUSES) };
@@ -144,7 +144,6 @@ function CategoriesPage() {
       appActions="category"
       countLabel={(count) => t("categoryCount", { count })}
       query={listQuery(search, term)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="categories"
       columns={columns}
       invalidate={[queryKeys.categories.all, queryKeys.collections.categoryOptions(), queryKeys.products.stats()]}

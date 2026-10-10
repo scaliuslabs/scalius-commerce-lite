@@ -109,6 +109,8 @@ describe("plan profile", () => {
     expect(free.queue.bulkBacklogLimit).toBeLessThanOrEqual(paid.queue.bulkBacklogLimit);
     expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);
     expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
+    expect(free.lists.bulkPerRowSlice).toBeLessThanOrEqual(paid.lists.bulkPerRowSlice);
+    expect(paid.lists.bulkPerRowSlice).toBe(90);
     expect(free.maintenance.slices).toBeGreaterThanOrEqual(paid.maintenance.slices);
     expect(free.maintenance.limitScale).toBeLessThanOrEqual(paid.maintenance.limitScale);
     expect(free.maintenance.limitScale).toBeGreaterThan(0);

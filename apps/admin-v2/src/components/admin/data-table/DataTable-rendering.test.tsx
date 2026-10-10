@@ -69,6 +69,7 @@ function TableHarness({
           <DataTableBodyRow
             key={row.id}
             cells={row.getVisibleCells()}
+            density="default"
             isSelected={row.getIsSelected()}
             includeDragColumn={false}
             hasSelect={false}

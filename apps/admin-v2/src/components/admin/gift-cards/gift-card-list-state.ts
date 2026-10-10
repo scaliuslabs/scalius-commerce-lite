@@ -3,8 +3,13 @@
 // pasted code is cut to its last 4 before it is kept or sent anywhere.
 
 import type { GiftCardListQuery } from "~/lib/api-query-options/gift-cards";
+import { DEFAULT_PAGE_SIZE, readSavedPageSize } from "~/lib/list-helpers";
 
-const GIFT_CARD_PAGE_SIZE = 25;
+/** The list's name for its saved columns and page size. */
+export const GIFT_CARD_LIST = "gift-cards";
+
+/** Rows per page: the size last chosen in this browser, else 50. */
+export const giftCardPageSize = () => readSavedPageSize(GIFT_CARD_LIST) ?? DEFAULT_PAGE_SIZE;
 
 export const GIFT_CARD_TABS = ["all", "active", "disabled", "expired", "empty"] as const;
 export type GiftCardTab = (typeof GIFT_CARD_TABS)[number];
@@ -32,9 +37,9 @@ export function giftCardSearchTerm(raw: string): string {
 }
 
 /** The list's API query: `q` is the session search (last 4 or a customer), never a page URL param. */
-export function giftCardListQuery(tab: GiftCardTab, term: string, cursor: string): GiftCardListQuery {
+export function giftCardListQuery(tab: GiftCardTab, term: string, cursor: string, limit = giftCardPageSize()): GiftCardListQuery {
   return {
-    limit: GIFT_CARD_PAGE_SIZE,
+    limit,
     ...(tab !== "all" ? { status: tab } : {}),
     ...(term ? { q: term } : {}),
     ...(cursor ? { cursor } : {}),

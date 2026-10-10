@@ -64,7 +64,15 @@ export const customers = sqliteTable("customers", {
     uniqueIndex("customers_guest_email_unique")
         .on(sql`lower(${table.email})`)
         .where(sql`${table.phone} = '' AND ${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL`),
+    // The dashboard list's sorts, each ending with the keyset tiebreaker `id`.
     index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
+    index("customers_list_updated_idx").on(table.deletedAt, table.updatedAt, table.id),
+    index("customers_list_created_idx").on(table.deletedAt, table.createdAt, table.id),
+    index("customers_list_name_idx").on(table.deletedAt, table.name, table.id),
+    // The trash, recently updated first.
+    index("customers_list_trash_idx")
+        .on(table.updatedAt, table.id)
+        .where(sql`${table.deletedAt} IS NOT NULL`),
 ]);
 
 /** Every address-book id starts with it (`caddr_<nanoid>`). */

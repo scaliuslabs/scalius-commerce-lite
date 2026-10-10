@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type ReactNode } from "react";
-import { Calendar as CalendarIcon, ListFilter, RefreshCw, X } from "lucide-react";
+import { Calendar as CalendarIcon, RefreshCw } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -10,6 +10,7 @@ import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { DataTableSortMenu, type SortField } from "~/components/admin/data-table/DataTableSortMenu";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { formatDateTime, useMessages } from "~/i18n";
 import {
@@ -45,14 +46,6 @@ const DateRangePickerWithPresets = lazy(() =>
 const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter").then((module) => ({ default: module.AppListFilter })));
 
 const ANY = "any";
-const SORT_OPTIONS = [
-  "createdAt:desc",
-  "createdAt:asc",
-  "updatedAt:desc",
-  "totalAmount:desc",
-  "totalAmount:asc",
-  "customerName:asc",
-] as const;
 
 interface OrderListToolbarProps {
   search: OrderListSearch;
@@ -62,8 +55,8 @@ interface OrderListToolbarProps {
   onChange: (updates: Partial<OrderListSearch>) => void;
   /** An active app has a column to filter by (loads the app filter field). */
   appFilterable?: boolean;
-  selectedCount: number;
-  bulkActions: ReactNode;
+  /** The bulk bar while orders are selected. */
+  bulkBar?: ReactNode;
   /** The live list's offer to load new orders or changes (use-live-order-list.ts). */
   live: { newCount: number; stale: boolean; showLatest: () => void };
 }
@@ -135,9 +128,9 @@ function DateRangeFilter({
       ? `${format(range.from)} – ${format(range.to)}`
       : format(range.from);
   const trigger = (
-    <Button variant="outline" className="w-full justify-start" onClick={() => setLoadPicker(true)}>
+    <Button id="order-filter-date" variant="outline" className="w-full justify-start" onClick={() => setLoadPicker(true)}>
       <CalendarIcon className="h-4 w-4" />
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>{label}</span>
     </Button>
   );
   return (
@@ -153,151 +146,135 @@ function DateRangeFilter({
   );
 }
 
-/** One row: search, Filters, sort and the live list's "new orders" offer; the filter fields open below it. */
+/** The orders list's sort menu: the fields the API sorts orders by, with their own direction words. */
+export function OrderSortMenu({ search, term, onChange }: { search: OrderListSearch; term: string; onChange: (updates: Partial<OrderListSearch>) => void }) {
+  const t = useMessages(orderListMessages);
+  const fields: SortField[] = [
+    ...(term.trim() ? [{ id: "relevance", label: t("sort.relevance:desc"), directions: 1 as const, desc: true }] : []),
+    { id: "createdAt", label: t("sortField.createdAt"), descLabel: t("sort.createdAt:desc"), ascLabel: t("sort.createdAt:asc"), desc: true },
+    { id: "updatedAt", label: t("sort.updatedAt:desc"), directions: 1, desc: true },
+    { id: "totalAmount", label: t("sortField.totalAmount"), descLabel: t("sort.totalAmount:desc"), ascLabel: t("sort.totalAmount:asc"), desc: true },
+    { id: "customerName", label: t("sort.customerName:asc"), directions: 1, desc: false },
+  ];
+  return (
+    <DataTableSortMenu
+      fields={fields}
+      value={{ id: search.sort, desc: search.order === "desc" }}
+      defaultLabel={false}
+      onChange={(next) => {
+        const sort = (next?.id ?? "createdAt") as OrderListSearch["sort"];
+        onChange({ sort, order: next?.desc === false ? "asc" : "desc", page: 1 });
+      }}
+    />
+  );
+}
+
+/**
+ * The orders toolbar on the list kit: search, Filters (the panel below holds
+ * every order filter), the sort and columns menus, and the live list's
+ * "3 new orders" offer.
+ */
 export function OrderListToolbar({
   search,
   term,
   onSearch,
   onChange,
   appFilterable = false,
-  selectedCount,
-  bulkActions,
+  bulkBar,
   live,
 }: OrderListToolbarProps) {
   const t = useMessages(orderListMessages);
   const to = useMessages(orderMessages);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const filterCount = countOrderFilters(search);
   const filter = (patch: Partial<OrderListSearch>) => onChange({ ...patch, page: 1 });
-  const sortOptions: ReadonlyArray<(typeof SORT_OPTIONS)[number] | "relevance:desc"> =
-    term.trim() ? ["relevance:desc", ...SORT_OPTIONS] : SORT_OPTIONS;
 
   return (
-    <div className="space-y-2 pb-2">
-      <DataTableToolbar
-        searchValue={term}
-        onSearchChange={onSearch}
-        searchPlaceholder={t("searchPlaceholder")}
-        selectedCount={selectedCount}
-        bulkActions={bulkActions}
-        filters={
-          // With rows selected the bulk actions take this row's place on wide screens
-          // (as in Shopify), so nothing wraps onto a second line.
-          <div className={selectedCount > 0 ? "contents md:hidden" : "contents"}>
-            <Button
-              variant="outline"
-              aria-expanded={filtersOpen}
-              aria-controls="order-filters"
-              onClick={() => setFiltersOpen((open) => !open)}
-            >
-              <ListFilter className="h-4 w-4" />
-              {filterCount > 0 ? t("filtersCount", { count: filterCount }) : t("filters")}
+    <DataTableToolbar
+      searchValue={term}
+      onSearchChange={onSearch}
+      searchPlaceholder={t("searchPlaceholder")}
+      bulkBar={bulkBar}
+      filterCount={filterCount}
+      onClearFilters={() => onChange(CLEARED_ORDER_FILTERS)}
+      extra={
+        // Polite and still: the offer appears, it never flashes or moves rows.
+        <span aria-live="polite" className="contents">
+          {live.newCount > 0 || live.stale ? (
+            <Button variant="secondary" onClick={live.showLatest}>
+              <RefreshCw className="h-4 w-4" />
+              {live.newCount > 0 ? t("newOrders", { count: live.newCount }) : t("ordersUpdated")}
             </Button>
-            <SearchableSelect
-              triggerClassName="w-auto"
-              ariaLabel={t("sort")}
-              value={`${search.sort}:${search.order}`}
-              onValueChange={(value) => {
-                const [sort, order] = value.split(":") as [OrderListSearch["sort"], "asc" | "desc"];
-                onChange({ sort, order, page: 1 });
-              }}
-              options={sortOptions.map((option) => ({ value: option, label: t(`sort.${option}`) }))}
-            />
-            {/* Polite and still: the offer appears, it never flashes or moves rows. */}
-            <span aria-live="polite" className="contents">
-              {live.newCount > 0 || live.stale ? (
-                <Button variant="secondary" onClick={live.showLatest}>
-                  <RefreshCw className="h-4 w-4" />
-                  {live.newCount > 0 ? t("newOrders", { count: live.newCount }) : t("ordersUpdated")}
-                </Button>
-              ) : null}
-            </span>
-          </div>
-        }
-      />
-
-      {filtersOpen ? (
-        <div id="order-filters" className="space-y-4 border-t pt-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FilterSelect
-              label={t("orderStatus")}
-              value={search.status}
-              onChange={(status) => filter({ status })}
-              options={ORDER_STATUSES.map((status) => ({ value: status, label: orderStatusLabel(to, status) }))}
-            />
-            <FilterSelect
-              label={t("payment")}
-              value={search.paymentStatus}
-              onChange={(value) => filter({ paymentStatus: value as OrderListSearch["paymentStatus"] })}
-              options={PAYMENT_STATUSES.map((status) => ({ value: status, label: paymentStatusLabel(to, status) }))}
-            />
-            <PaymentMethodFilter value={search.paymentMethod} onChange={(paymentMethod) => filter({ paymentMethod })} />
-            <FilterSelect
-              label={t("fulfillment")}
-              value={search.fulfillmentStatus}
-              onChange={(value) =>
-                filter({ fulfillmentStatus: value as OrderListSearch["fulfillmentStatus"] })}
-              options={FULFILLMENT_STATUSES.map((status) => ({ value: status, label: fulfillmentStatusLabel(to, status) }))}
-            />
-            <FilterSelect
-              label={t("deliveryMethod")}
-              value={search.deliveryMethod}
-              onChange={(value) =>
-                filter({ deliveryMethod: value as OrderListSearch["deliveryMethod"] })}
-              options={DELIVERY_METHODS.map((method) => ({ value: method, label: deliveryMethodLabel(to, method) }))}
-            />
-            <FilterSelect
-              label={t("salesChannel")}
-              value={search.channel}
-              onChange={(value) => filter({ channel: value as OrderListSearch["channel"] })}
-              options={SALES_CHANNELS.map((channel) => ({ value: channel, label: orderChannelLabel(to, channel) }))}
-            />
-            <FilterSelect
-              label={t("onlinePayment")}
-              value={search.paymentRecovery}
-              onChange={(value) =>
-                filter({ paymentRecovery: value as OrderListSearch["paymentRecovery"] })}
-              options={PAYMENT_RECOVERY_STATES.map((state) => ({ value: state, label: t(`recovery.${state}`) }))}
-            />
-            <DateRangeFilter
-              search={search}
-              onChange={(range) =>
-                filter({ startDate: formatDateOnly(range?.from), endDate: formatDateOnly(range?.to) })}
-            />
-            {appFilterable ? (
-              <Suspense fallback={<Skeleton className="h-15 w-full" />}>
-                <AppListFilter labelled resource="order" value={search.appFilter} onChange={(appFilter) => filter({ appFilter })} />
-              </Suspense>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="order-filter-open-request"
-                  checked={search.openRequest}
-                  onCheckedChange={(checked) => filter({ openRequest: checked === true })}
-                />
-                <Label htmlFor="order-filter-open-request">{t("openRequestFilter")}</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="order-filter-archived"
-                  checked={search.archived}
-                  onCheckedChange={(checked) => filter({ archived: checked === true })}
-                />
-                <Label htmlFor="order-filter-archived">{t("showArchived")}</Label>
-              </div>
+          ) : null}
+        </span>
+      }
+      filters={
+        <>
+          <FilterSelect
+            label={t("orderStatus")}
+            value={search.status}
+            onChange={(status) => filter({ status })}
+            options={ORDER_STATUSES.map((status) => ({ value: status, label: orderStatusLabel(to, status) }))}
+          />
+          <FilterSelect
+            label={t("payment")}
+            value={search.paymentStatus}
+            onChange={(value) => filter({ paymentStatus: value as OrderListSearch["paymentStatus"] })}
+            options={PAYMENT_STATUSES.map((status) => ({ value: status, label: paymentStatusLabel(to, status) }))}
+          />
+          <PaymentMethodFilter value={search.paymentMethod} onChange={(paymentMethod) => filter({ paymentMethod })} />
+          <FilterSelect
+            label={t("fulfillment")}
+            value={search.fulfillmentStatus}
+            onChange={(value) => filter({ fulfillmentStatus: value as OrderListSearch["fulfillmentStatus"] })}
+            options={FULFILLMENT_STATUSES.map((status) => ({ value: status, label: fulfillmentStatusLabel(to, status) }))}
+          />
+          <FilterSelect
+            label={t("deliveryMethod")}
+            value={search.deliveryMethod}
+            onChange={(value) => filter({ deliveryMethod: value as OrderListSearch["deliveryMethod"] })}
+            options={DELIVERY_METHODS.map((method) => ({ value: method, label: deliveryMethodLabel(to, method) }))}
+          />
+          <FilterSelect
+            label={t("salesChannel")}
+            value={search.channel}
+            onChange={(value) => filter({ channel: value as OrderListSearch["channel"] })}
+            options={SALES_CHANNELS.map((channel) => ({ value: channel, label: orderChannelLabel(to, channel) }))}
+          />
+          <FilterSelect
+            label={t("onlinePayment")}
+            value={search.paymentRecovery}
+            onChange={(value) => filter({ paymentRecovery: value as OrderListSearch["paymentRecovery"] })}
+            options={PAYMENT_RECOVERY_STATES.map((state) => ({ value: state, label: t(`recovery.${state}`) }))}
+          />
+          <DateRangeFilter
+            search={search}
+            onChange={(range) => filter({ startDate: formatDateOnly(range?.from), endDate: formatDateOnly(range?.to) })}
+          />
+          {appFilterable ? (
+            <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+              <AppListFilter labelled resource="order" value={search.appFilter} onChange={(appFilter) => filter({ appFilter })} />
+            </Suspense>
+          ) : null}
+          <div className="col-span-full flex flex-col justify-end gap-2 sm:flex-row sm:gap-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="order-filter-open-request"
+                checked={search.openRequest}
+                onCheckedChange={(checked) => filter({ openRequest: checked === true })}
+              />
+              <Label htmlFor="order-filter-open-request">{t("openRequestFilter")}</Label>
             </div>
-            {filterCount > 0 ? (
-              <Button variant="ghost" onClick={() => onChange(CLEARED_ORDER_FILTERS)}>
-                <X className="h-4 w-4" />
-                {t("clearFilters")}
-              </Button>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="order-filter-archived"
+                checked={search.archived}
+                onCheckedChange={(checked) => filter({ archived: checked === true })}
+              />
+              <Label htmlFor="order-filter-archived">{t("showArchived")}</Label>
+            </div>
           </div>
-        </div>
-      ) : null}
-    </div>
+        </>
+      }
+    />
   );
 }

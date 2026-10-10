@@ -22739,7 +22739,35 @@ export type GetApiV1AdminCustomersTagsResponse = GetApiV1AdminCustomersTagsRespo
 
 export type PostApiV1AdminCustomersTagsBulkData = {
     body: {
-        customerIds: Array<string>;
+        customerIds?: Array<string>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                /**
+                 * Customers with this tag
+                 */
+                tag?: string;
+                /**
+                 * Customers in this saved segment
+                 */
+                segmentId?: string;
+                /**
+                 * Customers subscribed on this channel now (any: on at least one)
+                 */
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         add?: Array<string>;
         remove?: Array<string>;
     };
@@ -22787,6 +22815,20 @@ export type PostApiV1AdminCustomersTagsBulkResponses = {
             customers: number;
             added: Array<string>;
             removed: Array<string>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
         };
     };
 };
@@ -23775,7 +23817,35 @@ export type PostApiV1AdminCustomersResponse = PostApiV1AdminCustomersResponses[k
 
 export type PostApiV1AdminCustomersBulkDeleteData = {
     body: {
-        customerIds: Array<string>;
+        customerIds?: Array<string>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                /**
+                 * Customers with this tag
+                 */
+                tag?: string;
+                /**
+                 * Customers in this saved segment
+                 */
+                segmentId?: string;
+                /**
+                 * Customers subscribed on this channel now (any: on at least one)
+                 */
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         permanent?: boolean;
     };
     path?: never;
@@ -23783,14 +23853,156 @@ export type PostApiV1AdminCustomersBulkDeleteData = {
     url: '/api/v1/admin/customers/bulk-delete';
 };
 
+export type PostApiV1AdminCustomersBulkDeleteErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersBulkDeleteError = PostApiV1AdminCustomersBulkDeleteErrors[keyof PostApiV1AdminCustomersBulkDeleteErrors];
+
 export type PostApiV1AdminCustomersBulkDeleteResponses = {
     /**
-     * No content
+     * Customers moved to trash or deleted; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminCustomersBulkDeleteResponse = PostApiV1AdminCustomersBulkDeleteResponses[keyof PostApiV1AdminCustomersBulkDeleteResponses];
+
+export type PostApiV1AdminCustomersBulkRestoreData = {
+    body: {
+        customerIds?: Array<string>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                /**
+                 * Customers with this tag
+                 */
+                tag?: string;
+                /**
+                 * Customers in this saved segment
+                 */
+                segmentId?: string;
+                /**
+                 * Customers subscribed on this channel now (any: on at least one)
+                 */
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/bulk-restore';
+};
+
+export type PostApiV1AdminCustomersBulkRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersBulkRestoreError = PostApiV1AdminCustomersBulkRestoreErrors[keyof PostApiV1AdminCustomersBulkRestoreErrors];
+
+export type PostApiV1AdminCustomersBulkRestoreResponses = {
+    /**
+     * Customers restored
+     */
+    200: {
+        success: true;
+        data: {
+            restored: Array<string>;
+            blocked: Array<string>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersBulkRestoreResponse = PostApiV1AdminCustomersBulkRestoreResponses[keyof PostApiV1AdminCustomersBulkRestoreResponses];
 
 export type DeleteApiV1AdminCustomersByIdData = {
     body?: never;
@@ -24823,10 +25035,24 @@ export type PostApiV1AdminPagesResponse = PostApiV1AdminPagesResponses[keyof Pos
 
 export type PostApiV1AdminPagesBulkDeleteData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         permanent?: boolean;
     };
     path?: never;
@@ -24869,19 +25095,51 @@ export type PostApiV1AdminPagesBulkDeleteError = PostApiV1AdminPagesBulkDeleteEr
 
 export type PostApiV1AdminPagesBulkDeleteResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkDeleteResponse = PostApiV1AdminPagesBulkDeleteResponses[keyof PostApiV1AdminPagesBulkDeleteResponses];
 
 export type PostApiV1AdminPagesBulkPublishData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -24923,19 +25181,51 @@ export type PostApiV1AdminPagesBulkPublishError = PostApiV1AdminPagesBulkPublish
 
 export type PostApiV1AdminPagesBulkPublishResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkPublishResponse = PostApiV1AdminPagesBulkPublishResponses[keyof PostApiV1AdminPagesBulkPublishResponses];
 
 export type PostApiV1AdminPagesBulkUnpublishData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -24977,19 +25267,51 @@ export type PostApiV1AdminPagesBulkUnpublishError = PostApiV1AdminPagesBulkUnpub
 
 export type PostApiV1AdminPagesBulkUnpublishResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkUnpublishResponse = PostApiV1AdminPagesBulkUnpublishResponses[keyof PostApiV1AdminPagesBulkUnpublishResponses];
 
 export type PostApiV1AdminPagesBulkRestoreData = {
     body: {
-        pages: Array<{
+        pages?: Array<{
             id: string;
             expectedRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: 'draft' | 'scheduled' | 'published';
+                contentType?: 'page' | 'article';
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -25031,9 +25353,27 @@ export type PostApiV1AdminPagesBulkRestoreError = PostApiV1AdminPagesBulkRestore
 
 export type PostApiV1AdminPagesBulkRestoreResponses = {
     /**
-     * No content
+     * Pages changed; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminPagesBulkRestoreResponse = PostApiV1AdminPagesBulkRestoreResponses[keyof PostApiV1AdminPagesBulkRestoreResponses];
@@ -25382,7 +25722,20 @@ export type GetApiV1AdminDiscountsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Page number; reaches the first 1,000 rows (10,000 on a Paid deployment).
+         */
+        page?: number;
         limit?: number;
+        /**
+         * Matches the name or title anywhere, or a code from its start.
+         */
+        search?: string;
+        /**
+         * active: on and started; scheduled: on, starts later; expired: its end has passed.
+         */
+        view?: 'active' | 'scheduled' | 'expired';
+        sort?: 'updated' | 'titleAsc' | 'titleDesc';
         includeDeleted?: string;
     };
     url: '/api/v1/admin/discounts';
@@ -25419,7 +25772,7 @@ export type GetApiV1AdminDiscountsError = GetApiV1AdminDiscountsErrors[keyof Get
 
 export type GetApiV1AdminDiscountsResponses = {
     /**
-     * Discounts, most recently updated first
+     * Discounts, most recently updated first unless sorted
      */
     200: {
         success: true;
@@ -25481,7 +25834,31 @@ export type GetApiV1AdminDiscountsResponses = {
                  * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
                  */
                 customerSegmentIds: Array<string>;
+                /**
+                 * Codes the discount has; `codes` holds the first only.
+                 */
+                codeCount: number;
             }>;
+            pagination: {
+                /**
+                 * Page number of this page; 0 for a cursor page deeper than the count cap.
+                 */
+                page: number;
+                limit: number;
+                /**
+                 * Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true.
+                 */
+                total: number;
+                totalPages: number;
+                /**
+                 * More rows match than `total` counts (show "1,000+").
+                 */
+                totalIsCapped: boolean;
+                /**
+                 * Zero-based index of the first row of this page; null deeper than the count cap.
+                 */
+                offset: number | null;
+            };
         };
     };
 };
@@ -45419,10 +45796,50 @@ export type PostApiV1AdminOrdersByIdAmendmentsResponse = PostApiV1AdminOrdersByI
 
 export type PostApiV1AdminOrdersArchiveData = {
     body: {
-        orders: Array<{
+        orders?: Array<{
             id: string;
             expectedVersion: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                status?: string;
+                /**
+                 * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+                 */
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
+                openRequest?: boolean;
+                paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
+                paymentMethod?: string;
+                fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+                /**
+                 * How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).
+                 */
+                deliveryMethod?: 'delivery' | 'pickup' | 'none';
+                /**
+                 * Where the order came from: online_store, admin (dashboard), pos, agent (AI agent) or app.
+                 */
+                channel?: 'online_store' | 'admin' | 'pos' | 'agent' | 'app';
+                /**
+                 * A stored source slug, e.g. facebook, whatsapp or walk_in.
+                 */
+                channelSource?: string;
+                paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                startDate?: string;
+                endDate?: string;
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -45452,9 +45869,27 @@ export type PostApiV1AdminOrdersArchiveError = PostApiV1AdminOrdersArchiveErrors
 
 export type PostApiV1AdminOrdersArchiveResponses = {
     /**
-     * No content
+     * Orders archived; with `matching`, where the next slice starts
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
 };
 
 export type PostApiV1AdminOrdersArchiveResponse = PostApiV1AdminOrdersArchiveResponses[keyof PostApiV1AdminOrdersArchiveResponses];
@@ -49003,10 +49438,33 @@ export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsRespo
 
 export type PostApiV1AdminProductsBulkDeleteData = {
     body: {
-        products: Array<{
+        products?: Array<{
             id: string;
             expectedAggregateRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                category?: string;
+                status?: 'active' | 'draft';
+                /**
+                 * A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.
+                 */
+                salesChannel?: string;
+                salesChannelState?: 'published' | 'unpublished';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         permanent?: boolean;
     };
     path?: never;
@@ -49065,18 +49523,156 @@ export type PostApiV1AdminProductsBulkDeleteResponses = {
                 code: string | null;
                 message: string | null;
             }>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
         };
     };
 };
 
 export type PostApiV1AdminProductsBulkDeleteResponse = PostApiV1AdminProductsBulkDeleteResponses[keyof PostApiV1AdminProductsBulkDeleteResponses];
 
-export type PostApiV1AdminProductsBulkUpdateData = {
+export type PostApiV1AdminProductsBulkRestoreData = {
     body: {
-        products: Array<{
+        products?: Array<{
             id: string;
             expectedAggregateRevision: number;
         }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                category?: string;
+                status?: 'active' | 'draft';
+                /**
+                 * A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.
+                 */
+                salesChannel?: string;
+                salesChannelState?: 'published' | 'unpublished';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/products/bulk-restore';
+};
+
+export type PostApiV1AdminProductsBulkRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Product revision or domain conflict
+     */
+    409: ProductMutationConflict;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminProductsBulkRestoreError = PostApiV1AdminProductsBulkRestoreErrors[keyof PostApiV1AdminProductsBulkRestoreErrors];
+
+export type PostApiV1AdminProductsBulkRestoreResponses = {
+    /**
+     * Products restored
+     */
+    200: {
+        success: true;
+        data: {
+            outcomes: Array<{
+                id: string;
+                status: 'restored' | 'blocked';
+                code: string | null;
+                message: string | null;
+            }>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminProductsBulkRestoreResponse = PostApiV1AdminProductsBulkRestoreResponses[keyof PostApiV1AdminProductsBulkRestoreResponses];
+
+export type PostApiV1AdminProductsBulkUpdateData = {
+    body: {
+        products?: Array<{
+            id: string;
+            expectedAggregateRevision: number;
+        }>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                category?: string;
+                status?: 'active' | 'draft';
+                /**
+                 * A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.
+                 */
+                salesChannel?: string;
+                salesChannelState?: 'published' | 'unpublished';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
         isActive?: boolean;
         categoryId?: string;
     };
@@ -49134,6 +49730,20 @@ export type PostApiV1AdminProductsBulkUpdateResponses = {
                 name: string;
                 reason: 'needs_price';
             }>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
         };
     };
 };
@@ -49143,8 +49753,31 @@ export type PostApiV1AdminProductsBulkUpdateResponse = PostApiV1AdminProductsBul
 export type PostApiV1AdminProductsPublicationsData = {
     body: {
         action: 'publish' | 'unpublish';
-        productIds: Array<string>;
+        productIds?: Array<string>;
         channelIds: Array<string>;
+        /**
+         * Act on every row the list's filter matches instead of an id list, one slice per request.
+         */
+        matching?: {
+            filter: {
+                search?: string;
+                category?: string;
+                status?: 'active' | 'draft';
+                /**
+                 * A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.
+                 */
+                salesChannel?: string;
+                salesChannelState?: 'published' | 'unpublished';
+                /**
+                 * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
+                 */
+                appFilter?: string | Array<string>;
+            };
+            /**
+             * The `next` of the slice before; leave it out for the first slice.
+             */
+            cursor?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -49189,6 +49822,20 @@ export type PostApiV1AdminProductsPublicationsResponses = {
         data: {
             productIds: Array<string>;
             channelIds: Array<string>;
+            matching?: {
+                /**
+                 * Rows this slice changed.
+                 */
+                processed: number;
+                /**
+                 * Rows this slice read but left as they were.
+                 */
+                skipped: number;
+                /**
+                 * Send it as matching.cursor for the next slice; null when every matching row is done.
+                 */
+                next: string | null;
+            };
         };
     };
 };
@@ -60681,6 +61328,11 @@ export type GetApiV1AdminGiftCardsResponses = {
         data: {
             items: Array<AdminGiftCardSummary>;
             nextCursor: string | null;
+            /**
+             * Cards the filter matches: exact up to the count cap (1,000; 10,000 on a Paid deployment), else the cap with totalIsCapped.
+             */
+            total: number;
+            totalIsCapped: boolean;
         };
     };
 };

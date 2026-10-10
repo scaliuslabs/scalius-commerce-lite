@@ -36,6 +36,7 @@ function Harness({ labelled }: { labelled: boolean }) {
       rows={table.getRowModel().rows}
       hasRows
       showInitialLoading={false}
+      density="default"
       onReorder={() => {}}
       getRowLabel={labelled ? (row) => row.name : undefined}
     />

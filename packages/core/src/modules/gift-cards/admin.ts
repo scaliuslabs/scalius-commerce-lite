@@ -3,6 +3,9 @@
 // see `last4` only; the code is shown once, at manual issue.
 import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
+import { ftsMatch } from "../../search/fts5";
+import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
+import { capTotal } from "@scalius/shared/pagination";
 import type { BatchItem } from "drizzle-orm/batch";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
@@ -138,7 +141,7 @@ const LAST4_QUERY = /^[0-9A-HJKMNP-TV-Z]{4}$/;
 export async function listGiftCardsForStaff(
     db: Database,
     input: { q?: string | null; status?: GiftCardListFilter | null; limit?: number; cursor?: string | null },
-): Promise<{ items: StaffGiftCardSummary[]; nextCursor: string | null }> {
+): Promise<{ items: StaffGiftCardSummary[]; nextCursor: string | null; total: number; totalIsCapped: boolean }> {
     const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 25)));
     const now = nowSeconds();
     const conditions: SQL[] = [];
@@ -148,11 +151,14 @@ export async function listGiftCardsForStaff(
         if (LAST4_QUERY.test(upper)) {
             conditions.push(eq(giftCards.codeLast4, upper));
         } else {
+            // The buyer's name, phone or email words through the customer search
+            // index (a scan of every customer otherwise, 200,000 in a large store).
+            const customerMatch = ftsMatch(db, "customers_fts", "customers", q) ?? sql`(${containsText(customers.name, q)}
+                   OR ${containsText(customers.phone, q)}
+                   OR ${containsText(customers.email, q)})`;
             conditions.push(sql`${giftCards.customerId} IN (
                 SELECT ${customers.id} FROM ${customers}
-                WHERE ${containsText(customers.name, q)}
-                   OR ${containsText(customers.phone, q)}
-                   OR ${containsText(customers.email, q)}
+                WHERE ${customerMatch}
                 LIMIT 200
             )`);
         }
@@ -175,6 +181,8 @@ export async function listGiftCardsForStaff(
         default:
             break;
     }
+    // The filter's count reads at most the plan's count cap ("1,000+"), whatever the page.
+    const filterWhere = conditions.length > 0 ? and(...conditions) : undefined;
     const cursor = decodeCursor(input.cursor);
     if (cursor) {
         conditions.push(or(
@@ -182,18 +190,21 @@ export async function listGiftCardsForStaff(
             and(eq(giftCards.createdAt, cursor.createdAt), lt(giftCards.id, cursor.id)),
         )!);
     }
-    const rows = await db.select(summaryColumns)
-        .from(giftCards)
-        .leftJoin(customers, eq(customers.id, giftCards.customerId))
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(giftCards.createdAt), desc(giftCards.id))
-        .limit(limit + 1)
-        .all();
+    const [counted, rows] = await db.batch([
+        cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(giftCards).where(filterWhere).$dynamic()),
+        db.select(summaryColumns)
+            .from(giftCards)
+            .leftJoin(customers, eq(customers.id, giftCards.customerId))
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .orderBy(desc(giftCards.createdAt), desc(giftCards.id))
+            .limit(limit + 1),
+    ]);
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];
     return {
         items: page.map((row) => toSummary(row, now)),
         nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+        ...capTotal(Number(counted[0]?.count ?? 0)),
     };
 }
 

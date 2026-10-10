@@ -435,9 +435,8 @@ function wrappingText(cell: Element): string[] {
   return found;
 }
 
-/** Lines a cell takes: its one-line blocks stacked, or the reserved `min-h-[2lh]`. */
+/** Lines a cell takes: its one-line blocks stacked. */
 function lines(cell: Element): number {
-  if (cell.querySelector(".min-h-\\[2lh\\]")) return 2;
   const blocks = [...cell.querySelectorAll("[class*='block'], [data-part=value], [class*='line-clamp']")]
     .filter((element) => !element.parentElement?.closest("[class*='block'], [data-part=value]") || element.parentElement === cell);
   return Math.max(1, blocks.length);
@@ -478,7 +477,7 @@ describe("rendered rows with the most and the least data", () => {
                 const cell = column.cell as ((context: { row: { original: TData } }) => ReactNode) | undefined;
                 // As the table styles it: numbers never wrap (`data-numeric`).
                 return (
-                  <td key={columnId(column)} data-col={columnId(column)} className={column.meta?.numeric ? "whitespace-nowrap" : undefined}>
+                  <td key={columnId(column)} data-col={columnId(column)} className={column.meta?.numeric || column.meta?.money ? "whitespace-nowrap" : undefined}>
                     {cell?.({ row: { original: row } })}
                   </td>
                 );
@@ -506,8 +505,9 @@ describe("rendered rows with the most and the least data", () => {
         const [full, empty] = [...host.querySelectorAll(`td[data-col="${CSS.escape(id)}"]`)];
         expect(wrappingText(full!), `${id} wraps`).toEqual([]);
         expect(wrappingText(empty!), `${id} wraps when empty`).toEqual([]);
-        // Full and empty rows take the same lines: rows never change height with their data.
-        expect(lines(empty!), id).toBe(lines(full!));
+        // At most two lines, full or empty: the row's fixed height (T3) holds them, so rows never change height with their data.
+        expect(lines(full!), id).toBeLessThanOrEqual(2);
+        expect(lines(empty!), id).toBeLessThanOrEqual(2);
         for (const cut of full!.querySelectorAll(".truncate")) {
           if (cut.textContent) expect(cut.getAttribute("title") ?? cut.closest("[title]")?.getAttribute("title"), `${id}: ${cut.textContent}`).toBeTruthy();
         }

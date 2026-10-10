@@ -50,16 +50,46 @@
     "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
   },
   {
-    "id": "products-sort-columns",
-    "title": "Products: sort and columns",
+    "id": "products-sort",
+    "title": "Products: sort menu",
     "route": "/admin/products",
     "steps": [
       {
-        "click": "button[aria-label='Sort and columns']",
+        "click": "button[aria-label='Sort by']",
         "measure": "open-popover"
       }
     ],
     "waitFor": "[role=dialog],[data-radix-popper-content-wrapper]",
+    "locales": [
+      "en"
+    ]
+  },
+  {
+    "id": "products-columns",
+    "title": "Products: columns menu",
+    "route": "/admin/products",
+    "steps": [
+      {
+        "click": "button[aria-label='Columns']",
+        "measure": "open-popover"
+      }
+    ],
+    "waitFor": "[role=dialog],[data-radix-popper-content-wrapper]",
+    "locales": [
+      "en"
+    ]
+  },
+  {
+    "id": "products-filters",
+    "title": "Products: filters panel",
+    "route": "/admin/products",
+    "steps": [
+      {
+        "click": "button[aria-controls]:has-text('Filters')",
+        "measure": "open-panel"
+      }
+    ],
+    "waitFor": "[role=group]",
     "locales": [
       "en"
     ]

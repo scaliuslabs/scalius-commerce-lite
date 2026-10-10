@@ -99,6 +99,14 @@ export const products = sqliteTable(
             sql`${table.createdAt} DESC`,
         ),
         index("products_deleted_at_idx").on(table.deletedAt),
+        // The dashboard list's sorts, each ending with the keyset tiebreaker `id`.
+        index("products_list_updated_idx").on(table.deletedAt, table.updatedAt, table.id),
+        index("products_list_name_idx").on(table.deletedAt, table.name, table.id),
+        index("products_list_price_idx").on(table.deletedAt, table.priceMinor, table.id),
+        // The trash, recently updated first.
+        index("products_list_trash_idx")
+            .on(table.updatedAt, table.id)
+            .where(sql`${table.deletedAt} IS NOT NULL`),
         index("products_public_brand_newest_idx").on(
             table.brandId,
             table.isActive,

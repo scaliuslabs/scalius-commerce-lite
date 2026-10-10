@@ -4,6 +4,7 @@ import { defineMessages } from "./index";
 export const customersMessages = defineMessages({
   en: {
     customers: "Customers",
+    whatCustomers: "customers",
     addCustomer: "Add customer",
     emptyTitle: "Your customers will show here",
     emptyBody: "Everyone who orders is saved here. You can also add one.",
@@ -20,6 +21,9 @@ export const customersMessages = defineMessages({
     subscribers: "Subscribers",
     searchPlaceholder: "Search by name, phone or email",
     filterTag: "Filter by tag",
+    labelTag: "Tag",
+    labelSegment: "Segment",
+    labelChannel: "Channel",
     anyTag: "Any tag",
     searchTags: "Search tags",
     noTagsFound: "No tags found",
@@ -51,6 +55,7 @@ export const customersMessages = defineMessages({
   },
   bn: {
     customers: "কাস্টমার",
+    whatCustomers: "কাস্টমার",
     addCustomer: "কাস্টমার যোগ করুন",
     emptyTitle: "আপনার কাস্টমাররা এখানে দেখাবে",
     emptyBody: "যারা অর্ডার করে সবাই এখানে সেভ হয়। আপনি নিজেও যোগ করতে পারেন।",
@@ -67,6 +72,9 @@ export const customersMessages = defineMessages({
     subscribers: "সাবস্ক্রাইবার",
     searchPlaceholder: "নাম, ফোন বা ইমেইল দিয়ে খুঁজুন",
     filterTag: "ট্যাগ দিয়ে ফিল্টার",
+    labelTag: "ট্যাগ",
+    labelSegment: "সেগমেন্ট",
+    labelChannel: "চ্যানেল",
     anyTag: "যেকোনো ট্যাগ",
     searchTags: "ট্যাগ খুঁজুন",
     noTagsFound: "কোনো ট্যাগ পাওয়া যায়নি",

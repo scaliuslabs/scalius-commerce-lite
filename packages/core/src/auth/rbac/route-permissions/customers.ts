@@ -14,6 +14,9 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.CUSTOMERS_DELETE },
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
+  "/api/v1/admin/customers/bulk-restore": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
   "/api/v1/admin/customers/sync": {
     POST: { permission: PERMISSIONS.CUSTOMERS_SYNC },
   },

@@ -12,11 +12,12 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
-import { AdminListPagination } from "~/components/admin/shared/AdminListPagination";
+import { IndexPager } from "~/components/admin/data-table/DataTablePagination";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDebounce } from "~/hooks/use-debounce";
 import { formatNumber, useMessages } from "~/i18n";
 import { attributeValueMessages } from "~/i18n/attributes";
+import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
@@ -38,6 +39,7 @@ export function AttributeValueEditor({
   readOnly = false,
 }: AttributeValuesViewerProps & { readOnly?: boolean }) {
   const t = useMessages(attributeValueMessages);
+  const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -359,14 +361,17 @@ export function AttributeValueEditor({
                 </Table>
               )}
               {loaded && valuesQuery.data && valuesQuery.data.totalValues > 0 ? (
-                <AdminListPagination
-                  pagination={{
+                <IndexPager
+                  label={r("showing", {
+                    start: (valuesQuery.data.page - 1) * valuesQuery.data.limit + 1,
+                    end: Math.min(valuesQuery.data.page * valuesQuery.data.limit, valuesQuery.data.totalValues),
                     total: valuesQuery.data.totalValues,
-                    page: valuesQuery.data.page,
-                    limit: valuesQuery.data.limit,
-                    totalPages: valuesQuery.data.totalPages,
-                  }}
-                  onPageChange={setPage}
+                  })}
+                  navLabel={r("page", { page: valuesQuery.data.page, pages: Math.max(1, valuesQuery.data.totalPages) })}
+                  canPrevious={valuesQuery.data.page > 1}
+                  canNext={valuesQuery.data.page < valuesQuery.data.totalPages}
+                  onPrevious={() => setPage(valuesQuery.data!.page - 1)}
+                  onNext={() => setPage(valuesQuery.data!.page + 1)}
                 />
               ) : null}
             </div>

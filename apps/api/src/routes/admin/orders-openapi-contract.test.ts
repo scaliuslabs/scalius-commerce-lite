@@ -191,8 +191,9 @@ describe("admin order mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
+        // 200: a matching archive answers where the next slice starts.
         expectResponses(spec, "/api/v1/admin/orders/archive", "post", [
-            "204",
+            "200",
             "400",
             "401",
             "403",

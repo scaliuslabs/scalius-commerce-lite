@@ -32,8 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
-import { DataTableHeadCell } from "./DataTableBodyRow";
+import { DataTableHeadCell, type RowDensity } from "./DataTableBodyRow";
 import { getSortableStyle } from "../shared/sortable-style";
 import { useMessages } from "~/i18n";
 import { dataTableMessages } from "~/i18n/data-table";
@@ -45,7 +44,8 @@ export interface SortableDataTableContentProps<TData extends TableRowData> {
   rows: Row<TData>[];
   hasRows: boolean;
   showInitialLoading: boolean;
-  emptyState?: EmptyStateConfig;
+  density: RowDensity;
+  emptyState?: ReactNode;
   onReorder?: (oldIndex: number, newIndex: number) => void;
   /** Names a row for its reorder handle; rows are numbered without it. */
   getRowLabel?: (row: TData) => string;
@@ -54,10 +54,12 @@ export interface SortableDataTableContentProps<TData extends TableRowData> {
 function SortableTableRow<TData extends TableRowData>({
   row,
   label,
+  density,
   children,
 }: {
   row: Row<TData>;
   label: string;
+  density: RowDensity;
   children: ReactNode;
 }) {
   const {
@@ -77,6 +79,7 @@ function SortableTableRow<TData extends TableRowData>({
       // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
       style={style}
       data-state={row.getIsSelected() || isDragging ? "selected" : undefined}
+      density={density}
     >
       <TableCell className="w-[40px] px-2">
         <div
@@ -99,6 +102,7 @@ export function SortableDataTableContent<TData extends TableRowData>({
   rows,
   hasRows,
   showInitialLoading,
+  density,
   emptyState,
   onReorder,
   getRowLabel,
@@ -144,8 +148,8 @@ export function SortableDataTableContent<TData extends TableRowData>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 <TableHead className="w-[40px]" />
-                {columns.map((column) => (
-                  <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} />
+                {columns.map((column, index) => (
+                  <DataTableHeadCell key={column.id} column={column} previous={columns[index - 1]} header={headers.get(column.id)} hasSelect={hasSelect} />
                 ))}
               </TableRow>
             ))}
@@ -156,14 +160,15 @@ export function SortableDataTableContent<TData extends TableRowData>({
                 <SortableTableRow
                   key={row.id}
                   row={row}
+                  density={density}
                   label={getRowLabel
                     ? t("reorderRow", { name: getRowLabel(row.original) })
                     : t("reorderRowNumber", { number: index + 1 })}
                 >
-                  {columns.map((column) => {
+                  {columns.map((column, columnIndex) => {
                     const cell = row.getAllCells().find((candidate) => candidate.column.id === column.id);
                     return cell ? (
-                      <TableCell key={cell.id} {...columnAttributes(column, hasSelect)}>
+                      <TableCell key={cell.id} {...columnAttributes(column, hasSelect, columns[columnIndex - 1])}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ) : null;
@@ -171,18 +176,12 @@ export function SortableDataTableContent<TData extends TableRowData>({
                 </SortableTableRow>
               ))
             ) : (
-              <TableRow>
+              <TableRow still>
                 <TableCell
                   colSpan={columns.length + 1}
                   className="h-24 text-center"
                 >
-                  {showInitialLoading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
-                    </div>
-                  ) : (
-                    <DataTableEmptyState config={emptyState} />
-                  )}
+                  {showInitialLoading ? null : emptyState}
                 </TableCell>
               </TableRow>
             )}

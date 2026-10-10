@@ -6,11 +6,10 @@ import {
   deleteApiV1AdminCustomersById,
   deleteApiV1AdminCustomersByIdPermanent,
   postApiV1AdminCustomersBulkDelete,
-  postApiV1AdminCustomersByIdRestore,
+  postApiV1AdminCustomersBulkRestore,
 } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { customerTitle } from "~/lib/customer-title";
-import { NO_CURSOR } from "~/lib/list-helpers";
 import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
@@ -82,8 +81,13 @@ export const Route = createFileRoute("/admin/customers/")({
 // Customers tied to orders keep their record: only order-free ones can be deleted for good.
 const deletable = (row: Customer) => row.totalOrders === 0;
 
-async function runEach(rows: Customer[], call: (id: string) => Promise<unknown>) {
-  for (const row of rows) await call(row.id);
+/** The list's filter as "all matching" bulk actions send it (the API reads the rows). */
+function customerMatchingFilter(search: CustomerListSearch, term: string, appFilter: string | undefined) {
+  return {
+    ...(term ? { search: term } : {}),
+    ...customerListFilters(search),
+    ...(appFilter ? { appFilter } : {}),
+  };
 }
 
 function CustomersPage() {
@@ -103,6 +107,7 @@ function CustomersPage() {
   // Same query as the table (shared cache): the export dialog names how many match.
   const app = useAppListColumns<Customer>("customer", search.appFilter);
   const { data: listed } = useQuery(listQuery(search, term, app));
+  const matchingFilter = customerMatchingFilter(search, term, app.filterParam);
 
   const columns = useMemo(
     () => getCustomerColumns({ t, fmt, rowTo: (row) => (search.trashed ? undefined : openTo(row)), extra: app.extra }),
@@ -127,11 +132,12 @@ function CustomersPage() {
         list="customers"
         appActions="customer"
         query={listQuery(search, term, app)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term, { filterParam: app.filterParam })}
         cursorPaging
+        matchingBulk
         dataKey="customers"
         columns={columns}
         invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
+        what={t("whatCustomers")}
         empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
         views={{ param: "view", tabs: [{ value: "subscribers", label: t("subscribers") }] }}
         searchPlaceholder={t("searchPlaceholder")}
@@ -142,13 +148,16 @@ function CustomersPage() {
             <CustomerListFilters search={search} />
           </Suspense>
         )}
-        bulkActions={(rows, done) => (
+        bulkActions={(target, done, run) => (
           <Suspense fallback={null}>
             <CustomerBulkActions
-              rows={rows}
+              target={target}
+              filter={matchingFilter}
+              run={run}
               done={done}
               canEdit={canEdit}
-              onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
+              // All matching: the export takes the list's filters, not ids.
+              onExport={() => setExporting({ open: true, ids: target.kind === "rows" ? target.rows.map((row) => row.id) : [] })}
             />
           </Suspense>
         )}
@@ -163,11 +172,18 @@ function CustomersPage() {
           undoTrash: true,
           run: (action, rows) => {
             const customerIds = rows.map((row) => row.id);
-            if (action === "restore") return runEach(rows, (id) => apiData(postApiV1AdminCustomersByIdRestore({ path: { id } })));
+            if (action === "restore") return apiData(postApiV1AdminCustomersBulkRestore({ body: { customerIds } }));
             if (rows.length > 1) return apiData(postApiV1AdminCustomersBulkDelete({ body: { customerIds, permanent: action === "delete" } }));
             return action === "delete"
               ? apiData(deleteApiV1AdminCustomersByIdPermanent({ path: { id: customerIds[0]! } }))
               : apiData(deleteApiV1AdminCustomersById({ path: { id: customerIds[0]! } }));
+          },
+          runMatching: async (action, cursor) => {
+            const matching = { filter: matchingFilter, ...(cursor ? { cursor } : {}) };
+            const result = action === "restore"
+              ? await apiData(postApiV1AdminCustomersBulkRestore({ body: { matching } }))
+              : await apiData(postApiV1AdminCustomersBulkDelete({ body: { matching, permanent: action === "delete" } }));
+            return result.matching ?? { processed: 0, skipped: 0, next: null };
           },
         }}
       />

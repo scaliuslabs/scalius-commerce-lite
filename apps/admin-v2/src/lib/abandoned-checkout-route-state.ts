@@ -1,4 +1,6 @@
 import {
+  DEFAULT_PAGE_SIZE,
+  readSavedPageSize,
   normalizeEnumSearchParam,
   normalizeListPositiveInteger,
   normalizeSearchString,
@@ -26,7 +28,7 @@ export function validateAbandonedCheckoutSearch(
 ): AbandonedCheckoutRouteState {
   return {
     page: normalizeListPositiveInteger(search.page, 1),
-    limit: normalizeListPositiveInteger(search.limit, 20, { max: 100 }),
+    limit: normalizeListPositiveInteger(search.limit, readSavedPageSize("abandoned-checkouts") ?? DEFAULT_PAGE_SIZE, { max: 100 }),
     search: normalizeSearchString(search.search),
     sort: normalizeEnumSearchParam(
       search.sort,

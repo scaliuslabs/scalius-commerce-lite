@@ -15,6 +15,8 @@ import {
 import { apiData, type ApiBody, type ApiResult } from "../api";
 
 export type PriceList = ApiResult<typeof getApiV1AdminPriceListsById>["priceList"];
+/** A row of the price lists index. */
+export type PriceListSummary = ApiResult<typeof getApiV1AdminPriceLists>["items"][number];
 export type PriceListVariant = ApiResult<typeof getApiV1AdminPriceListsByIdPrices>["items"][number];
 export type PriceListChoices = ApiResult<typeof getApiV1AdminPriceListsChoices>;
 export type CreatePriceListBody = ApiBody<typeof postApiV1AdminPriceLists>;

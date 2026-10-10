@@ -123,8 +123,14 @@ describe("DataTable column layout", () => {
   it("puts the column menu in the toolbar and marks the columns that pin and align", async () => {
     await act(async () => root.render(<Harness />));
     await resize(1440);
-    expect(host.querySelector('button[aria-label="Sort and columns"]')).not.toBeNull();
+    // One toolbar (T2): the sort menu, then the columns menu.
+    expect(host.querySelector('button[aria-label="Columns"]')).not.toBeNull();
     const cells = [...host.querySelectorAll("tbody td")];
+    // A start-aligned column after a number keeps 24px from it (T6).
+    expect(cells[4]?.hasAttribute("data-after-numeric")).toBe(true);
+    expect(cells[2]?.hasAttribute("data-after-numeric")).toBe(false);
+    // Every row has its density's one height (T3).
+    for (const row of host.querySelectorAll("tbody tr")) expect(row.className).toContain("h-[calc(2lh+12px)]");
     expect(cells[0]?.getAttribute("data-pin")).toBe("select");
     expect(cells[1]?.getAttribute("data-pin")).toBe("primary");
     expect(cells[1]?.hasAttribute("data-after-select")).toBe(true);

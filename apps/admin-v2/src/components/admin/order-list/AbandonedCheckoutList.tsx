@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
-import { ExternalLink, ShoppingCart, Trash2, X } from "lucide-react";
+import { ExternalLink, Trash2, X } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -18,15 +18,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { DataTable } from "@/components/admin/data-table/DataTable";
-import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar";
+import { DataTableToolbar, IndexBulkBar } from "@/components/admin/data-table/DataTableToolbar";
+import { DataTableSortMenu } from "@/components/admin/data-table/DataTableSortMenu";
+import { FilteredEmptyState } from "~/components/admin/states";
 import { DataTableRowActions } from "@/components/admin/data-table/DataTableRowActions";
 import { useServerTable } from "@/components/admin/data-table/useServerTable";
 import { createSelectColumn } from "@/components/admin/data-table/columns/column-factories";
 import type { ColumnDef, Row } from "@/components/admin/data-table/table-config";
 import { ConfirmDialog } from "@/components/admin/shared/ConfirmDialog";
-import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { customerContactLinks } from "~/components/admin/orderview/contact-links";
 import { useCurrency } from "@/hooks/use-currency";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
@@ -56,7 +56,6 @@ import { abandonedStage } from "./abandoned-stage";
 import { ListDate } from "~/components/admin/data-table/ListDate";
 
 const selectCheckouts = createDataSelector<AbandonedCheckout>("checkouts");
-const SORTS = ["updatedAt:desc", "updatedAt:asc", "customerPhone:asc", "checkoutId:asc"] as const;
 /** Abandoned checkout search terms (phones, names) stay in this tab's session, never in the URL. */
 const CHECKOUT_SEARCH_LIST = "abandoned-checkouts";
 
@@ -381,7 +380,6 @@ export function AbandonedCheckoutList({
     onPaginationChange: (page, limit) => onRouteStateChange({ page, limit }),
     onSortingChange: () => undefined,
     enableSorting: false,
-    defaultPageSize: 20,
   });
 
   useEffect(() => {
@@ -473,47 +471,43 @@ export function AbandonedCheckoutList({
         isLoading={isLoading}
         error={isError ? error : null}
         onRetry={() => void refetch()}
+        what={t("checkoutsLabel")}
         itemLabel={t("checkoutsLabel")}
-        pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
         layoutKey="abandoned-checkouts"
-        toolbar={<div className="px-2 pt-2"><DataTableToolbar
+        sortMenu={(
+          <DataTableSortMenu
+            fields={[
+              { id: "updatedAt", label: t("checkoutSortField.updatedAt"), descLabel: t("checkoutSort.updatedAt:desc"), ascLabel: t("checkoutSort.updatedAt:asc"), desc: true },
+              { id: "customerPhone", label: t("checkoutSort.customerPhone:asc"), directions: 1, desc: false },
+              { id: "checkoutId", label: t("checkoutSort.checkoutId:asc"), directions: 1, desc: false },
+            ]}
+            value={{ id: routeState.sort, desc: routeState.order === "desc" }}
+            defaultLabel={false}
+            onChange={(next) => onRouteStateChange({
+              sort: (next?.id ?? "updatedAt") as AbandonedCheckoutListState["sort"],
+              order: next?.desc === false ? "asc" : "desc",
+              page: 1,
+            })}
+          />
+        )}
+        toolbar={<DataTableToolbar
             searchValue={term}
             onSearchChange={(value) => {
               setTerm(value);
               onRouteStateChange({ page: 1 }, { replace: true });
             }}
             searchPlaceholder={t("searchCheckouts")}
-            selectedCount={selectedIds.length}
-            bulkActions={<div className="hidden md:flex">{bulkDelete}</div>}
-            filters={
-              <SearchableSelect
-                triggerClassName="w-auto"
-                ariaLabel={t("sort")}
-                value={`${routeState.sort}:${routeState.order}`}
-                onValueChange={(value) => {
-                  const [sort, order] = value.split(":") as [AbandonedCheckoutListState["sort"], "asc" | "desc"];
-                  onRouteStateChange({ sort, order, page: 1 });
-                }}
-                options={SORTS.map((option) => ({ value: option, label: t(`checkoutSort.${option}`) }))}
-              />
-            }
-          /></div>}
-        emptyState={{
-          icon: ShoppingCart,
-          title: term ? t("noMatchCheckouts") : t("abandonedEmptyTitle"),
-          description: term ? tr("noResultsHint") : t("abandonedEmptyBody"),
-          action: term ? (
-            <Button variant="outline" onClick={() => setTerm("")}>
-              {tr("clearSearch")}
-            </Button>
-          ) : undefined,
-        }}
+            bulkBar={selectedIds.length > 0 ? (
+              <IndexBulkBar status={tr("selected", { count: selectedIds.length })} actions={bulkDelete} onClear={clearSelection} />
+            ) : undefined}
+          />}
+        emptyState={term ? (
+          <FilteredEmptyState title={t("noMatchCheckouts")} onClearFilters={() => setTerm("")} />
+        ) : (
+          <FilteredEmptyState title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
+        )}
       />
-
-      <SelectionSheet count={selectedIds.length} clearLabel={t("clearSelection")} onClear={clearSelection}>
-        {bulkDelete}
-      </SelectionSheet>
 
       <ConfirmDialog
         open={deleteIds !== null}

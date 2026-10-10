@@ -190,7 +190,7 @@ describe("reviews screens", () => {
     expect(host.textContent).toContain(en.verified);
     expect(host.querySelectorAll('[role="img"]')[0]?.getAttribute("aria-label")).toBe(en.stars.replace("{rating}", "2"));
 
-    await act(async () => (host.querySelector(`button[aria-label="${en.selectAll}"]`) as HTMLButtonElement).click());
+    await act(async () => (host.querySelector(`button[aria-label="Select all"]`) as HTMLButtonElement).click());
     await act(async () => button(en.reject)!.click());
     const submit = [...document.querySelectorAll('[data-slot="dialog-footer"] button')].find((item) => item.textContent === en.reject) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
@@ -218,10 +218,19 @@ describe("reviews screens", () => {
   });
 
   it("shows each tab's empty state, and no moderation controls to viewers", async () => {
-    sdk.summary.mockImplementation(() => ok({ pending: 0, published: 0, rejected: 0, product: null }));
+    sdk.summary.mockImplementation(() => ok({ pending: 2, published: 0, rejected: 0, product: null }));
     sdk.list.mockImplementation(() => ok({ items: [], nextCursor: null }));
     await render(<ReviewsPage search={{ status: "rejected" }} onSearchChange={vi.fn()} />, ["reviews.view"]);
     expect(host.textContent).toContain(en["empty.rejected"]);
     expect(button(en.settings)).toBeUndefined();
+  });
+
+  it("shows the first-run card alone before any review arrives (E1)", async () => {
+    sdk.summary.mockImplementation(() => ok({ pending: 0, published: 0, rejected: 0, product: null }));
+    sdk.list.mockImplementation(() => ok({ items: [], nextCursor: null }));
+    await render(<ReviewsPage search={{ status: "rejected" }} onSearchChange={vi.fn()} />);
+    expect(host.textContent).toContain(en["empty.pending"]);
+    expect(host.querySelector("[role=tablist]")).toBeNull();
+    expect(host.querySelector("thead")).toBeNull();
   });
 });
