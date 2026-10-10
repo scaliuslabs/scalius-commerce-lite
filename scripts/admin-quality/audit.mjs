@@ -35,8 +35,23 @@ const pathOf = (url) => {
 
 /** The titles of the dashboard's own error and not-found screens, read from its catalog (en and bn). */
 export function errorScreenPatterns(catalogSource) {
-  const titles = [...catalogSource.matchAll(/^\s*(?:pageTitle|pageNotFound|noPermissionTitle|updatedTitle):\s*"([^"]+)"/gm)].map((match) => match[1]);
-  return titles;
+  return [...catalogSource.matchAll(/^\s*(pageTitle|pageNotFound|noPermissionTitle|updatedTitle):\s*"([^"]+)"/gm)]
+    .map((match) => ({ key: match[1], text: match[2] }));
+}
+
+/** The requested route must render its content, including the explicit permission page. */
+export function judgeRender(facts, { routePath, wantedUrl, finalUrl, errorTitles }) {
+  const findings = [];
+  const finalPath = pathOf(finalUrl).replace(/\/$/, "") || "/";
+  const wantedPath = pathOf(wantedUrl).replace(/\/$/, "") || "/";
+  if (finalPath !== wantedPath) findings.push(finding("redirected", "minor", `The route ended on ${finalPath}.`, [finalPath]));
+  const permissionPage = routePath === "/admin/access-denied" && finalPath === wantedPath;
+  const errorTitle = facts.texts.find((item) => !item.data && errorTitles.some((title) =>
+    title.text === item.text && !(permissionPage && title.key === "noPermissionTitle" && item.errorStateKind === "no-permission"),
+  ));
+  if (errorTitle) findings.push(finding("render", "critical", `The page shows its error or not-found screen: "${errorTitle.text}".`, [errorTitle.sel]));
+  else if (!facts.main.exists || (facts.main.textLength === 0 && !facts.main.hasMedia)) findings.push(finding("blank-page", "critical", "The page settled with no content in main."));
+  return findings;
 }
 
 function matchesAllowlist(list, url, status) {
@@ -256,7 +271,7 @@ async function screenshot(page, file) {
 }
 
 /**
- * Audits one job at one width: { job: { id, family, url, public, surface? }, width, locale }.
+ * Audits one job at one width: { job: { id, family, path, url, public, surface? }, width, locale }.
  * Returns { findings, metrics, screenshot }.
  */
 export async function auditPage({ context, job, width, locale, baseOrigin, axeSource, allowlist, languageAllow, errorTitles, out, shots }) {
@@ -294,15 +309,10 @@ export async function auditPage({ context, job, width, locale, baseOrigin, axeSo
     if (cls.value > THRESHOLDS.cls) findings.push(finding("layout-shift", cls.value > 0.25 ? "serious" : "moderate", `CLS ${cls.value.toFixed(3)} over the load plus ${CLS_WINDOW_MS / 1000} s (good is ${THRESHOLDS.cls} or less).`, cls.sources, 1));
 
     // Where the route ended, and whether it rendered.
-    const finalPath = pathOf(page.url()).replace(/\/$/, "") || "/";
-    const wantedPath = pathOf(job.url).replace(/\/$/, "") || "/";
-    if (finalPath !== wantedPath) findings.push(finding("redirected", "minor", `The route ended on ${finalPath}.`, [finalPath]));
     const facts = await page.evaluate(collectFacts);
     metrics.scrollWidth = facts.page.scrollWidth;
     metrics.clientWidth = facts.page.clientWidth;
-    const errorTitle = facts.texts.find((item) => errorTitles.includes(item.text) && !item.data);
-    if (errorTitle) findings.push(finding("render", "critical", `The page shows its error or not-found screen: "${errorTitle.text}".`, [errorTitle.sel]));
-    else if (!facts.main.exists || (facts.main.textLength === 0 && !facts.main.hasMedia)) findings.push(finding("blank-page", "critical", "The page settled with no content in main."));
+    findings.push(...judgeRender(facts, { routePath: job.path, wantedUrl: job.url, finalUrl: page.url(), errorTitles }));
     findings.push(...judgeFacts(facts, { locale, languageAllow }));
 
     findings.push(...(await runAxe(page, axeSource)));

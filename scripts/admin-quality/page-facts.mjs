@@ -326,10 +326,11 @@ export function collectFacts() {
     const clean = text.replace(/\s+/g, " ").trim();
     if (!clean) return;
     const sel = describe(element);
-    const key = `${sel}|${attr ?? ""}|${clean}`;
+    const errorStateKind = element.closest('[data-slot="error-state"]')?.getAttribute("data-state-kind") ?? null;
+    const key = `${sel}|${attr ?? ""}|${errorStateKind ?? ""}|${clean}`;
     if (seen.has(key) || facts.texts.length >= 4000) return;
     seen.add(key);
-    facts.texts.push({ text: clean.slice(0, 300), sel: attr ? `${sel} [${attr}]` : sel, data: Boolean(element.closest(dataSelector)), code: Boolean(element.closest(codeSelector)) });
+    facts.texts.push({ text: clean.slice(0, 300), sel: attr ? `${sel} [${attr}]` : sel, data: Boolean(element.closest(dataSelector)), code: Boolean(element.closest(codeSelector)), errorStateKind });
   };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
