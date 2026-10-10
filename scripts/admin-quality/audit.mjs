@@ -34,7 +34,7 @@ const pathOf = (url) => {
 
 /** The titles of the dashboard's own error and not-found screens, read from its catalog (en and bn). */
 export function errorScreenPatterns(catalogSource) {
-  const titles = [...catalogSource.matchAll(/^\s*(?:notFoundTitle|errorTitle|offlineTitle|unavailableTitle):\s*"([^"]+)"/gm)].map((match) => match[1]);
+  const titles = [...catalogSource.matchAll(/^\s*(?:pageTitle|pageNotFound|noPermissionTitle|updatedTitle):\s*"([^"]+)"/gm)].map((match) => match[1]);
   return titles;
 }
 

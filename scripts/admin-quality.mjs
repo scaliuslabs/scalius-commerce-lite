@@ -119,7 +119,7 @@ async function main() {
   const allowlist = loadAllowlist();
   const languageAllow = compileLanguageAllowlist(loadJson("scripts/admin-quality/language-allowlist.json"));
   const surfaces = args.surfaces ? loadJson("scripts/admin-quality/surfaces.json") : [];
-  const errorTitles = errorScreenPatterns(readFileSync(join(ROOT, "apps/admin-v2/src/i18n/app.ts"), "utf8"));
+  const errorTitles = errorScreenPatterns(readFileSync(join(ROOT, "apps/admin-v2/src/i18n/states.ts"), "utf8"));
   const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
   const baseOrigin = new URL(args.baseUrl).origin;
   const started = Date.now();
