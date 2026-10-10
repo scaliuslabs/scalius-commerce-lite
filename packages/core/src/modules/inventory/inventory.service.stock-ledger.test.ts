@@ -249,7 +249,7 @@ describe("inventory overview query boundaries", () => {
     expect(bindings[0]?.length).toBeLessThanOrEqual(90);
   });
 
-  it("batches the variant page, count, and stats without changing their projections", async () => {
+  it("batches the variant page and one stats pass (with the total) without changing their projections", async () => {
     const queries: string[] = [];
     const batchSizes: number[] = [];
     const d1 = {
@@ -281,8 +281,8 @@ describe("inventory overview query boundaries", () => {
             lowStockThreshold: 3,
             version: 5,
           }] },
-          { results: [{ count: 17 }] },
           { results: [{
+            inventory_matching_variants: 17,
             totalVariants: 31,
             totalOnHand: 120,
             totalReserved: 11,
@@ -324,12 +324,14 @@ describe("inventory overview query boundaries", () => {
       },
     });
 
-    expect(batchSizes).toEqual([3]);
-    expect(queries).toHaveLength(3);
+    expect(batchSizes).toEqual([2]);
+    expect(queries).toHaveLength(2);
     expect(queries[0]).toContain(
       'pvov.variant_id = "product_variants"."id"',
     );
     expect(queries[0]).not.toContain("pvov.variant_id = \"id\"");
+    // The option label is computed for the page's ids only.
+    expect(queries[0]).toContain('where "product_variants"."id" in (select "product_variants"."id" from "product_variants"');
     for (const query of queries) {
       expect(query.toLowerCase()).toContain('inner join "products"');
       expect(query.toLowerCase()).toContain('"products"."deleted_at" is null');
@@ -351,8 +353,8 @@ describe("inventory overview query boundaries", () => {
       },
       batch: async () => [
         { results: [] },
-        { results: [{ count: 0 }] },
         { results: [{
+          inventory_matching_variants: 0,
           totalVariants: 0,
           totalOnHand: 0,
           totalReserved: 0,
@@ -385,7 +387,7 @@ describe("inventory overview query boundaries", () => {
     });
 
     expect(
-      queries[2]?.toLowerCase().match(/coalesce\(sum\(case when/g),
+      queries[1]?.toLowerCase().match(/coalesce\(sum\(case when/g),
     ).toHaveLength(2);
   });
 
