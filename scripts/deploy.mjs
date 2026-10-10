@@ -37,7 +37,8 @@
  *                          dashboard SPA from its ASSETS binding) and the
  *                          Storefront Worker
  *
- * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
+ * The database name is read from apps/api/wrangler.jsonc (API worker owns D1);
+ * with --local, from apps/api/wrangler.local.jsonc, the config the dev stack uses.
  */
 
 import { execSync } from "child_process";
@@ -1141,7 +1142,9 @@ export async function main() {
   }
   let config;
   try {
-    config = readWranglerConfig(customWranglerConfigPath ?? undefined);
+    // Local runs read the local config: its D1 binding names the database
+    // the local dev stack opens (a different id makes a second, unused file).
+    config = readWranglerConfig(customWranglerConfigPath ?? (local ? resolve(apiDir, "wrangler.local.jsonc") : undefined));
   } catch (e) {
     console.error(`✗ Could not parse ${customWranglerConfigPath ?? "apps/api/wrangler.jsonc"}:`, e.message);
     process.exit(1);
@@ -1232,7 +1235,7 @@ export async function main() {
       const migrationTarget = customWranglerConfigPath ? "DB" : dbName;
       const migrationConfigFlag = customWranglerConfigPath
         ? ` --config ${shellQuote(customWranglerConfigPath)}`
-        : "";
+        : local ? " --config wrangler.local.jsonc" : "";
       // Remote only: a migration leaves read replicas on the old schema for a
       // short window, so the live /readyz check must wait. If the pending
       // check itself fails, assume migrations apply: waiting is the safe side.
@@ -1275,7 +1278,7 @@ export async function main() {
     try {
       const migrationTarget = dbName;
       runWithRetry(
-        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}${persistFlag}`,
+        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}${persistFlag}${local ? " --config wrangler.local.jsonc" : ""}`,
         `Apply D1 migrations → ${migrationTarget} (${target})`,
         apiDir,
       );
