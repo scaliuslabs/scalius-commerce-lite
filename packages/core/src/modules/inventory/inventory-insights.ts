@@ -137,6 +137,22 @@ function safeMinor(value: unknown): number {
 /** Inventory value per location at current unit costs, plus units in transit. */
 export async function getInventoryValuation(db: Database): Promise<InventoryValuation> {
   const currency = await readStoreCurrency(db);
+  // Aggregate narrow stock rows before joining and sorting location metadata.
+  const stock = db.select({
+    locationId: inventoryLevels.locationId,
+    units: sql<number>`SUM(${inventoryLevels.onHand})`.as("units"),
+    valueMinor: sql<number>`COALESCE(SUM(${inventoryLevels.onHand} * ${productVariants.costMinor}), 0)`.as("value_minor"),
+    unitsWithoutCost: sql<number>`SUM(CASE WHEN ${productVariants.costMinor} IS NULL THEN ${inventoryLevels.onHand} ELSE 0 END)`.as("units_without_cost"),
+    skusWithoutCost: sql<number>`COUNT(CASE WHEN ${productVariants.costMinor} IS NULL THEN 1 END)`.as("skus_without_cost"),
+  }).from(inventoryLevels)
+    .leftJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
+    .where(and(
+      // Each location's index range skips its zero-stock levels.
+      inArray(inventoryLevels.locationId, db.select({ id: inventoryLocations.id }).from(inventoryLocations)),
+      sql`${inventoryLevels.onHand} > 0`,
+    ))
+    .groupBy(inventoryLevels.locationId)
+    .as("valuation_stock");
   const [locationRows, transitRows, missingRows] = await db.batch([
     db.select({
       locationId: inventoryLocations.id,
@@ -144,16 +160,14 @@ export async function getInventoryValuation(db: Database): Promise<InventoryValu
       code: inventoryLocations.code,
       isDefault: inventoryLocations.isDefault,
       status: inventoryLocations.status,
-      units: sql<number>`COALESCE(SUM(${inventoryLevels.onHand}), 0)`,
-      valueMinor: sql<number>`COALESCE(SUM(${inventoryLevels.onHand} * ${productVariants.costMinor}), 0)`,
-      unitsWithoutCost: sql<number>`COALESCE(SUM(CASE WHEN ${productVariants.costMinor} IS NULL THEN ${inventoryLevels.onHand} ELSE 0 END), 0)`,
-      skusWithoutCost: sql<number>`COUNT(CASE WHEN ${productVariants.costMinor} IS NULL AND ${inventoryLevels.onHand} > 0 THEN 1 END)`,
+      units: sql<number>`COALESCE(${stock.units}, 0)`,
+      valueMinor: sql<number>`COALESCE(${stock.valueMinor}, 0)`,
+      unitsWithoutCost: sql<number>`COALESCE(${stock.unitsWithoutCost}, 0)`,
+      skusWithoutCost: sql<number>`COALESCE(${stock.skusWithoutCost}, 0)`,
     })
       .from(inventoryLocations)
-      .leftJoin(inventoryLevels, and(eq(inventoryLevels.locationId, inventoryLocations.id), sql`${inventoryLevels.onHand} > 0`))
-      .leftJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
-      .where(sql`(${inventoryLocations.status} = 'active' OR ${inventoryLevels.onHand} > 0)`)
-      .groupBy(inventoryLocations.id, inventoryLocations.name, inventoryLocations.code, inventoryLocations.isDefault, inventoryLocations.status, inventoryLocations.position)
+      .leftJoin(stock, eq(stock.locationId, inventoryLocations.id))
+      .where(sql`(${inventoryLocations.status} = 'active' OR ${stock.units} > 0)`)
       .orderBy(sql`${inventoryLocations.status} ASC`, sql`${inventoryLocations.isDefault} DESC`, sql`${inventoryLocations.position} ASC`, sql`${inventoryLocations.name} ASC`),
     db.select({
       units: sql<number>`COALESCE(SUM(${inventoryTransferLines.shippedQuantity} - ${inventoryTransferLines.receivedQuantity} - ${inventoryTransferLines.returnedQuantity}), 0)`,
@@ -166,11 +180,13 @@ export async function getInventoryValuation(db: Database): Promise<InventoryValu
       .where(inArray(inventoryTransfers.status, ["in_transit", "partially_received"])),
     // A SKU without a cost held at several locations counts once in the total.
     db.select({
-      skus: sql<number>`COUNT(DISTINCT ${inventoryLevels.variantId})`,
+      skus: sql<number>`COUNT(*)`,
     })
-      .from(inventoryLevels)
-      .innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
-      .where(sql`${inventoryLevels.onHand} > 0 AND ${productVariants.costMinor} IS NULL`),
+      .from(productVariants)
+      .where(sql`${productVariants.costMinor} IS NULL AND EXISTS (
+        SELECT 1 FROM ${inventoryLevels}
+        WHERE ${inventoryLevels.variantId} = ${productVariants.id} AND ${inventoryLevels.onHand} > 0
+      )`),
   ]);
   const money = (minor: unknown) => fromMinor(safeMinor(minor), currency.decimalPlaces);
   const locations = locationRows.map((row) => ({

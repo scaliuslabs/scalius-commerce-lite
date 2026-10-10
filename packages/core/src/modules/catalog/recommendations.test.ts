@@ -160,12 +160,14 @@ describe("product recommendations", () => {
         expect(dependencies.validUntil).not.toBeNull();
         const index = statements.findIndex((query) => query.includes("rec_popular_first"));
         expect(index).toBeGreaterThanOrEqual(0);
-        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`)
-            .all(...statementParams[index]!)
-            .map((step) => String(step.detail));
+        const steps = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`).all(...statementParams[index]!);
+        const plan = steps.map((step) => String(step.detail));
         // It scanned every live order, probing each for a source line: minutes on a million orders.
         expect(plan.filter((detail) => /^SCAN rec_(popular_first|source_order)|USING (COVERING )?INDEX orders_\w+ \(deleted_at=\?\)$/.test(detail))).toEqual([]);
         expect(plan.join("\n")).toMatch(/SEARCH rec_boundary_source_sample USING COVERING INDEX order_items_product_recent_idx/);
+        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_boundary_source_sample "))!;
+        expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
+            .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
     });
 
     it("ignores old and cancelled orders when selecting a live ranking deadline", async () => {
@@ -380,14 +382,16 @@ describe("product recommendations", () => {
         // expansion from every published category and every product in the
         // store (1.3 s per product page at 30k products).
         const index = statements.findIndex((query) => query.includes("rec_collection_peer"));
-        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`)
-            .all(...statementParams[index]!)
-            .map((step) => String(step.detail));
+        const steps = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`).all(...statementParams[index]!);
+        const plan = steps.map((step) => String(step.detail));
         expect(plan.join("\n")).not.toMatch(/SEARCH rec_(peer|source)_category USING INDEX categories_public_idx/);
         expect(plan.join("\n")).not.toMatch(/SCAN rec_(peer|source)_product/);
         // Also-bought starts from the source products' latest order lines
         // (newest first, bounded), not from every order of the last year.
         expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx \(product_id=\? AND created_at>\?\)/);
+        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_source_line_sample "))!;
+        expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
+            .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
     });
 
     it("stores the live ranking's top rows with a reason each, and reads them by primary key", async () => {

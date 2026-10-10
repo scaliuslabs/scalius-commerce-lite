@@ -307,7 +307,10 @@ export async function rankRecommendationRows(
     const sourceLines = (alias: string) => sql`(
         SELECT ${sql.raw(alias)}_sample.order_id AS order_id
         FROM order_items AS ${sql.raw(alias)}_sample
-        WHERE ${sql.raw(alias)}_sample.product_id IN ${sourceSet}
+        WHERE ${sourceIds.length === 1
+            // Equality lets the index stop at LIMIT without sorting a bestseller's entire history.
+            ? sql`${sql.raw(alias)}_sample.product_id = ${sourceIds[0]}`
+            : sql`${sql.raw(alias)}_sample.product_id IN ${sourceSet}`}
           AND ${sql.raw(alias)}_sample.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
         ORDER BY ${sql.raw(alias)}_sample.created_at DESC, ${sql.raw(alias)}_sample.order_id DESC
         LIMIT ${sql.raw(String(ALSO_BOUGHT_SOURCE_LINES))}

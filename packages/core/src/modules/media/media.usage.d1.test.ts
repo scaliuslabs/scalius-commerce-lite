@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -30,9 +30,11 @@ function bucket() {
 describe("media usage", () => {
   let db: Database;
   let sqlite: DatabaseSync;
+  let queries: Array<{ query: string; params: readonly SQLInputValue[] }>;
 
   beforeEach(() => {
-    ({ db, sqlite } = createSqliteD1Database());
+    queries = [];
+    ({ db, sqlite } = createSqliteD1Database({ onQuery: (query, params) => queries.push({ query, params }) }));
   });
   afterEach(() => sqlite.close());
 
@@ -126,6 +128,36 @@ describe("media usage", () => {
       { id: "media_one", usageCount: 1, keptForOrders: false },
       { id: "media_two", usageCount: 0, keptForOrders: false },
     ]);
+  });
+
+  it("reads text sources once per page and stops at the first order-image reference", async () => {
+    const photo = seedMedia("media_used");
+    seedMedia("media_unused");
+    sqlite.exec(`
+      INSERT INTO products (id, name, price_minor, slug, description)
+        VALUES ('prod_a', 'Product', 1000, 'product', '<img src="${photo}">');
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone)
+        VALUES ('order_a', 'Buyer', '+8801700000001', 'Address', 'city', 'zone');
+      INSERT INTO order_items (id, order_id, product_id, quantity, product_image_media_id) VALUES
+        ('item_a', 'order_a', 'prod_a', 1, 'media_used'),
+        ('item_b', 'order_a', 'prod_a', 1, 'media_used');
+    `);
+    const counts = await countMediaUsage(db, ["media_used", "media_unused", "media_used"]);
+    expect([...counts]).toEqual([
+      ["media_used", { usageCount: 1, keptForOrders: true }],
+      ["media_unused", { usageCount: 0, keptForOrders: false }],
+    ]);
+    const textReads = queries.filter(({ query }) => query.includes("WITH text_references"));
+    expect(textReads).toHaveLength(2);
+    for (const { query, params } of textReads) {
+      const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => row.detail).join("\n");
+      expect(plan).toContain("MATERIALIZE text_references");
+    }
+    const orderRead = queries.find(({ query }) => query.includes("requested_media"))!;
+    const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${orderRead.query}`).all(...orderRead.params).map((row) => row.detail).join("\n");
+    expect(plan).toMatch(/SEARCH order_items\b[^\n]*USING (?:COVERING )?INDEX \S+ \(product_image_media_id=\?\)/);
+    expect(plan).not.toMatch(/SCAN order_items|USE TEMP B-TREE/);
+    expect((await loadMediaUsage(db, "media_used")).orderCount).toBe(2);
   });
 
   it("keeps a used file through trash, restores it, and refuses permanent delete until it is unused", async () => {

@@ -171,11 +171,13 @@ async function loadUsageRows(db: Database, ids: readonly string[]): Promise<Usag
         SELECT theme_file.id, 'theme', '', NULL, 0
         FROM ${media} AS theme_file
         WHERE theme_file.id IN ${idSet(ids)} AND ${themeNamesMedia(sql`theme_file.id`)}`);
+    // Filter each document source once, not once for every file on the page.
     for (const group of textReferenceGroups()) {
         rows.push(...await db.all<UsageRow>(sql`
+            WITH text_references AS MATERIALIZED (${group})
             SELECT k.id AS media_id, t.kind AS kind, t.ref_id AS ref_id, t.name AS name, t.trashed AS trashed
             FROM ${media} AS k
-            INNER JOIN (${group}) AS t ON instr(t.body, k.object_key) > 0
+            INNER JOIN text_references AS t ON instr(t.body, k.object_key) > 0
             WHERE k.id IN ${idSet(ids)}`));
     }
     return rows;
@@ -216,8 +218,9 @@ export async function countMediaUsage(
         if (entry) entry.usageCount += 1;
     }
     const ordered = await db.all<{ media_id: string }>(sql`
-        SELECT DISTINCT ${orderItems.productImageMediaId} AS media_id FROM ${orderItems}
-        WHERE ${orderItems.productImageMediaId} IN ${idSet(unique)}`);
+        SELECT CAST(value AS TEXT) AS media_id FROM json_each(${JSON.stringify(unique)}) AS requested_media
+        WHERE EXISTS (SELECT 1 FROM ${orderItems}
+            WHERE ${orderItems.productImageMediaId} = CAST(requested_media.value AS TEXT))`);
     for (const row of ordered) {
         const entry = result.get(row.media_id);
         if (entry) entry.keptForOrders = true;
