@@ -144,7 +144,7 @@ function AdminLayout() {
               {offlineBanner}
               <main
                 id="admin-main-scroll"
-                tabIndex={-1}
+                tabIndex={0}
                 data-scroll-restoration-id="admin-main-scroll"
                 className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain outline-none lg:[scrollbar-gutter:stable] print:overflow-visible"
               >

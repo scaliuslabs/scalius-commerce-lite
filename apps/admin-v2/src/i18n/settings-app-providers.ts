@@ -57,7 +57,7 @@ export const appProvidersMessages = defineMessages({
     retry: "আবার চেষ্টা করুন",
     noFields: "{name}-এ সেট করার কিছু নেই।",
     readOnly: "আপনি এই সেটিংস দেখতে পারবেন। বদলাতে অ্যাপ পরিচালনার অনুমতি লাগবে।",
-    activateApp: "{name} ব্যবহার করতে Apps-এ {app} চালু করুন।",
+    activateApp: "{name} ব্যবহার করতে অ্যাপে গিয়ে {app} চালু করুন।",
     close: "বন্ধ করুন",
     cancel: "বাতিল",
     save: "সেভ করুন",

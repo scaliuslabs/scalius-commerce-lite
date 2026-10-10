@@ -227,11 +227,11 @@ export function EditorTopBar({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={t("frameSize", { size: device === "phone" ? t("device_phone") : sizeName(desktopWidth), scale: String(scalePercent(scale)) })}
+                title={t("frameSize", { size: device === "phone" ? t("device_phone") : sizeName(desktopWidth), scale: String(scalePercent(scale)) })}
                 // A fixed width: switching device never moves the controls beside it.
                 className="hidden h-9 w-24 shrink-0 items-center justify-between gap-1 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex xl:w-44"
               >
-                <span className="hidden min-w-0 truncate tabular-nums xl:inline">{device === "phone" ? t("device_phone") : sizeName(desktopWidth)}</span>
+                <span className="hidden min-w-0 tabular-nums xl:inline">{device === "phone" ? t("device_phone") : sizeName(desktopWidth)}</span>{" "}
                 <span className="font-medium tabular-nums">{scalePercent(scale)}%</span>
                 <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden="true" />
               </button>
@@ -332,7 +332,7 @@ export function MarketSwitcher({ options, value, onChange }: {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={`${current.short} · ${t("marketPicker", { market: current.label })}`}
+          title={t("marketPicker", { market: current.label })}
           className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex"
         >
           <Globe className="size-4" aria-hidden="true" />

@@ -80,10 +80,20 @@ describe("MediaCard picker management boundary", () => {
     expect(host.querySelector('button[aria-label="Actions for product-front.webp"]')).toBeTruthy();
   });
 
+  it("takes its accessible name from all visible file text", () => {
+    render(true);
+    const asset = host.querySelector<HTMLButtonElement>("article > button")!;
+    expect(asset.hasAttribute("aria-label")).toBe(false);
+    expect(asset.hasAttribute("aria-labelledby")).toBe(false);
+    expect(asset.getAttribute("aria-description")).toBe("Open product-front.webp");
+    expect(asset.textContent).toContain(file.filename);
+    expect(asset.textContent).toContain("100 B");
+  });
+
   it("marks already-attached picker assets as unavailable instead of selected", () => {
     render(false, true, true);
 
-    const asset = host.querySelector<HTMLButtonElement>('button[aria-label="Already added product-front.webp"]');
+    const asset = host.querySelector<HTMLButtonElement>('button[aria-description="Already added product-front.webp"]');
     expect(asset?.disabled).toBe(true);
     expect(asset?.getAttribute("aria-pressed")).toBeNull();
     expect(host.textContent).toContain("Added");

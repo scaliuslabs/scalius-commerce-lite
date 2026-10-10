@@ -32,6 +32,7 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
   const extra = formatDuration(file.durationMs) ?? (file.width && file.height ? `${file.width} × ${file.height}` : null);
+  const metadata = [formatFileType(file.mimeType).replace(/ (Image|Video)$/, ""), formatFileSize(file.size), extra].filter(Boolean).join(" · ");
   const previewUrl = isImage ? mediaImageUrl(file.url, 480) : posterUrl ? mediaImageUrl(posterUrl, 480) : null;
   const deletable = canDeletePermanently(file);
   // Ready files say where they're used; in Trash a file still in use says why it can't be deleted.
@@ -60,7 +61,7 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
         onClick={selectionMode ? onToggle : onActivate}
         aria-pressed={selectionMode && !unavailable ? selected : undefined}
         aria-keyshortcuts={selectionMode && !unavailable ? "Shift+Enter" : undefined}
-        aria-label={label}
+        aria-description={label}
         title={selectionMode && !unavailable ? t("rangeHint") : undefined}
       >
         <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden bg-muted text-muted-foreground">
@@ -100,8 +101,8 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
         </div>
         <div className="flex flex-col px-2.5 py-2 group-hover:bg-accent">
           <span className="truncate text-body font-medium" title={file.filename}>{file.filename}</span>
-          <span className="truncate text-body text-muted-foreground">
-            {[formatFileType(file.mimeType).replace(/ (Image|Video)$/, ""), formatFileSize(file.size), extra].filter(Boolean).join(" · ")}
+          <span title={metadata} className="truncate text-body text-muted-foreground">
+            {metadata}
           </span>
           {usage ? <span className="text-body text-muted-foreground">{usage}</span> : null}
         </div>

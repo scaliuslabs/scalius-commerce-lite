@@ -70,7 +70,7 @@ export function ConversationMessages({
   };
 
   return (
-    <div ref={scrollerRef} className={className}>
+    <div ref={scrollerRef} tabIndex={0} role="region" aria-label={t("messages")} className={className}>
       {hasMore ? (
         <div className="flex justify-center pb-3">
           <Button type="button" size="sm" variant="ghost" loading={loadingOlder} onClick={() => void loadOlder()}>

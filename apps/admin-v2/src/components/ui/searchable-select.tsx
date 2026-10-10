@@ -369,7 +369,7 @@ function ComboboxView({
               {busy ? t("loading") : label ?? placeholder ?? t("placeholder")}
             </span>
             {/* Room for the clear button, which sits just before the chevron. */}
-            {canClear ? <span aria-hidden="true" className="size-8 shrink-0 sm:size-6" /> : null}
+            {canClear ? <span aria-hidden="true" className="size-11 shrink-0 sm:size-6" /> : null}
             {busy ? (
               <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
             ) : (
@@ -386,7 +386,7 @@ function ComboboxView({
               setPicked(null);
               onValueChange("", null);
             }}
-            className="absolute inset-e-8 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-6"
+            className="absolute inset-e-8 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-6"
           >
             <X aria-hidden="true" className="size-3.5" />
           </button>

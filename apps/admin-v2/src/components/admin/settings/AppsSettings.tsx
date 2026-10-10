@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { providerLabel } from "~/i18n/provider-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -690,7 +691,7 @@ function FraudCheckerMoved({ provider, appProvider }: { provider: FraudCheckerPr
     <Alert variant="warning">
       <AlertDescription>
         <div className="flex flex-col items-start gap-1">
-          <span>{t("checkerMoved", { name: provider.name, app: appProvider?.appName ?? pluginId ?? "" })}</span>
+          <span>{t("checkerMoved", { name: providerLabel(provider.name), app: providerLabel(appProvider?.appName ?? pluginId ?? "") })}</span>
           {canSeeApps && pluginId ? (
             <Button type="button" variant="link" asChild>
               <Link to="/admin/apps/$pluginId" params={{ pluginId }}>{t("openAppToActivate")}</Link>
@@ -807,7 +808,7 @@ function FraudCardBody() {
       title={t("fraudTitle")}
       description={t("fraudDescription")}
       rows={appRows.length > 0 ? appRows.map(({ appProvider, provider }) => {
-        const name = appProvider?.name ?? provider?.name ?? "";
+        const name = providerLabel(appProvider?.name ?? provider?.name ?? "");
         const providerType = appProvider?.id ?? provider!.providerType;
         const value = !provider
           ? t("notSetUp")
@@ -818,7 +819,7 @@ function FraudCardBody() {
           <SettingsDialog
             key={providerType}
             title={name}
-            description={appProvider ? appT("byApp", { app: appProvider.appName }) : undefined}
+            description={appProvider ? appT("byApp", { app: providerLabel(appProvider.appName) }) : undefined}
             trigger={
               <SettingsRow
                 disabled={!canEdit}

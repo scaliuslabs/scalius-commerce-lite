@@ -77,7 +77,7 @@ export function ColumnMenuPanel<TData extends TableRowData>({ layout }: ColumnMe
                       type="button"
                       data-column-handle={id}
                       aria-label={t("moveColumn", { name })}
-                      className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                      className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted sm:size-8"
                       {...sortableProps.dragHandleProps}
                       onKeyDown={(event) => moveBy(event, id, index)}
                     >

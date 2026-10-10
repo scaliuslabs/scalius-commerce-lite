@@ -26,7 +26,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
         <h3 className="text-heading-sm">{t("customerLabel")}</h3>
         <p className="break-words">{thread.customerName?.trim() || t("unknownCustomer")}</p>
         {thread.customerId ? (
-          <Link to="/admin/customers/$customerId/edit" params={{ customerId: thread.customerId }} className="text-body text-link hover:underline">
+          <Link to="/admin/customers/$customerId/edit" params={{ customerId: thread.customerId }} className="inline-flex min-h-11 min-w-6 items-center text-body text-link hover:underline sm:min-h-6">
             {t("viewCustomer")}
           </Link>
         ) : null}
@@ -43,7 +43,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
             {formatSavedMinorAmount(order.totalAmountMinor, { currencyCode: currency, decimalPlaces: getDecimalPlaces(currency) })}
           </p>
           {order.createdAt ? <p className="text-body text-muted-foreground">{t("placedOn", { date: formatOrderDate(order.createdAt) ?? "" })}</p> : null}
-          <Link to="/admin/orders/$orderId" params={{ orderId: order.id }} className="text-body text-link hover:underline">
+          <Link to="/admin/orders/$orderId" params={{ orderId: order.id }} className="inline-flex min-h-11 min-w-6 items-center text-body text-link hover:underline sm:min-h-6">
             {t("viewOrder")}
           </Link>
         </section>

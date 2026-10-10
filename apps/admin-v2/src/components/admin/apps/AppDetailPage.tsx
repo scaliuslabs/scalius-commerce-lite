@@ -22,6 +22,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useLocale, useMessages } from "~/i18n";
+import { providerLabel } from "~/i18n/provider-copy";
 import { installedAppsMessages } from "~/i18n/apps";
 import { localizedAppDetail } from "./app-detail-text";
 import { resourceMessages } from "~/i18n/resource";
@@ -116,7 +117,7 @@ function Jobs({ app }: { app: AppDetail }) {
           return (
             <li key={job.name} className="space-y-1 border-t border-border px-4 py-3 text-body first:border-t-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono">{job.name}</span>
+                <span>{app.id === "scalius.bangladesh" ? providerLabel(job.name) : job.name}</span>
                 {run ? <Badge variant={JOB_VARIANT[run.status]}>{t(`job_${run.status}`)}</Badge> : <Badge variant="secondary">{t("job_never")}</Badge>}
               </div>
               <p className="text-muted-foreground">

@@ -100,7 +100,7 @@ export const customersMessages = defineMessages({
     removeTag: "{tag} ট্যাগ সরান",
     tagTooLong: "একটি ট্যাগ সর্বোচ্চ {count} অক্ষরের।",
     tagLimit: "সর্বোচ্চ {count}টি ট্যাগ।",
-    tagsHelp: "ট্যাগ যোগ করতে Enter চাপুন বা কমা দিন।",
+    tagsHelp: "ট্যাগ যোগ করতে এন্টার চাপুন বা কমা দিন।",
     suggestedTags: "প্রস্তাবিত ট্যাগ",
     noTagsYet: "কোনো ট্যাগ নেই",
   },

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Banknote, Wallet } from "lucide-react";
@@ -407,7 +408,7 @@ export function PaymentMethodsCard() {
   const methodRows = rowsFor(values);
   // Built-in methods read in the dashboard language; an app's provider by its own name.
   const nameOf = (row: PaymentMethodRow) =>
-    row.kind !== "app" && Object.hasOwn(paymentsMessages.en, row.id) ? t(row.id as keyof typeof paymentsMessages.en) : row.name;
+    row.kind !== "app" && Object.hasOwn(paymentsMessages.en, row.id) ? t(row.id as keyof typeof paymentsMessages.en) : providerLabel(row.name);
   const names = new Map(methodRows.map((row) => [row.id, nameOf(row)]));
   const currencyText = (currencies: readonly string[]) =>
     currencies.length === 1 && currencies[0] === "BDT"
@@ -461,7 +462,7 @@ export function PaymentMethodsCard() {
         : exclusion
           ? t(exclusion)
           : row.kind === "app" && unusable && status?.blockedReason
-            ? status.blockedReason
+            ? providerSetupReason(status.blockedReason)
             : [
                 needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
                 method !== "cod" && environment === "test" ? t("testMode") : null,
@@ -528,7 +529,7 @@ export function PaymentMethodsCard() {
           {row.kind === "app" && row.appName && row.pluginId ? (
             <ProvidedByChip pluginId={row.pluginId} appName={row.appName} />
           ) : row.kind === "app" && row.appName ? (
-            <p className="text-body text-muted-foreground">{t("fromApp", { app: row.appName })}</p>
+            <p className="text-body text-muted-foreground">{t("fromApp", { app: providerLabel(row.appName) })}</p>
           ) : null}
           <p className="text-body text-muted-foreground">{detail}</p>
           {testResult ? (

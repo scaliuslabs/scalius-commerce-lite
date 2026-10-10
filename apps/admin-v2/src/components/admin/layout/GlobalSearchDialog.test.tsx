@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setLocale } from "~/i18n";
 
 const navigate = vi.fn();
 const searchGlobal = vi.fn();
@@ -31,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  setLocale("en");
 });
 
 async function type(text: string) {
@@ -44,6 +46,18 @@ async function type(text: string) {
 }
 
 describe("global search (⌘K)", () => {
+  it("names the command list in Bangla instead of cmdk's English default", async () => {
+    setLocale("bn");
+    searchGlobal.mockResolvedValue(EMPTY);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => root.render(
+      <QueryClientProvider client={client}>
+        <GlobalSearchDialog nav={[]} canOpen={() => true} goKeys={new Map()} open setOpen={() => undefined} />
+      </QueryClientProvider>,
+    ));
+    expect(document.querySelector('[role="listbox"]')?.getAttribute("aria-label")).toBe("অপশন");
+  });
+
   it("groups records by kind from one request and ends each group with a searched list link", async () => {
     searchGlobal.mockResolvedValue({
       ...EMPTY,

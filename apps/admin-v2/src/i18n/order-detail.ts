@@ -657,7 +657,7 @@ export const orderDetailMessages = defineMessages({
 
     "payment.title": "পেমেন্ট",
     "payment.method": "পেমেন্ট মাধ্যম",
-    "payment.appInactive": "এই {method} পেমেন্ট রিফান্ড বা যাচাই করতে Apps-এ {app} চালু করুন।",
+    "payment.appInactive": "এই {method} পেমেন্ট রিফান্ড বা যাচাই করতে অ্যাপে গিয়ে {app} চালু করুন।",
     "payment.bangladeshPack": "বাংলাদেশ প্যাক",
     "payment.paidWith": "পরিশোধ · {method}",
     "payment.refunded": "রিফান্ড",

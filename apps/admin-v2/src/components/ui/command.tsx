@@ -3,6 +3,8 @@ import { Command as CommandPrimitive } from "cmdk";
 import { SearchIcon } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
+import { useMessages } from "~/i18n";
+import { comboboxMessages } from "~/i18n/combobox";
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -31,9 +33,11 @@ function CommandInput({ className, ...props }: React.ComponentProps<typeof Comma
 }
 
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
+  const t = useMessages(comboboxMessages);
   return (
     <CommandPrimitive.List
       data-slot="command-list"
+      label={t("options")}
       className={cn("max-h-80 scroll-py-1.5 overflow-y-auto overflow-x-hidden", className)}
       {...props}
     />

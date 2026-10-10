@@ -3,6 +3,7 @@
 // and section titles. Apart from app-text.ts, which the shell loads, so only
 // the app page and a provider's setup sheet carry it.
 import type { Locale } from "~/i18n";
+import { providerLabel } from "~/i18n/provider-copy";
 import type { AppDetail } from "~/lib/api-query-options/apps";
 import type { AppAdminSurfaces } from "~/lib/api-query-options/apps";
 import { localizedApp, translationFor, type Translation } from "./app-text";
@@ -30,6 +31,7 @@ export function localizedAppPage(app: Pick<AppAdminSurfaces, "translations">, pa
  * actions and widgets, and its settings' labels, help and section titles.
  */
 export function localizedAppDetail(app: AppDetail, locale: Locale): AppDetail {
+  app = { ...app, providers: app.providers.map((provider) => ({ ...provider, name: providerLabel(provider.name, locale) })) };
   const text = translationFor(app.translations, locale);
   if (!text) return app;
   const group = (id: string) => text.settingsGroups?.[id];

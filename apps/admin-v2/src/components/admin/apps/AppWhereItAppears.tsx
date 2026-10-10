@@ -150,12 +150,13 @@ export function AppWhereItAppears({ app }: { app: AppDetail }) {
             <ul className="pb-2">
               {items.map((entry) => {
                 const label = entry.key === "settings" ? t("appSettings") : entry.label;
+                const detail = detailText(entry);
                 const content = (
                   <>
                     {entry.icon !== undefined ? <AppIcon src={entry.icon} size="sm" /> : null}
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-body font-medium">{label}</span>
-                      <span className="block truncate text-body text-muted-foreground">{detailText(entry)}</span>
+                      <span title={label} className="block truncate text-body font-medium">{label}</span>
+                      <span title={detail} className="block truncate text-body text-muted-foreground">{detail}</span>
                     </span>
                   </>
                 );

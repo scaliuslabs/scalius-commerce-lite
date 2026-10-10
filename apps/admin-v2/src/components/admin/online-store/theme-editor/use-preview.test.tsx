@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 /**
  * The preview channel as the editor really runs it: the hook, the canvas
  * (its frames registered by ref) and re-renders after the frame connected.

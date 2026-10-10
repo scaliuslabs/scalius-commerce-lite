@@ -222,7 +222,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                   >
                     <span className="min-w-0 flex-1">
                       {/* Each order keeps the name it was placed with: a guest record can hold orders from different people. */}
-                      <span className="block truncate font-medium">
+                      <span title={`${formatOrderNumber(order.orderNumber, order.id)} · ${order.customerName}`} className="block truncate font-medium">
                         {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
                       </span>
                       <span className="block text-muted-foreground">{day(order.createdAt)}</span>

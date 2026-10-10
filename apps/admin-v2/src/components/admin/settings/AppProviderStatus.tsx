@@ -17,6 +17,7 @@ import { apiData } from "~/lib/api";
 import type { AppProvider } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { appProvidersMessages } from "~/i18n/settings-app-providers";
+import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
 
 export { ProvidedByChip };
 
@@ -24,7 +25,7 @@ type AppProvidersMessage = keyof (typeof appProvidersMessages)["en"];
 
 /** An app provider as a choice beside the built-in ones, under an "Apps" heading. */
 export function appProviderOption(provider: AppProvider, t: (key: AppProvidersMessage, vars?: Record<string, string>) => string) {
-  return { value: provider.id, label: provider.name, description: t("byApp", { app: provider.appName }), group: t("apps") };
+  return { value: provider.id, label: providerLabel(provider.name), description: t("byApp", { app: providerLabel(provider.appName) }), group: t("apps") };
 }
 
 /** The button that opens a provider's setup sheet: "Set up" until it is configured, then "Edit settings". */
@@ -37,7 +38,7 @@ export function AppProviderSetupButton({ provider, size = "default" }: { provide
   const configured = provider.readiness.configured;
   return (
     <Button type="button" variant={configured ? "outline" : "default"} size={size} onClick={() => openProvider(provider.id)}>
-      {t(configured ? "editSettings" : "setUp", { name: provider.name })}
+      {t(configured ? "editSettings" : "setUp", { name: providerLabel(provider.name) })}
     </Button>
   );
 }
@@ -55,14 +56,14 @@ export function AppProviderStatus({ provider }: { provider: AppProvider }) {
       <div className="flex items-start gap-3">
         <AppIcon src={provider.icon} size="sm" />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-body font-medium">{provider.name}</p>
+          <p className="text-body font-medium">{providerLabel(provider.name)}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={usable ? "success" : "warning"}>{usable ? t("ready") : t("notReady")}</Badge>
             <ProvidedByChip pluginId={provider.pluginId} appName={provider.appName} />
           </div>
         </div>
       </div>
-      {!usable && provider.readiness.blockedReason ? <Alert variant="warning">{provider.readiness.blockedReason}</Alert> : null}
+      {!usable && provider.readiness.blockedReason ? <Alert variant="warning">{providerSetupReason(provider.readiness.blockedReason)}</Alert> : null}
       <div className="flex flex-wrap items-center gap-2">
         <AppProviderSetupButton provider={provider} />
         {provider.canTestConnection && canManage ? (

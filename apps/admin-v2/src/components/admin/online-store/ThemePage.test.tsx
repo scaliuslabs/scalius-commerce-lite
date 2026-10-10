@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, Suspense } from "react";

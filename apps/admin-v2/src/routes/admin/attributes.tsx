@@ -84,7 +84,7 @@ function AttributesPage() {
       meta: { mobile: "primary", minWidth: 200 },
       cell: ({ row }) =>
         can.canEdit && !search.trashed ? (
-          <button type="button" className="line-clamp-2 break-words text-start font-medium hover:underline" onClick={() => setEditing(row.original)}>
+          <button type="button" className="min-h-11 min-w-6 break-words text-start font-medium hover:underline sm:min-h-6" onClick={() => setEditing(row.original)}>
             {row.original.name}
           </button>
         ) : (
@@ -115,7 +115,7 @@ function AttributesPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className="tabular-nums text-muted-foreground hover:underline disabled:no-underline"
+          className="min-h-11 min-w-6 tabular-nums text-muted-foreground hover:underline disabled:no-underline sm:min-h-6"
           disabled={search.trashed}
           onClick={(event) => {
             valuesOpener.current = event.currentTarget;

@@ -136,7 +136,7 @@ function RulesTable({
                     {events(event)}
                   </Link>
                 ) : (
-                  <span title={events(event)} className="line-clamp-2">{events(event)}</span>
+                  <span title={events(event)} className="line-clamp-2 min-h-11 sm:min-h-6">{events(event)}</span>
                 )}
               </td>
               {columns.map((column) => (

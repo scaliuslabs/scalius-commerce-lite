@@ -280,7 +280,7 @@ export function BarcodeLabelWorkspace({
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>
                 {t("labels")}{" "}
                 <span className="text-body font-normal text-muted-foreground">

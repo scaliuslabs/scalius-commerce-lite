@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { providerLabel } from "~/i18n/provider-copy";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { InlineError } from "~/components/admin/states/InlineError";
 import { pollWhileOffline } from "~/lib/admin-query-client";
@@ -329,7 +330,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       <CardContent className="space-y-4">
         {inactiveApp ? (
           <Alert>
-            <AlertDescription>{t("payment.appInactive", { app: inactiveApp, method: methodLabel(order.paymentMethod ?? "") })}</AlertDescription>
+            <AlertDescription>{t("payment.appInactive", { app: providerLabel(inactiveApp), method: methodLabel(order.paymentMethod ?? "") })}</AlertDescription>
           </Alert>
         ) : null}
         {activeRefundCopy && activeRefund ? (

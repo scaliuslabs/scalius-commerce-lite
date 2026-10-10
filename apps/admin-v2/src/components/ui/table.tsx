@@ -32,6 +32,7 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
   return (
     <div
       ref={wrapperRef}
+      tabIndex={scrolls ? 0 : undefined}
       data-scrolls={scrolls || undefined}
       className="relative w-full data-[scrolls]:max-h-[calc(100svh-8rem)] data-[scrolls]:overflow-auto"
     >

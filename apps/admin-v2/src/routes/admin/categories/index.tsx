@@ -89,17 +89,20 @@ function CategoriesPage() {
       accessorKey: "name",
       header: sortHeader(t("category")),
       meta: { mobile: "primary", minWidth: 240 },
-      cell: ({ row }) => (
-        <div className="flex min-w-0 items-center gap-3">
-          <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
-          <div className="min-w-0">
-            <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>
-            {row.original.parentId && byId.has(row.original.parentId) ? (
-              <p title={categoryPathLabel(row.original.parentId, byId)} className="truncate text-body text-muted-foreground">{categoryPathLabel(row.original.parentId, byId)}</p>
-            ) : null}
+      cell: ({ row }) => {
+        const parent = row.original.parentId && byId.has(row.original.parentId) ? categoryPathLabel(row.original.parentId, byId) : "";
+        return (
+          <div className="flex min-w-0 items-center gap-3">
+            <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
+            <div className="min-w-0">
+              <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)} title={[row.original.name, parent].filter(Boolean).join(" · ")}>
+                <span title={row.original.name} className="block h-lh truncate">{row.original.name}</span>
+                <span title={parent || undefined} className="block h-lh truncate font-normal text-muted-foreground">{parent}</span>
+              </ResourceRowLink>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       accessorKey: "status",
