@@ -1,6 +1,6 @@
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
-import { statesMessages } from "~/i18n/states";
+import { shellMessages } from "~/i18n/shell";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { classifyFailure, type FailureKind } from "./failure";
 
@@ -30,7 +30,7 @@ export function InlineError({
   description?: string;
   onRetry?: () => void;
 }) {
-  const t = useMessages(statesMessages);
+  const t = useMessages(shellMessages);
   const kind = kindProp ?? classifyFailure(error);
   const status = readAdminApiError(error)?.status ?? 0;
   const refusal = status >= 400 && status < 500 && error instanceof Error && error.message ? error.message : null;

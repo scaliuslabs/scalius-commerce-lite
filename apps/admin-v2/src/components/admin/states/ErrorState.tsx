@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { statesMessages } from "~/i18n/states";
+import { shellMessages } from "~/i18n/shell";
 import { readAdminApiError } from "~/lib/admin-api-error";
 import { classifyFailure, retriesWhenOnline, type FailureKind } from "./failure";
 import { useRetryWhenOnline } from "./online-status";
@@ -71,6 +72,7 @@ export function ErrorState({
   pageTitle,
 }: ErrorStateProps) {
   const t = useMessages(statesMessages);
+  const s = useMessages(shellMessages);
   const kind = kindProp ?? classifyFailure(error);
   // A failed page re-runs its loaders on reconnect; card and inline reads are
   // refetched by the shell's reconnect (useOfflineNavigation).
@@ -79,12 +81,12 @@ export function ErrorState({
   const heading = title
     ?? (kind === "updated" ? t("updatedTitle")
       : what ? t("loadTitle", { what })
-        : layout === "page" ? t("pageTitle") : t("sectionTitle"));
+        : layout === "page" ? t("pageTitle") : s("sectionTitle"));
   // A refusal (4xx) carries its own reason ("This order is being edited by Rahim").
   const status = readAdminApiError(error)?.status ?? 0;
   const refusal = status >= 400 && status < 500 && error instanceof Error && error.message ? error.message : null;
   const reason = description
-    ?? (kind === "updated" ? t("updatedBody") : refusal ?? t(REASONS[kind] ?? "reason.broken"));
+    ?? (kind === "updated" ? s("updatedBody") : refusal ?? s(REASONS[kind] ?? "reason.broken"));
 
   if (layout === "inline") {
     return <InlineError title={heading} kind={kind} description={reason} onRetry={onRetry} />;
@@ -101,7 +103,7 @@ export function ErrorState({
       {kind === "updated" ? (
         <Button type="button" variant={primary ? "default" : "outline"} onClick={() => window.location.reload()}>{t("reload")}</Button>
       ) : onRetry ? (
-        <Button type="button" variant={primary ? "default" : "outline"} onClick={onRetry}>{t("retry")}</Button>
+        <Button type="button" variant={primary ? "default" : "outline"} onClick={onRetry}>{s("retry")}</Button>
       ) : null}
     </>
   );

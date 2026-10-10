@@ -25,11 +25,10 @@ import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-ur
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
-import { OfflineBanner } from "@/components/admin/states/OfflineBanner";
-import { useOfflineNavigation } from "@/components/admin/states/offline-navigation";
 
 // Asks the API what the store uses once the first page is up.
 const StoreReachProbe = lazy(() => import("~/lib/store-reach-probe"));
+const OfflineShell = lazy(() => import("@/components/admin/states/OfflineShell"));
 // The live connection to the store's realtime hub (orders, inbox, presence),
 // loaded when the browser is idle after the first page.
 import { RealtimeLoader } from "@/components/admin/realtime/RealtimeLoader";
@@ -89,8 +88,8 @@ function AdminLayout() {
   // So is the new-store setup step (Shopify's "Tell us about your store").
   const matchRoute = useMatchRoute();
   const fullWindow = Boolean(matchRoute({ to: "/admin/online-store/theme/editor" }) || matchRoute({ to: "/admin/welcome" }));
-  const { online, waiting } = useOfflineNavigation();
-  const offlineBanner = online ? null : <OfflineBanner waiting={waiting} />;
+  // Offline: the guard and banner load just after the first paint (states/OfflineShell).
+  const offlineBanner = <Suspense fallback={null}><OfflineShell /></Suspense>;
 
   if (fullWindow) {
     return (
