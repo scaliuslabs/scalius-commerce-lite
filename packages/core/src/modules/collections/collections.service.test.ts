@@ -36,6 +36,7 @@ type QueryChain = {
     get: ReturnType<typeof vi.fn>;
     all: ReturnType<typeof vi.fn>;
     as: ReturnType<typeof vi.fn>;
+    getSQL: ReturnType<typeof vi.fn>;
     limitValue?: number;
     offsetValue?: number;
 };
@@ -59,6 +60,7 @@ function createQueryChain(selection: Record<string, unknown> = {}, allResults: u
     chain.get = vi.fn();
     chain.all = vi.fn(async () => allResults);
     chain.as = vi.fn(() => chain);
+    chain.getSQL = vi.fn();
     return chain;
 }
 
@@ -233,9 +235,19 @@ describe("listCollectionProductOptions", () => {
         expect(db.batch).toHaveBeenCalledTimes(1);
         const statements = db.batch.mock.calls[0]?.[0] as QueryChain[];
         expect(statements).toHaveLength(3);
-        expect(statements[1]?.limit).toHaveBeenCalledWith(10);
-        expect(statements[1]?.offset).toHaveBeenCalledWith(10);
-        expect(statements[1]?.orderBy).toHaveBeenCalled();
+        // Page the narrow ids before reading SKU facts; paging the outer
+        // query again would skip the second page twice.
+        const pageKeys = vi.mocked(db.select).mock.results
+            .map((result) => result.value as QueryChain)
+            .find((query) => Object.keys(query.selection).join() === "id")!;
+        expect(pageKeys.selection).toEqual({ id: schema.products.id });
+        expect(pageKeys.limit).toHaveBeenCalledWith(10);
+        expect(pageKeys.offset).toHaveBeenCalledWith(10);
+        expect(pageKeys.orderBy).toHaveBeenCalled();
+        expect(statements[1]?.where.mock.calls[0]?.[0].queryChunks).toContain(pageKeys);
+        expect(statements[1]?.limit).not.toHaveBeenCalled();
+        expect(statements[1]?.offset).not.toHaveBeenCalled();
+        expect(statements[1]?.orderBy.mock.calls).toEqual(pageKeys.orderBy.mock.calls);
     });
 
     it("aliases the joined category name for D1 batch row decoding", async () => {

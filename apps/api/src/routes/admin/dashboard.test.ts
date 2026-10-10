@@ -110,11 +110,15 @@ describe("Home sales numbers follow the View sales numbers permission", () => {
 
     it("bounds the recent-order feed", async () => {
         for (let index = 0; index < 20; index += 1) {
-            insertOrder(`ord_bulk_${index}`, `Customer ${"n".repeat(1_000)}`, 100, NOW);
+            // Keep the long-name orders ahead of the seed rows regardless
+            // of which index SQLite chooses for equal timestamps.
+            insertOrder(`ord_bulk_${index}`, `Customer ${"n".repeat(1_000)}`, 100, new Date(NOW.getTime() + (index + 1) * 1_000));
         }
         const { body } = await get(HOME_AND_ORDERS, "/home-summary");
         expect(body.data.recentOrders).toHaveLength(11);
-        expect(body.data.recentOrders[0].customerName).toHaveLength(256);
+        expect(body.data.recentOrders.map((order: { id: string }) => order.id))
+            .toEqual(Array.from({ length: 11 }, (_, index) => `ord_bulk_${19 - index}`));
+        for (const order of body.data.recentOrders) expect(order.customerName).toHaveLength(256);
     });
 
     it.each(["0", "91", "1.5", "not-a-number"])(
