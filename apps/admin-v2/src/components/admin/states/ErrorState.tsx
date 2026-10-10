@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { CloudOff, RefreshCw, ServerCrash, TriangleAlert } from "lucide-react";
+import { CloudOff, FileQuestion, Lock, RefreshCw, ServerCrash, TriangleAlert } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
@@ -17,8 +17,8 @@ const ICONS: Record<FailureKind, StateIcon> = {
   unreachable: CloudOff,
   unavailable: ServerCrash,
   updated: RefreshCw,
-  notFound: TriangleAlert,
-  forbidden: TriangleAlert,
+  notFound: FileQuestion,
+  forbidden: Lock,
   broken: TriangleAlert,
 };
 
