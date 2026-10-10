@@ -84,9 +84,18 @@ export function buildCustomerOrderMetricsProjection() {
     };
 }
 
-/** The name on the record's most recent order (a guest record's secondary text). */
-export function latestOrderNameSql(customerId: SQLWrapper) {
-    return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
+// Drizzle renders a column unqualified in a single-table select, and an
+// unqualified `id` inside the subquery binds to `orders.id`: the outer
+// customer is always named by table.
+const OUTER_CUSTOMER_ID = sql.raw('"customers"."id"');
+
+/**
+ * The name on the record's most recent order (a guest record's secondary
+ * text), for a select over `customers`. One probe of
+ * `orders_customer_activity_idx`.
+ */
+export function latestOrderNameSql() {
+    return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${OUTER_CUSTOMER_ID} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
 }
 
 /** Extra list filters (Customers & marketing): a tag, a segment's filters, a subscribed channel. */
@@ -379,7 +388,7 @@ export async function listCustomers(
             defaultAreaName: defaultAddress.areaName,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             origin: customers.origin,
-            latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
+            latestOrderName: latestOrderNameSql().as("latest_order_name"),
             totalOrders,
             totalSpentMinor,
             // One store currency (locked once orders exist): any of the customer's orders converts it.
@@ -525,7 +534,7 @@ export async function getCustomerDetail(db: Database, id: string) {
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
             .get(),
-        db.select({ name: latestOrderNameSql(customers.id) }).from(customers).where(eq(customers.id, id)).get(),
+        db.select({ name: latestOrderNameSql() }).from(customers).where(eq(customers.id, id)).get(),
         listCustomerTags(db, id),
         db.select({
             channel: customerMarketingConsents.channel,
