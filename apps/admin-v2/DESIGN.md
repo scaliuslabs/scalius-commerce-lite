@@ -293,14 +293,14 @@ Code: `components/admin/states/`. Never hand-build one of these views.
 | Nothing made yet (E1) | `EmptyState` (icon, action title, one sentence, `action`, `secondaryAction`, help link; one card, or `card={false}` inside one) |
 | No match for filters or search (E2) | `FilteredEmptyState` (`title`, `onClearFilters`), where the rows go |
 | A card with nothing yet (E3) | `SectionEmpty`, one muted line |
-| A failed read (R1, R3) | `ErrorState`: `layout="page"` (the page title stays as h1, Retry is the primary), `"card"` (inside the table or card), `"inline"` (one card of several). `what="orders"` reads "Couldn't load orders". The reason comes from the error: offline, unreachable, server down, updated (Reload), fault (Copy details). |
+| A failed read (R1, R3) | `ErrorState`: `layout="page"` (the page title stays as h1, Retry is the primary), `"card"` (inside the table or card), and `InlineError` for one card of several (one line and Retry; it downloads nothing more). `what="orders"` reads "Couldn't load orders". The reason comes from the error: offline, unreachable, server down, updated (Reload), fault (Copy details). |
 | A record that is gone (R2) | `RecordNotFound`: names the record and links to its list, both from the route path (`record-resource.ts`) |
 | No page, no access (R4) | `PageNotFound`, `NoPermissionState` (`area`, `ownerName`) |
 | View-only (R5) | `ReadOnlyNotice` (see Read-only mode) |
 | Offline (R6) | `OfflineBanner`, drawn by the shell; `useOnlineStatus()` |
 | Loading (L1, L2) | `PageSkeleton` (`detail`, `settings`, `index`, `page`) |
 
-Route boundaries come from the router defaults (`lib/route-error.tsx`): a failed loader renders `ErrorState`, a 404 `RecordNotFound`, a 403 `NoPermissionState`; a loader slower than 300 ms (`ROUTE_PENDING_MS`) renders the page's `PageSkeleton` for at least 300 ms. A route with a known shape passes its own `pendingComponent` built from `PageSkeleton`. Offline, a page whose code is already in the tab opens with its cached data; any other page waits and opens on reconnect (the banner says so), and failed reads run again. Saves are never queued.
+Route boundaries come from the router defaults (`lib/route-error.tsx`): a failed loader renders `ErrorState`, a 404 `RecordNotFound`, a 403 `NoPermissionState`; a loader slower than 300 ms (`ROUTE_PENDING_MS`) renders the page's `PageSkeleton` for at least 300 ms. Pages opened most from links (order, product, customer) get their card layout from `PAGE_SHAPES` there; never put a `pendingComponent` in a route file, because the router plugin splits it into a chunk that a cold or offline load must download first. The failed-read view ships with the router; the not-found and no-access views load after the first page. Offline, a page whose code is already in the tab opens with its cached data; any other page waits and opens on reconnect (the banner says so), and failed reads run again. Saves are never queued.
 
 | ID | Rule | Check |
 | --- | --- | --- |
