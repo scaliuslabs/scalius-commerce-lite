@@ -12,8 +12,9 @@ import { cn } from "@scalius/shared/utils";
  * the blue ring, disabled fades, `aria-pressed` marks a selected toggle and
  * `loading` swaps the label for a spinner without changing the width.
  */
+// Put the shared outline outside filled buttons, with a contrasting gap.
 const buttonVariants = cva(
-  "relative inline-flex min-h-11 min-w-6 sm:min-h-6 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-busy:opacity-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "relative inline-flex min-h-11 min-w-6 sm:min-h-6 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium focus-visible:outline-offset-1! focus-visible:ring-1 focus-visible:ring-background disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-busy:opacity-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

@@ -1,11 +1,12 @@
 @import "tailwindcss";
 /* Class names live in components and routes: docs (DESIGN.md lists forbidden classes), tests, message catalogs and generated files are not scanned; their words would add unused utilities. */
 @source not "../../*.md";
+@source not "../../test-support";
 @source not "../**/*.test.{ts,tsx}";
 @source not "../i18n";
 @source not "../**/*.gen.ts";
-/* Event/prop names (on blur, PermissionGate invert, query filter), never CSS classes. */
-@source not inline("blur invert filter");
+/* Event/prop/copy names (blur, resize, invert, filter, outline, collapse), never CSS classes. */
+@source not inline("blur resize invert filter outline collapse");
 @import "../components/ui/rich-content.css";
 
 @plugin "tailwindcss-animate";
