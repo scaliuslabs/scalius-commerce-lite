@@ -184,12 +184,16 @@ export function salesLinesCtes(options: SalesLineOptions = {}): SQL {
   // Accepted return quantities of the scope's lines, read once through
   // order_return_lines(order_id, order_item_id) and joined by line, rather
   // than a correlated subquery the planner may repeat for every reference.
+  // `so cross join` keeps the scope's orders the outer loop on SQLite (D1
+  // keeps no table statistics): joined plainly, the planner walked every
+  // line in the store and probed `so` (18 s a period on a million orders).
+  // PostgreSQL plans a cross join with a WHERE key as the same inner join.
   return sql`rq as (
     select rl.order_item_id, sum(rl.approved_quantity) as approved
     from so
-    join order_return_lines rl on rl.order_id = so.id
+    cross join order_return_lines rl
     join order_returns rr on rr.id = rl.return_id
-    where rr.status in (${COUNTED_RETURNS})
+    where rl.order_id = so.id and rr.status in (${COUNTED_RETURNS})
     group by rl.order_item_id
   ),
   sl as (
@@ -202,8 +206,9 @@ export function salesLinesCtes(options: SalesLineOptions = {}): SQL {
       ${unitCost} as unit_cost,
       case when so.reversed = 1 then oi.quantity else coalesce(rq.approved, 0) end as returned_raw
     from so
-    join order_items oi on oi.order_id = so.id
+    cross join order_items oi
     left join rq on rq.order_item_id = oi.id
+    where oi.order_id = so.id
   ),
   sv as (
     select sl.*,
