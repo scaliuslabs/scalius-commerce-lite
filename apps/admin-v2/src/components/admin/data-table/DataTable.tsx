@@ -32,7 +32,6 @@ import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { DataTablePagination, type DataTableCursorPaging } from "./DataTablePagination";
 import { DataTableRefetchBar } from "./DataTableRefetchBar";
-import { ErrorState } from "~/components/admin/states";
 import { DataTableBodyRow, DataTableHeadCell, rowClickHandler, type RowDensity } from "./DataTableBodyRow";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { CardRowContext } from "./RowLink";
@@ -40,6 +39,9 @@ import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { DataTableInitialCards, DataTableInitialRows } from "./DataTableInitialLoading";
 import { useShownAfter } from "./use-shown-after";
 import type { SortableDataTableContentProps } from "./SortableDataTableContent";
+
+// Only a failed read shows it: its own chunk, off the list's first render.
+const ErrorState = lazy(() => import("~/components/admin/states/ErrorState").then((module) => ({ default: module.ErrorState })));
 
 const SortableDataTableContent = lazy(async () => {
   const module = await import("./SortableDataTableContent");
@@ -199,7 +201,11 @@ export function DataTable<TData extends TableRowData>({
   };
   const headerLayout = { toggle: layout.toggle, isHiddenByChoice: layout.isHiddenByChoice };
 
-  const renderErrorState = () => <ErrorState layout="card" error={error} what={what} onRetry={onRetry} />;
+  const renderErrorState = () => (
+    <Suspense fallback={null}>
+      <ErrorState layout="card" error={error} what={what} onRetry={onRetry} />
+    </Suspense>
+  );
 
   const skeletonRows = (includeDragColumn: boolean) => (
     <DataTableInitialRows

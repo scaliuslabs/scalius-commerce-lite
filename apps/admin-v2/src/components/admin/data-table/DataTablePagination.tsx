@@ -1,16 +1,12 @@
+import { Suspense, lazy } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Table, TableRowData } from "./table-config";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { PAGE_SIZE_OPTIONS, writeSavedPageSize, type PageInfo } from "~/lib/list-helpers";
+
+const PageSizeMenu = lazy(() => import("./DataTablePageSizeMenu"));
 
 /**
  * Previous/Next by cursor for a list the API pages with `pageInfo` (orders,
@@ -132,22 +128,9 @@ export function IndexPager({
       <div className="flex items-center gap-2">
         <span className="tabular-nums" aria-live="polite">{label}</span>
         {pageSize ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                {t("perPage", { count: pageSize.value })}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuRadioGroup value={String(pageSize.value)} onValueChange={(value) => pageSize.onChange(Number(value))}>
-                {pageSize.options.map((size) => (
-                  <DropdownMenuRadioItem key={size} value={String(size)}>
-                    {t("perPage", { count: size })}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Suspense fallback={<Button variant="ghost" size="sm">{t("perPage", { count: pageSize.value })}</Button>}>
+            <PageSizeMenu value={pageSize.value} options={pageSize.options} onChange={pageSize.onChange} />
+          </Suspense>
         ) : null}
       </div>
       {!canPrevious && !canNext ? null : (

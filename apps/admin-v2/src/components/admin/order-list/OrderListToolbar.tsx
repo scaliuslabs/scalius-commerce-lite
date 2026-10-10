@@ -256,7 +256,7 @@ export function OrderListToolbar({
               <AppListFilter labelled resource="order" value={search.appFilter} onChange={(appFilter) => filter({ appFilter })} />
             </Suspense>
           ) : null}
-          <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-3 sm:flex-row sm:gap-6">
+          <div className="col-span-full flex flex-col justify-end gap-2 sm:flex-row sm:gap-4">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="order-filter-open-request"
