@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { errorScreenPatterns, judgeRender } from "./audit.mjs";
+import { errorScreenPatterns, judgeRender, runSurfaceOpen } from "./audit.mjs";
 
 const errorTitles = errorScreenPatterns(readFileSync(new URL("../../apps/admin-v2/src/i18n/states.ts", import.meta.url), "utf8"));
 const permissionTitles = errorTitles.filter((title) => title.key === "noPermissionTitle");
@@ -9,6 +9,16 @@ const text = (title, errorStateKind = "no-permission") => ({ text: title.text, s
 const facts = (texts = []) => ({ texts, main: { exists: true, textLength: 100, hasMedia: false } });
 const judge = (pageFacts, wantedUrl = permissionPath, finalUrl = wantedUrl, routePath = wantedUrl) => judgeRender(pageFacts, { routePath, wantedUrl, finalUrl, errorTitles });
 const rules = (...args) => judge(...args).map((item) => item.rule);
+
+it.each([true, false])("requires a visibly opened surface before checking Escape (opened: %s)", async (visible) => {
+  const findings = [];
+  const page = {
+    locator: () => ({ first: () => ({ waitFor: async () => { if (!visible) throw new Error("menu never appeared"); } }) }),
+    waitForTimeout: async () => {},
+  };
+  expect(await runSurfaceOpen(page, { surface: { waitFor: "[role=menu]" } }, findings, {})).toBe(visible);
+  expect(findings.map(({ rule }) => rule)).toEqual(visible ? [] : ["render"]);
+});
 
 describe("route render judgment", () => {
   it("reads the permission heading separately in both catalog languages", () => {

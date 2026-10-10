@@ -6,7 +6,7 @@ export function sortHeader(title: string) {
   function SortHeader<T extends TableRowData>({ column }: { column: Column<T, unknown> }) {
     return <DataTableColumnHeader column={column} title={title} />;
   }
-  return Object.assign(SortHeader, { label: title });
+  return Object.assign(SortHeader, { label: title, sortableHeader: true as const });
 }
 
 /** Square thumbnail (or icon) in front of a row title. */

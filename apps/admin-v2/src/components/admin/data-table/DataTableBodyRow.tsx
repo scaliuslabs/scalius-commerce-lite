@@ -3,6 +3,7 @@ import { cn } from "@scalius/shared/utils";
 import { flexRender, type Cell, type Column, type Header, type TableRowData } from "./table-config";
 import { columnAttributes } from "./column-attributes";
 import { layoutColumnOf } from "./column-layout";
+import { DataTableColumnHeader, sortableHeaderTitle } from "./DataTableColumnHeader";
 
 import { TableCell, TableHead, TableRow, type RowDensity } from "../../ui/table";
 
@@ -104,6 +105,7 @@ export function DataTableHeadCell<TData extends TableRowData>({
   const size = column.getSize();
   const { style: _cap, className: _padding, ...attributes } = columnAttributes(column, hasSelect, previous);
   const maxWidth = column.columnDef.meta?.maxWidth;
+  const sortTitle = sortableHeaderTitle(column.columnDef.header);
   return (
     <TableHead
       {...attributes}
@@ -115,7 +117,11 @@ export function DataTableHeadCell<TData extends TableRowData>({
         "--column-min": holdWidth ? `${layoutColumnOf(column).minWidth}px` : undefined,
       } as CSSProperties}
     >
-      {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}
+      {header && !header.isPlaceholder ? (
+        sortTitle === undefined
+          ? flexRender(column.columnDef.header, header.getContext())
+          : <DataTableColumnHeader column={column} title={sortTitle} />
+      ) : null}
     </TableHead>
   );
 }

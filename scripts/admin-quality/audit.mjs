@@ -301,7 +301,7 @@ export async function auditPage({ context, job, width, locale, baseOrigin, axeSo
 
     // The layout-shift window: three seconds after the content settled.
     const elapsed = Math.max(0, (timing.settledAt ?? timing.now) + CLS_WINDOW_MS - timing.now);
-    if (job.surface) await runSurfaceOpen(page, job, findings, metrics);
+    const surfaceOpened = job.surface && await runSurfaceOpen(page, job, findings, metrics);
     await page.waitForTimeout(Math.min(elapsed, CLS_WINDOW_MS));
     await page.evaluate(() => document.fonts?.ready).catch(() => {});
     const cls = await page.evaluate(() => ({ value: window.__galleryCls ?? 0, sources: window.__galleryShifts ?? [] }));
@@ -334,7 +334,7 @@ export async function auditPage({ context, job, width, locale, baseOrigin, axeSo
       findings.push(...focus.findings);
       metrics.tabStops = focus.tabStops;
     }
-    if (job.surface) await checkFocusReturn(page, job.surface, findings);
+    if (surfaceOpened) await checkFocusReturn(page, job.surface, findings);
     if (!job.surface) {
       const measured = await genericInteractions(page);
       metrics.interactions = Object.fromEntries(measured.map((item) => [item.name, item.ms === null ? null : Math.round(item.ms)]));
@@ -357,15 +357,17 @@ export async function auditPage({ context, job, width, locale, baseOrigin, axeSo
   }
 }
 
-async function runSurfaceOpen(page, job, findings, metrics) {
+export async function runSurfaceOpen(page, job, findings, metrics) {
   try {
     const measured = await runSurfaceSteps(page, job.surface);
     metrics.interactions = Object.fromEntries(measured.map((item) => [item.name, item.ms === null ? null : Math.round(item.ms)]));
     for (const item of measured) {
       if (item.ms !== null && item.ms > THRESHOLDS.interactionMs) findings.push(finding("interaction-latency", "moderate", `${item.name}: first visual response after ${Math.round(item.ms)} ms (flag above ${THRESHOLDS.interactionMs} ms).`));
     }
+    return true;
   } catch (error) {
     findings.push(finding("render", "critical", `The surface did not open: ${String(error.message).split("\n")[0].slice(0, 160)}`));
+    return false;
   }
 }
 

@@ -100,11 +100,11 @@
     "route": "/admin/products",
     "steps": [
       {
-        "click": "main [aria-haspopup=menu]:visible",
+        "click": "main [data-data-table-results] button[aria-haspopup=menu][aria-label]:visible",
         "measure": "open-menu"
       }
     ],
-    "waitFor": "[role=menu],[role=dialog],[data-radix-popper-content-wrapper]"
+    "waitFor": "[role=menu][data-state=open]:visible"
   },
   {
     "id": "products-import",

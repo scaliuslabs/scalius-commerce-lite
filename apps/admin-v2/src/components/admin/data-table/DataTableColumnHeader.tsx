@@ -19,6 +19,12 @@ interface DataTableColumnHeaderProps<TData extends TableRowData, TValue> {
   className?: string;
 }
 
+/** Only the shared sortHeader factory opts into the stable table heading renderer. */
+export function sortableHeaderTitle(header: unknown): string | undefined {
+  return typeof header === "function" && "sortableHeader" in header && header.sortableHeader === true &&
+    "label" in header && typeof header.label === "string" ? header.label : undefined;
+}
+
 const LazyDataTableColumnHeaderMenu = lazy(async () => {
   const module = await import("./DataTableColumnHeaderMenu");
   return {

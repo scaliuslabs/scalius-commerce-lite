@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ColumnDef, TableRowData } from "../table-config";
+import type { Column, ColumnDef, Row, ServerColumnMeta, TableRowData } from "../table-config";
 import { Checkbox } from "~/components/ui/checkbox";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
@@ -91,6 +91,10 @@ export function createSelectColumn<T extends TableRowData>(
 
 // ── Date column ──────────────────────────────────────────────────────
 
+function DateColumnHeader<T extends TableRowData>({ column }: { column: Column<T, unknown> }) {
+  return <DataTableColumnHeader column={column} title={column.columnDef.meta?.label ?? column.id} />;
+}
+
 /** A created or updated date, as every list shows it (`ListDate`). */
 export function createDateColumn<T extends TableRowData>(
   field: keyof T & string,
@@ -101,7 +105,7 @@ export function createDateColumn<T extends TableRowData>(
   return {
     id: opts.id ?? field,
     accessorFn: (row) => row[field],
-    header: sortable ? ({ column }) => <DataTableColumnHeader column={column} title={title} /> : title,
+    header: sortable ? DateColumnHeader : title,
     enableSorting: sortable,
     meta: { label: title, priority: opts.priority ?? 40, minWidth: localeWidth(LIST_DATE_WIDTH) },
     cell: ({ row }) => <ListDate value={row.original[field] as Date | string | number | null} />,
@@ -127,35 +131,44 @@ interface ActionsColumnCallbacks<T> {
   size?: number;
 }
 
+type ActionsColumn<T extends TableRowData> = ColumnDef<T, unknown> & {
+  meta: ServerColumnMeta & { actions: ActionsColumnCallbacks<T> };
+};
+
+// Keep the component type stable when a list refreshes its callbacks, so an open menu survives.
+function ActionsCell<T extends TableRowData>({ row, column }: { row: Row<T>; column: Column<T, unknown> }) {
+  const { actions: callbacks } = (column.columnDef as ActionsColumn<T>).meta;
+  const entity = row.original;
+  return (
+    <DataTableRowActions
+      showTrashed={callbacks.showTrashed}
+      onView={
+        callbacks.onView && (callbacks.canView?.(entity) ?? true)
+          ? () => callbacks.onView!(entity)
+          : undefined
+      }
+      onEdit={callbacks.onEdit ? () => callbacks.onEdit!(entity) : undefined}
+      onDelete={callbacks.onDelete ? () => callbacks.onDelete!(entity) : undefined}
+      onRestore={callbacks.onRestore ? () => callbacks.onRestore!(entity) : undefined}
+      onPermanentDelete={
+        callbacks.onPermanentDelete &&
+        (callbacks.canPermanentDelete?.(entity) ?? true)
+          ? () => callbacks.onPermanentDelete!(entity)
+          : undefined
+      }
+      extraActions={callbacks.getExtraActions?.(entity)}
+      menuLabel={callbacks.getMenuLabel?.(entity)}
+    />
+  );
+}
+
 export function createActionsColumn<T extends TableRowData>(
   callbacks: ActionsColumnCallbacks<T>,
-): ColumnDef<T, unknown> {
+): ActionsColumn<T> {
   return {
     id: "actions",
-    cell: ({ row }) => {
-      const entity = row.original;
-      return (
-        <DataTableRowActions
-          showTrashed={callbacks.showTrashed}
-          onView={
-            callbacks.onView && (callbacks.canView?.(entity) ?? true)
-              ? () => callbacks.onView!(entity)
-              : undefined
-          }
-          onEdit={callbacks.onEdit ? () => callbacks.onEdit!(entity) : undefined}
-          onDelete={callbacks.onDelete ? () => callbacks.onDelete!(entity) : undefined}
-          onRestore={callbacks.onRestore ? () => callbacks.onRestore!(entity) : undefined}
-          onPermanentDelete={
-            callbacks.onPermanentDelete &&
-            (callbacks.canPermanentDelete?.(entity) ?? true)
-              ? () => callbacks.onPermanentDelete!(entity)
-              : undefined
-          }
-          extraActions={callbacks.getExtraActions?.(entity)}
-          menuLabel={callbacks.getMenuLabel?.(entity)}
-        />
-      );
-    },
+    cell: ActionsCell,
+    meta: { actions: callbacks },
     enableSorting: false,
     size: callbacks.size ?? 70,
   };
