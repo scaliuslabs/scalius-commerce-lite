@@ -22,7 +22,8 @@ const Checkbox = React.forwardRef<
   >
     <span
       aria-hidden="true"
-      className="flex size-4 items-center justify-center rounded border border-input bg-card group-hover:border-muted-foreground group-aria-invalid:border-destructive group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground group-data-[state=indeterminate]:border-primary group-data-[state=indeterminate]:bg-primary group-data-[state=indeterminate]:text-primary-foreground"
+      // Checked and mixed share the filled look; unchecked overrides it (fewer state rules).
+      className="flex size-4 items-center justify-center rounded border border-primary bg-primary text-primary-foreground group-hover:border-muted-foreground group-aria-invalid:border-destructive group-data-[state=unchecked]:border-input group-data-[state=unchecked]:bg-card"
     >
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
         <Check className="size-3.5 group-data-[state=indeterminate]:hidden" strokeWidth={3} />

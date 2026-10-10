@@ -1,21 +1,10 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-
-/** A header action given as data, so the header can fold it into "More actions". */
-export interface PageAction {
-  label: string;
-  onAction?: () => void;
-  /** A dashboard path: the action is a link. */
-  to?: string;
-  icon?: ReactNode;
-  disabled?: boolean;
-  destructive?: boolean;
-}
 
 interface PageHeaderProps {
   /** The page title: wraps, never truncates. */
@@ -36,59 +25,21 @@ interface PageHeaderProps {
    */
   presence?: ReactNode;
   /**
-   * Secondary actions as data: up to two show as buttons from 640px, the rest
-   * (all of them on phones) go into "More actions" (C4).
+   * Secondary actions: at most two buttons, then a "More actions" menu for the
+   * rest (C4). They come before the primary action.
    */
-  secondaryActions?: readonly PageAction[];
-  /** Other secondary controls (an app's actions menu), before the primary action. */
   actions?: ReactNode;
   /** The page's one primary action, last (C3, C4). */
   primaryAction?: ReactNode;
 }
 
-const VISIBLE_SECONDARY = 2;
-
-function ActionButton({ action }: { action: PageAction }) {
-  const content = <>{action.icon}{action.label}</>;
-  if (action.to) {
-    return (
-      <Button variant="outline" asChild disabled={action.disabled}>
-        <Link to={action.to}>{content}</Link>
-      </Button>
-    );
-  }
-  return (
-    <Button type="button" variant={action.destructive ? "destructive" : "outline"} disabled={action.disabled} onClick={action.onAction}>
-      {content}
-    </Button>
-  );
-}
-
-// The menu loads with the first page that folds an action into it.
-const PageHeaderMenu = lazy(() => import("./PageHeaderMenu"));
-
-function MoreActions({ actions, className }: { actions: readonly PageAction[]; className?: string }) {
-  const t = useMessages(resourceMessages);
-  if (actions.length === 0) return null;
-  // Same button while the menu loads: nothing moves.
-  const placeholder = <Button type="button" variant="outline" className={className}>{t("moreActions")}<ChevronDown aria-hidden /></Button>;
-  return (
-    <Suspense fallback={placeholder}>
-      <PageHeaderMenu actions={actions} className={className} />
-    </Suspense>
-  );
-}
-
 /**
  * The one page header (Polaris Page): back arrow, title, status and presence
- * on one line, a meta line under it, then secondary actions, "More actions"
- * and the primary action at the end.
+ * on one line, a meta line under it, then secondary actions and the primary
+ * action at the end.
  */
-export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = false, status, meta, presence, secondaryActions = [], actions, primaryAction }: PageHeaderProps) {
+export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = false, status, meta, presence, actions, primaryAction }: PageHeaderProps) {
   const t = useMessages(resourceMessages);
-  const shown = secondaryActions.slice(0, VISIBLE_SECONDARY);
-  const folded = secondaryActions.slice(VISIBLE_SECONDARY);
-  const hasActions = secondaryActions.length > 0 || Boolean(actions) || Boolean(primaryAction);
   return (
     <div data-slot="page-header" className="mb-4 flex flex-wrap items-start gap-2">
       {backTo ? (
@@ -108,16 +59,8 @@ export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = fa
         </div>
         {meta ? <p className="text-body text-muted-foreground">{meta}</p> : null}
       </div>
-      {hasActions ? (
+      {actions || primaryAction ? (
         <div data-slot="page-actions" className="flex flex-wrap items-center gap-2">
-          {/* Phones fold every secondary action into one menu; from 640px two show. */}
-          {shown.map((action) => (
-            <span key={action.label} className="hidden sm:contents">
-              <ActionButton action={action} />
-            </span>
-          ))}
-          <MoreActions actions={folded} className="hidden sm:inline-flex" />
-          <MoreActions actions={secondaryActions} className="sm:hidden" />
           {actions}
           {primaryAction}
         </div>

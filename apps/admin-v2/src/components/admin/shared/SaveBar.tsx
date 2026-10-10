@@ -581,7 +581,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="absolute inset-x-1 top-0.5 z-30 flex h-13 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.5 ps-3 text-topbar-foreground md:inset-0 md:h-9 md:p-0.75"
+              className="absolute inset-x-2 top-0.5 z-30 flex h-13 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 ps-3 text-topbar-foreground md:inset-0 md:h-9"
             >
               <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
                 <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />

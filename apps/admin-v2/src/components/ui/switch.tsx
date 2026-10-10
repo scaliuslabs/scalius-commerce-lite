@@ -21,9 +21,9 @@ const Switch = React.forwardRef<
   >
     <span
       aria-hidden="true"
-      className="flex h-5 w-9 items-center rounded-full border-2 border-transparent group-data-[state=checked]:bg-primary group-data-[state=unchecked]:bg-input"
+      className="flex h-5 w-9 items-center rounded-full border-2 border-transparent bg-primary group-data-[state=unchecked]:bg-input"
     >
-      <SwitchPrimitives.Thumb className="pointer-events-none block size-4 rounded-full bg-card shadow-xs transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0 rtl:data-[state=checked]:-translate-x-4" />
+      <SwitchPrimitives.Thumb className="pointer-events-none block size-4 rounded-full bg-card shadow-xs transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0" />
     </span>
   </SwitchPrimitives.Root>
 ));
