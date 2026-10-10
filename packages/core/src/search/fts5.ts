@@ -5,7 +5,10 @@ import {
 } from "@scalius/database/client";
 import { and, or, sql, type SQL } from "drizzle-orm";
 
-const FTS5_SPECIAL_CHARS = /["\-*(){}[\]^~:\\/<>|@#&+!?.,'=\u0964\u0965]/g;
+// Every ASCII character outside an FTS5 bareword (letters, digits, `_`) and
+// the Bangla danda: a stray `%`, `$` or `;` would otherwise be an FTS5 syntax
+// error, not a search.
+const FTS5_SPECIAL_CHARS = /[\x00-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\x7F\u0964\u0965]/g;
 const MAX_SEARCH_TOKENS = 8;
 
 /**
@@ -39,7 +42,7 @@ const ALLOWED_FTS_TABLES = [
   "products_fts", "product_variants_fts", "categories_fts",
   "pages_fts", "orders_fts", "customers_fts",
   "discounts_fts", "abandoned_checkouts_fts",
-  "navigation_menu_items_fts",
+  "navigation_menu_items_fts", "product_reviews_fts",
 ] as const;
 type FtsTable = typeof ALLOWED_FTS_TABLES[number];
 
@@ -47,7 +50,7 @@ const ALLOWED_SOURCE_TABLES = [
   "products", "product_variants", "categories",
   "pages", "orders", "customers",
   "discounts", "abandoned_checkouts",
-  "navigation_menu_items",
+  "navigation_menu_items", "product_reviews",
 ] as const;
 type SourceTable = typeof ALLOWED_SOURCE_TABLES[number];
 
@@ -61,6 +64,7 @@ const FALLBACK_SEARCH_COLUMNS: Record<SourceTable, readonly string[]> = {
   discounts: ["code"],
   abandoned_checkouts: ["customer_phone", "checkout_id", "checkout_data"],
   navigation_menu_items: ["label", "target_value", "target_id"],
+  product_reviews: ["title", "body", "author_display_name"],
 };
 
 export function isFts5SearchEnabled(db: Database): boolean {
