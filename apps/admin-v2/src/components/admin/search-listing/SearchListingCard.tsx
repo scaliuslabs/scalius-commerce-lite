@@ -5,11 +5,11 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useMessages } from "~/i18n";
 import { searchListingMessages } from "~/i18n/search-listing";
+import { Field } from "~/components/ui/field";
 
 /** Recommended lengths; search engines cut longer text. */
 export const SEARCH_TITLE_LENGTH = 70;
@@ -137,38 +137,34 @@ export function SearchListingCard({
 
         {open ? (
           <div className="space-y-4 border-t pt-4">
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-title`}>{t("pageTitle")}</Label>
+            <Field id={`${id}-title`} label={t("pageTitle")} help={t("charactersUsed", { count: value.title.length, limit: SEARCH_TITLE_LENGTH })} error={errors.title}>
               <Input
                 id={`${id}-title`}
                 value={value.title}
                 placeholder={fallbackTitle}
                 disabled={disabled}
-                aria-invalid={Boolean(errors.title)}
                 onChange={(event) => onChange({ title: event.target.value })}
               />
-              <p className="text-body text-muted-foreground">
-                {errors.title ?? t("charactersUsed", { count: value.title.length, limit: SEARCH_TITLE_LENGTH })}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-description`}>{t("metaDescription")}</Label>
+            </Field>
+            <Field id={`${id}-description`} label={t("metaDescription")} help={t("charactersUsed", { count: value.description.length, limit: SEARCH_DESCRIPTION_LENGTH })} error={errors.description}>
               <Textarea
                 id={`${id}-description`}
                 value={value.description}
                 disabled={disabled}
-                aria-invalid={Boolean(errors.description)}
                 onChange={(event) => onChange({ description: event.target.value })}
                 rows={3}
               />
-              <p className="text-body text-muted-foreground">
-                {errors.description ??
-                  t("charactersUsed", { count: value.description.length, limit: SEARCH_DESCRIPTION_LENGTH })}
-              </p>
-            </div>
+            </Field>
             {value.handle !== undefined ? (
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-handle`}>{t("urlHandle")}</Label>
+              <Field
+                id={`${id}-handle`}
+                label={t("urlHandle")}
+                error={errors.handle}
+                help={<>
+                  <span className="block truncate" title={`${origin}${prefix}${handle}`}>{`${origin}${prefix}${handle}`}</span>
+                  {autoHandle !== undefined ? <span className="block">{t("autoHandleHint")}</span> : null}
+                </>}
+              >
                 <Input
                   id={`${id}-handle`}
                   value={value.handle}
@@ -176,19 +172,9 @@ export function SearchListingCard({
                   disabled={disabled}
                   inputMode="url"
                   autoCapitalize="none"
-                  aria-invalid={Boolean(errors.handle)}
-                  aria-describedby={`${id}-handle-help`}
                   onChange={(event) => onChange({ handle: event.target.value })}
                 />
-                <div id={`${id}-handle-help`}>
-                  <p className={errors.handle ? "text-body text-destructive" : "truncate text-body text-muted-foreground"}>
-                    {errors.handle ?? `${origin}${prefix}${handle}`}
-                  </p>
-                  {autoHandle !== undefined && !errors.handle ? (
-                    <p className="text-body text-muted-foreground">{t("autoHandleHint")}</p>
-                  ) : null}
-                </div>
-              </div>
+              </Field>
             ) : null}
             <label className="flex items-start gap-3 text-body">
               <Checkbox

@@ -26,7 +26,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
@@ -50,6 +49,8 @@ import {
 } from "./digital-upload";
 import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
 import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
+import { Field, FieldRow } from "~/components/ui/field";
+import { formMessages } from "~/i18n/forms";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -397,6 +398,7 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
   onSaved: (asset: DigitalAssetDto) => void;
   onChanged: () => void;
 }) {
+  const forms = useMessages(formMessages);
   const t = useMessages(digitalMessages);
   const r = useMessages(resourceMessages);
   const [name, setName] = React.useState("");
@@ -453,14 +455,12 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
             submit();
           }}
         >
-          <div className="space-y-1">
-            <Label htmlFor="digital-file-name">{t("nameLabel")}</Label>
+          <Field id="digital-file-name" label={t("nameLabel")} error={checked && nameIssue ? nameIssue : undefined}>
             <Input id="digital-file-name" value={name} maxLength={200} aria-invalid={checked && nameIssue ? true : undefined} onChange={(event) => setName(event.target.value)} />
-            {checked && nameIssue ? <p className="text-body text-destructive">{nameIssue}</p> : null}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="digital-file-limit">{t("downloadsLabel")}</Label>
+          </Field>
+          <FieldRow>
+            <Field id="digital-file-limit" label={t("downloadsLabel")} error={checked && limited && limitIssue ? limitIssue : undefined}>
+              <div className="flex flex-col gap-2">
               <SearchableSelect
                 id="digital-file-limit"
                 value={limited ? "limited" : "unlimited"}
@@ -469,14 +469,12 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                 options={[{ value: "limited", label: t("limited") }, { value: "unlimited", label: t("unlimited") }]}
               />
               {limited ? (
-                <>
-                  <NumberInput integer aria-label={t("downloadCountLabel")} value={limit} aria-invalid={checked && limitIssue ? true : undefined} onValueChange={setLimit} />
-                  {checked && limitIssue ? <p className="text-body text-destructive">{limitIssue}</p> : null}
-                </>
+                <NumberInput id="digital-file-limit-count" integer aria-label={t("downloadCountLabel")} value={limit} onValueChange={setLimit} />
               ) : null}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="digital-file-access">{t("accessLabel")}</Label>
+              </div>
+            </Field>
+            <Field id="digital-file-access" label={t("accessLabel")} error={checked && expires && daysIssue ? daysIssue : undefined}>
+              <div className="flex flex-col gap-2">
               <SearchableSelect
                 id="digital-file-access"
                 value={expires ? "days" : "forever"}
@@ -485,13 +483,11 @@ function FileSettingsDialog({ asset, onOpenChange, onSaved, onChanged }: {
                 options={[{ value: "forever", label: t("forever") }, { value: "days", label: t("limitedTime") }]}
               />
               {expires ? (
-                <>
-                  <NumberInput integer aria-label={t("daysLabel")} placeholder={t("daysLabel")} value={days} aria-invalid={checked && daysIssue ? true : undefined} onValueChange={setDays} />
-                  {checked && daysIssue ? <p className="text-body text-destructive">{daysIssue}</p> : null}
-                </>
+                <NumberInput id="digital-file-access-days" integer aria-label={t("daysLabel")} suffix={forms("daysUnit")} value={days} onValueChange={setDays} />
               ) : null}
-            </div>
-          </div>
+              </div>
+            </Field>
+          </FieldRow>
           {save.isError ? <p role="alert" className="text-body text-destructive">{digitalErrorText(save.error, t)}</p> : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={save.isPending} onClick={() => onOpenChange(false)}>{r("cancel")}</Button>

@@ -5,18 +5,16 @@ import {
   isWholeUnitIncrement,
   resolvePriceIncrementMinor,
 } from "@scalius/shared/currency-policy";
-import { cn } from "@scalius/shared/utils";
+import { currencySymbol } from "@scalius/shared/money-format";
 import { NumberInput } from "~/components/ui/number-input";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
 import { useRefusalReporter } from "~/lib/input-refusal-reporter";
 
-type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage" | "onRefusal"> & {
-  /** The amount's currency: the store's for catalog prices, the order's for refunds and charges. */
+type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage" | "onRefusal" | "prefix" | "suffix"> & {
+  /** The amount's currency: the store's for catalog prices, the order's for refunds and charges. Its symbol sits inside the field (F3). */
   currencyCode: string;
-  /** Shown inside the field before the amount (the currency symbol, "৳"), for fields without a label that says it. */
-  prefix?: string;
   /**
    * Cash a rider or the counter collects: on the cash-on-delivery increment
    * (whole taka in BDT) whatever the store's price increment is.
@@ -26,28 +24,22 @@ type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" 
 
 type MoneyFieldProps = Omit<MoneyInputProps, "cashOnDelivery"> & { whole: boolean };
 
-const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ currencyCode, prefix, className, whole, ...props }, ref) => {
+const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ currencyCode, whole, ...props }, ref) => {
   const t = useMessages(formMessages);
+  const store = useCurrency();
+  const code = currencyCode.trim().toUpperCase();
+  // The store's own symbol for its currency (Settings → Store details), the standard one for any other.
+  const symbol = code === store.code && store.symbol ? store.symbol : currencySymbol(code);
   // In a form built with `useFormWithRefusals`, the field `name` (as in the form) gets the fraction's reason as its error.
   const onRefusal = useRefusalReporter(props.name);
-  const input = (
+  return (
     <NumberInput
       ref={ref}
       {...props}
+      prefix={symbol}
       onRefusal={onRefusal}
-      // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
-      className={cn(prefix && "ps-7", className)}
-      wholeUnitsMessage={whole ? t(currencyCode.trim().toUpperCase() === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}
+      wholeUnitsMessage={whole ? t(code === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}
     />
-  );
-  if (!prefix) return input;
-  return (
-    <div className="relative">
-      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 inset-s-3 flex items-center text-body text-muted-foreground">
-        {prefix}
-      </span>
-      {input}
-    </div>
   );
 });
 MoneyField.displayName = "MoneyField";
@@ -72,7 +64,8 @@ const PriceMoneyInput = React.forwardRef<HTMLInputElement, Omit<MoneyInputProps,
 PriceMoneyInput.displayName = "PriceMoneyInput";
 
 /**
- * An amount of money. While the store prices in whole units (a BDT store's
+ * An amount of money, the currency symbol inside the field before it ("৳ 720"),
+ * the same way on every screen (F3). While the store prices in whole units (a BDT store's
  * default: whole taka) the field takes no decimal point and says why; a store
  * that prices in paisa or cents keeps its minor units. Cash on delivery
  * (`cashOnDelivery`) follows its own increment. In a react-hook-form form made
@@ -85,6 +78,16 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({
   return <MoneyField ref={ref} {...props} whole={isWholeUnitIncrement(code, cashOnDeliveryIncrementMinor(code))} />;
 });
 MoneyInput.displayName = "MoneyInput";
+
+/**
+ * A unit cost in the store currency. Not a cash amount, so it keeps paisa even
+ * in taka (a price field would refuse them): ৳12.50 per piece is a real
+ * supplier price. Empty means no cost.
+ */
+export const CostInput = React.forwardRef<HTMLInputElement, Omit<MoneyInputProps, "currencyCode" | "cashOnDelivery">>((props, ref) => (
+  <MoneyField ref={ref} {...props} currencyCode={useCurrency().code} whole={false} />
+));
+CostInput.displayName = "CostInput";
 
 /** True when the store prices in whole units (Settings → Store details; a BDT store's default). */
 export function useWholeUnitPrices(): boolean {

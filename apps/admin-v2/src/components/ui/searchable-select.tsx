@@ -6,6 +6,7 @@ import { cn } from "@scalius/shared/utils";
 import { useDebounce } from "~/hooks/use-debounce";
 import { useMessages } from "~/i18n";
 import { comboboxMessages } from "~/i18n/combobox";
+import { useFieldControl } from "./field-context";
 import { fieldClassName } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
@@ -96,7 +97,9 @@ export type SearchableSelectProps = StaticProps | AsyncProps;
  * choosing one option, including fixed enums. Give it `load` + `queryKey`
  * when the source is large (server search, paged).
  */
-export function SearchableSelect(props: SearchableSelectProps) {
+export function SearchableSelect(fieldProps: SearchableSelectProps) {
+  // Inside a `Field`, the trigger takes the field's id, help and invalid state.
+  const props = useFieldControl(fieldProps);
   return props.load ? <AsyncSearchableSelect {...props} /> : <StaticSearchableSelect {...(props as StaticProps)} />;
 }
 

@@ -2,6 +2,7 @@ import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 
 import { cn } from "@scalius/shared/utils";
+import { FieldContext } from "./field-context";
 import { OVERLAY_COLLISION_PADDING } from "./overlay";
 
 /** The trigger's element, so the open popover can take its name from it. */
@@ -79,6 +80,8 @@ function PopoverContent({
   }, [named, ref, trigger]);
   return (
     <PopoverPrimitive.Portal>
+      {/* Controls inside a popover opened from a field are not that field's control. */}
+      <FieldContext.Provider value={null}>
       <PopoverPrimitive.Content
         ref={setRef}
         align={align}
@@ -94,6 +97,7 @@ function PopoverContent({
         {...(named ? {} : name)}
         {...props}
       />
+      </FieldContext.Provider>
     </PopoverPrimitive.Portal>
   );
 }

@@ -296,26 +296,23 @@ export function collectFacts() {
   facts.unitLabels = [...document.querySelectorAll("label")].filter((element) => visible(element) && /\(.{1,3}\)\s*$/.test((element.textContent ?? "").trim())).map((element) => `${describe(element)} "${element.textContent.trim().slice(0, 40)}"`).slice(0, 10);
 
   // S2, S3: label to control 4px, control to help 4px.
-  facts.gaps = { label: [], help: [] };
+  // The boxes only; stackGapFindings() in analysis.mjs judges them.
+  const edges = (element) => {
+    const { left, right, top, bottom } = rectOf(element);
+    return { left, right, top, bottom };
+  };
+  facts.gapPairs = [];
   for (const label of document.querySelectorAll("label[for]")) {
     const control = document.getElementById(label.getAttribute("for"));
     if (!control || !visible(label) || !visible(control)) continue;
-    const a = rectOf(label);
-    const b = rectOf(control);
-    const overlapsX = a.left < b.right && b.left < a.right;
-    if (!overlapsX || a.bottom > b.top + 1) continue; // after the control (checkbox) or beside it
-    const gap = b.top - a.bottom;
-    if (gap < 48 && Math.abs(gap - 4) > 1) facts.gaps.label.push(`${describe(control)} (${round(gap)}px under its label)`);
+    facts.gapPairs.push({ id: describe(control), kind: "label", above: edges(label), below: edges(control) });
   }
   for (const control of document.querySelectorAll("[aria-describedby]")) {
     if (!visible(control) || !control.matches("input,textarea,select,[role=combobox],button")) continue;
     const help = document.getElementById(control.getAttribute("aria-describedby").split(/\s+/)[0]);
     if (!help || !visible(help) || help.closest("[role=tooltip]")) continue;
-    const gap = rectOf(help).top - rectOf(control).bottom;
-    if (gap >= 0 && gap < 48 && Math.abs(gap - 4) > 1) facts.gaps.help.push(`${describe(control)} (${round(gap)}px above its help)`);
+    facts.gapPairs.push({ id: describe(control), kind: "help", above: edges(control), below: edges(help) });
   }
-  facts.gaps.label = facts.gaps.label.slice(0, 10);
-  facts.gaps.help = facts.gaps.help.slice(0, 10);
 
   // N2: the main scroller does not scroll sideways either.
   const scroller = document.querySelector("#admin-main-scroll");

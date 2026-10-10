@@ -15,7 +15,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -34,6 +33,7 @@ import { isTranslationEditorType, type TranslationsSearch } from "~/lib/translat
 import { cn } from "@scalius/shared/utils";
 import { STATUS_BADGE, TYPE_LABEL_KEYS, languageName } from "./translation-form";
 import { canEditTranslations } from "./translation-permissions";
+import { Field } from "~/components/ui/field";
 
 // The editor downloads when the first item opens. It edits HTML fields as
 // HTML here: the rich text editor stays with the resource pages that load it.
@@ -135,26 +135,21 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
       {header}
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("translateDescription")}</p>
       <Card className={cn("mb-4 grid gap-3 p-4", adaptsMarkets && "sm:grid-cols-2")}>
-        <div className="flex min-w-0 flex-col gap-1">
-          <Label>{t("targetLanguage")}</Label>
+        <Field label={t("targetLanguage")}>
           <SearchableSelect
-            ariaLabel={t("targetLanguage")}
             value={locale}
             options={languageOptions}
             onValueChange={(value) => update({ locale: value, page: undefined })}
           />
-        </div>
+        </Field>
         {adaptsMarkets ? (
-          <div className="flex min-w-0 flex-col gap-1">
-            <Label>{t("market")}</Label>
+          <Field label={t("market")} help={t("marketHelp")}>
             <SearchableSelect
-              ariaLabel={t("market")}
               value={marketId ?? ""}
               options={marketOptions}
               onValueChange={(value) => update({ market: value || undefined, page: undefined })}
             />
-            <p className="text-body text-muted-foreground">{t("marketHelp")}</p>
-          </div>
+          </Field>
         ) : null}
       </Card>
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -175,9 +170,9 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
                 update({ q: query.trim() || undefined, page: undefined });
               }}
             >
-              <Label htmlFor="translation-search" className="sr-only">{t("search")}</Label>
               <Input
                 id="translation-search"
+                aria-label={t("search")}
                 name="q"
                 type="search"
                 placeholder={t("search")}

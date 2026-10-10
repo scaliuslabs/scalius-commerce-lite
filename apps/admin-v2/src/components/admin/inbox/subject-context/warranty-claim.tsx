@@ -17,7 +17,6 @@ import {
 } from "@scalius/shared/warranty";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
@@ -31,6 +30,7 @@ import { newRequestKey } from "../inbox-api";
 import { ClaimStatusBadge } from "../../warranty/ClaimStatusBadge";
 import { useUpdateWarrantyClaim, warrantyClaimQueryOptions, type WarrantyClaim } from "../../warranty/warranty-api";
 import { warrantyDate, warrantySummary } from "../../warranty/warranty-format";
+import { Field } from "~/components/ui/field";
 
 export function WarrantyClaimContext({ thread }: { thread: StaffThread }) {
   const t = useMessages(warrantyMessages);
@@ -137,8 +137,7 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
   return (
     <form method="post" noValidate className="flex flex-col gap-3 border-t pt-3" onSubmit={submit}>
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="warranty-claim-status">{t("status")}</Label>
+      <Field id="warranty-claim-status" label={t("status")}>
         <SearchableSelect
           id="warranty-claim-status"
           value={status}
@@ -146,10 +145,9 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
           triggerClassName="w-full"
           options={WARRANTY_CLAIM_STATUSES.map((value) => ({ value, label: t(`status.${value}`) }))}
         />
-      </div>
+      </Field>
       {status === "resolved" ? (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="warranty-claim-resolution">{t("resolution")}</Label>
+        <Field id="warranty-claim-resolution" label={t("resolution")} error={missingResolution ? t("resolutionRequired") : undefined}>
           <SearchableSelect
             id="warranty-claim-resolution"
             value={resolution}
@@ -162,11 +160,9 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
             triggerClassName="w-full"
             options={[{ value: "", disabled: true, label: t("chooseResolution") }, ...WARRANTY_CLAIM_RESOLUTIONS.map((value) => ({ value, label: t(`resolution.${value}`) }))]}
           />
-          {missingResolution ? <p id="warranty-claim-resolution-error" className="text-body text-destructive">{t("resolutionRequired")}</p> : null}
-        </div>
+        </Field>
       ) : null}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="warranty-claim-message">{t("reply")}</Label>
+      <Field id="warranty-claim-message" label={t("reply")} help={t("replyHelp")}>
         <Textarea
           id="warranty-claim-message"
           rows={3}
@@ -175,8 +171,7 @@ function ClaimStatusForm({ claim }: { claim: WarrantyClaim }) {
           aria-describedby="warranty-claim-message-help"
           onChange={(event) => setMessage(event.target.value)}
         />
-        <p id="warranty-claim-message-help" className="text-body text-muted-foreground">{t("replyHelp")}</p>
-      </div>
+      </Field>
       <Button type="submit" size="sm" className="self-start" loading={update.isPending} disabled={!dirty}>{t("update")}</Button>
     </form>
   );

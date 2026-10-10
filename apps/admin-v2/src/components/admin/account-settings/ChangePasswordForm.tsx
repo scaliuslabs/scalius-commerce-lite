@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { apiData } from "~/lib/api";
@@ -15,7 +15,7 @@ import { accountMessages, type AccountMessageKey } from "~/i18n/account";
 import { accountFailureKey } from "./account-error";
 
 const MIN_LENGTH = 12;
-type Field = "current" | "next" | "confirm";
+type PasswordKey = "current" | "next" | "confirm";
 
 /**
  * Password card. The form is POST-only with no `name` attributes and stays
@@ -25,15 +25,15 @@ type Field = "current" | "next" | "confirm";
 export function ChangePasswordForm() {
   const t = useMessages(accountMessages);
   const isHydrated = useHydrated();
-  const [values, setValues] = useState<Record<Field, string>>({ current: "", next: "", confirm: "" });
-  const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
+  const [values, setValues] = useState<Record<PasswordKey, string>>({ current: "", next: "", confirm: "" });
+  const [touched, setTouched] = useState<Partial<Record<PasswordKey, boolean>>>({});
   const [shown, setShown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wrongCurrent, setWrongCurrent] = useState(false);
   const [error, setError] = useState<AccountMessageKey | null>(null);
 
   const reused = values.next.length > 0 && values.next === values.current;
-  const errors: Partial<Record<Field, string>> = {
+  const errors: Partial<Record<PasswordKey, string>> = {
     current: wrongCurrent ? t("wrongCurrentPassword") : touched.current && !values.current ? t("enterCurrentPassword") : undefined,
     next: touched.next && values.next.length < MIN_LENGTH
       ? t("passwordTooShort")
@@ -41,7 +41,7 @@ export function ChangePasswordForm() {
     confirm: touched.confirm && values.confirm !== values.next ? t("passwordsDontMatch") : undefined,
   };
 
-  const set = (field: Field, value: string) => {
+  const set = (field: PasswordKey, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     if (field === "current") setWrongCurrent(false);
   };
@@ -68,29 +68,19 @@ export function ChangePasswordForm() {
     }
   };
 
-  const field = (id: Field, label: string, autoComplete: string, help?: string) => {
-    const describedBy = errors[id] ? `password-${id}-error` : help ? `password-${id}-help` : undefined;
+  const field = (id: PasswordKey, label: string, autoComplete: string, help?: string) => {
     return (
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`password-${id}`}>{label}</Label>
+      <Field id={`password-${id}`} label={label} help={help} error={errors[id]}>
         <Input
-          id={`password-${id}`}
           type={shown ? "text" : "password"}
           value={values[id]}
           autoComplete={autoComplete}
           required
           disabled={!isHydrated || saving}
-          aria-invalid={errors[id] ? true : undefined}
-          aria-describedby={describedBy}
           onBlur={() => setTouched((current) => ({ ...current, [id]: Boolean(values[id]) || current[id] }))}
           onChange={(event) => set(id, event.target.value)}
         />
-        {errors[id] ? (
-          <p id={`password-${id}-error`} className="text-body text-destructive">{errors[id]}</p>
-        ) : help ? (
-          <p id={`password-${id}-help`} className="text-body text-muted-foreground">{help}</p>
-        ) : null}
-      </div>
+      </Field>
     );
   };
 
@@ -123,7 +113,8 @@ export function ChangePasswordForm() {
           </div>
         </CardContent>
         <CardFooter className="justify-end">
-          <Button type="submit" loading={saving} disabled={!isHydrated || !values.current || !values.next || !values.confirm}>
+          {/* Secondary: the page's one primary is "Turn on" two-step verification (C3); Save shows what is missing (C5). */}
+          <Button type="submit" variant="outline" loading={saving} disabled={!isHydrated}>
             {t("changePassword")}
           </Button>
         </CardFooter>

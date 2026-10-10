@@ -27,7 +27,6 @@ import {
 } from "@scalius/shared/platform-config";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -58,6 +57,7 @@ import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { FieldSet } from "~/components/ui/field";
 
 const ImageField = lazy(() => import("../online-store/ImageField").then((module) => ({ default: module.ImageField })));
 
@@ -211,8 +211,7 @@ function InvoiceFields() {
           onChange={(event) => setValue("invoicePrefix", event.target.value)}
         />
       </SettingsField>
-      <div className="space-y-1.5">
-        <Label>{t("invoiceLogo")}</Label>
+      <FieldSet label={t("invoiceLogo")} error={isValidLogo(values.invoiceLogoUrl) ? undefined : t("logoUrlInvalid")}>
         <div className="flex items-center gap-3">
           <div className="grid h-16 w-32 shrink-0 place-items-center rounded-lg border border-border bg-muted p-2">
             {logoUrl ? (
@@ -236,10 +235,7 @@ function InvoiceFields() {
             </Button>
           ) : null}
         </div>
-        {!isValidLogo(values.invoiceLogoUrl) ? (
-          <p role="alert" className="text-body text-destructive">{t("logoUrlInvalid")}</p>
-        ) : null}
-      </div>
+      </FieldSet>
       <SettingsField id="business-invoiceFooterText" label={t("invoiceFooter")}>
         <Textarea
           id="business-invoiceFooterText"
@@ -815,7 +811,7 @@ function CountryFields() {
       >
         {(["include", "exclude"] as const).map((mode) => (
           <label key={mode} className="flex min-h-11 items-start gap-2 py-3 text-body">
-            <RadioGroupItem className="mt-0.5" value={mode} />
+            <span className="flex h-lh items-center"><RadioGroupItem value={mode} /></span>
             {mode === "include" ? t("onlySelected") : t("allExceptSelected")}
           </label>
         ))}

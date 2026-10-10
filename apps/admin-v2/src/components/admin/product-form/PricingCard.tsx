@@ -1,20 +1,12 @@
-import { lazy, Suspense, useEffect, useId, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { MoneyInput } from "@/components/admin/shared/MoneyInput";
-import { Label } from "@/components/ui/label";
-import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
+import { FormField } from "@/components/ui/form";
+import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { useCurrency } from "@/hooks/use-currency";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pairFromStored, storedFromPair, type PricePair } from "./compare-at";
@@ -22,6 +14,7 @@ import { useProductKindRules } from "./product-kind-rules";
 import { useSkuCosts, type SkuCostStore } from "./sku-costs";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
+import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 
 // A product-level discount is only edited on a product with options that already has one.
 const ProductDiscountFields = lazy(() => import("./ProductDiscountFields"));
@@ -40,7 +33,7 @@ export function PricingCard({ form, variantPrices }: {
 }) {
   const t = useMessages(productMessages);
   const { showDiscount, giftCard } = useProductKindRules();
-  const { symbol, fmt, salePrice } = useCurrency();
+  const { fmt, salePrice } = useCurrency();
   const costs = useSkuCosts();
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
@@ -57,15 +50,14 @@ export function PricingCard({ form, variantPrices }: {
       <CardContent className="space-y-4">
         {variantPrices ? (
           <>
-            <div className="space-y-1">
-              <p className="text-body font-medium">{t("priceLabel", { symbol })}</p>
-              <p className="text-body tabular-nums">
-                {variantPrices.min === variantPrices.max
-                  ? fmt(variantPrices.min)
-                  : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
-              </p>
-              <p className="text-body text-muted-foreground">{t("variantPricesHint")}</p>
-            </div>
+            <ReadOnlyValue
+              numeric
+              label={t("priceLabel")}
+              help={t("variantPricesHint")}
+              value={variantPrices.min === variantPrices.max
+                ? fmt(variantPrices.min)
+                : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
+            />
             {showDiscount && sale !== null ? <Suspense fallback={null}><ProductDiscountFields form={form} /></Suspense> : null}
           </>
         ) : (
@@ -91,7 +83,7 @@ export function PricingCard({ form, variantPrices }: {
  */
 function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFormValues>; compareAtAllowed: boolean }) {
   const t = useMessages(productMessages);
-  const { symbol, code, salePrice } = useCurrency();
+  const { code, salePrice } = useCurrency();
   const decimalPlaces = getDecimalPlaces(code);
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
@@ -137,56 +129,47 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
   };
 
   return (
-    <div className={cn("grid gap-4", compareAtAllowed && "sm:grid-cols-2")}>
+    <FieldRow>
       <FormField
         control={form.control}
         name="price"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("priceLabel", { symbol })}</FormLabel>
-            <FormControl>
-              <MoneyInput
-                currencyCode={code}
-                ref={field.ref}
-                name={field.name}
-                placeholder="0.00"
-                value={pair.price}
-                onValueChange={(next) => change({ ...pair, price: next })}
-                onBlur={field.onBlur}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
+        render={({ field, fieldState }) => (
+          <Field label={t("priceLabel")} error={fieldState.error?.message}>
+            <MoneyInput
+              currencyCode={code}
+              ref={field.ref}
+              name={field.name}
+              placeholder="0.00"
+              value={pair.price}
+              onValueChange={(next) => change({ ...pair, price: next })}
+              onBlur={field.onBlur}
+            />
+          </Field>
         )}
       />
       {compareAtAllowed ? (
         <FormField
           control={form.control}
           name="compareAtProblem"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("compareAtLabel", { symbol })}</FormLabel>
-              <FormControl>
-                <MoneyInput
-                  currencyCode={code}
-                  ref={field.ref}
-                  placeholder="0.00"
-                  value={pair.compareAt}
-                  onValueChange={(next) => change({ ...pair, compareAt: next })}
-                  // Said as the merchant leaves the field, not while they type.
-                  onBlur={() => {
-                    field.onBlur();
-                    void form.trigger("compareAtProblem");
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
-              <p className="text-body text-muted-foreground">{t("compareAtHelp")}</p>
-            </FormItem>
+          render={({ field, fieldState }) => (
+            <Field label={t("compareAtLabel")} help={t("compareAtHelp")} error={fieldState.error?.message}>
+              <MoneyInput
+                currencyCode={code}
+                ref={field.ref}
+                placeholder="0.00"
+                value={pair.compareAt}
+                onValueChange={(next) => change({ ...pair, compareAt: next })}
+                // Said as the merchant leaves the field, not while they type.
+                onBlur={() => {
+                  field.onBlur();
+                  void form.trigger("compareAtProblem");
+                }}
+              />
+            </Field>
           )}
         />
       ) : null}
-    </div>
+    </FieldRow>
   );
 }
 
@@ -197,41 +180,28 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
  */
 function ProductCostFields({ costs, customerPays }: { costs: SkuCostStore; customerPays: number | null }) {
   const t = useMessages(productMessages);
-  const { symbol, code, fmt } = useCurrency();
-  const id = useId();
+  const { code, fmt } = useCurrency();
   const cost = costs.costOf(costs.simpleKey);
   const problem = costProblem(cost);
   const result = costMargin(customerPays, cost, getDecimalPlaces(code));
+  const negative = (value: number | null | undefined, text: string) =>
+    value != null && value < 0 ? <span className="text-destructive">{text}</span> : text;
+  // The same two columns as Price and Compare-at price above (S5).
   return (
-    <div className="grid gap-4 border-t pt-4 sm:grid-cols-3">
-      <div className="space-y-2">
-        <Label htmlFor={id}>{t("costPerItem")}</Label>
-        <CostInput
-          id={id}
-          symbol={symbol}
-          value={cost}
-          aria-invalid={problem ? true : undefined}
-          aria-describedby={`${id}-help`}
-          onValueChange={(next) => costs.setCosts([costs.simpleKey], next)}
-        />
-        <p id={`${id}-help`} className={cn("text-body", problem ? "text-destructive" : "text-muted-foreground")}>
-          {problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : t("costHelp")}
-        </p>
-      </div>
-      <dl className="grid grid-cols-2 gap-4 sm:col-span-2">
-        <div className="space-y-2">
-          <dt className="text-body font-medium">{t("profit")}</dt>
-          <dd className={cn("flex h-11 items-center text-body tabular-nums sm:h-9", result && result.profit < 0 && "text-destructive")}>
-            {result ? fmt(result.profit) : "—"}
-          </dd>
+    <div className="border-t pt-4">
+      <FieldRow>
+        <Field
+          label={t("costPerItem")}
+          help={t("costHelp")}
+          error={problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : undefined}
+        >
+          <CostInput value={cost} onValueChange={(next) => costs.setCosts([costs.simpleKey], next)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <ReadOnlyValue besideControls numeric label={t("profit")} value={result ? negative(result.profit, fmt(result.profit)) : null} />
+          <ReadOnlyValue besideControls numeric label={t("margin")} value={result?.margin != null ? negative(result.margin, formatMargin(result.margin)) : null} />
         </div>
-        <div className="space-y-2">
-          <dt className="text-body font-medium">{t("margin")}</dt>
-          <dd className={cn("flex h-11 items-center text-body tabular-nums sm:h-9", result?.margin != null && result.margin < 0 && "text-destructive")}>
-            {formatMargin(result?.margin)}
-          </dd>
-        </div>
-      </dl>
+      </FieldRow>
     </div>
   );
 }

@@ -106,8 +106,9 @@ export function AnalyticsRangePicker({
       </Button>
     </div>
   );
+  // Toolbar height, beside the toolbar's selects (C2).
   const trigger = (
-    <Button variant="outline" size="sm">
+    <Button variant="outline">
       <CalendarDays className="size-4" aria-hidden />
       <span>{label}</span>
     </Button>

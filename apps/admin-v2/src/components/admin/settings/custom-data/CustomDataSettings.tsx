@@ -89,7 +89,7 @@ export function CustomDataSettings() {
               }}
               options={CUSTOM_FIELD_OWNER_TYPES.map((owner) => ({ value: owner, label: t(`owner.${owner}` as CustomFieldMessageKey) }))}
             />
-            {canEdit ? <Button type="button" size="sm" onClick={() => setEditing({ definition: null })}>{t("addField")}</Button> : null}
+            {canEdit ? <Button type="button" onClick={() => setEditing({ definition: null })}>{t("addField")}</Button> : null}
           </div>
         }
         rows={definitions.length === 0 ? (

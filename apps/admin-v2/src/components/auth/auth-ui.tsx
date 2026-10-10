@@ -1,6 +1,5 @@
 /**
- * The pieces every sign-in screen shares: heading, error banner, labelled
- * field, password field with show/hide and the 6-digit code input.
+ * The pieces every sign-in screen shares: heading, error banner, password field with show/hide and the 6-digit code input.
  */
 import { forwardRef, useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -8,7 +7,6 @@ import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Input, fieldClassName } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { clearPendingTwoFactorMethods } from "~/lib/two-factor-pending";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
@@ -80,41 +78,6 @@ export function downloadRecoveryCodes(codes: readonly string[], intro: string) {
   link.download = "recovery-codes.txt";
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-export function describedBy(id: string, error?: string | null, hint?: string) {
-  return {
-    "aria-invalid": error ? true : undefined,
-    "aria-describedby": error || hint ? `${id}-message` : undefined,
-  };
-}
-
-export function Field({
-  id,
-  label,
-  error,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  error?: string | null;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label id={`${id}-label`} htmlFor={id}>
-        {label}
-      </Label>
-      {children}
-      {error || hint ? (
-        <p id={`${id}-message`} className={cn("text-body", error ? "text-destructive" : "text-muted-foreground")}>
-          {error || hint}
-        </p>
-      ) : null}
-    </div>
-  );
 }
 
 /** A password field with a show/hide button. It never carries a `name`, so nothing can serialize it. */
@@ -231,7 +194,7 @@ export function CodeInput({
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} className="grid grid-cols-6 gap-2">
+    <div role="group" aria-labelledby={`${id}-field-label`} className="grid grid-cols-6 gap-2">
       {Array.from({ length: CODE_LENGTH }, (_, index) => (
         <input
           key={index}

@@ -60,6 +60,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { usePushIssueText } from "./push-issue-text";
 import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { FieldRow } from "~/components/ui/field";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 export const MASKED_VALUE = "••••••••••••";
@@ -380,13 +381,13 @@ function EmailFields() {
         >
           {(["cloudflare", "resend"] as const).map((provider) => (
             <label key={provider} className="flex min-h-11 items-start gap-2 py-3 text-body">
-              <RadioGroupItem className="mt-0.5" value={provider} />
+              <span className="flex h-lh items-center"><RadioGroupItem value={provider} /></span>
               {t(provider)}
             </label>
           ))}
           {apps.map((provider) => (
             <label key={provider.id} className="flex min-h-11 items-start gap-2 py-3 text-body">
-              <RadioGroupItem className="mt-0.5" value={provider.id} />
+              <span className="flex h-lh items-center"><RadioGroupItem value={provider.id} /></span>
               <span>
                 {provider.name}
                 <span className="block text-muted-foreground">{appT("byApp", { app: provider.appName })}</span>
@@ -562,7 +563,7 @@ function WhatsAppFields() {
           onChange={(event) => auth.setValue("whatsappTemplateName", event.target.value)}
         />
       </SettingsField>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="wa-order-template" label={t("waOrderTemplate")}>
           <Input
             id="wa-order-template"
@@ -579,7 +580,7 @@ function WhatsAppFields() {
             onChange={(event) => setTemplate("languageCode", event.target.value)}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
     </>
   );
 }

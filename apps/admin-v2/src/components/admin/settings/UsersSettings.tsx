@@ -36,6 +36,7 @@ import {
   staffActions,
   togglePermissions,
 } from "./staff-access";
+import { FieldRow } from "~/components/ui/field";
 
 export type UsersMessages = (key: keyof typeof usersMessages.en, vars?: Record<string, string | number>) => string;
 
@@ -172,7 +173,7 @@ function ListRow({ to, params, label, value, note }: {
   const body = (
     <span className="min-w-0 flex-1">
       <span className="block text-body font-medium">{label}</span>
-      {value ? <span className="block truncate text-body text-muted-foreground">{value}</span> : null}
+      {value ? <span className="block truncate text-body text-muted-foreground" title={typeof value === "string" ? value : undefined}>{value}</span> : null}
       {note ? <span className="block text-body text-muted-foreground">{note}</span> : null}
     </span>
   );
@@ -224,7 +225,7 @@ function AddStaffForm() {
   const limited = list.some((role) => !canGrantRole(role, viewer));
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="staff-name" label={t("name")} error={errors.name}>
           <Input
             id="staff-name"
@@ -246,7 +247,7 @@ function AddStaffForm() {
             onChange={(event) => setDraft({ ...draft, email: event.target.value })}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
       {roles.isError ? (
         <SettingsLoadFailure title={t("roles")} onRetry={roles.refetch} />
       ) : (

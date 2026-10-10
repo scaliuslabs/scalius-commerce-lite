@@ -33,6 +33,7 @@ import {
   SALES_CHANNELS,
   type OrderListSearch,
 } from "./order-list-search";
+import { Field, FieldSet } from "~/components/ui/field";
 
 const DateRangePickerWithPresets = lazy(() =>
   import("./DateRangePickerWithPresets").then((module) => ({
@@ -80,16 +81,14 @@ function FilterSelect({
 }) {
   const t = useMessages(orderListMessages);
   return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
+    <Field label={label}>
       <SearchableSelect
         triggerClassName="w-full"
-        ariaLabel={label}
         value={value ?? ANY}
         onValueChange={(next) => onChange(next === ANY ? undefined : next)}
         options={[{ value: ANY, label: t("any") }, ...options]}
       />
-    </div>
+    </Field>
   );
 }
 
@@ -142,8 +141,7 @@ function DateRangeFilter({
     </Button>
   );
   return (
-    <div className="space-y-1">
-      <Label>{t("date")}</Label>
+    <FieldSet label={t("date")}>
       {loadPicker ? (
         <Suspense fallback={trigger}>
           <DateRangePickerWithPresets date={range} setDate={onChange} trigger={trigger} />
@@ -151,7 +149,7 @@ function DateRangeFilter({
       ) : (
         trigger
       )}
-    </div>
+    </FieldSet>
   );
 }
 

@@ -50,6 +50,7 @@ import {
   segmentNameProblem,
   type SegmentDraft,
 } from "./segment-draft";
+import { Page } from "~/components/admin/resource/Page";
 
 /**
  * A saved customer segment, or a new one: name and description, the filters
@@ -155,7 +156,7 @@ function SegmentEditorPage({ segment }: { segment: CustomerSegment | null }) {
     : nameProblem === "too_long" ? t("nameTooLong", { count: SEGMENT_NAME_MAX }) : undefined;
 
   return (
-    <div className="pb-6">
+    <Page width="form" className="pb-6">
       <PageHeader
         backTo="/admin/customers/segments"
         title={segment ? base.draft.name : t("newSegment")}
@@ -296,6 +297,6 @@ function SegmentEditorPage({ segment }: { segment: CustomerSegment | null }) {
         onOpenChange={(open) => setDeleting(open)}
         onDeleted={() => void navigate({ to: "/admin/customers/segments", replace: true })}
       />
-    </div>
+    </Page>
   );
 }

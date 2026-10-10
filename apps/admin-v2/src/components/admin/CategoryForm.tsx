@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -42,6 +42,7 @@ import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { Field } from "~/components/ui/field";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -201,22 +202,17 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("name")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("namePlaceholder")} maxLength={100} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <Field label={t("name")} error={fieldState.error?.message}>
+                    <Input placeholder={t("namePlaceholder")} maxLength={100} {...field} />
+                  </Field>
                 )}
               />
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("description")}</FormLabel>
+                render={({ field, fieldState }) => (
+                  <Field label={t("description")} error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
@@ -228,8 +224,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     ) : (
                       <RichContent content={field.value ?? ""} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -243,8 +238,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="content"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     {canSave ? (
                       <DeferredTiptapEditor
                         content={field.value ?? ""}
@@ -256,8 +251,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                     ) : (
                       <RichContent content={field.value ?? ""} />
                     )}
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -271,8 +265,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="image"
-                render={({ field }) => (
-                  <FormItem>
+                render={({ field, fieldState }) => (
+                  <Field error={fieldState.error?.message}>
                     <FormImageUploadField
                       value={field.value}
                       onChange={field.onChange}
@@ -280,8 +274,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       changeTriggerLabel={t("changeImage")}
                       placeholder={t("noImage")}
                     />
-                    <FormMessage />
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -339,27 +332,26 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             <CardHeader>
               <CardTitle>{t("status")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
                 name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <SearchableSelect
-                        value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
-                        triggerRef={field.ref}
-                        onBlur={field.onBlur}
-                        triggerClassName="w-full"
-                        options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }, { value: "internal", label: t("hidden") }]}
-                      />
-                    </FormControl>
-                    <FormDescription>
+                render={({ field, fieldState }) => (
+                  <Field
+                    help={<>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
-                    </FormDescription>
-                    {staysEmpty ? <p className="text-body text-warning">{t("staysEmpty")}</p> : null}
-                    <FormMessage />
-                  </FormItem>
+                      {staysEmpty ? <span className="block text-warning">{t("staysEmpty")}</span> : null}
+                    </>}
+                    error={fieldState.error?.message}
+                  >
+                    <SearchableSelect
+                      value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
+                      triggerRef={field.ref}
+                      onBlur={field.onBlur}
+                      triggerClassName="w-full"
+                      options={[{ value: "published", label: t("active") }, { value: "draft", label: t("draft") }, { value: "internal", label: t("hidden") }]}
+                    />
+                  </Field>
                 )}
               />
               {isEdit && committedStatus === "published" && defaultValues?.slug ? (
@@ -384,26 +376,22 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="parentId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="category-parent">{t("parentCategory")}</FormLabel>
-                    <ParentCategorySelect
-                      selfId={defaultValues?.id}
-                      name={name ?? ""}
-                      value={field.value ?? null}
-                      onChange={field.onChange}
-                      disabled={!canSave}
-                    />
-                    <FormMessage />
-                  </FormItem>
+                render={({ field, fieldState }) => (
+                  <ParentCategorySelect
+                    selfId={defaultValues?.id}
+                    name={name ?? ""}
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    disabled={!canSave}
+                    error={fieldState.error?.message}
+                  />
                 )}
               />
               <FormField
                 control={form.control}
                 name="listingTemplate"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="category-template">{t("template")}</FormLabel>
+                  <Field id="category-template" label={t("template")} help={t("templateHelp")}>
                     <TemplateSelect
                       id="category-template"
                       kind="listing"
@@ -411,8 +399,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                       onChange={field.onChange}
                       disabled={!canSave}
                     />
-                    <FormDescription>{t("templateHelp")}</FormDescription>
-                  </FormItem>
+                  </Field>
                 )}
               />
             </CardContent>
@@ -427,7 +414,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
  * The category this one sits under, named by its path. Its own subtree and
  * places that would make a fifth level are left out (the server refuses them).
  */
-function ParentCategorySelect({ selfId, name, value, onChange, disabled }: {
+function ParentCategorySelect({ selfId, name, value, onChange, disabled, error }: {
+  error?: string;
   selfId?: string;
   name: string;
   value: string | null;
@@ -447,9 +435,13 @@ function ParentCategorySelect({ selfId, name, value, onChange, disabled }: {
   const parentPath = value ? categoryPathLabel(value, byId) : "";
   const ownName = name.trim() || t("thisCategory");
   return (
-    <>
+    <Field
+      id="category-parent"
+      label={t("parentCategory")}
+      help={t("path", { path: parentPath ? `${parentPath} › ${ownName}` : ownName })}
+      error={error}
+    >
       <SearchableSelect
-        id="category-parent"
         value={value ?? ""}
         options={options}
         selectedLabel={parentPath || undefined}
@@ -461,9 +453,6 @@ function ParentCategorySelect({ selfId, name, value, onChange, disabled }: {
         emptyMessage={t("noCategoriesFound")}
         onValueChange={(next) => onChange(next || null)}
       />
-      <FormDescription>
-        {t("path", { path: parentPath ? `${parentPath} › ${ownName}` : ownName })}
-      </FormDescription>
-    </>
+    </Field>
   );
 }

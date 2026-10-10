@@ -149,6 +149,6 @@ describe("AppListFilter", () => {
     await render(undefined);
     expect(container.querySelector("label")).toBeNull();
     await render(undefined, true);
-    expect(container.querySelector("label")?.textContent).toBe("App filter");
+    expect(container.querySelector('[data-slot="field-label"]')?.textContent).toBe("App filter");
   });
 });

@@ -38,6 +38,7 @@ import {
 import { PriceListPrices } from "./PriceListPrices";
 import { KIND_HELP, KIND_LABEL, scheduleText, priceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
 import { DateInput } from "~/components/ui/date-input";
+import { Page } from "~/components/admin/resource/Page";
 
 // The grid is the heaviest part of the page and only staff who edit open it.
 const PriceGridSheet = lazy(() => import("./PriceGridSheet").then((module) => ({ default: module.PriceGridSheet })));
@@ -114,11 +115,11 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
   };
 
   return (
-    <div className="pb-6">
+    <Page width="form" className="pb-6">
       <PageHeader
         backTo="/admin/price-lists"
         title={base.name || saved.name}
-        badge={<StatusBadge status={shown.state}>{t(shown.state)}</StatusBadge>}
+        status={<StatusBadge status={shown.state}>{t(shown.state)}</StatusBadge>}
       />
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
@@ -250,7 +251,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
         </Suspense>
       ) : null}
       {canEdit ? <DeletePriceList list={saved} open={deleting} onOpenChange={setDeleting} /> : null}
-    </div>
+    </Page>
   );
 }
 
@@ -276,6 +277,7 @@ function ScheduleField({ id, label, help, error, date, time, onChange }: {
           onValueChange={(next) => onChange(next, next ? time : "")}
         />
         <Input
+          id={`${id}-time`}
           type="time"
           aria-label={t("timeOf", { field: label })}
           className="w-auto min-w-0 flex-1"
@@ -284,7 +286,7 @@ function ScheduleField({ id, label, help, error, date, time, onChange }: {
           onChange={(event) => onChange(date, event.target.value)}
         />
         {date ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onChange("", "")}>{t("clearDate")}</Button>
+          <Button type="button" variant="ghost" onClick={() => onChange("", "")}>{t("clearDate")}</Button>
         ) : null}
       </div>
     </SettingsField>

@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import { useWatch } from "react-hook-form";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { orderChannelSourceLabel, orderMessages } from "@/i18n/orders";
 import { useOrderForm } from "./OrderFormContext";
 import { ORDER_SOURCE_CHOICES, type OrderSourceChoice } from "./types";
+import { Field } from "~/components/ui/field";
 
 const SOURCE_CHOICE_ID = "order-source";
 
@@ -42,8 +42,7 @@ export function SalesChannelSection() {
         <CardDescription>{t("salesChannelHelp")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor={SOURCE_CHOICE_ID}>{t("source")}</Label>
+        <Field id={SOURCE_CHOICE_ID} label={t("source")}>
           <SearchableSelect
             id={SOURCE_CHOICE_ID}
             triggerClassName="w-full"
@@ -61,25 +60,21 @@ export function SalesChannelSection() {
               label: source === "other" ? t("sourceOther") : orderChannelSourceLabel(o, source),
             }))}
           />
-        </div>
+        </Field>
         {choice === "other" ? (
           <FormField
             control={form.control}
             name="sourceName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("sourceName")}</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    maxLength={ORDER_CHANNEL_SOURCE_MAX_LENGTH}
-                    placeholder={t("sourceNamePlaceholder")}
-                    autoComplete="off"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("sourceName")} error={fieldState.error?.message}>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  maxLength={ORDER_CHANNEL_SOURCE_MAX_LENGTH}
+                  placeholder={t("sourceNamePlaceholder")}
+                  autoComplete="off"
+                />
+              </Field>
             )}
           />
         ) : null}

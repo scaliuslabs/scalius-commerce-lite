@@ -17,7 +17,6 @@ import {
   type StorefrontListingToolbarPiece,
 } from "@scalius/shared/storefront-theme";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
@@ -26,6 +25,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import type { MediaPreviews } from "../schema-form/resource-fields";
 import { BlockSettingsFields, type SetTheme, type Theme } from "../theme-fields";
 import { DensitySketch, Sketch, VisualChoice } from "../ThemeChoices";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 type Listing = Theme["blocks"]["listing"];
@@ -86,7 +86,7 @@ function ListingFilterSketch({ filterStyle, theme }: { filterStyle: StorefrontLi
   );
 }
 
-/** A labelled switch with its help underneath, the switch on the first line. */
+/** A switch with its label after it and its help underneath (F2), the switch on the first line. */
 export function SwitchField({ id, label, help, checked, onCheckedChange }: {
   id: string;
   label: string;
@@ -95,15 +95,12 @@ export function SwitchField({ id, label, help, checked, onCheckedChange }: {
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <Label htmlFor={id}>{label}</Label>
-        {help ? <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p> : null}
-      </div>
-      <span className="flex h-lh items-center">
-        <Switch id={id} checked={checked} aria-describedby={help ? `${id}-note` : undefined} onCheckedChange={onCheckedChange} />
-      </span>
-    </div>
+    <ChoiceField
+      id={id}
+      label={label}
+      help={help}
+      control={<Switch id={id} checked={checked} aria-describedby={help ? `${id}-help` : undefined} onCheckedChange={onCheckedChange} />}
+    />
   );
 }
 
@@ -150,9 +147,7 @@ export function ListingToolbarSettings({ theme, setDraft }: { theme: Theme; setD
           onCheckedChange={(phoneBanner) => setListing(setDraft, (current) => ({ ...current, phoneBanner }))}
         />
       ) : null}
-      <div className="space-y-1">
-        <Label htmlFor="theme-listing-description-placement">{store("listingDescriptionPlacement")}</Label>
-        <p className="text-body text-muted-foreground">{store("listingDescriptionPlacementHelp")}</p>
+      <Field id="theme-listing-description-placement" label={store("listingDescriptionPlacement")} help={store("listingDescriptionPlacementHelp")}>
         <SearchableSelect
           id="theme-listing-description-placement"
           value={listing.descriptionPlacement}
@@ -163,7 +158,7 @@ export function ListingToolbarSettings({ theme, setDraft }: { theme: Theme; setD
           onValueChange={(descriptionPlacement) => setListing(setDraft, (current) => ({ ...current, descriptionPlacement: descriptionPlacement as Listing["descriptionPlacement"] }))}
           triggerClassName="w-full"
         />
-      </div>
+      </Field>
     </div>
   );
 }
@@ -299,8 +294,7 @@ export function ListingGridSettings({ theme, setDraft, media, search }: { theme:
         ] as const).map((option) => ({ ...option, sketch: <ListingLayoutSketch layout={option.value === "grid" ? "grid" : "list"} theme={theme} /> }))}
         onChange={(phoneLayout) => setListing(setDraft, (current) => ({ ...current, phoneLayout }))}
       />
-      <div className="space-y-1">
-        <Label htmlFor="theme-listing-paging">{editor("paging")}</Label>
+      <Field id="theme-listing-paging" label={editor("paging")}>
         <SearchableSelect
           id="theme-listing-paging"
           value={listing.paging}
@@ -308,7 +302,7 @@ export function ListingGridSettings({ theme, setDraft, media, search }: { theme:
           onValueChange={(paging) => setListing(setDraft, (current) => ({ ...current, paging: paging as Listing["paging"] }))}
           triggerClassName="w-full"
         />
-      </div>
+      </Field>
       <VisualChoice
         label={t("density")}
         showLabel

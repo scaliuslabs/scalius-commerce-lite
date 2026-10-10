@@ -185,14 +185,13 @@ function ItemForm({
           onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value, labelMode: "custom" }))}
         />
       </Field>
-      <div className="space-y-1.5">
-        <Label htmlFor="menu-item-link-type">{t("linkTo")}</Label>
+      <Field id="menu-item-link-type" label={t("linkTo")}>
         <SearchableSelect
           id="menu-item-link-type" value={linkType} onValueChange={(value) => setTarget(targetFor(value as LinkType))}
           triggerClassName="w-full"
           options={LINK_TYPES.map((type) => ({ value: type, label: t(`link_${type}`) }))}
         />
-      </div>
+      </Field>
       {target.type === "resource" ? (
         <NavigationResourcePicker
           key={target.resourceType}

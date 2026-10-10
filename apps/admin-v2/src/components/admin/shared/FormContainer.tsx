@@ -1,11 +1,9 @@
 import type React from "react";
 import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
-import { useMessages } from "~/i18n";
-import { saveBarMessages } from "~/i18n/save-bar";
+import { Page } from "@/components/admin/resource/Page";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
@@ -77,7 +75,6 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   readOnlyNotice?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const t = useMessages(saveBarMessages);
   // A save tells the other editors on this record at once (realtime presence).
   const announcingSave = async (values: TTransformedValues) => {
     const result = await save(values);
@@ -116,23 +113,15 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
         <fieldset disabled={!canSave} className="min-w-0">
           {children}
         </fieldset>
-        {canSave ? (
-          // Shopify repeats Save at the end of the page, under a divider.
-          <div className="flex justify-end border-t pt-4">
-            <Button type="submit" loading={Boolean(scope?.busy)} disabled={!scope?.dirty}>
-              {t("save")}
-            </Button>
-          </div>
-        ) : null}
       </div>
     </form>
   );
 }
 
 /**
- * A record editor page: title with a back arrow, then the cards, then Save.
- * Edits also show the contextual save bar, which saves, discards and guards
- * leaving the page; a failed save is explained in a banner under the title.
+ * A record editor page: title with a back arrow, then the cards. Save lives
+ * only in the contextual save bar (and Cmd/Ctrl+S, P4), which saves, discards
+ * and guards leaving the page; a failed save is explained in a banner under the title.
  */
 export function FormContainer<
   TFieldValues extends FieldValues,
@@ -159,6 +148,7 @@ export function FormContainer<
     <ErrorBoundary>
       <SaveBarProvider unsavedLabel={unsavedLabel} savedMessage={savedMessage}>
         <Form {...form}>
+          <Page width="form">
           <EditorForm
             form={form}
             saving={isSubmitting}
@@ -167,12 +157,13 @@ export function FormContainer<
             savedValues={savedValues}
             reload={reload}
             className={formClassName}
-            header={<PageHeader backTo={backUrl} badge={badge} title={heading} actions={actions} />}
+            header={<PageHeader backTo={backUrl} status={badge} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
             presenceKey={presenceKey}
           >
             {children}
           </EditorForm>
+          </Page>
         </Form>
       </SaveBarProvider>
     </ErrorBoundary>

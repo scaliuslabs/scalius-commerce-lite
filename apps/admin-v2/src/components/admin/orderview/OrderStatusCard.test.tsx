@@ -7,7 +7,7 @@ import type { Order } from "./types";
 import { OrderStatusCard } from "./OrderStatusCard";
 import { translate } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderMessages } from "~/i18n/orders";
+import { orderChannelText, orderMessages } from "~/i18n/orders";
 
 const t = orderDetailMessages.en;
 const o = orderMessages.en;
@@ -75,13 +75,12 @@ describe("OrderStatusCard", () => {
   }
 
   it.each([
-    ["online_store", null, "From Online store"],
-    ["agent", null, "From AI agent"],
-    ["admin", "walk_in", "From Dashboard · Walk-in"],
-    ["admin", "daraz_shop", "From Dashboard · daraz_shop"],
-  ] as const)("says where a %s order (source %s) came from", async (channel, channelSource, text) => {
-    await act(async () => root.render(<OrderStatusCard order={{ ...order, channel, channelSource }} />));
-    expect(host.textContent).toContain(text);
+    ["online_store", null, "Online store"],
+    ["agent", null, "AI agent"],
+    ["admin", "walk_in", "Dashboard · Walk-in"],
+    ["admin", "daraz_shop", "Dashboard · daraz_shop"],
+  ] as const)("names where a %s order (source %s) came from, for the page header's meta line", (channel, channelSource, text) => {
+    expect(orderChannelText((key, vars) => translate(orderMessages, key, vars), channel, channelSource)).toBe(text);
   });
 
   it("changes forward statuses in one step", async () => {

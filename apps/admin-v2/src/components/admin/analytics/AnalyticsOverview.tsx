@@ -59,11 +59,12 @@ export function AnalyticsOverview({
       title={t("analytics")}
       actions={(
         <>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
+          <Button variant="outline" onClick={() => window.print()} className="print:hidden">
             <Printer className="size-4" aria-hidden />
             {t("print")}
           </Button>
-          <Button size="sm" asChild className="print:hidden">
+          {/* Navigation, not the page's action: secondary (C3). */}
+          <Button variant="outline" asChild className="print:hidden">
             <Link to="/admin/analytics/reports">
               <FileBarChart className="size-4" aria-hidden />
               {t("reports")}

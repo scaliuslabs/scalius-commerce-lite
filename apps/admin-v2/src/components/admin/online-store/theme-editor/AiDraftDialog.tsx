@@ -27,6 +27,7 @@ import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { apiData } from "~/lib/api";
 import { actionErrorText } from "../shared";
+import { Field } from "~/components/ui/field";
 
 export type AiPage = "home" | "landing" | "product" | "collection" | "cart" | "page";
 
@@ -95,8 +96,7 @@ export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgen
             }}
           >
             {providers.length > 1 ? (
-              <div className="space-y-1">
-                <Label htmlFor="ai-draft-provider">{t("aiProvider")}</Label>
+              <Field id="ai-draft-provider" label={t("aiProvider")}>
                 <SearchableSelect
                   id="ai-draft-provider"
                   value={providerId}
@@ -104,12 +104,11 @@ export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgen
                   onValueChange={setProviderId}
                   triggerClassName="w-full"
                 />
-              </div>
+              </Field>
             ) : null}
-            <div className="space-y-1">
-              <Label htmlFor="ai-draft-prompt">{t("aiPrompt")}</Label>
+            <Field id="ai-draft-prompt" label={t("aiPrompt")}>
               <Textarea id="ai-draft-prompt" rows={3} maxLength={2000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("aiPromptPlaceholder")} />
-            </div>
+            </Field>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("aiExamples")}>
               {EXAMPLES.map((key) => (
                 <Button key={key} type="button" variant="outline" size="sm" onClick={() => setPrompt(t(key))}>{t(`${key}Label`)}</Button>

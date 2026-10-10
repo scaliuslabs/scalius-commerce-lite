@@ -3,14 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrderForm } from "./OrderFormContext";
@@ -25,6 +18,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { customerFill, customerLookupTerm, findCustomerByPhone, isGuestRecord } from "./customer-lookup";
+import { Field } from "~/components/ui/field";
 
 /** Element ids of the address fields (`AddressFields` with the "order" prefix), to focus on a validation error. */
 export const ORDER_ADDRESS_IDS = {
@@ -213,44 +207,27 @@ export function CustomerInfoSection() {
           <FormField
             control={form.control}
             name="customerName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("name")}</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.customerNameRef.current = el;
-                    }}
-                    onKeyDown={(e) => handleKeyDown(e, refs.customerPhoneRef)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("name")} error={fieldState.error?.message}>
+                <Input
+                  {...field}
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.customerNameRef.current = el;
+                  }}
+                  onKeyDown={(e) => handleKeyDown(e, refs.customerPhoneRef)}
+                />
+              </Field>
             )}
           />
           <FormField
             control={form.control}
             name="customerPhone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("phone")}</FormLabel>
-                <FormControl>
-                  <AdminPhoneInput
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.customerPhoneRef.current = el;
-                    }}
-                    name={field.name}
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {returning
+            render={({ field, fieldState }) => (
+              <Field
+                label={t("phone")}
+                error={fieldState.error?.message}
+                help={returning
                     ? isGuestRecord(returning.customer)
                       ? [
                           returning.customer.totalOrders === 1
@@ -265,32 +242,38 @@ export function CustomerInfoSection() {
                           returning.filled ? t("filledFromCustomer") : null,
                         ].filter(Boolean).join(" ")
                     : t("phoneHelp")}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+              >
+                <AdminPhoneInput
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.customerPhoneRef.current = el;
+                  }}
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
+                />
+              </Field>
             )}
           />
           <FormField
             control={form.control}
             name="customerEmail"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("email")}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="email"
-                    {...field}
-                    value={field.value || ""}
-                    onChange={(e) => field.onChange(e.target.value || null)}
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.customerEmailRef.current = el;
-                    }}
-                    onKeyDown={(e) => handleKeyDown(e, refs.shippingAddressRef)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("email")} error={fieldState.error?.message}>
+                <Input
+                  type="email"
+                  {...field}
+                  value={field.value || ""}
+                  onChange={(e) => field.onChange(e.target.value || null)}
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.customerEmailRef.current = el;
+                  }}
+                  onKeyDown={(e) => handleKeyDown(e, refs.shippingAddressRef)}
+                />
+              </Field>
             )}
           />
         </CardContent>
@@ -326,25 +309,22 @@ export function CustomerInfoSection() {
           <FormField
             control={form.control}
             name="notes"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Textarea
-                    rows={3}
-                    aria-label={t("notes")}
-                    {...field}
-                    value={field.value || ""}
-                    // Cleared notes are "none" again, so undoing a note clears the save bar.
-                    onChange={(e) => field.onChange(e.target.value || null)}
-                    ref={(el) => {
-                      field.ref(el);
-                      refs.notesRef.current = el;
-                    }}
-                    onKeyDown={(e) => handleKeyDown(e, refs.productSearchInputRef)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field error={fieldState.error?.message}>
+                <Textarea
+                  rows={3}
+                  aria-label={t("notes")}
+                  {...field}
+                  value={field.value || ""}
+                  // Cleared notes are "none" again, so undoing a note clears the save bar.
+                  onChange={(e) => field.onChange(e.target.value || null)}
+                  ref={(el) => {
+                    field.ref(el);
+                    refs.notesRef.current = el;
+                  }}
+                  onKeyDown={(e) => handleKeyDown(e, refs.productSearchInputRef)}
+                />
+              </Field>
             )}
           />
         </CardContent>

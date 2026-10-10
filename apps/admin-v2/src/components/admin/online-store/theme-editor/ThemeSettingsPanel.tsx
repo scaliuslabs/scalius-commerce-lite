@@ -24,7 +24,6 @@ import {
   type ResolvedStorefrontThemeLayout,
   type StorefrontNavigationSource,
 } from "@scalius/shared/storefront-theme";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
@@ -36,6 +35,7 @@ import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, Na
 import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
 import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
+import { Field } from "~/components/ui/field";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
@@ -97,8 +97,7 @@ function LayoutFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme })
   const set = <Key extends "container" | "radius" | "buttonShape">(key: Key, value: Theme["tokens"][Key]) =>
     setDraft((current) => ({ ...current, tokens: { ...current.tokens, [key]: value } }));
   const select = <Key extends "container" | "radius" | "buttonShape">(key: Key, values: readonly Theme["tokens"][Key][]) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={`theme-layout-${key}`}>{t(`layout_${key}`)}</Label>
+    <Field id={`theme-layout-${key}`} label={<>{t(`layout_${key}`)}</>}>
       <SearchableSelect
         id={`theme-layout-${key}`}
         value={theme.tokens[key]}
@@ -106,7 +105,7 @@ function LayoutFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme })
         onValueChange={(value) => set(key, value as Theme["tokens"][Key])}
         triggerClassName="w-full"
       />
-    </div>
+    </Field>
   );
   return (
     <>
@@ -169,8 +168,7 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
     <>
       <MediaField id={THEME_FIELD_IDS.logo} label={t("headerLogo")} help={t("headerLogoHelp")} {...image("logo")} />
       {brand.logo ? (
-        <div className="space-y-1.5">
-          <Label htmlFor={THEME_FIELD_IDS.logoWidth}>{t("logoWidth", { width: brand.logoWidth })}</Label>
+        <Field id={THEME_FIELD_IDS.logoWidth} label={<>{t("logoWidth", { width: brand.logoWidth })}</>}>
           <input
             id={THEME_FIELD_IDS.logoWidth}
             type="range"
@@ -182,7 +180,7 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
             className="h-11 w-full accent-primary sm:h-6"
             aria-valuetext={`${brand.logoWidth}px`}
           />
-        </div>
+        </Field>
       ) : null}
       <MediaField id={THEME_FIELD_IDS.footerLogo} label={t("footerLogo")} help={t("footerLogoHelp")} {...image("footerLogo")} />
       <MediaField id={THEME_FIELD_IDS.favicon} label={t("favicon")} {...image("favicon")} />
@@ -234,8 +232,7 @@ export function AnnouncementSettings({ theme, resolved, media, setDraft }: { the
   const block = useBlockChoice(theme, resolved, setDraft, media);
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="theme-top-bar">{t("topBar")}</Label>
+      <Field id="theme-top-bar" label={t("topBar")}>
         <SearchableSelect
           id="theme-top-bar"
           value={theme.blocks.topBar.variant}
@@ -247,7 +244,7 @@ export function AnnouncementSettings({ theme, resolved, media, setDraft }: { the
           onValueChange={block.set("topBar")}
           triggerClassName="w-full"
         />
-      </div>
+      </Field>
       {block.fields("topBar")}
     </div>
   );
@@ -278,8 +275,7 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
         title={t("menuStyle")}
         description={<>{t("menuStyleHelp")} <Link to="/admin/online-store/navigation" className="text-link hover:underline">{t("editMenus")}</Link></>}
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="theme-navigation-source">{t("menuSource")}</Label>
+        <Field id="theme-navigation-source" label={t("menuSource")}>
           <SearchableSelect
             id="theme-navigation-source"
             value={theme.blocks.navigation.source}
@@ -299,7 +295,7 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
             name={(source) => t(`menuSource_${source}` as MessageKey)}
             reason={fitReason}
           />
-        </div>
+        </Field>
         <VisualChoice
           label={t("menuStyleDesktop")}
           showLabel

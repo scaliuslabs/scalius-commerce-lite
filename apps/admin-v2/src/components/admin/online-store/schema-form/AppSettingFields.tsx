@@ -28,6 +28,7 @@ import {
   type AppSettingValue,
   type AppSettingValues,
 } from "./app-settings";
+import { Field } from "~/components/ui/field";
 
 type Messages = (key: keyof (typeof themeEditorMessages)["en"], vars?: Record<string, string | number>) => string;
 
@@ -74,14 +75,12 @@ function FieldLabel({ id, field }: { id: string; field: ThemeAppSettingField }) 
   );
 }
 
-/** A label, its control, then the help or the problem under it. */
+/** The setting's `Field`: optional ones say so (F7); help or the problem under the control. */
 function Labelled({ id, field, error, children }: { id: string; field: ThemeAppSettingField; error?: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <FieldLabel id={id} field={field} />
+    <Field id={id} label={field.label} optional={!field.required} help={field.help} error={error} noteId={`${id}-note`}>
       {children}
-      <Note id={id} help={field.help} error={error} />
-    </div>
+    </Field>
   );
 }
 

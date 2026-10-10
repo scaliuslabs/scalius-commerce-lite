@@ -42,7 +42,6 @@ function SoleMarket({ market }: { market: Market }) {
     <Link
       to="/admin/settings/markets/$marketId"
       params={{ marketId: market.id }}
-      aria-label={t("edit", { name: market.name })}
       className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <span className="min-w-0 flex-1 space-y-1">

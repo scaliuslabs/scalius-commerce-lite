@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { REVIEW_REJECTION_REASONS, type ReviewRejectionReason } from "@scalius/shared/reviews";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { reviewsMessages } from "~/i18n/reviews";
@@ -58,13 +58,10 @@ export function RejectReviewsDialog({
             onReject(reason);
           }}
         >
-          <Label htmlFor={fieldId}>{t("reason")}</Label>
-          <SearchableSelect
-            id={fieldId}
-            required
-            value={reason}
-            aria-invalid={missingReason}
-            aria-describedby={missingReason ? `${fieldId}-error` : undefined}
+          <Field id={fieldId} label={t("reason")} error={missingReason ? t("reasonPlaceholder") : undefined}>
+            <SearchableSelect
+              required
+              value={reason}
             placeholder={t("reasonPlaceholder")}
             onValueChange={(value) => {
               setReason(value as ReviewRejectionReason);
@@ -72,8 +69,8 @@ export function RejectReviewsDialog({
             }}
             triggerClassName="w-full"
             options={REVIEW_REJECTION_REASONS.map((value) => ({ value, label: t(`reason.${value}`) }))}
-          />
-          {missingReason ? <p id={`${fieldId}-error`} role="alert" className="text-body text-destructive">{t("reasonPlaceholder")}</p> : null}
+            />
+          </Field>
         </form>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>

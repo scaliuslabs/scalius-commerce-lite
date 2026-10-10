@@ -11,11 +11,11 @@ import { compareThemeDocuments, type StorefrontSection, type StorefrontThemeDocu
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { useChangeText } from "./ThemeHistory";
+import { Field } from "~/components/ui/field";
 
 export function PublishDialog({ open, onOpenChange, live, draft, unopenedAi, sectionName, publishing, onOpenSection, onPublish }: {
   open: boolean;
@@ -82,11 +82,9 @@ export function PublishDialog({ open, onOpenChange, live, draft, unopenedAi, sec
               </ul>
             </section>
           ) : null}
-          <div className="space-y-1">
-            <Label htmlFor="theme-publish-note">{t("publishNote")}</Label>
+          <Field id="theme-publish-note" label={t("publishNote")} help={t("publishNoteHelp")}>
             <Textarea id="theme-publish-note" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} aria-describedby="theme-publish-note-help" />
-            <p id="theme-publish-note-help" className="text-body text-muted-foreground">{t("publishNoteHelp")}</p>
-          </div>
+          </Field>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>

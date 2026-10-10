@@ -211,12 +211,13 @@ function RatesEditor({
               </div>
               <SettingsField
                 id={id("fee")}
-                label={`${t("fee")} (${symbol})`}
+                label={t("fee")}
                 help={rate.kind === "pickup" ? t("pickupFeeHelp") : undefined}
                 error={errors.fee ? t(errors.fee, { max: formatNumber(MAX_AMOUNT) }) : null}
               >
                 <Input
                   id={id("fee")}
+                  prefix={symbol}
                   inputMode={wholeTaka ? "numeric" : "decimal"}
                   autoComplete="off"
                   value={rate.fee}
@@ -227,12 +228,13 @@ function RatesEditor({
             </div>
             <SettingsField
               id={id("freeOver")}
-              label={`${t("freeOver")} (${symbol})`}
+              label={t("freeOver")}
               help={t("freeOverHelp")}
               error={errors.freeOver ? t(errors.freeOver, { max: formatNumber(MAX_AMOUNT) }) : null}
             >
               <Input
                 id={id("freeOver")}
+                prefix={symbol}
                 inputMode={wholeTaka ? "numeric" : "decimal"}
                 autoComplete="off"
                 className="sm:max-w-48"

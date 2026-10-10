@@ -9,7 +9,7 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { NumberInput } from "~/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { SearchableSelect } from "~/components/ui/searchable-select";
@@ -88,33 +88,31 @@ function StoreAlertLevel({ level, canEdit, open, onOpenChange }: {
         <form
           method="post"
           noValidate
-          className="space-y-2"
+          className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (valid && !save.isPending) save.mutate(draft);
           }}
         >
-          <Label htmlFor="inventory-store-alert-level">{t("storeAlertLevel")}</Label>
-          <div className="flex flex-wrap items-center gap-2">
+          <Field
+            id="inventory-store-alert-level"
+            label={t("storeAlertLevel")}
+            help={t("storeAlertLevelHelp")}
+            error={valid ? undefined : t("alertLevelInvalid")}
+          >
+            <div className="flex flex-wrap items-center gap-2">
             <span className="text-body">{t("alertWhen")}</span>
             <NumberInput
               id="inventory-store-alert-level"
               integer
               className="w-24"
               value={draft}
-              aria-invalid={valid ? undefined : true}
-              aria-describedby="inventory-store-alert-level-help"
               onValueChange={setDraft}
             />
             <span className="text-body">{t("alertOrFewer")}</span>
-          </div>
-          <p
-            id="inventory-store-alert-level-help"
-            className={valid ? "text-body text-muted-foreground" : "text-body text-destructive"}
-          >
-            {valid ? t("storeAlertLevelHelp") : t("alertLevelInvalid")}
-          </p>
-          <div className="flex justify-end gap-2 pt-2">
+            </div>
+          </Field>
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{r("cancel")}</Button>
             <Button type="submit" disabled={!valid || draft === level} loading={save.isPending}>{r("save")}</Button>
           </div>

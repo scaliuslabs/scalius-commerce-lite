@@ -230,7 +230,8 @@ describe("markets settings", () => {
     expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Sell in another country"]);
     expect(container.textContent).not.toContain("Web address");
     // The whole row opens the market: one link around the name and the sentence, not only the name.
-    const rows = container.querySelectorAll("a[aria-label='Edit Bangladesh']");
+    // Named by its own text (WCAG 2.5.3): no aria-label that hides the sentence.
+    const rows = [...container.querySelectorAll<HTMLAnchorElement>("a[href='/admin/settings/markets/$marketId']")];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.textContent).toContain("Your store sells in Bangladesh");
   });
@@ -337,7 +338,7 @@ describe("markets settings", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Adjusted product prices"));
     const adjusted = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Adjusted product prices"))!;
     act(() => adjusted.querySelector<HTMLButtonElement>("button[role=radio]")!.click());
-    await vi.waitFor(() => expect(container.textContent).toContain("Price adjustment (%)"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Price adjustment"));
     const input = container.querySelector<HTMLInputElement>("#market-adjustment")!;
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     act(() => {

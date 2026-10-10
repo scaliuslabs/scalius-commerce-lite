@@ -12,13 +12,13 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { useMessages } from "~/i18n";
 import { settingsMarketsMessages, type SettingsMarketsMessageKey } from "~/i18n/settings-markets";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useCreateMarket } from "~/lib/api-query-options/markets";
 import { MarketCountryPicker } from "./MarketCountryPicker";
 import { createMarketBody } from "./market-form";
+import { Field } from "~/components/ui/field";
 
 export function CreateMarketDialog({ open, onOpenChange, taken }: {
   open: boolean;
@@ -75,8 +75,7 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
           </DialogHeader>
           <form id="market-create-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
             {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
-            <div className="space-y-1.5">
-              <Label htmlFor="market-create-name">{t("name")}</Label>
+            <Field id="market-create-name" label={t("name")}>
               <Input
                 id="market-create-name"
                 value={name}
@@ -91,9 +90,8 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
               <p id="market-create-name-note" className={errors.name ? "text-body text-destructive" : "text-body text-muted-foreground"}>
                 {t(errors.name ?? "nameHelp")}
               </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="market-create-countries">{t("countries")}</Label>
+            </Field>
+            <Field id="market-create-countries" label={t("countries")}>
               <MarketCountryPicker
                 id="market-create-countries"
                 selected={countries}
@@ -108,7 +106,7 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
               {errors.countries ? (
                 <p id="market-create-countries-note" className="text-body text-destructive">{t(errors.countries)}</p>
               ) : null}
-            </div>
+            </Field>
           </form>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={create.isPending} onClick={requestClose}>{t("cancel")}</Button>

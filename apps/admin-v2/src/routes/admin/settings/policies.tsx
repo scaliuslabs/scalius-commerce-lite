@@ -23,6 +23,8 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { policiesMessages } from "~/i18n/settings-policies";
+import { FieldRow } from "~/components/ui/field";
+import { formMessages } from "~/i18n/forms";
 
 // The return policy lives in the SEO settings document; only its
 // `returnPolicy` part is read and written here (the POST is partial).
@@ -55,6 +57,7 @@ function validDays(value: number | null): boolean {
 function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
   const t = useMessages(policiesMessages);
   const common = useMessages(settingsMessages);
+  const forms = useMessages(formMessages);
   const { values, setValues, setValue, isLoadError, refetch } = useSettingsForm<SeoReturnPolicySettings>({
     label: t("returnsTitle"),
     queryKey: returnPolicyQuery.queryKey,
@@ -116,6 +119,7 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
             min="1"
             max="365"
             className="max-w-32"
+            suffix={forms("daysUnit")}
             disabled={!canEdit}
             value={values.returnWindowDays ?? ""}
             aria-invalid={!validDays(values.returnWindowDays)}
@@ -125,7 +129,7 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
         </SettingsField>
       ) : null}
       {accepts ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FieldRow>
           <SettingsField id="return-fees" label={t("fees")}>
             <SearchableSelect
               id="return-fees"
@@ -146,7 +150,7 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
               options={[{ value: "mail", label: t("mail") }, { value: "in_store", label: t("inStore") }, { value: "both", label: t("both") }]}
             />
           </SettingsField>
-        </div>
+        </FieldRow>
       ) : null}
       {values.enabled ? (
         <SettingsField id="return-url" label={t("policyUrl")} help={t("policyUrlHelp")} error={urlValid ? null : t("policyUrlInvalid")}>

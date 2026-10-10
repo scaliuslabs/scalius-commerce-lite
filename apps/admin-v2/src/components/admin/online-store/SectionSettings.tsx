@@ -26,7 +26,6 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { MediaManager, type MediaFile } from "~/components/admin/media-manager";
 import { useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { useMessages } from "~/i18n";
@@ -45,6 +44,7 @@ import {
 } from "./schema-form/resource-fields";
 import { SchemaSettingsForm } from "./schema-form/SchemaSettingsForm";
 import { blockListSpec } from "./theme-editor/editor-state";
+import { Field } from "~/components/ui/field";
 
 type Section = StorefrontSection;
 
@@ -143,8 +143,7 @@ function SlideText({ id, label, help, value, max, error, onChange }: {
 }) {
   const note = error ?? help;
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <Field id={id} label={label}>
       <Input
         id={id}
         value={value}
@@ -158,7 +157,7 @@ function SlideText({ id, label, help, value, max, error, onChange }: {
       ) : help ? (
         <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
       ) : null}
-    </div>
+    </Field>
   );
 }
 

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
+import { ChoiceField } from "~/components/ui/field";
 
 const RULES = [
   "productRuleDenominations",
@@ -61,12 +61,12 @@ export function GiftCardProductCard({ form, readOnly }: {
       defaultOpen={isGiftCard}
       summary={<p className="text-body text-muted-foreground">{t(isGiftCard ? "productSummaryOn" : "productSummaryOff")}</p>}
     >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="product-gift-card">{t("productSwitch")}</Label>
-            <p id="product-gift-card-help" className="text-body text-muted-foreground">{t("productSwitchHelp")}</p>
-          </div>
-          <span className="flex h-lh items-center">
+        <ChoiceField
+          id="product-gift-card"
+          controlAt="end"
+          label={t("productSwitch")}
+          help={t("productSwitchHelp")}
+          control={(
             <Switch
               id="product-gift-card"
               checked={isGiftCard}
@@ -74,8 +74,8 @@ export function GiftCardProductCard({ form, readOnly }: {
               aria-describedby="product-gift-card-help"
               onCheckedChange={change}
             />
-          </span>
-        </div>
+          )}
+        />
         {isGiftCard ? (
           <div className="space-y-2 border-t pt-3">
             <ul className="list-disc space-y-1 ps-5 text-body text-muted-foreground">

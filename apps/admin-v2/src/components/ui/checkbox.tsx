@@ -4,6 +4,10 @@ import { Check, Minus } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
 
+/**
+ * A 16px box with a 24px hit area (44px on phones, C6). The hit area hangs
+ * outside the box by negative margins, so the box takes 16px in the layout.
+ */
 const Checkbox = React.forwardRef<
   React.ComponentRef<typeof CheckboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
@@ -11,15 +15,21 @@ const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      "peer group size-4 shrink-0 rounded border border-input bg-card hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground",
+      "peer group -m-3.5 inline-flex size-11 shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:-m-1 sm:size-6",
       className,
     )}
     {...props}
   >
-    <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
-      <Check className="size-3.5 group-data-[state=indeterminate]:hidden" strokeWidth={3} />
-      <Minus className="hidden size-3.5 group-data-[state=indeterminate]:block" strokeWidth={3} />
-    </CheckboxPrimitive.Indicator>
+    <span
+      aria-hidden="true"
+      // Checked and mixed share the filled look; unchecked overrides it (fewer state rules).
+      className="flex size-4 items-center justify-center rounded border border-primary bg-primary text-primary-foreground group-hover:border-muted-foreground group-aria-invalid:border-destructive group-data-[state=unchecked]:border-input group-data-[state=unchecked]:bg-card"
+    >
+      <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
+        <Check className="size-3.5 group-data-[state=indeterminate]:hidden" strokeWidth={3} />
+        <Minus className="hidden size-3.5 group-data-[state=indeterminate]:block" strokeWidth={3} />
+      </CheckboxPrimitive.Indicator>
+    </span>
   </CheckboxPrimitive.Root>
 ));
 Checkbox.displayName = CheckboxPrimitive.Root.displayName;

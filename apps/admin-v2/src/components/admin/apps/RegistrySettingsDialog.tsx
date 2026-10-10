@@ -8,7 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { Skeleton } from "~/components/ui/skeleton";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
@@ -109,22 +109,17 @@ function SettingsForm({ settings, canEdit, onClose }: { settings: AppRegistrySet
   };
 
   const field = (id: string, label: string, value: string, onChange: (value: string) => void, error: RowErrors[string] | undefined, mono = false) => (
-    <div className="flex min-w-0 flex-col gap-1">
-      <Label htmlFor={`${base}-${id}`}>{label}</Label>
+    <Field id={`${base}-${id}`} label={label} error={error ? t(error) : undefined}>
       <Input
-        id={`${base}-${id}`}
         value={value}
         disabled={save.isPending}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${base}-${id}-error` : undefined}
         autoComplete="off"
         spellCheck={false}
         // eslint-disable-next-line shadcn/no-restyle -- a pasted key is read as code
         className={mono ? "font-mono" : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
-      {error ? <p id={`${base}-${id}-error`} className="text-body text-destructive">{t(error)}</p> : null}
-    </div>
+    </Field>
   );
 
   return (

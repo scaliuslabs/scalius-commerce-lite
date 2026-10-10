@@ -3,7 +3,7 @@
 // store language, time zone (the browser's) and units (the country's). One
 // request writes them all; the API refuses a store that is no longer new.
 // A store in Bangladesh then sees the Bangladesh pack step.
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminSettingsStoreSetup } from "@scalius/api-client/sdk";
@@ -14,7 +14,7 @@ import { defaultCurrencyForCountry, defaultUnitSystemForCountry } from "@scalius
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { LOCALES, getLocale, useMessages } from "~/i18n";
@@ -27,21 +27,6 @@ import { setStoreTimeZone } from "~/lib/store-time-zone";
 import { browserTimeZone, timeZoneOptions } from "~/lib/time-zone-options";
 import type { StoreSetupStatus } from "~/lib/api-query-options/store-defaults";
 import { BangladeshPackStep } from "./BangladeshPackStep";
-
-/** A labelled field with its help or error line (the sign-in screens' shape, without their icons). */
-function Field({ id, label, error, hint, children }: { id: string; label: string; error?: string | null; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error || hint ? (
-        <p id={`${id}-message`} className={error ? "text-body text-destructive" : "text-body text-muted-foreground"}>
-          {error || hint}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 interface Draft {
   storeName: string;
@@ -188,7 +173,7 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
           }}
         />
       </Field>
-      <Field id="setup-country" label={t("country")} hint={t("countryHelp")}>
+      <Field id="setup-country" label={t("country")} help={t("countryHelp")}>
         <SearchableSelect
           id="setup-country"
           value={draft.countryCode}
@@ -202,7 +187,7 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
       <Field
         id="setup-currency"
         label={t("currency")}
-        hint={status.currencyLocked ? t("currencyLocked", { code: draft.currencyCode }) : t("currencyHelp")}
+        help={status.currencyLocked ? t("currencyLocked", { code: draft.currencyCode }) : t("currencyHelp")}
       >
         <SearchableSelect
           id="setup-currency"
@@ -227,7 +212,7 @@ export function StoreSetupForm({ status }: { status: StoreSetupStatus }) {
           onValueChange={(locale) => setDraft((current) => ({ ...current, locale }))}
         />
       </Field>
-      <Field id="setup-time-zone" label={t("timeZone")} hint={t("timeZoneHelp")}>
+      <Field id="setup-time-zone" label={t("timeZone")} help={t("timeZoneHelp")}>
         <SearchableSelect
           id="setup-time-zone"
           value={draft.timeZone}

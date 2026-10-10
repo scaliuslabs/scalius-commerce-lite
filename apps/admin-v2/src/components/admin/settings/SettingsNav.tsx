@@ -30,18 +30,18 @@ function StoreIdentity({ variant }: { variant: "sidebar" | "rows" }) {
   if (!store.canView) return null;
   const sidebar = variant === "sidebar";
   const name = store.name ? (
-    <span className={cn("block truncate", sidebar ? "text-nav font-medium text-sidebar-foreground" : "text-heading-sm")}>{store.name}</span>
+    <span className={cn("block truncate", sidebar ? "text-nav font-medium text-sidebar-foreground" : "text-heading-sm")} title={store.name}>{store.name}</span>
   ) : !store.loaded ? null : (
     <Link
       to="/admin/settings/store"
       hash="business"
-      className={cn("block truncate hover:underline", sidebar ? "text-nav font-medium text-sidebar-foreground underline" : "text-heading-sm text-link")}
+      className={cn("block truncate py-0.5 hover:underline", sidebar ? "text-nav font-medium text-sidebar-foreground underline" : "text-heading-sm text-link")}
     >
       {t("addStoreName")}
     </Link>
   );
   const host = store.host ? (
-    <span className={cn("block truncate", sidebar ? "text-caption text-sidebar-muted-foreground" : "text-body text-muted-foreground")}>{store.host}</span>
+    <span className={cn("block truncate", sidebar ? "text-caption text-sidebar-muted-foreground" : "text-body text-muted-foreground")} title={store.host}>{store.host}</span>
   ) : null;
   return sidebar ? (
     <div className="flex min-h-11 min-w-0 items-center gap-3 px-2">
@@ -128,7 +128,7 @@ export function SettingsNav({ variant, onNavigate }: { variant: "sidebar" | "row
         <input
           type="search"
           {...field}
-          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover ps-8 pe-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-8"
+          className="h-11 w-full rounded-lg border border-sidebar-border bg-sidebar-hover ps-8 pe-2 text-body-lg text-sidebar-foreground outline-none placeholder:text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring sm:text-nav md:h-9"
         />
       ) : (
         <Input

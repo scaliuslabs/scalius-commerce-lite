@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { CustomerActivity } from "./CustomerActivity";
@@ -36,6 +36,8 @@ import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
+import { Field } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -161,28 +163,22 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
         <CardHeader>
           <CardTitle>{t("contact")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <FormField
             control={form.control}
             name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("name")}</FormLabel>
-                <FormControl>
-                  <Input required autoComplete="off" {...field} />
-                </FormControl>
-                {record?.kind === "guest" ? <FormDescription>{t("guestNameHint")}</FormDescription> : null}
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("name")} help={record?.kind === "guest" ? t("guestNameHint") : undefined} error={fieldState.error?.message}>
+                <Input required autoComplete="off" {...field} />
+              </Field>
             )}
           />
           <FormField
             control={form.control}
             name="phone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("phone")}</FormLabel>
-                <FormControl>
+            render={({ field, fieldState }) => (
+              <div className="flex flex-col gap-2">
+                <Field label={t("phone")} help={phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
                   <AdminPhoneInput
                     value={field.value}
                     onChange={(value) => {
@@ -191,30 +187,24 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                     }}
                     required={phoneRequired}
                   />
-                </FormControl>
-                {phoneRequired ? null : <FormDescription>{t("phoneOptionalHint")}</FormDescription>}
-                <FormMessage />
+                </Field>
                 {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
-              </FormItem>
+              </div>
             )}
           />
           <FormField
             control={form.control}
             name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("email")}</FormLabel>
-                <FormControl>
-                  {/* Email is optional: clearing it removes it. */}
-                  <Input
-                    type="email"
-                    {...field}
-                    value={field.value || ""}
-                    onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            render={({ field, fieldState }) => (
+              <Field label={t("email")} error={fieldState.error?.message}>
+                {/* Email is optional: clearing it removes it. */}
+                <Input
+                  type="email"
+                  {...field}
+                  value={field.value || ""}
+                  onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
+                />
+              </Field>
             )}
           />
         </CardContent>
@@ -226,7 +216,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CardHeader>
             <CardTitle>{ta("firstAddress")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <p className="text-body text-muted-foreground">{ta("firstAddressHelp")}</p>
             <AddressFields
               idPrefix="new-customer-address"
@@ -279,7 +269,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <div className="space-y-4">{details}</div>
         </div>
       ) : (
-        <div className="mx-auto max-w-2xl space-y-4">{details}</div>
+        <Page width="task" className="space-y-4">{details}</Page>
       )}
     </FormContainer>
   );

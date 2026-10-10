@@ -25,6 +25,7 @@ import {
   type ReviewSettingsError,
   type ReviewSettingsForm,
 } from "./reviews-api";
+import { Field } from "~/components/ui/field";
 
 /** A newer saved version under the form: edited fields keep the edit, the rest update. */
 function keepEdits(form: ReviewSettingsForm, previous: ReviewSettingsForm, saved: ReviewSettingsForm): ReviewSettingsForm {
@@ -180,7 +181,7 @@ function SettingsForm({
                 <span className="flex h-lh items-center">
                   <RadioGroupItem id={`${formId}-${mode}`} value={mode} aria-describedby={`${formId}-${mode}-help`} />
                 </span>
-                <div className="flex flex-col gap-1">
+                <div className="flex min-w-0 flex-col gap-1">
                   <Label htmlFor={`${formId}-${mode}`}>{t(`moderation.${mode}`)}</Label>
                   <p id={`${formId}-${mode}-help`} className="text-body text-muted-foreground">{t(`moderation.${mode}Help`)}</p>
                 </div>
@@ -196,8 +197,7 @@ function SettingsForm({
             <Label htmlFor={ids.requests}>{t("requestsEnabled")}</Label>
             <Switch id={ids.requests} disabled={saving} checked={form.requestsEnabled} onCheckedChange={(checked) => set("requestsEnabled", checked)} />
           </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor={ids.delay}>{t("requestDelay")}</Label>
+          <Field id={ids.delay} label={t("requestDelay")}>
             <Input
               id={ids.delay}
               inputMode="numeric"
@@ -211,30 +211,27 @@ function SettingsForm({
             <p id={`${ids.delay}-help`} className={invalid === "delayInvalid" ? "text-body text-destructive" : "text-body text-muted-foreground"}>
               {invalid === "delayInvalid" ? t("delayInvalid") : t("requestDelayHelp")}
             </p>
-          </div>
+          </Field>
           <p className="text-body text-muted-foreground">
             {t("requestChannels")}{" "}
             <Link to="/admin/settings/notifications" className="text-link hover:underline">{t("notificationsLink")}</Link>
           </p>
         </fieldset>
 
-        <div className="flex flex-col gap-1 border-t pt-4">
-          <Label htmlFor={ids.words}>{t("blockWords")}</Label>
-          <Textarea
+        <div className="border-t pt-4">
+          <Field
             id={ids.words}
-            rows={4}
-            disabled={saving}
-            value={form.blockWords}
-            aria-invalid={invalid === "blockWordsTooMany" || invalid === "blockWordTooLong" || undefined}
-            aria-describedby={`${ids.words}-help`}
-            onChange={(event) => set("blockWords", event.target.value)}
-          />
-          <p
-            id={`${ids.words}-help`}
-            className={invalid === "blockWordsTooMany" || invalid === "blockWordTooLong" ? "text-body text-destructive" : "text-body text-muted-foreground"}
+            label={t("blockWords")}
+            help={t("blockWordsHelp")}
+            error={invalid === "blockWordsTooMany" || invalid === "blockWordTooLong" ? t(invalid) : undefined}
           >
-            {invalid === "blockWordsTooMany" || invalid === "blockWordTooLong" ? t(invalid) : t("blockWordsHelp")}
-          </p>
+            <Textarea
+              rows={4}
+              disabled={saving}
+              value={form.blockWords}
+              onChange={(event) => set("blockWords", event.target.value)}
+            />
+          </Field>
         </div>
       </form>
       <DialogFooter>

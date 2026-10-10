@@ -7,7 +7,8 @@ import { storePendingTwoFactorMethods } from "@/lib/two-factor-pending";
 import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import { authFailureMessage, newPasswordError, readAuthFailure, type AuthMessage } from "./auth-error";
-import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
+import { AuthAlert, AuthHeader, PasswordInput, linkClassName } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 import { handOffTwoFactorSetup } from "./two-factor-setup-handoff";
 
 type Step = "checking" | "form" | "expired" | "used" | "cancelled" | "done";
@@ -225,7 +226,7 @@ export function ResetPasswordForm() {
       <AuthHeader title={t(invite ? "inviteTitle" : "resetTitle")} description={t(invite ? "inviteDescription" : "resetDescription")} />
       <form method="post" action="/auth/reset-password" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <AuthAlert message={failure} />
-        <Field id="new-password" label={t(invite ? "password" : "newPassword")} error={passwordMessage} hint={t("passwordHint")}>
+        <Field id="new-password" label={t(invite ? "password" : "newPassword")} error={passwordMessage} help={t("passwordHint")}>
           <PasswordInput
             ref={passwordRef}
             id="new-password"
@@ -236,7 +237,6 @@ export function ResetPasswordForm() {
               setPassword(event.target.value);
               setFieldError(null);
             }}
-            {...describedBy("new-password", passwordMessage, t("passwordHint"))}
           />
         </Field>
         <Button type="submit" className="w-full" loading={isLoading}>

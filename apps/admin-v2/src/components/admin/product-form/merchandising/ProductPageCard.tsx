@@ -1,7 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
@@ -10,6 +9,7 @@ import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { productBaseSectionQueryOptions } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 interface PageSettings {
   pageTemplate: string | null;
@@ -58,8 +58,7 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
       <CardContent className="space-y-4">
         {draft ? (
           <>
-            <div className="space-y-2">
-              <Label htmlFor="product-page-template">{t("template")}</Label>
+            <Field id="product-page-template" label={t("template")} help={t("templateHelp")}>
               <TemplateSelect
                 id="product-page-template"
                 kind="product"
@@ -67,20 +66,21 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
                 disabled={readOnly}
                 onChange={(pageTemplate) => setDraft({ ...draft, pageTemplate })}
               />
-              <p className="text-body text-muted-foreground">{t("templateHelp")}</p>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="product-emi">{t("emiEligible")}</Label>
-                <p className="text-body text-muted-foreground">{t("emiEligibleHelp")}</p>
-              </div>
+            </Field>
+            <ChoiceField
+              id="product-emi"
+              controlAt="end"
+              label={t("emiEligible")}
+              help={t("emiEligibleHelp")}
+              control={(
               <Switch
                 id="product-emi"
                 checked={draft.emiEligible}
                 disabled={readOnly}
                 onCheckedChange={(emiEligible) => setDraft({ ...draft, emiEligible })}
               />
-            </div>
+              )}
+            />
           </>
         ) : (
           <Skeleton className="h-28 w-full" />

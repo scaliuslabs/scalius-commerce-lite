@@ -26,7 +26,7 @@ import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NumberInput } from "~/components/ui/number-input";
+import { NumberInput, PercentInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
@@ -62,6 +62,7 @@ import {
   withSubfolder,
   type MarketForm,
 } from "./market-form";
+import { FieldRow } from "~/components/ui/field";
 
 function displayName(code: string, type: "currency"): string {
   try {
@@ -289,7 +290,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
         <>
           <p className="text-body text-muted-foreground">{t("ownCurrencyNote", { currency: values.currencyCode, shop })}</p>
           <ExchangeRateSource values={values} canEdit={canEdit} setValues={setValues} />
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             {values.fxRateSource === MANUAL_FX_RATE_SOURCE_ID ? (
               <SettingsField id="market-rate" label={t("exchangeRate")} help={t("exchangeRateHelp", { currency: values.currencyCode, shop })} error={rateError}>
                 <Input
@@ -316,7 +317,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
                 onValueChange={(fxLockMinutes) => setValues((draft) => ({ ...draft, fxLockMinutes }))}
               />
             </SettingsField>
-          </div>
+          </FieldRow>
           {values.fxRateSource === MANUAL_FX_RATE_SOURCE_ID && values.fxRate && !rateError ? (
             <p className="text-body">
               {t("exchangeRateLine", { shop, rate: values.fxRate, currency: values.currencyCode })}
@@ -488,7 +489,7 @@ function PricingCard({ values, canEdit, backupIncrement, adjustmentError, setVal
         <>
           {own ? null : <p className="text-body text-muted-foreground">{t("sameCurrencyRate", { currency: values.currencyCode })}</p>}
           <SettingsField id="market-adjustment" label={t("adjustment")} help={t("adjustmentHelp")} error={adjustmentError}>
-            <NumberInput
+            <PercentInput
               id="market-adjustment"
               className="max-w-32"
               disabled={!canEdit}
@@ -496,7 +497,7 @@ function PricingCard({ values, canEdit, backupIncrement, adjustmentError, setVal
               onValueChange={(priceAdjustmentPercent) => setValues((draft) => ({ ...draft, priceAdjustmentPercent }))}
             />
           </SettingsField>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <SettingsField id="market-rounding" label={t("rounding")} help={t("roundingHelp")}>
               <SearchableSelect
                 id="market-rounding"
@@ -528,7 +529,7 @@ function PricingCard({ values, canEdit, backupIncrement, adjustmentError, setVal
                 onValueChange={(value) => setValues((draft) => ({ ...draft, priceEndingMinor: value ? Number(value) : null }))}
               />
             </SettingsField>
-          </div>
+          </FieldRow>
           {preview.length > 0 ? (
             <div className="space-y-1 text-body">
               <p className="font-medium">{t("previewTitle")}</p>

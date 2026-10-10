@@ -51,6 +51,7 @@ import {
   taxRegionName,
 } from "./tax-form";
 import { NONE, SwitchRow, useCanManageTaxes, useGroupName, useRefreshTaxes, useSaveFailure, useWriteFailure } from "./tax-shared";
+import { FieldRow } from "~/components/ui/field";
 
 const BD = "BD";
 
@@ -189,7 +190,7 @@ function RateForm({ rate, country, regions, config }: {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <SettingsField id="tax-rate-name" label={t("rateName")}>
           <Input id="tax-rate-name" maxLength={120} value={draft.name} onChange={(event) => set("name", event.target.value)} />
         </SettingsField>
@@ -201,13 +202,14 @@ function RateForm({ rate, country, regions, config }: {
           <Input
             id="tax-rate-percent"
             inputMode="decimal"
+            suffix="%"
             value={draft.percent}
             placeholder="15"
             aria-describedby="tax-rate-percent-note"
             onChange={(event) => set("percent", event.target.value)}
           />
         </SettingsField>
-      </div>
+      </FieldRow>
       <SettingsField id="tax-rate-group" label={t("rateGroup")}>
         <SearchableSelect
           id="tax-rate-group"

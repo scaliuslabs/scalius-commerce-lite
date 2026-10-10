@@ -10,6 +10,8 @@ import { setLocale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
 import { PaymentCard } from "./PaymentCard";
+// The refund dialog loads on first open; load it up front so a click shows it at once.
+import "./RefundDialog";
 
 const mocks = vi.hoisted(() => ({
   permissions: { canEditOrders: true, canRefundOrders: false, canUpdateOrderCod: false },
@@ -358,7 +360,7 @@ describe("PaymentCard", () => {
       await act(async () => submit.click());
       expect(mocks.refund).not.toHaveBeenCalled();
       expect(amount.getAttribute("aria-invalid")).toBe("true");
-      expect(document.querySelector("#refundAmount-help")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
+      expect(document.querySelector("#refundAmount-error")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
     });
 
     it("takes a cash refund typed in Bangla digits", async () => {

@@ -9,6 +9,7 @@ import { collectionFormMessages } from "~/i18n/collection-form";
 import { resourceMessages } from "~/i18n/resource";
 import type { Product } from "./types";
 import { ProductOptionMeta, ProductOptionsStatus, useProductOptions } from "./ProductPickerDialog";
+import { useFieldControl } from "~/components/ui/field";
 
 interface ProductPickerPopoverProps {
   triggerLabel: string;
@@ -21,6 +22,8 @@ interface ProductPickerPopoverProps {
 export function ProductPickerPopover({ triggerLabel, selectedCategoryIds = [], onSelectProduct }: ProductPickerPopoverProps) {
   const t = useMessages(collectionFormMessages);
   const tr = useMessages(resourceMessages);
+  // Inside a Field, the trigger is the field's control: its label names it.
+  const control = useFieldControl({});
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const categoryIds = useMemo(
@@ -39,7 +42,7 @@ export function ProductPickerPopover({ triggerLabel, selectedCategoryIds = [], o
       }}
     >
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} className="min-w-0 flex-1 justify-between">
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} {...control} className="min-w-0 flex-1 justify-between">
           <span className="truncate">{triggerLabel}</span>
           <ChevronDown className="text-muted-foreground" />
         </Button>

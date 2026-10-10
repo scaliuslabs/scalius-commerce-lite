@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { NumberInput } from "@/components/ui/number-input";
+import { NumberInput, PercentInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
@@ -18,6 +18,7 @@ import { CollapsibleCard } from "../CollapsibleCard";
 import { productBundlesQueryOptions, type BundleItem } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
+import { Field } from "~/components/ui/field";
 
 interface TierDraft {
   key: string;
@@ -46,7 +47,7 @@ const valid = (value: number | null): value is number => value !== null && Numbe
 /** Quantity bundles ("2 for 10% off", "3 for ৳900"): checkout prices them exactly as shown. */
 export default function BundlesCard({ productId, readOnly }: { productId: string; readOnly: boolean }) {
   const t = useMessages(productMerchandisingMessages);
-  const { code, symbol, fmt } = useCurrency();
+  const { code, fmt } = useCurrency();
   const queryClient = useQueryClient();
   const { data } = useQuery(productBundlesQueryOptions(productId));
   const loaded = useMemo(() => data?.items.map(fromItem), [data]);
@@ -144,8 +145,7 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                 const idFor = (field: string) => `bundle-${tier.key}-${field}`;
                 return (
                   <li key={tier.key} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-12">
-                    <div className="space-y-1 sm:col-span-2">
-                      <Label htmlFor={idFor("quantity")}>{t("bundleQuantity")}</Label>
+                    <Field id={idFor("quantity")} label={t("bundleQuantity")} className="sm:col-span-2">
                       <NumberInput
                         id={idFor("quantity")}
                         integer
@@ -153,9 +153,8 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                         disabled={readOnly}
                         onValueChange={(quantity) => update(tier.key, { quantity })}
                       />
-                    </div>
-                    <div className="space-y-1 sm:col-span-3">
-                      <Label htmlFor={idFor("type")}>{t("bundleDiscount")}</Label>
+                    </Field>
+                    <Field id={idFor("type")} label={t("bundleDiscount")} className="sm:col-span-3">
                       <SearchableSelect
                         id={idFor("type")}
                         value={tier.discountType}
@@ -164,33 +163,24 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                         triggerClassName="w-full"
                         options={[{ value: "percentage", label: t("bundlePercentOff") }, { value: "fixed_price", label: t("bundleSetPrice") }]}
                       />
-                    </div>
-                    <div className="space-y-1 sm:col-span-3">
+                    </Field>
+                    <Field id={idFor("value")} label={t(tier.discountType === "percentage" ? "bundlePercent" : "bundlePrice")} className="sm:col-span-3">
                       {tier.discountType === "percentage" ? (
-                        <>
-                          <Label htmlFor={idFor("value")}>{t("bundlePercent")}</Label>
-                          <NumberInput
-                            id={idFor("value")}
+                        <PercentInput
                             value={tier.discountPercentage}
                             disabled={readOnly}
                             onValueChange={(discountPercentage) => update(tier.key, { discountPercentage })}
-                          />
-                        </>
+                        />
                       ) : (
-                        <>
-                          <Label htmlFor={idFor("value")}>{t("bundlePrice", { symbol })}</Label>
-                          <MoneyInput
-                            id={idFor("value")}
+                        <MoneyInput
                             currencyCode={code}
                             value={tier.price}
                             disabled={readOnly}
                             onValueChange={(price) => update(tier.key, { price })}
-                          />
-                        </>
+                        />
                       )}
-                    </div>
-                    <div className="space-y-1 sm:col-span-4">
-                      <Label htmlFor={idFor("label")}>{t("bundleLabel")}</Label>
+                    </Field>
+                    <Field id={idFor("label")} label={t("bundleLabel")} className="sm:col-span-4">
                       <Input
                         id={idFor("label")}
                         value={tier.label}
@@ -199,7 +189,7 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                         disabled={readOnly}
                         onChange={(event) => update(tier.key, { label: event.target.value })}
                       />
-                    </div>
+                    </Field>
                     <div className="flex items-center justify-between gap-3 sm:col-span-12">
                       <p className="min-w-0 text-body text-muted-foreground">{summary(tier)}</p>
                       <div className="flex shrink-0 items-center gap-3">

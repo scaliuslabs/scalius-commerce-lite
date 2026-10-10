@@ -54,7 +54,8 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
       data-slot="topbar"
       className="relative flex h-14 shrink-0 items-center gap-1 px-2 text-topbar-foreground md:grid md:grid-cols-[1fr_minmax(0,40rem)_1fr] md:gap-2 nav:ps-0 print:hidden"
     >
-      <div className="flex min-w-0">
+      {/* No min-w-0: the 1fr track keeps the Menu button's width, so the pill never covers it (768-1099px). */}
+      <div className="flex">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -94,7 +95,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
         </Suspense>
         {/* The store menu: badge and name, like Shopify's store switcher. */}
         <UserMenu user={user} side="bottom">
-          <button type="button" aria-label={storeLabel ? undefined : t("accountMenu")} className={cn(TOP_BAR_BUTTON, "min-w-0 gap-2 px-1.5")}>
+          <button type="button" aria-label={storeLabel || t("accountMenu")} className={cn(TOP_BAR_BUTTON, "min-w-0 gap-2 px-1.5")}>
             <StoreBadge name={store.name} className="size-7 rounded-lg md:size-6 md:rounded-md" />
             {storeLabel ? <span className="hidden max-w-40 truncate text-nav font-medium xl:inline">{storeLabel}</span> : null}
           </button>

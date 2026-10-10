@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { Page } from "~/components/admin/resource/Page";
 
 import { SettingsField } from "~/components/admin/settings/SettingsPage";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -60,7 +61,7 @@ export function AccessFields({
         >
           {PRESETS.map((preset) => (
             <label key={preset} className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-body font-medium">
-              <RadioGroupItem value={preset} className="mt-0.5" />
+              <span className="flex h-lh items-center"><RadioGroupItem value={preset}/></span>
               <span className="space-y-0.5">
                 <span className="block">{t(`preset_${preset}`)}</span>
                 <span className="block font-normal text-muted-foreground">{t(`preset_${preset}Help`)}</span>
@@ -102,7 +103,7 @@ export function AccessFields({
 export function AccessPage({ title, children }: { title: ReactNode; children: ReactNode }) {
   const t = useMessages(aiAccessMessages);
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
+    <Page width="settings" className="space-y-4">
       <div className="flex min-h-11 items-center gap-2 pe-10">
         <Link
           to="/admin/settings/integrations"
@@ -114,6 +115,6 @@ export function AccessPage({ title, children }: { title: ReactNode; children: Re
         <h1 className="text-heading-lg">{title}</h1>
       </div>
       {children}
-    </div>
+    </Page>
   );
 }

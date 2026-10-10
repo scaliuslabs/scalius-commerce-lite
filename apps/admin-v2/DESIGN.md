@@ -19,7 +19,7 @@ Use the Tailwind names. Values for both themes are in `global.css`.
 | Charts | `bg-chart-1` to `bg-chart-5` |
 | Elevation | `shadow-card` · `shadow-button` (outline buttons) · `shadow-button-primary` · `shadow-button-critical` · `shadow-popover` · `shadow-modal` · pressed: `shadow-pressed`, `shadow-pressed-strong`. The card, button, popover and modal shadows draw their own 1px ring edge. |
 | Radius | `rounded-md` 6px (menu items) · `rounded-lg` 8px (controls, badges, navigation rows) · `rounded-xl` 12px (cards, popovers, menus, alerts) · `rounded-2xl` 16px (dialogs) |
-| Spacing | Tailwind 4px scale. Cards `p-4`. Page stacks `gap-4`. Table cells `px-3 py-1.5`; list tables (`DataTable`) `px-1.5 py-1.5`, `pl-3`/`pr-3` at the table's edges. Page content `max-w-7xl`, padding `px-3 sm:px-4 md:px-6`. |
+| Spacing | Tailwind 4px scale. Cards `p-4`. Page stacks `gap-4`. Table cells `px-3 py-1.5`; list tables (`DataTable`) `px-1.5 py-1.5`, `pl-3`/`pr-3` at the table's edges. Page content width by page kind (`Page`, S8), padding `px-3 sm:px-4 md:px-6`. |
 
 ## Type
 
@@ -79,12 +79,12 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 | Need | Use |
 | --- | --- |
-| Action | `Button`. Variants: `default` primary, `outline` secondary, `secondary` neutral, `ghost` tertiary and icon, `link` plain, `destructive` critical. Sizes (phone/`sm` up): `default` 44/36px, `sm` 36/32, `lg` 44, `icon` 44/36, `icon-sm` 44/28. |
+| Action | `Button`. Variants: `default` primary, `outline` secondary, `secondary` neutral, `ghost` tertiary and icon, `link` plain, `destructive` critical. Sizes (phone/`sm` up): `default` 44/36px, `sm` 44/32 (phones get the 44px touch height, C6), `lg` 44, `icon` 44/36, `icon-sm` 44/28. |
 | Section | `Card` with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. |
 | Status | `Badge`. Use `default` (strong) only for counts, and the tone variants per the status table below. |
 | Page message | `Alert`, with a tone variant. |
 | List | `Table` inside a `Card`, with `Tabs` above. Right-align numeric columns (`data-numeric`). |
-| Fields | `Input`, `Textarea`, `SearchableSelect`, `DateInput`, `Checkbox`, `RadioGroup`, `Switch`, with `Label` and `Form*`. |
+| Fields | `Field` (label, control, help or error) around `Input`, `Textarea`, `SearchableSelect`, `DateInput`, `NumberInput`, `MoneyInput`, `PercentInput`, `CostInput`; `ChoiceField` for one `Checkbox`, `Switch` or radio; `FieldSet` over a group; `ReadOnlyValue` for a value that cannot change here. See [Fields](#fields). |
 | Small edit or confirmation | `Dialog`: a bottom sheet on phones, centred from `sm`. |
 | Destructive or irreversible confirmation | `AlertDialog`: no outside-click dismiss. The title names the object: "Delete 'Cotton panjabi'?". |
 | In-context preview | `Sheet`. |
@@ -116,9 +116,22 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 - Use `LocationPicker` (`components/admin/location/`) wherever the dashboard picks a delivery address: City, then Thana, then Area, each filtered by the level above.
 - Never use `NativeSelect`, Radix Select or a raw `<select>` (lint).
 
+### Fields
+
+Code: `components/ui/field.tsx` (F1). The reference is the expanded variant row.
+
+- `Field` draws the label (`field-label`), the control (`field-control`), then the help (`field-help`) or, while the value is wrong, the error (`field-error`) in its place, 4px apart (S2, S3). It gives the control its `id`, `aria-describedby` and `aria-invalid`: `Input`, `Textarea`, `NumberInput`, `MoneyInput`, `SearchableSelect` and `DateInput` read them (`useFieldControl`), and whatever the control sets itself wins. One control per field; a second control inside it passes its own `id`. `optional` adds "(optional)"; required fields carry no mark (F7). `hideLabel` keeps the label for screen readers only. `labelAction` puts a `FieldAction` ("Generate code", "Done") at the end of the label line. With react-hook-form: `<FormField render={({ field, fieldState }) => <Field label=… error={fieldState.error?.message}><Input {...field} /></Field>} />`.
+- `FieldGroup` stacks fields 16px apart (`inset`: 12px inside an `Inset`). `FieldRow` puts fields side by side on one grid of equal columns (2, or `columns={3}`), tops aligned (`inset`: 12px inside an `Inset`); two columns go to one when the row itself is narrower than 448px (a phone, a side column), three columns below 640px.
+- `ChoiceField` is one checkbox, switch or radio with its label after it and help under the label (F2); `controlAt="end"` puts a switch for a setting that applies at once at the end of the row.
+- `FieldSet` labels a group that is not one input (a picker with buttons, a radio list).
+- `ReadOnlyValue` shows a value as text under its label, "—" when empty (R5); `besideControls` puts it on the line of the inputs next to it.
+- `Inset` is the quiet box for detail that belongs to one row (K3).
+- Money: `MoneyInput` always shows the currency symbol inside the field before the amount ("৳ 720"), the store's own symbol for its currency; `CostInput` is a unit cost in the store currency that keeps paisa. Percentages use `PercentInput` ("%" after the number); other units pass `suffix` ("days", the weight unit). Never put a unit in the label (F3).
+
 ### Page patterns
 
-- `PageHeader` holds an optional back link, a `text-heading-lg` title that wraps and never truncates, badges, then secondary actions and one primary action on the right.
+- `PageHeader` (`components/admin/resource/PageHeader.tsx`, slot `page-header`) holds an optional back link, a `text-heading-lg` title (`page-title`) that wraps and never truncates, `status` badges and the `presence` slot on the title line, one `meta` line under it, then (`page-actions`) secondary `actions` (two buttons at most, the rest in a "More actions" menu) and the one `primaryAction` last. The presence slot is a 28px box on the 36px title line and renders nothing when empty, so people arriving never move the page.
+- `Page width="index|detail|form|settings|task"` (`resource/Page.tsx`) sets the page column (S8): lists `max-w-7xl`, a record's detail or form page `max-w-5xl`, settings `max-w-3xl`, one-card tasks `max-w-2xl`.
 - An empty state is one card with a short title ("No orders match these filters"), one sentence and one primary action. Filtered empties offer "Clear filters".
 - Help text is `text-body text-muted-foreground`. Error text is `text-body text-destructive`.
 
@@ -199,7 +212,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| F1 | One `Field` primitive (`components/ui/field.tsx`): label, control, help, error. Never write a local `Field`, `FormItem` with `space-y-*`, or a bare `<Label>` beside a control. | lint → no `function *Field(` outside `components/ui`; no `space-y-*` on a parent of `Label` |
+| F1 | One `Field` primitive (`components/ui/field.tsx`): label, control, help, error. Never write a local `Field`, a label stack with `space-y-*`, or a bare `<Label>` beside a control. | lint (`fieldRules` in `eslint.config.js`) → no `*Field` function outside `components/ui` that renders a `Label` with a text control; no `Label` directly inside a `space-y-*` parent; no `Label` followed by a sibling text control |
 | F2 | The label is above the control, sentence case, 1–3 words, `text-body font-medium`. A single checkbox or switch puts its label after the control on the same line. | review |
 | F3 | Units and currency are a prefix or suffix inside the control (`৳`, `g`, `%`), never in the label ("Price (৳)"). | harness → no visible `label` text matches `/\(.{1,3}\)$/` |
 | F4 | Money, quantities, weights and percentages use `MoneyInput`/`NumberInput`: tabular digits, a fixed width (`w-40`, `w-32` for quantities) in dense rows, full column width in forms. | review |
@@ -219,7 +232,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | C4 | Order: secondary actions, then the primary at the end. More than two secondary actions go into "More actions". | harness → `[data-slot=page-actions]`: ≤ 3 visible buttons; primary is last |
 | C5 | Never a disabled primary as the only cue. Disabled buttons say why (tooltip or help line). | review |
 | C6 | Touch targets: ≥24×24px everywhere, ≥44px tall below 640px. A 16px checkbox gets a 24px (44px on phones) hit area. | harness → `button,a[href],[role=checkbox],[role=switch],[role=radio],[role=tab]`: hit box ≥ 24×24; ≥ 44 tall under 640 |
-| C7 | Icon-only buttons have an accessible name and a tooltip. | harness → every visible `button` has text, `aria-label` or `aria-labelledby` |
+| C7 | Icon-only buttons have an accessible name and a tooltip. | lint (`buttonRules`: a `Button` with an icon size needs `aria-label`) · harness → every visible `button` has text, `aria-label` or `aria-labelledby` |
 | C8 | Links are `text-link`. Underline only on hover, except inside running text. | review |
 
 ### Card and form section
@@ -228,7 +241,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | --- | --- | --- |
 | K1 | A card has a title (`text-heading-sm`) and, at most, one sentence of description. Its one action sits in the title row (`CardHeading`). | review |
 | K2 | Sections inside a card are separated by `border-t` and 16px, never by nested cards. | lint (rule 13) |
-| K3 | A quiet inset (`bg-muted rounded-lg p-3`, no shadow) holds detail that belongs to one row (expanded variant, address, line item). | review |
+| K3 | A quiet inset (`Inset`: `rounded-lg border bg-muted/30 p-3`, no shadow; the reference row's light fill with an edge) holds detail that belongs to one row (expanded variant, address, line item). | review |
 | K4 | A collapsible card shows its state in one line when closed ("Not a gift card", "2 bundles"). | review |
 | K5 | Never place text directly on the page background, except the page title and the empty first-run card. | review |
 
@@ -373,7 +386,7 @@ Every list and picker must work at 100,000 rows.
 | `no-unknown-classes` | `rich-content` and `ProseMirror` (stylesheet classes). |
 | `require-static-classes` | None. |
 
-`no-restricted-syntax` checks class strings in `className`, `cn`, `cva`, `clsx`, `cx` and `...ClassName` constants. It enforces every rule marked (lint) above, `dark:` variants, `NativeSelect` and the raw `<select>`. `no-restricted-imports` (all of `src/**/*.{ts,tsx}`) rejects `@radix-ui/react-select`, `components/ui/select` and `native-select`, and `toast` from `sonner` (import it from `~/lib/toast`; `src/lib/toast.ts` is the one exception).
+`no-restricted-syntax` checks class strings in `className`, `cn`, `cva`, `clsx`, `cx` and `...ClassName` constants. It enforces every rule marked (lint) above, `dark:` variants, `NativeSelect` and the raw `<select>`. Outside `components/ui` it also enforces F1 (`fieldRules`) and C7 (`buttonRules`). `no-restricted-imports` (all of `src/**/*.{ts,tsx}`) rejects `@radix-ui/react-select`, `components/ui/select` and `native-select`, and `toast` from `sonner` (import it from `~/lib/toast`; `src/lib/toast.ts` is the one exception).
 
 For any other exception, write `// eslint-disable-next-line <rule> -- reason`.
 

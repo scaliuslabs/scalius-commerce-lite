@@ -341,7 +341,8 @@ export function DeliveryAreasManager() {
           <Tabs value={String(level)} onValueChange={(value) => changeLevel(Number(value))} className="me-auto">
             <TabsList>
               {levels.map((value) => (
-                <TabsTrigger key={value} value={String(value)}>{names.many(value)}</TabsTrigger>
+                // A filter over the list below, not a panel switch: no tab panel to point at.
+                <TabsTrigger key={value} value={String(value)} aria-controls={undefined}>{names.many(value)}</TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
@@ -350,7 +351,7 @@ export function DeliveryAreasManager() {
           <div className="flex gap-2">
             {canEdit && bangladesh ? (
               // The Bangladesh pack loads the places and refreshes them from Pathao's live list.
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="outline">
                 <Link to="/admin/apps/$pluginId/pages/$pageId" params={{ pluginId: BANGLADESH_PACK_ID, pageId: "places" }}>{t("bangladeshPlaces")}</Link>
               </Button>
             ) : null}
@@ -368,7 +369,7 @@ export function DeliveryAreasManager() {
             ) : null}
             <SettingsDialog
               title={t("addPlace", { name: names.word(level) })}
-              trigger={<Button type="button" size="sm" disabled={!canEdit}>{t("addPlace", { name: names.word(level) })}</Button>}
+              trigger={<Button type="button" disabled={!canEdit}>{t("addPlace", { name: names.word(level) })}</Button>}
             >
               <LocationForm key={`${country}-${level}`} country={country} level={level} location={null} />
             </SettingsDialog>
@@ -390,7 +391,7 @@ export function DeliveryAreasManager() {
                 <SettingsDialog
                   title={t("addCountryTitle")}
                   savedMessage={t("countryAdded")}
-                  trigger={<Button type="button" variant="outline" size="sm">{t("addCountry")}</Button>}
+                  trigger={<Button type="button" variant="outline">{t("addCountry")}</Button>}
                 >
                   <AddCountryForm
                     taken={new Set(listed)}
@@ -483,7 +484,7 @@ export function DeliveryAreasManager() {
                       title={t("editLocation", { name: location.name })}
                       trigger={
                         <button type="button" disabled={!canEdit} className="min-h-11 min-w-0 flex-1 text-start">
-                          <span className="block truncate text-body font-medium">{location.name}</span>
+                          <span className="block truncate text-body font-medium" title={location.name}>{location.name}</span>
                           <span className="block truncate text-body text-muted-foreground">
                             {[
                               location.parentPath?.length ? location.parentPath.join(" · ") : null,

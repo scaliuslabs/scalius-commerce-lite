@@ -1,6 +1,7 @@
 import { cloneElement, createContext, isValidElement, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
-import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useLocation } from "@tanstack/react-router";
+import { ChevronRight, Loader2 } from "lucide-react";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Button } from "~/components/ui/button";
 import { Card, CardHeading } from "~/components/ui/card";
 import {
@@ -12,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
+import { Field } from "~/components/ui/field";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SaveErrorBanner, SaveScope, useSaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
 import { useMessages } from "~/i18n";
@@ -24,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { EditorPresence } from "~/lib/realtime/store";
 import { PresenceScopeContext, presenceKey } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
+import { Page } from "~/components/admin/resource/Page";
 
 type SettingsNavTo = (typeof SETTINGS_NAV)[number]["to"];
 
@@ -50,33 +52,24 @@ export function SettingsPage({
 }) {
   const t = useMessages(settingsNavMessages);
   const common = useMessages(settingsMessages);
-  const Icon = SETTINGS_NAV.find((item) => item.key === page)!.icon;
   const hash = useLocation({ select: (location) => location.hash });
   const key = presenceKey("settings", page);
   return (
     <PresenceScopeContext.Provider value={key}>
     <TargetCardContext.Provider value={hash}>
-      <div className="mx-auto w-full max-w-3xl space-y-4">
-        <div className="flex min-h-11 flex-wrap items-center gap-2 md:min-h-9">
-          <Link
-            to={back?.to ?? "/admin/settings"}
-            aria-label={back?.label ?? t("settings")}
-            className={cn(
-              "-ms-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground md:size-9",
-              !back && "nav:hidden",
-            )}
-          >
-            <ArrowLeft className="size-5" aria-hidden="true" />
-          </Link>
-          {back ? null : <Icon className="hidden size-5 text-muted-foreground nav:block" aria-hidden="true" />}
-          <h1 className="me-auto text-heading-lg">{title ?? t(page)}</h1>
-          {actions}
-        </div>
+      <Page width="settings" className="space-y-4">
+        <PageHeader
+          title={title ?? t(page)}
+          backTo={back?.to ?? "/admin/settings"}
+          backLabel={back?.label ?? t("settings")}
+          backOnlyWithoutPanel={!back}
+          actions={actions}
+        />
         <SaveErrorBanner />
         <SettingsPresence presenceKey={key} />
         {readOnly ? <p className="text-body text-muted-foreground">{common("readOnly")}</p> : null}
         {children}
-      </div>
+      </Page>
     </TargetCardContext.Provider>
     </PresenceScopeContext.Provider>
   );
@@ -151,8 +144,9 @@ export function SettingsCardLoading() {
 }
 
 /**
- * Label, control and one line of help or error. Give the control
- * `aria-describedby={`${id}-note`}` so the note is read with it.
+ * A settings `Field` that shows its error once the merchant leaves the field
+ * (or presses Save), and the server's error for it after a rejected save. Its
+ * help or error is `<id>-note`.
  */
 export function SettingsField({
   id,
@@ -180,6 +174,7 @@ export function SettingsField({
   };
   const clientShown = error && (left || server.revealed) ? error : null;
   const shown = clientShown ?? server.error;
+  // A control that does not read its `Field` (a plain button, a switch) still gets the state.
   const isControl = isValidElement<{ id?: string }>(children) && children.props.id === id;
   const control = !isControl
     ? children
@@ -189,8 +184,13 @@ export function SettingsField({
         ? cloneElement(children as ReactElement<Record<string, unknown>>, { "aria-invalid": false })
         : children;
   return (
-    <div
-      className="space-y-1.5"
+    <Field
+      id={id}
+      label={label}
+      help={help}
+      error={shown}
+      noteId={`${id}-note`}
+      announceError
       onBlur={(event) => {
         const target = event.target as { value?: unknown };
         if (edited || (typeof target.value === "string" && target.value.trim())) setLeft(true);
@@ -198,14 +198,8 @@ export function SettingsField({
       onInput={onEdit}
       onChange={onEdit}
     >
-      <Label htmlFor={id}>{label}</Label>
       {control}
-      {shown ? (
-        <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p>
-      ) : help ? (
-        <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
-      ) : null}
-    </div>
+    </Field>
   );
 }
 
@@ -223,7 +217,7 @@ export function SettingsRow({
     >
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium">{label}</span>
-        {value ? <span className="block truncate text-body text-muted-foreground">{value}</span> : null}
+        {value ? <span className="block truncate text-body text-muted-foreground" title={typeof value === "string" ? value : undefined}>{value}</span> : null}
       </span>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>

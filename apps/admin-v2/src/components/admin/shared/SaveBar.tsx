@@ -104,8 +104,12 @@ export interface SaveScopeState {
   failure: SaveFailureKind | null;
   /** Save was pressed while fields were invalid; their messages are showing. */
   revealed: boolean;
-  /** Saves every dirty entry; false when any failed (their edits are kept). */
-  saveAll: () => Promise<boolean>;
+  /**
+   * Saves every dirty entry; false when any failed (their edits are kept).
+   * `all` also saves untouched entries: Save on a new record before any edit,
+   * which shows what it still needs.
+   */
+  saveAll: (options?: { all?: boolean }) => Promise<boolean>;
   discardAll: () => void;
   /**
    * The merchant fixed what these banner lines said: takes them off (the
@@ -273,8 +277,9 @@ export function SaveScope({
     failed: failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0,
     failure: failureKind(failure),
     revealed: failure.reveal > 0,
-    async saveAll() {
-      if (list.some((entry) => entry.dirty && entry.invalid)) {
+    async saveAll(options) {
+      const all = options?.all === true;
+      if (list.some((entry) => (all || entry.dirty) && entry.invalid)) {
         // Shopify: Save stays pressable; it shows what to fix instead of saving.
         setFailure((previous) => ({ ...previous, reveal: previous.reveal + 1 }));
         return false;
@@ -289,7 +294,7 @@ export function SaveScope({
       try {
         // Cards are separate documents: save each, keep the edits of any that fail.
         for (const entry of [...entries.current.values()]) {
-          if (!entry.dirty) continue;
+          if (!entry.dirty && !all) continue;
           try {
             await entry.save();
           } catch (error) {
@@ -493,13 +498,14 @@ export function SaveBarProvider({
 /**
  * Shopify's save bar is the search pill itself (12px corners, 1px lighter
  * edge on the frame), so its buttons sit 4px inside its outer edge (1px
- * border + 3px) with 8px corners, concentric: 36px on phones, 28px from md.
+ * border + 3px) with 8px corners, concentric, 28px from md. On phones the bar
+ * is a 52px pill over the top bar with 44px buttons (C6).
  * Discard is dark, Save white, in both themes.
  */
 const DISCARD_BUTTON =
-  "relative inline-flex h-9 items-center rounded-lg bg-topbar-hover px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
+  "relative inline-flex h-11 items-center rounded-lg bg-topbar-hover px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
 const SAVE_BUTTON =
-  "relative inline-flex h-9 items-center rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
+  "relative inline-flex h-11 items-center rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
 
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
@@ -511,11 +517,14 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
         : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
           : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const saveRef = useRef(state.saveAll);
-  saveRef.current = state.saveAll;
+  // A new record shows its bar before the first edit (P5), as Shopify's "Unsaved product" does.
+  const shown = dirty || unsavedLabel !== undefined;
+  const save = () => state.saveAll({ all: !dirty });
+  const saveRef = useRef(save);
+  saveRef.current = save;
   // ⌘S / Ctrl+S saves the page from any field while the bar shows. Esc never discards.
   useEffect(() => {
-    if (!dirty) return;
+    if (!shown) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!matchesShortcut("save", event)) return;
       event.preventDefault();
@@ -523,7 +532,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dirty, busy]);
+  }, [shown, busy]);
   // Signed out mid-edit: keep the page and its edits; sign in again in a new tab, then Save.
   useEffect(() => {
     if (!dirty) return;
@@ -562,7 +571,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
           setConfirmDiscard(false);
         }}
       />
-      {dirty && slot
+      {shown && slot
         ? createPortal(
             // Shopify's contextual save bar: the search pill turns into it, same
             // place, size and shape (on phones the pill's row between Menu and
@@ -572,7 +581,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="absolute inset-x-2 top-1.5 z-30 flex h-11 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 ps-3 text-topbar-foreground md:inset-0 md:h-9"
+              className="absolute inset-x-2 top-0.5 z-30 flex h-13 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 ps-3 text-topbar-foreground md:inset-0 md:h-9"
             >
               <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
                 <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />
@@ -582,7 +591,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                 <button
                   type="button"
                   className={DISCARD_BUTTON}
-                  disabled={busy}
+                  disabled={busy || !dirty}
                   onClick={() => setConfirmDiscard(true)}
                 >
                   {t("discard")}
@@ -592,7 +601,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                   className={SAVE_BUTTON}
                   disabled={busy}
                   aria-busy={busy || undefined}
-                  onClick={() => void state.saveAll()}
+                  onClick={() => void save()}
                 >
                   <span className={busy ? "invisible" : undefined}>{t("save")}</span>
                   {busy ? (

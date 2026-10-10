@@ -10,6 +10,7 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { TagInput } from "./TagInput";
 import { sameTags } from "./tag-input";
+import { Field } from "~/components/ui/field";
 
 /**
  * The customer page's Tags card. Tags save with the page's save bar (like the
@@ -53,8 +54,13 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
       <CardHeader>
         <CardTitle>{t("tags")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1.5">
-        <label htmlFor="customer-tags" className="sr-only">{t("addTag")}</label>
+      <CardContent>
+        <Field
+          id="customer-tags"
+          label={t("addTag")}
+          hideLabel
+          help={canEdit ? t("tagsHelp") : tags.length === 0 ? t("noTagsYet") : undefined}
+        >
         <TagInput
           id="customer-tags"
           value={tags}
@@ -63,11 +69,7 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
           disabled={!canEdit}
           aria-describedby={canEdit ? "customer-tags-help" : undefined}
         />
-        {canEdit ? (
-          <p id="customer-tags-help" className="text-body text-muted-foreground">{t("tagsHelp")}</p>
-        ) : tags.length === 0 ? (
-          <p className="text-body text-muted-foreground">{t("noTagsYet")}</p>
-        ) : null}
+        </Field>
       </CardContent>
     </Card>
   );

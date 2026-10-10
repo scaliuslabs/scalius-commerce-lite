@@ -138,6 +138,7 @@ export function CategoryAttributeSetCard({ categoryId, canEdit }: { categoryId: 
             {canEdit && own.length < OWN_MAX ? (
               <SearchableSelect
                 id={`category-attribute-add-${categoryId}`}
+                ariaLabel={t("addAttribute")}
                 value=""
                 load={loadAttributes}
                 queryKey={[...queryKeys.attributes.all, "set-picker"]}

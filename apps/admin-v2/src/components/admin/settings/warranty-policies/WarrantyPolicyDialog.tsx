@@ -29,6 +29,8 @@ import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useSaveWarrantyPolicy, type WarrantyPolicy, type WarrantyPolicyBody } from "../../warranty/warranty-api";
 import { warrantySummary } from "../../warranty/warranty-format";
+import { Field } from "~/components/ui/field";
+import { formMessages } from "~/i18n/forms";
 
 interface Draft {
   name: string;
@@ -87,6 +89,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useMessages(warrantyMessages);
+  const forms = useMessages(formMessages);
   const [draft, setDraft] = useState<Draft>(() => draftOf(policy));
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveWarrantyPolicy();
@@ -130,14 +133,6 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
   const preview = isWarrantyDurationValue(draft.durationValue)
     ? warrantySummary(t, { ...draft, durationValue: draft.durationValue })
     : null;
-  const describedBy = (field: keyof Errors, help: boolean) =>
-    errors[field] ? `warranty-policy-${field}-error` : help ? `warranty-policy-${field}-help` : undefined;
-  const fieldNote = (field: keyof Errors, help?: string) =>
-    errors[field] ? (
-      <p id={`warranty-policy-${field}-error`} className="text-body text-destructive">{t(errors[field]!)}</p>
-    ) : help ? (
-      <p id={`warranty-policy-${field}-help`} className="text-body text-muted-foreground">{help}</p>
-    ) : null;
 
   return (
     <>
@@ -149,18 +144,14 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
           </DialogHeader>
           <form id="warranty-policy-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
             {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-name">{t("name")}</Label>
+            <Field id="warranty-policy-name" label={t("name")} help={t("nameHelp")} error={errors.name ? t(errors.name) : undefined}>
               <Input
                 id="warranty-policy-name"
                 value={draft.name}
                 maxLength={WARRANTY_LIMITS.nameLength * 2}
-                aria-invalid={Boolean(errors.name)}
-                aria-describedby={describedBy("name", true)}
                 onChange={(event) => set("name", event.target.value)}
               />
-              {fieldNote("name", t("nameHelp"))}
-            </div>
+            </Field>
             <fieldset className="space-y-2">
               <legend className="text-body font-medium">{t("provider")}</legend>
               <RadioGroup value={draft.provider} onValueChange={(value) => set("provider", value as WarrantyProvider)}>
@@ -172,16 +163,13 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                 ))}
               </RadioGroup>
             </fieldset>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-durationValue">{t("duration")}</Label>
+            <Field id="warranty-policy-durationValue" label={t("duration")} error={errors.durationValue ? t(errors.durationValue) : undefined}>
               <div className="flex gap-2">
                 <NumberInput
                   id="warranty-policy-durationValue"
                   integer
                   className="w-24"
                   value={draft.durationValue}
-                  aria-invalid={Boolean(errors.durationValue)}
-                  aria-describedby={describedBy("durationValue", false)}
                   onValueChange={(value) => set("durationValue", value)}
                 />
                 <SearchableSelect
@@ -193,33 +181,25 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
                   options={WARRANTY_DURATION_UNITS.map((unit) => ({ value: unit, label: t(`unit.${unit}`) }))}
                 />
               </div>
-              {fieldNote("durationValue")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-replacementDays">{t("replacement")}</Label>
+            </Field>
+            <Field id="warranty-policy-replacementDays" label={t("replacement")} help={t("replacementHelp")} error={errors.replacementDays ? t(errors.replacementDays) : undefined}>
               <NumberInput
                 id="warranty-policy-replacementDays"
                 integer
-                className="w-24"
+                className="w-32"
+                suffix={forms("daysUnit")}
                 value={draft.replacementDays}
-                aria-invalid={Boolean(errors.replacementDays)}
-                aria-describedby={describedBy("replacementDays", true)}
                 onValueChange={(value) => set("replacementDays", value)}
               />
-              {fieldNote("replacementDays", t("replacementHelp"))}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="warranty-policy-terms">{t("terms")}</Label>
+            </Field>
+            <Field id="warranty-policy-terms" label={t("terms")} help={t("termsHelp")} error={errors.terms ? t(errors.terms) : undefined}>
               <Textarea
                 id="warranty-policy-terms"
                 rows={5}
                 value={draft.terms}
-                aria-invalid={Boolean(errors.terms)}
-                aria-describedby={describedBy("terms", true)}
                 onChange={(event) => set("terms", event.target.value)}
               />
-              {fieldNote("terms", t("termsHelp"))}
-            </div>
+            </Field>
             {preview ? <p className="rounded-lg bg-muted px-3 py-2 text-body">{preview}</p> : null}
           </form>
           <DialogFooter>

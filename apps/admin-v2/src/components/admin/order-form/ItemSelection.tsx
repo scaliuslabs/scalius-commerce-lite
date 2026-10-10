@@ -1,7 +1,7 @@
 import * as React from "react";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
-import { FormLabel } from "~/components/ui/form";
+import { Field, FieldRow } from "~/components/ui/field";
 import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
@@ -51,14 +51,14 @@ export function ItemSelection({
   const variant = variants.find((candidate) => candidate.id === selectedVariant);
   const remainingStock = isEdit ? null : remainingStockForNewOrderLine(variant, items);
   const alreadyStaged = variant ? stagedVariantQuantity(items, variant.id) : 0;
-  const stockGuidanceId = "new-order-item-stock-guidance";
   const variantTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="space-y-4">
-    <div className="grid items-start gap-4 sm:grid-cols-3">
-      <div
-        className="space-y-2"
+    <div className="flex flex-col gap-4">
+    <FieldRow columns={3}>
+      <Field
+        id="variant-select-trigger"
+        label={t("variant")}
         onKeyDown={(e) => {
           // Enter on the closed variant field moves on to the quantity.
           if (e.key === "Enter" && e.target === variantTriggerRef.current) {
@@ -67,9 +67,7 @@ export function ItemSelection({
           }
         }}
       >
-        <FormLabel htmlFor="variant-select-trigger">{t("variant")}</FormLabel>
         <SearchableSelect
-          id="variant-select-trigger"
           triggerRef={variantTriggerRef}
           triggerClassName="w-full"
           value={selectedVariant}
@@ -89,10 +87,14 @@ export function ItemSelection({
             } · ${fmt(discountedUnitPrice(selectedProduct, option))}`,
           }))}
         />
-      </div>
+      </Field>
 
-      <div className="space-y-2">
-        <FormLabel htmlFor="quantity-input">{t("quantity")}</FormLabel>
+      <Field
+        id="quantity-input"
+        label={t("quantity")}
+        help={remainingStock ? remainingStockMessage(remainingStock, alreadyStaged) : undefined}
+        error={remainingStock === 0 ? remainingStockMessage(remainingStock, alreadyStaged) : undefined}
+      >
         <OrderItemQuantityInput
           id="quantity-input"
           quantity={quantity}
@@ -110,25 +112,15 @@ export function ItemSelection({
           maximumExceededMessage={remainingStock === null
             ? undefined
             : exceededStockMessage(remainingStock)}
-          describedBy={remainingStock === null ? undefined : stockGuidanceId}
+          describedBy={remainingStock === null ? undefined : remainingStock === 0 ? "quantity-input-error" : "quantity-input-help"}
           disabled={remainingStock === 0}
           className="w-full"
         />
-        {remainingStock !== null ? (
-          <p
-            id={stockGuidanceId}
-            className={remainingStock === 0
-              ? "text-body text-destructive"
-              : "text-body text-muted-foreground"}
-          >
-            {remainingStockMessage(remainingStock, alreadyStaged)}
-          </p>
-        ) : null}
-      </div>
+      </Field>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-1">
         {/* Keeps the button on the fields' line under their labels. */}
-        <FormLabel aria-hidden className="invisible hidden sm:block">{t("add")}</FormLabel>
+        <span aria-hidden className="invisible hidden text-body font-medium sm:block">{t("add")}</span>
         <Button
           type="button"
           onClick={handleAddItem}
@@ -140,7 +132,7 @@ export function ItemSelection({
           {t("add")}
         </Button>
       </div>
-    </div>
+    </FieldRow>
     {buyerInputs ? <LinePropertyFields {...buyerInputs} /> : null}
     </div>
   );

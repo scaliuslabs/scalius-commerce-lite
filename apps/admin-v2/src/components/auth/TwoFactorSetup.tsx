@@ -12,14 +12,13 @@ import {
   AuthAlert,
   AuthHeader,
   CodeInput,
-  Field,
   PasswordInput,
   SignOutButton,
-  describedBy,
   downloadRecoveryCodes,
   linkClassName,
   useResendCooldown,
 } from "./auth-ui";
+import { Field } from "~/components/ui/field";
 import { clearTwoFactorSetup, peekTwoFactorSetup } from "./two-factor-setup-handoff";
 
 type Step = "password" | "verify" | "backup";
@@ -207,7 +206,6 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
                 setPassword(event.target.value);
                 setFieldError(null);
               }}
-              {...describedBy("setup-password", message)}
             />
           </Field>
         ) : (
@@ -218,7 +216,7 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
                 value={code}
                 autoFocus
                 invalid={Boolean(message)}
-                describedById={message ? "setup-code-message" : undefined}
+                describedById={message ? "setup-code-error" : undefined}
                 onChange={(next) => {
                   setCode(next);
                   setFieldError(null);

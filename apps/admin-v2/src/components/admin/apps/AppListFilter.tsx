@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { FieldSet } from "~/components/ui/field";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { appListColumnsMessages } from "~/i18n/app-list-columns";
@@ -115,9 +115,6 @@ export function AppListFilter({ resource, value, onChange, labelled = false }: A
 
   if (!labelled) return controls;
   return (
-    <div className="space-y-1">
-      <Label>{t("filterLabel")}</Label>
-      {controls}
-    </div>
+    <FieldSet label={t("filterLabel")}>{controls}</FieldSet>
   );
 }

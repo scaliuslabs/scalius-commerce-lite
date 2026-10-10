@@ -416,7 +416,7 @@ describe("sign-in error states", () => {
     type(container.querySelector("#setup-confirmPassword"), SECRET);
     type(container.querySelector("#setup-setupKey"), "wrong");
     await submit();
-    expect(container.querySelector("#setup-setupKey-message")?.textContent).toBe(
+    expect(container.querySelector("#setup-setupKey-error")?.textContent).toBe(
       "That setup key isn't right. Check it and try again.",
     );
     expect(document.activeElement?.id).toBe("setup-setupKey");

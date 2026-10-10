@@ -65,6 +65,8 @@ import {
   type TypeProblemCode,
 } from "./metaobject-form";
 import { useAppName } from "./use-app-name";
+import { ChoiceField, FieldRow } from "~/components/ui/field";
+import { Page } from "~/components/admin/resource/Page";
 
 export function MetaobjectTypeForm({ definition }: { definition: MetaobjectDefinition | null }) {
   const t = useMessages(metaobjectMessages);
@@ -187,7 +189,7 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
   const title = creating ? t("createTitle") : base.name || saved?.name || "";
 
   return (
-    <div className="pb-6">
+    <Page width="form" className="pb-6">
       <PageHeader
         backTo={saved ? `/admin/metaobjects/${saved.id}` : "/admin/metaobjects"}
         title={title}
@@ -271,7 +273,7 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
                             <Trash2 aria-hidden="true" />
                           </Button>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <FieldRow>
                           <SettingsField id={`${rid}-name`} label={t("fieldName")} error={say(rowProblems?.name)}>
                             <Input
                               id={`${rid}-name`}
@@ -319,7 +321,7 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
                               onChange={(event) => updateRow(row.rowId, { description: event.target.value })}
                             />
                           </SettingsField>
-                        </div>
+                        </FieldRow>
                         <div className="flex min-h-11 items-center gap-2">
                           <Checkbox id={`${rid}-required`} checked={row.required} onCheckedChange={(value) => updateRow(row.rowId, { required: value === true })} />
                           <Label htmlFor={`${rid}-required`}>{t("fieldRequired")}</Label>
@@ -368,20 +370,20 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
                   <CardTitle>{t("storefrontTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <Label htmlFor="metaobject-storefront">{t("storefrontAccess")}</Label>
-                      <p id="metaobject-storefront-note" className="text-body text-muted-foreground">{t("storefrontHelp")}</p>
-                    </div>
-                    <span className="flex h-lh items-center">
+                  <ChoiceField
+                    id="metaobject-storefront"
+                    controlAt="end"
+                    label={t("storefrontAccess")}
+                    help={t("storefrontHelp")}
+                    control={(
                       <Switch
                         id="metaobject-storefront"
                         checked={draft.storefrontAccess}
-                        aria-describedby="metaobject-storefront-note"
+                        aria-describedby="metaobject-storefront-help"
                         onCheckedChange={(value) => update({ storefrontAccess: value })}
                       />
-                    </span>
-                  </div>
+                    )}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -397,7 +399,7 @@ function TypeFormPage({ initial }: { initial: MetaobjectDefinition | null }) {
         ) : null}
       </div>
       {canEdit && saved ? <DeleteType definition={saved} open={deleting} onOpenChange={setDeleting} /> : null}
-    </div>
+    </Page>
   );
 }
 
