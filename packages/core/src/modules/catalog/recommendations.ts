@@ -5,7 +5,8 @@
 // source products with the signals the store really has:
 //   1. also bought — other products in the same real orders (placed, not
 //      cancelled/refunded/returned/unfinished) within a year, counted by
-//      distinct buyer phone; two or more buyers rank a product first;
+//      distinct buyer phone; two or more buyers rank a product first. Only
+//      the source products' latest ALSO_BOUGHT_SOURCE_LINES lines are read;
 //   2. similarity — same published category, same active collection (manual
 //      list or dynamic category rule), shared attribute values, and an
 //      effective buyer price within 60–140% of the source price band;
@@ -72,6 +73,14 @@ export const MIN_ALSO_BOUGHT_BUYERS = 2;
 /** Distinct buyers in the popularity window before a product counts as popular. */
 export const MIN_POPULAR_BUYERS = 2;
 const ALSO_BOUGHT_WINDOW_SECONDS = 365 * 86_400;
+/**
+ * "Also bought" reads the source products' latest order lines in the window,
+ * at most this many (newest first, through order_items_product_recent_idx).
+ * A best seller sits in tens of thousands of orders: reading them all, and
+ * every line of each, made one product page take a minute on a
+ * million-order store. The latest thousand orders carry the same signal.
+ */
+export const ALSO_BOUGHT_SOURCE_LINES = 1_000;
 const POPULAR_WINDOW_SECONDS = 30 * 86_400;
 
 /**
@@ -292,36 +301,52 @@ export async function rankRecommendationRows(
     deps.anyAttribute();
     const sourceJson = JSON.stringify(sourceIds);
     const sourceSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${sourceJson}))`;
+    // The source products' latest lines in the window (ALSO_BOUGHT_SOURCE_LINES),
+    // read newest first from (product_id, created_at, order_id). Older lines
+    // never re-enter: anything older leaves the window first.
+    const sourceLines = (alias: string) => sql`(
+        SELECT ${sql.raw(alias)}_sample.order_id AS order_id
+        FROM order_items AS ${sql.raw(alias)}_sample
+        WHERE ${sql.raw(alias)}_sample.product_id IN ${sourceSet}
+          AND ${sql.raw(alias)}_sample.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
+        ORDER BY ${sql.raw(alias)}_sample.created_at DESC, ${sql.raw(alias)}_sample.order_id DESC
+        LIMIT ${sql.raw(String(ALSO_BOUGHT_SOURCE_LINES))}
+    ) AS ${sql.raw(alias)}`;
 
     if (deps.active()) {
         // Inclusive SQL windows stop including an order one second after its
         // boundary. Empty/quiet stores have no deadline, never a routine TTL.
-        const [boundary] = await db.select({ at: sql<number | null>`MIN(
-            CASE WHEN rec_boundary.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                THEN rec_boundary.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
-                ELSE rec_boundary.created_at + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
-            END
-        )` }).from(sql`orders AS rec_boundary`).where(sql`
-            ${realOrder("rec_boundary")}
-            AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_boundary.id)
-            AND (
-                rec_boundary.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                OR (rec_boundary.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
-                    AND EXISTS (SELECT 1 FROM order_items AS boundary_source
-                        WHERE boundary_source.order_id = rec_boundary.id AND boundary_source.product_id IN ${sourceSet}))
-            )
-        `).all();
-        if (boundary?.at != null) deps.validUntil(Number(boundary.at) * 1000);
+        // The first exits: the oldest real order of the popularity window
+        // (read in created_at order from the index) and the oldest real
+        // order among the sampled source lines. Each is a bounded read.
+        const [boundary] = await db.select({
+            popularAt: sql<number | null>`(SELECT rec_popular_first.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
+             FROM orders AS rec_popular_first
+             WHERE ${realOrder("rec_popular_first")}
+               AND rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+               AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_popular_first.id)
+             ORDER BY rec_popular_first.created_at ASC
+             LIMIT 1)`,
+            alsoBoughtAt: sql<number | null>`(SELECT MIN(rec_source_order.created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
+             FROM ${sourceLines("rec_boundary_source")}
+             CROSS JOIN orders AS rec_source_order
+             WHERE rec_source_order.id = rec_boundary_source.order_id
+               AND ${realOrder("rec_source_order")}
+               AND rec_source_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))})`,
+        }).from(sql`(SELECT 1) AS rec_boundary`).all();
+        const exits = [boundary?.popularAt, boundary?.alsoBoughtAt]
+            .filter((at): at is number => at !== null && at !== undefined)
+            .map(Number);
+        if (exits.length > 0) deps.validUntil(Math.min(...exits) * 1000);
     }
 
     const coPurchase = sql`(
         SELECT rec_peer_line.product_id AS product_id,
                COUNT(DISTINCT ${buyerSql("rec_co_order")}) AS buyers
-        FROM order_items AS rec_source_line
+        FROM ${sourceLines("rec_source_line")}
         CROSS JOIN orders AS rec_co_order
         CROSS JOIN order_items AS rec_peer_line
-        WHERE rec_source_line.product_id IN ${sourceSet}
-          AND rec_co_order.id = rec_source_line.order_id
+        WHERE rec_co_order.id = rec_source_line.order_id
           AND rec_peer_line.order_id = rec_source_line.order_id
           AND rec_peer_line.product_id NOT IN ${sourceSet}
           AND ${realOrder("rec_co_order")}

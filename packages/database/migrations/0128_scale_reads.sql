@@ -9,6 +9,9 @@
 -- more key columns than the store-wide (track_inventory, deleted_at) index,
 -- SQLite (no statistics) picks it for per-product reads instead of walking
 -- every tracked SKU for each product. It replaces the product_id index.
+-- order_items_product_recent_idx: a product's lines newest first, so
+-- recommendations read a best seller's latest orders, not tens of thousands
+-- (one product page took a minute). It replaces order_items_product_id_idx.
 -- customer_order_stats: every customer gets a row (the backfill, then a
 -- trigger on insert), so the customer list sorts by orders, spend and last
 -- order from (value, customer_id) indexes in order; they replace the
@@ -25,6 +28,10 @@ DROP INDEX IF EXISTS `orders_dashboard_agg_idx`;
 CREATE INDEX IF NOT EXISTS `product_variants_product_live_idx` ON `product_variants` (`product_id`, `deleted_at`, `track_inventory`);
 --> statement-breakpoint
 DROP INDEX IF EXISTS `product_variants_product_id_idx`;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `order_items_product_recent_idx` ON `order_items` (`product_id`, `created_at`, `order_id`);
+--> statement-breakpoint
+DROP INDEX IF EXISTS `order_items_product_id_idx`;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `customer_order_stats_orders_list_idx` ON `customer_order_stats` (`orders_count`, `customer_id`);
 --> statement-breakpoint
@@ -84,4 +91,4 @@ BEGIN
 	VALUES ('delete', OLD.rowid, OLD.title, OLD.body, OLD.author_display_name);
 END;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (128, '0128_scale_reads', '1a1fffc8bdcf66f71e360f9160935c176a3b0fc2c8431cb38345e86ec538c0bf');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (128, '0128_scale_reads', '4e7c00ff5c929a14749b56998a7438d7400e58c10ca30d7d18ba7016e0fa6d46');

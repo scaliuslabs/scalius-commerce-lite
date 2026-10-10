@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7b18ba51-7dba-4896-9694-a43045838c69",
+  "id": "5db4fcfc-ccb7-489f-9d9b-f65df5207f05",
   "prevId": "b6febd72-0393-4c18-bd0f-e0c532da2c82",
   "tables": {
     "account": {
@@ -9449,10 +9449,12 @@
           ],
           "isUnique": false
         },
-        "order_items_product_id_idx": {
-          "name": "order_items_product_id_idx",
+        "order_items_product_recent_idx": {
+          "name": "order_items_product_recent_idx",
           "columns": [
-            "product_id"
+            "product_id",
+            "created_at",
+            "order_id"
           ],
           "isUnique": false
         },

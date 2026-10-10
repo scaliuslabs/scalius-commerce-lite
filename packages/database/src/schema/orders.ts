@@ -512,7 +512,8 @@ export const orderItems = sqliteTable("order_items", {
     ),
     check("order_items_properties_price_nonnegative", sql`${table.propertiesPriceMinor} >= 0`),
     index("order_items_order_id_idx").on(table.orderId),
-    index("order_items_product_id_idx").on(table.productId),
+    // A product's lines, newest first: "also bought" reads only the latest (0128).
+    index("order_items_product_recent_idx").on(table.productId, table.createdAt, table.orderId),
     index("order_items_variant_id_idx").on(table.variantId),
     index("order_items_product_image_media_id_idx").on(table.productImageMediaId),
     // Drives the auto-fulfil sweep: only lines an automatic fulfiller still owes.

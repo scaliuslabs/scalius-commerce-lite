@@ -66,11 +66,11 @@ describe.runIf(postgresUrl)("0128 scale reads PostgreSQL sidecar", () => {
     const indexes = async () => new Set((await client.query("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()"))
       .rows.map((row: { indexname: string }) => row.indexname));
     const after = await indexes();
-    for (const name of ["orders_sales_rollup_idx", "product_variants_product_live_idx", "customer_order_stats_orders_list_idx",
+    for (const name of ["orders_sales_rollup_idx", "product_variants_product_live_idx", "order_items_product_recent_idx", "customer_order_stats_orders_list_idx",
       "customer_order_stats_spent_list_idx", "customer_order_stats_last_order_list_idx"]) {
       expect(after.has(name), name).toBe(true);
     }
-    for (const name of ["orders_dashboard_agg_idx", "product_variants_product_id_idx", "customer_order_stats_orders_idx",
+    for (const name of ["orders_dashboard_agg_idx", "product_variants_product_id_idx", "order_items_product_id_idx", "customer_order_stats_orders_idx",
       "customer_order_stats_spent_idx", "customer_order_stats_last_order_idx"]) {
       expect(after.has(name), name).toBe(false);
     }

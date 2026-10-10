@@ -17,11 +17,11 @@ const migration = () => readFileSync(join(import.meta.dirname, `../migrations/${
 const statements = (sql: string) => sql.split(BREAKPOINT).map((statement) => statement.trim()).filter(Boolean);
 
 const CREATED = [
-  "orders_sales_rollup_idx", "product_variants_product_live_idx",
+  "orders_sales_rollup_idx", "product_variants_product_live_idx", "order_items_product_recent_idx",
   "customer_order_stats_orders_list_idx", "customer_order_stats_spent_list_idx", "customer_order_stats_last_order_list_idx",
 ];
 const DROPPED = [
-  "orders_dashboard_agg_idx", "product_variants_product_id_idx",
+  "orders_dashboard_agg_idx", "product_variants_product_id_idx", "order_items_product_id_idx",
   "customer_order_stats_orders_idx", "customer_order_stats_spent_idx", "customer_order_stats_last_order_idx",
 ];
 

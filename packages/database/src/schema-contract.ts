@@ -420,7 +420,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 128,
     name: "0128_scale_reads",
-    sourceSha256: "1a1fffc8bdcf66f71e360f9160935c176a3b0fc2c8431cb38345e86ec538c0bf",
+    sourceSha256: "4e7c00ff5c929a14749b56998a7438d7400e58c10ca30d7d18ba7016e0fa6d46",
   },
 ] as const;
 
