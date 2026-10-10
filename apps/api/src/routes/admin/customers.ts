@@ -558,7 +558,7 @@ app.openapi(getHistoryRoute, async (c) => {
                 phone: customers.phone,
                 accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
                 origin: customers.origin,
-                latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
+                latestOrderName: latestOrderNameSql().as("latest_order_name"),
                 mergedIntoId: sql<string | null>`${mergedInto.id}`.as("merged_into_id"),
                 mergedIntoName: sql<string | null>`${mergedInto.name}`.as("merged_into_name"),
                 totalOrders: metrics.totalOrders,

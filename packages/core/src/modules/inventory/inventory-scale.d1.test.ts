@@ -30,12 +30,19 @@ function setup() {
 
 const base = { search: "", status: "all", page: 1, limit: 20, sort: "available", order: "asc" } as const;
 
+type VariantsSection = {
+    variants: Array<{ id: string }>;
+    pagination: { total: number };
+    stats: Record<string, number>;
+};
+type AlertsSection = { alerts: Array<{ variantId: string }> };
+
 describe("inventory list at scale", () => {
     it("reads the SKUs twice: the page by id, and one pass for the stats and the total", async () => {
         const { db, queries } = setup();
-        const result = await getInventoryOverview(db, { section: "variants", ...base, search: "ket" });
-        expect(result.variants?.map((variant) => variant.id)).toEqual(["var_kettle"]);
-        expect(result.pagination?.total).toBe(1);
+        const result = await getInventoryOverview(db, { section: "variants", ...base, search: "ket" }) as VariantsSection;
+        expect(result.variants.map((variant) => variant.id)).toEqual(["var_kettle"]);
+        expect(result.pagination.total).toBe(1);
         expect(result.stats).toMatchObject({ totalVariants: 2, totalOnHand: 5, totalReserved: 1, outOfStockCount: 1 });
 
         const reads = queries.filter(({ query }) => /from "product_variants"/.test(query));
@@ -47,8 +54,8 @@ describe("inventory list at scale", () => {
 
     it("sorts the alerts tab on the narrow row too", async () => {
         const { db, queries } = setup();
-        const result = await getInventoryOverview(db, { section: "alerts", ...base, alertStatus: "active" });
-        expect(result.alerts?.map((alert) => alert.variantId)).toEqual(["var_mug"]);
+        const result = await getInventoryOverview(db, { section: "alerts", ...base, alertStatus: "active" }) as AlertsSection;
+        expect(result.alerts.map((alert) => alert.variantId)).toEqual(["var_mug"]);
         const page = queries.find(({ query }) => /group_concat/.test(query))!;
         expect(page.query).toMatch(/where "product_variants"\."id" in \(select "product_variants"\."id" from "product_variants"/);
     });

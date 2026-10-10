@@ -2,7 +2,7 @@ import { productVariants, products, inventoryLocations, inventoryMovements, inve
 import { eq, sql, and, isNull, desc, asc, or, inArray } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
@@ -470,7 +470,7 @@ export async function getInventoryOverview(db: Database, params: {
 
         const availableSql = availableStockSql;
         const sortDirection = order === "desc" ? "desc" : "asc";
-        const byDirection = (column: SQL | typeof productVariants.sku) => sortDirection === "desc" ? desc(column) : asc(column);
+        const byDirection = (column: SQLWrapper) => sortDirection === "desc" ? desc(column) : asc(column);
         // The id tie-break follows the sort, so the available sort walks
         // product_variants_available_idx (track_inventory, deleted_at, available, id) in order.
         const orderBy = [
