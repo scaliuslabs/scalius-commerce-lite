@@ -69,13 +69,15 @@ import { Route } from "./edit";
 describe("Apply product conflict while editing SKUs", () => {
   it.each([false, true])("keeps a new SKU draft made while loading (remote SKU change: %s)", async (remoteSkuChanged) => {
     fixture.mounts = 0;
+    fixture.dialog = null;
     let finish!: (value: unknown) => void;
     fixture.fetchQuery.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const host = document.createElement("div");
     const root = createRoot(host);
     const Page = Route.options.component as ComponentType;
     await act(async () => { root.render(<Page />); });
-    act(() => (host.querySelector("button") as HTMLButtonElement).click());
+    expect(fixture.dialog).toBeNull();
+    await act(async () => (host.querySelector("button") as HTMLButtonElement).click());
     let applying!: Promise<void>;
     act(() => { applying = fixture.dialog!.onApplyMine!(); });
     // Escape can close the pending dialog, allowing the merchant to edit a SKU.

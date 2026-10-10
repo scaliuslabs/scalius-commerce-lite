@@ -1,6 +1,4 @@
 import { lazy, Suspense, useState, type ReactNode } from "react";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const loadUserMenuContent = () => import("./UserMenuContent");
 const UserMenuContent = lazy(loadUserMenuContent);
@@ -10,20 +8,6 @@ export interface UserMenuUser {
   name: string;
   email: string;
   image?: string | null;
-}
-
-function initials(name: string) {
-  return name.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2);
-}
-
-/** The signed-in user's picture, or their initials. */
-export function UserAvatar({ user }: { user: UserMenuUser }) {
-  return (
-    <Avatar className="size-7">
-      {user.image ? <AvatarImage src={mediaImageUrl(user.image, 160)} alt="" className="object-cover" /> : null}
-      <AvatarFallback><span className="text-caption font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
-    </Avatar>
-  );
 }
 
 /**

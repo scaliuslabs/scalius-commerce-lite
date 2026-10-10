@@ -4,7 +4,7 @@ import { TicketPercent } from "lucide-react";
 
 import { DiscountBulkActions, discountTitle, useDiscountColumns } from "~/components/admin/discounts/DiscountList";
 import { DiscountTypeDialog } from "~/components/admin/discounts/DiscountTypeDialog";
-import { DISCOUNT_SORTS, DISCOUNT_TABS } from "~/components/admin/discounts/discount-kinds";
+import { DISCOUNT_SORTS, DISCOUNT_VIEWS } from "~/components/admin/discounts/discount-kinds";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { Button } from "~/components/ui/button";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -23,12 +23,11 @@ import { queryKeys } from "~/lib/query-keys";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 
-const VIEWS = DISCOUNT_TABS.filter((tab) => tab !== "all");
 const validateBase = createListSearchValidator(DISCOUNT_SORTS, { sort: "updatedAt", list: "discounts" });
 
 /** The view tab, sort and page are shareable; the search (discount codes) stays out of the URL. */
 export function validateDiscountListSearch(search: SearchValidatorInput) {
-  return { ...validateBase(search), tab: normalizeOptionalEnumSearchParam(search.tab, VIEWS) };
+  return { ...validateBase(search), tab: normalizeOptionalEnumSearchParam(search.tab, DISCOUNT_VIEWS) };
 }
 
 type DiscountListSearch = ReturnType<typeof validateDiscountListSearch>;
@@ -79,7 +78,7 @@ function DiscountsPage() {
         what={t("whatDiscounts")}
         invalidate={[queryKeys.discounts.all]}
         empty={{ icon: TicketPercent, title: t("emptyTitle"), description: t("emptyBody"), action: create }}
-        views={{ param: "tab", tabs: VIEWS.map((tab) => ({ value: tab, label: t(tab === "active" ? "tabActive" : tab === "scheduled" ? "tabScheduled" : "tabExpired") })) }}
+        views={{ param: "tab", tabs: DISCOUNT_VIEWS.map((tab) => ({ value: tab, label: t(tab === "active" ? "tabActive" : tab === "scheduled" ? "tabScheduled" : "tabExpired") })) }}
         searchPlaceholder={t("searchPlaceholder")}
         rowTo={(row) => `/admin/discounts/${row.id}`}
         rowLabel={discountTitle}

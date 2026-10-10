@@ -4,6 +4,8 @@
 @source not "../**/*.test.{ts,tsx}";
 @source not "../i18n";
 @source not "../**/*.gen.ts";
+/* Event/prop names (on blur, PermissionGate invert, query filter), never CSS classes. */
+@source not inline("blur invert filter");
 @import "../components/ui/rich-content.css";
 
 @plugin "tailwindcss-animate";

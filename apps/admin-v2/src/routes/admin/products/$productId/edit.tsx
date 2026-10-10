@@ -4,7 +4,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
 import { productFieldLabel } from "~/components/admin/product-form/utils";
 import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/variants/option-matrix-editor-model";
-import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
@@ -38,6 +38,7 @@ import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
 const PRICING_GROUP = ["price", "discountType", "discountPercentage", "discountAmount", "variants"] as const;
 const VARIANTS_FIELD = "variants";
 
+const ProductRevisionConflictDialog = lazy(() => import("~/components/admin/product-form/ProductRevisionConflictDialog").then((module) => ({ default: module.ProductRevisionConflictDialog })));
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
     default: module.OptionMatrixEditor,
@@ -137,6 +138,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
   const [formGeneration, setFormGeneration] = useState(0);
   const [revisionConflict, setRevisionConflict] = useState<ProductRevisionConflict | null>(null);
   const [isConflictOpen, setIsConflictOpen] = useState(false);
+  const conflictMounted = useOpenedOnce(isConflictOpen);
   const [isReloadingLatest, setIsReloadingLatest] = useState(false);
   const [reloadLatestError, setReloadLatestError] = useState<string | null>(null);
   const [matrixDirty, setMatrixDirty] = useState(false);
@@ -433,22 +435,26 @@ function ProductEditor({ productId, initialProduct, categories }: {
         )}
       />
     </div>
-      <ProductRevisionConflictDialog
-        open={isConflictOpen}
-        conflict={revisionConflict}
-        isReloading={isReloadingLatest}
-        reloadError={reloadLatestError}
-        onOpenChange={setIsConflictOpen}
-        changedFields={isConflictOpen ? [
-          ...(draftRef.current?.().changed ?? []).map(productFieldLabel),
-          ...(draftRef.current?.().changedSections ?? []),
-        ] : []}
-        variantsChanged={matrixDirty}
-        overlap={overlap}
-        onApplyMine={applyMineToLatest}
-        onReloadLatest={reloadLatest}
-        onProductUnavailable={() => void navigate({ to: "/admin/products" })}
-      />
+      {conflictMounted ? (
+        <Suspense fallback={null}>
+          <ProductRevisionConflictDialog
+            open={isConflictOpen}
+            conflict={revisionConflict}
+            isReloading={isReloadingLatest}
+            reloadError={reloadLatestError}
+            onOpenChange={setIsConflictOpen}
+            changedFields={isConflictOpen ? [
+              ...(draftRef.current?.().changed ?? []).map(productFieldLabel),
+              ...(draftRef.current?.().changedSections ?? []),
+            ] : []}
+            variantsChanged={matrixDirty}
+            overlap={overlap}
+            onApplyMine={applyMineToLatest}
+            onReloadLatest={reloadLatest}
+            onProductUnavailable={() => void navigate({ to: "/admin/products" })}
+          />
+        </Suspense>
+      ) : null}
     </SkuCostProvider>
   );
 }

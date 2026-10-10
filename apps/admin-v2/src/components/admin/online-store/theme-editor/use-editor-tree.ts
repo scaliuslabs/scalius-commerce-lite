@@ -39,7 +39,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { themeSettingMessages } from "~/i18n/theme-settings";
 import { settingLabelKey, sectionLabelScope } from "../schema-form/labels";
 import { appValuesInvalid } from "../schema-form/app-settings";
-import { useFitReason } from "../theme-fields";
+import { useFitReason } from "../use-fit-reason";
 import { EDITOR_PARTS, PRODUCT_MODULES, moduleId, pageMain, pageSections, pageShowsSharedParts, pageTemplate, type EditorPage } from "./editor-pages";
 import { blockId } from "./editor-selection";
 import { blockList, canRemoveBlock, newBlock, pageItems, type AppSectionEntry } from "./editor-state";

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent } from "react";
 import { useLocation, useRouter } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Eye, PanelLeft, X } from "lucide-react";
+import { ChevronRight, Eye, PanelLeft, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { UserAvatar, UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
+import type { UserMenuUser } from "@/components/auth/UserMenu";
 import markImg from "@/assets/favicon.png";
 import { InboxNavBadge } from "~/components/admin/inbox/InboxNavBadge";
 import { ReviewsNavBadge } from "~/components/admin/reviews/ReviewsNavBadge";
@@ -17,8 +17,8 @@ import { ariaKeys, comboCaps, SHORTCUTS } from "./shortcuts";
 import { ShellLink } from "./ShellLink";
 import { useShell } from "./shell";
 
-// The settings list carries its search index; the phone drawer its dialog code.
-const SettingsNav = lazy(() => import("../settings/SettingsNav").then((module) => ({ default: module.SettingsNav })));
+// The settings panel carries its search and avatar; the phone drawer its dialog code.
+const SettingsPanel = lazy(() => import("./SettingsPanel").then((module) => ({ default: module.SettingsPanel })));
 const SidebarMobileSheet = lazy(() =>
   import("@/components/ui/sidebar-mobile-sheet").then((module) => ({ default: module.SidebarMobileSheet })),
 );
@@ -123,7 +123,9 @@ export function AppSidebar({ nav, user, showSettings }: SidebarProps) {
   const closeDrawer = () => setDrawerOpen(false);
   const panel = (drawer: boolean) =>
     inSettings ? (
-      <SettingsPanel user={user} onBack={leaveSettings} onClose={drawer ? closeDrawer : undefined} />
+      <Suspense fallback={null}>
+        <SettingsPanel user={user} onBack={leaveSettings} onClose={drawer ? closeDrawer : undefined} />
+      </Suspense>
     ) : (
       <MainPanel nav={nav} showSettings={showSettings} onClose={drawer ? closeDrawer : undefined} />
     );
@@ -348,44 +350,5 @@ function Rail({ nav, showSettings, inSettings }: { nav: VisibleNavItem[]; showSe
         </ShellLink>
       ) : null}
     </nav>
-  );
-}
-
-/**
- * The settings takeover: Back and the title, then the settings list with its
- * search and the store block, and the signed-in user at the bottom.
- */
-function SettingsPanel({ user, onBack, onClose }: { user: UserMenuUser; onBack: () => void; onClose?: () => void }) {
-  const t = useMessages(shellMessages);
-  return (
-    <>
-      <div className="flex h-14 shrink-0 items-center gap-1 px-2">
-        <button type="button" onClick={onBack} aria-label={t("back")} className={NAV_ICON_BUTTON}>
-          <ChevronLeft className="rtl:rotate-180" aria-hidden />
-        </button>
-        <h2 className="flex-1 truncate text-nav font-semibold text-sidebar-foreground">{t("settings")}</h2>
-        {onClose ? (
-          <button type="button" onClick={onClose} aria-label={t("closeMenu")} className={NAV_ICON_BUTTON}>
-            <X aria-hidden />
-          </button>
-        ) : null}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
-        <Suspense fallback={null}>
-          <SettingsNav variant="sidebar" onNavigate={onClose} />
-        </Suspense>
-      </div>
-      <div className="shrink-0 border-t border-sidebar-border p-2">
-        <UserMenu user={user} side="top">
-          <button type="button" className={cn(NAV_ROW, "h-auto min-h-11 gap-2 py-1 md:h-auto")}>
-            <UserAvatar user={user} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium text-sidebar-foreground">{user.name}</span>
-              <span className="block truncate text-caption text-sidebar-muted-foreground">{user.email}</span>
-            </span>
-          </button>
-        </UserMenu>
-      </div>
-    </>
   );
 }

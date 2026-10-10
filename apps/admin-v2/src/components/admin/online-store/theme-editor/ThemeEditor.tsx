@@ -53,7 +53,7 @@ import { languageName } from "../../translations/translation-form";
 import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
-import { useFitReason } from "../theme-fields";
+import { useFitReason } from "../use-fit-reason";
 import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
