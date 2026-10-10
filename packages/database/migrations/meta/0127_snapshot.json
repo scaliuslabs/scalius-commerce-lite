@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e072a884-64e8-48d9-850b-534404fdd5e6",
+  "id": "b6febd72-0393-4c18-bd0f-e0c532da2c82",
   "prevId": "957d1763-494c-48dd-95e9-fed5ce7deabf",
   "tables": {
     "account": {
@@ -4033,15 +4033,6 @@
           "columns": [
             "deleted_at",
             "updated_at",
-            "id"
-          ],
-          "isUnique": false
-        },
-        "products_list_created_idx": {
-          "name": "products_list_created_idx",
-          "columns": [
-            "deleted_at",
-            "created_at",
             "id"
           ],
           "isUnique": false

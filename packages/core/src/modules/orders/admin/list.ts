@@ -1,5 +1,5 @@
 // The dashboard order list: views, filters, search and export details.
-import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
+import { chunkForD1, type Database, getDatabaseProviderForClient, safeBatch } from "@scalius/database/client";
 import {
     orders,
     orderItems,
@@ -19,6 +19,7 @@ import { and, asc, sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../../utils/bulk-matching";
 import { ARCHIVABLE_ORDER_STATUSES } from "../archive-policy";
 import { containsText } from "../../../utils/text-match";
+import { anySetIsSmall } from "../../../utils/list-lead";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -34,7 +35,7 @@ import type { OrderChannel } from "@scalius/shared/order-channel";
 import type { OrderBillingAddressFields, OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types";
 import { orderBillingAddressFields, orderBillingAddressSelection } from "../billing-address";
 import { orderNumberSearchCondition } from "../number";
-import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../search";
+import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch, phonePrefixFtsQuery } from "../../../utils/phone-search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
@@ -153,20 +154,47 @@ export const ORDER_LIST_VIEWS = [
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
-function codTrackingStatusExists(statuses: readonly string[]): SQL {
-    return sql`EXISTS (
-        SELECT 1 FROM ${codTracking}
-        WHERE ${codTracking.orderId} = ${orders.id}
-          AND ${inArray(codTracking.codStatus, [...statuses])}
-    )`;
+/**
+ * The rowids of the orders a set names (`orderIds` selects `order_id`).
+ * The CROSS JOIN keeps SQLite's join order: the set first, then each order
+ * by id (SQLite has no statistics to choose by).
+ */
+function namedOrderRowids(orderIds: SQL): SQL {
+    return sql`SELECT named_order.rowid FROM (${orderIds}) AS named
+        CROSS JOIN orders AS named_order ON named_order.id = named.order_id`;
 }
 
-function openCustomerRequestExists(): SQL {
-    return sql`EXISTS (
-        SELECT 1 FROM ${orderSupportRequests}
-        WHERE ${orderSupportRequests.orderId} = ${orders.id}
-          AND ${orderSupportRequests.activeKey} IS NOT NULL
-    )`;
+/**
+ * The orders a set names, as a condition: an indexed lookup of the set,
+ * never a per-order EXISTS probe of every order. When the set is small the
+ * list reads it first (`orderListLeads`).
+ */
+function ordersAmong(db: Database, orderIds: SQL): SQL {
+    if (getDatabaseProviderForClient(db) === "postgres") {
+        return sql`${orders.id} IN (SELECT named.order_id FROM (${orderIds}) AS named)`;
+    }
+    return sql`orders.rowid IN (${namedOrderRowids(orderIds)})`;
+}
+
+// Cash on delivery still out (`cod_tracking_status_idx`): couriers' work in flight.
+function codTrackingOrderIds(statuses: readonly string[]): SQL {
+    return sql`SELECT ${codTracking.orderId} AS order_id FROM ${codTracking}
+        WHERE ${inArray(codTracking.codStatus, [...statuses])}`;
+}
+
+const COD_TO_COLLECT_STATUSES = [CodStatus.PENDING, CodStatus.FAILED] as const;
+const COD_FAILED_STATUSES = [CodStatus.FAILED] as const;
+
+function codTrackingStatusExists(db: Database, statuses: readonly string[]): SQL {
+    return ordersAmong(db, codTrackingOrderIds(statuses));
+}
+
+// Open customer requests (the active-key index).
+const openRequestOrderIds = () => sql`SELECT ${orderSupportRequests.orderId} AS order_id FROM ${orderSupportRequests}
+    WHERE ${orderSupportRequests.activeKey} IS NOT NULL`;
+
+function openCustomerRequestExists(db: Database): SQL {
+    return ordersAmong(db, openRequestOrderIds());
 }
 
 /**
@@ -174,7 +202,7 @@ function openCustomerRequestExists(): SQL {
  * cancelled, returned and unfinished online checkouts never sit in Unpaid or
  * Unfulfilled (ORD-09); cash on delivery gets its own views (ORD-29).
  */
-function orderListViewCondition(view: OrderListView): SQL {
+function orderListViewCondition(db: Database, view: OrderListView): SQL {
     switch (view) {
         case "unfulfilled":
             return sql`${inArray(orders.status, [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED])}
@@ -191,10 +219,10 @@ function orderListViewCondition(view: OrderListView): SQL {
             return sql`${orders.paymentMethod} = ${PaymentMethod.COD}
                 AND ${inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED])}
                 AND ${orders.balanceDueMinor} > 0
-                AND ${codTrackingStatusExists([CodStatus.PENDING, CodStatus.FAILED])}`;
+                AND ${codTrackingStatusExists(db, COD_TO_COLLECT_STATUSES)}`;
         case "delivery_failed":
             return sql`${orders.status} = ${OrderStatus.SHIPPED}
-                AND ${codTrackingStatusExists([CodStatus.FAILED])}`;
+                AND ${codTrackingStatusExists(db, COD_FAILED_STATUSES)}`;
         case "returned":
             return sql`${orders.status} = ${OrderStatus.RETURNED}`;
         case "ready_for_pickup":
@@ -227,6 +255,67 @@ function normalizeListPositiveInteger(value: number | undefined, fallback: numbe
     const minBounded = Math.max(1, integer);
     return max == null ? minBounded : Math.min(minBounded, max);
 }
+
+/**
+ * The orders a search finds: the order number, a word of the buyer's name,
+ * phone or email (`orders_fts`), a whole email, a phone written any way, or
+ * the courier's consignment or tracking id. Every source is an index lookup,
+ * so a search reads its matches only, never every order (a million-order
+ * store). With FTS5 the sources are one union of rowids; a phone matches
+ * from its start (with or without the country code), as Shopify's search does.
+ */
+function orderSearchCondition(db: Database, term: string): SQL {
+    const rowids = orderSearchRowids(db, term);
+    if (rowids) return sql`orders.rowid IN (${rowids})`;
+    const parts = orderSearchParts(term);
+    const matches = [
+        parts.orderNumberCondition,
+        parts.emailCondition ?? ftsMatch(db, "orders_fts", "orders", term),
+        buildPhoneSearchCondition(parts.phoneTerms),
+        parts.courierCondition,
+    ].filter((condition): condition is SQL => condition !== undefined);
+    return sql`(${sql.join(matches, sql` OR `)})`;
+}
+
+function orderSearchParts(term: string) {
+    // A full email finds that address only: "rahim@x.com" must not also
+    // find "rahima@x.com" through word matching (R2-ORD-14).
+    const emailCondition = isEmailSearch(term)
+        ? sql`lower(trim(${orders.customerEmail})) = lower(trim(${term}))`
+        : undefined;
+    return {
+        orderNumberCondition: orderNumberSearchCondition(term),
+        phoneTerms: isLikelyPhoneSearch(term) ? buildPhoneSearchTerms(term) : [],
+        emailCondition,
+        // Merchants also look orders up by the courier's consignment or tracking id.
+        courierCondition: sql`${orders.id} IN (
+            SELECT ${deliveryShipments.orderId} FROM ${deliveryShipments}
+            WHERE lower(${deliveryShipments.trackingId}) = lower(${term})
+              OR lower(${deliveryShipments.externalId}) = lower(${term})
+        )`,
+    };
+}
+
+/** With FTS5, the search's matching rowids: one union of index lookups. */
+function orderSearchRowids(db: Database, term: string): SQL | undefined {
+    if (!isFts5SearchEnabled(db)) return undefined;
+    const { orderNumberCondition, phoneTerms, emailCondition, courierCondition } = orderSearchParts(term);
+    const sources: SQL[] = [];
+    if (orderNumberCondition) sources.push(sql`SELECT rowid FROM ${orders} WHERE ${orderNumberCondition}`);
+    if (emailCondition) {
+        sources.push(sql`SELECT rowid FROM ${orders} WHERE ${emailCondition}`);
+    } else {
+        const words = sanitizeFtsQuery(term);
+        if (words) sources.push(sql`SELECT rowid FROM orders_fts WHERE orders_fts MATCH ${words}`);
+    }
+    if (phoneTerms.length > 0) {
+        const phoneQuery = phonePrefixFtsQuery("customer_phone", phoneTerms);
+        sources.push(sql`SELECT rowid FROM orders_fts WHERE orders_fts MATCH ${phoneQuery}`);
+    }
+    sources.push(sql`SELECT rowid FROM ${orders} WHERE ${courierCondition}`);
+    return sql.join(sources, sql` UNION `);
+}
+
 
 function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
     if (searchTerms.length === 0) return undefined;
@@ -269,6 +358,31 @@ export interface OrderListFilter {
     startDate?: Date;
     endDate?: Date;
     appCondition?: SQL;
+    /**
+     * Read the orders the search or the open-request filter names first,
+     * then the other conditions; set when those are few (`orderListLeads`).
+     */
+    leadWithMatches?: boolean;
+}
+
+/**
+ * Whether a list read should start from a set of orders its filter names
+ * (`utils/list-lead.ts`): the search's matches, the orders with an open
+ * request, or cash on delivery still out, when one of them is small.
+ */
+export async function orderListLeads(
+    db: Database,
+    filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view">,
+): Promise<boolean> {
+    if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
+    const sets: SQL[] = [];
+    const term = filter.search?.trim();
+    const searchRowids = term ? orderSearchRowids(db, term) : undefined;
+    if (searchRowids) sets.push(searchRowids);
+    if (filter.openRequest) sets.push(openRequestOrderIds());
+    if (filter.view === "cod_to_collect") sets.push(codTrackingOrderIds(COD_TO_COLLECT_STATUSES));
+    if (filter.view === "delivery_failed") sets.push(codTrackingOrderIds(COD_FAILED_STATUSES));
+    return anySetIsSmall(db, sets);
 }
 
 /**
@@ -296,7 +410,12 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
     } = filter;
     const whereConditions: SQL[] = [];
 
-    whereConditions.push(sql`${orders.deletedAt} IS NULL`);
+    // Every list index starts with `deleted_at`: the unary `+` keeps SQLite
+    // off them, so it reads the named orders by rowid instead of walking an
+    // index past rows that cannot match.
+    whereConditions.push(filter.leadWithMatches
+        ? sql`+${orders.deletedAt} IS NULL`
+        : sql`${orders.deletedAt} IS NULL`);
     if (filter.appCondition) whereConditions.push(filter.appCondition);
     if (ids) {
         // An explicit selection is exported as picked, archived or not.
@@ -308,41 +427,10 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
     let rankExpression: SQL | undefined = undefined;
     const trimmedSearch = search?.trim();
     if (trimmedSearch) {
-        const phoneSearchTerms = buildPhoneSearchTerms(trimmedSearch);
-        const phoneCondition = isLikelyPhoneSearch(trimmedSearch)
-            ? buildPhoneSearchCondition(phoneSearchTerms)
-            : undefined;
-        // A full email finds that address only: "rahim@x.com" must not also
-        // find "rahima@x.com" through word matching (R2-ORD-14).
-        const emailSearch = isEmailSearch(trimmedSearch);
-        const ftsCondition = emailSearch
-            ? sql`lower(${orders.customerEmail}) = lower(${trimmedSearch})`
-            : ftsMatch(db, "orders_fts", "orders", trimmedSearch);
-        // Merchants also look orders up by the courier's consignment or tracking id.
-        const courierIdCondition = sql`EXISTS (
-            SELECT 1 FROM ${deliveryShipments}
-            WHERE ${deliveryShipments.orderId} = ${orders.id}
-              AND (lower(${deliveryShipments.trackingId}) = lower(${trimmedSearch})
-                OR lower(${deliveryShipments.externalId}) = lower(${trimmedSearch}))
-        )`;
         const orderNumberCondition = orderNumberSearchCondition(trimmedSearch);
-        const matches = [orderNumberCondition, ftsCondition, phoneCondition, courierIdCondition].filter(
-            (condition): condition is SQL => condition !== undefined,
-        );
-        whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
-        const ftsRank = ftsCondition && !emailSearch && isFts5SearchEnabled(db)
-            ? sql`COALESCE(
-                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitizeFtsQuery(trimmedSearch)}),
-                    999999
-                ) ASC`
-            : undefined;
-        // "#1001" puts that order first, then the best text matches.
-        const numberRank = orderNumberCondition
-            ? sql`CASE WHEN ${orderNumberCondition} THEN 0 ELSE 1 END ASC`
-            : undefined;
-        rankExpression = numberRank && ftsRank
-            ? sql`${numberRank}, ${ftsRank}`
-            : numberRank ?? ftsRank;
+        whereConditions.push(orderSearchCondition(db, trimmedSearch));
+        // "#1001" puts that order first; the other matches read newest first.
+        if (orderNumberCondition) rankExpression = sql`CASE WHEN ${orderNumberCondition} THEN 0 ELSE 1 END ASC`;
     }
 
     if (status) {
@@ -350,11 +438,11 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
     }
 
     if (view) {
-        whereConditions.push(orderListViewCondition(view));
+        whereConditions.push(orderListViewCondition(db, view));
     }
 
     if (openRequest) {
-        whereConditions.push(openCustomerRequestExists());
+        whereConditions.push(openCustomerRequestExists(db));
     }
 
     if (paymentStatus) {
@@ -414,7 +502,8 @@ export async function listMatchingArchivableOrders(
     cursor: string | undefined,
     limit: number = BULK_MATCHING_SLICE,
 ): Promise<{ claims: Array<{ id: string; expectedVersion: number }>; next: string | null }> {
-    const { conditions } = orderListConditions(db, { ...filter, showArchived: false, ids: undefined });
+    const leadWithMatches = await orderListLeads(db, { search: filter.search, openRequest: filter.openRequest, view: filter.view });
+    const { conditions } = orderListConditions(db, { ...filter, showArchived: false, ids: undefined, leadWithMatches });
     const after = matchingSliceCondition(orders.id, cursor);
     const nowSeconds = Math.floor(Date.now() / 1000);
     const rows = await db
@@ -447,7 +536,7 @@ export async function listOrders(db: Database, options: {
     paymentRecovery?: OrderPaymentRecoveryFilter;
     view?: OrderListView;
     deliveryMethod?: OrderDeliveryMethodFilter;
-    /** Where the order came from (`orders_channel_list_idx`). */
+    /** Where the order came from (`orders_list_channel_idx`). */
     channel?: OrderChannel;
     /** A stored source slug (`facebook`, `walk_in`, …). */
     channelSource?: string;
@@ -512,28 +601,31 @@ export async function listOrders(db: Database, options: {
         startDate,
         endDate,
         appCondition: options.appCondition,
+        leadWithMatches: await orderListLeads(db, { search, openRequest, ids, view }),
     });
 
     const whereClause = whereConditions.length > 0
         ? sql`${sql.join(whereConditions, sql` AND `)}`
         : undefined;
 
-    // A search ordered by relevance computes its rank per row and cannot
-    // seek, so it pages by position inside the first `maxOffset`
-    // matches. Every other sort walks by keyset (sort value + id).
+    // Relevance is the order number first, then newest first. An order-number
+    // search ranks per row and cannot seek, so it pages by position inside
+    // the first `maxOffset` matches (it matches few). Every other sort walks
+    // by keyset (sort value + id), relevance without a number as newest first.
     const relevanceRanked = sort === "relevance" && rankExpression !== undefined;
-    const keysetSort = sort === "relevance" ? "updatedAt" : sort;
+    const keysetSort = sort === "relevance" ? "createdAt" : sort;
+    const direction = sort === "relevance" ? "desc" : order;
     const keysetSpec = ORDER_KEYSET_SORTS[keysetSort as keyof typeof ORDER_KEYSET_SORTS] ?? ORDER_KEYSET_SORTS.updatedAt;
     const referenced = !relevanceRanked && "referenced" in keysetSpec && keysetSpec.referenced === true;
     const boundary = referenced
-        ? await resolveReferencedBoundary({ after, before }, { sort: keysetSort, direction: order }, async (id) => {
+        ? await resolveReferencedBoundary({ after, before }, { sort: keysetSort, direction }, async (id) => {
             const [row] = await db.select({ value: sql<string>`${keysetSpec.column}` }).from(orders).where(eq(orders.id, id)).limit(1);
             return row?.value;
         })
         : undefined;
     const plan = planKeysetPage({ page, limit, after, before, boundary }, {
         sort: relevanceRanked ? "relevance" : keysetSort,
-        order: { column: keysetSpec.column, id: orders.id, direction: order },
+        order: { column: keysetSpec.column, id: orders.id, direction },
         kind: keysetSpec.kind,
         referenced,
         ranked: relevanceRanked
@@ -545,6 +637,18 @@ export async function listOrders(db: Database, options: {
             ]
             : undefined,
     });
+
+    // The page's ids first, read from the sort index alone; the wide row and
+    // its per-order facts are then read for those ids only. Sorting full rows
+    // would compute every fact of every row tied on the sort value, and a
+    // status or payment tab can tie thousands (a million-order store).
+    const pageKeys = db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(plan.pageWhere(whereClause))
+        .orderBy(...plan.orderBy)
+        .limit(plan.fetchLimit)
+        .offset(plan.offset);
 
     const dataQuery = db
         .select({
@@ -584,9 +688,7 @@ export async function listOrders(db: Database, options: {
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
-        .where(plan.pageWhere(whereClause))
-        .limit(plan.fetchLimit)
-        .offset(plan.offset)
+        .where(inArray(orders.id, pageKeys))
         .orderBy(...plan.orderBy);
 
     // The total reads at most `countCap` + 1 rows. A cursor page also

@@ -36,8 +36,6 @@ CREATE INDEX IF NOT EXISTS "orders_list_pickup_idx" ON "orders" ("deleted_at", "
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "products_list_updated_idx" ON "products" ("deleted_at", "updated_at", "id");
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "products_list_created_idx" ON "products" ("deleted_at", "created_at", "id");
---> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "products_list_name_idx" ON "products" ("deleted_at", "name", "id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "products_list_price_idx" ON "products" ("deleted_at", "price_minor", "id");
@@ -74,4 +72,4 @@ DROP INDEX IF EXISTS "orders_channel_list_idx";
 --> statement-breakpoint
 DROP INDEX IF EXISTS "product_reviews_status_created_idx";
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (127, '0127_list_indexes', '5562ec468681e4ca1d0ceb9125b14605a939d4526ac36e4686757d341d65a621');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (127, '0127_list_indexes', '8961702f56aa42ccd156bd6c9318f666d798ad1f9ad38acf3d8ec47fb53d5641');

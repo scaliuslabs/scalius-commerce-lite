@@ -18,7 +18,7 @@ const CREATED = [
   "orders_list_updated_idx", "orders_list_created_idx", "orders_list_total_idx", "orders_list_customer_name_idx",
   "orders_list_status_idx", "orders_list_payment_status_idx", "orders_list_payment_method_idx",
   "orders_list_fulfillment_idx", "orders_list_channel_idx", "orders_list_archived_idx", "orders_list_pickup_idx",
-  "products_list_updated_idx", "products_list_created_idx", "products_list_name_idx", "products_list_price_idx", "products_list_trash_idx",
+  "products_list_updated_idx", "products_list_name_idx", "products_list_price_idx", "products_list_trash_idx",
   "customers_list_updated_idx", "customers_list_created_idx", "customers_list_name_idx", "customers_list_trash_idx", "product_reviews_status_list_idx", "product_reviews_created_idx",
   "cod_tracking_status_idx", "delivery_shipments_tracking_lookup_idx", "delivery_shipments_external_lookup_idx",
 ];

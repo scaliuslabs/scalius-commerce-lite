@@ -158,7 +158,9 @@ describe("admin customer list location projection", () => {
     // The count joins only the stored order facts (segment filters read them), never locations,
     // and reads a capped `select 1` sub-select, not every row.
     expect(queries.find((query) => "one" in query.fields)?.joins).toHaveLength(1);
-    expect(queries.find((query) => "latestOrderName" in query.fields)).toMatchObject({ limit: 11, offset: 10 });
+    // The page window reads ids only; the wide row is read for those ids, unpaged.
+    expect(queries.find((query) => Object.keys(query.fields).join() === "id")).toMatchObject({ limit: 11, offset: 10 });
+    expect(queries.find((query) => "latestOrderName" in query.fields)?.limit).toBeUndefined();
     expect(result.pagination).toEqual({
       total: 25,
       totalIsCapped: false,

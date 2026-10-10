@@ -19,6 +19,7 @@ import {
 } from "../../utils/keyset";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
+import { anySetIsSmall } from "../../utils/list-lead";
 import { ValidationError } from "@scalius/core/errors";
 import {
   buildBuyerCatalogPricingProjection,
@@ -87,6 +88,40 @@ export interface ProductListFilter {
     salesChannelState?: "published" | "unpublished";
     /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
     appCondition?: SQL;
+    /** Read the search's matches first (`productListLeads`). */
+    leadWithMatches?: boolean;
+}
+
+/**
+ * With SQLite (FTS5), the rowids of the products a search finds: a word of
+ * the product, a word of one of its live SKUs, or a SKU's exact barcode.
+ * Index lookups only, never a probe of every product's SKUs.
+ */
+function productSearchRowids(db: Database, search: string): SQL | undefined {
+    if (!isFts5SearchEnabled(db)) return undefined;
+    const sources: SQL[] = [];
+    const words = sanitizeFtsQuery(search);
+    if (words) {
+        sources.push(sql`SELECT rowid FROM products_fts WHERE products_fts MATCH ${words}`);
+        sources.push(sql`SELECT matched_product.rowid FROM product_variants_fts
+            CROSS JOIN ${productVariants} ON ${productVariants}.rowid = product_variants_fts.rowid
+            CROSS JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
+            WHERE product_variants_fts MATCH ${words} AND ${productVariants.deletedAt} IS NULL`);
+    }
+    const barcodeKey = getBarcodeIdentityKey(search);
+    if (barcodeKey) {
+        sources.push(sql`SELECT matched_product.rowid FROM ${productVariants}
+            CROSS JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
+            WHERE ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL`);
+    }
+    return sources.length > 0 ? sql.join(sources, sql` UNION `) : undefined;
+}
+
+/** Whether the list should read the search's matches first: they are few (`utils/list-lead.ts`). */
+export async function productListLeads(db: Database, filter: Pick<ProductListFilter, "search">): Promise<boolean> {
+    const search = filter.search?.trim();
+    const rowids = search ? productSearchRowids(db, search) : undefined;
+    return rowids ? anySetIsSmall(db, [rowids]) : false;
 }
 
 /**
@@ -105,17 +140,27 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
     } = filter;
     const whereConditions: SQL[] = filter.appCondition ? [filter.appCondition] : [];
 
+    // The list indexes start with `deleted_at`: the unary `+` keeps SQLite
+    // off them when the list reads the search's matches first.
+    const deletedAt = filter.leadWithMatches ? sql`+${products.deletedAt}` : sql`${products.deletedAt}`;
     if (showTrashed) {
-        whereConditions.push(sql`${products.deletedAt} IS NOT NULL`);
+        whereConditions.push(sql`${deletedAt} IS NOT NULL`);
     } else {
-        whereConditions.push(sql`${products.deletedAt} IS NULL`);
+        whereConditions.push(sql`${deletedAt} IS NULL`);
     }
     if (status) {
         whereConditions.push(eq(products.isActive, status === "active"));
     }
 
     let rankExpression: SQL | undefined;
-    if (search) {
+    const searchRowids = search ? productSearchRowids(db, search) : undefined;
+    if (search && searchRowids) {
+        whereConditions.push(sql`products.rowid IN (${searchRowids})`);
+        const sanitized = sanitizeFtsQuery(search);
+        if (sanitized) {
+            rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+        }
+    } else if (search) {
         const barcodeKey = getBarcodeIdentityKey(search);
 
         const sanitized = sanitizeFtsQuery(search);
@@ -181,7 +226,7 @@ export async function listMatchingProductClaims(
     cursor: string | undefined,
     limit: number = BULK_MATCHING_SLICE,
 ): Promise<{ claims: Array<{ id: string; expectedAggregateRevision: number }>; next: string | null }> {
-    const { conditions } = productListConditions(db, filter);
+    const { conditions } = productListConditions(db, { ...filter, leadWithMatches: await productListLeads(db, filter) });
     const after = matchingSliceCondition(products.id, cursor);
     const rows = await db
         .select({ id: products.id, aggregateRevision: products.aggregateRevision })
@@ -248,6 +293,7 @@ export async function listProducts(db: Database, options: {
         salesChannelId,
         salesChannelState,
         appCondition: options.appCondition,
+        leadWithMatches: await productListLeads(db, { search }),
     });
     const whereClause =
         whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -261,6 +307,17 @@ export async function listProducts(db: Database, options: {
         kind: keysetSpec.kind,
         ranked: rankExpression ? [rankExpression, sql`${products.id} asc`] : undefined,
     });
+
+    // The page's ids first, from the sort index; the wide row and its
+    // channels are then read for those ids only.
+    const pageKeys = db
+        .select({ id: products.id })
+        .from(products)
+        .leftJoin(categories, eq(categories.id, products.categoryId))
+        .where(plan.pageWhere(whereClause))
+        .orderBy(...plan.orderBy)
+        .limit(plan.fetchLimit)
+        .offset(plan.offset);
 
     const productResultsQuery = db
         .select({
@@ -287,9 +344,7 @@ export async function listProducts(db: Database, options: {
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(plan.pageWhere(whereClause))
-        .limit(plan.fetchLimit)
-        .offset(plan.offset)
+        .where(inArray(products.id, pageKeys))
         .orderBy(...plan.orderBy);
 
     // The total reads at most `countCap` + 1 rows; a cursor page also

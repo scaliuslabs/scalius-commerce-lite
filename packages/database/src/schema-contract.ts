@@ -415,7 +415,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 127,
     name: "0127_list_indexes",
-    sourceSha256: "5562ec468681e4ca1d0ceb9125b14605a939d4526ac36e4686757d341d65a621",
+    sourceSha256: "8961702f56aa42ccd156bd6c9318f666d798ad1f9ad38acf3d8ec47fb53d5641",
   },
 ] as const;
 

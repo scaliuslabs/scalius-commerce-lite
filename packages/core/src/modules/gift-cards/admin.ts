@@ -3,6 +3,7 @@
 // see `last4` only; the code is shown once, at manual issue.
 import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
+import { ftsMatch } from "../../search/fts5";
 import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
 import { capTotal } from "@scalius/shared/pagination";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -150,11 +151,14 @@ export async function listGiftCardsForStaff(
         if (LAST4_QUERY.test(upper)) {
             conditions.push(eq(giftCards.codeLast4, upper));
         } else {
+            // The buyer's name, phone or email words through the customer search
+            // index (a scan of every customer otherwise, 200,000 in a large store).
+            const customerMatch = ftsMatch(db, "customers_fts", "customers", q) ?? sql`(${containsText(customers.name, q)}
+                   OR ${containsText(customers.phone, q)}
+                   OR ${containsText(customers.email, q)})`;
             conditions.push(sql`${giftCards.customerId} IN (
                 SELECT ${customers.id} FROM ${customers}
-                WHERE ${containsText(customers.name, q)}
-                   OR ${containsText(customers.phone, q)}
-                   OR ${containsText(customers.email, q)}
+                WHERE ${customerMatch}
                 LIMIT 200
             )`);
         }

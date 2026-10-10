@@ -266,18 +266,32 @@ describe.each(PLANS)("order list totals read a bounded number of rows on the %s 
 describe.each(PLANS)("order list relevance search on the %s plan", (plan) => {
     const lists = useProfile(plan);
 
-    it("pages a ranked search by position inside the bounded window", async () => {
+    it("reads a word search newest first by keyset, forward and back", async () => {
         const { db, rows } = setup(40);
-        const matching = rows.filter((row) => row.customerName === "Karim Ali").map((row) => row.id);
+        const matching = expectedOrder(rows.filter((row) => row.customerName === "Karim Ali"), "createdAt", "desc");
         const pages = await walkForward(fetcher(db, { search: "Karim", sort: "relevance", limit: 3 }));
-        expect(pages.flatMap((page) => page.ids).sort()).toEqual([...matching].sort());
-        expect(new Set(pages.flatMap((page) => page.ids)).size).toBe(matching.length);
+        expect(pages.flatMap((page) => page.ids)).toEqual(matching);
         const last = pages[pages.length - 1]!;
         const back = await walkBackward(fetcher(db, { search: "Karim", sort: "relevance", limit: 3 }), last);
         expect(back.map((page) => page.ids)).toEqual(pages.map((page) => page.ids).reverse());
+        expect(JSON.parse(Buffer.from(last.pageInfo.startCursor!, "base64url").toString())).toMatchObject({ s: "createdAt" });
+    });
+
+    it("puts the order number first and pages that ranked search by position inside the bounded window", async () => {
+        const { db, sqlite } = setup(40);
+        sqlite.exec("UPDATE orders SET order_number = 3 WHERE id = 'ord_0039'");
+        // "3" is order #3 and the email words starting with 3 ("buyer.3", "buyer.30" …).
+        const all = (await listOrders(db, { search: "3", sort: "relevance", limit: 100 })).orders.map((order) => order.id);
+        expect(all[0]).toBe("ord_0039");
+        expect(all.length).toBeGreaterThan(3);
+        const pages = await walkForward(fetcher(db, { search: "3", sort: "relevance", limit: 3 }));
+        expect(pages.flatMap((page) => page.ids)).toEqual(all);
+        const last = pages[pages.length - 1]!;
+        const back = await walkBackward(fetcher(db, { search: "3", sort: "relevance", limit: 3 }), last);
+        expect(back.map((page) => page.ids)).toEqual(pages.map((page) => page.ids).reverse());
         expect(JSON.parse(Buffer.from(last.pageInfo.endCursor!, "base64url").toString())).toMatchObject({
             s: "relevance",
-            k: [matching.length - 1],
+            k: [all.length - 1],
             i: "",
         });
         expect(back.at(-1)!.pageInfo.hasPreviousPage).toBe(false);
@@ -285,10 +299,10 @@ describe.each(PLANS)("order list relevance search on the %s plan", (plan) => {
 
     it("rejects a relevance cursor for another sort and a deep numbered search page", async () => {
         const { db } = setup(40);
-        const first = await listOrders(db, { search: "Karim", sort: "relevance", limit: 2 });
-        await expect(listOrders(db, { search: "Karim", sort: "createdAt", limit: 2, after: first.pageInfo.endCursor! }))
+        const first = await listOrders(db, { search: "3", sort: "relevance", limit: 2 });
+        await expect(listOrders(db, { search: "3", sort: "createdAt", limit: 2, after: first.pageInfo.endCursor! }))
             .rejects.toMatchObject({ code: "INVALID_CURSOR" });
-        await expect(listOrders(db, { search: "Karim", sort: "relevance", limit: 50, page: lists.maxOffset / 50 + 1 }))
+        await expect(listOrders(db, { search: "3", sort: "relevance", limit: 50, page: lists.maxOffset / 50 + 1 }))
             .rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
     });
 });

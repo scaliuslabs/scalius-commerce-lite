@@ -1,6 +1,18 @@
+// What a dashboard search term is (an email, a phone) and the phone's forms,
+// shared by the order and customer lists.
 import { toLatinDigits } from "@scalius/shared/phone-input";
 
 const PHONE_DIGIT_MIN_LENGTH = 4;
+
+/**
+ * An FTS5 query for a phone column: any of the phone's forms as a prefix
+ * token ("01712" finds +8801712…). The terms are digits only, so the query
+ * needs no escaping. A stored "+880 1712-345678" is several tokens, so it
+ * matches from its first group only.
+ */
+export function phonePrefixFtsQuery(column: string, terms: readonly string[]): string {
+    return `${column} : (${terms.map((digits) => `${digits}*`).join(" OR ")})`;
+}
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Bangla (০–৯) and Arabic digits typed by the merchant read as Latin digits (R2-ORD-14). */

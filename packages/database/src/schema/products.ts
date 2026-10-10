@@ -101,7 +101,6 @@ export const products = sqliteTable(
         index("products_deleted_at_idx").on(table.deletedAt),
         // The dashboard list's sorts, each ending with the keyset tiebreaker `id`.
         index("products_list_updated_idx").on(table.deletedAt, table.updatedAt, table.id),
-        index("products_list_created_idx").on(table.deletedAt, table.createdAt, table.id),
         index("products_list_name_idx").on(table.deletedAt, table.name, table.id),
         index("products_list_price_idx").on(table.deletedAt, table.priceMinor, table.id),
         // The trash, recently updated first.

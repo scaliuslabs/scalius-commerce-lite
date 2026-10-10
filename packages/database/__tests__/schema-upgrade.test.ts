@@ -625,9 +625,9 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 127,
         name: "0127_list_indexes",
-        // Twenty-five dashboard list indexes, six replaced ones dropped, the ledger.
-        sqliteStatements: 32,
-        postgresStatements: 32,
+        // Twenty-four dashboard list indexes, six replaced ones dropped, the ledger.
+        sqliteStatements: 31,
+        postgresStatements: 31,
       },
     ]);
   });
