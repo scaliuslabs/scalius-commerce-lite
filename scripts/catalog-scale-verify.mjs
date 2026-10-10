@@ -48,8 +48,8 @@ const CHECKS = [
   ["fulfilled quantity = sum of active fulfilment lines, never over quantity", `SELECT count(*) FROM order_items AS i
      WHERE i.fulfilled_quantity <> coalesce((SELECT sum(l.quantity) FROM order_fulfillment_lines AS l JOIN order_fulfillments AS f ON f.id = l.fulfillment_id WHERE l.order_item_id = i.id AND f.status = 'active'), 0)
         OR i.fulfilled_quantity > i.quantity`],
-  ["return quantities never pass fulfilled quantity", `SELECT count(*) FROM order_items AS i
-     WHERE coalesce((SELECT sum(rl.requested_quantity) FROM order_return_lines AS rl WHERE rl.order_item_id = i.id), 0) > i.fulfilled_quantity`],
+  ["return quantities never pass fulfilled quantity", `SELECT count(*) FROM (SELECT order_item_id, sum(requested_quantity) AS s FROM order_return_lines GROUP BY order_item_id) AS r
+     JOIN order_items AS i ON i.id = r.order_item_id WHERE r.s > i.fulfilled_quantity`],
   // ---- customers
   ["customer total_orders = trigger-maintained orders_count", `SELECT count(*) FROM customers AS c JOIN customer_order_stats AS s ON s.customer_id = c.id WHERE c.total_orders <> s.orders_count`],
   ["customer_order_stats agrees with orders (sampled 2000 customers)", `SELECT count(*) FROM (SELECT customer_id, orders_count, first_order_at, last_order_at FROM customer_order_stats ORDER BY rowid LIMIT 2000) AS s
