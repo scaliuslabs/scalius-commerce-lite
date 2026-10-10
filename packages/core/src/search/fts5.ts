@@ -8,7 +8,7 @@ import { and, or, sql, type SQL } from "drizzle-orm";
 // Every ASCII character outside an FTS5 bareword (letters, digits, `_`) and
 // the Bangla danda: a stray `%`, `$` or `;` would otherwise be an FTS5 syntax
 // error, not a search.
-const FTS5_SPECIAL_CHARS = /[\x00-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\x7F\u0964\u0965]/g;
+const FTS5_SPECIAL_CHARS = /[\p{Cc}\x20-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\x7E\u0964\u0965]/gu;
 const MAX_SEARCH_TOKENS = 8;
 
 /**
