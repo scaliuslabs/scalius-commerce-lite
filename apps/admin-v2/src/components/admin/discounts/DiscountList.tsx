@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useState } from "react";
 import { toast } from "~/lib/toast";
 
@@ -55,14 +55,13 @@ export function useDiscountColumns(): ColumnDef<DiscountListItem, unknown>[] {
         const more = discount.codeCount > 1 ? t("moreCodes", { count: discount.codeCount - 1 }) : null;
         return (
           <span className="block min-w-0">
-            <Link
-              to="/admin/discounts/$discountId"
-              params={{ discountId: discount.id }}
+            <RowLink
+              to={`/admin/discounts/${discount.id}`}
               title={title}
               className="block truncate font-medium text-foreground hover:underline"
             >
               {discount.method === "code" ? <span className="font-mono">{title}</span> : title}
-            </Link>
+            </RowLink>
             <span title={more ? `${value} · ${more}` : value} className="block truncate text-muted-foreground">
               {value}{more ? ` · ${more}` : null}
             </span>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -38,13 +39,12 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
       header: t("colTransfer"),
       meta: { primary: true, mobile: "primary", minWidth: 120 },
       cell: ({ row }) => (
-        <Link
-          to="/admin/inventory/transfers/$transferId"
-          params={{ transferId: row.original.id }}
+        <RowLink
+          to={`/admin/inventory/transfers/${row.original.id}`}
           className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {row.original.displayNumber}
-        </Link>
+        </RowLink>
       ),
     },
     {

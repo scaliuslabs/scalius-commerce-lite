@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, UsersRound } from "lucide-react";
@@ -52,14 +53,13 @@ export function SegmentList() {
           || (segment.promotionCount === 1 ? t("usedByOne") : segment.promotionCount > 1 ? t("usedBy", { count: segment.promotionCount }) : "");
         return (
           <span className="block min-w-0">
-            <Link
-              to="/admin/customers/segments/$segmentId"
-              params={{ segmentId: segment.id }}
+            <RowLink
+              to={`/admin/customers/segments/${segment.id}`}
               title={segment.name}
               className="block truncate font-medium text-foreground hover:underline"
             >
               {segment.name}
-            </Link>
+            </RowLink>
             {note ? <span title={note} className="block truncate text-muted-foreground">{note}</span> : null}
           </span>
         );

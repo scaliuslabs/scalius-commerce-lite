@@ -1,6 +1,7 @@
 // One content type's entries: title, status and when each changed. Entries
 // open on their own page; a private type says the online store cannot show
 // its entries yet.
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -53,14 +54,13 @@ export function MetaobjectEntriesList({ definitionId }: { definitionId: string }
       cell: ({ row }) => {
         const name = row.original.displayName || t("untitledEntry");
         return (
-          <Link
-            to="/admin/metaobjects/$definitionId/entries/$entryId"
-            params={{ definitionId, entryId: row.original.id }}
+          <RowLink
+            to={`/admin/metaobjects/${definitionId}/entries/${row.original.id}`}
             title={name}
             className="block truncate font-medium text-foreground hover:underline"
           >
             {name}
-          </Link>
+          </RowLink>
         );
       },
     },

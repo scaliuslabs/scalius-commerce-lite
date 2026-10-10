@@ -1,5 +1,6 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
 import { toast } from "~/lib/toast";
@@ -558,9 +559,9 @@ export function ResourceRowLink({ to, lines = 2, title, children }: {
   const clamp = lines === 1 ? "line-clamp-1" : "line-clamp-2";
   const whole = title ?? (typeof children === "string" ? children : undefined);
   return to ? (
-    <Link to={to} title={whole} className={cn("break-words font-medium text-foreground hover:underline", clamp)}>
+    <RowLink to={to} title={whole} className={cn("break-words font-medium text-foreground hover:underline", clamp)}>
       {children}
-    </Link>
+    </RowLink>
   ) : (
     <span title={whole} className={cn("break-words font-medium", clamp)}>{children}</span>
   );

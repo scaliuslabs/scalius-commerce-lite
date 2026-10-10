@@ -1,6 +1,7 @@
 // Content → Content types: every content type (the merchant's and the apps')
 // with its entry count and whether the online store can show it. A type opens
 // on its entries.
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -38,14 +39,13 @@ export function MetaobjectTypesList() {
       meta: { primary: true, minWidth: 220, maxWidth: 420 },
       cell: ({ row }) => (
         <span className="block min-w-0">
-          <Link
-            to="/admin/metaobjects/$definitionId"
-            params={{ definitionId: row.original.id }}
+          <RowLink
+            to={`/admin/metaobjects/${row.original.id}`}
             title={row.original.name}
             className="block truncate font-medium text-foreground hover:underline"
           >
             {row.original.name}
-          </Link>
+          </RowLink>
           <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
             <code title={row.original.handle} className="min-w-0 truncate">{row.original.handle}</code>
             {row.original.owner === "app" ? <Badge variant="info">{t("managedByApp")}</Badge> : null}

@@ -1,9 +1,9 @@
 // Products › Price lists (docs/MARKETS-DESIGN.md D5), Medusa's price lists
 // list: each list with its type, market, state, SKU count and schedule. A
 // list opens on its own page; a new one starts as a draft.
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { Tag } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { DataTable } from "~/components/admin/data-table/DataTable";
@@ -35,14 +35,13 @@ export function PriceListsList() {
       meta: { primary: true, minWidth: 220, maxWidth: 420 },
       cell: ({ row }) => (
         <span className="block min-w-0">
-          <Link
-            to="/admin/price-lists/$priceListId"
-            params={{ priceListId: row.original.id }}
+          <RowLink
+            to={`/admin/price-lists/${row.original.id}`}
             title={row.original.name}
             className="block truncate font-medium text-foreground hover:underline"
           >
             {row.original.name}
-          </Link>
+          </RowLink>
           {row.original.description ? <span title={row.original.description} className="block truncate text-muted-foreground">{row.original.description}</span> : null}
         </span>
       ),

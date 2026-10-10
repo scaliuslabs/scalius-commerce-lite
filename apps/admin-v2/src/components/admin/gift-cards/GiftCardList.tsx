@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
-import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Gift } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -102,13 +102,12 @@ export function GiftCardList({ tab, onTabChange }: {
       enableSorting: false,
       meta: { primary: true, mobile: "primary", minWidth: 140, maxWidth: 200 },
       cell: ({ row }) => (
-        <Link
-          to="/admin/gift-cards/$giftCardId"
-          params={{ giftCardId: row.original.id }}
+        <RowLink
+          to={`/admin/gift-cards/${row.original.id}`}
           className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {maskedGiftCard(row.original.last4)}
-        </Link>
+        </RowLink>
       ),
     },
     {

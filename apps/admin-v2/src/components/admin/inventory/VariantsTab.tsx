@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { FilteredEmptyState } from "~/components/admin/states";
 import { Link } from "@tanstack/react-router";
@@ -9,7 +10,7 @@ import { IdText, NameText } from "~/components/admin/data-table/cells";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { DataTableToolbar, IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
+import { CheckboxHitArea, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -157,9 +158,9 @@ export function VariantName({ productId, productName, optionLabel }: {
   return (
     <NameText
       name={(
-        <Link to="/admin/products/$productId/edit" params={{ productId }} className="hover:underline">
+        <RowLink to={`/admin/products/${productId}/edit`} className="hover:underline">
           {productName ?? t("unknownProduct")}
-        </Link>
+        </RowLink>
       )}
       detail={optionLabel ? <span title={optionLabel}>{optionLabel}</span> : null}
     />
@@ -331,12 +332,14 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
     const variant = row.original;
     return (
       <div className="flex items-start gap-3 px-3 py-2">
-        <span className="flex h-5 items-center">
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(checked) => row.toggleSelected(checked === true)}
-            aria-label={r("select", { name: variant.sku })}
-          />
+        <span className="flex h-lh items-center">
+          <CheckboxHitArea>
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+              aria-label={r("select", { name: variant.sku })}
+            />
+          </CheckboxHitArea>
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <VariantCell variant={variant} />

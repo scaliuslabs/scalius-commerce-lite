@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList } from "lucide-react";
@@ -51,13 +52,12 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       header: t("colPurchaseOrder"),
       meta: { primary: true, mobile: "primary", minWidth: 140 },
       cell: ({ row }) => (
-        <Link
-          to="/admin/inventory/purchase-orders/$purchaseOrderId"
-          params={{ purchaseOrderId: row.original.id }}
+        <RowLink
+          to={`/admin/inventory/purchase-orders/${row.original.id}`}
           className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {row.original.displayNumber}
-        </Link>
+        </RowLink>
       ),
     },
     {

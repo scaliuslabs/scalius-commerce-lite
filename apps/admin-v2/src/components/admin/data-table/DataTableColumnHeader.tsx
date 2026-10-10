@@ -76,7 +76,7 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   const trigger = (
     <button
       type="button"
-      className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 text-start outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
+      className="-mx-1 -my-1 inline-flex min-h-6 items-center gap-1 rounded-md px-1 text-start outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
       data-state={open ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={open}
