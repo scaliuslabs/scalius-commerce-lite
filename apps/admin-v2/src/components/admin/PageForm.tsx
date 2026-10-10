@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
+import { Checkbox } from "../ui/checkbox";
 import { RichContent } from "../ui/rich-content";
 import { SearchableSelect } from "../ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
@@ -38,7 +38,7 @@ import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
-import { Field } from "~/components/ui/field";
+import { Field, ChoiceField } from "~/components/ui/field";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -415,11 +415,11 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                     control={form.control}
                     name={name}
                     render={({ field }) => (
-                      <Field label={t(name)}>
-                        <div className="flex items-center justify-between gap-3">
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </div>
-                      </Field>
+                      <ChoiceField
+                        id={`page-${name}`}
+                        label={t(name)}
+                        control={<Checkbox id={`page-${name}`} checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />}
+                      />
                     )}
                   />
                 ),

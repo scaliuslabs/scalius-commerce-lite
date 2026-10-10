@@ -97,7 +97,7 @@ export function ChoiceField({ id, label, help, control, controlAt = "start", cla
       <div data-slot="field-control" className="flex h-lh shrink-0 items-center text-body">{control}</div>
       <div className="flex min-w-0 flex-col gap-1">
         <Label data-slot="field-label" htmlFor={id}>{label}</Label>
-        {help ? <p data-slot="field-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
+        {help ? <p data-slot="choice-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
       </div>
     </div>
   );

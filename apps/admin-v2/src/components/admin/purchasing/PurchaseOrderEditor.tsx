@@ -361,7 +361,8 @@ export function PurchaseOrderEditor({ order, onReload }: {
             <CardHeader>
               <CardTitle>{t("notes")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent>
+              <Field id="po-notes" help={t("notesHelp")}>
               <Textarea
                 id="po-notes"
                 aria-label={t("notes")}
@@ -371,7 +372,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
                 aria-describedby="po-notes-help"
                 onChange={(event) => update({ notes: event.target.value })}
               />
-              <p id="po-notes-help" className="text-body text-muted-foreground">{t("notesHelp")}</p>
+              </Field>
             </CardContent>
           </Card>
         </div>
