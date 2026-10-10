@@ -1,34 +1,76 @@
 /**
- * The router's error, not-found and pending views. Pending (a page's
- * skeleton) is in the first download; the error and not-found views load
- * lazily and are preloaded once the first page is up (`preloadRouteStateViews`),
- * so an offline or failing page still has them.
+ * The router's error, not-found and pending views. The failed-read view and
+ * the page skeleton ship with the router, so a page that fails or loads
+ * offline never needs a download first. The missing-record and no-access
+ * views (record nouns, the store owner's name) load lazily and are preloaded
+ * once the first page is up (`preloadRouteStateViews`).
  */
-import { lazy, Suspense, type JSX } from "react";
-import { useMatch, type ErrorComponentProps } from "@tanstack/react-router";
+import { lazy, Suspense, useEffect, type JSX, type ReactNode } from "react";
+import { useMatch, useRouter } from "@tanstack/react-router";
+import { ErrorState } from "~/components/admin/states/ErrorState";
+import { classifyFailure } from "~/components/admin/states/failure";
 import { BootSpinner, PageSkeleton, type PageSkeletonKind } from "~/components/admin/states/PageSkeleton";
+import { titleFromHead } from "~/i18n/page-titles";
+import { reloadRecoverableRouteOnce } from "./recoverable-route-error";
 
-const loadViews = () => import("./route-error-views");
-const ErrorView = lazy(() => loadViews().then((module) => ({ default: module.RouteErrorComponent })));
-const NotFoundView = lazy(() => loadViews().then((module) => ({ default: module.RouteNotFoundComponent })));
+const loadMissingViews = () => import("./route-not-found");
+const LazyMissingView = lazy(() => loadMissingViews().then((module) => ({ default: module.MissingView })));
+const LazyNotFound = lazy(() => loadMissingViews().then((module) => ({ default: module.RouteNotFoundComponent })));
 
-/** Fetches the error and not-found views ahead of need; a failure only means they load when first shown. */
+/** Fetches the not-found and no-access views ahead of need; a failure only means they load when first shown. */
 export function preloadRouteStateViews(): void {
-  void loadViews().catch(() => undefined);
+  void loadMissingViews().catch(() => undefined);
 }
 
-export function RouteErrorComponent(props: Pick<ErrorComponentProps, "error" | "reset"> & { fullPage?: boolean }): JSX.Element {
-  return (
-    <Suspense fallback={null}>
-      <ErrorView {...props} />
-    </Suspense>
-  );
+function FullPage({ children }: { children: ReactNode }) {
+  return <main className="min-h-dvh bg-background px-3 py-12 text-foreground sm:px-4 md:px-6"><div className="mx-auto max-w-2xl">{children}</div></main>;
+}
+
+export function RouteErrorComponent({
+  error,
+  reset,
+  fullPage = false,
+}: {
+  error: Error;
+  reset: () => void;
+  fullPage?: boolean;
+}): JSX.Element {
+  const router = useRouter();
+  const pageTitle = useMatch({ strict: false, select: (match) => titleFromHead(match.meta) });
+  const kind = classifyFailure(error);
+
+  useEffect(() => {
+    // A deploy replaced the bundle this tab was using: reload once by itself.
+    // Never offline: a reload then is the browser's blank error page.
+    if (kind !== "updated") return;
+    reloadRecoverableRouteOnce({
+      error,
+      pathname: window.location.pathname,
+      storage: window.sessionStorage,
+      reload: () => window.location.reload(),
+    });
+  }, [error, kind]);
+
+  if (kind === "notFound" || kind === "forbidden") {
+    return (
+      <Suspense fallback={null}>
+        <LazyMissingView kind={kind} fullPage={fullPage} />
+      </Suspense>
+    );
+  }
+
+  const retry = () => {
+    reset();
+    void router.invalidate();
+  };
+  const view = <ErrorState error={error} kind={kind} layout="page" pageTitle={pageTitle || undefined} onRetry={retry} />;
+  return fullPage ? <FullPage>{view}</FullPage> : view;
 }
 
 export function RouteNotFoundComponent(): JSX.Element {
   return (
     <Suspense fallback={null}>
-      <NotFoundView />
+      <LazyNotFound />
     </Suspense>
   );
 }

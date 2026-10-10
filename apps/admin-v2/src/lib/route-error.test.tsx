@@ -14,8 +14,8 @@ vi.mock("@tanstack/react-router", () => ({
   useMatch: ({ select }: { select: (value: typeof match) => unknown }) => select(match),
 }));
 
-const { RouteErrorComponent, RouteNotFoundComponent } = await import("./route-error-views");
-const { pendingKindForPath } = await import("./route-error");
+const { RouteErrorComponent, pendingKindForPath } = await import("./route-error");
+const { RouteNotFoundComponent } = await import("./route-not-found");
 const { AdminApiResponseError } = await import("./admin-api-error");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,6 +33,9 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
 });
+
+/** Lets a lazily loaded view resolve and render. */
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
 
 function show(error: Error, reset = vi.fn()) {
   act(() => root.render(<RouteErrorComponent error={error} reset={reset} />));
@@ -112,9 +115,10 @@ describe("route error page (polish bar R1)", () => {
 });
 
 describe("missing records and pages (R2, R4)", () => {
-  it("names a missing record and links back to its list", () => {
+  it("names a missing record and links back to its list", async () => {
     Object.assign(match, { fullPath: "/admin/gift-cards/$giftCardId", params: { giftCardId: "gc_1" }, meta: [] });
     show(new AdminApiResponseError("Gift card not found", 404));
+    await settle();
     expect(text("h1")).toBe("This gift card doesn't exist or was deleted");
     expect(container.querySelector("a")?.getAttribute("href")).toBe("/admin/gift-cards");
     expect(container.querySelector("a")?.textContent).toBe("Back to gift cards");
@@ -127,13 +131,14 @@ describe("missing records and pages (R2, R4)", () => {
     expect(container.querySelector("a")?.getAttribute("href")).toBe("/admin/metaobjects/def_1");
   });
 
-  it("sends an address that is no page at all to Home, and a forbidden one says who to ask", () => {
+  it("sends an address that is no page at all to Home, and a forbidden one says who to ask", async () => {
     Object.assign(match, { fullPath: "/admin", params: {} });
     act(() => root.render(<RouteNotFoundComponent />));
     expect(text("h1")).toBe("There's no page at this address");
     expect(container.querySelector("a")?.getAttribute("href")).toBe("/admin");
 
     show(new AdminApiResponseError("Forbidden", 403));
+    await settle();
     expect(text("h1")).toBe("You don't have access to this page");
     expect(container.textContent).toContain("Ask the store owner");
   });
