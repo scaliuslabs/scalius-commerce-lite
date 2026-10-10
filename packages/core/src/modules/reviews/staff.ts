@@ -6,7 +6,7 @@
 // buyer can see.
 import { nanoid } from "nanoid";
 import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
-import { containsText } from "../../utils/text-match";
+import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import {
   conversations,
@@ -212,12 +212,19 @@ export async function listAdminReviews(db: Database, filters: AdminReviewFilters
   if (filters.productId) conditions.push(eq(productReviews.productId, filters.productId));
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
-    conditions.push(or(
-      containsText(productReviews.title, q),
-      containsText(productReviews.body, q),
-      containsText(productReviews.authorDisplayName, q),
-      containsText(products.name, q),
-    )!);
+    // The review's words (title, text, author) and its product's name, each
+    // through its FTS index (migration 0128), never a scan of every review.
+    // Without FTS5 (Turso, PostgreSQL) both fall back to the text match.
+    const reviewMatch = ftsMatch(db, "product_reviews_fts", "product_reviews", q);
+    const productMatch = ftsMatch(db, "products_fts", "products", q, { column: "name" });
+    const matches = [
+      reviewMatch,
+      productMatch
+        ? sql`${productReviews.productId} IN (SELECT ${products.id} FROM ${products} WHERE ${productMatch})`
+        : undefined,
+    ].filter((match): match is SQL => match !== undefined);
+    // A query with no searchable word matches nothing.
+    conditions.push(matches.length > 0 ? or(...matches)! : sql`0 = 1`);
   }
   const cursor = decodeCursor(filters.cursor);
   if (cursor) {

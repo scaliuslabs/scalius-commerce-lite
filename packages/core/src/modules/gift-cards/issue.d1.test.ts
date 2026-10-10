@@ -120,7 +120,12 @@ describe("gift-card issue, lookup and buyer surfaces", () => {
         expect(applied.handle).not.toContain(issued.code);
         expect(await openGiftCardApplyHandle(MASTER, applied.handle)).toBe(issued.giftCardId);
         // Forged, tampered, expired or foreign-secret handles open to nothing.
-        expect(await openGiftCardApplyHandle(MASTER, `${applied.handle.slice(0, -2)}AA`)).toBeNull();
+        // Tamper with a character inside the payload, always to a different one: overwriting the
+        // tail with a fixed "AA" left the handle unchanged when it already ended in bits that decode the same.
+        const tamperAt = 12;
+        const tampered = `${applied.handle.slice(0, tamperAt)}${applied.handle[tamperAt] === "A" ? "B" : "A"}${applied.handle.slice(tamperAt + 1)}`;
+        expect(tampered).not.toBe(applied.handle);
+        expect(await openGiftCardApplyHandle(MASTER, tampered)).toBeNull();
         expect(await openGiftCardApplyHandle(`${MASTER}-other`, applied.handle)).toBeNull();
         const stale = await sealGiftCardApplyHandle(MASTER, issued.giftCardId, Math.floor(Date.now() / 1000) - 3 * 3600);
         expect(await openGiftCardApplyHandle(MASTER, stale.handle)).toBeNull();

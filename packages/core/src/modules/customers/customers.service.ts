@@ -84,9 +84,18 @@ export function buildCustomerOrderMetricsProjection() {
     };
 }
 
-/** The name on the record's most recent order (a guest record's secondary text). */
-export function latestOrderNameSql(customerId: SQLWrapper) {
-    return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
+// Drizzle renders a column unqualified in a single-table select, and an
+// unqualified `id` inside the subquery binds to `orders.id`: the outer
+// customer is always named by table.
+const OUTER_CUSTOMER_ID = sql.raw('"customers"."id"');
+
+/**
+ * The name on the record's most recent order (a guest record's secondary
+ * text), for a select over `customers`. One probe of
+ * `orders_customer_activity_idx`.
+ */
+export function latestOrderNameSql() {
+    return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${OUTER_CUSTOMER_ID} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
 }
 
 /** Extra list filters (Customers & marketing): a tag, a segment's filters, a subscribed channel. */
@@ -302,7 +311,8 @@ export async function listCustomers(
     const limit = Math.min(Math.max(rawLimit, 1), 100);
 
     const listFilter: CustomerListFilter = { search, showTrashed, filters: options.filters, appCondition: options.appCondition };
-    const whereConditions = customerListConditions(db, { ...listFilter, leadWithMatches: await customerListLeads(db, listFilter) });
+    const leadWithMatches = await customerListLeads(db, listFilter);
+    const whereConditions = customerListConditions(db, { ...listFilter, leadWithMatches });
 
     const whereClause =
         whereConditions.length > 0
@@ -324,7 +334,22 @@ export async function listCustomers(
         updatedAt: { column: customers.updatedAt, kind: "number", nullable: false, referenced: false },
     } as const satisfies Record<string, { column: SQLWrapper; kind: CursorValueKind; nullable: boolean; referenced: boolean }>;
     const sortKey = (sort in keysetSorts ? sort : "updatedAt") as keyof typeof keysetSorts;
-    const keysetSpec = keysetSorts[sortKey];
+    // Every customer has a `customer_order_stats` row (migration 0128: a
+    // trigger on insert, existing customers backfilled), so an order-facts
+    // sort of the live list walks the stats row's own index
+    // (count/spent/last order, customer_id) and probes each customer:
+    // `stats cross join customers` keeps that order on SQLite. A search, tag
+    // or channel that names few customers still reads them first.
+    const statsSorts = {
+        totalOrders: customerOrderStats.ordersCount,
+        totalSpent: customerOrderStats.totalSpentMinor,
+        lastOrderAt: customerOrderStats.lastOrderAt,
+    } as const;
+    const statsDriven = sortKey in statsSorts && !showTrashed && !leadWithMatches;
+    const keysetSpec = statsDriven
+        ? { ...keysetSorts[sortKey], column: statsSorts[sortKey as keyof typeof statsSorts] }
+        : keysetSorts[sortKey];
+    const keysetId = statsDriven ? customerOrderStats.customerId : customers.id;
     const boundary = keysetSpec.referenced
         ? await resolveReferencedBoundary({ after, before }, { sort: sortKey, direction: order }, async (id) => {
             const [row] = await db.select({ value: sql<string>`${keysetSpec.column}` }).from(customers).where(eq(customers.id, id)).limit(1);
@@ -333,7 +358,7 @@ export async function listCustomers(
         : undefined;
     const plan = planKeysetPage({ page, limit, after, before, boundary }, {
         sort: sortKey,
-        order: { column: keysetSpec.column, id: customers.id, direction: order, nullable: keysetSpec.nullable },
+        order: { column: keysetSpec.column, id: keysetId, direction: order, nullable: keysetSpec.nullable },
         kind: keysetSpec.kind,
         referenced: keysetSpec.referenced,
     });
@@ -349,11 +374,17 @@ export async function listCustomers(
 
     // The page's ids first, from the sort index; the address, latest order
     // and spend are then read for those ids only (a 200,000-customer store).
-    const pageKeys = db
-        .select({ id: customers.id })
-        .from(customers)
-        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
-        .where(plan.pageWhere(whereClause))
+    const pageKeys = (statsDriven
+        ? db
+            .select({ id: customers.id })
+            .from(customerOrderStats)
+            .crossJoin(customers)
+            .where(and(eq(customers.id, customerOrderStats.customerId), plan.pageWhere(whereClause)))
+        : db
+            .select({ id: customers.id })
+            .from(customers)
+            .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+            .where(plan.pageWhere(whereClause)))
         .orderBy(...plan.orderBy)
         .limit(plan.fetchLimit)
         .offset(plan.offset);
@@ -379,7 +410,7 @@ export async function listCustomers(
             defaultAreaName: defaultAddress.areaName,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             origin: customers.origin,
-            latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
+            latestOrderName: latestOrderNameSql().as("latest_order_name"),
             totalOrders,
             totalSpentMinor,
             // One store currency (locked once orders exist): any of the customer's orders converts it.
@@ -525,7 +556,7 @@ export async function getCustomerDetail(db: Database, id: string) {
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
             .get(),
-        db.select({ name: latestOrderNameSql(customers.id) }).from(customers).where(eq(customers.id, id)).get(),
+        db.select({ name: latestOrderNameSql() }).from(customers).where(eq(customers.id, id)).get(),
         listCustomerTags(db, id),
         db.select({
             channel: customerMarketingConsents.channel,

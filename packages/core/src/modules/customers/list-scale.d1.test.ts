@@ -65,3 +65,47 @@ describe("customer list search", () => {
         expect((await listCustomers(db, { search: "Karim", limit: 50 })).customers.map((customer) => customer.id)).toEqual(["cus_other"]);
     });
 });
+
+const STATS_DATA = /"customers"\."id" in \(select "customers"\."id" from "customer_order_stats" cross join "customers"/;
+
+describe("customer list order-fact sorts (migration 0128)", () => {
+    const cases: Array<[string, Parameters<typeof listCustomers>[1], string]> = [
+        ["by orders", { sort: "totalOrders", order: "desc" }, "customer_order_stats_orders_list_idx"],
+        ["by spend", { sort: "totalSpent", order: "asc" }, "customer_order_stats_spent_list_idx"],
+        ["by last order", { sort: "lastOrderAt", order: "desc" }, "customer_order_stats_last_order_list_idx"],
+    ];
+    for (const [label, options, index] of cases) {
+        it(`reads a page ${label} from ${index} in order`, async () => {
+            const { db, sqlite, queries } = setup();
+            await listCustomers(db, { limit: 50, ...options });
+            const plan = pageKeysPlan(sqlite, queries, STATS_DATA);
+            expect(plan).toMatch(new RegExp(`^SCAN customer_order_stats USING COVERING INDEX ${index}`));
+            expect(plan).not.toMatch(SORTS_THE_TABLE);
+        });
+    }
+
+    it("sorts every live customer, those without orders included, and pages by cursor", async () => {
+        const { db, sqlite } = setup();
+        sqlite.exec(`INSERT INTO customers (id, name, phone) VALUES
+            ('cus_a', 'A', '+8801711000001'), ('cus_b', 'B', '+8801711000002'),
+            ('cus_c', 'C', '+8801711000003'), ('cus_gone', 'Gone', '+8801711000004')`);
+        const order = (id: string, customer: string, createdAt: number, paid: number) => sqlite.exec(`
+            INSERT INTO orders (id, customer_id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor,
+                shipping_amount_minor, payment_method, status, payment_status, paid_amount_minor, balance_due_minor, currency_code,
+                currency_decimal_places, created_at, updated_at)
+            VALUES ('${id}', '${customer}', 'X', '+8801711000009', 'Mirpur', 'c', 'z', ${paid}, 0, 'cod', 'delivered', 'paid', ${paid}, 0, 'BDT', 2, ${createdAt}, ${createdAt})`);
+        order("ord_1", "cus_b", 1_700_000_000, 1000);
+        order("ord_2", "cus_b", 1_700_000_100, 1000);
+        order("ord_3", "cus_a", 1_700_000_200, 5000);
+        sqlite.exec("UPDATE customers SET deleted_at = 1700000300 WHERE id = 'cus_gone'");
+        const ids = async (options: Parameters<typeof listCustomers>[1]) => (await listCustomers(db, options)).customers.map((customer) => customer.id);
+
+        expect(await ids({ sort: "totalOrders", order: "desc", limit: 50 })).toEqual(["cus_b", "cus_a", "cus_c"]);
+        expect(await ids({ sort: "totalSpent", order: "desc", limit: 50 })).toEqual(["cus_a", "cus_b", "cus_c"]);
+        // No order sorts last, newest first.
+        expect(await ids({ sort: "lastOrderAt", order: "desc", limit: 50 })).toEqual(["cus_a", "cus_b", "cus_c"]);
+        const first = await listCustomers(db, { sort: "totalOrders", order: "desc", limit: 2 });
+        expect(first.customers.map((customer) => customer.id)).toEqual(["cus_b", "cus_a"]);
+        expect(await ids({ sort: "totalOrders", order: "desc", limit: 2, after: first.pageInfo.endCursor ?? undefined })).toEqual(["cus_c"]);
+    });
+});

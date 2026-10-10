@@ -149,6 +149,25 @@ describe("product recommendations", () => {
         expect(dependencies.softMaxAgeSeconds).toBeNull();
     });
 
+    it("reads the live ranking deadline from bounded index reads, never every order of the year", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_shirts" });
+        order("01711000001", ["source", "peer"], "completed", NOW - 40 * 86400);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const { dependencies } = await recordedRecommendations(["source"]);
+        expect(dependencies.validUntil).not.toBeNull();
+        const index = statements.findIndex((query) => query.includes("rec_popular_first"));
+        expect(index).toBeGreaterThanOrEqual(0);
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`)
+            .all(...statementParams[index]!)
+            .map((step) => String(step.detail));
+        // It scanned every live order, probing each for a source line: minutes on a million orders.
+        expect(plan.filter((detail) => /^SCAN rec_(popular_first|source_order)|USING (COVERING )?INDEX orders_\w+ \(deleted_at=\?\)$/.test(detail))).toEqual([]);
+        expect(plan.join("\n")).toMatch(/SEARCH rec_boundary_source_sample USING COVERING INDEX order_items_product_recent_idx/);
+    });
+
     it("ignores old and cancelled orders when selecting a live ranking deadline", async () => {
         product({ id: "source" });
         product({ id: "peer" });
@@ -366,9 +385,9 @@ describe("product recommendations", () => {
             .map((step) => String(step.detail));
         expect(plan.join("\n")).not.toMatch(/SEARCH rec_(peer|source)_category USING INDEX categories_public_idx/);
         expect(plan.join("\n")).not.toMatch(/SCAN rec_(peer|source)_product/);
-        // Also-bought starts from the source products' order lines, not from
-        // every order of the last year.
-        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line USING INDEX order_items_product_id_idx/);
+        // Also-bought starts from the source products' latest order lines
+        // (newest first, bounded), not from every order of the last year.
+        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx \(product_id=\? AND created_at>\?\)/);
     });
 
     it("stores the live ranking's top rows with a reason each, and reads them by primary key", async () => {

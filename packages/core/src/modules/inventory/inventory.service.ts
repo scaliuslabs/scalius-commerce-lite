@@ -1,8 +1,8 @@
 import { productVariants, products, inventoryLocations, inventoryMovements, inventoryOperations, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
-import { eq, sql, and, isNull, desc, asc, or } from "drizzle-orm";
+import { eq, sql, and, isNull, desc, asc, or, inArray } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
 import type { Database } from "@scalius/database/client";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
@@ -443,37 +443,56 @@ export async function getInventoryOverview(db: Database, params: {
                 .get();
             if (!location) throw new ValidationError("Unknown inventory location");
         }
-        const conditions: (SQL | undefined)[] = [
+        // The tracked SKUs the section covers; the stats summarize all of them.
+        const baseConditions: SQL[] = [
             isNull(productVariants.deletedAt),
             isNull(products.deletedAt),
             eq(productVariants.trackInventory, true),
             operationalSkuRowPredicate(),
         ];
+        const filters: SQL[] = [];
 
         if (status === "low") {
-            conditions.push(buildInventoryLowStockCondition());
+            filters.push(buildInventoryLowStockCondition());
         } else if (status === "out") {
-            conditions.push(sql`${availableStockSql} <= 0`);
+            filters.push(sql`${availableStockSql} <= 0`);
         } else if (status === "reserved") {
-            conditions.push(sql`${productVariants.reservedStock} > 0`);
+            filters.push(sql`${productVariants.reservedStock} > 0`);
         }
 
         if (search) {
-            conditions.push(or(
+            filters.push(or(
                 containsText(productVariants.sku, search),
                 containsText(productVariants.barcode, search),
                 containsText(products.name, search)
-            ));
+            )!);
         }
 
         const availableSql = availableStockSql;
         const sortDirection = order === "desc" ? "desc" : "asc";
-        const orderBy =
+        const byDirection = (column: SQLWrapper) => sortDirection === "desc" ? desc(column) : asc(column);
+        // The id tie-break follows the sort, so the available sort walks
+        // product_variants_available_idx (track_inventory, deleted_at, available, id) in order.
+        const orderBy = [
             sort === "productName"
-                ? sortDirection === "desc" ? desc(products.name) : asc(products.name)
+                ? byDirection(products.name)
                 : sort === "sku"
-                    ? sortDirection === "desc" ? desc(productVariants.sku) : asc(productVariants.sku)
-                    : sortDirection === "desc" ? desc(availableSql) : asc(availableSql);
+                    ? byDirection(productVariants.sku)
+                    : byDirection(availableSql),
+            sortDirection === "desc" ? desc(productVariants.id) : asc(productVariants.id),
+        ];
+
+        // The page's ids first, sorted on the narrow row; the label, incoming
+        // and location subqueries then run for those rows only (SQLite
+        // computes a sorted select's columns for every row it sorts).
+        const pageKeys = db
+            .select({ id: productVariants.id })
+            .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .where(and(...baseConditions, ...filters))
+            .orderBy(...orderBy)
+            .limit(limit)
+            .offset(offset);
 
         const variantsQuery = db
             .select({
@@ -498,19 +517,19 @@ export async function getInventoryOverview(db: Database, params: {
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(...conditions))
-            .orderBy(orderBy, asc(productVariants.id))
-            .limit(limit)
-            .offset(offset);
+            .where(inArray(productVariants.id, pageKeys))
+            .orderBy(...orderBy);
 
-        const countQuery = db
-            .select({ count: sql<number>`count(*)` })
-            .from(productVariants)
-            .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(...conditions));
-
+        // One pass over the tracked SKUs answers the stats and the filtered
+        // total together (the total is every SKU when nothing filters).
+        // Aliased: D1 keys result columns by name, and two bare count(*)
+        // columns would collapse into one.
+        const matchingCount = (filters.length > 0
+            ? sql<number>`COALESCE(SUM(CASE WHEN ${and(...filters)} THEN 1 ELSE 0 END), 0)`
+            : sql<number>`count(*)`).as("inventory_matching_variants");
         const statsQuery = db
             .select({
+                matching: matchingCount,
                 totalVariants: sql<number>`count(*)`,
                 totalOnHand: sql<number>`COALESCE(SUM(${productVariants.stock}), 0)`,
                 totalReserved: sql<number>`COALESCE(SUM(${productVariants.reservedStock}), 0)`,
@@ -521,20 +540,14 @@ export async function getInventoryOverview(db: Database, params: {
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(
-                isNull(productVariants.deletedAt),
-                isNull(products.deletedAt),
-                eq(productVariants.trackInventory, true),
-                operationalSkuRowPredicate(),
-            ));
+            .where(and(...baseConditions));
 
-        const [variantRows, countRows, statsRows] = await db.batch([
+        const [variantRows, statsRows] = await db.batch([
             variantsQuery,
-            countQuery,
             statsQuery,
         ]);
-        const countResult = countRows[0];
-        const { defaultLowStockThreshold, ...statsResult } = statsRows[0] ?? {
+        const { defaultLowStockThreshold, matching, ...statsResult } = statsRows[0] ?? {
+            matching: 0,
             totalVariants: 0,
             totalOnHand: 0,
             totalReserved: 0,
@@ -557,8 +570,8 @@ export async function getInventoryOverview(db: Database, params: {
             pagination: {
                 page,
                 limit,
-                total: countResult?.count ?? 0,
-                totalPages: Math.ceil((countResult?.count ?? 0) / limit),
+                total: Number(matching ?? 0),
+                totalPages: Math.ceil(Number(matching ?? 0) / limit),
             },
             stats: statsResult,
         };
@@ -605,6 +618,18 @@ export async function getInventoryOverview(db: Database, params: {
         const alertWhere = and(...alertConditions);
         const alertJoin = eq(productLowStockAlerts.variantId, productVariants.id);
 
+        const alertOrder = [asc(availableStockSql), asc(products.name), asc(productVariants.id)];
+        // The page's ids first, on the narrow row: the option label runs for the page only.
+        const alertPageKeys = db
+            .select({ id: productVariants.id })
+            .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .leftJoin(productLowStockAlerts, alertJoin)
+            .where(alertWhere)
+            .orderBy(...alertOrder)
+            .limit(limit)
+            .offset(offset);
+
         const countResult = await db
             .select({ count: sql<number>`count(*)`, defaultLowStockThreshold: storeDefaultLowStockThresholdSql() })
             .from(productVariants)
@@ -634,10 +659,8 @@ export async function getInventoryOverview(db: Database, params: {
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
             .leftJoin(productLowStockAlerts, alertJoin)
-            .where(alertWhere)
-            .orderBy(asc(availableStockSql), asc(products.name), asc(productVariants.id))
-            .limit(limit)
-            .offset(offset)
+            .where(inArray(productVariants.id, alertPageKeys))
+            .orderBy(...alertOrder)
             .all();
 
         return {

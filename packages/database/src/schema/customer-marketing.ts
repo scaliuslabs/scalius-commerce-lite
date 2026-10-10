@@ -14,6 +14,8 @@
 // `customer_order_stats` is maintained only by the 0108 triggers on `orders`
 // (recomputed from the customer's orders on every relevant order write), so
 // segment filters on spend, order count and order dates are indexed reads.
+// Since 0128 a trigger on `customers` also gives every new customer its
+// zero row, so the customer list sorts by order facts from these indexes.
 // Application code never writes it.
 
 import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
@@ -174,10 +176,12 @@ export const customerOrderStats = sqliteTable("customer_order_stats", {
     lastOrderAt: integer("last_order_at"),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
-    index("customer_order_stats_orders_idx").on(table.ordersCount),
-    index("customer_order_stats_spent_idx").on(table.totalSpentMinor),
+    // The customer list's order-fact sorts walk these in order, ending with
+    // the keyset tiebreaker (0128); every customer has a row.
+    index("customer_order_stats_orders_list_idx").on(table.ordersCount, table.customerId),
+    index("customer_order_stats_spent_list_idx").on(table.totalSpentMinor, table.customerId),
     index("customer_order_stats_first_order_idx").on(table.firstOrderAt),
-    index("customer_order_stats_last_order_idx").on(table.lastOrderAt),
+    index("customer_order_stats_last_order_list_idx").on(table.lastOrderAt, table.customerId),
     check("customer_order_stats_nonnegative", sql`${table.ordersCount} >= 0 AND ${table.totalSpentMinor} >= 0`),
 ]);
 

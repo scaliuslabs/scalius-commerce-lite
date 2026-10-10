@@ -37,15 +37,29 @@ const RUNS = Math.max(1, Number(process.env.ANALYTICS_SCALE_RUNS ?? 1));
 const results: Array<{ name: string; ms: number; minMs: number; statements: number; fullScans: string[] }> = [];
 
 
-/** Full scans of the big tables in the statements a run issued (temp b-trees for small groups are fine). */
+/** The big table an alias in `query` names (`order_items oi`, `orders AS p`), or the name itself. */
+function bigTableOf(query: string, name: string): string | undefined {
+  if (BIG_TABLES.includes(name)) return name;
+  for (const table of BIG_TABLES) {
+    if (new RegExp(`["\`]?\\b${table}["\`]?\\s+(?:as\\s+)?["\`]?${name}["\`]?\\b`, "i").test(query)) return table;
+  }
+  return undefined;
+}
+
+/**
+ * Full scans of the big tables in the statements a run issued (temp b-trees
+ * for small groups are fine): a table scan, by name or alias, or a walk of a
+ * whole index of one (`SCAN oi USING INDEX order_items_order_id_idx`, with
+ * no key constraint, reads every line in the store).
+ */
 function fullScans(): string[] {
   const scans = new Set<string>();
   for (const { query, values } of captured) {
-    if (!/^\s*select/i.test(query)) continue;
+    if (!/^\s*(select|with)/i.test(query)) continue;
     const plan = database.sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...values) as Array<{ detail: string }>;
     for (const { detail } of plan) {
-      const match = /^SCAN (\w+)(?: AS (\w+))?(?! USING)/.exec(detail);
-      if (match && BIG_TABLES.includes(match[1]!) && !/USING (COVERING )?INDEX/.test(detail)) scans.add(detail);
+      const scan = /^SCAN (\w+)(?: AS \w+)?(?: USING (?:COVERING )?INDEX (\w+))?$/.exec(detail);
+      if (scan && bigTableOf(query, scan[1]!)) scans.add(detail);
       // An orders index entered on deleted_at alone walks every live order.
       if (/USING (?:COVERING )?INDEX orders_\w+ \(deleted_at=\?\)$/.test(detail)) scans.add(detail);
     }

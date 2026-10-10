@@ -306,7 +306,8 @@ export const orders = sqliteTable("orders", {
         table.paymentStatus,
         table.updatedAt,
     ),
-    index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
+    // Home and activity sum a period from the index alone (migration 0128).
+    index("orders_sales_rollup_idx").on(table.deletedAt, table.createdAt, table.status, table.totalShopMinor, table.shopCurrency),
     index("orders_customer_phone_idx").on(table.customerPhone),
     index("orders_customer_email_normalized_idx").on(sql`lower(trim(${table.customerEmail}))`),
     index("orders_shipment_claim_idx")
@@ -511,7 +512,8 @@ export const orderItems = sqliteTable("order_items", {
     ),
     check("order_items_properties_price_nonnegative", sql`${table.propertiesPriceMinor} >= 0`),
     index("order_items_order_id_idx").on(table.orderId),
-    index("order_items_product_id_idx").on(table.productId),
+    // A product's lines, newest first: "also bought" reads only the latest (0128).
+    index("order_items_product_recent_idx").on(table.productId, table.createdAt, table.orderId),
     index("order_items_variant_id_idx").on(table.variantId),
     index("order_items_product_image_media_id_idx").on(table.productImageMediaId),
     // Drives the auto-fulfil sweep: only lines an automatic fulfiller still owes.
