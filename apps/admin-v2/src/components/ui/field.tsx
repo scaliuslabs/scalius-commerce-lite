@@ -112,7 +112,8 @@ export function FieldAction({ className, type = "button", ...props }: React.Butt
   return (
     <button
       type={type}
-      className={cn("rounded-md text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50", className)}
+      // A 44px target (C6) whose padding hangs past the line, so the label line stays one text line high.
+      className={cn("-my-3 rounded-md py-3 text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50", className)}
       {...props}
     />
   );
