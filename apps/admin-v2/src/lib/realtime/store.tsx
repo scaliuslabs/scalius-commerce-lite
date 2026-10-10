@@ -188,6 +188,8 @@ export interface PresenceSlotProps {
   onLoadLatest?: () => void;
   /** The banner, field rings and save notice; false for an editor that handles saves itself (the theme editor). */
   notices?: boolean;
+  /** With `notices` false: another person saved (a newer revision than this editor has). */
+  onRemoteSave?: () => void;
 }
 
 /**

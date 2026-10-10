@@ -54,10 +54,18 @@ export default function EditorPresenceView({
   changedFields,
   onLoadLatest,
   notices = true,
+  onRemoteSave,
 }: PresenceSlotProps & { presenceKey: string }) {
   const presence = useEditorPresence(presenceKey, revision);
   usePresenceReporter(presenceKey, dirty);
-  const { others, remoteSave } = presence;
+  const { others, remoteSave, dismissRemoteSave } = presence;
+  // An editor without notices handles another person's save itself.
+  useEffect(() => {
+    if (notices || !remoteSave) return;
+    dismissRemoteSave();
+    onRemoteSave?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to the notice only
+  }, [remoteSave]);
   return (
     <>
       {others.length > 0 ? <PresenceAvatars people={others} /> : null}

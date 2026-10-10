@@ -27,7 +27,7 @@ export function PersonAvatar({ person, className }: { person: RealtimePresence; 
           aria-label={label}
           style={{ "--presence": presenceVar(person.id) } as CSSProperties}
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-full bg-(--presence) text-caption font-semibold text-(--presence-foreground) ring-2 ring-card",
+            "flex size-7 shrink-0 items-center justify-center rounded-full bg-(--presence) text-caption font-semibold text-(--presence-foreground) ring-2 ring-background",
             className,
           )}
         >
@@ -56,7 +56,7 @@ export default function PresenceAvatars({ people }: { people: readonly RealtimeP
               role="img"
               tabIndex={0}
               aria-label={t("othersHere", { names: restNames })}
-              className="-ms-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-card"
+              className="-ms-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-background"
             >
               <span aria-hidden="true">{t("morePeople", { count: rest.length })}</span>
             </span>

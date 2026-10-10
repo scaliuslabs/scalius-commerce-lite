@@ -16,7 +16,6 @@
  *   saved (use-preview-sync.ts).
  */
 import { PresenceSlot } from "~/lib/realtime/store";
-import { useEditorPresence } from "~/lib/realtime/editor-presence";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
@@ -204,16 +203,6 @@ export function ThemeEditor({ workspace, refetch }: {
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
   const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
   const draft = useThemeDraft({ workspace, refetch, canEdit, appSections, appBlocks });
-  // Who else is in the editor; a save of theirs loads at once while this one has nothing unsaved
-  // (with unsaved edits, the next autosave meets their revision and the conflict names them).
-  const editors = useEditorPresence(THEME_PRESENCE_KEY, draft.saved.revision);
-  const { remoteSave, dismissRemoteSave } = editors;
-  useEffect(() => {
-    if (!remoteSave) return;
-    dismissRemoteSave();
-    if (!draft.unsavedEdits && !draft.busy) void draft.reload(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to the notice only
-  }, [remoteSave]);
   const theme = draft.working;
   const storeShape = workspace.storeShape;
   const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
@@ -823,7 +812,17 @@ export function ThemeEditor({ workspace, refetch }: {
           <>
             {phone ? null : (
               <div data-slot="presence" className="flex h-7 shrink-0 items-center">
-                <PresenceSlot presenceKey={THEME_PRESENCE_KEY} revision={draft.saved.revision} dirty={draft.unsavedEdits} notices={false} />
+                <PresenceSlot
+                  presenceKey={THEME_PRESENCE_KEY}
+                  revision={draft.saved.revision}
+                  dirty={draft.unsavedEdits}
+                  notices={false}
+                  // Another person's save loads at once while this editor has nothing unsaved (with
+                  // unsaved edits, the next autosave meets their revision and the conflict names them).
+                  onRemoteSave={() => {
+                    if (!draft.unsavedEdits && !draft.busy) void draft.reload(false);
+                  }}
+                />
               </div>
             )}
             <MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />

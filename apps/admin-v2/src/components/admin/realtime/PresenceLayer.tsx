@@ -15,6 +15,7 @@
  * and a ring is an outline on the field itself.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Users } from "lucide-react";
 import { formatList } from "@scalius/shared/locale-words";
 import type { RealtimePresence } from "@scalius/shared/realtime";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -186,6 +187,7 @@ function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
         : (fields ? sentence("savedBoth") : t("savedChanges", { name }));
   return (
     <Alert variant="info" className="pointer-events-auto">
+      <Users />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
         {outcome === "both" ? <p>{t("savedBothHint")}</p> : null}
@@ -262,7 +264,7 @@ export default function PresenceLayer({ presence }: { presence: EditorPresenceVa
   return (
     <>
       <FieldRings presenceKey={presence.presenceKey} people={presence.others} />
-      <div data-slot="presence-layer" className="pointer-events-none fixed inset-x-0 bottom-4 z-40 mx-auto flex w-full max-w-xl flex-col gap-2 px-3">
+      <div data-slot="presence-layer" className="pointer-events-none fixed inset-x-0 bottom-3 z-40 mx-auto flex w-full max-w-xl flex-col gap-2 px-3">
         {/* One notice at a time: a save notice already names who is working here. */}
         {presence.remoteSave
           ? <SaveNotice key={presence.remoteSave.at} presence={presence} />
