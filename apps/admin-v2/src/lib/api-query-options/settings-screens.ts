@@ -13,7 +13,6 @@ import {
   getApiV1AdminSettingsCustomerRequests,
   getApiV1AdminSettingsDeliveryLocations,
   getApiV1AdminSettingsEmail,
-  getApiV1AdminSettingsFirebase,
   getApiV1AdminSettingsMarketingConsent,
   getApiV1AdminSettingsMedia,
   getApiV1AdminSettingsMetaConversions,
@@ -233,10 +232,6 @@ export const appProvidersQuery = (kind: AppProviderKind) => ({
 export const authQuery = {
   queryKey: queryKeys.settings.auth(),
   queryFn: () => apiData(getApiV1AdminSettingsAuth()),
-};
-export const firebaseQuery = {
-  queryKey: queryKeys.settings.firebase(),
-  queryFn: () => apiData(getApiV1AdminSettingsFirebase()),
 };
 
 export interface TemplatesData {

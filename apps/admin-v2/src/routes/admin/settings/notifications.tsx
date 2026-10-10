@@ -13,7 +13,7 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { appProvidersQuery, customerRulesQuery, emailQuery, smsQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { webPushQuery, webPushSupported } from "~/lib/web-push";
+import { webPushQuery } from "~/lib/web-push";
 
 export const Route = createFileRoute("/admin/settings/notifications")({
   loader: ({ context: { queryClient } }) =>
@@ -23,8 +23,8 @@ export const Route = createFileRoute("/admin/settings/notifications")({
       queryClient.ensureQueryData(smsQuery),
       queryClient.ensureQueryData(appProvidersQuery("push")),
       queryClient.ensureQueryData(appProvidersQuery("messaging")),
-      // "Notifications on this device" reads this staff member's browsers; only a browser with Web Push asks.
-      webPushSupported() ? queryClient.ensureQueryData(webPushQuery) : Promise.resolve(),
+      // "Notifications on this device": this staff member's devices (also listed, and testable, from a browser that cannot subscribe).
+      queryClient.ensureQueryData(webPushQuery),
     ]),
   head: () => settingsHead("notifications"),
   errorComponent: RouteErrorComponent,

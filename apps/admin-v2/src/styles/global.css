@@ -109,6 +109,17 @@
   --chart-4: #8051ff;
   --chart-5: #c70a24;
 
+  /* Presence: one colour per person (avatar, field ring, name tag). Mid tones
+     that serve both themes: each passes AA with --presence-foreground and 3:1
+     as a ring on the light and the dark card. */
+  --presence-1: #4285f4;
+  --presence-2: #16a34a;
+  --presence-3: #9061f9;
+  --presence-4: #e0457b;
+  --presence-5: #c2700a;
+  --presence-6: #0891b2;
+  --presence-foreground: #111111;
+
   --elevation-card: 0 1px 0 0 rgb(26 26 26 / 0.07), inset 0 -1px 0 0 rgb(0 0 0 / 0.08), inset 0 0 0 1px rgb(0 0 0 / 0.08);
   --elevation-button: inset 0 -1px 0 0 #b5b5b5, inset 0 0 0 1px rgb(0 0 0 / 0.1), inset 0 0.5px 0 1.5px #ffffff;
   --elevation-button-primary: inset 0 -1px 0 1px rgb(0 0 0 / 0.8), inset 0 0 0 1px rgb(48 48 48), inset 0 0.5px 0 1.5px rgb(255 255 255 / 0.25);
@@ -504,6 +515,32 @@ html:lang(bn) {
 
 [data-save-bar] {
   animation: save-bar-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+/* Field presence (components/admin/realtime/PresenceLayer.tsx, DESIGN.md W3):
+   the control someone else is in gets a ring in their colour, and its field a
+   name tag at the top end. Set and cleared by the presence layer. */
+[data-presence-ring] {
+  outline: 2px solid var(--presence);
+  outline-offset: 2px;
+}
+
+[data-presence-name] {
+  position: relative;
+}
+
+[data-presence-name]::after {
+  content: attr(data-presence-name);
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  border-radius: 0.375rem;
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  background: var(--presence);
+  color: var(--presence-foreground);
+  pointer-events: none;
 }
 
 [data-save-bar]::after {

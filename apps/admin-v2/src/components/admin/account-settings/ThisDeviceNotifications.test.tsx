@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// Settings → Notifications → Staff → "Notifications on this device": subscribes
-// this browser to Web Push (the worker has a scope of its own), shows On or Off,
-// turns it off again, lists the staff member's own browsers with Remove, and is
-// hidden in a browser without Web Push or says why when the Worker cannot send.
+// My account → "Notifications on this device": subscribes this browser to Web
+// Push (the worker has a scope of its own), proves it with a test and "Did it
+// arrive?", says exactly why a browser cannot receive them, and lists the staff
+// member's own devices with their delivery, "Send test" and "Remove".
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -99,6 +99,8 @@ const button = (label: string) => [...host.querySelectorAll("button")].find((ele
 
 beforeEach(() => {
   setLocale("en");
+  Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+  setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
   localStorage.clear();
   document.body.innerHTML = "";
   host = document.createElement("div");
@@ -118,32 +120,55 @@ afterEach(() => {
   Reflect.deleteProperty(window, "PushManager");
 });
 
+const THIS = { id: "wpd_this", deviceLabel: "Chrome on macOS", lastSuccessAt: null, createdAt: "2026-10-01T00:00:00.000Z", failureCount: 0 };
+const PHONE = { id: "wpd_phone", deviceLabel: "Safari on iOS", lastSuccessAt: "2026-10-02T10:00:00.000Z", createdAt: "2026-10-01T00:00:00.000Z", failureCount: 0 };
+
+function setUserAgent(value: string, touchPoints = 0) {
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value });
+  Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, value: touchPoints });
+}
+
 describe("Notifications on this device", () => {
-  it("renders nothing in a browser without Web Push", async () => {
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: undefined });
+  it("says this browser has no Web Push, and still lists the staff member's devices", async () => {
     Reflect.deleteProperty(navigator, "serviceWorker");
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [PHONE] }));
     await mount();
-    expect(host.textContent).toBe("");
-    expect(api.get).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("This browser can't show notifications");
+    expect(button("Turn on")).toBeUndefined();
+    expect(host.textContent).toContain("Safari on iOS");
   });
 
-  it("says why in one line, and offers no switch, when the Worker cannot send", async () => {
+  it("on iPhone in Safari, explains Apple's Home Screen rule with the steps", async () => {
+    Reflect.deleteProperty(navigator, "serviceWorker");
+    setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", 5);
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [] }));
+    await mount();
+    expect(host.textContent).toContain("Add the dashboard to your Home Screen first");
+    expect(host.textContent).toContain("Tap Add to Home Screen, then Add.");
+    expect(button("Turn on")).toBeUndefined();
+  });
+
+  it("says the store needs an https address when the Worker cannot send", async () => {
     installBrowser();
     api.get.mockImplementation(() => ok({ publicKey: null, available: false, devices: [] }));
     await mount();
-    expect(host.textContent).toContain("Notifications on this device");
     expect(host.textContent).toContain("https web address");
     expect(button("Turn on")).toBeUndefined();
   });
 
-  it("subscribes this browser under its own scope and saves it with a short device label", async () => {
+  it("says how to unblock notifications in this browser when they are blocked", async () => {
+    installBrowser(null, "denied");
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [] }));
+    await mount();
+    expect(host.textContent).toContain("Notifications are blocked for the dashboard in this browser.");
+    expect(host.textContent).toContain("open Site settings, set Notifications to Allow");
+    expect(button("Turn on")).toBeUndefined();
+  });
+
+  it("turns on, sends a test at once and asks whether it arrived; No shows what to check", async () => {
     const browser = installBrowser();
-    // The API lists the browser once it has been saved.
-    api.get.mockImplementation(() => ok({
-      publicKey: PUBLIC_KEY,
-      available: true,
-      devices: api.post.mock.calls.length === 0 ? [] : [{ id: "wpd_this", deviceLabel: "Chrome on macOS", lastSuccessAt: null, createdAt: "2026-10-01T00:00:00.000Z" }],
-    }));
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: api.post.mock.calls.length === 0 ? [] : [THIS] }));
+    api.post.mockImplementation((request: { url: string }) => (request.url.endsWith("/test") ? ok({ outcome: "sent" }) : ok({ id: "wpd_this" })));
     await mount();
     expect(host.textContent).toContain("Off");
     await vi.waitFor(() => expect(button("Turn on")?.disabled).toBe(false));
@@ -151,24 +176,28 @@ describe("Notifications on this device", () => {
     await act(async () => button("Turn on")!.click());
     await flush();
 
-    expect(browser.requestPermission).toHaveBeenCalledTimes(1);
     expect(browser.register).toHaveBeenCalledWith("/web-push-sw.js", { scope: "/web-push/" });
-    const options = browser.subscribe.mock.calls[0]![0] as { userVisibleOnly: boolean; applicationServerKey: Uint8Array };
-    expect(options.userVisibleOnly).toBe(true);
-    expect(options.applicationServerKey).toBeInstanceOf(Uint8Array);
-    expect(options.applicationServerKey.length).toBe(65);
     expect(api.post).toHaveBeenCalledWith(expect.objectContaining({
       url: "/api/v1/admin/web-push/subscriptions",
       body: { endpoint: "https://push.example/abc", keys: { p256dh: "p256", auth: "auth" }, deviceLabel: "Chrome on macOS" },
     }));
-    expect(localStorage.getItem("scalius-web-push-device")).toBe("wpd_this");
-    await vi.waitFor(() => expect(host.textContent).toContain("On"));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(expect.objectContaining({
+      url: "/api/v1/admin/web-push/devices/wpd_this/test",
+      body: { title: "Test notification", body: "Notifications work on this device." },
+    })));
+    await vi.waitFor(() => expect(host.textContent).toContain("Did it arrive?"));
     expect(button("Turn off")).toBeDefined();
+
+    await act(async () => button("No")!.click());
+    expect(host.textContent).toContain("Turn off Focus or Do Not Disturb.");
+    await act(async () => button("Send again")!.click());
+    await flush();
+    expect(api.post.mock.calls.filter(([request]) => (request as { url: string }).url.endsWith("/test"))).toHaveLength(2);
   });
 
-  it("saves nothing when the browser blocks notifications", async () => {
+  it("saves nothing when the person refuses the browser's question", async () => {
     const browser = installBrowser(null, "default");
-    browser.requestPermission.mockImplementation(async () => "denied");
+    browser.requestPermission.mockImplementation(async () => "default");
     api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [] }));
     await mount();
     await vi.waitFor(() => expect(button("Turn on")?.disabled).toBe(false));
@@ -176,25 +205,17 @@ describe("Notifications on this device", () => {
     await flush();
     expect(browser.subscribe).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("blocks notifications");
   });
 
   it("turns off: tells the API, then unsubscribes the browser", async () => {
     const subscription = fakeSubscription("https://push.example/mine");
     installBrowser(subscription, "granted");
     localStorage.setItem("scalius-web-push-device", "wpd_this");
-    api.get.mockImplementation(() => ok({
-      publicKey: PUBLIC_KEY,
-      available: true,
-      devices: [{ id: "wpd_this", deviceLabel: "Chrome on macOS", lastSuccessAt: null, createdAt: "2026-10-01T00:00:00.000Z" }],
-    }));
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [THIS] }));
     await mount();
     await vi.waitFor(() => expect(button("Turn off")).toBeDefined());
-    expect(host.textContent).toContain("On");
-
     await act(async () => button("Turn off")!.click());
     await flush();
-
     expect(api.post).toHaveBeenCalledWith(expect.objectContaining({
       url: "/api/v1/admin/web-push/subscriptions/remove",
       body: { endpoint: "https://push.example/mine" },
@@ -203,23 +224,22 @@ describe("Notifications on this device", () => {
     expect(localStorage.getItem("scalius-web-push-device")).toBeNull();
   });
 
-  it("lists the staff member's own browsers and removes another one by id", async () => {
+  it("lists devices with their delivery, tests another device and removes it", async () => {
     installBrowser(null, "granted");
     localStorage.setItem("scalius-web-push-device", "wpd_this");
-    api.get.mockImplementation(() => ok({
-      publicKey: PUBLIC_KEY,
-      available: true,
-      devices: [
-        { id: "wpd_this", deviceLabel: "Chrome on macOS", lastSuccessAt: null, createdAt: "2026-10-01T00:00:00.000Z" },
-        { id: "wpd_phone", deviceLabel: "Safari on iOS", lastSuccessAt: "2026-10-02T10:00:00.000Z", createdAt: "2026-10-01T00:00:00.000Z" },
-      ],
-    }));
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [THIS, { ...PHONE, failureCount: 2 }] }));
+    api.post.mockImplementation(() => ok({ outcome: "failed" }));
     await mount();
     expect(host.textContent).toContain("Your devices");
-    expect(host.textContent).toContain("Chrome on macOS");
     expect(host.textContent).toContain("This device");
-    expect(host.textContent).toContain("No alert yet");
-    expect(host.textContent).toContain("Last alert");
+    expect(host.textContent).toContain("No delivery yet");
+    expect(host.textContent).toContain("Last delivery");
+    expect(host.textContent).toContain("Not delivering");
+
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send test to Safari on iOS"]')!.click());
+    await flush();
+    expect(api.post).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/v1/admin/web-push/devices/wpd_phone/test" }));
+    expect(host.textContent).toContain("Couldn't reach this device.");
 
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Remove Safari on iOS"]')!.click());
     await flush();

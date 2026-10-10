@@ -8,7 +8,6 @@ import {
   getApiV1AdminSettingsSms,
   postApiV1AdminSettingsAuth,
   postApiV1AdminSettingsEmail,
-  postApiV1AdminSettingsFirebase,
   postApiV1AdminSettingsSms,
   putApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
@@ -21,7 +20,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -32,7 +30,6 @@ import {
   authQuery,
   customerRulesQuery,
   emailQuery,
-  firebaseQuery,
   smsQuery,
   type AppProvider,
 } from "~/lib/api-query-options/settings-screens";
@@ -58,7 +55,7 @@ import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { usePushIssueText } from "./push-issue-text";
-import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
+import { webPushMessages } from "~/i18n/settings-web-push";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { FieldRow } from "~/components/ui/field";
 
@@ -231,6 +228,7 @@ function staffEmailValid(email: string): boolean {
 
 export function StaffNotificationsCard() {
   const t = useMessages(notificationsMessages);
+  const push = useMessages(webPushMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useCanEditNotifications();
   // The same document as the customer card: one read, each card saves its part.
@@ -277,9 +275,16 @@ export function StaffNotificationsCard() {
           }))}
       />
       {!pushReady ? (
-        <p className="text-body text-muted-foreground">{t("notReady", { channel: t("push") })}</p>
+        // Staff push is Web Push: it needs the store's https address (Sending has no push row any more).
+        <p className="text-body text-muted-foreground">{push("reasonHttps")}</p>
       ) : null}
-      <ThisDeviceNotifications />
+      {/* Staff push is set up per person, on their own devices (My account): one place, open to every staff member. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-4">
+        <p className="min-w-0 flex-1 basis-60 text-body text-muted-foreground">{push("settingsPointer")}</p>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/admin/account" hash="this-device">{push("settingsOpen")}</Link>
+        </Button>
+      </div>
       <div className="space-y-3 border-t border-border pt-4">
         <div className="space-y-1">
           <h3 className="text-heading-sm">{t("staffEmails")}</h3>
@@ -585,130 +590,6 @@ function WhatsAppFields() {
   );
 }
 
-// ── Sending: push (Firebase) ────────────────────────────────────────────
-
-const FIREBASE_FIELDS = [
-  ["apiKey", "fbApiKey"],
-  ["authDomain", "fbAuthDomain"],
-  ["projectId", "fbProjectId"],
-  ["storageBucket", "fbStorageBucket"],
-  ["messagingSenderId", "fbSenderId"],
-  ["appId", "fbAppId"],
-  ["vapidKey", "fbVapidKey"],
-] as const;
-type FirebaseKey = (typeof FIREBASE_FIELDS)[number][0];
-
-interface FirebaseValues {
-  serviceAccount: string;
-  publicConfig: Record<FirebaseKey | "measurementId", string>;
-}
-
-function isServiceAccount(value: string): boolean {
-  if (!value || value === MASKED_VALUE) return true;
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    return ["private_key", "client_email", "project_id"].every(
-      (key) => typeof parsed[key] === "string" && Boolean((parsed[key] as string).trim()),
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** Reads the `firebaseConfig = {...}` snippet Firebase shows for web apps. */
-function parseWebConfig(raw: string): Partial<Record<string, string>> | null {
-  try {
-    const json = raw
-      .trim()
-      .replace(/^(const|let|var)\s+\w+\s*=\s*/, "")
-      .replace(/;$/, "")
-      .replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":')
-      .replace(/,(\s*[}\]])/g, "$1");
-    const parsed = JSON.parse(json) as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => typeof value === "string")) as Record<string, string>;
-  } catch {
-    return null;
-  }
-}
-
-function PushFields() {
-  const t = useMessages(notificationsMessages);
-  const common = useMessages(settingsMessages);
-  const { values, setValue, setValues } = useSettingsForm<FirebaseValues>({
-    queryKey: firebaseQuery.queryKey,
-    fetchFn: async () => {
-      const data = await firebaseQuery.queryFn();
-      const config = Object.fromEntries(
-        [...FIREBASE_FIELDS.map(([key]) => key), "measurementId"].map((key) => [
-          key,
-          typeof data.publicConfig[key] === "string" ? (data.publicConfig[key] as string) : "",
-        ]),
-      ) as FirebaseValues["publicConfig"];
-      // The revision rides along for the save; the hook keeps it out of the values.
-      return { serviceAccount: data.serviceAccount, publicConfig: config, revision: data.revision };
-    },
-    saveFn: (draft, expectedRevision) => {
-      const body: ApiBody<typeof postApiV1AdminSettingsFirebase> = { publicConfig: draft.publicConfig, expectedRevision };
-      if (draft.serviceAccount !== MASKED_VALUE) body.serviceAccount = draft.serviceAccount;
-      return apiData(postApiV1AdminSettingsFirebase({ body }));
-    },
-    invalidateQueryKeys: [customerRulesQuery.queryKey],
-    defaultValues: { serviceAccount: "", publicConfig: {} as FirebaseValues["publicConfig"] },
-    errorMessage: common("saveFailed"),
-    canEdit: useCanEditNotifications(),
-    isValid: (draft) => isServiceAccount(draft.serviceAccount),
-  });
-  const accountValid = isServiceAccount(values.serviceAccount);
-  return (
-    <>
-      <p className="text-body text-muted-foreground">{t("firebaseOptional")}</p>
-      <SettingsField
-        id="push-service-account"
-        label={t("serviceAccount")}
-        help={values.serviceAccount === MASKED_VALUE ? t("serviceAccountSaved") : t("serviceAccountHelp")}
-        error={accountValid ? null : t("serviceAccountInvalid")}
-      >
-        <Textarea
-          id="push-service-account"
-          rows={4}
-          spellCheck={false}
-          autoComplete="off"
-          value={values.serviceAccount}
-          aria-invalid={!accountValid}
-          aria-describedby="push-service-account-note"
-          onFocus={() => values.serviceAccount === MASKED_VALUE && setValue("serviceAccount", "")}
-          onChange={(event) => setValue("serviceAccount", event.target.value)}
-        />
-      </SettingsField>
-      <SettingsField id="push-paste" label={t("pasteConfig")} help={t("pasteConfigHelp")}>
-        <Textarea
-          id="push-paste"
-          rows={2}
-          spellCheck={false}
-          aria-describedby="push-paste-note"
-          onChange={(event) => {
-            const parsed = parseWebConfig(event.target.value);
-            if (parsed) setValues((draft) => ({ ...draft, publicConfig: { ...draft.publicConfig, ...parsed } }));
-          }}
-        />
-      </SettingsField>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {FIREBASE_FIELDS.map(([key, label]) => (
-          <SettingsField key={key} id={`push-${key}`} label={t(label)}>
-            <Input
-              id={`push-${key}`}
-              autoComplete="off"
-              value={values.publicConfig[key] ?? ""}
-              onChange={(event) =>
-                setValues((draft) => ({ ...draft, publicConfig: { ...draft.publicConfig, [key]: event.target.value } }))}
-            />
-          </SettingsField>
-        ))}
-      </div>
-    </>
-  );
-}
-
 // ── Sending card ────────────────────────────────────────────────────────
 
 export function SendingCard() {
@@ -772,14 +653,6 @@ export function SendingCard() {
             trigger={<SettingsRow label={t("whatsapp")} disabled={!canEditGeneral} value={status(isReady(rules.data.whatsapp))} />}
           >
             <WhatsAppFields />
-          </SettingsDialog>
-          <SettingsDialog
-            title={t("pushTitle")}
-            trigger={
-              <SettingsRow label={t("pushTitle")} disabled={!canEditNotifications} value={status(isReady(rules.data.push))} />
-            }
-          >
-            <PushFields />
           </SettingsDialog>
         </>
       }

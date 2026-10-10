@@ -245,7 +245,6 @@ export const queryKeys = {
     customerRequests: () => ["settings", "customer-requests"] as const,
     marketingConsent: () => ["settings", "marketing-consent"] as const,
     email: () => ["settings", "email"] as const,
-    firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,
     taxes: () => ["settings", "taxes"] as const,
     taxClassifications: (params?: Record<string, unknown>) =>
@@ -292,12 +291,6 @@ export const queryKeys = {
   setup: {
     all: ["setup"] as const,
     status: () => ["setup", "status"] as const,
-  },
-
-  // ── Firebase Config ──────────────────────────────────────────────
-  firebase: {
-    all: ["firebase"] as const,
-    config: () => ["firebase", "config"] as const,
   },
 
   // ── Webhooks (commerce hook H3) ──────────────────────────────────

@@ -1,8 +1,9 @@
 /**
  * Staff Web Push from this dashboard browser (`/api/v1/admin/web-push`): the
- * worker `public/web-push-sw.js` shows each push, this module subscribes and
- * unsubscribes the browser and tells the API. The worker has a scope of its
- * own, apart from the optional Firebase worker, so neither replaces the other.
+ * dashboard's one staff push path. The worker `public/web-push-sw.js` shows
+ * each push (and tells open dashboard tabs, for the bell); this module
+ * subscribes and unsubscribes the browser, tells the API, sends test
+ * notifications and says exactly why a browser cannot receive them.
  * Not in the generated SDK yet; the response shapes are typed here.
  */
 import { apiClient, apiData } from "./api";
@@ -17,7 +18,12 @@ export interface WebPushDevice {
   deviceLabel: string | null;
   lastSuccessAt: string | null;
   createdAt: string;
+  /** Sends that failed in a row since the last delivery (0 when the last one arrived). */
+  failureCount: number;
 }
+
+/** What the push service answered a test: `gone` means the browser dropped it (the API removed it). */
+export type TestPushOutcome = "sent" | "failed" | "gone";
 
 export interface WebPushState {
   publicKey: string | null;
@@ -38,6 +44,50 @@ export function webPushSupported(): boolean {
     && "serviceWorker" in navigator
     && "PushManager" in window
     && "Notification" in window;
+}
+
+/** An iPhone or iPad (iPadOS reports a Mac with touch). */
+export function isAppleMobile(userAgent: string, maxTouchPoints = 0): boolean {
+  return /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+}
+
+/** Opened from the Home Screen (an installed web app), where iOS allows Web Push. */
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(display-mode: standalone)").matches === true
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+/**
+ * Why this browser cannot receive staff notifications, or null when it can
+ * (the server's side, an https store address, is `available` from the API):
+ * - `https`: the store has no https web address (or the dashboard is not on one);
+ * - `homeScreen`: iPhone and iPad allow Web Push only from the Home Screen (Apple's rule);
+ * - `iosVersion`: on the Home Screen, but iOS is older than 16.4;
+ * - `unsupported`: this browser has no Web Push;
+ * - `blocked`: notifications are blocked for the dashboard in this browser.
+ */
+export type PushBlocker = "https" | "homeScreen" | "iosVersion" | "unsupported" | "blocked";
+
+export function pushBlocker(available: boolean | undefined): PushBlocker | null {
+  if (typeof window === "undefined") return "unsupported";
+  if (available === false || !window.isSecureContext) return "https";
+  if (isAppleMobile(navigator.userAgent, navigator.maxTouchPoints) && !webPushSupported()) {
+    return isStandalone() ? "iosVersion" : "homeScreen";
+  }
+  if (!webPushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "blocked";
+  return null;
+}
+
+/** Sends a test notification to one of this staff member's browsers, in the dashboard's language. */
+export async function sendTestPush(deviceId: string, text: { title: string; body: string }): Promise<TestPushOutcome> {
+  const result = await apiData(apiClient.post<{ 200: { success: boolean; data: { outcome: TestPushOutcome } } }>({
+    url: `${WEB_PUSH_URL}/devices/${encodeURIComponent(deviceId)}/test`,
+    headers: JSON_HEADERS,
+    body: text,
+  }));
+  return result.outcome;
 }
 
 /** "Chrome on macOS": the browser and system from the user agent, nothing finer. */
@@ -128,7 +178,7 @@ export function thisDeviceId(): string | null {
  * Asks for permission, subscribes this browser and saves it with the API.
  * Returns "blocked" when the merchant refuses permission (nothing is saved).
  */
-export async function turnOnThisDevice(publicKey: string, deviceLabel: string): Promise<"on" | "blocked"> {
+export async function turnOnThisDevice(publicKey: string, deviceLabel: string): Promise<{ id: string } | "blocked"> {
   const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (permission !== "granted") return "blocked";
   const registration = await activeRegistration();
@@ -146,7 +196,21 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
     body: { ...subscription.toJSON(), deviceLabel },
   }));
   rememberDevice(saved.id);
-  return "on";
+  return { id: saved.id };
+}
+
+/**
+ * Whether this browser is on now, from the browser alone (no request): a
+ * subscription, granted permission, and the device id the API gave it.
+ * The bell reads this on every page; Settings checks the server's list too.
+ */
+export async function thisBrowserIsOn(): Promise<boolean> {
+  if (!webPushSupported() || Notification.permission !== "granted") return false;
+  try {
+    return Boolean(await currentSubscription()) && thisDeviceId() !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** Unsubscribes this browser and tells the API to forget it. */

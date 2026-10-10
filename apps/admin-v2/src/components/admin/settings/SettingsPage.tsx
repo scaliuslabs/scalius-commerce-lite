@@ -23,8 +23,7 @@ import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
 import { useQueryClient } from "@tanstack/react-query";
-import { EditorPresence } from "~/lib/realtime/store";
-import { PresenceScopeContext, presenceKey } from "~/lib/realtime/store";
+import { PresenceScopeContext, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import type { SettingsCardId } from "./settings-search";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -57,16 +56,16 @@ export function SettingsPage({
   return (
     <PresenceScopeContext.Provider value={key}>
     <TargetCardContext.Provider value={hash}>
-      <Page width="settings" className="space-y-4">
+      <Page width="settings" data-presence-root={key} className="space-y-4">
         <PageHeader
           title={title ?? t(page)}
           backTo={back?.to ?? "/admin/settings"}
           backLabel={back?.label ?? t("settings")}
           backOnlyWithoutPanel={!back}
+          presence={<SettingsPresence presenceKey={key} />}
           actions={actions}
         />
         <SaveErrorBanner />
-        <SettingsPresence presenceKey={key} />
         {readOnly ? <ReadOnlyNotice /> : null}
         {children}
       </Page>
@@ -74,6 +73,9 @@ export function SettingsPage({
     </PresenceScopeContext.Provider>
   );
 }
+
+/** Settings cards keep the fields they edited when the page reloads, so any save by someone else merges. */
+const NO_FIELDS = () => [];
 
 /**
  * Who else has this settings page open, and their saves. "Load latest"
@@ -84,9 +86,10 @@ function SettingsPresence({ presenceKey: key }: { presenceKey: string }) {
   const scope = useSaveScope();
   const queryClient = useQueryClient();
   return (
-    <EditorPresence
+    <PresenceSlot
       presenceKey={key}
       dirty={Boolean(scope?.dirty)}
+      changedFields={NO_FIELDS}
       onLoadLatest={() => void queryClient.invalidateQueries({ queryKey: ["settings"] })}
     />
   );

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
 import { notificationBellMessages } from "~/i18n/notification-bell";
+import { webPushMessages } from "~/i18n/settings-web-push";
+import { pushBlocker, thisBrowserIsOn, type PushBlocker } from "~/lib/web-push";
 import { TOP_BAR_BUTTON } from "./layout/nav-button";
 
 interface AdminNotification {
@@ -18,11 +19,12 @@ interface AdminNotification {
   link?: string;
 }
 
-// Foreground push messages arrive as this window event (see use-firebase-init).
-interface AdminNotificationEvent {
-  title: string;
-  message: string;
-  link?: string;
+/** What the Web Push worker tells open dashboard tabs about each push it shows (public/web-push-sw.js). */
+interface PushShownMessage {
+  type: "scalius:push";
+  title?: unknown;
+  body?: unknown;
+  url?: unknown;
 }
 
 const STORAGE_KEY = "scalius_admin_notifications";
@@ -45,15 +47,48 @@ function saveNotifications(notifications: AdminNotification[]) {
   }
 }
 
-export function NotificationDropdown({ userId }: { userId: string }) {
+/** A dashboard path from the worker's absolute dashboard address, else none. */
+function dashboardPath(url: unknown): string | undefined {
+  if (typeof url !== "string" || !url) return undefined;
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.origin === window.location.origin ? `${parsed.pathname}${parsed.search}${parsed.hash}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * This browser's staff push state from the browser alone (no request on
+ * every page): on, or why not. The one setup lives in My account.
+ */
+function useThisBrowserPush(): "on" | PushBlocker | "off" | null {
+  const [state, setState] = useState<"on" | PushBlocker | "off" | null>(null);
+  useEffect(() => {
+    let current = true;
+    const blocker = pushBlocker(undefined);
+    if (blocker) {
+      setState(blocker);
+      return;
+    }
+    void thisBrowserIsOn().then((on) => current && setState(on ? "on" : "off"));
+    return () => {
+      current = false;
+    };
+  }, []);
+  return state;
+}
+
+export function NotificationDropdown() {
   const t = useMessages(notificationBellMessages);
+  const push = useMessages(webPushMessages);
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AdminNotification[]>(loadNotifications);
-  const { status: pushStatus, enablePushNotifications } = useFirebaseInit(userId);
+  const pushState = useThisBrowserPush();
   const pushNote =
-    pushStatus === "denied" ? t("pushBlocked")
-    : pushStatus === "error" ? t("pushFailed")
-    : pushStatus === "idle" || pushStatus === "loading" ? t("pushOff")
+    pushState === "blocked" ? push("bellBlocked")
+    : pushState === "off" ? push("bellOff")
+    : pushState && pushState !== "on" ? push("bellUnavailable")
     : null;
 
   const update = useCallback((change: (current: AdminNotification[]) => AdminNotification[]) => {
@@ -64,17 +99,22 @@ export function NotificationDropdown({ userId }: { userId: string }) {
     });
   }, []);
 
+  // Each push the worker shows while a dashboard tab is open lands in the list too.
   useEffect(() => {
-    const onNotification = (event: Event) => {
-      const detail = (event as CustomEvent<AdminNotificationEvent>).detail;
-      if (!detail) return;
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as PushShownMessage | null;
+      if (!data || data.type !== "scalius:push" || typeof data.title !== "string") return;
+      const title = data.title;
+      const message = typeof data.body === "string" ? data.body : "";
+      const link = dashboardPath(data.url);
       update((current) => [
-        { id: crypto.randomUUID(), title: detail.title, message: detail.message, link: detail.link, timestamp: Date.now(), read: false },
+        { id: crypto.randomUUID(), title, message, link, timestamp: Date.now(), read: false },
         ...current,
       ].slice(0, MAX_NOTIFICATIONS));
     };
-    window.addEventListener("admin-notification", onNotification);
-    return () => window.removeEventListener("admin-notification", onNotification);
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, [update]);
 
   const unread = notifications.filter((notification) => !notification.read).length;
@@ -104,15 +144,10 @@ export function NotificationDropdown({ userId }: { userId: string }) {
           <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
             <div className="min-w-0 text-body">
               <p className="font-medium">{t("pushAlerts")}</p>
-              <p className="truncate text-muted-foreground">{pushNote}</p>
+              <p className="text-muted-foreground">{pushNote}</p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={pushStatus === "loading" || pushStatus === "denied"}
-              onClick={() => void enablePushNotifications()}
-            >
-              {t("turnOn")}
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/admin/account" hash="this-device">{push("bellSetUp")}</Link>
             </Button>
           </div>
         ) : null}
@@ -130,7 +165,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                 }}
                 className={cn("block w-full rounded-md px-3 py-2 text-start hover:bg-muted", !notification.read && "bg-muted/50")}
               >
-                <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
+                <p className={cn("truncate text-body", !notification.read && "font-medium")} title={notification.title}>{notification.title}</p>
                 {notification.message ? <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p> : null}
                 <p className="mt-0.5 text-caption text-muted-foreground">
                   {formatDateTime(new Date(notification.timestamp), { dateStyle: "medium", timeStyle: "short" })}

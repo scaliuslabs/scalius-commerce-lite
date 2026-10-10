@@ -12,10 +12,12 @@ import {
   listStaffPushDevices,
   parsePushSubscription,
   savePushSubscription,
+  sendStaffTestPush,
   webPushPublicKey,
   webPushSender,
 } from "@scalius/core/modules/notifications";
-import { NotFoundError, UnauthorizedError } from "../../utils/api-error";
+import { NotFoundError, RateLimitError, ServiceUnavailableError, UnauthorizedError } from "../../utils/api-error";
+import { isWithinRateLimit } from "../../utils/rate-limit";
 import { noContent, ok } from "../../utils/api-response";
 import { errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
 
@@ -39,6 +41,7 @@ const deviceSchema = z.object({
   deviceLabel: z.string().nullable(),
   lastSuccessAt: z.string().nullable(),
   createdAt: z.string(),
+  failureCount: z.number().int().openapi({ description: "Sends that failed in a row since the last delivery; 0 when the last one arrived." }),
 });
 
 app.openapi(createRoute({
@@ -74,8 +77,46 @@ app.openapi(createRoute({
       deviceLabel: device.deviceLabel,
       lastSuccessAt: device.lastSuccessAt?.toISOString() ?? null,
       createdAt: device.createdAt.toISOString(),
+      failureCount: device.failureCount,
     })),
   });
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.web_push.device_test",
+  method: "post",
+  path: "/devices/{id}/test",
+  tags: [TAG],
+  summary: "Send a test notification to one of this staff member's browsers",
+  description: "Sends the text given (the dashboard's language) to one of the caller's own browsers at once and records the delivery like any send. `sent` means the push service accepted it; the browser shows it within seconds when it is online. Five tests a minute per staff member.",
+  request: {
+    params: z.object({ id: z.string().min(1).max(68) }),
+    body: { required: true, content: { "application/json": { schema: z.object({
+      title: z.string().trim().min(1).max(120),
+      body: z.string().trim().max(240),
+    }) } } },
+  },
+  responses: {
+    200: {
+      description: "What the push service answered",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        outcome: z.enum(["sent", "failed", "gone"]).openapi({ description: "`gone`: the browser dropped the subscription, so it was removed." }),
+      })) } },
+    },
+    ...errorResponses,
+  },
+}), async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  const userId = staffId(c);
+  if (!(await isWithinRateLimit(c.env, "RL_STRICT", "web_push_test", userId))) {
+    throw new RateLimitError("Too many test notifications. Try again in a minute.");
+  }
+  const sender = await webPushSender(c.env);
+  if (!sender) throw new ServiceUnavailableError("Browser notifications need your store's https web address.");
+  const { title, body } = c.req.valid("json");
+  const outcome = await sendStaffTestPush(c.get("db"), sender, userId, c.req.valid("param").id, { title, body });
+  if (outcome === null) throw new NotFoundError("Device not found");
+  return ok(c, { outcome: outcome === "sent" ? "sent" as const : outcome === "gone" ? "gone" as const : "failed" as const });
 });
 
 app.openapi(createRoute({

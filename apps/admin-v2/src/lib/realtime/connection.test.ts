@@ -76,6 +76,53 @@ describe("RealtimeConnection", () => {
     expect(second.sent.at(-1)).toBe(JSON.stringify({ t: "watch", keys: [] }));
   });
 
+  it("coalesces focus reports, resends them after a reconnect, and sends lists and saved fields", () => {
+    const saved = vi.fn();
+    connection.subscribe({ saved });
+    connection.start();
+    const first = FakeSocket.all[0]!;
+    first.open();
+    first.sent = [];
+    // A key that is not watched reports nothing.
+    connection.focus("product:prd_1", "price", false);
+    expect(first.sent).toEqual([]);
+    const release = connection.watch("product:prd_1");
+    const releaseList = connection.watchList("order");
+    expect(first.sent.at(-1)).toBe(JSON.stringify({ t: "watch", keys: ["product:prd_1"], lists: ["order"] }));
+    first.sent = [];
+
+    // The first report goes at once; a burst inside 200 ms ends on its last state.
+    connection.focus("product:prd_1", "price", false);
+    connection.focus("product:prd_1", "stock", false);
+    connection.focus("product:prd_1", "stock", true);
+    expect(first.sent).toEqual([JSON.stringify({ t: "focus", key: "product:prd_1", field: "price", editing: false })]);
+    vi.advanceTimersByTime(200);
+    expect(first.sent.at(-1)).toBe(JSON.stringify({ t: "focus", key: "product:prd_1", field: "stock", editing: true }));
+    vi.advanceTimersByTime(1_000);
+    expect(first.sent).toHaveLength(2);
+
+    // A new socket hears the state again.
+    first.emit("close", { code: 1006 });
+    vi.advanceTimersByTime(1_000);
+    const second = FakeSocket.all[1]!;
+    second.open();
+    expect(second.sent).toEqual([
+      JSON.stringify({ t: "watch", keys: ["product:prd_1"], lists: ["order"] }),
+      JSON.stringify({ t: "focus", key: "product:prd_1", field: "stock", editing: true }),
+    ]);
+
+    connection.announceSave("product:prd_1", 4, ["price"]);
+    expect(second.sent.at(-1)).toBe(JSON.stringify({ t: "saved", key: "product:prd_1", rev: 4, fields: ["price"] }));
+    second.message({ t: "saved", key: "product:prd_1", by: { id: "usr_k", name: "Karim" }, rev: 5, fields: ["stock"] });
+    expect(saved).toHaveBeenCalledWith("product:prd_1", { id: "usr_k", name: "Karim" }, 5, ["stock"]);
+    second.message({ t: "saved", key: "product:prd_1", by: { id: "usr_k", name: "Karim" }, rev: 6 });
+    expect(saved).toHaveBeenLastCalledWith("product:prd_1", { id: "usr_k", name: "Karim" }, 6, []);
+
+    releaseList();
+    release();
+    expect(second.sent.at(-1)).toBe(JSON.stringify({ t: "watch", keys: [] }));
+  });
+
   it("detects a dead socket after sleep: no pong within 10 s reconnects at once", () => {
     connection.start();
     const first = FakeSocket.all[0]!;

@@ -9,6 +9,10 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>Scalius Admin</title>
     <link rel="icon" href="/favicon.png" />
+    <!-- An installable web app: on iPhone and iPad, Web Push works only from the Home Screen. -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Scalius" />
     <!-- Theme and language before first paint: the saved choice, else the system theme. -->
     <script>(function(){var d=document.documentElement,t=null,l=null;try{t=localStorage.getItem("theme");l=localStorage.getItem("scalius.dashboard.locale")}catch(e){}d.classList.toggle("dark",t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches);if(l==="bn")d.lang="bn"})()</script>
     <!-- Every page's first guard reads the session: start that read now, while

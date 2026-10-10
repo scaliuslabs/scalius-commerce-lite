@@ -18,6 +18,7 @@ import {
   parsePushSubscription,
   savePushSubscription,
   sendCustomerPush,
+  sendStaffTestPush,
   sendWebPushNotification,
   webPushPublicKey,
   webPushSender,
@@ -121,6 +122,29 @@ describe("web push delivery", () => {
     }
     expect(await hasPushSubscription(db, owner, flaky.endpoint)).toBe(false);
     expect(await hasPushSubscription(db, owner, ok.endpoint)).toBe(true);
+  });
+
+  it("sends a staff test push only to the staff member's own device and records its delivery status", async () => {
+    sqlite.exec("INSERT INTO user (id, name, email, email_verified, role) VALUES ('usr_2', 'Other', 'other@shop.test', 1, 'admin')");
+    const base = (await webPushSender(ENV))!;
+    const phone = await browser("https://web.push.apple.com/phone");
+    const laptop = await browser("https://fcm.googleapis.com/fcm/send/laptop");
+    const { id: phoneId } = await savePushSubscription(db, { audience: "staff", userId: "usr_1" }, parsePushSubscription(phone));
+    const { id: laptopId } = await savePushSubscription(db, { audience: "staff", userId: "usr_1" }, parsePushSubscription(laptop));
+    const { sender, calls } = recordingSender(base, { [laptop.endpoint]: 503 });
+    const note = { title: "Test notification", body: "Notifications work on this device." };
+
+    expect(await sendStaffTestPush(db, sender, "usr_1", phoneId, note)).toBe("sent");
+    expect(calls.map((call) => call.url)).toEqual([phone.endpoint]);
+    expect(calls[0]!.headers.Urgency).toBe("high");
+    expect(await sendStaffTestPush(db, sender, "usr_1", laptopId, note)).toBe("retry");
+    // Another person's device is never theirs to test.
+    expect(await sendStaffTestPush(db, sender, "usr_2", phoneId, note)).toBeNull();
+    expect(calls).toHaveLength(2);
+
+    const devices = await listStaffPushDevices(db, "usr_1");
+    expect(devices.find((device) => device.id === phoneId)).toMatchObject({ failureCount: 0, lastSuccessAt: expect.any(Date) });
+    expect(devices.find((device) => device.id === laptopId)).toMatchObject({ failureCount: 1, lastSuccessAt: null });
   });
 
   it("sends a buyer's push through the store's choice: Web Push by default, never another buyer's browser", async () => {

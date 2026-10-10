@@ -62393,12 +62393,74 @@ export type GetApiV1AdminWebPushResponses = {
                 deviceLabel: string | null;
                 lastSuccessAt: string | null;
                 createdAt: string;
+                /**
+                 * Sends that failed in a row since the last delivery; 0 when the last one arrived.
+                 */
+                failureCount: number;
             }>;
         };
     };
 };
 
 export type GetApiV1AdminWebPushResponse = GetApiV1AdminWebPushResponses[keyof GetApiV1AdminWebPushResponses];
+
+export type PostApiV1AdminWebPushDevicesByIdTestData = {
+    body: {
+        title: string;
+        body: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/web-push/devices/{id}/test';
+};
+
+export type PostApiV1AdminWebPushDevicesByIdTestErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminWebPushDevicesByIdTestError = PostApiV1AdminWebPushDevicesByIdTestErrors[keyof PostApiV1AdminWebPushDevicesByIdTestErrors];
+
+export type PostApiV1AdminWebPushDevicesByIdTestResponses = {
+    /**
+     * What the push service answered
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * `gone`: the browser dropped the subscription, so it was removed.
+             */
+            outcome: 'sent' | 'failed' | 'gone';
+        };
+    };
+};
+
+export type PostApiV1AdminWebPushDevicesByIdTestResponse = PostApiV1AdminWebPushDevicesByIdTestResponses[keyof PostApiV1AdminWebPushDevicesByIdTestResponses];
 
 export type PostApiV1AdminWebPushSubscriptionsData = {
     body: WebPushSubscription;

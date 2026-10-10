@@ -7,8 +7,8 @@ import { Page } from "@/components/admin/resource/Page";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
-import { EditorPresence } from "~/lib/realtime/store";
-import { announceSave } from "~/lib/realtime/store";
+import { PresenceSlot, announceSave } from "~/lib/realtime/store";
+import { changedFieldNames } from "~/lib/realtime/changed-fields";
 
 interface FormContainerProps<
   TFieldValues extends FieldValues,
@@ -71,43 +71,51 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   savedValues?: (result: unknown) => Partial<TFieldValues>;
   reload?: () => Promise<unknown>;
   className: string;
-  header: React.ReactNode;
+  /** The page header, given the presence avatars for its `presence` slot. */
+  header: (presence: React.ReactNode) => React.ReactNode;
   readOnlyNotice?: React.ReactNode;
   children: React.ReactNode;
 }) {
   // A save tells the other editors on this record at once (realtime presence).
   const announcingSave = async (values: TTransformedValues) => {
+    const changed = changedFieldNames(form.formState.dirtyFields);
     const result = await save(values);
     if (presenceKey) {
       const revision = (savedValues?.(result) as { revision?: unknown } | undefined)?.revision;
-      announceSave(presenceKey, typeof revision === "number" ? revision : null);
+      announceSave(presenceKey, typeof revision === "number" ? revision : null, changed);
     }
     return result;
   };
   useFormSaveBar({ form, saving, locked: !canSave, save: announcingSave, savedValues, reload });
   const scope = useSaveScope();
+  // Read while rendering, so react-hook-form keeps the tree current for the presence calls.
+  void form.formState.dirtyFields;
   const loadedRevision = (form.formState.defaultValues as { revision?: unknown } | undefined)?.revision;
+  const presence = (
+    <PresenceSlot
+      presenceKey={presenceKey}
+      revision={typeof loadedRevision === "number" ? loadedRevision : null}
+      dirty={Boolean(scope?.dirty)}
+      changedFields={() => changedFieldNames(form.formState.dirtyFields)}
+      onLoadLatest={reload ? () => void reload() : undefined}
+    />
+  );
   return (
     <form
       method="post"
       noValidate
       className={className}
+      data-presence-root={presenceKey ?? undefined}
       onSubmit={(event) => {
         event.preventDefault();
         // React bubbles submits from forms in portalled dialogs; only this form saves the page.
         if (event.target === event.currentTarget && scope?.dirty && !scope.busy) void scope.saveAll();
       }}
     >
-      {header}
+      {header(presence)}
       {/* A flex gap, so the banner's hidden placeholder adds no space. */}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
-        <EditorPresence
-          presenceKey={presenceKey}
-          revision={typeof loadedRevision === "number" ? loadedRevision : null}
-          dirty={Boolean(scope?.dirty)}
-          onLoadLatest={reload ? () => void reload() : undefined}
-        />
         {canSave ? null : readOnlyNotice ?? <ReadOnlyNotice />}
         {/* Without the save permission the record opens read-only. */}
         <fieldset disabled={!canSave} className="min-w-0">
@@ -157,7 +165,7 @@ export function FormContainer<
             savedValues={savedValues}
             reload={reload}
             className={formClassName}
-            header={<PageHeader backTo={backUrl} status={badge} title={heading} actions={actions} />}
+            header={(presence) => <PageHeader backTo={backUrl} status={badge} presence={presence} title={heading} actions={actions} />}
             readOnlyNotice={readOnlyNotice}
             presenceKey={presenceKey}
           >

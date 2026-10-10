@@ -211013,13 +211013,18 @@
                               },
                               "createdAt": {
                                 "type": "string"
+                              },
+                              "failureCount": {
+                                "type": "integer",
+                                "description": "Sends that failed in a row since the last delivery; 0 when the last one arrived."
                               }
                             },
                             "required": [
                               "id",
                               "deviceLabel",
                               "lastSuccessAt",
-                              "createdAt"
+                              "createdAt",
+                              "failureCount"
                             ]
                           }
                         }
@@ -211122,6 +211127,180 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "A staff member's own browsers and the VAPID key a dashboard browser subscribes with; an agent has no browser."
+        },
+        "x-scalius-rbac": {
+          "type": "allowAnyAdmin"
+        }
+      }
+    },
+    "/api/v1/admin/web-push/devices/{id}/test": {
+      "post": {
+        "operationId": "dashboard.web_push.device_test",
+        "tags": [
+          "Admin - Web Push"
+        ],
+        "summary": "Send a test notification to one of this staff member's browsers",
+        "description": "Sends the text given (the dashboard's language) to one of the caller's own browsers at once and records the delivery like any send. `sent` means the push service accepted it; the browser shows it within seconds when it is online. Five tests a minute per staff member.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 68
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "title",
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What the push service answered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "sent",
+                            "failed",
+                            "gone"
+                          ],
+                          "description": "`gone`: the browser dropped the subscription, so it was removed."
+                        }
+                      },
+                      "required": [
+                        "outcome"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Shows a test notification on one of the signed-in staff member's own browsers, where the person checks it arrived; an agent has no browser."
         },
         "x-scalius-rbac": {
           "type": "allowAnyAdmin"

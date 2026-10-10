@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -48,6 +48,9 @@ import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
+
+/** Who else has this order open: loaded after the first render, into a reserved box. */
+const OrderPresence = lazy(() => import("./realtime/OrderPresence"));
 import { Page } from "~/components/admin/resource/Page";
 
 /** Item locks that the order's state already explains; the others get a reason. */
@@ -135,11 +138,16 @@ export function OrderView({ order }: { order: Order }) {
   return (
     <ErrorBoundary>
       <TooltipProvider>
-        <Page width="detail" className="space-y-4 pb-24 lg:pb-0">
+        <Page width="detail" data-presence-root={`order:${order.id}`} className="space-y-4 pb-24 lg:pb-0">
           <PageHeader
             backTo={backTo}
             title={o("order", { number: name })}
             status={<OrderHeaderBadges order={order} />}
+            presence={(
+              <Suspense fallback={<div className="h-7 w-24" />}>
+                <OrderPresence orderId={order.id} version={order.version ?? null} />
+              </Suspense>
+            )}
             meta={orderMeta}
             actions={
               <>
