@@ -66,7 +66,7 @@ export function PagePicker({ theme, page, onPage, onCreate, className }: {
           type="button"
           data-page-picker
           aria-label={t("pagePicker", { page: name(page, theme) })}
-          className={cn("flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg bg-topbar-subdued px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress", className)}
+          className={cn("flex h-11 min-w-0 sm:h-9 items-center justify-between gap-2 rounded-lg bg-topbar-subdued px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress", className)}
         >
           <span className="min-w-0 truncate">{name(page, theme)}</span>
           <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden="true" />

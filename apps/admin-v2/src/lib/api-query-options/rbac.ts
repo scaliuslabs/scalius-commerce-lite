@@ -1,8 +1,11 @@
 import {
   getApiV1AdminAuthUsers,
   getApiV1AdminRbacRoles,
+  getApiV1AdminRbacRolesById,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
+import { queryOptions } from "@tanstack/react-query";
+import { queryKeys } from "../query-keys";
 
 export type RbacRole = ApiResult<typeof getApiV1AdminRbacRoles>["roles"][number];
 export type AdminUser = ApiResult<typeof getApiV1AdminAuthUsers>["users"][number];
@@ -28,3 +31,9 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   }
   throw new Error("Staff list exceeded the supported page limit");
 }
+
+/** A role editor reads just its role, not every paged role in the store. */
+export const roleQueryOptions = (id: string) => queryOptions({
+  queryKey: queryKeys.rbac.role(id),
+  queryFn: async () => (await apiData(getApiV1AdminRbacRolesById({ path: { id } }))).role,
+});

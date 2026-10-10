@@ -29,7 +29,6 @@ import { productMessages } from "~/i18n/products";
 import { customFieldMessages } from "~/i18n/custom-fields";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { VariantCustomFieldsDialog } from "~/components/admin/custom-fields/CustomFieldsCard";
 import { appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
 import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { resourceMessages } from "~/i18n/resource";
@@ -58,6 +57,12 @@ import {
   type IssueFor,
   type StockElsewhere,
 } from "./variant-fields";
+
+// Keep the variant dialog off the editor's first download, like the product's
+// Custom data card. It stays mounted once loaded so closing preserves focus.
+const VariantCustomFieldsDialog = React.lazy(() =>
+  import("~/components/admin/custom-fields/CustomFieldsCard").then((module) => ({ default: module.VariantCustomFieldsDialog })),
+);
 
 /** Phone: select, photo, name, menu (price and quantity below). Wider: one line with every column. */
 const ROW_GRID = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_2.25rem]";
@@ -456,13 +461,15 @@ export function VariantTable(props: VariantTableProps) {
           {filtered.length === 0 ? <div className="px-3 py-6 text-center text-body text-muted-foreground">{r("noResults")}</div> : null}
         </div>
       )}
-      <VariantCustomFieldsDialog
-        variantId={customDataFor?.id ?? null}
-        sku={customDataFor?.sku ?? ""}
-        canEdit={canEditProducts}
-        open={customDataFor !== null}
-        onOpenChange={(open) => (open ? undefined : setCustomDataFor(null))}
-      />
+      <React.Suspense fallback={null}>
+        <VariantCustomFieldsDialog
+          variantId={customDataFor?.id ?? null}
+          sku={customDataFor?.sku ?? ""}
+          canEdit={canEditProducts}
+          open={customDataFor !== null}
+          onOpenChange={(open) => (open ? undefined : setCustomDataFor(null))}
+        />
+      </React.Suspense>
       {appActions.dialogs}
     </div>
   );
@@ -554,7 +561,7 @@ const VariantRow = React.memo(function VariantRow({
           aria-expanded={expanded}
           aria-label={t("moreFieldsFor", { name })}
           title={name}
-          className="inline-flex max-w-full items-center gap-1 rounded-sm text-start font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-11 max-w-full items-center gap-1 rounded-sm sm:h-9 text-start font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate">{label}</span>
           {expanded ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" /> : null}

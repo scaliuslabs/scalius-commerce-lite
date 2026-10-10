@@ -95,7 +95,7 @@ function CategoriesPage() {
           <div className="min-w-0">
             <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>
             {row.original.parentId && byId.has(row.original.parentId) ? (
-              <p className="truncate text-body text-muted-foreground">{categoryPathLabel(row.original.parentId, byId)}</p>
+              <p title={categoryPathLabel(row.original.parentId, byId)} className="truncate text-body text-muted-foreground">{categoryPathLabel(row.original.parentId, byId)}</p>
             ) : null}
           </div>
         </div>

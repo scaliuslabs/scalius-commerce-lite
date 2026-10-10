@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
-import { IdText, NameText } from "~/components/admin/data-table/cells";
+import { IdText } from "~/components/admin/data-table/cells";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { DataTableToolbar, IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
@@ -119,7 +119,7 @@ function StockBadge({ variant, storeLevel }: { variant: InventoryVariant; storeL
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <button type="button" className="inline-flex min-h-11 min-w-6 shrink-0 items-center rounded-md sm:min-h-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Badge variant={status.badge}>{t(status.key)}</Badge>
         </button>
       </TooltipTrigger>
@@ -154,16 +154,14 @@ export function VariantName({ productId, productName, optionLabel }: {
   optionLabel: string | null;
 }) {
   const t = useMessages(inventoryMessages);
-  // The product on at most two lines, its option values muted on one (the whole value on hover).
+  // The product and its option values each use one line, with the whole value on hover.
   return (
-    <NameText
-      name={(
-        <RowLink to={`/admin/products/${productId}/edit`} className="hover:underline">
-          {productName ?? t("unknownProduct")}
-        </RowLink>
-      )}
-      detail={optionLabel ? <span title={optionLabel}>{optionLabel}</span> : null}
-    />
+    <span className="block min-w-0">
+      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="block truncate font-medium hover:underline">
+        {productName ?? t("unknownProduct")}
+      </RowLink>
+      <span title={optionLabel ?? undefined} className="block h-lh truncate text-muted-foreground">{optionLabel}</span>
+    </span>
   );
 }
 

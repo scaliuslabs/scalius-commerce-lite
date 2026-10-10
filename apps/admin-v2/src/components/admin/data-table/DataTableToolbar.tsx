@@ -103,6 +103,7 @@ export function DataTableToolbar({
   const clearSearchRef = useRef(clearSearch);
   clearSearchRef.current = clearSearch;
 
+  const filterTrigger = useRef<HTMLButtonElement>(null);
   const bulk = Boolean(bulkBar);
 
   return (
@@ -138,6 +139,7 @@ export function DataTableToolbar({
             <Button
               type="button"
               variant="outline"
+              ref={filterTrigger}
               aria-expanded={filtersOpen}
               aria-controls={panelId}
               onClick={() => setFiltersOpen((open) => !open)}
@@ -151,7 +153,16 @@ export function DataTableToolbar({
           {extra}
         </div>
         {filters && filtersOpen ? (
-          <div id={panelId} role="group" aria-label={t("filters")} className="mt-2 space-y-3 border-t pt-3">
+          <div id={panelId} role="group" aria-label={t("filters")} className="mt-2 space-y-3 border-t pt-3"
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || event.defaultPrevented) return;
+              if ((event.target as HTMLElement).closest("[data-radix-popper-content-wrapper]")) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setFiltersOpen(false);
+              filterTrigger.current?.focus();
+            }}
+          >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filters}</div>
             {filterCount > 0 && onClearFilters ? (
               <div className="flex justify-end">

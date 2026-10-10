@@ -228,4 +228,29 @@ describe("modal top anchor", () => {
     expect(panel()?.className).toContain("max-h-[860px]");
     expect(panel()?.className).not.toContain("--dialog-top,0px");
   });
+  it("returns focus to a plain opener when Escape closes a controlled dialog", async () => {
+    function PlainOpener() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <button onClick={() => setOpen(true)}>Import</button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogTitle>Import products</DialogTitle>
+            <DialogDescription>Choose a file.</DialogDescription>
+            <button>Choose file</button>
+          </DialogContent>
+        </Dialog>
+      </>;
+    }
+    await render(<PlainOpener />);
+    const opener = host.querySelector("button")!;
+    opener.focus();
+    await act(async () => opener.click());
+    expect(panel()).not.toBeNull();
+    await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(panel()).toBeNull();
+    expect(host.inert).not.toBe(true);
+  });
+
 });

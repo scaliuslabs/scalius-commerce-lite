@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { ModalInertBackground } from "./overlay";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -118,10 +119,24 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof Dialo
 
 /** Mounted by Radix for each open (the portal keeps nothing while closed), so it anchors once per open. */
 const DialogPanel = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.Content>, DialogContentProps>(
-  ({ className, children, showCloseButton = true, variant = "modal", ...props }, ref) => {
+  ({ className, children, showCloseButton = true, variant = "modal", onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
     const panelRef = useModalTopAnchor(ref, variant === "modal");
+    const opener = React.useRef<HTMLElement | null>(null);
     return (
-      <DialogPrimitive.Content ref={panelRef} data-slot="dialog-content" className={cn(variant === "palette" ? paletteClassName : modalClassName, className)} {...props}>
+      <DialogPrimitive.Content ref={panelRef} data-slot="dialog-content" className={cn(variant === "palette" ? paletteClassName : modalClassName, className)} {...props}
+        onOpenAutoFocus={(event) => {
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (!event.defaultPrevented && opener.current?.isConnected && opener.current !== document.body) {
+            event.preventDefault();
+            opener.current.focus();
+          }
+        }}
+      >
+        <ModalInertBackground />
         {children}
         {showCloseButton && variant === "modal" ? (
           <DialogPrimitive.Close className="absolute inset-e-2 top-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inset-e-3 sm:top-3 sm:size-8">

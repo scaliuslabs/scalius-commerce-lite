@@ -845,3 +845,17 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
     background-color: var(--scrollbar-thumb-hover);
   }
 }
+
+/* A table link is a control even when its cell contains only one short word.
+   Utilities can still clamp names or lay out a phone card as a flex column. */
+@layer components {
+  [data-slot="table"] a[href],
+  [data-slot="index-table"] a[href] {
+    display: inline-block;
+    min-height: 2.75rem;
+    min-width: 1.5rem;
+    @media (min-width: 40rem) {
+      min-height: 1.5rem;
+    }
+  }
+}

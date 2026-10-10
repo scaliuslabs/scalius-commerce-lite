@@ -199,7 +199,7 @@ export function ShortcutsDialog({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label={t("changeFor", { page: label })}
+                      aria-label={t(key ? "changeFor" : "addFor", { page: label })}
                       aria-pressed={active}
                       title={active ? t("recordHint") : undefined}
                       disabled={saving}

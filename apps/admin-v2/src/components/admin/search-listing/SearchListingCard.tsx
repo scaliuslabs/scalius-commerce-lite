@@ -75,7 +75,7 @@ export function SearchListingPreview({
 }) {
   return (
     <div className="min-w-0 space-y-1" aria-live="polite">
-      <p className="truncate text-body text-muted-foreground">{url}</p>
+      <p title={url} className="truncate text-body text-muted-foreground">{url}</p>
       <p className="line-clamp-2 text-heading-md text-link">{title}</p>
       {description ? (
         <p className="line-clamp-2 text-body text-muted-foreground">{description}</p>

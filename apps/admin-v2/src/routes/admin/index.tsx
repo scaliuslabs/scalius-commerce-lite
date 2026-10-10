@@ -178,7 +178,7 @@ function HomePage() {
                           className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                         >
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">
+                            <span title={`${formatOrderNumber(order.orderNumber, order.id)} · ${order.customerName}`} className="block truncate font-medium">
                               {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
                             </span>
                             <span className="block text-muted-foreground">

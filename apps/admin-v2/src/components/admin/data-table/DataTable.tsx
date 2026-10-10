@@ -284,27 +284,29 @@ export function DataTable<TData extends TableRowData>({
     const select = cells.find((cell) => cell.column.id === SELECT_COLUMN);
     const actions = cells.find((cell) => cell.column.id === ACTIONS_COLUMN);
     const href = getRowHref?.(row.original);
-    // The card's text is one link to the row (T14, C6: a 44px target), so its
-    // title renders as text inside it (`RowLink`).
+    // The primary text links to the row (T14, C6: a 44px target). Secondary
+    // destinations stay outside that link, so cards never nest anchors.
     const body = (
       <CardRowContext.Provider value={Boolean(href)}>
         {primary.map(render)}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{secondary.map(render)}</div>
       </CardRowContext.Provider>
     );
     return (
       <div className="flex items-center gap-3 px-3 py-1">
         {select ? <div className="flex shrink-0 items-center">{render(select)}</div> : null}
-        {href ? (
-          <Link
-            to={href}
-            className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 rounded-md py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {body}
-          </Link>
-        ) : (
-          <div className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 py-1.5">{body}</div>
-        )}
+        <div className="min-w-0 flex-1">
+          {href ? (
+            <Link
+              to={href}
+              className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 rounded-md py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {body}
+            </Link>
+          ) : (
+            <div className="flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-1 py-1.5">{body}</div>
+          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{secondary.map(render)}</div>
+        </div>
         <div className="flex shrink-0 items-center gap-1">
           {slot("status").map(render)}
           {actions ? render(actions) : null}

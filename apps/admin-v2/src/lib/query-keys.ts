@@ -212,6 +212,7 @@ export const queryKeys = {
   rbac: {
     all: ["rbac"] as const,
     roles: () => ["rbac", "roles"] as const,
+    role: (id: string) => ["rbac", "roles", id] as const,
     permissions: () => ["rbac", "permissions"] as const,
   },
 

@@ -8,6 +8,7 @@
  * The guards redirect; the admin API enforces the same gates on every call.
  */
 import { redirect } from "@tanstack/react-router";
+import { ADMIN_API_READ_TIMEOUT_MS, AdminApiReadTimeoutError } from "./admin-api-timeout";
 import { AdminApiResponseError } from "./admin-api-error";
 import { withDashboardBasePath } from "./dashboard-base-path";
 
@@ -50,11 +51,22 @@ declare global {
 }
 
 async function parseDashboardSession(pending: Promise<Response>): Promise<DashboardSessionState> {
-  const response = await pending;
-  // The server answered: carry its status, so a 502 reads as "Scalius isn't
-  // responding" rather than as the merchant's connection being down.
-  if (!response.ok) throw new AdminApiResponseError("Dashboard session is unavailable", response.status);
-  return response.json() as Promise<DashboardSessionState>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // The early index.html read bypasses the SDK: bound its headers and body
+    // too, so a stalled session can reach the existing Retry screen.
+    return await Promise.race([
+      pending.then(async (response) => {
+        if (!response.ok) throw new AdminApiResponseError("Dashboard session is unavailable", response.status);
+        return response.json() as Promise<DashboardSessionState>;
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new AdminApiReadTimeoutError()), ADMIN_API_READ_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function fetchDashboardSession(): Promise<Response> {
@@ -88,7 +100,12 @@ export function readDashboardSession(): Promise<DashboardSessionState> {
   if (!bootSession) {
     const early = typeof window === "undefined" ? undefined : window.__scaliusSession;
     if (typeof window !== "undefined") delete window.__scaliusSession;
-    bootSession = parseDashboardSession(early ?? fetchDashboardSession());
+    const pending = parseDashboardSession(early ?? fetchDashboardSession());
+    bootSession = pending;
+    void pending.catch(() => {
+      // Retry must make a fresh read even before the router first resolves.
+      if (bootSession === pending) bootSession = null;
+    });
   }
   return bootSession;
 }

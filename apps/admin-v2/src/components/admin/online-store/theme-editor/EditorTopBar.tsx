@@ -60,7 +60,7 @@ export const TopBarButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<H
         title={tip ? undefined : label}
         aria-pressed={pressed}
         className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-lg text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-40 aria-pressed:bg-topbar-subdued pointer-coarse:size-11 [&_svg]:size-4",
+          "grid size-11 shrink-0 sm:size-9 place-items-center rounded-lg text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-40 aria-pressed:bg-topbar-subdued pointer-coarse:size-11 [&_svg]:size-4",
           className,
         )}
         {...props}
@@ -154,9 +154,9 @@ export function EditorTopBar({
       <div className="flex min-w-0 items-center gap-1">
         <Link
           to="/admin/online-store/theme"
-          aria-label={t("back")}
+          aria-label={`${t("themeShort")} · ${t("back")}`}
           title={t("back")}
-          className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress"
+          className="flex h-11 shrink-0 items-center sm:h-9 gap-1 rounded-lg px-2 text-body font-medium text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress"
         >
           <ChevronLeft className="size-4" aria-hidden="true" />
           {phone ? null : <span className="hidden lg:inline">{t("themeShort")}</span>}
@@ -227,7 +227,7 @@ export function EditorTopBar({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={t("frameSize", { size: sizeName(device === "phone" ? 390 : desktopWidth), scale: String(scalePercent(scale)) })}
+                aria-label={t("frameSize", { size: device === "phone" ? t("device_phone") : sizeName(desktopWidth), scale: String(scalePercent(scale)) })}
                 // A fixed width: switching device never moves the controls beside it.
                 className="hidden h-9 w-24 shrink-0 items-center justify-between gap-1 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex xl:w-44"
               >
@@ -307,7 +307,7 @@ export function EditorTopBar({
             onClick={onPublish}
             disabled={!canPublish || publishing}
             aria-busy={publishing || undefined}
-            className="flex h-9 shrink-0 items-center rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-50 pointer-coarse:h-11"
+            className="flex h-11 shrink-0 items-center sm:h-9 rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-50 pointer-coarse:h-11"
           >
             {t("publish")}
           </button>
@@ -332,7 +332,7 @@ export function MarketSwitcher({ options, value, onChange }: {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={t("marketPicker", { market: current.label })}
+          aria-label={`${current.short} · ${t("marketPicker", { market: current.label })}`}
           className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg bg-topbar-subdued px-2.5 text-body text-topbar-foreground hover:bg-topbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress md:flex"
         >
           <Globe className="size-4" aria-hidden="true" />

@@ -32,10 +32,12 @@ export function ConversationComposer({
   conversationId,
   orderId,
   onPosted,
+  primary = true,
 }: {
   conversationId: string | null;
   orderId?: string | null;
   onPosted?: (thread: StaffThread) => void;
+  primary?: boolean;
 }) {
   const t = useMessages(inboxMessages);
   const fieldId = useId();
@@ -104,21 +106,26 @@ export function ConversationComposer({
         </Alert>
       ) : null}
       <label htmlFor={fieldId} className="sr-only">{t(mode === "public" ? "replyLabel" : "noteLabel")}</label>
-      <Textarea
-        id={fieldId}
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        onKeyDown={(event) => {
-          if (matchesShortcut("submit", event)) {
-            event.preventDefault();
-            send();
-          }
-        }}
-        placeholder={t(mode === "public" ? "replyPlaceholder" : "notePlaceholder")}
-        aria-describedby={helpId}
-        aria-invalid={tooLong || undefined}
-        className="min-h-24"
-      />
+      <div className="flex flex-col gap-1">
+        <Textarea
+          id={fieldId}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          onKeyDown={(event) => {
+            if (matchesShortcut("submit", event)) {
+              event.preventDefault();
+              send();
+            }
+          }}
+          placeholder={t(mode === "public" ? "replyPlaceholder" : "notePlaceholder")}
+          aria-describedby={helpId}
+          aria-invalid={tooLong || undefined}
+          className="min-h-24"
+        />
+        <p id={helpId} className="text-body text-muted-foreground">
+          {t(mode === "public" ? "replyHelp" : "noteHelp")} · {t("sendShortcut")}
+        </p>
+      </div>
       {images.length > 0 || uploading > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {images.map((image) => (
@@ -163,18 +170,14 @@ export function ConversationComposer({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             disabled={images.length + uploading >= MAX_IMAGES}
             onClick={() => fileInput.current?.click()}
           >
             <ImagePlus aria-hidden />
             {t("attach")}
           </Button>
-          <p id={helpId} className="hidden text-body text-muted-foreground sm:block">
-            {t(mode === "public" ? "replyHelp" : "noteHelp")} · {t("sendShortcut")}
-          </p>
         </div>
-        <Button type="button" onClick={send} disabled={!canSend && !post.isPending} loading={post.isPending}>
+        <Button type="button" variant={primary ? "default" : "outline"} onClick={send} disabled={!canSend && !post.isPending} loading={post.isPending}>
           {t(mode === "public" ? "send" : "addNote")}
         </Button>
       </div>

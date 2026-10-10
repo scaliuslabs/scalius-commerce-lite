@@ -45,7 +45,7 @@ function SoleMarket({ market }: { market: Market }) {
       className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <span className="min-w-0 flex-1 space-y-1">
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-2">
           <span className="break-words text-body font-medium text-foreground">{market.name}</span>
           <PrimaryBadge />
         </span>
@@ -97,9 +97,9 @@ export function MarketsList() {
                 {data.map((market) => {
                   const path = marketPresencePath(market);
                   return (
-                    <TableRow key={market.id} className="relative">
+                    <TableRow key={market.id} density="default" className="relative">
                       <TableCell data-pin="primary">
-                        <span className="flex flex-wrap items-center gap-2">
+                        <span className="flex items-center gap-2">
                           <Link
                             to="/admin/settings/markets/$marketId"
                             params={{ marketId: market.id }}
@@ -114,7 +114,7 @@ export function MarketsList() {
                         <StatusBadge status={market.status}>{t(market.status)}</StatusBadge>
                       </TableCell>
                       <TableCell>
-                        <span className="line-clamp-2 min-w-40 break-words">
+                        <span title={market.countries.length > 0 ? market.countries.map(countryName).join(", ") : t("noCountries")} className="line-clamp-2 min-w-40 break-words">
                           {market.countries.length > 0 ? market.countries.map(countryName).join(", ") : t("noCountries")}
                         </span>
                       </TableCell>

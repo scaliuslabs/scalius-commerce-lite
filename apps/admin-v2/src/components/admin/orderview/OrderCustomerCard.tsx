@@ -136,7 +136,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             <Link
               to="/admin/customers/$customerId/edit"
               params={{ customerId: record.id }}
-              className="block text-link hover:underline"
+              className="flex min-h-11 min-w-6 items-center text-link hover:underline sm:min-h-6"
             >
               {record.kind !== "guest"
                 ? record.name

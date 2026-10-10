@@ -117,25 +117,26 @@ function RulesTable({
       </thead>
       {groups.map((group) => (
         <tbody key={group.key}>
-          <tr>
-            <th colSpan={columns.length + 1} className="pb-1 pt-4 text-start font-semibold">
-              {events(group.key)}
+          <tr className="h-[calc(2lh+12px)]">
+            <th colSpan={columns.length + 1} className="py-1.5 text-start font-semibold">
+              <span className="flex min-h-11 items-center sm:min-h-0">{events(group.key)}</span>
             </th>
           </tr>
           {group.events.map((event) => (
-            <tr key={event} className="border-t border-border">
+            <tr key={event} className="h-[calc(2lh+12px)] border-t border-border">
               <td className="py-1.5 pe-2">
                 {linkEvents && isTemplatedNotificationType(event) ? (
                   <Link
                     to="/admin/settings/notifications/$event"
                     params={{ event }}
                     aria-label={t("editMessage", { event: events(event) })}
-                    className="text-link hover:underline"
+                    title={events(event)}
+                    className="line-clamp-2 min-h-11 min-w-6 text-link hover:underline sm:min-h-6"
                   >
                     {events(event)}
                   </Link>
                 ) : (
-                  events(event)
+                  <span title={events(event)} className="line-clamp-2">{events(event)}</span>
                 )}
               </td>
               {columns.map((column) => (

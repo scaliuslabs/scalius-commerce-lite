@@ -110,7 +110,7 @@ export function CountryChecklist({
                 type="button"
                 disabled={disabled}
                 aria-label={copy.remove(countryName(code))}
-                className="grid size-8 place-items-center rounded-full hover:bg-muted-foreground/20 disabled:pointer-events-none disabled:opacity-50 sm:size-6"
+                className="grid size-11 place-items-center rounded-full hover:bg-muted-foreground/20 disabled:pointer-events-none disabled:opacity-50 sm:size-6"
                 onClick={() => toggle(code)}
               >
                 <X className="size-3.5" aria-hidden="true" />

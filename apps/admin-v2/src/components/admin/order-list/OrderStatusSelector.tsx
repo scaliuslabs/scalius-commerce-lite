@@ -78,7 +78,7 @@ export function OrderStatusSelector({
       onKeyDown={isMenuRequested ? undefined : handleKeyDown}
       className={cn(
         badgeVariants({ variant }),
-        "cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+        "min-h-11 min-w-6 sm:min-h-6 cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
       )}
     >
       {label}

@@ -48,7 +48,7 @@ export function EmptyState({
             href={HELP_LINKS.questions}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md text-body text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-11 min-w-6 items-center rounded-md text-body text-link sm:min-h-6 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t("emptyHelp")}
           </a>

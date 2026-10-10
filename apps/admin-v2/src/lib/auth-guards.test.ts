@@ -1,11 +1,16 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ADMIN_API_READ_TIMEOUT_MS } from "./admin-api-timeout";
 import { AdminApiResponseError } from "./admin-api-error";
 import { beginBootSessionRead, endBootSessionRead, readDashboardSession } from "./auth-guards";
 
 describe("dashboard session read", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    endBootSessionRead();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it("keeps the server's status when the session endpoint answers with an error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("Bad gateway", { status: 502 })));
@@ -36,4 +41,22 @@ describe("dashboard session read", () => {
     await readDashboardSession();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it.each(["headers", "body"])("bounds stalled session %s and allows a fresh boot retry", async (part) => {
+    vi.useFakeTimers();
+    const never = new Promise<never>(() => {});
+    window.__scaliusSession = part === "headers"
+      ? never
+      : Promise.resolve({ ok: true, json: () => never } as unknown as Response);
+    const signedOut = { adminExists: true, session: null };
+    const fetchMock = vi.fn(async () => Response.json(signedOut));
+    vi.stubGlobal("fetch", fetchMock);
+    beginBootSessionRead();
+    const failed = readDashboardSession().catch((error) => error);
+    await vi.advanceTimersByTimeAsync(ADMIN_API_READ_TIMEOUT_MS);
+    expect(await failed).toMatchObject({ code: "ADMIN_API_READ_TIMEOUT", status: 504 });
+    await expect(readDashboardSession()).resolves.toMatchObject(signedOut);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
 });

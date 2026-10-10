@@ -1,14 +1,18 @@
 // @vitest-environment happy-dom
 
-import { act, useMemo } from "react";
+import { act, useMemo, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serverTableFeatures, useTable, type ColumnDef } from "./table-config";
 import { CARD_LAYOUT_BELOW, DataTable } from "./DataTable";
 import { DataTableToolbar } from "./DataTableToolbar";
 import { IdText } from "./cells";
+import { RowLink } from "./RowLink";
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+  Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => <a href={to} {...props}>{children}</a>,
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,15 +38,15 @@ class FakeResizeObserver {
   unobserve() {}
 }
 
-function Harness({ empty = false }: { empty?: boolean }) {
+function Harness({ empty = false, links = false }: { empty?: boolean; links?: boolean }) {
   const columns = useMemo<ColumnDef<Variant, unknown>[]>(() => [
     { id: "select", header: "", cell: () => <span role="checkbox" aria-checked="false" /> },
-    { accessorKey: "name", header: "Product", meta: { primary: true, minWidth: 200 } },
+    { accessorKey: "name", header: "Product", meta: { primary: true, minWidth: 200 }, cell: ({ row }) => links ? <RowLink to="/record">{row.original.name}</RowLink> : row.original.name },
     { accessorKey: "sku", header: "SKU", meta: { priority: 80, minWidth: 140 }, cell: ({ row }) => <IdText value={row.original.sku} copy /> },
     { accessorKey: "stock", header: "Available", meta: { numeric: true, priority: 90, minWidth: 100 } },
-    { accessorKey: "vendor", header: "Vendor", meta: { priority: 20, minWidth: 140, maxWidth: 220 } },
+    { accessorKey: "vendor", header: "Vendor", meta: { mobile: links ? "secondary" : undefined, priority: 20, minWidth: 140, maxWidth: 220 }, cell: ({ row }) => links ? <a href="/related">{row.original.vendor}</a> : row.original.vendor },
     { id: "actions", header: "", cell: () => "…" },
-  ], []);
+  ], [links]);
   const table = useTable({
     features: serverTableFeatures,
     data: empty ? [] : [{ id: "v1", name: "Xiaozhi Electronic Pet AI Chatbot", sku: LONG_SKU, stock: 4, vendor: "Aarong" }],
@@ -57,6 +61,7 @@ function Harness({ empty = false }: { empty?: boolean }) {
       isFetching={false}
       isLoading={false}
       paginate={false}
+      getRowHref={links ? () => "/record" : undefined}
       layoutKey="layout-test"
       toolbar={<DataTableToolbar searchValue="" onSearchChange={() => {}} />}
     />
@@ -157,4 +162,15 @@ describe("DataTable column layout", () => {
     const sku = [...host.querySelectorAll("tbody td")].find((td) => td.textContent?.includes(LONG_SKU))!;
     expect(sku.hasAttribute("data-capped")).toBe(false);
   });
+  it("keeps a phone card's secondary destination outside its primary link", async () => {
+    await act(async () => root.render(<Harness links />));
+    await resize(390);
+    expect(host.querySelector("a a")).toBeNull();
+    const primary = host.querySelector('a[href="/record"]');
+    const secondary = host.querySelector('a[href="/related"]');
+    expect(primary?.textContent).toContain("Xiaozhi");
+    expect(secondary?.textContent).toBe("Aarong");
+    expect(primary?.contains(secondary)).toBe(false);
+  });
+
 });

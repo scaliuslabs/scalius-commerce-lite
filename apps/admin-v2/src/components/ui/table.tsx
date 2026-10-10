@@ -35,7 +35,7 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
       data-scrolls={scrolls || undefined}
       className="relative w-full data-[scrolls]:max-h-[calc(100svh-8rem)] data-[scrolls]:overflow-auto"
     >
-      <table ref={ref} className={cn("w-full caption-bottom text-body", className)} {...props} />
+      <table ref={ref} data-slot="table" className={cn("w-full caption-bottom text-body", className)} {...props} />
     </div>
   );
 });

@@ -33,8 +33,7 @@ import {
 } from "~/components/admin/settings/UsersSettings";
 import { roleKey } from "~/components/admin/settings/staff-access";
 import { apiData } from "~/lib/api";
-import type { RbacRole } from "~/lib/api-query-options/rbac";
-import { rolesQuery } from "~/lib/api-query-options/settings-screens";
+import { roleQueryOptions, type RbacRole } from "~/lib/api-query-options/rbac";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
@@ -48,7 +47,11 @@ const NEW_ROLE = "new";
 export const Route = createFileRoute("/admin/settings/users_/roles/$roleId")({
   validateSearch: (search: Record<string, unknown>): { from?: string } =>
     typeof search.from === "string" ? { from: search.from } : {},
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(rolesQuery).catch(() => undefined),
+  loaderDeps: ({ search }) => ({ from: search.from }),
+  loader: ({ context: { queryClient }, params, deps }) => {
+    const id = params.roleId === NEW_ROLE ? deps.from : params.roleId;
+    return id ? queryClient.ensureQueryData(roleQueryOptions(id)) : undefined;
+  },
   head: () => pageHead("roles"),
   errorComponent: RouteErrorComponent,
   component: RolePage,
@@ -60,17 +63,18 @@ function RolePage() {
   const t = useMessages(usersMessages);
   const nav = useMessages(settingsNavMessages);
   const roleName = useRoleName();
-  const roles = useQuery(rolesQuery);
   const back = { to: "/admin/settings/users" as const, label: nav("users") };
   const creating = roleId === NEW_ROLE;
-  const role = creating ? null : roles.data?.find((candidate) => candidate.id === roleId);
-  const template = creating && from ? roles.data?.find((candidate) => candidate.id === from) : undefined;
+  const id = creating ? from : roleId;
+  const query = useQuery({ ...roleQueryOptions(id ?? ""), enabled: Boolean(id) });
+  const role = creating ? null : query.data;
+  const template = creating ? query.data : undefined;
 
   const page = (title: string, body: ReactNode, actions?: ReactNode) => (
     <SettingsPage page="users" back={back} title={title} actions={actions}>{body}</SettingsPage>
   );
-  if (roles.isError) return page(t("rolesTitle"), <SettingsLoadFailure title={t("rolesTitle")} onRetry={roles.refetch} />);
-  if (!roles.data) return page(t("rolesTitle"), <SettingsCardLoading />);
+  if (query.isError) return page(t("rolesTitle"), <SettingsLoadFailure title={t("rolesTitle")} onRetry={query.refetch} />);
+  if (id && !query.data) return page(t("rolesTitle"), <SettingsCardLoading />);
   if (role === undefined) return page(t("rolesTitle"), <SettingsCard description={t("notFound")} />);
 
   if (role?.isSystem) {

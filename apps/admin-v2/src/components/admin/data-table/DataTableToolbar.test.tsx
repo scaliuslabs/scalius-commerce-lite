@@ -77,4 +77,17 @@ describe("DataTableToolbar", () => {
     await act(async () => [...panel.querySelectorAll("button")].find((node) => node.textContent?.includes("Clear filters"))!.click());
     expect(onClear).toHaveBeenCalledOnce();
   });
+  it("closes filters with Escape and returns focus without clearing the filter", async () => {
+    const clear = vi.fn();
+    await render(0, clear);
+    const trigger = host.querySelector<HTMLButtonElement>("button[aria-controls]")!;
+    await act(async () => trigger.click());
+    const field = host.querySelector<HTMLInputElement>("[role=group] input")!;
+    field.focus();
+    await act(async () => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector("[role=group]")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(clear).not.toHaveBeenCalled();
+  });
+
 });

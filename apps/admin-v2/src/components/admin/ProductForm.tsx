@@ -52,7 +52,6 @@ import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { DigitalDeliveryCard } from "./product-form/DigitalDeliveryCard";
 import { GiftCardProductCard } from "./product-form/GiftCardProductCard";
-import { BuyerInputsCard } from "./product-form/BuyerInputsCard";
 import { StatusCard } from "./product-form/StatusCard";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
@@ -92,6 +91,7 @@ import { richTextOrNull } from "~/lib/rich-text-value";
 import { Page } from "~/components/admin/resource/Page";
 
 // The product page's own cards load after the editor, off its first download.
+const BuyerInputsCard = React.lazy(() => import("./product-form/BuyerInputsCard").then((module) => ({ default: module.BuyerInputsCard })));
 const loadCards = () => import("./product-form/merchandising/cards");
 const ContentBlocksCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ContentBlocksCard })));
 const BundlesCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.BundlesCard })));
@@ -505,14 +505,16 @@ function ProductEditor({
               ) : (
                 <AfterSaveCard title={t("bundles")} />
               )}
-              <BuyerInputsCard
-                form={form}
-                readOnly={readOnly}
-                savedInvalid={customizationSchemaInvalid}
-                conflict={revisionConflict && dirtyFields.customizationSchema && onOpenRevisionConflict
-                  ? { onReview: onOpenRevisionConflict }
-                  : null}
-              />
+              <React.Suspense fallback={<LoadingFallback height="h-20" />}>
+                <BuyerInputsCard
+                  form={form}
+                  readOnly={readOnly}
+                  savedInvalid={customizationSchemaInvalid}
+                  conflict={revisionConflict && dirtyFields.customizationSchema && onOpenRevisionConflict
+                    ? { onReview: onOpenRevisionConflict }
+                    : null}
+                />
+              </React.Suspense>
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-20" />}>
                   <ContentBlocksCard productId={productId} readOnly={readOnly} onTabsMoved={() => { tabsMoved.current = true; }} />

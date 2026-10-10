@@ -974,14 +974,15 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
             {option.values.map((value) => (
               <Badge key={value.id} variant="secondary">
                 {value.value}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   aria-label={t("removeValue", { value: value.value })}
                   onClick={() => onRemoveValue(value)}
-                  className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </Badge>
             ))}
           </div>

@@ -61,9 +61,13 @@ export function GlobalSearch(props: Omit<GlobalSearchProps, "goKeys">) {
   }, [canOpen, navigate, setSearchOpen, setHelpOpen, destinations]);
 
   return (
-    <Suspense fallback={null}>
-      <GlobalSearchDialog {...props} goKeys={keys} open={searchOpen} setOpen={setSearchOpen} />
-      <ShortcutsDialog {...props} open={helpOpen} setOpen={setHelpOpen} />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <GlobalSearchDialog {...props} goKeys={keys} open={searchOpen} setOpen={setSearchOpen} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ShortcutsDialog {...props} open={helpOpen} setOpen={setHelpOpen} />
+      </Suspense>
+    </>
   );
 }

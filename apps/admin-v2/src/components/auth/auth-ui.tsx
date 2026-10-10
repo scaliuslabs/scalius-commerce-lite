@@ -14,7 +14,7 @@ import type { AuthMessage } from "./auth-error";
 
 /** Quiet text actions: "Forgot password?", "Resend code", "Back to sign in". */
 export const linkClassName =
-  "rounded-md text-body text-link underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:text-muted-foreground";
+  "inline-flex min-h-11 min-w-6 items-center rounded-md text-body text-link sm:min-h-6 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:text-muted-foreground";
 
 export function AuthHeader({ title, description }: { title: string; description?: ReactNode }) {
   return (

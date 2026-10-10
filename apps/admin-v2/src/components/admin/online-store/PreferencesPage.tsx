@@ -114,7 +114,7 @@ function FeedLeftOut() {
         ))}
       </ul>
       {hidden && !showAll ? (
-        <Button type="button" variant="link" size="sm" className="mt-1" onClick={() => setShowAll(true)}>
+        <Button type="button" variant="link" className="mt-1" onClick={() => setShowAll(true)}>
           {t("showAllProducts")}
         </Button>
       ) : null}

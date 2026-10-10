@@ -301,7 +301,7 @@ function ReviewCell({ review, onOpen }: { review: AdminReview; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full min-w-0 flex-col rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex min-h-11 w-full min-w-0 flex-col sm:min-h-6 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex min-w-0 items-center gap-2">
         <ReviewStars rating={review.rating} />
