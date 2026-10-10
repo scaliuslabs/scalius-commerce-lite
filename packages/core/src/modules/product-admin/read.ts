@@ -412,8 +412,8 @@ export async function listProducts(db: Database, options: {
             .select({
                 productId: productVariants.productId,
                 count: sql<number>`count(${productVariants.id})`,
-                trackedCount: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} THEN 1 ELSE 0 END)`,
-                onHand: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} THEN ${productVariants.stock} ELSE 0 END)`,
+                trackedCount: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} = 1 THEN 1 ELSE 0 END)`,
+                onHand: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} = 1 THEN ${productVariants.stock} ELSE 0 END)`,
                 hasSkuDiscount: sql<number>`max(CASE WHEN ${productVariants.discountBps} > 0 OR ${productVariants.discountAmountMinor} > 0 THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)

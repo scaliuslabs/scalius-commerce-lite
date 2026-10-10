@@ -212,7 +212,7 @@ app.openapi(catalogProductsRoute, async (c) => {
             productId: productVariants.productId,
             available: sql<number>`SUM(CASE WHEN ${productVariants.stock} > ${productVariants.reservedStock}
                 THEN ${productVariants.stock} - ${productVariants.reservedStock} ELSE 0 END)`,
-            untracked: sql<number>`SUM(CASE WHEN ${productVariants.trackInventory} THEN 0 ELSE 1 END)`,
+            untracked: sql<number>`SUM(CASE WHEN ${productVariants.trackInventory} = 1 THEN 0 ELSE 1 END)`,
         }).from(productVariants).where(and(
             inArray(productVariants.productId, productIds),
             isNull(productVariants.deletedAt),
