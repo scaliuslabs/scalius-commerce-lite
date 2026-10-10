@@ -41,7 +41,8 @@ function setup(count: number, queries: Array<{ query: string; values: readonly u
         "INSERT INTO customers (id, name, phone, email, origin, created_at, updated_at) VALUES (?, ?, ?, ?, 'merchant', ?, ?)",
     );
     const insertStats = harness.sqlite.prepare(
-        "INSERT INTO customer_order_stats (customer_id, orders_count, total_spent_minor, last_order_at) VALUES (?, ?, ?, ?)",
+        // A new customer already has its zero row (the 0128 trigger): set the seeded facts on it.
+        "UPDATE customer_order_stats SET orders_count = ?2, total_spent_minor = ?3, last_order_at = ?4 WHERE customer_id = ?1",
     );
     const rows: Seeded[] = [];
     harness.sqlite.exec("BEGIN");
