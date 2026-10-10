@@ -179,7 +179,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const cursorPaging = props.cursorPaging === true;
   const setSearch = useCallback(
     (updates: Record<string, unknown>) =>
-      void navigate({
+      navigate({
         search: ((prev: Record<string, unknown>) => ({
           ...prev,
           ...(cursorPaging ? resetCursorUnlessPaging(updates) : updates),
@@ -187,6 +187,21 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       }),
     [cursorPaging, navigate],
   );
+
+  const searchChangeId = useRef(0);
+  const [pendingTerm, setPendingTerm] = useState<string>();
+  useEffect(() => () => { searchChangeId.current += 1; }, []);
+  const changeTerm = useCallback(async (value: string, updates?: Record<string, unknown>) => {
+    const id = ++searchChangeId.current;
+    setPendingTerm(value);
+    try {
+      // The session store publishes synchronously; the route must drop its old cursor first.
+      if (updates || search.page !== 1 || search.after || search.before) await setSearch(updates ?? { page: 1 });
+      if (id === searchChangeId.current) setTerm(value);
+    } finally {
+      if (id === searchChangeId.current) setPendingTerm(undefined);
+    }
+  }, [search.after, search.before, search.page, setSearch, setTerm]);
 
   // A `?q=` link was adopted as the session term by the loader; the address drops it
   // so search terms never stay in URLs.
@@ -365,8 +380,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   ) : filtered ? (
     <FilteredEmptyState
       onClearFilters={() => {
-        setTerm("");
-        setSearch({
+        void changeTerm("", {
           ...(viewParam ? { [viewParam]: undefined } : {}),
           ...Object.fromEntries(filterParams.map((param) => [param, undefined])),
           page: 1,
@@ -480,11 +494,8 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
           <>
             {tabs.length > 1 ? <IndexTabs tabs={tabs} value={currentView} onChange={onTabChange} /> : null}
             <DataTableToolbar
-              searchValue={term}
-              onSearchChange={(value) => {
-                setTerm(value);
-                if (search.page !== 1 || search.after || search.before) setSearch({ page: 1 });
-              }}
+              searchValue={pendingTerm ?? term}
+              onSearchChange={changeTerm}
               searchPlaceholder={props.searchPlaceholder ?? t("search")}
               bulkBar={bulkBar}
               filters={props.filters}

@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResourceListPage, type ResourceLifecycle } from "./ResourceListPage";
+import { readListSearch, useListSearch, writeListSearch } from "~/lib/list-search";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -240,6 +241,123 @@ describe("ResourceListPage", () => {
       });
       expect(router.state.location.search).not.toHaveProperty("after");
       expect(router.state.location.search).toMatchObject({ page: 1 });
+    });
+
+    async function renderSearchRace(position: "before" | "after" | "page", empty = false) {
+      const list = "cursor-search-regression";
+      writeListSearch(list, "old");
+      const requests: Array<{ term: string; before?: unknown; after?: unknown; page?: unknown }> = [];
+      const resetStarted = vi.fn();
+      let releaseReset!: () => void;
+      const reset = new Promise<void>((resolve) => { releaseReset = resolve; });
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+      const rootRoute = createRootRoute();
+      const listRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/",
+        validateSearch: (raw: Record<string, unknown>) => ({ ...raw, page: Number(raw.page ?? 1) }),
+        loaderDeps: ({ search: current }) => current,
+        loader: async ({ deps }) => {
+          const current = deps as Record<string, unknown>;
+          if (!current.before && !current.after && current.page === 1) {
+            resetStarted();
+            await reset;
+          }
+        },
+        component: function SearchingList() {
+          const current = listRoute.useSearch() as Record<string, unknown>;
+          const [term] = useListSearch(list);
+          return (
+            <ResourceListPage<Row>
+              title="Things"
+              list={list}
+              search={{ ...search, ...current } as typeof search}
+              query={{
+                queryKey: [list, current, term],
+                queryFn: async () => {
+                  requests.push({ term, before: current.before, after: current.after, page: current.page });
+                  return {
+                    things: empty && term ? [] : rows,
+                    pagination: { page: 1, limit: 10, total: 2, totalPages: 1 },
+                    pageInfo,
+                  };
+                },
+              }}
+              dataKey="things"
+              columns={[{ accessorKey: "name", header: "Name" }]}
+              invalidate={[[list]]}
+              filterParams={["category"]}
+              empty={{ icon: () => null, title: "Nothing", description: "" }}
+              cursorPaging
+            />
+          );
+        },
+      });
+      const router = createRouter({
+        routeTree: rootRoute.addChildren([listRoute]),
+        history: createMemoryHistory({ initialEntries: [`/?${position}=${position === "page" ? "5" : "old-cursor"}&category=old-category`] }),
+      });
+      await router.load();
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>));
+      await vi.waitFor(() => expect(host.querySelector("input")).not.toBeNull());
+      return { list, requests, resetStarted, releaseReset, router };
+    }
+
+    const typeSearch = async (value: string) => {
+      const input = host.querySelector<HTMLInputElement>("input")!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+
+    it.each(["before", "after", "page"] as const)("drops the %s position before publishing a changed search term", async (position) => {
+      const state = await renderSearchRace(position);
+      await typeSearch("new term");
+      await vi.waitFor(() => expect(state.resetStarted).toHaveBeenCalled());
+      expect(readListSearch(state.list)).toBe("old");
+      await act(async () => state.releaseReset());
+      await vi.waitFor(() => expect(state.requests.some((request) => request.term === "new term")).toBe(true));
+      expect(state.requests.filter((request) => request.term !== "old")).toEqual([
+        { term: "new term", before: undefined, after: undefined, page: 1 },
+      ]);
+      expect(state.router.state.location.search).not.toHaveProperty("q");
+      expect(state.router.state.location.href).not.toContain("new");
+    });
+
+    it.each(["", "latest"])("lets the latest search value %j supersede a search waiting for its cursor reset", async (latest) => {
+      const state = await renderSearchRace("before");
+      await typeSearch("superseded");
+      await vi.waitFor(() => expect(state.resetStarted).toHaveBeenCalled());
+      if (latest) {
+        await typeSearch(latest);
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
+      } else {
+        await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Clear search"]')!.click());
+      }
+      expect(readListSearch(state.list)).toBe("old");
+      await act(async () => state.releaseReset());
+      await vi.waitFor(() => expect(readListSearch(state.list)).toBe(latest));
+      expect(state.requests.some((request) => request.term === "superseded")).toBe(false);
+      expect(state.requests.filter((request) => request.term === latest).every((request) => !request.before && !request.after && request.page === 1)).toBe(true);
+      expect(host.querySelector<HTMLInputElement>("input")!.value).toBe(latest);
+    });
+
+    it("resets paging and filters before the empty state's Clear filters clears the term", async () => {
+      const state = await renderSearchRace("before", true);
+      await vi.waitFor(() => expect(button("Clear filters")).toBeDefined());
+      await typeSearch("superseded draft");
+      await act(async () => button("Clear filters")!.click());
+      await vi.waitFor(() => expect(state.resetStarted).toHaveBeenCalled());
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
+      expect(readListSearch(state.list)).toBe("old");
+      expect(host.querySelector<HTMLInputElement>("input")!.value).toBe("");
+      await act(async () => state.releaseReset());
+      await vi.waitFor(() => expect(readListSearch(state.list)).toBe(""));
+      expect(state.requests.some((request) => request.term === "superseded draft")).toBe(false);
+      expect(state.requests.filter((request) => request.term === "").every((request) => !request.before && !request.after && request.page === 1)).toBe(true);
+      expect(state.router.state.location.search).not.toHaveProperty("category");
+      expect(state.router.state.location.search).not.toHaveProperty("q");
     });
   });
 });
