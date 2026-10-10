@@ -126,6 +126,34 @@ export function fieldAlignmentFindings(fields) {
   return findings;
 }
 
+// ─── Label and help gaps (S2, S3) ───────────────────────────────────────────
+
+const STACK_GAP = 4;
+const STACK_GAP_TOLERANCE = 1;
+const STACK_GAP_MAX = 48; // further apart, the two are not one field's stack
+
+/**
+ * A label 4px above its control, and help or error text 4px under it.
+ *   pair: { id, kind: "label" | "help", above: box, below: box }, box: { left, right, top, bottom }
+ * For "label" the label is above; for "help" the control is above. A pair that
+ * does not overlap horizontally sits side by side (a checkbox and its text, a
+ * switch at the row's end), and a label under its control is a checkbox's; both
+ * have no stack gap to judge.
+ * Returns the messages: { label: [...], help: [...] }, at most 10 each.
+ */
+export function stackGapFindings(pairs) {
+  const found = { label: [], help: [] };
+  for (const { id, kind, above, below } of pairs) {
+    if (!(above.left < below.right && below.left < above.right)) continue;
+    if (above.bottom > below.top + STACK_GAP_TOLERANCE) continue;
+    const gap = below.top - above.bottom;
+    if (gap >= STACK_GAP_MAX || Math.abs(gap - STACK_GAP) <= STACK_GAP_TOLERANCE) continue;
+    const shown = Math.round(gap * 10) / 10;
+    found[kind].push(kind === "label" ? `${id} (${shown}px under its label)` : `${id} (${shown}px above its help)`);
+  }
+  return { label: found.label.slice(0, 10), help: found.help.slice(0, 10) };
+}
+
 // ─── Leaked values ──────────────────────────────────────────────────────────
 
 const FILE_AND_DOMAIN_ENDINGS = new Set([

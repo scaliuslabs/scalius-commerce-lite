@@ -9,6 +9,7 @@ import {
   compileLanguageAllowlist,
   controlHeightFindings,
   fieldAlignmentFindings,
+  stackGapFindings,
   findEnglishInBn,
   findLeaks,
   skeletonShapeFinding,
@@ -141,8 +142,9 @@ export function judgeFacts(facts, { locale, languageAllow }) {
   if (facts.rowLinks.length) findings.push(finding("row-link", "minor", "No row of this table opens by a real link (Cmd-click, middle-click).", facts.rowLinks));
   if (facts.labelClips.length) findings.push(finding("label-truncated", "moderate", "A button, tab, label or heading is wider than its box.", facts.labelClips, facts.labelClips.length));
   if (facts.unitLabels.length) findings.push(finding("unit-in-label", "moderate", "A label carries its unit in brackets.", facts.unitLabels));
-  if (facts.gaps.label.length) findings.push(finding("label-gap", "moderate", "A label is not 4 px above its control.", facts.gaps.label));
-  if (facts.gaps.help.length) findings.push(finding("help-gap", "moderate", "Help or error text is not 4 px under its control.", facts.gaps.help));
+  const gaps = stackGapFindings(facts.gapPairs);
+  if (gaps.label.length) findings.push(finding("label-gap", "moderate", "A label is not 4 px above its control.", gaps.label));
+  if (gaps.help.length) findings.push(finding("help-gap", "moderate", "Help or error text is not 4 px under its control.", gaps.help));
 
   const leaks = findLeaks(facts.texts);
   if (leaks.length) findings.push(finding("leaked-value", "serious", `A visible value is ${[...new Set(leaks.map((leak) => leak.label))].join(", ")}.`, leaks.map((leak) => `${leak.kind}: "${leak.text}" in ${leak.sel}`), leaks.length));

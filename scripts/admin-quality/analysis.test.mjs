@@ -10,6 +10,7 @@ import {
   findEnglishInBn,
   findLeaks,
   skeletonShapeFinding,
+  stackGapFindings,
 } from "./analysis.mjs";
 import { NOT_AUTOMATED, RULES, isGating, polishIds } from "./rules.mjs";
 
@@ -73,6 +74,33 @@ describe("field alignment", () => {
     expect(fieldAlignmentFindings([field("a", 24, 0), field("b", 340, 0), field("c", 24, 60), field("d", 340, 60)])).toEqual([]);
     // Two fields on one row 10px apart are neighbours, not a misaligned column.
     expect(fieldAlignmentFindings([field("a", 24, 0), field("b", 34, 0)])).toEqual([]);
+  });
+});
+
+describe("label and help gaps", () => {
+  const box = (left, top, width, height) => ({ left, right: left + width, top, bottom: top + height });
+  const control = box(0, 24, 300, 36);
+  it("passes a stack with 4 px gaps", () => {
+    expect(stackGapFindings([
+      { id: "a", kind: "label", above: box(0, 0, 80, 20), below: control },
+      { id: "a", kind: "help", above: control, below: box(0, 64, 300, 20) },
+    ])).toEqual({ label: [], help: [] });
+  });
+  it("flags help 8 px under its control", () => {
+    expect(stackGapFindings([{ id: "a", kind: "help", above: control, below: box(0, 68, 300, 20) }]).help).toEqual(["a (8px above its help)"]);
+  });
+  it("skips pairs side by side, like a checkbox and the help beside it", () => {
+    const checkbox = box(0, 0, 16, 16);
+    expect(stackGapFindings([
+      { id: "c", kind: "help", above: checkbox, below: box(28, 22, 260, 20) },
+      { id: "c", kind: "label", above: box(28, 0, 120, 20), below: checkbox },
+    ])).toEqual({ label: [], help: [] });
+  });
+  it("skips a label under its control and pairs far apart", () => {
+    expect(stackGapFindings([
+      { id: "c", kind: "label", above: box(0, 40, 80, 20), below: box(0, 0, 16, 16) },
+      { id: "a", kind: "help", above: control, below: box(0, 200, 300, 20) },
+    ])).toEqual({ label: [], help: [] });
   });
 });
 
