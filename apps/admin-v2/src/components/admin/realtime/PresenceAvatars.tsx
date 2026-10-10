@@ -47,7 +47,7 @@ export default function PresenceAvatars({ people }: { people: readonly RealtimeP
   return (
     <div className="flex items-center">
       {shown.map((person, index) => (
-        <PersonAvatar key={person.id} person={person} className={index > 0 ? "-ms-2" : undefined} />
+        <PersonAvatar key={person.id} person={person} className={index > 0 ? "-ms-1.5" : undefined} />
       ))}
       {rest.length > 0 ? (
         <Tooltip>
@@ -56,7 +56,7 @@ export default function PresenceAvatars({ people }: { people: readonly RealtimeP
               role="img"
               tabIndex={0}
               aria-label={t("othersHere", { names: restNames })}
-              className="-ms-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-background"
+              className="-ms-1.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-foreground ring-2 ring-background"
             >
               <span aria-hidden="true">{t("morePeople", { count: rest.length })}</span>
             </span>
