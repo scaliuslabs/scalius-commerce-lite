@@ -303,7 +303,7 @@ describe("CategoryForm", () => {
     permissions.canEdit = false;
     await render({ defaultValues: saved, isEdit: true });
 
-    expect(document.body.textContent).toContain("You can view this but not change it.");
+    expect(document.body.textContent).toContain("You can view this page but not change it.");
     expect(document.querySelector("fieldset")?.disabled).toBe(true);
     expect(queryButton("Save")).toBeUndefined();
     expect(document.querySelector('textarea[aria-label="Description"]')).toBeNull();

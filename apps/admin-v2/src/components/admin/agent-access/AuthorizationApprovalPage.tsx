@@ -6,6 +6,9 @@ import { toast } from "~/lib/toast";
 
 import { SettingsCard, SettingsCardLoading, SettingsField } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
+import { ErrorState } from "~/components/admin/states/ErrorState";
+import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
 import { Input } from "~/components/ui/input";
 import { useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
@@ -83,6 +86,21 @@ export function AuthorizationApprovalPage({
     return (
       <AccessPage title={t("approveTitle", { name: t("approveUnnamed") })}>
         <SettingsCardLoading />
+      </AccessPage>
+    );
+  }
+  // A read that failed (offline, server down) can be retried; a request that
+  // is gone or already answered cannot.
+  if (!decision && requestQuery.isError && !isAdminApiNotFoundError(requestQuery.error)) {
+    return (
+      <AccessPage title={t("approveTitle", { name: clientName })}>
+        <Card>
+          <ErrorState
+            error={requestQuery.error}
+            onRetry={() => void requestQuery.refetch()}
+            backTo={{ to: "/admin/settings/integrations", label: t("backToIntegrations") }}
+          />
+        </Card>
       </AccessPage>
     );
   }

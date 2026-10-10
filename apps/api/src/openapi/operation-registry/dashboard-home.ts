@@ -31,6 +31,11 @@ export const DASHBOARD_HOME_OPERATIONS = {
     reason:
       "Placeholder returns ‘Reindex initiated’ without scheduling or performing reindex work; execution would report a false side effect.",
   },
+  "dashboard.search.global": {
+    exposure: "excluded",
+    reason:
+      "The dashboard's command palette: a handful of mixed records for typed navigation. Agents search each kind through its bounded list operation, which carries filters, paging and the full record.",
+  },
   "dashboard.search.get_search": {
     exposure: "excluded",
     reason:

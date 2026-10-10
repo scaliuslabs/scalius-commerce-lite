@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
@@ -9,7 +10,6 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { resourceMessages } from "~/i18n/resource";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
@@ -34,7 +34,6 @@ const RETURNABLE_ORDER_STATUSES = new Set(["delivered", "completed"]);
 
 export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: () => void }) {
   const t = useMessages(orderDetailMessages);
-  const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();
   const hydrated = useHydrated();
   const actions = useOrderActionPermissions();
@@ -74,12 +73,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
         {!hydrated || query.isLoading ? (
           <p className="text-muted-foreground">{t("read.loading")}</p>
         ) : query.isError ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-muted-foreground">{t("returns.loadFailed")}</p>
-            <Button type="button" size="sm" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
-              {r("retry")}
-            </Button>
-          </div>
+          <InlineError title={t("returns.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
         ) : returns.length === 0 ? (
           <p className="text-muted-foreground">{t(canRequest ? "returns.emptyCanRequest" : "returns.empty")}</p>
         ) : (

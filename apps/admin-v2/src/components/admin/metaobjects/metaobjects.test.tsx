@@ -203,7 +203,7 @@ describe("content types", () => {
     await render(<MetaobjectTypeForm definition={faq} />, { permissions: ["metaobjects.view"] });
     expect(container.querySelector("fieldset")!.disabled).toBe(true);
     expect(button("Save")).toBeUndefined();
-    expect(container.textContent).toContain("You can view this but not change it.");
+    expect(container.textContent).toContain("You can view this page but not change it.");
   });
 
   it("lists a type's entries", async () => {

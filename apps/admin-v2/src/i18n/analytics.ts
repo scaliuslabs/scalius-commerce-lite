@@ -7,7 +7,7 @@ export const analyticsMessages = defineMessages({
     reports: "Reports",
     viewAnalytics: "View analytics",
     allReports: "All reports",
-    loadFailed: "Couldn't load these numbers. Try again.",
+    loadFailed: "Couldn't load these numbers",
     retry: "Try again",
     noAccess: "You don't have access to sales numbers.",
     // Date range, comparison, buckets
@@ -310,7 +310,7 @@ export const analyticsMessages = defineMessages({
     reports: "রিপোর্ট",
     viewAnalytics: "অ্যানালিটিক্স দেখুন",
     allReports: "সব রিপোর্ট",
-    loadFailed: "হিসাব লোড করা যায়নি। আবার চেষ্টা করুন।",
+    loadFailed: "হিসাব লোড করা যায়নি",
     retry: "আবার চেষ্টা করুন",
     noAccess: "বিক্রির হিসাব দেখার অনুমতি আপনার নেই।",
     dateRange: "তারিখের সীমা",

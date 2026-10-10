@@ -133,14 +133,7 @@ export function OrderView({ order }: { order: Order }) {
   ].filter(Boolean).join(" · ") || undefined;
 
   return (
-    <ErrorBoundary
-      fallback={
-        <div className="space-y-2 p-4 text-center text-body text-muted-foreground">
-          <p>{t("loadFailed")}</p>
-          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>{t("reload")}</Button>
-        </div>
-      }
-    >
+    <ErrorBoundary>
       <TooltipProvider>
         <Page width="detail" className="space-y-4 pb-24 lg:pb-0">
           <PageHeader

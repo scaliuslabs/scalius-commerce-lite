@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { CollectionForm } from "~/components/admin/collection-form";
 import {
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
         .catch(nullForAdminApiNotFound),
       queryClient.ensureQueryData(collectionCategoryOptionsQueryOptions()),
     ]);
-    if (!collection) throw redirect({ to: "/admin/collections" });
+    if (!collection) throw notFound();
 
     const productIds = collectionProductIdsForLookup(collection.config);
     if (typeof window !== "undefined" && productIds.length > 0) {

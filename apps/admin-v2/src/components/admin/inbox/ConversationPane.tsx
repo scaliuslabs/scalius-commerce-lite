@@ -8,7 +8,9 @@ import { cn } from "@scalius/shared/utils";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { EmptyState } from "~/components/admin/states/EmptyState";
+import { ErrorState } from "~/components/admin/states/ErrorState";
+import { RecordNotFound } from "~/components/admin/states/NotFound";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
@@ -68,9 +70,12 @@ export function ConversationPane({
   if (thread.isError || !data) {
     const missing = thread.error instanceof AdminApiResponseError && thread.error.status === 404;
     return (
-      <section className={cn("flex flex-col items-start gap-2 p-4", className)}>
-        <p className="text-body text-destructive">{missing ? getServerFnError(thread.error) : t("threadLoadFailed")}</p>
-        {!missing ? <Button type="button" size="sm" variant="outline" onClick={() => void thread.refetch()}>{t("retry")}</Button> : null}
+      <section className={cn("p-4", className)}>
+        {missing ? (
+          <RecordNotFound resource={{ noun: "conversation", list: "/admin/inbox" }} />
+        ) : (
+          <ErrorState layout="card" title={t("threadLoadFailed")} error={thread.error} onRetry={() => void thread.refetch()} />
+        )}
       </section>
     );
   }
@@ -143,7 +148,7 @@ export function NoConversationSelected({ className }: { className?: string }) {
   const t = useMessages(inboxMessages);
   return (
     <section className={cn("flex items-center justify-center", className)}>
-      <EmptyState icon={MessagesSquare} title={t("pickThread")} description={t("pickThreadBody")} />
+      <EmptyState icon={MessagesSquare} title={t("pickThread")} description={t("pickThreadBody")} help={false} card={false} />
     </section>
   );
 }

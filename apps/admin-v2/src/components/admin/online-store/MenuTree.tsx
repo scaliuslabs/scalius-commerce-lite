@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
@@ -253,11 +254,8 @@ function MenuLevel({
 
   if (query.isError) {
     return (
-      <div className="flex items-center justify-between gap-3 px-2 py-3 text-body">
-        <span className="text-destructive">{t("loadFailed")}</span>
-        <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
-          {t("retry")}
-        </Button>
+      <div className="px-2 py-3">
+        <InlineError title={t("loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
       </div>
     );
   }

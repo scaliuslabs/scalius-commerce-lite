@@ -872,6 +872,9 @@ const myPermissionsRoute = createRoute({
                 denials: z.array(z.string().max(150)).max(ACCOUNT_OVERRIDE_LIMIT),
                 truncated: z.boolean(),
             }),
+            storeOwnerName: z.string().max(100).nullable().openapi({
+                description: "The store owner's name (the first active super admin), so a view-only or no-access screen can say who grants access.",
+            }),
         })) } } },
         ...errorResponses,
     }
@@ -885,7 +888,13 @@ app.openapi(myPermissionsRoute, async (c) => {
         const db = c.get("db");
         const kv = getPermissionKv(c);
 
-        const context = await getUserPermissionContext(db, sessionUser.id, kv);
+        const [context, [owner]] = await Promise.all([
+            getUserPermissionContext(db, sessionUser.id, kv),
+            db.select({ name: user.name }).from(user)
+                .where(and(eq(user.isSuperAdmin, true), eq(user.banned, false)))
+                .orderBy(user.createdAt)
+                .limit(1),
+        ]);
 
         if (!context) {
             throw new NotFoundError("User not found");
@@ -912,6 +921,7 @@ app.openapi(myPermissionsRoute, async (c) => {
                 truncated: context.overrides.grants.length > grants.length
                     || context.overrides.denials.length > denials.length,
             },
+            storeOwnerName: owner?.name.trim().slice(0, 100) || null,
         });
     } catch (error: unknown) {
         console.error("Error fetching user permissions:", error);

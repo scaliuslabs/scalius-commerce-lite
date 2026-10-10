@@ -49,7 +49,10 @@ export function useWarmEverydayRouteCode(canOpen: (path: string) => boolean): vo
     const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
     if (shouldSkipRouteCodeWarming(connection)) return;
     let idle: number | undefined;
-    const warm = () => warmEverydayRouteCode(router, canOpen);
+    // Offline a failed download would stay failed until a reload: warm only online.
+    const warm = () => {
+      if (navigator.onLine !== false) warmEverydayRouteCode(router, canOpen);
+    };
     const timer = window.setTimeout(() => {
       // Wait for the browser to be idle too, where it can say (Safari cannot).
       if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(warm, { timeout: 5_000 });

@@ -163,6 +163,17 @@ Code: `components/admin/orderview/status-badges.ts` (`statusBadgeVariant(status,
 
 Record states `archived`, `hidden` and `inactive` are `secondary`. A cancelled, refunded, returned or incomplete order shows only its status badge (`orderBadgeVisibility`).
 
+## Read-only mode
+
+Staff who can view a page but not edit it (polish bar R5) see one consistent page:
+
+1. `ReadOnlyNotice` (`components/admin/states`) once, under the page header: an info banner, "You can view this page but not change it", and who grants edit access (the store owner's name from `/rbac/my-permissions`, else "the store owner").
+2. Values are text, never disabled inputs: every field renders through `Field` with `readOnly`, which draws `ReadOnlyValue` (the value, "—" when empty, codes in mono, money and dates formatted) in the field's place with its label. Rich text renders as content. A disabled control is for a choice that is unavailable now, not for missing permission.
+3. Nothing that writes is drawn: no save bar (an editor registers no save entry), no create, delete, upload, reorder or status controls, no primary action in the header, and "More actions" keeps only reading actions (view, print, copy link). Navigation, search, filters and exports that only read stay.
+4. One switch per page: the page reads its edit permission once (`useHasPermission(...)`) and passes `readOnly` down; components never check permissions for their own copy of the rule.
+
+The harness checks it with a view-only session: `[data-slot=read-only-notice]` is present and no enabled control would send a mutating request.
+
 ## Right to left
 
 Write sides as the reading direction sees them, so a right-to-left language mirrors the page:
@@ -287,6 +298,22 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | O6 | Status badge: always a word, a tone from the status table, never colour alone. | lint (existing) |
 
 ### States
+
+Code: `components/admin/states/`. Never hand-build one of these views.
+
+| Situation | Component |
+| --- | --- |
+| Nothing made yet (E1) | `EmptyState` (icon, action title, one sentence, `action`, `secondaryAction`, help link; one card, or `card={false}` inside one) |
+| No match for filters or search (E2) | `FilteredEmptyState` (`title`, `onClearFilters`), where the rows go |
+| A card with nothing yet (E3) | `SectionEmpty`, one muted line |
+| A failed read (R1, R3) | `ErrorState`: `layout="page"` (the page title stays as h1, Retry is the primary), `"card"` (inside the table or card), and `InlineError` for one card of several (one line and Retry; it downloads nothing more). `what="orders"` reads "Couldn't load orders". The reason comes from the error: offline, unreachable, server down, updated (Reload), fault (Copy details). |
+| A record that is gone (R2) | `RecordNotFound`: names the record and links to its list, both from the route path (`record-resource.ts`) |
+| No page, no access (R4) | `PageNotFound`, `NoPermissionState` (`area`, `ownerName`) |
+| View-only (R5) | `ReadOnlyNotice` (see Read-only mode) |
+| Offline (R6) | `OfflineBanner`, drawn by the shell; `useOnlineStatus()` |
+| Loading (L1, L2) | `PageSkeleton` (`detail`, `settings`, `index`, `page`) |
+
+Route boundaries come from the router defaults (`lib/route-error.tsx`): a failed loader renders `ErrorState`, a 404 `RecordNotFound`, a 403 `NoPermissionState`; a loader slower than 300 ms (`ROUTE_PENDING_MS`) renders the page's `PageSkeleton` for at least 300 ms. Pages opened most from links (order, product, customer) get their card layout from `PAGE_SHAPES` there; never put a `pendingComponent` in a route file, because the router plugin splits it into a chunk that a cold or offline load must download first. The failed-read view ships with the router; the not-found and no-access views load after the first page. Offline, a page whose code is already in the tab opens with its cached data; any other page waits and opens on reconnect (the banner says so), and failed reads run again. Saves are never queued.
 
 | ID | Rule | Check |
 | --- | --- | --- |

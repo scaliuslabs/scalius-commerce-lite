@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useRef, useState } from "react";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
 import { productFieldLabel } from "~/components/admin/product-form/utils";
@@ -55,7 +55,8 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
-    if (!product || (product as ProductDetail).deletedAt) throw redirect({ to: "/admin/products" });
+    // A missing or trashed product says so and links back to the list (polish bar R2).
+    if (!product || (product as ProductDetail).deletedAt) throw notFound();
   },
   head: () => pageHead("product"),
   errorComponent: RouteErrorComponent,

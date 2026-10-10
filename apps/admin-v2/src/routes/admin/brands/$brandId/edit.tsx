@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { BrandForm, brandFormValues } from "~/components/admin/BrandForm";
 import { brandQueryOptions } from "~/lib/api-query-options/brands";
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/admin/brands/$brandId/edit")({
     const brand = await queryClient
       .ensureQueryData({ ...brandQueryOptions(params.brandId), staleTime: Infinity })
       .catch(nullForAdminApiNotFound);
-    if (!brand) throw redirect({ to: "/admin/brands" });
+    if (!brand) throw notFound();
     if (brand.deletedAt != null) throw redirect({ to: "/admin/brands", search: { trashed: true } as never });
   },
   head: () => pageHead("brand"),

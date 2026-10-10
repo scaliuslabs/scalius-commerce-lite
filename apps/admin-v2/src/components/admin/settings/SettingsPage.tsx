@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { cloneElement, createContext, isValidElement, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { ChevronRight, Loader2 } from "lucide-react";
@@ -51,7 +52,6 @@ export function SettingsPage({
   children: ReactNode;
 }) {
   const t = useMessages(settingsNavMessages);
-  const common = useMessages(settingsMessages);
   const hash = useLocation({ select: (location) => location.hash });
   const key = presenceKey("settings", page);
   return (
@@ -67,7 +67,7 @@ export function SettingsPage({
         />
         <SaveErrorBanner />
         <SettingsPresence presenceKey={key} />
-        {readOnly ? <p className="text-body text-muted-foreground">{common("readOnly")}</p> : null}
+        {readOnly ? <ReadOnlyNotice /> : null}
         {children}
       </Page>
     </TargetCardContext.Provider>

@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -97,10 +98,9 @@ export function AnalyticsOverview({
         {header}
         {toolbar}
         <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-            <p className="text-body">{t("loadFailed")}</p>
-            <Button variant="outline" size="sm" onClick={() => void overview.refetch()}>{t("retry")}</Button>
-          </CardHeader>
+          <CardContent className="pt-4">
+<InlineError title={t("loadFailed")} error={overview.error} onRetry={() => void overview.refetch()} />
+</CardContent>
         </Card>
       </div>
     );

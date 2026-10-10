@@ -32005,6 +32005,100 @@ export type GetApiV1AdminSearchResponses = {
 
 export type GetApiV1AdminSearchResponse = GetApiV1AdminSearchResponses[keyof GetApiV1AdminSearchResponses];
 
+export type GetApiV1AdminSearchGlobalData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * What the staff member typed (2 characters or more)
+         */
+        q: string;
+    };
+    url: '/api/v1/admin/search/global';
+};
+
+export type GetApiV1AdminSearchGlobalErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSearchGlobalError = GetApiV1AdminSearchGlobalErrors[keyof GetApiV1AdminSearchGlobalErrors];
+
+export type GetApiV1AdminSearchGlobalResponses = {
+    /**
+     * Up to 5 records of each kind the caller may read
+     */
+    200: {
+        success: true;
+        data: {
+            query: string;
+            orders: Array<{
+                id: string;
+                orderNumber: number | null;
+                customerName: string;
+                status: string;
+            }>;
+            customers: Array<{
+                id: string;
+                name: string;
+                phone: string | null;
+                email: string | null;
+                origin: string;
+                latestOrderName: string | null;
+            }>;
+            products: Array<{
+                id: string;
+                name: string;
+                isActive: boolean;
+                matchedSku: string | null;
+            }>;
+            discounts: Array<{
+                id: string;
+                name: string;
+                code: string | null;
+                status: string;
+            }>;
+            collections: Array<{
+                id: string;
+                name: string;
+            }>;
+            categories: Array<{
+                id: string;
+                name: string;
+            }>;
+            pages: Array<{
+                id: string;
+                title: string;
+                contentType: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSearchGlobalResponse = GetApiV1AdminSearchGlobalResponses[keyof GetApiV1AdminSearchGlobalResponses];
+
 export type PostApiV1AdminSearchReindexData = {
     body?: never;
     path?: never;
@@ -34523,6 +34617,10 @@ export type GetApiV1AdminRbacMyPermissionsResponses = {
                 denials: Array<string>;
                 truncated: boolean;
             };
+            /**
+             * The store owner's name (the first active super admin), so a view-only or no-access screen can say who grants access.
+             */
+            storeOwnerName: string | null;
         };
     };
 };

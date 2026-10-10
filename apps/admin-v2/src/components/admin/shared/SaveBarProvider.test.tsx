@@ -72,6 +72,17 @@ describe("page save bar", () => {
     expect(toast.success).toHaveBeenCalledWith("Customer created");
   });
 
+  it("offline, says the edits wait for the connection instead of asking for a fix (R6)", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    // A form that wraps the failure in its own words still reads as offline.
+    render({ dirty: true, save: vi.fn(async () => { throw new Error("Couldn't save the checkout"); }), discard: vi.fn() });
+
+    await pressBarSave();
+    expect(barText()).toContain("You're offline · Save when you reconnect");
+    expect(barText()).not.toContain("Fix the problems");
+    onLine.mockRestore();
+  });
+
   it("treats a server fault like a connection problem", async () => {
     render({ dirty: true, save: vi.fn(async () => { throw new AdminApiResponseError("API error: 502", 502); }), discard: vi.fn() });
 

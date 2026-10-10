@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -24,12 +25,15 @@ export function OperationalReadNotice({
   if (read.status === "loading") {
     return <p role="status" className="text-body text-muted-foreground">{t("read.loading")}</p>;
   }
-  return (
-    <div role="status" className="flex items-center justify-between gap-2 text-body">
-      <p className="text-muted-foreground">{read.status === "stale" ? t("read.stale") : label}</p>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={read.refreshing}>
-        {r("retry")}
-      </Button>
-    </div>
-  );
+  if (read.status === "stale") {
+    return (
+      <div role="status" className="flex items-center justify-between gap-2 text-body">
+        <p className="text-muted-foreground">{t("read.stale")}</p>
+        <Button type="button" variant="outline" onClick={onRetry} loading={read.refreshing}>
+          {r("retry")}
+        </Button>
+      </div>
+    );
+  }
+  return <InlineError title={label} onRetry={onRetry} />;
 }

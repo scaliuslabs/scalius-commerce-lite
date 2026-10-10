@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -120,10 +121,7 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
           thread.isPending ? (
             <p className="text-body text-muted-foreground">{t("read.loading")}</p>
           ) : thread.isError ? (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-body text-muted-foreground">{tr("threadLoadFailed")}</p>
-              <Button type="button" size="sm" variant="outline" onClick={() => void thread.refetch()}>{tr("retry")}</Button>
-            </div>
+            <InlineError title={tr("threadLoadFailed")} error={thread.error} onRetry={() => void thread.refetch()} />
           ) : conversation && conversation.messages.length > 0 ? (
             <Suspense fallback={<p className="text-body text-muted-foreground">{t("read.loading")}</p>}>
               <ConversationMessages

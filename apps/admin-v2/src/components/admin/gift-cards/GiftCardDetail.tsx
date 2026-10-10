@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -164,7 +165,7 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
         actions={actions}
       />
       {!canManage ? (
-        <p role="status" className="mb-4 rounded-lg bg-muted px-4 py-2 text-body text-muted-foreground">{t("readOnly")}</p>
+        <ReadOnlyNotice />
       ) : null}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">

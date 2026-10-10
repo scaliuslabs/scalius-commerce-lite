@@ -1,0 +1,65 @@
+import { defineMessages } from "./index";
+
+/**
+ * The state views every screen shares (components/admin/states): empty,
+ * filtered, error, not found, no access, offline, read-only. One catalog, so
+ * the same situation reads the same everywhere.
+ */
+export const statesMessages = defineMessages({
+  en: {
+    emptyHelp: "Questions? Ask the community.",
+    filteredTitle: "No results match these filters",
+    filteredBody: "Try changing the filters or the search words.",
+    clearFilters: "Clear filters",
+    reload: "Reload",
+    copyDetails: "Copy details",
+    copied: "Copied",
+    loadTitle: "Couldn't load {what}",
+    pageTitle: "This page didn't load",
+    updatedTitle: "Scalius was updated",
+    recordNotFound: "This {noun} doesn't exist or was deleted",
+    recordNotFoundBody: "Check the link, or find it in the list.",
+    backTo: "Back to {list}",
+    pageNotFound: "There's no page at this address",
+    pageNotFoundBody: "Check the address and try again, or go back to Home.",
+    goHome: "Go to Home",
+    noPermissionTitle: "You don't have access to this page",
+    noPermissionArea: "You don't have access to {area}",
+    askOwnerAccess: "Ask the store owner to give you access.",
+    askNamedAccess: "Ask {name} to give you access.",
+    noAccessBody: "Your account has no permissions in this store yet. Ask the store owner to give you a role.",
+    signOut: "Sign out",
+    readOnly: "You can view this page but not change it.",
+    askOwnerEdit: "Ask the store owner if you need to make changes.",
+    askNamedEdit: "Ask {name} if you need to make changes.",
+  },
+  bn: {
+    emptyHelp: "প্রশ্ন আছে? কমিউনিটিকে জিজ্ঞাসা করুন।",
+    filteredTitle: "এই ফিল্টারে কিছু মেলেনি",
+    filteredBody: "ফিল্টার বা খোঁজার শব্দ বদলে দেখুন।",
+    clearFilters: "ফিল্টার মুছুন",
+    reload: "রিলোড করুন",
+    copyDetails: "বিস্তারিত কপি করুন",
+    copied: "কপি হয়েছে",
+    loadTitle: "{what} লোড করা যায়নি",
+    pageTitle: "পেজটি লোড হয়নি",
+    updatedTitle: "Scalius আপডেট হয়েছে",
+    recordNotFound: "এই {noun} নেই, বা মুছে ফেলা হয়েছে",
+    recordNotFoundBody: "লিংকটি দেখুন, বা তালিকায় খুঁজুন।",
+    backTo: "{list} তালিকায় ফিরুন",
+    pageNotFound: "এই ঠিকানায় কোনো পেজ নেই",
+    pageNotFoundBody: "ঠিকানাটি দেখে আবার চেষ্টা করুন, অথবা হোমে ফিরে যান।",
+    goHome: "হোমে যান",
+    noPermissionTitle: "এই পেজ দেখার অনুমতি আপনার নেই",
+    noPermissionArea: "{area} দেখার অনুমতি আপনার নেই",
+    askOwnerAccess: "অনুমতির জন্য স্টোরের মালিককে বলুন।",
+    askNamedAccess: "অনুমতির জন্য {name}-কে বলুন।",
+    noAccessBody: "এই স্টোরে আপনার অ্যাকাউন্টের এখনো কোনো অনুমতি নেই। স্টোরের মালিককে একটি রোল দিতে বলুন।",
+    signOut: "সাইন আউট",
+    readOnly: "আপনি এই পেজটি দেখতে পারবেন, কিন্তু বদলাতে পারবেন না।",
+    askOwnerEdit: "কিছু বদলাতে হলে স্টোরের মালিককে বলুন।",
+    askNamedEdit: "কিছু বদলাতে হলে {name}-কে বলুন।",
+  },
+});
+
+export type StatesKey = keyof (typeof statesMessages)["en"];

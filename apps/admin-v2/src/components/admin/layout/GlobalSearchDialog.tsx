@@ -14,20 +14,14 @@ import {
   Layers,
   PackageMinus,
   Plug,
+  Search,
   Settings,
   SunMoon,
   Tag,
   Truck,
   UserRound,
 } from "lucide-react";
-import {
-  getApiV1AdminCategories,
-  getApiV1AdminCollections,
-  getApiV1AdminCustomers,
-  getApiV1AdminOrders,
-  getApiV1AdminPages,
-  getApiV1AdminProducts,
-} from "@scalius/api-client/sdk";
+import { getApiV1AdminSearchGlobal } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -36,7 +30,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useDebounce } from "~/hooks/use-debounce";
 import { apiData } from "~/lib/api";
 import { appSurfacesQueryOptions } from "~/lib/api-query-options/apps";
-import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
+import { writeListSearch } from "~/lib/list-search";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { recordNounMessages } from "~/i18n/record-nouns";
 import { LOCALES, setLocale, useLocale, useMessages } from "~/i18n";
 import { navKeywordMessages } from "~/i18n/nav-keywords";
 import { shellMessages } from "~/i18n/shell";
@@ -76,15 +72,15 @@ interface Entry {
   detail?: string;
   /** A customer titled by its phone (a guest without an order name) never goes into the device's recents. */
   titledByPhone?: boolean;
+  /** A "Search all orders for …" row: writes the list's session search, then opens the list. */
+  listSearch?: string;
 }
 
 type ShellKey = keyof (typeof shellMessages)["en"];
 type KeywordKey = keyof (typeof navKeywordMessages)["en"];
 
-/** Shopify caps admin search at 7 results. */
-const MAX_RESULTS = 7;
-/** Per record type, so one type can't crowd out the others. */
-const PER_TYPE = 3;
+/** Pages and settings shown for a query, after the records. */
+const MAX_PLACES = 7;
 const RECENT_KEY = "scalius.search.recent";
 /** Everyday tasks that live inside a page, found by name like the pages themselves. */
 const TASKS: ReadonlyArray<{ key: ShellKey & KeywordKey; to: string; search?: Record<string, string>; icon: Entry["icon"] }> = [
@@ -112,7 +108,7 @@ function readRecent(): Recent[] {
 
 /** Remembers what was opened on this device: never the typed query, nor a customer's phone. */
 function remember(entry: Entry) {
-  if (!entry.to || entry.titledByPhone) return;
+  if (!entry.to || entry.titledByPhone || entry.listSearch) return;
   try {
     const { id, label, to, hash, search } = entry;
     const detail = id.startsWith("u:") ? undefined : entry.detail;
@@ -125,11 +121,12 @@ function remember(entry: Entry) {
 
 /**
  * The ⌘K dialog: recently opened places, then for a query the matching
- * dashboard pages, tasks and settings (with G-key hints) and the top orders,
- * customers, discounts, products (SKU and barcode too, drafts included),
- * collections, categories and pages. Records come from the same list
- * endpoints as the list pages, so the two searches never disagree. The query
- * stays in this dialog: nothing goes into the URL.
+ * dashboard pages, tasks and settings (with G-key hints) and, grouped by
+ * kind, up to five orders, customers, products (SKU and barcode too, drafts
+ * included), discounts, collections, categories and pages from one indexed
+ * request (`/admin/search/global`), each group ending in a row that opens its
+ * list already searched. The query stays in this dialog and the list's
+ * session search: nothing goes into the URL.
  */
 export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
   const t = useMessages(shellMessages);
@@ -144,23 +141,18 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
   const needle = term.toLowerCase();
   const lookupTerm = useDebounce(term, 200);
   const searching = open && lookupTerm.length >= 2;
-  const lookup = <T,>(kind: string, path: string, fetch: () => Promise<T>) => ({
-    queryKey: ["global-search", kind, lookupTerm],
-    queryFn: fetch,
-    enabled: searching && canOpen(path),
+  // One request finds every kind of record the staff member may read (the
+  // API checks each list's permission): indexed lookups, five of each.
+  const found = useQuery({
+    queryKey: ["global-search", lookupTerm],
+    queryFn: () => apiData(getApiV1AdminSearchGlobal({ query: { q: lookupTerm } })),
+    enabled: searching,
     placeholderData: keepPreviousData,
     retry: false,
     staleTime: 30_000,
   });
-  const listQuery = { search: lookupTerm, limit: PER_TYPE };
-  const orders = useQuery(lookup("orders", "/admin/orders", () => apiData(getApiV1AdminOrders({ query: listQuery }))));
-  const customers = useQuery(lookup("customers", "/admin/customers", () => apiData(getApiV1AdminCustomers({ query: listQuery }))));
-  const products = useQuery(lookup("products", "/admin/products", () => apiData(getApiV1AdminProducts({ query: { ...listQuery, view: "compact" } }))));
-  const collections = useQuery(lookup("collections", "/admin/collections", () => apiData(getApiV1AdminCollections({ query: listQuery }))));
-  const categories = useQuery(lookup("categories", "/admin/categories", () => apiData(getApiV1AdminCategories({ query: listQuery }))));
-  const pages = useQuery(lookup("pages", "/admin/pages", () => apiData(getApiV1AdminPages({ query: listQuery }))));
-  // Every discount is one small list the Discounts page caches too; match codes and titles here.
-  const discounts = useQuery({ ...discountsQueryOptions(), enabled: searching && canOpen("/admin/discounts") });
+  const orderT = useMessages(orderMessages);
+  const s = useMessages(recordNounMessages);
   // Active apps' pages and providers: the shell's cached surfaces read (apps.view).
   const surfacesT = useMessages(appSurfacesMessages);
   const apps = useQuery({ ...appSurfacesQueryOptions(), enabled: open && canOpen("/admin/apps") }).data;
@@ -230,21 +222,31 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
     return [...navMatches, ...tasks, ...settingEntries, ...appEntries];
   }, [apps, canOpen, goKeys, locale, nav, needle, settingsCard, settingsPage, surfacesT, t, theme, toggleTheme]);
 
-  const records = useMemo<Entry[]>(() => {
-    if (!searching) return [];
-    const draft = t("draft");
-    const discountMatches = (discounts.data ?? []).filter((discount) =>
-      [discount.name, ...discount.codes.map(({ code }) => code)].some((value) => value.toLowerCase().includes(lookupTerm.toLowerCase())));
+  // Records in groups (Shopify): five of each kind, then a row that opens the
+  // kind's list already searched for the term.
+  const groups = useMemo<Array<{ key: string; heading: string; entries: Entry[] }>>(() => {
+    const data = found.data;
+    if (!searching || !data) return [];
+    const all = (list: string, to: string, label: string): Entry => ({
+      id: `all:${list}`,
+      label: t("searchAll", { list: label, term: lookupTerm }),
+      to,
+      icon: Search,
+      listSearch: list,
+    });
+    const group = (key: string, heading: string, entries: Entry[], seeAll?: Entry) =>
+      entries.length ? [{ key, heading, entries: seeAll ? [...entries, seeAll] : entries }] : [];
     return [
-      ...(orders.data?.orders ?? []).map((order) => ({
+      ...group("orders", t("orders"), data.orders.map((order) => ({
         id: `o:${order.id}`,
         label: formatOrderNumber(order.orderNumber, order.id),
-        detail: order.customerName,
+        detail: `${order.customerName} · ${orderStatusLabel(orderT, order.status)}`,
         to: `/admin/orders/${order.id}`,
         icon: Inbox,
-      })),
-      ...(customers.data?.customers ?? []).map((customer) => {
-        const { title, detail } = customerTitle(customer, customerT);
+      })), all("orders", "/admin/orders", s("list.order"))),
+      ...group("customers", t("customers"), data.customers.map((customer) => {
+        const kind = customer.origin === "order" ? "guest" : customer.origin === "account" ? "account" : "merchant";
+        const { title, detail } = customerTitle({ ...customer, kind }, customerT);
         return {
           id: `u:${customer.id}`,
           label: title,
@@ -253,50 +255,53 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           icon: UserRound,
           titledByPhone: customer.phone !== null && title === formatPhoneForDisplay(customer.phone, getStoreRegion()),
         };
-      }),
-      ...discountMatches.slice(0, PER_TYPE).map((discount) => ({
-        id: `d:${discount.id}`,
-        label: discount.codes[0]?.code ?? discount.name,
-        detail: t("discounts"),
-        to: `/admin/discounts/${discount.id}`,
-        icon: BadgePercent,
-      })),
-      ...(products.data?.products ?? []).map((item) => ({
+      }), all("customers", "/admin/customers", s("list.customer"))),
+      ...group("products", t("products"), data.products.map((item) => ({
         id: `p:${item.id}`,
         label: item.name,
-        detail: item.isActive ? undefined : draft,
+        detail: [item.matchedSku, item.isActive ? null : t("draft")].filter(Boolean).join(" · ") || undefined,
         to: `/admin/products/${item.id}/edit`,
         icon: Tag,
-      })),
-      ...(collections.data?.collections ?? []).map((item) => ({ id: `l:${item.id}`, label: item.name, detail: t("collections"), to: `/admin/collections/${item.id}/edit`, icon: Layers })),
-      ...(categories.data?.categories ?? []).map((item) => ({ id: `c:${item.id}`, label: item.name, detail: t("categories"), to: `/admin/categories/${item.id}/edit`, icon: FolderTree })),
-      ...(pages.data?.pages ?? []).map((item) => ({
+      })), all("products", "/admin/products", s("list.product"))),
+      ...group("discounts", t("discounts"), data.discounts.map((discount) => ({
+        id: `d:${discount.id}`,
+        label: discount.code ?? discount.name,
+        detail: discount.code ? discount.name : undefined,
+        to: `/admin/discounts/${discount.id}`,
+        icon: BadgePercent,
+      })), all("discounts", "/admin/discounts", s("list.discount"))),
+      ...group("collections", t("collections"), data.collections.map((item) => ({
+        id: `l:${item.id}`, label: item.name, to: `/admin/collections/${item.id}/edit`, icon: Layers,
+      })), all("collections", "/admin/collections", s("list.collection"))),
+      ...group("categories", t("categories"), data.categories.map((item) => ({
+        id: `c:${item.id}`, label: item.name, to: `/admin/categories/${item.id}/edit`, icon: FolderTree,
+      })), all("categories", "/admin/categories", s("list.category"))),
+      ...group("pages", t("pages"), data.pages.map((item) => ({
         id: `g:${item.id}`,
         label: item.title,
-        detail: t(item.contentType === "article" ? "blogPosts" : "pages"),
+        detail: item.contentType === "article" ? t("blogPosts") : undefined,
         to: item.contentType === "article" ? `/admin/articles/${item.id}/edit` : `/admin/pages/${item.id}/edit`,
         icon: FileText,
-      })),
+      }))),
     ];
-  }, [categories.data, collections.data, customers.data, customerT, discounts.data, lookupTerm, orders.data, pages.data, products.data, searching, t]);
+  }, [customerT, found.data, lookupTerm, orderT, s, searching, t]);
 
   const recent = useMemo<Entry[]>(
     () => (open && !term ? readRecent().map((item) => ({ ...item, icon: Clock })) : []),
     [open, term],
   );
 
-  // A page whose name starts with the query wins ("coll" → Collections);
-  // then matching records; then other pages. Seven results in total.
+  // A page whose name starts with the query leads ("coll" → Collections);
+  // then the records by kind; then other pages and settings.
   const named = places.filter((entry) => needle && entry.label.toLowerCase().startsWith(needle));
-  const matchesAll = [...named, ...records, ...places.filter((entry) => !named.includes(entry))].slice(0, term ? MAX_RESULTS : undefined);
-  const recordMatches = matchesAll.filter((entry) => records.includes(entry));
-  const placeMatches = matchesAll.filter((entry) => !records.includes(entry));
-  const loading = searching && [orders, customers, products, collections, categories, pages].some((result) => result.isFetching) && matchesAll.length === 0;
+  const otherPlaces = places.filter((entry) => !named.includes(entry)).slice(0, term ? MAX_PLACES : undefined);
+  const loading = searching && found.isFetching && groups.length === 0;
 
   const go = (entry: Entry) => {
     remember(entry);
     setOpen(false);
     setQuery("");
+    if (entry.listSearch) writeListSearch(entry.listSearch, lookupTerm);
     if (entry.run) entry.run();
     else if (entry.to) void navigate({ to: entry.to, hash: entry.hash, search: entry.search as never });
   };
@@ -304,7 +309,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
   const renderItem = (entry: Entry) => (
     <CommandItem key={entry.id} value={entry.id} onSelect={() => go(entry)}>
       <entry.icon aria-hidden />
-      <span className="flex-1 truncate">
+      <span className="flex-1 truncate" title={entry.detail ? `${entry.label} · ${entry.detail}` : entry.label}>
         {entry.label}
         {entry.detail ? <span className="text-muted-foreground"> · {entry.detail}</span> : null}
       </span>
@@ -321,9 +326,11 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           <CommandList className="max-h-96">
             <CommandEmpty>{loading || term !== lookupTerm ? t("searching") : t("searchNothing")}</CommandEmpty>
             {recent.length ? <CommandGroup heading={t("recent")}>{recent.map(renderItem)}</CommandGroup> : null}
-            {named.length ? null : recordMatches.length ? <CommandGroup heading={t("results")}>{recordMatches.map(renderItem)}</CommandGroup> : null}
-            {placeMatches.length ? <CommandGroup heading={t("goTo")}>{placeMatches.map(renderItem)}</CommandGroup> : null}
-            {named.length && recordMatches.length ? <CommandGroup heading={t("results")}>{recordMatches.map(renderItem)}</CommandGroup> : null}
+            {named.length ? <CommandGroup heading={t("goTo")}>{named.map(renderItem)}</CommandGroup> : null}
+            {groups.map((group) => (
+              <CommandGroup key={group.key} heading={group.heading}>{group.entries.map(renderItem)}</CommandGroup>
+            ))}
+            {otherPlaces.length ? <CommandGroup heading={named.length ? undefined : t("goTo")}>{otherPlaces.map(renderItem)}</CommandGroup> : null}
           </CommandList>
         </Command>
         <p className="hidden border-t px-3 py-2 text-caption text-muted-foreground sm:block">{t("searchHint")}</p>

@@ -6,6 +6,7 @@
 // market's own web address and language) sit behind "Web address and
 // handle". One save bar saves the page under the revision it loaded; the
 // delete action sits apart at the bottom.
+import { RecordNotFound } from "~/components/admin/states/NotFound";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -99,7 +100,7 @@ export function MarketEditor({ marketId }: { marketId: string }) {
     const missing = isAdminApiNotFoundError(form.loadError);
     return (
       <SettingsPage page="markets" back={back} title={nav("markets")}>
-        {missing ? <SettingsCard description={t("notFound")} /> : <SettingsLoadFailure title={t("loadFailed")} onRetry={form.refetch} />}
+        {missing ? <RecordNotFound resource={{ noun: "market", list: "/admin/settings/markets" }} /> : <SettingsLoadFailure title={t("loadFailed")} error={form.loadError} onRetry={form.refetch} />}
       </SettingsPage>
     );
   }

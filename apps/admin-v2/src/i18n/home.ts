@@ -21,7 +21,7 @@ export const homeMessages = defineMessages({
     addHeaderMenu: "Add a menu to your store header",
     smsCannotSend: "SMS can't send: {reason}",
     allDone: "You're all caught up.",
-    loadFailed: "Couldn't load your numbers. Try again.",
+    loadFailed: "Couldn't load your numbers",
     retry: "Try again",
   },
   bn: {
@@ -43,7 +43,7 @@ export const homeMessages = defineMessages({
     addHeaderMenu: "স্টোরের হেডারে একটি মেনু যোগ করুন",
     smsCannotSend: "এসএমএস পাঠানো যাচ্ছে না: {reason}",
     allDone: "সব কাজ শেষ।",
-    loadFailed: "হিসাব লোড করা যায়নি। আবার চেষ্টা করুন।",
+    loadFailed: "হিসাব লোড করা যায়নি",
     retry: "আবার চেষ্টা করুন",
   },
 });

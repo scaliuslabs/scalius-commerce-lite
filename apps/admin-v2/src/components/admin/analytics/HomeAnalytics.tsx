@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -63,10 +64,9 @@ export function HomeAnalytics() {
       {!data ? (
         overview.isError ? (
           <Card>
-            <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-              <p className="text-body">{t("loadFailed")}</p>
-              <Button variant="outline" size="sm" onClick={() => void overview.refetch()}>{t("retry")}</Button>
-            </CardHeader>
+            <CardContent className="pt-4">
+<InlineError title={t("loadFailed")} error={overview.error} onRetry={() => void overview.refetch()} />
+</CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

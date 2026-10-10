@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageForm } from "~/components/admin/PageForm";
 import { pageQueryOptions } from "~/lib/api-query-options/pages";
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin/articles/$articleId/edit")({
       })
       .catch(nullForAdminApiNotFound);
     if (!data || data.contentType !== "article") {
-      throw redirect({ to: "/admin/articles" });
+      throw notFound();
     }
   },
   head: () => pageHead("blogPost"),

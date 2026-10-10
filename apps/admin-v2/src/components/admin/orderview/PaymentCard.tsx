@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { pollWhileOffline } from "~/lib/admin-query-client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -386,12 +387,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </dl>
 
         {isHydrated && paymentsQuery.isError ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-muted-foreground">{t("history.failed")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={refetchPayments} disabled={historyFetching}>
-              {r("retry")}
-            </Button>
-          </div>
+          <InlineError title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
         ) : null}
 
         {canShowRecoveryLink ? (

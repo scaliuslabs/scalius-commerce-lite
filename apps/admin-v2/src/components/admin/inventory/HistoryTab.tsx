@@ -1,3 +1,4 @@
+import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -262,10 +263,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
 
       <div className={cn("-mx-3 border-y", query.isFetching && movements.length > 0 && "opacity-60")} aria-busy={query.isFetching}>
         {query.isError ? (
-          <div className="space-y-3 p-6 text-center">
-            <p className="text-body text-destructive">{r("loadFailed")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>{r("retry")}</Button>
-          </div>
+          <div className="p-4"><InlineError error={query.error} onRetry={() => void query.refetch()} /></div>
         ) : query.isLoading ? (
           <ul role="status" aria-label={t("loading")} className="divide-y">
             {[0, 1, 2, 3, 4].map((row) => (

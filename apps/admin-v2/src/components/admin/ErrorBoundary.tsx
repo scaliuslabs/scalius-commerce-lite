@@ -1,5 +1,7 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
-import { ErrorState } from "~/lib/route-error";
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
+
+// The fallback loads only when something crashed: no page pays for it up front.
+const ErrorState = lazy(() => import("./states/ErrorState").then((module) => ({ default: module.ErrorState })));
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -27,6 +29,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, { error: Error 
 
   render() {
     if (!this.state.error) return this.props.children;
-    return this.props.fallback ?? <ErrorState error={this.state.error} onRetry={this.handleReset} />;
+    return this.props.fallback ?? (
+      <Suspense fallback={null}>
+        <ErrorState error={this.state.error} onRetry={this.handleReset} />
+      </Suspense>
+    );
   }
 }

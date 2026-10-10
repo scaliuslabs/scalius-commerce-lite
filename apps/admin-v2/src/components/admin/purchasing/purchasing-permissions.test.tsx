@@ -118,7 +118,7 @@ describe("purchasing write actions follow inventory.manage; money follows produc
     expect(host.textContent).toContain("PANJABI-L");
     expect(has(t("receive"))).toBe(canEdit);
     expect(has(t("edit"))).toBe(canEdit);
-    expect(host.textContent?.includes(t("readOnly"))).toBe(!canEdit);
+    expect(host.querySelector("[data-slot=read-only-notice]") !== null).toBe(!canEdit);
     // Viewing stays open to everyone.
     expect(has(t("moreActions"))).toBe(true);
   });

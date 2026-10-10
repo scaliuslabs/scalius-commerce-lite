@@ -18,6 +18,7 @@ import {
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { InlineError } from "~/components/admin/states/InlineError";
 import {
   Dialog,
   DialogContent,
@@ -111,22 +112,14 @@ function ActivityLine({ event }: { event: AgentAuditEvent }) {
 /** The newest events for one connection, fetched only while its dialog is open. */
 function RecentActivity({ grantId, open }: { grantId: string; open: boolean }) {
   const t = useMessages(aiAccessMessages);
-  const common = useMessages(settingsMessages);
-  const { data, isError, isRefetching, refetch } = useQuery({
+  const { data, isError, error, refetch } = useQuery({
     queryKey: ["agent-access", "events", grantId],
     queryFn: () => listAgentConnectionEvents(grantId, { page: 1, limit: ACTIVITY_LIMIT }),
     enabled: open,
   });
   let body: ReactNode;
   if (isError) {
-    body = (
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-body text-destructive">{t("activityFailed")}</p>
-        <Button type="button" variant="outline" size="sm" loading={isRefetching} onClick={() => void refetch()}>
-          {common("retry")}
-        </Button>
-      </div>
-    );
+    body = <InlineError title={t("activityFailed")} error={error} onRetry={() => void refetch()} />;
   } else if (!data) {
     body = (
       <p className="flex items-center gap-2 text-body text-muted-foreground">

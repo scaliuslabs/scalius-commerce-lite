@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -81,7 +82,7 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
         ) : null}
       />
       {!canEdit ? (
-        <p role="status" className="mb-4 rounded-lg bg-muted px-4 py-2 text-body text-muted-foreground">{t("readOnly")}</p>
+        <ReadOnlyNotice />
       ) : null}
       {problem ? (
         <div className="mb-4">
