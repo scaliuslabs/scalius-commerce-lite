@@ -5,7 +5,9 @@ import {
 } from "@scalius/core/modules/products";
 import {
     bulkDeleteProducts,
+    bulkRestoreProducts,
     bulkUpdateProducts,
+    listMatchingProductClaims,
     deleteProduct,
     permanentlyDeleteProduct,
     restoreProduct,
@@ -59,6 +61,10 @@ import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-job
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
 import { products } from "@scalius/database/schema";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
+import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
+import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
+import { planLimits } from "@scalius/shared/plan-limits";
+import type { Database } from "@scalius/database/client";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -264,11 +270,45 @@ const expectedAggregateRevisionQuerySchema = z.object({
     expectedAggregateRevision: expectedAggregateRevisionSchema,
 });
 
+const productClaimsSchema = z.array(z.object({
+    id: z.string(),
+    expectedAggregateRevision: z.number().int().min(1),
+})).min(1).max(90);
+
+/**
+ * The products list's filter, for "all matching" bulk actions. The tab
+ * (Trash or not) is the action's own: trash and status changes read live
+ * products, restore and permanent delete read trashed ones.
+ */
+const productMatchingFilterSchema = z.object({
+    search: z.string().trim().max(120).optional(),
+    category: z.string().min(1).max(180).optional(),
+    status: z.enum(["active", "draft"]).optional(),
+    salesChannel: salesChannelIdSchema.optional(),
+    salesChannelState: z.enum(["published", "unpublished"]).optional(),
+    appFilter: appListQuerySchema.appFilter,
+}).strict();
+const productMatchingSchema = matchingSchema(productMatchingFilterSchema);
+type ProductMatching = z.infer<typeof productMatchingSchema>;
+
+/** One slice of the products a bulk action's filter matches, with the revision each write claims. */
+async function readProductSlice(db: Database, matching: ProductMatching, trashed: boolean, limit: number = BULK_MATCHING_SLICE) {
+    const { filter } = matching;
+    const appList = await planAppList(db, "product", products.id, { appFilter: filter.appFilter });
+    return listMatchingProductClaims(db, {
+        search: filter.search || undefined,
+        categoryId: filter.category,
+        showTrashed: trashed,
+        status: trashed ? undefined : filter.status,
+        salesChannelId: filter.salesChannel,
+        salesChannelState: filter.salesChannelState,
+        appCondition: appList.condition,
+    }, readMatchingCursor(matching.cursor), limit);
+}
+
 const bulkDeleteSchema = z.object({
-    products: z.array(z.object({
-        id: z.string(),
-        expectedAggregateRevision: z.number().int().min(1),
-    })).min(1).max(90),
+    products: productClaimsSchema.optional(),
+    matching: productMatchingSchema.optional(),
     permanent: z.boolean().default(false)
 });
 const bulkDeleteOutcomeSchema = z.object({
@@ -578,6 +618,7 @@ const bulkDeleteRoute = createRoute({
                 })),
                 deletedIds: z.array(z.string()),
                 outcomes: z.array(bulkDeleteOutcomeSchema),
+                matching: matchingResultSchema.optional(),
             })) } },
         },
         ...conflictMutationErrorResponses,
@@ -587,17 +628,70 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await bulkDeleteProducts(db, data.products, data.permanent);
+    requireOneSelection(data.products, data.matching);
+    // Permanent deletes write per product: a smaller slice on the Free plan.
+    const slice = data.matching
+        ? await readProductSlice(db, data.matching, data.permanent, data.permanent ? planLimits().lists.bulkPerRowSlice : BULK_MATCHING_SLICE)
+        : null;
+    const claims = slice ? slice.claims : data.products!;
+    const result = claims.length > 0 ? await bulkDeleteProducts(db, claims, data.permanent) : { revisions: [], outcomes: [] };
     const deletedIds = result.outcomes
         .filter((outcome) => outcome.status === "deleted")
         .map((outcome) => outcome.id);
+    const done = result.outcomes.filter((outcome) => outcome.status === "deleted" || outcome.status === "trashed").length;
     return ok(c, {
         products: result.revisions.map((revision, index) => ({
-            id: data.products[index]!.id,
+            id: claims[index]!.id,
             aggregateRevision: revision.aggregateRevision,
         })),
         deletedIds,
         outcomes: result.outcomes,
+        ...(slice ? { matching: { processed: done, skipped: result.outcomes.length - done, next: slice.next } satisfies MatchingResult } : {}),
+    });
+});
+
+// ── Bulk Restore Products ──
+
+app.openapi(createRoute({
+    method: "post",
+    path: "/bulk-restore",
+    operationId: "dashboard.products.bulk_restore",
+    tags: ["Admin - Products"],
+    summary: "Restore several trashed products",
+    description: "Restores the listed products, or one slice of the trashed products a filter matches (`matching`). A product that cannot be restored is reported in `outcomes`.",
+    request: {
+        body: { required: true, content: { "application/json": { schema: z.object({
+            products: productClaimsSchema.optional(),
+            matching: productMatchingSchema.optional(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Products restored",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                outcomes: z.array(z.object({
+                    id: z.string(),
+                    status: z.enum(["restored", "blocked"]),
+                    code: z.string().nullable(),
+                    message: z.string().nullable(),
+                })),
+                matching: matchingResultSchema.optional(),
+            })) } },
+        },
+        ...conflictMutationErrorResponses,
+    },
+}), async (c) => {
+    const db = c.get("db");
+    const data = c.req.valid("json");
+    requireOneSelection(data.products, data.matching);
+    const slice = data.matching ? await readProductSlice(db, data.matching, true, planLimits().lists.bulkPerRowSlice) : null;
+    const claims = slice ? slice.claims : data.products!;
+    const { outcomes } = claims.length > 0 ? await bulkRestoreProducts(db, claims) : { outcomes: [] };
+    const restored = outcomes.filter((outcome) => outcome.status === "restored").map((outcome) => outcome.id);
+    if (restored.length > 0) scheduleRecommendationRefreshAfterWrite(c, db, restored);
+    return ok(c, {
+        outcomes,
+        ...(slice ? { matching: { processed: restored.length, skipped: outcomes.length - restored.length, next: slice.next } satisfies MatchingResult } : {}),
     });
 });
 
@@ -615,7 +709,8 @@ const bulkUpdateRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        products: bulkDeleteSchema.shape.products,
+                        products: productClaimsSchema.optional(),
+                        matching: productMatchingSchema.optional(),
                         isActive: z.boolean().optional(),
                         categoryId: z.string().min(1).max(180).optional(),
                     }),
@@ -629,6 +724,7 @@ const bulkUpdateRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({
                 products: z.array(z.object({ id: z.string(), aggregateRevision: z.number().int().min(1) })),
                 skipped: z.array(z.object({ id: z.string(), name: z.string(), reason: z.enum(["needs_price"]) })),
+                matching: matchingResultSchema.optional(),
             })) } },
         },
         ...conflictMutationErrorResponses,
@@ -637,13 +733,18 @@ const bulkUpdateRoute = createRoute({
 
 app.openapi(bulkUpdateRoute, async (c) => {
     const db = c.get("db");
-    const { products, ...changes } = c.req.valid("json");
-    const result = await bulkUpdateProducts(db, products, changes);
+    const { products: listed, matching, ...changes } = c.req.valid("json");
+    requireOneSelection(listed, matching);
+    const slice = matching ? await readProductSlice(db, matching, false) : null;
+    const claims = slice ? slice.claims : listed!;
+    const result = claims.length > 0 ? await bulkUpdateProducts(db, claims, changes) : { products: [], skipped: [] };
     if (result.products.length > 0) {
-
         scheduleRecommendationRefreshAfterWrite(c, db, result.products.map((product) => product.id));
     }
-    return ok(c, result);
+    return ok(c, {
+        ...result,
+        ...(slice ? { matching: { processed: result.products.length, skipped: result.skipped.length, next: slice.next } satisfies MatchingResult } : {}),
+    });
 });
 
 // ── Publishing (MARKETS-DESIGN D6) ──
@@ -655,19 +756,36 @@ app.openapi(createRoute({
     tags: ["Admin - Products"],
     summary: "Publish or unpublish products on sales channels",
     description: "Up to 90 products on up to 10 channels in one write. A product already in that state is left alone. Unpublishing from the online store takes the product off the storefront (its page answers 404, listings and sitemaps drop it); from Google, Meta or AI agents, off that feed or UCP.",
-    request: { body: { required: true, content: { "application/json": { schema: bulkPublicationsSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: bulkPublicationsSchema.extend({
+        productIds: bulkPublicationsSchema.shape.productIds.optional(),
+        matching: productMatchingSchema.optional(),
+    }) } } } },
     responses: {
         200: {
             description: "The products and channels written",
-            content: { "application/json": { schema: successEnvelope(z.object({ productIds: z.array(z.string()), channelIds: z.array(z.string()) })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({
+                productIds: z.array(z.string()),
+                channelIds: z.array(z.string()),
+                matching: matchingResultSchema.optional(),
+            })) } },
         },
         ...errorResponses,
     },
 }), async (c) => {
     const db = c.get("db");
-    const result = await setProductPublications(db, c.req.valid("json"));
+    const { matching, productIds, ...input } = c.req.valid("json");
+    requireOneSelection(productIds, matching);
+    const slice = matching ? await readProductSlice(db, matching, false) : null;
+    const ids = slice ? slice.claims.map((claim) => claim.id) : productIds!;
+    if (ids.length === 0) {
+        return ok(c, { productIds: [], channelIds: input.channelIds, matching: { processed: 0, skipped: 0, next: null } });
+    }
+    const result = await setProductPublications(db, { ...input, productIds: ids });
     scheduleRecommendationRefreshAfterWrite(c, db, result.productIds);
-    return ok(c, result);
+    return ok(c, {
+        ...result,
+        ...(slice ? { matching: { processed: result.productIds.length, skipped: 0, next: slice.next } satisfies MatchingResult } : {}),
+    });
 });
 
 app.openapi(createRoute({

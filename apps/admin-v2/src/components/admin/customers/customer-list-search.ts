@@ -33,7 +33,7 @@ export function normalizeTagParam(value: unknown): string | undefined {
   return tag && [...tag].length <= TAG_MAX_LENGTH ? tag : undefined;
 }
 
-const validateBase = createListSearchValidator(CUSTOMER_SORTS, { sort: "updatedAt", limit: 20 });
+const validateBase = createListSearchValidator(CUSTOMER_SORTS, { sort: "updatedAt", list: "customers" });
 
 export function validateCustomerSearch(search: SearchValidatorInput) {
   const view = normalizeOptionalEnumSearchParam(search.view, CUSTOMER_VIEWS);

@@ -94,11 +94,18 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 
 ### Tables
 
+Code: `components/admin/data-table/` (the index-table kit). A list screen is `ResourceListPage` (header, view tabs, toolbar, rows, pager, bulk bar, confirmations, the first-run card) over a list API; a list inside a page or with its own frame composes the same parts: `DataTable` (the rows), `DataTableToolbar` (search, `filters` in the "Filters" panel with `FilterControl` fields, `filterCount`, `onClearFilters`, `extra`), `IndexBulkBar` (`bulkBar`), `DataTableSortMenu` (`sortMenu`, for fields that are not columns) and `useStaticTable` (a short list the API returns whole, `paginate={false}`). Empty and failed rows are `FilteredEmptyState` and `ErrorState` from `components/admin/states/`.
+
+- One toolbar on every list (T2): search (300ms, on the server), "Filters" (count, a panel of labelled fields, "Clear filters"), the sort menu, the columns menu. Saved views are the tabs above it.
+- One row height per density: `density="default"` (52px: a two-line title or a thumbnail) or `"compact"` (40px). `TableRow` sets the height from the language's line height, so Bangla rows are taller and still equal (T3).
+- One pager, `DataTablePagination` (`IndexPager` for a list outside a table): the range ("51–100 of 1,000+", or "51–100" when the API does not count), the page size (20, 50, 100; kept per list in this browser through `createListSearchValidator({ list })` and `readSavedPageSize`), Previous and Next, left out when everything fits on one page. Numbered pages, API cursors (`cursorPaging`) and client cursor history (gift cards, reviews, stock history) all use it.
+- Loading: the first load draws the page size of skeleton rows (at most 100) in the real columns at the row height, invisible for the first 300ms and then shown for at least 300ms (`useShownAfter`). A refetch keeps the rows and runs a 2px line along their top (`DataTableRefetchBar`); nothing dims.
+- Selection (T10, T11): the checkbox column, Shift+click for a range, then `IndexBulkBar` takes the toolbar's place, sticks under the top bar and sets `--index-sticky-top` so the header sticks under it. With a whole page ticked, a list whose bulk actions accept it (`matchingBulk`, `lifecycle.runMatching`) offers "Select all N matching": the actions then send the list's filter, never ids (`lib/bulk-selection.ts`): the API walks the matching rows in id order, one slice of at most 90 per request (`matching: { filter, cursor }` → `matching: { processed, skipped, next }`, `schemas/bulk-matching.ts`), and the bulk bar shows the running count with Stop. Products and customers do this today.
 - The header row is sticky by itself, under the top bar. When the columns are wider than the card, the table scrolls both ways inside a viewport-high box and the header sticks there.
 - Any wrapper between a table and the page uses `overflow-clip`, never `overflow-hidden` or `overflow-auto`. Otherwise sticky stops working.
 - List tables (`DataTable`) copy Polaris IndexTable's density: 6px each side of a cell, 12px at the table's edges, 6px row padding, a subdued header (`INDEX_CELL`).
-- Every cell is one line (two for a title or name over phone, on every row, `min-h-[2lh]`), so rows never change height with their data. Free text truncates at `meta.maxWidth` with the whole value in `title`. An empty cell reads "—".
-- A column's `meta.minWidth` is its widest content in the dashboard's language plus padding (`localeWidth({ en, bn })`). Too narrow a table steps the lowest `meta.priority` aside first; the title column and `meta.keep` columns (the orders list's Date) never go. `meta.combines` names a stand-in column that takes the place of two columns that no longer fit side by side (Payment over Fulfillment). `list-layout.test.tsx` measures every list's widest content with the fonts' real glyph widths at 1024, 1280, 1440 and 1920px.
+- Every cell is at most two lines (a title over a muted line), so rows never change height with their data. Free text truncates at `meta.maxWidth` with the whole value in `title`. An empty cell reads "—". A start-aligned column after a number starts 32px after the numbers (`data-after-numeric`, T6).
+- A column's `meta.minWidth` is its widest content in the dashboard's language plus padding (`localeWidth({ en, bn })`). Too narrow a table steps the lowest `meta.priority` aside first; the title column, money columns (`meta.money`, which is also numeric) and `meta.keep` columns (the orders list's Date) never go. `meta.combines` names a stand-in column that takes the place of two columns that no longer fit side by side (Payment over Fulfillment). `list-layout.test.tsx` measures every list's widest content with the fonts' real glyph widths at 1024, 1280, 1440 and 1920px.
 - Apps' columns are data-backed (`dataColumns`): the list asks for them in its one read (`useAppListColumns`, at most 5, sent only when an active app has one) and shows them with a low priority, titled in the dashboard's language; their priority stays below every list's working set. Money arrives in major units, like every amount in the API; a yes/no value is a Yes or No badge. A filterable column adds one "App filter" field (`AppListFilter`, lazy; `appFilter` in the URL) to the list's filters.
 - Created and updated dates use `ListDate` (or `createDateColumn`): store time, "Just now", "41 min ago", "Today at 3:42 PM", "Yesterday at …", the weekday within a week, "Oct 3 at …", and "Oct 3, 2025" for another year, the full date and time on hover.
 
@@ -236,7 +243,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| T1 | Every list uses `IndexTable` (today `DataTable` + `ResourceListPage`): never a hand-built `<Table>` for a list of records. | lint → `components/ui/table` imported only by the data-table kit and read-only summaries on the allowlist |
+| T1 | Every list uses the index-table kit (`DataTable` + `ResourceListPage`, DESIGN.md Tables): never a hand-built `<Table>` for a list of records. | lint → `components/ui/table` imported only by the data-table kit and the line editors and read-only summaries on `TABLE_OWNERS` (eslint.config.js) |
 | T2 | Anatomy, top to bottom: page header, view tabs, toolbar (search, filters, sort, columns), rows, pagination. One toolbar layout for every list: search, a "Filters" button, a sort menu, a columns menu. | review |
 | T3 | Row height: 52px for rows with a two-line title or a thumbnail, 40px for single-line lists; every row on a page has the same height. | harness → `tbody tr` heights: max − min ≤ 1 |
 | T4 | Cells align to the row's vertical centre, including the title cell. | harness → each `td` content box centre = row centre ±2 |
@@ -246,7 +253,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | T8 | Column widths follow content: an ID column is as wide as its widest ID, never wider than the name column. | harness → `th` width of an ID/date column ≤ width of the primary column |
 | T9 | Sticky header under the top bar; on horizontal scroll the checkbox and title columns stick. | harness → scroll `#admin-main-scroll` 600px: first `thead th` `top` = topbar bottom ±1 |
 | T10 | Selection: a checkbox column; Shift+click selects a range. With rows selected, the bulk bar replaces the toolbar in place and stays in view (sticky) while the list scrolls. | harness → select a row, scroll to the end: `[data-slot=bulk-bar]` is inside the viewport |
-| T11 | "Select all N" selects the whole filtered set by query, not by gathering rows. At scale the label reads "All 52,341 matching products". | review (needs the API's select-by-filter bulk action) |
+| T11 | "Select all N" selects the whole filtered set by query, not by gathering rows: the bulk action sends the list's filter and the API walks the matches in slices of at most 90. The label reads "All 52,341 matching selected", or "All 1,000+ matching selected" past the count cap. | review (`lib/bulk-selection.ts`, `schemas/bulk-matching.ts`) |
 | T12 | Default page size 50; the choice is kept per list. One pagination component (`pagination` slot): range label, then Previous/Next. Hide Previous/Next when there is one page. | harness → `[data-slot=pagination]` buttons absent when total ≤ page size |
 | T13 | Counts above 1,000 that the API caps read "1,000+"; an exact count is shown only when the API counts it. Never a client-side count of a partial page. | harness → mocked capped total: range label ends with "+" |
 | T14 | Phones (<640px container) show cards: title, then one secondary line, then status; the row menu stays. The name keeps priority over the phone number. | review |
@@ -274,6 +281,22 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | O6 | Status badge: always a word, a tone from the status table, never colour alone. | lint (existing) |
 
 ### States
+
+Code: `components/admin/states/`. Never hand-build one of these views.
+
+| Situation | Component |
+| --- | --- |
+| Nothing made yet (E1) | `EmptyState` (icon, action title, one sentence, `action`, `secondaryAction`, help link; one card, or `card={false}` inside one) |
+| No match for filters or search (E2) | `FilteredEmptyState` (`title`, `onClearFilters`), where the rows go |
+| A card with nothing yet (E3) | `SectionEmpty`, one muted line |
+| A failed read (R1, R3) | `ErrorState`: `layout="page"` (the page title stays as h1, Retry is the primary), `"card"` (inside the table or card), `"inline"` (one card of several). `what="orders"` reads "Couldn't load orders". The reason comes from the error: offline, unreachable, server down, updated (Reload), fault (Copy details). |
+| A record that is gone (R2) | `RecordNotFound`: names the record and links to its list, both from the route path (`record-resource.ts`) |
+| No page, no access (R4) | `PageNotFound`, `NoPermissionState` (`area`, `ownerName`) |
+| View-only (R5) | `ReadOnlyNotice` (see Read-only mode) |
+| Offline (R6) | `OfflineBanner`, drawn by the shell; `useOnlineStatus()` |
+| Loading (L1, L2) | `PageSkeleton` (`detail`, `settings`, `index`, `page`) |
+
+Route boundaries come from the router defaults (`lib/route-error.tsx`): a failed loader renders `ErrorState`, a 404 `RecordNotFound`, a 403 `NoPermissionState`; a loader slower than 300 ms (`ROUTE_PENDING_MS`) renders the page's `PageSkeleton` for at least 300 ms. A route with a known shape passes its own `pendingComponent` built from `PageSkeleton`. Offline, a page whose code is already in the tab opens with its cached data; any other page waits and opens on reconnect (the banner says so), and failed reads run again. Saves are never queued.
 
 | ID | Rule | Check |
 | --- | --- | --- |
@@ -354,7 +377,7 @@ Every list and picker must work at 100,000 rows.
 | X3 | Pickers (products, customers, collections, categories, countries, places) search on the server and page (`SearchableSelect` `load`). A picker never downloads its whole list. | review |
 | X4 | A list inside one record (variants, line items, menu items, zone areas) shows the first 50 and searches or pages beyond; >100 rows render virtualized. | review |
 | X5 | Counts that the API caps show "1,000+"; totals and sums come from the API, never from a page. | harness (T13) |
-| X6 | Bulk actions on a filtered set run as one server job with progress, not as client loops over rows. | review |
+| X6 | Bulk actions on a filtered set run on the server by filter with progress, never as client loops over rows: the dashboard repeats one bounded request per slice (`runMatching`) and shows the count done, with Stop. | review |
 | X7 | Exports and imports run in the background with a progress row and a notice when done. | review |
 | X8 | The theme editor, navigation editor and category tree stay usable with 5,000 products, 500 categories and 200 menu items: lazy children, search, no full-tree render. | review |
 

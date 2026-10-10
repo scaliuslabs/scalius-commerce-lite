@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
-import { OrderExportContext } from "~/components/admin/order-list/order-export";
+import { OrderExportContext, OrdersFirstRunContext } from "~/components/admin/order-list/order-export";
 import {
   ORDER_VIEWS,
   orderViewUpdates,
@@ -31,6 +31,8 @@ function OrdersFrame() {
   const orderActions = useOrderActionPermissions();
   const navigate = useNavigate();
   const [exportOpen, setExportOpen] = useState(false);
+  // No order yet: the list's first-run card stands alone (E1).
+  const [nothingYet, setNothingYet] = useState(false);
   const exportDialog = useMemo(() => ({ open: exportOpen, setOpen: setExportOpen }), [exportOpen]);
   const search = useMatch({ from: "/admin/orders/_list/", shouldThrow: false })?.search;
   const tab: OrdersTab = search ? (search.view ?? "all") : "abandoned";
@@ -47,9 +49,10 @@ function OrdersFrame() {
 
   return (
     <OrderExportContext.Provider value={exportDialog}>
+    <OrdersFirstRunContext.Provider value={setNothingYet}>
       <PageHeader
         title={tab === "abandoned" ? t("abandonedTitle") : to("orders")}
-        actions={
+        actions={nothingYet ? undefined : (
           <>
             {search ? (
               <Button variant="outline" onClick={() => setExportOpen(true)}>
@@ -63,10 +66,10 @@ function OrdersFrame() {
               </Button>
             ) : null}
           </>
-        }
+        )}
       />
       <div className="overflow-clip rounded-xl bg-card shadow-card">
-        <IndexTabs<OrdersTab>
+        {nothingYet ? null : <IndexTabs<OrdersTab>
           label={t("views")}
           value={tab}
           onChange={selectTab}
@@ -75,9 +78,10 @@ function OrdersFrame() {
             ...ORDER_VIEWS.map((view) => ({ value: view, label: t(`tab.${view}`) })),
             { value: "abandoned", label: t("tab.abandoned") },
           ]}
-        />
+        />}
         <Outlet />
       </div>
+    </OrdersFirstRunContext.Provider>
     </OrderExportContext.Provider>
   );
 }

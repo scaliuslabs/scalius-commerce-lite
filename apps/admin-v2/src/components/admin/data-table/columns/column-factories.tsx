@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ColumnDef, TableRowData } from "../table-config";
 import { Checkbox } from "~/components/ui/checkbox";
 import { translate } from "~/i18n";
@@ -26,6 +27,14 @@ interface SelectColumnOptions {
 // Last checkbox clicked per table, for Shift-click range selection.
 const selectionAnchor = new WeakMap<object, number>();
 
+/**
+ * The 16px box's hit area (C6): a 24px label (44px on phones), pulled back by
+ * a negative margin so the row keeps its layout.
+ */
+export function CheckboxHitArea({ children }: { children: ReactNode }) {
+  return <label className="-m-1 flex size-6 cursor-pointer items-center justify-center max-sm:-m-3.5 max-sm:size-11">{children}</label>;
+}
+
 export function createSelectColumn<T extends TableRowData>(
   opts?: SelectColumnOptions,
 ): ColumnDef<T, unknown> {
@@ -37,18 +46,21 @@ export function createSelectColumn<T extends TableRowData>(
         .getRowModel()
         .rows.some((row) => row.getCanSelect());
       return (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label={translate(resourceMessages, "selectAll")}
-          disabled={!hasSelectableRows}
-        />
+        <CheckboxHitArea>
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+            aria-label={translate(resourceMessages, "selectAll")}
+            disabled={!hasSelectableRows}
+          />
+        </CheckboxHitArea>
       );
     },
     cell: ({ row, table }) => (
+      <CheckboxHitArea>
       <Checkbox
         checked={row.getIsSelected()}
         onClick={(event) => {
@@ -69,6 +81,7 @@ export function createSelectColumn<T extends TableRowData>(
           : translate(resourceMessages, "selectRow")}
         disabled={!row.getCanSelect()}
       />
+      </CheckboxHitArea>
     ),
     enableSorting: false,
     enableHiding: false,

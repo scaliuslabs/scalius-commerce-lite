@@ -68,7 +68,7 @@ export const LAPTOP_VIEWPORTS = [1024, 1280, 1440, 1920] as const;
 function layoutOf<TData extends TableRowData>(column: ColumnDef<TData, unknown>): LayoutColumn {
   const id = column.id ?? (column as { accessorKey?: string }).accessorKey!;
   const meta = column.meta;
-  const locked = id === SELECT_COLUMN || id === ACTIONS_COLUMN || Boolean(meta?.primary || meta?.mobile === "primary" || meta?.keep);
+  const locked = id === SELECT_COLUMN || id === ACTIONS_COLUMN || Boolean(meta?.primary || meta?.mobile === "primary" || meta?.keep || meta?.money);
   return {
     id,
     priority: locked ? Number.POSITIVE_INFINITY : meta?.priority ?? 50,

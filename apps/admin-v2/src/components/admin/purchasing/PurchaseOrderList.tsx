@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { RowLink } from "~/components/admin/data-table/RowLink";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList } from "lucide-react";
@@ -16,6 +17,7 @@ import {
   supplierQueryOptions,
   type PurchaseOrderSummary,
 } from "~/lib/api-query-options/purchasing";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { DocumentList } from "./DocumentList";
 import { formatDay } from "./purchasing-format";
 import { PURCHASE_ORDER_TABS, purchaseOrderListQuery, type PurchaseOrderTab } from "./purchasing-list-state";
@@ -50,13 +52,12 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       header: t("colPurchaseOrder"),
       meta: { primary: true, mobile: "primary", minWidth: 140 },
       cell: ({ row }) => (
-        <Link
-          to="/admin/inventory/purchase-orders/$purchaseOrderId"
-          params={{ purchaseOrderId: row.original.id }}
+        <RowLink
+          to={`/admin/inventory/purchase-orders/${row.original.id}`}
           className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {row.original.displayNumber}
-        </Link>
+        </RowLink>
       ),
     },
     {
@@ -123,8 +124,8 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       searchKey="purchaseOrders"
       searchPlaceholder={t("searchPurchaseOrders")}
       filters={(
+        <FilterControl label={t("colSupplier")}>
         <SearchableSelect
-          triggerClassName="w-auto min-w-44"
           ariaLabel={t("supplierFilter")}
           value={supplierId ?? ""}
           selectedLabel={supplier?.name}
@@ -136,8 +137,9 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
           queryKey={[...purchasingKeys.suppliers(), "picker"]}
           onValueChange={(value) => onSupplierChange(value || undefined)}
         />
+        </FilterControl>
       )}
-      filtered={Boolean(supplierId)}
+      filterCount={supplierId ? 1 : 0}
       onClearFilters={() => onSupplierChange(undefined)}
       query={(term, page, limit) => purchaseOrdersQueryOptions(purchaseOrderListQuery(tab, term, page, limit, supplierId))}
       dataKey="purchaseOrders"

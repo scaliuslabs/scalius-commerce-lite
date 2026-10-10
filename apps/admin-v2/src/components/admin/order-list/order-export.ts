@@ -60,3 +60,9 @@ export const OrderExportContext = createContext<{ open: boolean; setOpen: (open:
 });
 
 export const useOrderExportDialog = () => useContext(OrderExportContext);
+
+/**
+ * The orders list tells its frame that no order exists yet: the frame then
+ * draws the first-run card alone, without tabs or header actions (E1).
+ */
+export const OrdersFirstRunContext = createContext<(nothingYet: boolean) => void>(() => {});

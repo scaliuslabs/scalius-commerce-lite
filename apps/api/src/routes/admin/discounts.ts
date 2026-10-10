@@ -6,7 +6,9 @@ import {
     createPromotionDraftSchema,
     getPromotionAggregate,
     getPromotionOrderUsage,
-    listPromotionDrafts,
+    listPromotionPage,
+    PROMOTION_LIST_SORTS,
+    PROMOTION_LIST_VIEWS,
     previewPersistedPromotion,
     pausePromotion,
     updatePromotionDraft,
@@ -18,6 +20,7 @@ import { NotFoundError } from "../../utils/api-error";
 import { created, noContent, ok } from "../../utils/api-response";
 
 import {
+    cappedPaginationSchema,
     conflictResponse,
     errorResponses,
     noContentResponse,
@@ -87,26 +90,40 @@ app.openapi(createRoute({
     path: "/",
     tags: [TAG],
     summary: "List code and automatic discounts",
+    description: "One page of discounts, searched (name, title, or a code from its start), filtered by view and sorted on the server. Each row carries its first code only, with `codeCount` for the rest.",
     request: {
         query: z.object({
-            limit: z.coerce.number().int().min(1).max(90).default(90),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number; reaches the first 1,000 rows (10,000 on a Paid deployment)." }),
+            limit: z.coerce.number().int().min(1).max(90).default(50),
+            search: z.string().trim().max(120).optional().openapi({ description: "Matches the name or title anywhere, or a code from its start." }),
+            view: z.enum(PROMOTION_LIST_VIEWS).optional().openapi({ description: "active: on and started; scheduled: on, starts later; expired: its end has passed." }),
+            sort: z.enum(PROMOTION_LIST_SORTS).optional().default("updated"),
             includeDeleted: z.string().optional(),
         }),
     },
     responses: {
         200: {
-            description: "Discounts, most recently updated first",
-            content: { "application/json": { schema: successEnvelope(z.object({ discounts: z.array(discountSchema) })) } },
+            description: "Discounts, most recently updated first unless sorted",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                discounts: z.array(discountSchema.extend({
+                    codeCount: z.number().int().nonnegative().openapi({ description: "Codes the discount has; `codes` holds the first only." }),
+                })),
+                pagination: cappedPaginationSchema,
+            })) } },
         },
         ...errorResponses,
     },
 }), async (c) => {
     const query = c.req.valid("query");
-    const discounts = await listPromotionDrafts(c.get("db"), {
+    const result = await listPromotionPage(c.get("db"), {
+        page: query.page,
         limit: query.limit,
+        search: query.search || undefined,
+        view: query.view,
+        sort: query.sort,
         includeDeleted: query.includeDeleted === "true",
     });
-    return ok(c, { discounts });
+    return ok(c, result);
 });
 
 app.openapi(createRoute({

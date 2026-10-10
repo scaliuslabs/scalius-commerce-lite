@@ -57,12 +57,12 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   appFilter?: string;
 };
 
-const baseSearchValidator = createListSearchValidator(ORDER_SORTS, { limit: 10, sort: "createdAt" });
+const baseSearchValidator = createListSearchValidator(ORDER_SORTS, { sort: "createdAt", list: "orders" });
 
 /** Default values, kept out of the URL so tab links stay short. */
 export const ORDER_SEARCH_DEFAULTS = {
   page: 1,
-  limit: 10,
+  limit: 50,
   sort: "createdAt",
   order: "desc",
   archived: false,

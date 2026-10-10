@@ -29,6 +29,11 @@ export interface ServerColumnMeta {
   mobile?: "primary" | "secondary" | "status";
   /** Money, counts and quantities: right-aligned with tabular figures. */
   numeric?: boolean;
+  /**
+   * A money column (the order total, a balance, a price): numeric, and never
+   * stepped aside to fit the width, like the title column.
+   */
+  money?: boolean;
   /** The column's name in the column menu (needed when the header is not plain text). */
   label?: string;
   /**

@@ -1,8 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { Archive, Blocks, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
-import { getApiV1AdminOrders } from "@scalius/api-client/sdk";
+import { postApiV1AdminOrdersArchive } from "@scalius/api-client/sdk";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { Button } from "~/components/ui/button";
 import {
@@ -12,10 +12,10 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { DataTable } from "~/components/admin/data-table/DataTable";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
+import { IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
-import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
 import { appActionMessages } from "~/i18n/app-actions";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
@@ -26,13 +26,15 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { NO_CURSOR, createDataSelector, getCanonicalPageForPagination, isPagingRefusal } from "~/lib/list-helpers";
+import { runMatching } from "~/lib/bulk-selection";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useListSearch } from "~/lib/list-search";
 import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
 import { getOrderColumns } from "./order-columns";
 import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
-import { useOrderExportDialog } from "./order-export";
+import { OrdersFirstRunContext, useOrderExportDialog } from "./order-export";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
@@ -42,7 +44,7 @@ import {
   orderSearchSortUpdates,
   type OrderListSearch,
 } from "./order-list-search";
-import { OrderListToolbar } from "./OrderListToolbar";
+import { OrderListToolbar, OrderSortMenu } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
 import { useLiveOrderList } from "./use-live-order-list";
@@ -55,19 +57,14 @@ const BulkOrdersDialog = lazy(() => import("./BulkOrdersDialog").then((module) =
 const ExportOrdersDialog = lazy(() => import("./ExportOrdersDialog").then((module) => ({ default: module.ExportOrdersDialog })));
 
 const selectOrders = createDataSelector<OrderListItem>("orders");
-/** "Archive all matching orders" loads at most this many orders to act on. */
-const ALL_MATCHING_LIMIT = 1000;
 /** The invoice print page takes at most 90 orders. */
 const PRINT_LIMIT = 90;
 
-async function loadAllMatchingOrders(filters: ReturnType<typeof orderFilterQuery>): Promise<OrderListItem[]> {
-  const orders: OrderListItem[] = [];
-  for (let page = 1; orders.length < ALL_MATCHING_LIMIT; page += 1) {
-    const result = selectOrders(await apiData(getApiV1AdminOrders({ query: { ...filters, page, limit: 100 } })));
-    orders.push(...result.data);
-    if (result.data.length === 0 || page >= result.pagination.totalPages) break;
-  }
-  return orders.slice(0, ALL_MATCHING_LIMIT);
+/** The list's filter as "archive all matching" sends it: the API reads the orders itself, slice by slice. */
+function orderMatchingFilter(filters: ReturnType<typeof orderFilterQuery> & { appFilter?: string }) {
+  const { sort: _sort, order: _order, archived: _archived, openRequest, ...rest } = filters;
+  const defined = Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined && value !== ""));
+  return { ...defined, ...(openRequest === "true" ? { openRequest: true } : {}) } as Record<string, unknown>;
 }
 
 /** The order table inside the Orders card: toolbar, rows, bulk actions and their dialogs. */
@@ -131,16 +128,45 @@ export function OrderList({
     onPaginationChange: (_page, limit) => onChange({ page: 1, limit }),
     onSortingChange: () => undefined,
     enableSorting: false,
-    defaultPageSize: 10,
   });
 
   const pageRows = table.getRowModel().rows;
   const pageFullySelected = pageRows.length > 0 && selectedRows.length === pageRows.length;
   const allSelected = pageFullySelected && allMatchingKey === filtersKey && pagination.total > pageRows.length;
-  // The count stops at the API's cap: "all matching" then means the first ALL_MATCHING_LIMIT.
+  // Past the API's count cap the label reads "1,000+": the server still walks every match.
   const totalIsCapped = pagination.totalIsCapped === true;
-  const allMatchingCount = totalIsCapped ? Math.min(pagination.total, ALL_MATCHING_LIMIT) : pagination.total;
-  const selectedCount = allSelected ? allMatchingCount : selectedRows.length;
+  const selectedCount = allSelected ? pagination.total : selectedRows.length;
+  // "Archive all matching": its progress in the bulk bar, and the confirmation before it.
+  const [matchingDone, setMatchingDone] = useState<number | null>(null);
+  const stopMatching = useRef(false);
+  const [confirmArchiveAll, setConfirmArchiveAll] = useState(false);
+  const archiveAllMatching = async () => {
+    setConfirmArchiveAll(false);
+    stopMatching.current = false;
+    setMatchingDone(0);
+    try {
+      const totals = await runMatching(
+        async (cursor) => {
+          const result = await apiData(postApiV1AdminOrdersArchive({ body: { matching: { filter: orderMatchingFilter(filters) as never, ...(cursor ? { cursor } : {}) } } }));
+          return result.matching ?? { processed: 0, skipped: 0, next: null };
+        },
+        (progress) => setMatchingDone(progress.processed + progress.skipped),
+        () => stopMatching.current,
+      );
+      toast.success(t("ordersArchived"), {
+        description: [
+          totals.skipped > 0 ? t("archiveSkipped", { count: totals.skipped }) : null,
+          totals.stopped ? tr("bulkStopped", { count: totals.processed }) : null,
+        ].filter(Boolean).join(" ") || undefined,
+      });
+      clearAll();
+    } catch (archiveError) {
+      toast.error(getServerFnError(archiveError, t("loadOrdersFailed")));
+    } finally {
+      setMatchingDone(null);
+      void refetch();
+    }
+  };
   const clearAll = useCallback(() => {
     setAllMatchingKey(null);
     clearSelection();
@@ -189,20 +215,10 @@ export function OrderList({
     [dateField],
   );
 
-  const openBulk = (action: OrderBulkAction) => {
-    if (!allSelected) {
-      actions.openBulk(action, selectedRows);
-      return;
-    }
-    actions.openBulk(action, null);
-    loadAllMatchingOrders(filters).then(actions.setDialogOrders, (loadError: unknown) => {
-      actions.closeBulk();
-      toast.error(getServerFnError(loadError, t("loadOrdersFailed")));
-    });
-  };
+  const openBulk = (action: OrderBulkAction) => actions.openBulk(action, selectedRows);
 
   const archiveSelection = () => {
-    if (allSelected) openBulk("archive");
+    if (allSelected) setConfirmArchiveAll(true);
     else archive(selectedRows, clearAll);
   };
 
@@ -243,15 +259,29 @@ export function OrderList({
     ...appMoreActions,
   ].filter((action) => action !== null);
 
-  const bulkButtons = (
+  const selectionStatus = (
     <>
-      {pageFullySelected && !allSelected && pagination.total > pageRows.length ? (
+      {matchingDone !== null ? (
+        <span className="flex items-center gap-2" role="status" aria-live="polite">
+          {tr("bulkProgress", { label: t("archiving"), count: matchingDone })}
+          <Button variant="link" onClick={() => { stopMatching.current = true; }}>{tr("stop")}</Button>
+        </span>
+      ) : (
+        <span>
+          {allSelected
+            ? tr(totalIsCapped ? "allMatchingSelectedCapped" : "allMatchingSelected", { count: selectedCount })
+            : tr("selected", { count: selectedCount })}
+        </span>
+      )}
+      {matchingDone === null && pageFullySelected && !allSelected && pagination.total > pageRows.length ? (
         <Button variant="link" onClick={() => setAllMatchingKey(filtersKey)}>
-          {totalIsCapped
-          ? t("selectFirstMatching", { count: allMatchingCount })
-          : t("selectAllMatching", { count: pagination.total })}
+          {tr(totalIsCapped ? "selectAllMatchingCapped" : "selectAllMatching", { count: pagination.total })}
         </Button>
       ) : null}
+    </>
+  );
+  const bulkButtons = (
+    <>
       {!showArchived && !allSelected && orderActions.canChangeOrderStatus ? (
         <Button variant="outline" onClick={() => openBulk("confirm")} disabled={actions.busy}>
           <CircleCheck className="h-4 w-4" />
@@ -272,7 +302,7 @@ export function OrderList({
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label={tr("moreActions")} title={tr("moreActions")}>
+          <Button variant="outline" size="icon" className="shrink-0" aria-label={tr("moreActions")} title={tr("moreActions")}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -300,6 +330,11 @@ export function OrderList({
   };
   // No order has ever been placed: an empty state, not a table of nothing.
   const nothingYet = !isLoading && !isError && !filtered && !showArchived && pagination.total === 0 && pageRows.length === 0;
+  const reportFirstRun = useContext(OrdersFirstRunContext);
+  useEffect(() => {
+    reportFirstRun(nothingYet);
+    return () => reportFirstRun(false);
+  }, [nothingYet, reportFirstRun]);
   const cancelOrder = actions.cancelOrder;
   const cancelLoaded = useOpenedOnce(cancelOrder !== null);
   const bulkLoaded = useOpenedOnce(actions.dialog !== null);
@@ -309,6 +344,7 @@ export function OrderList({
     <>
       {nothingYet ? (
         <EmptyState
+          card={false}
           icon={ShoppingBag}
           title={t("emptyTitle")}
           description={t("emptyBody")}
@@ -317,7 +353,6 @@ export function OrderList({
               <Link to="/admin/orders/new">{t("createOrder")}</Link>
             </Button>
           ) : undefined}
-          help
         />
       ) : (
       <DataTable
@@ -328,9 +363,10 @@ export function OrderList({
         isLoading={isLoading}
         error={isError ? error : null}
         onRetry={() => void refetch()}
+        what={t("itemLabel")}
         itemLabel={t("itemLabel")}
-        pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
+        sortMenu={<OrderSortMenu search={search} term={term} onChange={onChange} />}
         cursorPaging={{
           total: pagination.total,
           totalIsCapped,
@@ -340,7 +376,7 @@ export function OrderList({
           onPrevious: (startCursor) => onChange({ before: startCursor, after: undefined, page: 1 }),
         }}
         layoutKey="orders"
-        toolbar={<div className="px-2 pt-2"><OrderListToolbar
+        toolbar={<OrderListToolbar
             search={search}
             term={term}
             onSearch={(value) => {
@@ -350,44 +386,36 @@ export function OrderList({
             }}
             onChange={onChange}
             appFilterable={appList.filterable.length > 0}
-            selectedCount={selectedRows.length}
             live={live}
-            bulkActions={
-              <div className="hidden flex-wrap items-center gap-2 md:flex">
-                <span className="text-body font-medium">
-                  {allSelected
-                    ? t(totalIsCapped ? "firstSelected" : "allSelected", { count: selectedCount })
-                    : tr("selected", { count: selectedCount })}
-                </span>
-                {bulkButtons}
-              </div>
-            }
-          /></div>}
-        emptyState={{
-          icon: ShoppingBag,
-          title: showArchived ? t("archivedEmptyTitle") : filtered ? t("noMatchTitle") : t("emptyTitle"),
-          description: showArchived
-            ? t("archivedEmptyBody")
-            : filtered
-              ? tr("noResultsHint")
-              : t("emptyBody"),
-          action: filtered || showArchived ? (
-            <Button variant="outline" onClick={clearFilters}>
-              {t("clearFilters")}
-            </Button>
-          ) : orderActions.canCreateOrders ? (
-            <Button asChild>
-              <Link to="/admin/orders/new">{t("createOrder")}</Link>
-            </Button>
-          ) : undefined,
-        }}
+            bulkBar={selectedRows.length > 0 || matchingDone !== null ? (
+              <IndexBulkBar
+                status={selectionStatus}
+                actions={matchingDone === null ? bulkButtons : null}
+                onClear={() => { stopMatching.current = true; clearAll(); }}
+              />
+            ) : undefined}
+          />}
+        emptyState={(
+          <FilteredEmptyState
+            title={showArchived ? t("archivedEmptyTitle") : filtered ? t("noMatchTitle") : t("emptyTitle")}
+            description={showArchived ? t("archivedEmptyBody") : filtered ? undefined : t("emptyBody")}
+            onClearFilters={filtered || showArchived ? clearFilters : undefined}
+          />
+        )}
       />
       )}
 
-      <SelectionSheet count={selectedCount} clearLabel={t("clearSelection")} onClear={clearAll}>
-        {bulkButtons}
-      </SelectionSheet>
       {appActions.dialogs}
+
+      <ConfirmDialog
+        open={confirmArchiveAll}
+        onOpenChange={setConfirmArchiveAll}
+        title={t(totalIsCapped ? "archiveAllCappedTitle" : "archiveAllTitle", { count: pagination.total })}
+        description={t("archiveAllBody")}
+        confirmLabel={t("archive")}
+        cancelLabel={tr("cancel")}
+        onConfirm={() => void archiveAllMatching()}
+      />
 
       {cancelLoaded ? (
         <Suspense fallback={null}>
@@ -407,10 +435,7 @@ export function OrderList({
           <BulkOrdersDialog
             action={actions.dialog?.action ?? null}
             orders={actions.dialog?.orders ?? null}
-            selectedCount={actions.dialog?.orders && !allSelected ? actions.dialog.orders.length : selectedCount}
-            note={allSelected && (totalIsCapped || pagination.total > ALL_MATCHING_LIMIT)
-              ? t("allMatchingCapped", { count: ALL_MATCHING_LIMIT })
-              : undefined}
+            selectedCount={actions.dialog?.orders ? actions.dialog.orders.length : selectedCount}
             running={actions.running}
             outcome={actions.outcome}
             onOpenChange={(open) => {

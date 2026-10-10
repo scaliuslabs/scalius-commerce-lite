@@ -47,6 +47,9 @@ export const PRODUCT_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
     DELETE: { permission: PERMISSIONS.PRODUCTS_DELETE },
   },
+  "/api/v1/admin/products/bulk-restore": {
+    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
+  },
   "/api/v1/admin/products/bulk-update": {
     POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
   },

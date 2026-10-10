@@ -79,6 +79,13 @@ export interface PlanLimits {
     readonly countCap: number;
     /** Deepest OFFSET a numbered page may read; deeper pages use the keyset cursor. */
     readonly maxOffset: number;
+    /**
+     * Rows one slice of an "all matching" bulk action handles when each row
+     * needs its own reads and writes (restore, permanent delete): a handful
+     * of D1 queries per row must stay inside the plan's queries per request.
+     * Batched actions (trash, status, category) always take 90.
+     */
+    readonly bulkPerRowSlice: number;
   };
   /**
    * Per-app ceilings (docs/platform/PLUGINS.md, "Quotas"). An app's manifest
@@ -117,7 +124,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     }),
     kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
     maintenance: Object.freeze({ slices: 4, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
       cpuMs: 50,
       wallMs: 10_000,
@@ -143,7 +150,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     }),
     kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
     maintenance: Object.freeze({ slices: 1, limitScale: 1, inlineRenditionsPerRun: 240 }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({
       cpuMs: 200,
       wallMs: 30_000,

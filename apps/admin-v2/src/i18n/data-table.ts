@@ -3,7 +3,7 @@ import { defineMessages } from "./index";
 /** The shared list table: column menu, sorting, identifiers. */
 export const dataTableMessages = defineMessages({
   en: {
-    columnMenu: "Sort and columns",
+    sort: "Sort",
     sortBy: "Sort by",
     sortField: "Sort field",
     ascending: "Ascending",
@@ -34,7 +34,7 @@ export const dataTableMessages = defineMessages({
     dateAt: "{date} at {time}",
   },
   bn: {
-    columnMenu: "সাজানো ও কলাম",
+    sort: "সাজানো",
     sortBy: "সাজান",
     sortField: "যেভাবে সাজাবেন",
     ascending: "ছোট থেকে বড়",

@@ -7,7 +7,7 @@ import type { Column, Table, TableRowData } from "./table-config";
  * per list in this browser, like Shopify's column menu) and then what fits.
  * When the table is narrower than the visible columns need, the lowest
  * priority columns step aside until it fits; the checkbox, the title column,
- * the actions column and `meta.keep` columns always stay. A stand-in column
+ * the actions column, money (`meta.money`) and `meta.keep` columns always stay. A stand-in column
  * (`meta.combines`) takes the place of the columns it combines when they no
  * longer fit side by side.
  */
@@ -156,7 +156,7 @@ export function isPrimaryColumn<TData extends TableRowData>(column: Column<TData
 /** A column's layout facts; defaults suit a plain text column. */
 export function layoutColumnOf<TData extends TableRowData>(column: Column<TData, unknown>): LayoutColumn {
   const meta = column.columnDef.meta;
-  const locked = column.id === SELECT_COLUMN || column.id === ACTIONS_COLUMN || isPrimaryColumn(column) || Boolean(meta?.keep);
+  const locked = column.id === SELECT_COLUMN || column.id === ACTIONS_COLUMN || isPrimaryColumn(column) || Boolean(meta?.keep || meta?.money);
   return {
     id: column.id,
     priority: locked ? Number.POSITIVE_INFINITY : meta?.priority ?? 50,

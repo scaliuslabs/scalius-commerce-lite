@@ -77084,6 +77084,68 @@
                     "minItems": 1,
                     "maxItems": 500
                   },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "tag": {
+                            "type": "string",
+                            "maxLength": 200,
+                            "description": "Customers with this tag"
+                          },
+                          "segmentId": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "description": "Customers in this saved segment"
+                          },
+                          "subscribed": {
+                            "type": "string",
+                            "enum": [
+                              "email",
+                              "sms",
+                              "whatsapp",
+                              "any"
+                            ],
+                            "description": "Customers subscribed on this channel now (any: on at least one)"
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  },
                   "add": {
                     "type": "array",
                     "items": {
@@ -77101,9 +77163,6 @@
                     "maxItems": 10
                   }
                 },
-                "required": [
-                  "customerIds"
-                ],
                 "additionalProperties": false
               }
             }
@@ -77140,6 +77199,31 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
                         }
                       },
                       "required": [
@@ -80444,25 +80528,197 @@
                   "customerIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "tag": {
+                            "type": "string",
+                            "maxLength": 200,
+                            "description": "Customers with this tag"
+                          },
+                          "segmentId": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "description": "Customers in this saved segment"
+                          },
+                          "subscribed": {
+                            "type": "string",
+                            "enum": [
+                              "email",
+                              "sms",
+                              "whatsapp",
+                              "any"
+                            ],
+                            "description": "Customers subscribed on this channel now (any: on at least one)"
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   },
                   "permanent": {
                     "type": "boolean",
                     "default": false
                   }
-                },
-                "required": [
-                  "customerIds"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Customers moved to trash or deleted; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -80493,6 +80749,259 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "customers.delete"
+        }
+      }
+    },
+    "/api/v1/admin/customers/bulk-restore": {
+      "post": {
+        "operationId": "dashboard.customers.bulk_restore",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "Restore several trashed customers",
+        "description": "Restores the listed customers, or one slice of the trashed customers a filter matches (`matching`). A guest record merged into an account stays merged.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "tag": {
+                            "type": "string",
+                            "maxLength": 200,
+                            "description": "Customers with this tag"
+                          },
+                          "segmentId": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "description": "Customers in this saved segment"
+                          },
+                          "subscribed": {
+                            "type": "string",
+                            "enum": [
+                              "email",
+                              "sms",
+                              "whatsapp",
+                              "any"
+                            ],
+                            "description": "Customers subscribed on this channel now (any: on at least one)"
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customers restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "restored": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "blocked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "restored",
+                        "blocked"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.edit"
         }
       }
     },
@@ -84161,22 +84670,109 @@
                     "minItems": 1,
                     "maxItems": 90
                   },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  },
                   "permanent": {
                     "type": "boolean",
                     "default": false
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -84315,19 +84911,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -84466,19 +85149,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -84617,19 +85387,106 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "draft",
+                              "scheduled",
+                              "published"
+                            ]
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "enum": [
+                              "page",
+                              "article"
+                            ],
+                            "default": "page"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "pages"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Pages changed; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -85823,16 +86680,69 @@
           "Admin - Discounts"
         ],
         "summary": "List code and automatic discounts",
+        "description": "One page of discounts, searched (name, title, or a code from its start), filtered by view and sorted on the server. Each row carries its first code only, with `codeCount` for the rest.",
         "parameters": [
           {
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "default": 1,
+              "description": "Page number; reaches the first 1,000 rows (10,000 on a Paid deployment)."
+            },
+            "required": false,
+            "description": "Page number; reaches the first 1,000 rows (10,000 on a Paid deployment).",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
               "maximum": 90,
-              "default": 90
+              "default": 50
             },
             "required": false,
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Matches the name or title anywhere, or a code from its start."
+            },
+            "required": false,
+            "description": "Matches the name or title anywhere, or a code from its start.",
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "scheduled",
+                "expired"
+              ],
+              "description": "active: on and started; scheduled: on, starts later; expired: its end has passed."
+            },
+            "required": false,
+            "description": "active: on and started; scheduled: on, starts later; expired: its end has passed.",
+            "name": "view",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "updated",
+                "titleAsc",
+                "titleDesc"
+              ],
+              "default": "updated"
+            },
+            "required": false,
+            "name": "sort",
             "in": "query"
           },
           {
@@ -85846,7 +86756,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Discounts, most recently updated first",
+            "description": "Discounts, most recently updated first unless sorted",
             "content": {
               "application/json": {
                 "schema": {
@@ -86078,6 +86988,11 @@
                                   "type": "string"
                                 },
                                 "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
+                              },
+                              "codeCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Codes the discount has; `codes` holds the first only."
                               }
                             },
                             "required": [
@@ -86106,13 +87021,51 @@
                               "codes",
                               "conditions",
                               "effects",
-                              "customerSegmentIds"
+                              "customerSegmentIds",
+                              "codeCount"
                             ]
                           }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number",
+                              "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number",
+                              "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean",
+                              "description": "More rows match than `total` counts (show \"1,000+\")."
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "description": "Zero-based index of the first row of this page; null deeper than the count cap."
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages",
+                            "totalIsCapped",
+                            "offset"
+                          ]
                         }
                       },
                       "required": [
-                        "discounts"
+                        "discounts",
+                        "pagination"
                       ]
                     }
                   },
@@ -154935,6 +155888,7 @@
           "Admin - Orders"
         ],
         "summary": "Archive completed orders without changing commerce state",
+        "description": "Archives the listed orders, or one slice of the finished orders the list's filter matches (`matching`): an order that cannot be archived now is skipped and counted.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -154962,19 +155916,192 @@
                     },
                     "minItems": 1,
                     "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "status": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "view": {
+                            "type": "string",
+                            "enum": [
+                              "unfulfilled",
+                              "unpaid",
+                              "cod_to_collect",
+                              "delivery_failed",
+                              "returned",
+                              "ready_for_pickup"
+                            ],
+                            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
+                          },
+                          "openRequest": {
+                            "type": "boolean"
+                          },
+                          "paymentStatus": {
+                            "type": "string",
+                            "enum": [
+                              "unpaid",
+                              "partial",
+                              "paid",
+                              "partially_refunded",
+                              "refunded",
+                              "failed"
+                            ]
+                          },
+                          "paymentMethod": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "fulfillmentStatus": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "partial",
+                              "complete"
+                            ]
+                          },
+                          "deliveryMethod": {
+                            "type": "string",
+                            "enum": [
+                              "delivery",
+                              "pickup",
+                              "none"
+                            ],
+                            "description": "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical)."
+                          },
+                          "channel": {
+                            "type": "string",
+                            "enum": [
+                              "online_store",
+                              "admin",
+                              "pos",
+                              "agent",
+                              "app"
+                            ],
+                            "description": "Where the order came from: online_store, admin (dashboard), pos, agent (AI agent) or app."
+                          },
+                          "channelSource": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+                            "description": "A stored source slug, e.g. facebook, whatsapp or walk_in."
+                          },
+                          "paymentRecovery": {
+                            "type": "string",
+                            "enum": [
+                              "recoverable",
+                              "awaiting_payment",
+                              "processing",
+                              "needs_attention"
+                            ]
+                          },
+                          "startDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
-                },
-                "required": [
-                  "orders"
-                ]
+                }
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Orders archived; with `matching`, where the next slice starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -167852,14 +168979,78 @@
                     "minItems": 1,
                     "maxItems": 90
                   },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "category": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "draft"
+                            ]
+                          },
+                          "salesChannel": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                            "example": "sc_online_store"
+                          },
+                          "salesChannelState": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "unpublished"
+                            ]
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  },
                   "permanent": {
                     "type": "boolean",
                     "default": false
                   }
-                },
-                "required": [
-                  "products"
-                ]
+                }
               }
             }
           },
@@ -167940,6 +169131,31 @@
                               "message"
                             ]
                           }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
                         }
                       },
                       "required": [
@@ -168059,6 +169275,304 @@
         }
       }
     },
+    "/api/v1/admin/products/bulk-restore": {
+      "post": {
+        "operationId": "dashboard.products.bulk_restore",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Restore several trashed products",
+        "description": "Restores the listed products, or one slice of the trashed products a filter matches (`matching`). A product that cannot be restored is reported in `outcomes`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "products": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "expectedAggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedAggregateRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "category": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "draft"
+                            ]
+                          },
+                          "salesChannel": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                            "example": "sc_online_store"
+                          },
+                          "salesChannelState": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "unpublished"
+                            ]
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Products restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "outcomes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "restored",
+                                  "blocked"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "message": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "status",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "outcomes"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductMutationConflict"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.bulk_operations"
+        }
+      }
+    },
     "/api/v1/admin/products/bulk-update": {
       "post": {
         "operationId": "dashboard.products.bulk_update",
@@ -168094,6 +169608,73 @@
                     "minItems": 1,
                     "maxItems": 90
                   },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "category": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "draft"
+                            ]
+                          },
+                          "salesChannel": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                            "example": "sc_online_store"
+                          },
+                          "salesChannelState": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "unpublished"
+                            ]
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
+                  },
                   "isActive": {
                     "type": "boolean"
                   },
@@ -168102,10 +169683,7 @@
                     "minLength": 1,
                     "maxLength": 180
                   }
-                },
-                "required": [
-                  "products"
-                ]
+                }
               }
             }
           },
@@ -168171,6 +169749,31 @@
                               "reason"
                             ]
                           }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
                         }
                       },
                       "required": [
@@ -168331,11 +169934,77 @@
                     },
                     "minItems": 1,
                     "maxItems": 10
+                  },
+                  "matching": {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "type": "object",
+                        "properties": {
+                          "search": {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "category": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "draft"
+                            ]
+                          },
+                          "salesChannel": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                            "example": "sc_online_store"
+                          },
+                          "salesChannelState": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "unpublished"
+                            ]
+                          },
+                          "appFilter": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 400
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 400
+                                },
+                                "maxItems": 3
+                              }
+                            ],
+                            "description": "Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cursor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,200}$",
+                        "description": "The `next` of the slice before; leave it out for the first slice."
+                      }
+                    },
+                    "required": [
+                      "filter"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Act on every row the list's filter matches instead of an id list, one slice per request."
                   }
                 },
                 "required": [
                   "action",
-                  "productIds",
                   "channelIds"
                 ]
               }
@@ -168370,6 +170039,31 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "matching": {
+                          "type": "object",
+                          "properties": {
+                            "processed": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice changed."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Rows this slice read but left as they were."
+                            },
+                            "next": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Send it as matching.cursor for the next slice; null when every matching row is done."
+                            }
+                          },
+                          "required": [
+                            "processed",
+                            "skipped",
+                            "next"
+                          ]
                         }
                       },
                       "required": [
@@ -205408,11 +207102,21 @@
                         "nextCursor": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Cards the filter matches: exact up to the count cap (1,000; 10,000 on a Paid deployment), else the cap with totalIsCapped."
+                        },
+                        "totalIsCapped": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "items",
-                        "nextCursor"
+                        "nextCursor",
+                        "total",
+                        "totalIsCapped"
                       ]
                     }
                   },
@@ -223124,6 +224828,14 @@
           ]
         },
         {
+          "operationId": "dashboard.customers.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.bulk_restore"
+          ]
+        },
+        {
           "operationId": "dashboard.customers.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -225229,6 +226941,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.products.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.bulk_restore"
           ]
         },
         {

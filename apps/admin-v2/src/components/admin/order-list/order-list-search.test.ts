@@ -82,7 +82,7 @@ describe("order list search", () => {
     expect(search.openRequest).toBe(true);
     expect(search.archived).toBe(true);
     expect(search.startDate).toBeUndefined();
-    expect(base).toMatchObject({ page: 1, limit: 10, sort: "createdAt", order: "desc", archived: false, openRequest: false });
+    expect(base).toMatchObject({ page: 1, limit: 50, sort: "createdAt", order: "desc", archived: false, openRequest: false });
   });
 
   it("accepts every server-side tab and the partially refunded payment filter", () => {
@@ -125,10 +125,10 @@ describe("order list search", () => {
   });
 
   it("asks for a numbered page, or for the rows after/before a cursor, never both", () => {
-    expect(orderListQuery(base, "")).toMatchObject({ page: 1, limit: 10 });
+    expect(orderListQuery(base, "")).toMatchObject({ page: 1, limit: 50 });
     expect(orderListQuery(base, "")).not.toHaveProperty("after");
     const next = orderListQuery(validateOrderSearch({ after: "end-cursor", page: "3" }), "");
-    expect(next).toMatchObject({ after: "end-cursor", limit: 10 });
+    expect(next).toMatchObject({ after: "end-cursor", limit: 50 });
     expect(next).not.toHaveProperty("page");
     const previous = orderListQuery(validateOrderSearch({ before: "start-cursor" }), "");
     expect(previous).toMatchObject({ before: "start-cursor" });

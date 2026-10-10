@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serverTableFeatures, useTable, type ColumnDef, type SortingState } from "./table-config";
 import { useColumnLayout } from "./column-layout";
 import { DataTableColumnMenu } from "./DataTableColumnMenu";
+import { TableSortMenu } from "./DataTableSortMenu";
 import { dataColumns } from "./data-columns";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -42,6 +43,7 @@ function Harness({ width }: { width: number }) {
   const layout = useColumnLayout(table, "inventory", width);
   return (
     <div>
+      <TableSortMenu table={table} />
       <DataTableColumnMenu table={table} layout={layout} />
       <p data-testid="columns">{layout.visible.map((column) => column.id).join(",")}</p>
       <p data-testid="sorting">{sorting.map((sort) => `${sort.id}:${sort.desc ? "desc" : "asc"}`).join(",")}</p>
@@ -87,9 +89,16 @@ describe("column menu and width-aware columns", () => {
     [...document.querySelectorAll<HTMLButtonElement>("button")].find((node) => node.getAttribute("aria-label") === name || node.textContent?.trim() === name);
   const render = (width: number) => act(async () => root.render(<Harness width={width} />));
   const openMenu = async () => {
-    await act(async () => button("Sort and columns")!.click());
+    await act(async () => button("Columns")!.click());
     // The draggable column list loads when the menu opens.
     for (let attempt = 0; attempt < 50 && !document.querySelector("[data-column-handle]"); attempt += 1) {
+      await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
+  };
+  // Sorting has its own menu (T2): the field, then the direction.
+  const openSortMenu = async () => {
+    await act(async () => button("Sort by")!.click());
+    for (let attempt = 0; attempt < 50 && !document.querySelector("#table-sort-default"); attempt += 1) {
       await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
     }
   };
@@ -178,7 +187,7 @@ describe("column menu and width-aware columns", () => {
 
   it("sorts by the chosen field and direction", async () => {
     await render(1440);
-    await openMenu();
+    await openSortMenu();
     await act(async () => document.querySelector<HTMLElement>("#table-sort-stock")!.click());
     expect(document.querySelector("[data-testid=sorting]")!.textContent).toBe("stock:asc");
     await act(async () => button("Descending")!.click());
@@ -205,7 +214,7 @@ describe("column menu and width-aware columns", () => {
 
   it("lists the list's default order as a sort choice, selected while no sort is chosen", async () => {
     await render(1440);
-    await openMenu();
+    await openSortMenu();
     const choice = document.querySelector<HTMLElement>("#table-sort-default")!;
     expect(choice.getAttribute("aria-checked")).toBe("true");
     await act(async () => document.querySelector<HTMLElement>("#table-sort-stock")!.click());

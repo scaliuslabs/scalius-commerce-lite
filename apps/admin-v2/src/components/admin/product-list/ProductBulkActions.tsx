@@ -24,7 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { inChunks, useResourceMutation, type BulkRun } from "~/components/admin/resource/ResourceListPage";
+import type { BulkTarget } from "~/lib/bulk-selection";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { MAX_LABEL_SKUS } from "~/components/admin/barcode-labels/barcode-label-search";
 import { apiData } from "~/lib/api";
@@ -56,25 +57,48 @@ const claims = (rows: ProductListItem[]) =>
 /**
  * The products list's bulk actions (Polaris IndexTable): two promoted status
  * actions and a menu for collections and category, each in a small dialog.
+ * On "all matching" products the status, category and channel actions send
+ * the list's `filter` and the API walks the products itself; collections and
+ * labels act on ticked rows only.
  */
-export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; done: () => void }) {
+export function ProductBulkActions({ target, filter, done, run }: {
+  target: BulkTarget<ProductListItem>;
+  filter: Record<string, unknown>;
+  done: () => void;
+  run: BulkRun;
+}) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const [picker, setPicker] = useState<Picker | null>(null);
   const [publishing, setPublishing] = useState<"publish" | "unpublish" | null>(null);
   const [choice, setChoice] = useState("");
-  const count = rows.length;
+  const rows = target.kind === "rows" ? target.rows : [];
+  const matching = target.kind === "matching";
+  const count = matching ? target.count : rows.length;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-
-  const setStatus = useResourceMutation(async (isActive: boolean) => {
+  /** Runs one change on the selection: ticked rows by claim, or every match on the server. */
+  const update = async (changes: { isActive?: boolean; categoryId?: string }, label: string) => {
     let changed = 0;
     const skipped: string[] = [];
+    if (matching) {
+      const totals = await run.matching(label, async (cursor) => {
+        const result = await apiData(postApiV1AdminProductsBulkUpdate({ body: { ...changes, matching: { filter, ...(cursor ? { cursor } : {}) } } }));
+        skipped.push(...result.skipped.map((row) => row.name));
+        return result.matching ?? { processed: 0, skipped: 0, next: null };
+      });
+      return { changed: totals.processed, skipped };
+    }
     await inChunks(rows, async (chunk) => {
-      const result = await apiData(postApiV1AdminProductsBulkUpdate({ body: { products: claims(chunk), isActive } }));
+      const result = await apiData(postApiV1AdminProductsBulkUpdate({ body: { products: claims(chunk), ...changes } }));
       changed += result.products.length;
       skipped.push(...result.skipped.map((row) => row.name));
     });
+    return { changed, skipped };
+  };
+
+  const setStatus = useResourceMutation(async (isActive: boolean) => {
+    const { changed, skipped } = await update({ isActive }, t(isActive ? "settingActive" : "settingDraft"));
     // Products without a price stay as they were; say which, and whether anything changed.
     if (skipped.length === 0) {
       toast.success(t(isActive ? "bulkActivated" : "bulkDrafted", { count: changed }));
@@ -87,7 +111,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
     else toast.warning(t("bulkActivated", { count: changed }), { description: why });
   }, INVALIDATE);
   // Setting live products as draft hides them from the store: confirm first, naming how many.
-  const liveCount = rows.filter((row) => row.isActive).length;
+  const liveCount = matching ? count : rows.filter((row) => row.isActive).length;
   const [confirmDraft, setConfirmDraft] = useState(false);
   const printLabels = useMutation({
     mutationFn: async () => {
@@ -117,7 +141,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
 
   const change = useResourceMutation(async ({ kind, id }: { kind: Picker; id: string }) => {
     if (kind === "category") {
-      await inChunks(rows, (chunk) => apiData(postApiV1AdminProductsBulkUpdate({ body: { products: claims(chunk), categoryId: id } })));
+      await update({ categoryId: id }, t("changingCategory"));
       return;
     }
     let expectedVersion = manualCollections.find((collection) => collection.id === id)?.version ?? 1;
@@ -141,7 +165,6 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
     <>
       <Button
         variant="outline"
-        size="sm"
         disabled={busy}
         onClick={() => setStatus.mutate({ variables: true }, { onSuccess: done })}
       >
@@ -149,7 +172,6 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
       </Button>
       <Button
         variant="outline"
-        size="sm"
         disabled={busy}
         onClick={() => (liveCount > 0 ? setConfirmDraft(true) : setStatus.mutate({ variables: false }, { onSuccess: done }))}
       >
@@ -173,18 +195,24 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={busy}>
+          <Button variant="outline" disabled={busy}>
             {r("moreActions")}
             <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => open("addToCollection")}>{t("addToCollection")}</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => open("removeFromCollection")}>{t("removeFromCollection")}</DropdownMenuItem>
+          {matching ? null : (
+            <>
+              <DropdownMenuItem onSelect={() => open("addToCollection")}>{t("addToCollection")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => open("removeFromCollection")}>{t("removeFromCollection")}</DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuItem onSelect={() => open("category")}>{t("changeCategory")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setPublishing("publish")}>{t("makeAvailable")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setPublishing("unpublish")}>{t("makeUnavailable")}</DropdownMenuItem>
-          <DropdownMenuItem disabled={printLabels.isPending} onSelect={() => printLabels.mutate()}>{t("printLabels")}</DropdownMenuItem>
+          {matching ? null : (
+            <DropdownMenuItem disabled={printLabels.isPending} onSelect={() => printLabels.mutate()}>{t("printLabels")}</DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -192,7 +220,9 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
         <Suspense fallback={null}>
           <PublicationsDialog
             action={publishing}
-            productIds={rows.map((row) => row.id)}
+            target={target}
+            filter={filter}
+            bulk={run}
             onClose={() => setPublishing(null)}
             onDone={() => {
               setPublishing(null);

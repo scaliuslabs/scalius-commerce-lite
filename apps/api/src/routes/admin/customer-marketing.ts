@@ -21,6 +21,7 @@ import {
     setCustomerTags,
     updateCustomerSegment,
     listCustomers,
+    listMatchingCustomerIds,
     type CustomerSegmentRecord,
 } from "@scalius/core/modules/customers";
 import {
@@ -52,6 +53,42 @@ import { ok, created, noContent } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, namedSharedSchema, noContentResponse, successEnvelope } from "../../schemas/responses";
 import { customerSummarySchema } from "../../schemas/entities";
+import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
+import { appListQuerySchema, planAppList } from "../../plugins/list-columns";
+import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
+
+const listFilterQuery = {
+    tag: z.string().max(200).optional().openapi({ description: "Customers with this tag" }),
+    segmentId: z.string().max(64).optional().openapi({ description: "Customers in this saved segment" }),
+    subscribed: z.enum([...MARKETING_CHANNELS, "any"]).optional().openapi({ description: "Customers subscribed on this channel now (any: on at least one)" }),
+};
+
+/**
+ * The customers list's filter for "all matching" bulk actions
+ * (schemas/bulk-matching.ts). The tab (Trash or not) is the action's own.
+ */
+export const customerMatchingSchema = matchingSchema(z.object({
+    search: z.string().trim().max(120).optional(),
+    ...listFilterQuery,
+    appFilter: appListQuerySchema.appFilter,
+}).strict());
+export type CustomerMatching = z.infer<typeof customerMatchingSchema>;
+
+/** One slice of the customers a bulk action's filter matches. */
+export async function readCustomerSlice(
+    db: Database,
+    matching: CustomerMatching,
+    options: { trashed: boolean; deletableOnly?: boolean; limit?: number },
+) {
+    const { filter } = matching;
+    const appList = await planAppList(db, "customer", customers.id, { appFilter: filter.appFilter });
+    return listMatchingCustomerIds(db, {
+        search: filter.search || undefined,
+        showTrashed: options.trashed,
+        filters: await customerListFiltersFromQuery(db, options.trashed ? { tag: filter.tag, segmentId: filter.segmentId } : filter),
+        appCondition: appList.condition,
+    }, readMatchingCursor(matching.cursor), options.limit ?? BULK_MATCHING_SLICE, { deletableOnly: options.deletableOnly });
+}
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -134,7 +171,8 @@ const bulkTagsRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        customerIds: z.array(z.string().min(1).max(128)).min(1).max(500),
+                        customerIds: z.array(z.string().min(1).max(128)).min(1).max(500).optional(),
+                        matching: customerMatchingSchema.optional(),
                         add: z.array(z.string().max(200)).max(CUSTOMER_TAGS_PER_REQUEST_MAX).optional(),
                         remove: z.array(z.string().max(200)).max(CUSTOMER_TAGS_PER_REQUEST_MAX).optional(),
                     }).strict(),
@@ -145,7 +183,12 @@ const bulkTagsRoute = createRoute({
     responses: {
         200: {
             description: "Tags changed",
-            content: { "application/json": { schema: successEnvelope(z.object({ customers: z.number().int(), added: z.array(z.string()), removed: z.array(z.string()) })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({
+                customers: z.number().int(),
+                added: z.array(z.string()),
+                removed: z.array(z.string()),
+                matching: matchingResultSchema.optional(),
+            })) } },
         },
         ...errorResponses,
     },
@@ -155,9 +198,19 @@ app.openapi(bulkTagsRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
     if (!body.add?.length && !body.remove?.length) throw new ValidationError("Give tags to add or remove.");
-    const added = body.add?.length ? (await addTagsToCustomers(db, { customerIds: body.customerIds, tags: body.add })).tags : [];
-    const removed = body.remove?.length ? (await removeTagsFromCustomers(db, { customerIds: body.customerIds, tags: body.remove })).tags : [];
-    return ok(c, { customers: new Set(body.customerIds).size, added, removed });
+    requireOneSelection(body.customerIds, body.matching);
+    const slice = body.matching ? await readCustomerSlice(db, body.matching, { trashed: false }) : null;
+    const customerIds = slice ? slice.ids : body.customerIds!;
+    const add = body.add ?? [];
+    const remove = body.remove ?? [];
+    const added = add.length && customerIds.length ? (await addTagsToCustomers(db, { customerIds, tags: add })).tags : [];
+    const removed = remove.length && customerIds.length ? (await removeTagsFromCustomers(db, { customerIds, tags: remove })).tags : [];
+    return ok(c, {
+        customers: new Set(customerIds).size,
+        added,
+        removed,
+        ...(slice ? { matching: { processed: customerIds.length, skipped: 0, next: slice.next } satisfies MatchingResult } : {}),
+    });
 });
 
 const setTagsRoute = createRoute({
@@ -182,12 +235,6 @@ app.openapi(setTagsRoute, async (c) => {
 });
 
 // ── Export ──────────────────────────────────────────────────────────────
-
-const listFilterQuery = {
-    tag: z.string().max(200).optional().openapi({ description: "Customers with this tag" }),
-    segmentId: z.string().max(64).optional().openapi({ description: "Customers in this saved segment" }),
-    subscribed: z.enum([...MARKETING_CHANNELS, "any"]).optional().openapi({ description: "Customers subscribed on this channel now (any: on at least one)" }),
-};
 
 /** The list filters of a request, with the saved segment resolved. */
 export async function customerListFiltersFromQuery(

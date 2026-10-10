@@ -152,7 +152,7 @@ describe("order columns on a narrow screen", () => {
     ]);
   });
 
-  it("drops the delivery method, items, channel and delivery status first; folds payment and fulfilment into one cell; then drops it, the total, status and customer; never the order or the date", () => {
+  it("drops the delivery method, items, channel and delivery status first; folds payment and fulfilment into one cell; then drops it, status and customer; never the order, the date or the total", () => {
     const states: string[][] = [];
     for (let width = 4000; width >= 10; width -= 2) {
       const shown = shownAt(width);
@@ -165,9 +165,8 @@ describe("order columns on a narrow screen", () => {
       ["order", "date", "customer", "total", "payment", "fulfillment", "status"],
       ["order", "date", "customer", "total", "paymentFulfillment", "status"],
       ["order", "date", "customer", "total", "status"],
-      ["order", "date", "customer", "status"],
-      ["order", "date", "customer"],
-      ["order", "date"],
+      ["order", "date", "customer", "total"],
+      ["order", "date", "total"],
     ]);
   });
 });

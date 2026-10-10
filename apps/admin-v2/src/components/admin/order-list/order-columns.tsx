@@ -156,7 +156,7 @@ function CustomerCell({ order }: { order: OrderListItem }) {
   return (
     <div data-part="customer" className="flex items-center gap-1">
       {/* Two lines on every row, even without a name or a phone. */}
-      <div className="min-h-[2lh] min-w-0 flex-1">
+      <div className="min-w-0 flex-1">
         <Line text={order.customerName} className="font-medium" />
         {order.customerPhone ? (
           <Line text={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="font-mono text-muted-foreground" />
@@ -333,7 +333,8 @@ export const ORDER_COLUMN_LAYOUT = {
   date: { keep: true, minWidth: LIST_DATE_WIDTH },
   customer: { priority: 96, maxWidth: 176, minWidth: 188 },
   channel: { priority: 40, maxWidth: 140, minWidth: 152 },
-  total: { priority: 94, minWidth: 120, numeric: true },
+  // Money never steps aside (T8: ORD-3).
+  total: { minWidth: 120, money: true },
   payment: { priority: 92, minWidth: { en: 136, bn: 178 } },
   fulfillment: { priority: 90, minWidth: { en: 132, bn: 156 } },
   // Payment over fulfilment in one cell, where the two don't fit side by side.
@@ -377,7 +378,7 @@ export function getOrderColumns(handlers: OrderRowHandlers, extra: ColumnDef<Ord
     column("payment", ({ row }) => <div data-part="payment"><PaymentCell order={row.original} /></div>),
     column("fulfillment", ({ row }) => <div data-part="fulfillment"><FulfilmentCell order={row.original} /></div>),
     column("paymentFulfillment", ({ row }) => (
-      <div data-part="payment-fulfillment" className="flex flex-col items-start gap-0.5">
+      <div data-part="payment-fulfillment" className="flex flex-col items-start">
         <PaymentCell order={row.original} />
         <FulfilmentCell order={row.original} />
       </div>

@@ -6,7 +6,7 @@ import {
   deleteApiV1AdminProductsById,
   deleteApiV1AdminProductsByIdPermanent,
   postApiV1AdminProductsBulkDelete,
-  postApiV1AdminProductsByIdRestore,
+  postApiV1AdminProductsBulkRestore,
 } from "@scalius/api-client/sdk";
 import {
   NO_CURSOR,
@@ -21,7 +21,9 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { productsQueryOptions } from "~/lib/api-query-options/products";
-import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
+import { categoryQueryOptions } from "~/lib/api-query-options/categories";
+import { getApiV1AdminCategories } from "@scalius/api-client/sdk";
+import type { SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { channelsInUse, salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -38,6 +40,7 @@ import {
 } from "~/components/admin/product-list/product-columns";
 import { ProductBulkActions } from "~/components/admin/product-list/ProductBulkActions";
 import { SearchableSelect } from "~/components/ui/searchable-select";
+import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useAppListColumns } from "~/components/admin/apps/ui/list-columns";
@@ -49,7 +52,7 @@ import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDi
 
 const STATUSES = ["active", "draft"] as const;
 const CHANNEL_STATES = ["published", "unpublished"] as const;
-const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });
+const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt", list: "products" });
 
 function validateProductSearch(search: SearchValidatorInput) {
   return {
@@ -65,6 +68,17 @@ function validateProductSearch(search: SearchValidatorInput) {
 }
 
 type ProductSearch = ReturnType<typeof validateProductSearch>;
+
+/** The list's filter as "all matching" bulk actions send it (the API reads the rows). */
+export function productMatchingFilter(search: ProductSearch, term: string, appFilter: string | undefined) {
+  return {
+    ...(term ? { search: term } : {}),
+    ...(search.category ? { category: search.category } : {}),
+    ...(search.status && !search.trashed ? { status: search.status } : {}),
+    ...(search.channel ? { salesChannel: search.channel, salesChannelState: search.channelState ?? "published" } : {}),
+    ...(appFilter ? { appFilter } : {}),
+  };
+}
 
 /**
  * `app` is what the active apps ask of the list (their columns and the filter
@@ -105,6 +119,16 @@ export const Route = createFileRoute("/admin/products/")({
 
 const claim = (row: ProductListItem) => ({ id: row.id, expectedAggregateRevision: row.aggregateRevision });
 
+const CATEGORY_PAGE = 50;
+/** Categories for the filter, searched and paged on the server. */
+const loadCategories: SearchableSelectLoader = async ({ search: typed, page, signal }) => {
+  const result = await apiData(getApiV1AdminCategories({ query: { search: typed, page, limit: CATEGORY_PAGE }, signal }));
+  return {
+    options: result.categories.map((category) => ({ value: category.id, label: category.name })),
+    hasMore: page < result.pagination.totalPages,
+  };
+};
+
 function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -116,7 +140,8 @@ function ProductsPage() {
   const { products: can } = useCatalogActionPermissions();
   const duplicate = useDuplicateProduct();
   const [importing, setImporting] = useState(false);
-  const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
+  // X3: the category filter searches on the server and pages; a store may have hundreds.
+  const { data: chosenCategory } = useQuery({ ...categoryQueryOptions(search.category ?? ""), enabled: Boolean(search.category) });
   const { data: channelData } = useQuery(salesChannelsQueryOptions());
   const c = useMessages(salesChannelNamesMessages);
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
@@ -135,6 +160,7 @@ function ProductsPage() {
     [search.trashed, fmt, channelNames, app.extra],
   );
   const channelFilter = search.channel ? `${search.channelState ?? "published"}:${search.channel}` : "all";
+  const matchingFilter = productMatchingFilter(search, term, app.filterParam);
 
   return (
     <>
@@ -159,11 +185,12 @@ function ProductsPage() {
         }
         search={search}
         query={listQuery(search, term, app)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit, ...NO_CURSOR }, term, { filterParam: app.filterParam })}
         cursorPaging
+        matchingBulk
         dataKey="products"
         columns={columns}
         invalidate={[queryKeys.products.all, queryKeys.dashboard.all, queryKeys.inventory.list()]}
+        what={t("whatProducts")}
         empty={{ icon: Package, title: t("emptyTitle"), description: t("emptyHint") }}
         views={{ param: "status", tabs: [
           { value: "active", label: t("statusActive") },
@@ -174,23 +201,25 @@ function ProductsPage() {
         filterParams={["category", "channel", "channelState", "appFilter"]}
         filters={
           <>
+          <FilterControl label={t("category")}>
           <SearchableSelect
-            value={search.category ?? "all"}
+            value={search.category ?? ""}
+            selectedLabel={chosenCategory?.name}
+            clearable
+            load={loadCategories}
+            queryKey={["products", "category-filter"]}
             onValueChange={(value) => void navigate({
               to: "/admin/products",
-              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value === "all" ? undefined : value, page: 1, ...NO_CURSOR })) as never,
+              search: ((prev: Record<string, unknown>) => ({ ...prev, category: value || undefined, page: 1, ...NO_CURSOR })) as never,
             })}
-            options={[
-              { value: "all", label: t("allCategories") },
-              ...(categoryData?.categories ?? []).map((category) => ({ value: category.id, label: category.name })),
-            ]}
             placeholder={t("allCategories")}
             searchPlaceholder={t("searchCategories")}
             emptyMessage={r("noResults")}
             ariaLabel={t("filterCategory")}
-            triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-40"
           />
+          </FilterControl>
           {showChannels ? (
+          <FilterControl label={c("channelLabel")}>
           <SearchableSelect
             value={channelFilter}
             onValueChange={(value) => {
@@ -218,12 +247,13 @@ function ProductsPage() {
             searchPlaceholder={c("filterChannel")}
             emptyMessage={r("noResults")}
             ariaLabel={c("filterChannel")}
-            triggerClassName="w-full shrink-0 sm:w-auto sm:min-w-44"
           />
+          </FilterControl>
           ) : null}
           {app.filterable.length > 0 ? (
-            <Suspense fallback={<Skeleton className="h-9 w-full sm:w-80" />}>
+            <Suspense fallback={<Skeleton className="h-15 w-full" />}>
               <AppListFilter
+                labelled
                 resource="product"
                 value={search.appFilter}
                 onChange={(appFilter) => void navigate({
@@ -242,7 +272,9 @@ function ProductsPage() {
           ...(can.canCreate ? [duplicateProductAction(() => duplicate.mutate({ id: row.id, name: row.name }))] : []),
           productShortcodeAction(row.slug),
         ]}
-        bulkActions={can.canBulkDelete ? (rows, done) => <ProductBulkActions rows={rows} done={done} /> : undefined}
+        bulkActions={can.canBulkDelete ? (target, done, run) => (
+          <ProductBulkActions target={target} filter={matchingFilter} done={done} run={run} />
+        ) : undefined}
         lifecycle={{
           canTrash: can.canDelete,
           canRestore: can.canRestore,
@@ -257,9 +289,9 @@ function ProductsPage() {
               return;
             }
             if (action === "restore") {
-              for (const row of rows) {
-                await apiData(postApiV1AdminProductsByIdRestore({ path: { id: row.id }, query: { expectedAggregateRevision: row.aggregateRevision } }));
-              }
+              const { outcomes } = await apiData(postApiV1AdminProductsBulkRestore({ body: { products: rows.map(claim) } }));
+              const kept = outcomes.filter((outcome) => outcome.status !== "restored").length;
+              if (kept > 0) throw new Error(t("bulkRestorePartial", { restored: outcomes.length - kept, kept }));
               return;
             }
             if (action === "delete" && rows.length === 1) {
@@ -272,6 +304,13 @@ function ProductsPage() {
             }));
             const kept = result.outcomes.filter((outcome) => outcome.status === "blocked" || outcome.status === "failed").length;
             if (kept > 0) throw new Error(t("bulkDeletePartial", { deleted: result.deletedIds.length, kept }));
+          },
+          runMatching: async (action, cursor) => {
+            const matching = { filter: matchingFilter, ...(cursor ? { cursor } : {}) };
+            const result = action === "restore"
+              ? await apiData(postApiV1AdminProductsBulkRestore({ body: { matching } }))
+              : await apiData(postApiV1AdminProductsBulkDelete({ body: { matching, permanent: action === "delete" } }));
+            return result.matching ?? { processed: 0, skipped: 0, next: null };
           },
         }}
       />

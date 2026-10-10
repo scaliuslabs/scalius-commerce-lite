@@ -30,6 +30,11 @@ export const productMessages = defineMessages({
     movedToTrash: "Product moved to trash",
     deleted: "Product deleted",
     bulkDeletePartial: "{deleted} deleted, {kept} kept in trash",
+    bulkRestorePartial: "{restored} restored, {kept} still in trash",
+    whatProducts: "products",
+    settingActive: "Setting as active…",
+    settingDraft: "Setting as draft…",
+    changingCategory: "Changing category…",
     listChangedTitle: "A product changed",
     listChangedBody: "The list is up to date now. Try again.",
 
@@ -446,6 +451,11 @@ export const productMessages = defineMessages({
     movedToTrash: "পণ্য ট্র্যাশে সরানো হয়েছে",
     deleted: "পণ্য মুছে ফেলা হয়েছে",
     bulkDeletePartial: "{deleted}টি মুছে ফেলা হয়েছে, {kept}টি ট্র্যাশে রয়ে গেছে",
+    bulkRestorePartial: "{restored}টি ফিরিয়ে আনা হয়েছে, {kept}টি এখনো ট্র্যাশে",
+    whatProducts: "পণ্য",
+    settingActive: "সক্রিয় করা হচ্ছে…",
+    settingDraft: "খসড়া করা হচ্ছে…",
+    changingCategory: "ক্যাটাগরি বদলানো হচ্ছে…",
     listChangedTitle: "একটি পণ্য বদলেছে",
     listChangedBody: "তালিকা এখন আপডেট। আবার চেষ্টা করুন।",
 

@@ -622,6 +622,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 21,
         postgresStatements: 21,
       },
+      {
+        version: 127,
+        name: "0127_list_indexes",
+        // Twenty-four dashboard list indexes, six replaced ones dropped, the ledger.
+        sqliteStatements: 31,
+        postgresStatements: 31,
+      },
     ]);
   });
 
@@ -797,6 +804,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 124, name: "0124_theme_restore_points" },
           { version: 125, name: "0125_plugin_lifecycle" },
           { version: 126, name: "0126_plugin_seams" },
+          { version: 127, name: "0127_list_indexes" },
         ],
       });
     } finally {

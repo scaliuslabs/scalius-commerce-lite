@@ -34,6 +34,35 @@ export interface PageInfo {
 
 export const DEFAULT_LIST_MAX_LIMIT = 100;
 
+/** Rows per page a list starts with (T12). */
+export const DEFAULT_PAGE_SIZE = 50;
+/** The page sizes every list offers. */
+export const PAGE_SIZE_OPTIONS: readonly number[] = [20, 50, 100];
+
+const PAGE_SIZE_PREFIX = "scalius.pageSize.";
+
+/**
+ * The page size the merchant last chose for this list in this browser (T12:
+ * "kept per list"), or null. A page link with `limit` still wins.
+ */
+export function readSavedPageSize(list: string): number | null {
+  try {
+    const value = Number(localStorage.getItem(PAGE_SIZE_PREFIX + list));
+    return PAGE_SIZE_OPTIONS.includes(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeSavedPageSize(list: string, size: number): void {
+  try {
+    if (size === DEFAULT_PAGE_SIZE) localStorage.removeItem(PAGE_SIZE_PREFIX + list);
+    else localStorage.setItem(PAGE_SIZE_PREFIX + list, String(size));
+  } catch {
+    // Storage blocked: the size lasts for this page.
+  }
+}
+
 export interface ListSearchParams<TSort extends string = string> {
   page: number;
   limit: number;
@@ -185,21 +214,24 @@ export function createListSearchValidator<T extends readonly [string, ...string[
     limit?: number;
     sort?: T[number];
     order?: "asc" | "desc";
+    /** The list's name: its page size is the one last chosen in this browser (T12). */
+    list?: string;
   },
 ) {
   const defaultLimit = normalizeListPositiveInteger(
-    defaults?.limit ?? 50,
-    50,
+    defaults?.limit ?? DEFAULT_PAGE_SIZE,
+    DEFAULT_PAGE_SIZE,
     { max: DEFAULT_LIST_MAX_LIMIT },
   );
   const defaultSort = (defaults?.sort ?? sortOptions[0]) as T[number];
   const defaultOrder = defaults?.order ?? "desc";
+  const list = defaults?.list;
 
   return (
     search: SearchInput<ListSearchParams<T[number]>>,
   ): ListSearchParams<T[number]> => ({
     page: normalizeListPositiveInteger(search.page, 1),
-    limit: normalizeListPositiveInteger(search.limit, defaultLimit, {
+    limit: normalizeListPositiveInteger(search.limit, (list ? readSavedPageSize(list) : null) ?? defaultLimit, {
       max: DEFAULT_LIST_MAX_LIMIT,
     }),
     sort: normalizeEnumSearchParam(search.sort, sortOptions, defaultSort),

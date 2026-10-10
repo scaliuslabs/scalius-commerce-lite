@@ -376,7 +376,9 @@ export function PromotionSelect({ id, value, onChange }: {
   onChange: (id: string | null) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const { data } = useQuery(discountsQueryOptions());
+  // Running discounts (a page of them): a countdown needs one with an end date.
+  const { data: page } = useQuery(discountsQueryOptions({ view: "active", limit: 90 }));
+  const data = page?.discounts;
   const now = Date.now() / 1000;
   const live = (data ?? []).filter((discount) =>
     discount.deletedAtEpochSeconds === null

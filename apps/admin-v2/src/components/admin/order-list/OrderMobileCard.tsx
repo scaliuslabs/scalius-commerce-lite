@@ -15,7 +15,9 @@ import { shipmentStatusMessages } from "~/i18n/shipment-status";
 import { resourceMessages } from "~/i18n/resource";
 import { AttentionMarker, FulfilmentCell, orderName, PaymentCell } from "./order-columns";
 import { codToCollect, deliveryMethod, deliveryStatus, orderAttention, TONE_TEXT } from "./order-row-facts";
-import { ListDate } from "~/components/admin/data-table/ListDate";
+import { ListDate, listDateLabel } from "~/components/admin/data-table/ListDate";
+import { dataTableMessages } from "~/i18n/data-table";
+import { unixToDate } from "@scalius/shared/timestamps";
 
 export { codToCollect } from "./order-row-facts";
 
@@ -47,6 +49,13 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const sh = useMessages(shipmentStatusMessages);
   const delivery = deliveryStatus(order, t, sh);
   const attention = orderAttention(order, t, to)[0] ?? null;
+  const dt = useMessages(dataTableMessages);
+  const placed = unixToDate(order[dateField] as Date | string | number | null);
+  // The whole line on hover, where a narrow phone cuts it (T7).
+  const lineTitle = [
+    placed ? listDateLabel(placed, new Date(), dt) : null,
+    attention ? attention.text : delivery ? delivery.text : deliveryMethod(order, to),
+  ].filter(Boolean).join(" · ");
   return (
     <div className="flex items-start gap-1 py-1 pe-3" data-part="order-card">
       {selectable ? (
@@ -71,10 +80,13 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           </span>
           <span className="shrink-0 font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
         </span>
+        {/* The name keeps its room; the phone takes what is left and is cut first (T14). */}
         <span className="flex items-center justify-between gap-3 text-body">
-          <span className="min-w-0 truncate">{order.customerName}</span>
+          <span title={order.customerName} className="max-w-full shrink-0 truncate">{order.customerName}</span>
           {order.customerPhone ? (
-            <span className="shrink-0 font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone, getStoreRegion())}</span>
+            <span title={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="min-w-0 truncate font-mono text-muted-foreground">
+              {formatPhoneForDisplay(order.customerPhone, getStoreRegion())}
+            </span>
           ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1">
@@ -89,7 +101,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
         {/* What holds the order up comes first; else where the parcel is, or how it's delivered.
             Cash still to collect keeps its own place at the end: a long line is cut before it, never through it. */}
         <span className="flex items-center justify-between gap-3 text-body text-muted-foreground">
-          <span className="min-w-0 truncate">
+          <span title={lineTitle} className="min-w-0 truncate">
             <ListDate value={order[dateField]} />
             {" · "}
             {attention ? (

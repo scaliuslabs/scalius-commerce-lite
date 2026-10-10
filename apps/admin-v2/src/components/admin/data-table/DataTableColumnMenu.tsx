@@ -16,10 +16,10 @@ export function columnLabel<TData extends TableRowData>(column: Column<TData, un
   return column.columnDef.meta?.label ?? (typeof header === "string" ? header : typeof named === "string" ? named : column.id);
 }
 
-/** Set by `DataTable`, read by the toolbar: the menu sits right of the search (Shopify). */
-export const ColumnMenuContext = createContext<ReactNode>(null);
+/** Set by `DataTable`, read by the toolbar: the sort and columns menus sit right of the search (Shopify). */
+export const ColumnMenuContext = createContext<{ sortMenu: ReactNode; columnMenu: ReactNode }>({ sortMenu: null, columnMenu: null });
 
-export function useColumnMenu(): ReactNode {
+export function useColumnMenu(): { sortMenu: ReactNode; columnMenu: ReactNode } {
   return useContext(ColumnMenuContext);
 }
 
@@ -39,30 +39,23 @@ const ColumnMenuPanel = lazy(() => loadPanel().then((module) => ({ default: modu
 ) => ReactNode;
 
 /**
- * Shopify's list menu: "Sort by" (field and direction) and "Columns" (show or
- * hide with the eye, reorder by drag or with the arrow keys on the handle),
- * plus "Reset to default". The title column is always shown.
+ * Shopify's columns menu: show or hide with the eye, reorder by drag or with
+ * the arrow keys on the handle, plus "Reset to default". The title column is
+ * always shown. Sorting has its own menu (`DataTableSortMenu`).
  */
 export function DataTableColumnMenu<TData extends TableRowData>({
   table,
   layout,
-  defaultSortLabel,
 }: {
   table: Table<TData>;
   layout: ColumnLayout<TData>;
-  /**
-   * What the list is sorted by when no sort is chosen, e.g. "Recently updated";
-   * `false` when the list always sorts by one of its columns.
-   */
-  defaultSortLabel?: string | false;
 }) {
   const t = useMessages(dataTableMessages);
-  const menuName = sortableColumns(table).length > 0 ? t("columnMenu") : t("columns");
+  const menuName = t("columns");
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        {/* Says what it holds: "Sort and columns" when the list sorts, else "Columns" (text from sm up). */}
         <Button type="button" variant="outline" aria-label={menuName} title={menuName} onPointerEnter={() => void loadPanel()} onFocus={() => void loadPanel()}>
           <Columns3 aria-hidden />
           <span className="max-sm:sr-only">{menuName}</span>
@@ -77,7 +70,7 @@ export function DataTableColumnMenu<TData extends TableRowData>({
             </div>
           )}
         >
-          <ColumnMenuPanel table={table} layout={layout} defaultSortLabel={defaultSortLabel} />
+          <ColumnMenuPanel table={table} layout={layout} />
         </Suspense>
       </PopoverContent>
     </Popover>

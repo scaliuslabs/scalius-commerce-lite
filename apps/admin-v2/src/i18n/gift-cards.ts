@@ -4,6 +4,7 @@ import { defineMessages } from "./index";
 export const giftCardsMessages = defineMessages({
   en: {
     pageTitle: "Gift cards",
+    whatGiftCards: "gift cards",
     issueGiftCard: "Issue gift card",
 
     // Outstanding balance
@@ -166,6 +167,7 @@ export const giftCardsMessages = defineMessages({
   },
   bn: {
     pageTitle: "গিফট কার্ড",
+    whatGiftCards: "গিফট কার্ড",
     issueGiftCard: "গিফট কার্ড ইস্যু করুন",
 
     outstandingTitle: "বকেয়া ব্যালেন্স",

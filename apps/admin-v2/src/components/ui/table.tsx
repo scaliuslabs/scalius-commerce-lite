@@ -51,15 +51,39 @@ const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes
 );
 TableBody.displayName = "TableBody";
 
-const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn("group border-b hover:bg-muted data-[state=selected]:bg-accent data-[state=selected]:hover:bg-secondary", className)}
-      {...props}
-    />
-  ),
-);
+/**
+ * Row density (polish bar T3): "default" rows hold a two-line title or a
+ * 40px thumbnail (52px in English), "compact" rows one line (40px). Every
+ * row of a list has its density's height whatever its data, so rows never
+ * jump; the height follows the language's line height (Bangla is taller).
+ */
+export type RowDensity = "default" | "compact";
+
+/**
+ * A list row: `density` fixes its height, `clickable` shows it opens on a
+ * click, `still` keeps a row that is not a record (a skeleton, an empty or
+ * error state) from lighting up on hover.
+ */
+const TableRow = React.forwardRef<
+  HTMLTableRowElement,
+  React.HTMLAttributes<HTMLTableRowElement> & { density?: RowDensity; clickable?: boolean; still?: boolean }
+>(({ className, density, clickable, still, ...props }, ref) => (
+  <tr
+    ref={ref}
+    data-density={density}
+    data-clickable={clickable || undefined}
+    data-still={still || undefined}
+    className={cn(
+      "group border-b data-[state=selected]:bg-accent data-[state=selected]:hover:bg-secondary",
+      still ? null : "hover:bg-muted",
+      clickable && "cursor-pointer",
+      density === "compact" && "h-[calc(1lh+20px)]",
+      density === "default" && "h-[calc(2lh+12px)]",
+      className,
+    )}
+    {...props}
+  />
+));
 TableRow.displayName = "TableRow";
 
 /*
@@ -72,9 +96,17 @@ TableRow.displayName = "TableRow";
  * - `data-capped` with `--column-max`: the cell's content is at most that
  *   wide, so a long name truncates instead of widening its column (an auto
  *   table never makes a column narrower than its widest unbreakable line).
+ * - `data-after-numeric`: a start-aligned column right after an end-aligned
+ *   number starts 20px in (32px from the numbers), so "৳1,250" never touches "Paid" (T6).
+ *
+ * The header sticks under `--index-sticky-top` (the list's sticky bulk bar
+ * while rows are selected, else 0).
  */
 const LAYOUT =
   "data-[capped]:*:max-w-(--column-max) data-[numeric]:whitespace-nowrap data-[numeric]:text-end data-[numeric]:tabular-nums data-[pin=actions]:w-px data-[pin=actions]:whitespace-nowrap data-[pin=actions]:text-end data-[pin=primary]:min-w-40 in-data-[scrolls]:data-[pin]:sticky data-[pin=select]:inset-s-0 data-[pin=primary]:inset-s-0 data-[pin=primary]:data-[after-select]:inset-s-10 data-[pin=actions]:inset-e-0 in-data-[scrolls]:data-[pin=primary]:before:pointer-events-none in-data-[scrolls]:data-[pin=primary]:before:absolute in-data-[scrolls]:data-[pin=primary]:before:inset-y-0 in-data-[scrolls]:data-[pin=primary]:before:-inset-e-3 in-data-[scrolls]:data-[pin=primary]:before:w-3 in-data-[scrolls]:data-[pin=primary]:before:bg-linear-to-r in-data-[scrolls]:data-[pin=primary]:before:from-foreground/10 in-data-[scrolls]:data-[pin=primary]:before:to-transparent in-data-[scrolls]:data-[pin=actions]:before:pointer-events-none in-data-[scrolls]:data-[pin=actions]:before:absolute in-data-[scrolls]:data-[pin=actions]:before:inset-y-0 in-data-[scrolls]:data-[pin=actions]:before:-inset-s-3 in-data-[scrolls]:data-[pin=actions]:before:w-3 in-data-[scrolls]:data-[pin=actions]:before:bg-linear-to-l in-data-[scrolls]:data-[pin=actions]:before:from-foreground/10 in-data-[scrolls]:data-[pin=actions]:before:to-transparent";
+
+/** A start-aligned column after a numeric one starts 20px in (32px from the numbers, T6). */
+const afterNumeric = (props: object) => ("data-after-numeric" in props ? "ps-5" : null);
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
@@ -83,8 +115,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         // Sticky with its own 1px bottom rule: a collapsed `border-b` would scroll away.
         // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
-        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
+        "sticky top-[var(--index-sticky-top,0px)] z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle in-data-[scrolls]:top-0 text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
         LAYOUT,
+        afterNumeric(props),
         className,
       )}
       {...props}
@@ -100,6 +133,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
       className={cn(
         "px-3 py-1.5 align-middle has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-10 in-data-[scrolls]:data-[pin]:bg-card in-data-[scrolls]:data-[pin]:group-hover:bg-muted in-data-[scrolls]:data-[pin]:group-data-[state=selected]:bg-accent",
         LAYOUT,
+        afterNumeric(props),
         className,
       )}
       {...props}

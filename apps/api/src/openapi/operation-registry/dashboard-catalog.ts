@@ -94,6 +94,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     risk: "destructive",
     revision: "required",
   },
+  "dashboard.products.bulk_restore": { revision: "required" },
   "dashboard.products.bulk_update": { revision: "required" },
   "dashboard.products.create": { limits: { response: 16_384 } },
   "dashboard.products.duplicate": {},

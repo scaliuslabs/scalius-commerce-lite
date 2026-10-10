@@ -2,7 +2,7 @@
 // pending badge and the Reviews route loader load with the shell, so this file
 // holds reads only; the writes live beside the Reviews screens
 // (components/admin/reviews/reviews-api.ts).
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminReviews,
   getApiV1AdminReviewsById,
@@ -42,13 +42,14 @@ export const reviewSummaryQueryOptions = (productId?: string) =>
     staleTime: 30_000,
   });
 
-/** The moderation queue, newest first, 25 per page (keyset cursor). */
-export const reviewListQueryOptions = (query: AdminReviewQuery) =>
-  infiniteQueryOptions({
-    queryKey: reviewKeys.list(query),
-    queryFn: ({ pageParam }) => apiData(getApiV1AdminReviews({ query: { ...query, cursor: pageParam } })),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
+/** Reviews per page of the moderation queue (the API's own page). */
+export const REVIEW_PAGE_SIZE = 25;
+
+/** One page of the moderation queue, newest first, after `cursor` (keyset). */
+export const reviewListQueryOptions = (query: AdminReviewQuery, cursor = "") =>
+  queryOptions({
+    queryKey: [...reviewKeys.list(query), cursor] as const,
+    queryFn: () => apiData(getApiV1AdminReviews({ query: { ...query, ...(cursor ? { cursor } : {}) } })),
     staleTime: 15_000,
   });
 

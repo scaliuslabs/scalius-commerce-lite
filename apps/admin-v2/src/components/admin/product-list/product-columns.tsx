@@ -133,7 +133,7 @@ export function getProductColumns(opts: {
         return (
           <div className="flex min-w-0 items-center gap-3">
             <ProductThumb src={row.original.primaryImage} />
-            <div className="min-h-[2lh] min-w-0">
+            <div className="min-w-0">
               <ResourceRowLink to={opts.trashed ? undefined : opts.rowTo(row.original)} lines={note ? 1 : 2}>
                 {row.original.name || t("untitled")}
               </ResourceRowLink>

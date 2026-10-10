@@ -34,6 +34,9 @@ import {
 } from "@scalius/core/modules/orders/browser";
 import { projectOrderListResult } from "../order-list-projection";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../../plugins/list-columns";
+import { matchingSchema } from "../../../schemas/bulk-matching";
+import type { Database } from "@scalius/database/client";
+import type { OrderListFilter } from "@scalius/core/modules/orders";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -82,6 +85,49 @@ const paymentRecoveryQuerySchema = z.enum([
     "processing",
     "needs_attention",
 ]);
+
+/**
+ * The orders list's filter for "all matching" bulk actions
+ * (schemas/bulk-matching.ts): the list query's own fields, never in a URL.
+ */
+export const orderMatchingSchema = matchingSchema(z.object({
+    search: z.string().trim().max(160).optional(),
+    status: z.string().max(40).optional(),
+    view: orderListViewQuerySchema.optional(),
+    openRequest: z.boolean().optional(),
+    paymentStatus: paymentStatusQuerySchema.optional(),
+    paymentMethod: paymentMethodQuerySchema.optional(),
+    fulfillmentStatus: fulfillmentStatusQuerySchema.optional(),
+    deliveryMethod: deliveryMethodQuerySchema.optional(),
+    channel: channelQuerySchema.optional(),
+    channelSource: channelSourceQuerySchema.optional(),
+    paymentRecovery: paymentRecoveryQuerySchema.optional(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    appFilter: appListQuerySchema.appFilter,
+}).strict());
+export type OrderMatching = z.infer<typeof orderMatchingSchema>;
+
+/** The core list filter a matching request names, with its app filter and store-day dates resolved. */
+export async function orderMatchingFilter(db: Database, env: Env, filter: OrderMatching["filter"]): Promise<OrderListFilter> {
+    const app = await planAppList(db, "order", orders.id, { appFilter: filter.appFilter });
+    return {
+        appCondition: app.condition,
+        search: filter.search || undefined,
+        status: filter.status || undefined,
+        view: filter.view,
+        openRequest: filter.openRequest === true,
+        paymentStatus: filter.paymentStatus,
+        paymentMethod: filter.paymentMethod,
+        fulfillmentStatus: filter.fulfillmentStatus,
+        deliveryMethod: filter.deliveryMethod,
+        channel: filter.channel,
+        channelSource: filter.channelSource,
+        paymentRecovery: filter.paymentRecovery,
+        startDate: parseStoreDateOnlyBoundary(filter.startDate, "start", storeTimeZoneOf(env)),
+        endDate: parseStoreDateOnlyBoundary(filter.endDate, "end", storeTimeZoneOf(env)),
+    };
+}
 
 const ORDER_EXPORT_MAX_ROWS = 5_000;
 const ORDER_EXPORT_PAGE_SIZE = 90;

@@ -10,6 +10,9 @@ import {
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { containsText } from "../../utils/text-match";
+import { COUNT_PROBE_COLUMN, cappedCountQuery, cappedPagination, tooDeepPage } from "../../utils/keyset";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
@@ -408,23 +411,95 @@ export async function getPromotionAggregate(
     return buildPromotionAggregate(parent, codeRows, conditionRows, effectRows, segmentRows);
 }
 
-export async function listPromotionDrafts(
+/** The discounts list's views (the dashboard's tabs), as the list's status words read them. */
+export const PROMOTION_LIST_VIEWS = ["active", "scheduled", "expired"] as const;
+export type PromotionListView = (typeof PROMOTION_LIST_VIEWS)[number];
+export const PROMOTION_LIST_SORTS = ["updated", "titleAsc", "titleDesc"] as const;
+export type PromotionListSort = (typeof PROMOTION_LIST_SORTS)[number];
+
+/** A list row: the rule with its first code only, and how many codes it has. */
+export type PromotionListItem = PromotionAggregate & { codeCount: number };
+
+/**
+ * The view's condition at `now` (epoch seconds), the same words as the
+ * dashboard's status badge: active (on and started), scheduled (on, starts
+ * later), expired (on or draft, its end passed).
+ */
+function promotionViewCondition(view: PromotionListView) {
+    const now = sql`unixepoch()`;
+    const notEnded = sql`(${promotions.endsAt} IS NULL OR ${promotions.endsAt} > ${now})`;
+    if (view === "active") {
+        return sql`${promotions.status} = 'active' AND ${notEnded} AND (${promotions.startsAt} IS NULL OR ${promotions.startsAt} <= ${now})`;
+    }
+    if (view === "scheduled") return sql`${promotions.status} = 'active' AND ${notEnded} AND ${promotions.startsAt} > ${now}`;
+    return sql`${promotions.status} IN ('active', 'draft') AND ${promotions.endsAt} <= ${now}`;
+}
+
+/**
+ * Matches a discount's name or title anywhere, or one of its codes from the
+ * start: codes are upper-case, so a prefix is one seek on the code index
+ * (a bulk-generated discount can hold thousands of codes).
+ */
+function promotionSearchCondition(term: string) {
+    const code = term.trim().toUpperCase();
+    const byCode = /^[A-Z0-9_-]{1,50}$/.test(code)
+        ? sql` OR ${promotions.id} IN (SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${promotionCodes.normalizedCode} >= ${code} AND ${promotionCodes.normalizedCode} < ${`${code}~`})`
+        : sql``;
+    return sql`(${containsText(promotions.name, term)} OR ${containsText(sql`coalesce(${promotions.title}, '')`, term)}${byCode})`;
+}
+
+/**
+ * One page of the dashboard's discounts list: searched, filtered by view and
+ * sorted in SQL, counted (capped as every list), and each row with only its
+ * first code and the count of the rest, so a discount with 10,000
+ * bulk-generated codes costs one row.
+ */
+export async function listPromotionPage(
     db: Database,
-    input: { limit?: number; includeDeleted?: boolean } = {},
-): Promise<PromotionAggregate[]> {
+    input: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        view?: PromotionListView;
+        sort?: PromotionListSort;
+        includeDeleted?: boolean;
+    } = {},
+): Promise<{ discounts: PromotionListItem[]; pagination: ReturnType<typeof cappedPagination> }> {
     const limit = Math.min(Math.max(input.limit ?? 50, 1), PROMOTION_LIST_LIMIT);
-    const rows = await db.select()
-        .from(promotions)
-        .where(input.includeDeleted ? undefined : isNull(promotions.deletedAt))
-        .orderBy(desc(promotions.updatedAt), asc(promotions.id))
-        .limit(limit);
-    if (rows.length === 0) return [];
+    const page = Math.max(1, Math.trunc(input.page ?? 1));
+    const offset = (page - 1) * limit;
+    const { maxOffset } = planLimits().lists;
+    if (offset >= maxOffset) throw tooDeepPage(offset, maxOffset);
+    const conditions = [
+        ...(input.includeDeleted ? [] : [isNull(promotions.deletedAt)]),
+        ...(input.view ? [promotionViewCondition(input.view)] : []),
+        ...(input.search?.trim() ? [promotionSearchCondition(input.search.trim())] : []),
+    ];
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderBy = input.sort === "titleAsc"
+        ? [asc(promotions.name), asc(promotions.id)]
+        : input.sort === "titleDesc"
+            ? [desc(promotions.name), asc(promotions.id)]
+            : [desc(promotions.updatedAt), asc(promotions.id)];
+    const [counted, rows] = await db.batch([
+        cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(promotions).where(where).$dynamic()),
+        db.select().from(promotions).where(where).orderBy(...orderBy).limit(limit).offset(offset),
+    ]);
+    const pagination = cappedPagination(Number(counted[0]?.count ?? 0), offset, limit);
+    if (rows.length === 0) return { discounts: [], pagination };
 
     const ids = rows.map(({ id }) => id);
-    const [codeRows, conditionRows, effectRows, segmentRows, usageRows] = await db.batch([
-        db.select().from(promotionCodes)
-            .where(inArray(promotionCodes.promotionId, ids))
-            .orderBy(asc(promotionCodes.normalizedCode)),
+    const idSet = JSON.stringify(ids);
+    const inPage = (column: typeof promotionCodes.promotionId) => sql`${column} IN (SELECT CAST(value AS TEXT) FROM json_each(${idSet}))`;
+    const [codeRows, codeCounts, conditionRows, effectRows, segmentRows, usageRows] = await db.batch([
+        // Each discount's first code (the one the list names it by).
+        db.select().from(promotionCodes).where(sql`(${promotionCodes.promotionId}, ${promotionCodes.normalizedCode}) IN (
+            SELECT ${promotionCodes.promotionId}, min(${promotionCodes.normalizedCode}) FROM ${promotionCodes}
+            WHERE ${inPage(promotionCodes.promotionId)} GROUP BY ${promotionCodes.promotionId})`),
+        db.select({ promotionId: promotionCodes.promotionId, count: count() })
+            .from(promotionCodes)
+            .where(inPage(promotionCodes.promotionId))
+            .groupBy(promotionCodes.promotionId),
         db.select().from(promotionConditions)
             .where(inArray(promotionConditions.promotionId, ids))
             .orderBy(asc(promotionConditions.position), asc(promotionConditions.id)),
@@ -440,8 +515,9 @@ export async function listPromotionDrafts(
         orderUsageQuery(db, ids),
     ]);
     const usageByPromotionId = new Map(usageRows.map((usage) => [usage.promotionId, usage]));
+    const codeCountById = new Map(codeCounts.map((row) => [row.promotionId, Number(row.count)]));
 
-    return rows.flatMap((parent) => {
+    const discounts = rows.flatMap((parent): PromotionListItem[] => {
         let aggregate: PromotionAggregate;
         try {
             aggregate = buildPromotionAggregate(
@@ -460,8 +536,18 @@ export async function listPromotionDrafts(
             ...aggregate,
             redemptionCount: Number(usage?.redemptionCount ?? 0),
             discountSpendMinor: Number(usage?.discountSpendMinor ?? 0),
+            codeCount: codeCountById.get(parent.id) ?? 0,
         }];
     });
+    return { discounts, pagination };
+}
+
+/** The first page of discounts, newest edits first (tests and simple callers). */
+export async function listPromotionDrafts(
+    db: Database,
+    input: { limit?: number; includeDeleted?: boolean } = {},
+): Promise<PromotionListItem[]> {
+    return (await listPromotionPage(db, input)).discounts;
 }
 
 /**

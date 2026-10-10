@@ -12,7 +12,11 @@ import {
   bulkPublishPages,
   bulkUnpublishPages,
   restorePages,
+  listMatchingPageClaims,
 } from "@scalius/core/modules/pages";
+import { readMatchingCursor } from "@scalius/core/utils/bulk-matching";
+import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
+import type { Database } from "@scalius/database/client";
 import {
   createPageSchema,
   updatePageSchema,
@@ -38,6 +42,50 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const pageMutationSchema = z.object({ revision: z.number().int().min(1) });
 const pageCreateResultSchema = pageMutationSchema.extend({ id: z.string() });
 const pageRevisionBodySchema = pageRevisionClaimSchema.omit({ id: true });
+
+/**
+ * The pages and blog posts list's filter for "all matching" bulk actions.
+ * The tab (Trash or not) is the action's own.
+ */
+const pageMatchingSchema = matchingSchema(z.object({
+  search: z.string().trim().max(120).optional(),
+  status: z.enum(["draft", "scheduled", "published"]).optional(),
+  contentType: z.enum(["page", "article"]).default("page"),
+}).strict());
+type PageMatching = z.infer<typeof pageMatchingSchema>;
+
+/** A bulk body names its pages one way: the claims, or every page the filter matches. */
+const pageSelectionSchema = z.object({
+  pages: pageRevisionClaimsSchema.shape.pages.optional(),
+  matching: pageMatchingSchema.optional(),
+});
+const pageBulkResult = {
+  description: "Pages changed; with `matching`, where the next slice starts",
+  content: { "application/json": { schema: successEnvelope(z.object({ matching: matchingResultSchema.optional() })) } },
+};
+
+/** Runs one bulk page write on the listed claims, or on one slice of the matching pages. */
+async function runPageBulk(
+  db: Database,
+  body: { pages?: Array<{ id: string; expectedRevision: number }>; matching?: PageMatching },
+  trashed: boolean,
+  write: (claims: Array<{ id: string; expectedRevision: number }>) => Promise<void>,
+): Promise<{ matching?: MatchingResult }> {
+  requireOneSelection(body.pages, body.matching);
+  if (!body.matching) {
+    await write(body.pages!);
+    return {};
+  }
+  const { filter, cursor } = body.matching;
+  const slice = await listMatchingPageClaims(db, {
+    search: filter.search || undefined,
+    status: trashed ? undefined : filter.status,
+    contentType: filter.contentType,
+    showTrashed: trashed,
+  }, readMatchingCursor(cursor));
+  if (slice.claims.length > 0) await write(slice.claims);
+  return { matching: { processed: slice.claims.length, skipped: 0, next: slice.next } };
+}
 
 // ── List Pages ──
 
@@ -167,7 +215,7 @@ const bulkDeleteRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: pageRevisionClaimsSchema.extend({
+          schema: pageSelectionSchema.extend({
             permanent: z.boolean().default(false),
           }),
         },
@@ -175,7 +223,7 @@ const bulkDeleteRoute = createRoute({
     },
   },
   responses: {
-    204: noContentResponse,
+    200: pageBulkResult,
     ...errorResponses,
     409: conflictResponse,
   },
@@ -183,10 +231,8 @@ const bulkDeleteRoute = createRoute({
 
 app.openapi(bulkDeleteRoute, async (c) => {
   const db = c.get("db");
-  const { pages: revisionClaims, permanent } = c.req.valid("json");
-  await bulkDeletePages(db, revisionClaims, permanent);
-
-  return noContent(c);
+  const body = c.req.valid("json");
+  return ok(c, await runPageBulk(db, body, body.permanent, (claims) => bulkDeletePages(db, claims, body.permanent)));
 });
 
 // ── Bulk Publish Pages ──
@@ -199,11 +245,11 @@ const bulkPublishRoute = createRoute({
   operationId: "dashboard.content.bulk_publish",
   request: {
     body: {
-      content: { "application/json": { schema: pageRevisionClaimsSchema } },
+      content: { "application/json": { schema: pageSelectionSchema } },
     },
   },
   responses: {
-    204: noContentResponse,
+    200: pageBulkResult,
     ...errorResponses,
     409: conflictResponse,
   },
@@ -211,10 +257,7 @@ const bulkPublishRoute = createRoute({
 
 app.openapi(bulkPublishRoute, async (c) => {
   const db = c.get("db");
-  const { pages: revisionClaims } = c.req.valid("json");
-  await bulkPublishPages(db, revisionClaims);
-
-  return noContent(c);
+  return ok(c, await runPageBulk(db, c.req.valid("json"), false, (claims) => bulkPublishPages(db, claims)));
 });
 
 // ── Bulk Unpublish Pages ──
@@ -227,11 +270,11 @@ const bulkUnpublishRoute = createRoute({
   operationId: "dashboard.content.bulk_unpublish",
   request: {
     body: {
-      content: { "application/json": { schema: pageRevisionClaimsSchema } },
+      content: { "application/json": { schema: pageSelectionSchema } },
     },
   },
   responses: {
-    204: noContentResponse,
+    200: pageBulkResult,
     ...errorResponses,
     409: conflictResponse,
   },
@@ -239,10 +282,7 @@ const bulkUnpublishRoute = createRoute({
 
 app.openapi(bulkUnpublishRoute, async (c) => {
   const db = c.get("db");
-  const revisionClaims = c.req.valid("json").pages;
-  await bulkUnpublishPages(db, revisionClaims);
-
-  return noContent(c);
+  return ok(c, await runPageBulk(db, c.req.valid("json"), false, (claims) => bulkUnpublishPages(db, claims)));
 });
 
 // ── Bulk Restore Pages ──
@@ -255,11 +295,11 @@ const bulkRestoreRoute = createRoute({
   operationId: "dashboard.content.bulk_restore",
   request: {
     body: {
-      content: { "application/json": { schema: pageRevisionClaimsSchema } },
+      content: { "application/json": { schema: pageSelectionSchema } },
     },
   },
   responses: {
-    204: noContentResponse,
+    200: pageBulkResult,
     ...errorResponses,
     409: conflictResponse,
   },
@@ -267,10 +307,7 @@ const bulkRestoreRoute = createRoute({
 
 app.openapi(bulkRestoreRoute, async (c) => {
   const db = c.get("db");
-  const { pages: revisionClaims } = c.req.valid("json");
-  await restorePages(db, revisionClaims);
-
-  return noContent(c);
+  return ok(c, await runPageBulk(db, c.req.valid("json"), true, (claims) => restorePages(db, claims)));
 });
 
 // ── Restore Page ──

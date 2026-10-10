@@ -12,7 +12,8 @@ import {
     firstCustomerAddressId,
     orders,
 } from "@scalius/database/schema";
-import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
+import { sql, isNull, asc, desc, eq, and, or, inArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { containsText } from "../../utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
@@ -28,7 +29,9 @@ import {
     type MarketingChannel,
 } from "@scalius/shared/customer-marketing";
 import { listCustomerTags } from "./customer-tags";
-import { ftsMatch } from "../../search/fts5";
+import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
+import { buildPhoneSearchTerms, isLikelyPhoneSearch, phonePrefixFtsQuery } from "../../utils/phone-search";
+import { anySetIsSmall } from "../../utils/list-lead";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
     COUNT_PROBE_COLUMN,
@@ -37,7 +40,7 @@ import {
     planKeysetPage,
     resolveReferencedBoundary,
 } from "../../utils/keyset";
-import type { Database } from "@scalius/database/client";
+import { type Database, getDatabaseProviderForClient } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { customerAuthDocument, validateCustomerPhoneCountry } from "../settings";
 import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
@@ -111,6 +114,157 @@ export function customerListFilterSql(filters: CustomerListFilters = {}): SQL[] 
     return conditions;
 }
 
+/** The customers list's filters, shared by the list and its "all matching" bulk actions. */
+export interface CustomerListFilter {
+    search?: string;
+    showTrashed?: boolean;
+    filters?: CustomerListFilters;
+    /** An app column filter (plugins/list-columns.ts): an indexed match on the app's records. */
+    appCondition?: SQL;
+    /** Read the customers a filter names first (`customerListLeads`). */
+    leadWithMatches?: boolean;
+}
+
+/**
+ * With SQLite (FTS5), the rowids of the customers a search finds: a word
+ * of the name, phone or email, or the phone in any of its forms as a prefix
+ * ("01712" finds +8801712…). Index lookups only, never a scan of every
+ * customer.
+ */
+function customerSearchRowids(db: Database, term: string): SQL | undefined {
+    if (!isFts5SearchEnabled(db)) return undefined;
+    const sources: SQL[] = [];
+    const words = sanitizeFtsQuery(term);
+    if (words) sources.push(sql`SELECT rowid FROM customers_fts WHERE customers_fts MATCH ${words}`);
+    const phoneTerms = isLikelyPhoneSearch(term) ? buildPhoneSearchTerms(term) : [];
+    if (phoneTerms.length > 0) {
+        sources.push(sql`SELECT rowid FROM customers_fts WHERE customers_fts MATCH ${phonePrefixFtsQuery("phone", phoneTerms)}`);
+    }
+    return sources.length > 0 ? sql.join(sources, sql` UNION `) : undefined;
+}
+
+/** The rowids of the customers a set names (`customerIds` selects `customer_id`), the set first. */
+function namedCustomerRowids(customerIds: SQL): SQL {
+    return sql`SELECT named_customer.rowid FROM (${customerIds}) AS named
+        CROSS JOIN customers AS named_customer ON named_customer.id = named.customer_id`;
+}
+
+/**
+ * The sets of customers the filters name, each an indexed read: the tag's
+ * links, the channels' subscribed consents (a superset: the list's own
+ * condition also checks the consent is for the current contact).
+ */
+function customerFilterSets(filters: CustomerListFilters = {}): SQL[] {
+    const sets: SQL[] = [];
+    if (filters.tag) {
+        sets.push(namedCustomerRowids(sql`SELECT ${customerTagLinks.customerId} AS customer_id FROM ${customerTagLinks}
+            WHERE ${customerTagLinks.tag} = ${filters.tag}`));
+    }
+    if (filters.subscribed) {
+        const channels = filters.subscribed === "any" ? [...MARKETING_CHANNELS] : [filters.subscribed];
+        sets.push(namedCustomerRowids(sql`SELECT ${customerMarketingConsents.customerId} AS customer_id FROM ${customerMarketingConsents}
+            WHERE ${inArray(customerMarketingConsents.channel, channels)} AND ${customerMarketingConsents.state} = 'subscribed'`));
+    }
+    return sets;
+}
+
+/**
+ * Whether a list read should start from a set of customers its filter names
+ * (`utils/list-lead.ts`): the search's matches, a tag, or a channel's
+ * subscribers, when one of them is small.
+ */
+export async function customerListLeads(db: Database, filter: CustomerListFilter): Promise<boolean> {
+    if (getDatabaseProviderForClient(db) === "postgres") return false;
+    const term = filter.search?.trim();
+    const searchRowids = term ? customerSearchRowids(db, term) : undefined;
+    return anySetIsSmall(db, [...(searchRowids ? [searchRowids] : []), ...customerFilterSets(filter.filters)]);
+}
+
+/** The list's WHERE conditions: the same rows for the list and for an "all matching" bulk action. */
+export function customerListConditions(db: Database, filter: CustomerListFilter): SQL[] {
+    const { search = "", showTrashed = false } = filter;
+    const whereConditions: SQL[] = filter.appCondition ? [filter.appCondition] : [];
+    // The list indexes start with `deleted_at`: the unary `+` keeps SQLite
+    // off them when the list reads a named set first.
+    const deletedAt = filter.leadWithMatches ? sql`+${customers.deletedAt}` : sql`${customers.deletedAt}`;
+    if (showTrashed) {
+        // A retired guest record (all its orders joined an account) is merged, not trashed.
+        // Nearly every customer is unmerged: SQLite's `+` keeps it reading the trash by `deleted_at`.
+        const unmerged = getDatabaseProviderForClient(db) === "postgres"
+            ? sql`${customers.mergedIntoCustomerId} IS NULL`
+            : sql`+${customers.mergedIntoCustomerId} IS NULL`;
+        whereConditions.push(sql`${deletedAt} IS NOT NULL AND ${unmerged}`);
+    } else {
+        whereConditions.push(sql`${deletedAt} IS NULL`);
+    }
+    const term = search.trim();
+    if (term) {
+        const rowids = customerSearchRowids(db, term);
+        if (rowids) {
+            whereConditions.push(sql`customers.rowid IN (${rowids})`);
+        } else {
+            const digitsOnly = term.replace(/[^0-9]/g, "");
+            const ftsCondition = ftsMatch(db, "customers_fts", "customers", term);
+            const phoneCondition = isLikelyPhoneSearch(term) ? containsText(customers.phone, digitsOnly) : undefined;
+            const matches = [ftsCondition, phoneCondition].filter((condition): condition is SQL => condition !== undefined);
+            if (matches.length > 0) whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
+        }
+    }
+
+    whereConditions.push(...customerListFilterSql(filter.filters));
+    if (getDatabaseProviderForClient(db) !== "postgres") {
+        for (const set of customerFilterSets(filter.filters)) whereConditions.push(sql`customers.rowid IN (${set})`);
+    }
+    return whereConditions;
+}
+
+/**
+ * One slice of an "all matching" bulk action (`utils/bulk-matching.ts`): the
+ * next `limit` customer ids the list's filter matches after `cursor`.
+ * `deletableOnly` keeps to customers with no orders (only they can be
+ * deleted permanently), so the walk never stops on a blocked row.
+ */
+export async function listMatchingCustomerIds(
+    db: Database,
+    filter: CustomerListFilter,
+    cursor: string | undefined,
+    limit: number = BULK_MATCHING_SLICE,
+    options: { deletableOnly?: boolean } = {},
+): Promise<{ ids: string[]; next: string | null }> {
+    const conditions = customerListConditions(db, { ...filter, leadWithMatches: await customerListLeads(db, filter) });
+    const after = matchingSliceCondition(customers.id, cursor);
+    if (after) conditions.push(after);
+    if (options.deletableOnly) {
+        conditions.push(sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id})`);
+        conditions.push(sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.accountOwnerCustomerId} = ${customers.id})`);
+    }
+    // Filters read `customer_order_stats` (segments), as the list does.
+    const rows = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+        .where(and(...conditions))
+        .orderBy(asc(customers.id))
+        .limit(limit);
+    return { ids: rows.map((row) => row.id), next: nextMatchingCursor(rows, limit) };
+}
+
+/** Restores several trashed customers one by one; a merged guest record stays merged and is reported. */
+export async function bulkRestoreCustomers(db: Database, ids: readonly string[], actorId: string | null = null): Promise<{ restored: string[]; blocked: string[] }> {
+    const restored: string[] = [];
+    const blocked: string[] = [];
+    for (const id of ids) {
+        try {
+            await restoreCustomer(db, id, actorId);
+            restored.push(id);
+        } catch (error) {
+            if (!(error instanceof ValidationError) && !(error instanceof NotFoundError)) throw error;
+            blocked.push(id);
+        }
+    }
+    return { restored, blocked };
+}
+
 /**
  * Order facts come from `customer_order_stats` (trigger-maintained: real
  * orders only, not `incomplete` or deleted), so the list, its sorting and
@@ -147,28 +301,8 @@ export async function listCustomers(
     } = options;
     const limit = Math.min(Math.max(rawLimit, 1), 100);
 
-    const whereConditions: (SQL | undefined)[] = options.appCondition ? [options.appCondition] : [];
-    if (showTrashed) {
-        // A retired guest record (all its orders joined an account) is merged, not trashed.
-        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`);
-    } else {
-        whereConditions.push(sql`${customers.deletedAt} IS NULL`);
-    }
-    if (search) {
-        const digitsOnly = search.replace(/[^0-9]/g, "");
-        const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
-        const ftsCondition = ftsMatch(db, "customers_fts", "customers", search);
-
-        if (looksLikePhone && ftsCondition) {
-            whereConditions.push(sql`(${ftsCondition} OR ${containsText(customers.phone, digitsOnly)})`);
-        } else if (looksLikePhone) {
-            whereConditions.push(containsText(customers.phone, digitsOnly));
-        } else if (ftsCondition) {
-            whereConditions.push(ftsCondition);
-        }
-    }
-
-    whereConditions.push(...customerListFilterSql(options.filters));
+    const listFilter: CustomerListFilter = { search, showTrashed, filters: options.filters, appCondition: options.appCondition };
+    const whereConditions = customerListConditions(db, { ...listFilter, leadWithMatches: await customerListLeads(db, listFilter) });
 
     const whereClause =
         whereConditions.length > 0
@@ -213,6 +347,17 @@ export async function listCustomers(
             .$dynamic(),
     );
 
+    // The page's ids first, from the sort index; the address, latest order
+    // and spend are then read for those ids only (a 200,000-customer store).
+    const pageKeys = db
+        .select({ id: customers.id })
+        .from(customers)
+        .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+        .where(plan.pageWhere(whereClause))
+        .orderBy(...plan.orderBy)
+        .limit(plan.fetchLimit)
+        .offset(plan.offset);
+
     const resultsQuery = db
         .select({
             id: customers.id,
@@ -251,9 +396,7 @@ export async function listCustomers(
             eq(defaultAddress.customerId, customers.id),
             eq(defaultAddress.isDefault, true),
         ))
-        .where(plan.pageWhere(whereClause))
-        .limit(plan.fetchLimit)
-        .offset(plan.offset)
+        .where(inArray(customers.id, pageKeys))
         .orderBy(...plan.orderBy);
 
     // The total reads at most `countCap` + 1 rows; a cursor page also
@@ -579,31 +722,33 @@ async function findActiveCustomerWithPhone(db: Database, phone: string, exceptId
 }
 
 export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {
+    if (ids.length === 0) return;
+    // One bound value for the whole id set: a list of 90 ids used twice would
+    // bind 180 values, over D1's 100.
+    const idSet = JSON.stringify(ids);
+    const inSet = (column: SQLWrapper) => sql`${column} IN (SELECT CAST(value AS TEXT) FROM json_each(${idSet}))`;
     if (permanent) {
         const referencedOrder = await db
             .select({ id: orders.id })
             .from(orders)
-            .where(or(
-                inArray(orders.customerId, ids),
-                inArray(orders.accountOwnerCustomerId, ids),
-            ))
+            .where(or(inSet(orders.customerId), inSet(orders.accountOwnerCustomerId)))
             .limit(1)
             .get();
         if (referencedOrder) {
             throw new ValidationError("Customers with order history cannot be permanently deleted. Keep those customers archived.");
         }
         await db.batch([
-            db.delete(customerSessions).where(inArray(customerSessions.customerId, ids)),
-            db.delete(customerHistory).where(inArray(customerHistory.customerId, ids)),
-            db.delete(customers).where(inArray(customers.id, ids)),
+            db.delete(customerSessions).where(inSet(customerSessions.customerId)),
+            db.delete(customerHistory).where(inSet(customerHistory.customerId)),
+            db.delete(customers).where(inSet(customers.id)),
         ] as Parameters<Database["batch"]>[0]);
     } else {
         await db.batch([
-            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inArray(customers.id, ids)),
+            db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(inSet(customers.id)),
             db
                 .update(customerSessions)
                 .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-                .where(and(inArray(customerSessions.customerId, ids), isNull(customerSessions.revokedAt))),
+                .where(and(inSet(customerSessions.customerId), isNull(customerSessions.revokedAt))),
         ] as Parameters<Database["batch"]>[0]);
     }
 }
