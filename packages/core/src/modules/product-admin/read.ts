@@ -129,7 +129,23 @@ export async function productListLeads(db: Database, filter: Pick<ProductListFil
  * The same conditions pick the rows of an "all matching" bulk action, so it
  * acts on exactly what the list shows.
  */
-export function productListConditions(db: Database, filter: ProductListFilter): { conditions: SQL[]; rankExpression: SQL | undefined } {
+/**
+ * A text search's relevance: each product match's FTS5 rank, read once as a
+ * derived table the list left-joins on rowid (`product_rank`). A correlated
+ * `(SELECT rank ... WHERE rowid = products.rowid AND MATCH ...)` re-ran the
+ * match for every candidate row: 2.8 s for a common word over 50,000
+ * products. Products matched only through a SKU rank last (0).
+ */
+function productRankJoin(sanitized: string): { join: SQL; on: SQL; order: SQL } {
+    return {
+        // `LIMIT -1` keeps SQLite from flattening it back into a per-row MATCH (FTS5 is SQLite-only).
+        join: sql`(SELECT rowid AS fts_rowid, rank AS fts_rank FROM products_fts WHERE products_fts MATCH ${sanitized} LIMIT -1) AS product_rank`,
+        on: sql`product_rank.fts_rowid = ${products}.rowid`,
+        order: sql`COALESCE(product_rank.fts_rank, 0) ASC`,
+    };
+}
+
+export function productListConditions(db: Database, filter: ProductListFilter): { conditions: SQL[]; rankExpression: SQL | undefined; rankJoin: { join: SQL; on: SQL } | undefined } {
     const {
         search,
         categoryId,
@@ -153,12 +169,15 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
     }
 
     let rankExpression: SQL | undefined;
+    let rankJoin: { join: SQL; on: SQL } | undefined;
     const searchRowids = search ? productSearchRowids(db, search) : undefined;
     if (search && searchRowids) {
         whereConditions.push(sql`products.rowid IN (${searchRowids})`);
         const sanitized = sanitizeFtsQuery(search);
         if (sanitized) {
-            rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+            const rank = productRankJoin(sanitized);
+            rankExpression = rank.order;
+            rankJoin = rank;
         }
     } else if (search) {
         const barcodeKey = getBarcodeIdentityKey(search);
@@ -194,7 +213,9 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
                 whereConditions.push(ftsCondition);
             }
             if (isFts5SearchEnabled(db)) {
-                rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+                const rank = productRankJoin(sanitized);
+                rankExpression = rank.order;
+                rankJoin = rank;
             }
         } else if (barcodeKey) {
             // FTS sanitized to nothing but it's a barcode — search by barcode only
@@ -212,7 +233,7 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
         whereConditions.push(salesChannelState === "published" ? published : sql`NOT ${published}`);
     }
 
-    return { conditions: whereConditions, rankExpression };
+    return { conditions: whereConditions, rankExpression, rankJoin };
 }
 
 /**
@@ -285,7 +306,7 @@ export async function listProducts(db: Database, options: {
         salesChannelState = "published",
     } = options;
 
-    const { conditions: whereConditions, rankExpression } = productListConditions(db, {
+    const { conditions: whereConditions, rankExpression, rankJoin } = productListConditions(db, {
         search,
         categoryId,
         showTrashed,
@@ -310,16 +331,18 @@ export async function listProducts(db: Database, options: {
 
     // The page's ids first, from the sort index; the wide row and its
     // channels are then read for those ids only.
-    const pageKeys = db
+    const pageKeysBase = db
         .select({ id: products.id })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
+        .$dynamic();
+    const pageKeys = (rankJoin ? pageKeysBase.leftJoin(rankJoin.join, rankJoin.on) : pageKeysBase)
         .where(plan.pageWhere(whereClause))
         .orderBy(...plan.orderBy)
         .limit(plan.fetchLimit)
         .offset(plan.offset);
 
-    const productResultsQuery = db
+    const productResultsBase = db
         .select({
             id: products.id,
             name: products.name,
@@ -344,6 +367,8 @@ export async function listProducts(db: Database, options: {
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
+        .$dynamic();
+    const productResultsQuery = (rankJoin ? productResultsBase.leftJoin(rankJoin.join, rankJoin.on) : productResultsBase)
         .where(inArray(products.id, pageKeys))
         .orderBy(...plan.orderBy);
 

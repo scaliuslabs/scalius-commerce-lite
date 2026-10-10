@@ -52,6 +52,21 @@ describe("product list plans (migration 0127)", () => {
         expect(await find("3310")).toEqual(["prod_phone"]);
         queries.length = 0;
         expect(await find("bx778899")).toEqual(["prod_monitor"]);
-        expect(pageKeysPlan(sqlite, queries, DATA)).toMatch(/^SEARCH products USING INTEGER PRIMARY KEY \(rowid=\?\)/);
+        // The relevance ranks are read once (materialized), then the matches by rowid.
+        expect(pageKeysPlan(sqlite, queries, DATA)).toMatch(/^(MATERIALIZE product_rank \| )?SEARCH products USING INTEGER PRIMARY KEY \(rowid=\?\)/);
+    });
+
+    it("ranks a common word's matches from one FTS read, never a MATCH per candidate row", async () => {
+        const { db, sqlite, queries } = setup();
+        const values = Array.from({ length: 30 }, (_, index) => `('prod_${index}', 'Gaming Laptop ${index}', 'gaming-laptop-${index}', 100000)`);
+        sqlite.exec(`INSERT INTO products (id, name, slug, price_minor) VALUES ${values.join(", ")}`);
+        const result = await listProducts(db, { search: "laptop", limit: 10, includeDescription: false });
+        expect(result.products).toHaveLength(10);
+        const data = queries.find(({ query }) => DATA.test(query))!;
+        const bound = data.values.map((value) => typeof value === "boolean" ? Number(value) : value) as never[];
+        const plan = (sqlite.prepare(`EXPLAIN QUERY PLAN ${data.query}`).all(...bound) as Array<{ detail: string }>).map((row) => row.detail);
+        // `=M`: a rowid-constrained MATCH, run again for each candidate row.
+        expect(plan.filter((detail) => /products_fts VIRTUAL TABLE INDEX \d+:=M/.test(detail))).toEqual([]);
+        expect(plan).toContain("MATERIALIZE product_rank");
     });
 });
