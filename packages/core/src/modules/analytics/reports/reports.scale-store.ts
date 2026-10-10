@@ -1,6 +1,7 @@
 // Test-only generator for the scale run: a store with a year of orders
 // (lines, COD tracking, parcels, returns, payments and refunds) bulk-loaded
 // into a migrated node:sqlite database with its triggers dropped.
+import { analyticsRollupBackfillStatements } from "@scalius/database/analytics-rollup";
 import type { SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
 
 const DAY = 86_400;
@@ -29,7 +30,7 @@ function pick<T>(rand: () => number, entries: ReadonlyArray<readonly [T, number]
 export function seedScaleStore(db: SqliteTestDatabase, orderCount: number, now: Date) {
   const { sqlite } = db;
   const rand = random(42);
-  // Reads don't depend on triggers; dropping them makes seeding a bulk load.
+  // Bulk-load source rows, then rebuild the same projections the migration installs.
   const triggers = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as Array<{ name: string }>;
   for (const { name } of triggers) sqlite.exec(`DROP TRIGGER "${name}"`);
   const products = Math.max(200, Math.round(orderCount / 20));
@@ -126,6 +127,7 @@ export function seedScaleStore(db: SqliteTestDatabase, orderCount: number, now: 
       returnLine.run(`retl_${id}`, `ret_${id}`, id, lineIds[0]!.id, lineIds[0]!.variant);
     }
   }
+  for (const statement of analyticsRollupBackfillStatements()) sqlite.exec(statement);
   sqlite.exec("COMMIT");
   sqlite.exec("ANALYZE");
 }

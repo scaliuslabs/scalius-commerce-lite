@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
     getStorefrontProductRecommendations,
     MAX_RECOMMENDATION_SOURCE_IDS,
+    rankProductRecommendations,
 } from "./recommendations";
 import { getStorefrontProductBySlug } from "./product-page";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
@@ -303,6 +304,56 @@ describe("product recommendations", () => {
         const wider = await recommend(["source"], 3);
         expect(wider.products).toHaveLength(2);
         expect(wider.reason).toBe("also_bought");
+    });
+
+    it("covers recent buyer and order-line reads without changing live scores or the strict deadline", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_trousers", priceMinor: 900_000 });
+        product({ id: "similar", categoryId: "cat_shirts" });
+        product({ id: "sold_out", stock: 0 });
+        product({ id: "hidden", isActive: false });
+        const basket = ["source", "peer", "sold_out", "hidden"];
+        order("01711111111", basket, "pending");
+        order("01711111111", basket, "delivered");
+        order("", basket, "processing");
+        sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run("buyer@example.com", `ord_${orderSequence}`);
+        order("", basket, "confirmed");
+        sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run(" BUYER@EXAMPLE.COM ", `ord_${orderSequence}`);
+        order("01722222222", basket, "completed", NOW - 40 * 86_400);
+        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) {
+            order(`excluded_${status}`, basket, status);
+        }
+        order("01733333333", basket);
+        sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+
+        const { value, dependencies } = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source"], limit: 8 }),
+            { strict: true, log: () => {} },
+        );
+        expect(value).toEqual({
+            reason: "also_bought",
+            rows: [
+                { id: "peer", alsoBoughtBuyers: 3, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+                { id: "similar", alsoBoughtBuyers: 0, relatedScore: 40, popularBuyers: 0, popularOrdering: 0 },
+            ],
+        });
+        expect(dependencies.validUntil).toBe((NOW - 3_600 + 30 * 86_400 + 1) * 1_000);
+        expect(dependencies.keys).toContain("recommendation-signals");
+        expect(dependencies.uncacheable).toEqual([]);
+        expect(dependencies.coarseTables).toEqual([]);
+        expect(statements).toHaveLength(2);
+        const plan = statements.flatMap((query, index) => sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`)
+            .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
+        // A non-covering lookup per order/line took 18 seconds at one million orders.
+        for (const alias of ["rec_popular_first", "rec_popular_order"]) {
+            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_buyers_idx`));
+        }
+        for (const alias of ["rec_popular_line", "rec_peer_line"]) {
+            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
+        }
     });
 
     it("recommends for a whole cart, excluding every cart item", async () => {

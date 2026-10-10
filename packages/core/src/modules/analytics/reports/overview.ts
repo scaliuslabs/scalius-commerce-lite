@@ -2,10 +2,9 @@
 // COD and cancellation rates, and breakdowns by channel, payment method,
 // city, delivery zone and location, for a range and its comparison period.
 //
-// One statement per period: the per-order metrics (`om`, see sales-sql.ts)
-// are computed once and grouped several ways with UNION ALL, so a period is
-// one pass over its orders and lines, both periods run concurrently (two of
-// D1's six connections), and nothing is read twice.
+// A small bucket read chooses each customer path, then one statement per
+// period reads UTC summaries and exact facts. The two periods use two of D1's
+// six connections; labels and merchant days follow the store's current settings.
 import { sql, type SQL } from "drizzle-orm";
 import {
   analyticsBuckets,
@@ -18,18 +17,8 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 import type { WeekDay } from "@scalius/shared/week-start";
-import {
-  hasPriorSalesOrderSql,
-  merchantDaySql,
-  scopeOffsets,
-  orderIdentitySql,
-  orderMeasuresSql,
-  orderMetricsCtes,
-  salesLinesCtes,
-  salesOrdersCte,
-  shopMinorSql,
-  type SalesScope,
-} from "./sales-sql";
+import { merchantDaySql, scopeOffsets, orderMeasuresSql } from "./sales-sql";
+import { overviewReadRanges } from "./overview-buckets";
 import { num, runAnalyticsQuery, text, type AnalyticsContext } from "./context";
 
 /** Sales measures in integer minor units of the report currency. */
@@ -178,136 +167,217 @@ export function addMeasures(left: SalesMeasures, right: SalesMeasures): SalesMea
   };
 }
 
-const OVERVIEW_FIELDS = [
-  "kind",
-  "k1",
-  "k2",
-  "orders",
-  "gross_sales",
-  "discounts",
-  "returns",
-  "net_sales",
-  "shipping",
-  "taxes",
-  "total_sales",
-  "net_items_sold",
-  "x1",
-  "x2",
-  "x3",
-  "x4",
-] as const;
-
 const ZEROS = sql.raw("0 as x1, 0 as x2, 0 as x3, 0 as x4");
 
-/** The single statement for one period (see the file comment). */
-function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
+const ROLLUP_MEASURES = [
+  "order_count", "placed", "cancelled", "gross", "disc", "returns", "shipping", "taxes",
+  "net_units", "cod", "rts", "cod_delivered", "refunded",
+] as const;
+const DIMENSIONS = sql.raw(`'["total","channel","payment","city","delivery","location"]'`);
+const columns = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `${alias}.${name}`).join(", "));
+const sums = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `sum(${alias}.${name}) as ${name}`).join(", "));
+
+function intervalCte(name: string, intervals: readonly (readonly [number, number])[]): SQL {
+  return sql`${sql.raw(name)} as (
+    select cast(json_extract(value, '$.lo') as bigint) as lo,
+      cast(json_extract(value, '$.hi') as bigint) as hi
+    from json_each(${JSON.stringify(intervals.map(([lo, hi]) => ({ lo, hi })))})
+  )`;
+}
+
+function customerCtes(currency: string, start: number, end: number, summarized: boolean): SQL {
+  if (summarized) {
+    // First, second and last sales can prove membership or an empty interval.
+    // Probe only histories whose remaining middle sales could lie in the range.
+    return sql`cp as (
+      select case when cs.first_sale_at >= ${start} and cs.second_sale_at < ${end} then 2 else 1 end as n,
+        case when cs.first_sale_any_currency_at < ${start} then 1 else 0 end as prior
+      from analytics_customer_currency_summary cs
+      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
+        and cs.first_sale_at < ${end} and cs.last_sale_at >= ${start}
+        and case
+          when cs.first_sale_at >= ${start} then 1
+          when cs.last_sale_at < ${end} then 1
+          when cs.second_sale_at >= ${end} then 0
+          when cs.second_sale_at >= ${start} then 1
+          else case when exists (
+            select 1 from analytics_order_facts f
+            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
+              and f.created_at >= ${start} and f.created_at < ${end}
+          ) then 1 else 0 end end = 1
+    )`;
+  }
+  return sql`cu as (
+      select f.identity, count(*) as n
+      from analytics_order_facts f
+      where f.shop_currency = ${currency} and f.order_count = 1
+        and f.created_at >= ${start} and f.created_at < ${end}
+      group by f.identity
+    ),
+    cp as (
+      select cu.n, case when fs.first_sale_at < ${start} then 1 else 0 end as prior
+      from cu left join analytics_customer_first_sale fs on fs.identity = cu.identity
+    )`;
+}
+
+/** UTC totals use daily buckets; only merchant-day boundaries need finer reads. */
+function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean): SQL {
   const instants = analyticsInstantRange(range, ctx.timeZone);
-  const scope: SalesScope = { ...instants, currency: ctx.currency.code };
-  const measures = orderMeasuresSql("ox", true);
-  return sql`with ${salesOrdersCte(scope, "overview")},
-    ${salesLinesCtes()},
-    ${orderMetricsCtes()},
-    od as (
-      select om.payment_method, om.channel, om.channel_source, om.city_name,
-        om.gross, om.disc, om.returns, om.shipping, om.taxes, om.net_units,
-        ${merchantDaySql("om.created_at", scopeOffsets(ctx.timeZone, instants))} as day,
-        case when om.payment_method = 'cod' then 1 else 0 end as cod,
-        case when om.payment_method = 'cod' and om.status in ('returned', 'refunded')
-          and coalesce(ct.cod_status, '') <> 'collected' then 1 else 0 end as rts,
-        case when om.payment_method = 'cod' and (coalesce(ct.cod_status, '') = 'collected'
-          or om.status in ('delivered', 'completed')) then 1 else 0 end as cod_delivered,
-        coalesce(${sql.raw(shopMinorSql(`(
-          select sum(p.amount_minor) from order_payments p
-          where p.order_id = om.id and p.payment_type = 'refund' and p.status = 'refunded'
-        )`, "om"))}, 0) as refunded,
-        case
-          when om.requires_shipping = 0 then '__no_delivery'
-          when om.shipping_method_kind = 'pickup' then '__pickup'
-          when om.shipping_method_id is null then '__unknown'
-          when dz.id is null then '__everywhere_else'
-          else dz.id
-        end as zone_key,
-        coalesce(dz.name, '') as zone_label,
-        coalesce(om.fulfillment_location_id, (
-          select dl.id from inventory_locations dl where dl.is_default = 1
-        ), '') as location_key
-      from om
-      left join cod_tracking ct on ct.order_id = om.id and ct.cod_status = 'collected'
-      left join shipping_methods sm on sm.id = om.shipping_method_id
+  const offsets = scopeOffsets(ctx.timeZone, instants);
+  const ranges = overviewReadRanges(instants, offsets);
+  const currency = ctx.currency.code;
+  const measures = orderMeasuresSql("x", true);
+  return sql`with
+    ${intervalCte("period_edges", ranges.periodEdges)},
+    ${intervalCte("quarter_hours", ranges.quarterHours)},
+    ${intervalCte("day_edges", ranges.dayEdges)},
+    edge_facts as materialized (
+      select f.* from period_edges e
+      cross join analytics_order_facts f
+      where f.created_at >= e.lo and f.created_at < e.hi
+    ),
+    period_rows as (
+      select b.dimension_kind, b.shop_currency, b.key1, b.key2, ${columns("b")}
+      from json_each(${DIMENSIONS}) d
+      cross join analytics_sales_buckets b
+      where b.grain_seconds = 86400 and b.dimension_kind = d.value
+        and b.bucket_start >= ${ranges.fullDays[0]} and b.bucket_start < ${ranges.fullDays[1]}
+        and (b.shop_currency = ${currency} or b.dimension_kind = 'total')
+      union all
+      select cast(d.value as text), edge.shop_currency,
+        case d.value
+          when 'channel' then edge.channel
+          when 'payment' then edge.payment_method
+          when 'city' then coalesce(edge.city_name, '')
+          when 'delivery' then case
+            when edge.requires_shipping = 0 then 'none'
+            when edge.shipping_method_kind = 'pickup' then 'pickup'
+            when edge.shipping_method_id is null then 'unknown'
+            else 'method' end
+          when 'location' then case when edge.fulfillment_location_id is null then 'default' else 'id' end
+          else '' end,
+        case d.value
+          when 'channel' then coalesce(edge.channel_source, '')
+          when 'delivery' then coalesce(edge.shipping_method_id, '')
+          when 'location' then coalesce(edge.fulfillment_location_id, '')
+          else '' end,
+        ${columns("edge")}
+      from edge_facts edge cross join json_each(${DIMENSIONS}) d
+      where edge.shop_currency = ${currency} or d.value = 'total'
+    ),
+    px as materialized (
+      select dimension_kind, shop_currency, key1, key2, ${sums("r")}
+      from period_rows r group by dimension_kind, shop_currency, key1, key2
+    ),
+    sales as materialized (
+      select * from px where shop_currency = ${currency} and order_count > 0
+    ),
+    day_rows as (
+      select ${merchantDaySql("b.bucket_start", offsets)} as day, ${columns("b")}
+      from quarter_hours q cross join analytics_sales_buckets b
+      where b.grain_seconds = 900 and b.dimension_kind = 'total'
+        and b.bucket_start >= q.lo and b.bucket_start < q.hi and b.shop_currency = ${currency}
+      union all
+      select ${merchantDaySql("f.created_at", offsets)} as day, ${columns("f")}
+      from day_edges e cross join analytics_order_facts f
+      where f.created_at >= e.lo and f.created_at < e.hi and f.shop_currency = ${currency}
+        and f.order_count = 1
+    ),
+    zones as (
+      select s.*,
+        case s.key1
+          when 'none' then '__no_delivery'
+          when 'pickup' then '__pickup'
+          when 'unknown' then '__unknown'
+          else coalesce(dz.id, '__everywhere_else') end as zone_key,
+        coalesce(dz.name, '') as zone_label
+      from sales s left join shipping_methods sm on sm.id = s.key2
       left join delivery_zones dz on dz.id = sm.zone_id
+      where s.dimension_kind = 'delivery'
     ),
-    -- Collapse identical dimensions once, before the seven breakdown sorts.
-    ox as materialized (
-      select payment_method, channel, channel_source, city_name, day, zone_key, zone_label, location_key,
-        count(*) as order_count,
-        sum(gross) as gross, sum(disc) as disc, sum(returns) as returns,
-        sum(shipping) as shipping, sum(taxes) as taxes, sum(net_units) as net_units,
-        sum(cod) as cod, sum(rts) as rts, sum(cod_delivered) as cod_delivered, sum(refunded) as refunded
-      from od
-      group by payment_method, channel, channel_source, city_name, day, zone_key, zone_label, location_key
+    locations as (
+      select s.*, case when s.key1 = 'default' then coalesce((
+        select dl.id from inventory_locations dl where dl.is_default = 1
+      ), '') else s.key2 end as location_key
+      from sales s where s.dimension_kind = 'location'
     ),
-    cu as (
-      select ${orderIdentitySql("so")} as identity, max(so.customer_id) as customer_id, max(so.customer_phone) as customer_phone,
-        count(*) as n
-      from so group by ${orderIdentitySql("so")}
-    ),
-    -- Read identities before money enrichment; probe once across all three sums.
-    cp as materialized (
-      select cu.n, ${hasPriorSalesOrderSql(instants.start, "cu")} as prior from cu
-    )
-    -- D1 allows at most five terms per compound SELECT: two groups of terms.
+    ${customerCtes(currency, instants.start, instants.endExclusive, summarizedCustomers)}
+    -- Keep each compound SELECT within D1's five-term limit.
     select * from (
       select 'total' as kind, '' as k1, '' as k2, ${measures},
-        coalesce(sum(ox.cod), 0) as x1, coalesce(sum(ox.rts), 0) as x2,
-        coalesce(sum(ox.cod_delivered), 0) as x3, coalesce(sum(ox.refunded), 0) as x4
-      from ox
+        coalesce(sum(x.cod), 0) as x1, coalesce(sum(x.rts), 0) as x2,
+        coalesce(sum(x.cod_delivered), 0) as x3, coalesce(sum(x.refunded), 0) as x4
+      from sales x where x.dimension_kind = 'total'
       union all
-      select 'day', cast(ox.day as text), '', ${measures}, ${ZEROS}
-      from ox group by ox.day
+      select 'day', cast(x.day as text), '', ${measures}, ${ZEROS}
+      from day_rows x group by x.day having sum(x.order_count) > 0
       union all
-      select 'channel', ox.channel, coalesce(ox.channel_source, ''), ${measures}, ${ZEROS}
-      from ox group by ox.channel, coalesce(ox.channel_source, '')
+      select 'channel', x.key1, x.key2, ${measures}, ${ZEROS}
+      from sales x where x.dimension_kind = 'channel' group by x.key1, x.key2
       union all
-      select 'payment', ox.payment_method, '', ${measures}, ${ZEROS}
-      from ox group by ox.payment_method
+      select 'payment', x.key1, '', ${measures}, ${ZEROS}
+      from sales x where x.dimension_kind = 'payment' group by x.key1
       union all
-      select 'city', coalesce(ox.city_name, ''), '', ${measures}, ${ZEROS}
-      from ox group by coalesce(ox.city_name, '')
+      select 'city', x.key1, '', ${measures}, ${ZEROS}
+      from sales x where x.dimension_kind = 'city' group by x.key1
     ) as sales_groups
     union all
     select * from (
-      select 'zone' as kind, ox.zone_key as k1, ox.zone_label as k2, ${measures}, ${ZEROS}
-      from ox group by ox.zone_key, ox.zone_label
+      select 'zone' as kind, x.zone_key as k1, x.zone_label as k2, ${measures}, ${ZEROS}
+      from zones x group by x.zone_key, x.zone_label
       union all
-      select 'location', ox.location_key, coalesce(il.name, ''), ${measures}, ${ZEROS}
-      from ox left join inventory_locations il on il.id = ox.location_key
-      group by ox.location_key, coalesce(il.name, '')
+      select 'location', x.location_key, coalesce(il.name, ''), ${measures}, ${ZEROS}
+      from locations x left join inventory_locations il on il.id = x.location_key
+      group by x.location_key, coalesce(il.name, '')
       union all
       select 'customers', '', '', count(*), 0, 0, 0, 0, 0, 0, 0, 0,
         coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
         coalesce(sum(cp.prior), 0),
-        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0),
-        0
+        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0
       from cp
       union all
       select 'placed', '', '',
-        coalesce(sum(case when po.shop_currency = ${scope.currency} then 1 else 0 end), 0),
+        coalesce(sum(case when x.shop_currency = ${currency} then x.placed else 0 end), 0),
         0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when po.shop_currency = ${scope.currency} and po.status = 'cancelled' then 1 else 0 end), 0),
-        coalesce(sum(case when po.shop_currency <> ${scope.currency} then 1 else 0 end), 0),
-        0, 0
-      from orders po
-      where po.deleted_at is null
-        and po.created_at >= ${instants.start} and po.created_at < ${instants.endExclusive}
-        and po.status <> 'incomplete'
+        coalesce(sum(case when x.shop_currency = ${currency} then x.cancelled else 0 end), 0),
+        coalesce(sum(case when x.shop_currency <> ${currency} then x.placed else 0 end), 0), 0, 0
+      from px x where x.dimension_kind = 'total'
     ) as other_groups`;
 }
 
-function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange) {
-  const fields = Object.fromEntries(
-    OVERVIEW_FIELDS.map((field) => [field, sql`q.${sql.raw(field)}`]),
-  ) as Record<(typeof OVERVIEW_FIELDS)[number], SQL<unknown>>;
-  return ctx.db.select(fields).from(sql`(${overviewStatement(ctx, range)}) as q`);
+function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean) {
+  // Every output column already has its public aggregate alias. Avoid ORM
+  // field decoding for hundreds of day rows; mapOverviewPeriod normalizes them.
+  return ctx.db.all<Record<string, unknown>>(overviewStatement(ctx, range, summarizedCustomers));
+}
+
+/** Summaries bound broad reads and historical prefixes; narrow interior ranges use dated facts. */
+async function overviewCustomerStrategies(ctx: AnalyticsContext, current: AnalyticsRange, previous: AnalyticsRange | null): Promise<[boolean, boolean]> {
+  const completeDaySales = (range: AnalyticsRange | null): SQL => {
+    if (!range) return sql.raw("0");
+    const { start, endExclusive } = analyticsInstantRange(range, ctx.timeZone);
+    return sql`coalesce(sum(case when b.bucket_start >= ${Math.ceil(start / 86400) * 86400}
+      and b.bucket_start < ${Math.floor(endExclusive / 86400) * 86400} then b.order_count else 0 end), 0)`;
+  };
+  // Complete days are a lower bound, so partial-day facts need no extra read.
+  const [row] = await ctx.db.select({
+    total: sql`coalesce(sum(b.order_count), 0)`,
+    firstSaleDay: sql`min(case when b.order_count > 0 then b.bucket_start end)`,
+    current: completeDaySales(current),
+    previous: completeDaySales(previous),
+  }).from(sql`analytics_sales_buckets b`).where(sql`b.grain_seconds = 86400
+    and b.dimension_kind = 'total' and b.shop_currency = ${ctx.currency.code}`);
+  const total = num(row?.total);
+  const summarize = (range: AnalyticsRange | null, orders: unknown) => {
+    if (!range || total === 0) return false;
+    // Before the first sales day, every summary reached by first_sale_at < end belongs to the range.
+    const prefix = row?.firstSaleDay != null
+      && analyticsInstantRange(range, ctx.timeZone).start <= num(row.firstSaleDay);
+    // Above a quarter of the store's sales, grouping facts and joining each
+    // customer costs more than scanning the covering customer summaries.
+    return prefix || num(orders) * 4 >= total;
+  };
+  return [summarize(current, row?.current), summarize(previous, row?.previous)];
 }
 
 function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
@@ -425,13 +495,16 @@ export function rollUpDays(
 
 export async function getAnalyticsOverview(ctx: AnalyticsContext, input: OverviewInput): Promise<AnalyticsOverview> {
   const previousRange = analyticsComparisonRange(input.range, input.comparison);
-  const [currentRows, previousRows] = await runAnalyticsQuery("overview", () => Promise.all([
-    overviewQuery(ctx, input.range),
-    previousRange ? overviewQuery(ctx, previousRange) : Promise.resolve(null),
-  ]));
-  const current = mapOverviewPeriod(input.range, currentRows as Record<string, unknown>[]);
+  const [currentRows, previousRows] = await runAnalyticsQuery("overview", async () => {
+    const [currentStrategy, previousStrategy] = await overviewCustomerStrategies(ctx, input.range, previousRange);
+    return Promise.all([
+      overviewQuery(ctx, input.range, currentStrategy),
+      previousRange ? overviewQuery(ctx, previousRange, previousStrategy) : Promise.resolve(null),
+    ]);
+  });
+  const current = mapOverviewPeriod(input.range, currentRows);
   const previous = previousRange && previousRows
-    ? mapOverviewPeriod(previousRange, previousRows as Record<string, unknown>[])
+    ? mapOverviewPeriod(previousRange, previousRows)
     : null;
 
   const currentBuckets = rollUpDays(input.range, current.days, input.granularity, ctx.weekStart);

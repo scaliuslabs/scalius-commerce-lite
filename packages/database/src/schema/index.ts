@@ -42,3 +42,4 @@ export * from "./sales-channels";
 export * from "./metaobjects";
 export * from "./web-push";
 export * from "./customer-identities";
+export * from "./analytics";

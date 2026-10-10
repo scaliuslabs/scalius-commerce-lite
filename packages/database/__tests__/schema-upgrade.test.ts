@@ -652,6 +652,19 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 7,
         postgresStatements: 7,
       },
+      {
+        version: 131,
+        name: "0131_analytics_rollup",
+        // Four tables, five indexes, four backfills, 28 maintenance triggers and the ledger.
+        sqliteStatements: 42,
+        postgresStatements: 42,
+      },
+      {
+        version: 132,
+        name: "0132_recommendation_buyers",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -831,6 +844,8 @@ describe("provider-neutral schema upgrades", () => {
           { version: 128, name: "0128_scale_reads" },
           { version: 129, name: "0129_order_overview_reads" },
           { version: 130, name: "0130_dashboard_home_reads" },
+          { version: 131, name: "0131_analytics_rollup" },
+          { version: 132, name: "0132_recommendation_buyers" },
         ],
       });
     } finally {

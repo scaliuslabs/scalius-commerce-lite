@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./analytics-sales-sql": "./src/analytics-sales-sql.ts",
+    "./analytics-rollup": "./src/analytics-rollup.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./postgres-adapter": "./src/postgres-adapter.ts",
@@ -41,6 +43,7 @@
     "verify:portability-export": "tsx scripts/verify-sqlite-export.ts"
   },
   "dependencies": {
+    "@scalius/shared": "workspace:*",
     "@neondatabase/serverless": "1.2.0",
     "@tursodatabase/database": "^0.7.2",
     "@tursodatabase/serverless": "^1.4.1",

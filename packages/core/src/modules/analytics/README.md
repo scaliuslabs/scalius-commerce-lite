@@ -75,7 +75,7 @@ Home's sales numbers (total sales, orders, average order value, return-to-sender
 
 ## Analytics overview and reports
 
-The Analytics page, its reports and Home's sales numbers all read `reports/`. `reports/sales-sql.ts` defines which orders count and how each money figure is measured (the CTE chain, measures, customer probes and bucket SQL). The overview and every report only group those relations, so a number has one meaning.
+The Analytics page, its reports and Home's sales numbers all read `reports/`. `reports/sales-sql.ts` defines report scopes and grouping. Its line/order monetary expressions come from `@scalius/database/analytics-sales-sql`, shared with the overview projection, so money has one definition across live reports and stored facts.
 
 The report catalog (ids, columns, types, default sorts) is `packages/shared/src/analytics-reports.ts`. Periods, presets, comparisons and buckets are `packages/shared/src/analytics-period.ts`.
 
@@ -153,14 +153,27 @@ The catalog has 26 reports in six categories (`sales`, `customers`, `inventory`,
 
 ### Boundedness
 
-- One statement per period (overview) or per page (report). The two overview periods run concurrently (two of D1's six connections). Collection membership travels as one JSON parameter.
-- `so` and the overview's `ox` are `as materialized`, so SQLite does not re-read the period's orders per reference.
+- The overview reads daily totals once to select customer paths, then runs one statement per period. Its two periods run concurrently (two of D1's six connections). Detailed reports use one statement per page. Collection membership travels as one JSON parameter.
+- Live reports materialize `so`; the overview materializes only exact boundary facts and grouped summaries, without reopening the order ledger.
 - D1 rejects a compound SELECT of more than five terms, so the overview nests its groupings in two compounds.
 - A report page computes every group (window totals) and pages with `ORDER BY`, `LIMIT` and `OFFSET`: at most 100 rows a page and 10,000 deep. An export is one read of up to 10,000 rows. These lists use page numbers, not cursors.
-- Reports read the base tables. No rollup or fact tables exist.
+- Detailed reports read base tables. Migration 0131 maintains the overview's private `analytics_order_facts`, `analytics_sales_buckets`, `analytics_customer_first_sale` and `analytics_customer_currency_summary` synchronously in the source transaction. Full UTC days use daily breakdowns; merchant-day series use quarter-hour totals; partial boundaries read exact indexed facts. Current time zones, delivery zones and location names resolve on read.
+- Customer counts remain exact; never sum daily distinct counts. Small ranges group identities through the covering date index. When complete UTC days contain at least a quarter of the currency's sales, or the range starts before the first sales day, the overview reads `analytics_customer_currency_summary`: first, second and last sale instants per identity/currency, plus the first sale across all currencies. A first, second or last sale inside the range proves membership. When the first is before the range and the second is at or after its end, the range is empty for that customer. Only an unresolved middle history needs an indexed fact `EXISTS`. Second-sale time determines repeat status for new customers, including equal timestamps. This avoids per-order grouping and first-sale joins while reading at most four times the selected sales in summary rows; a historical prefix reads only summaries whose first sale is before its end. Dates remain instants, so time-zone changes require no rebuild.
+- Customer summary maintenance runs only for eligibility, identity, currency or placement-time changes; money-only updates do not touch it. Global-first changes update that identity's currency rows. Dormant rows have null endpoints and are omitted from the covering read index. Local extrema and global-first reads come from facts, so sibling trigger order cannot change the result.
+- The database-owned `analytics-rollup` helper builds the same facts for migration backfill and triggerless test seeds. Maintenance skips unchanged facts and emits no domain events or public cache invalidations. COD/refund-only changes update two total buckets. PostgreSQL writers use the adapter's SERIALIZABLE whole-operation retry; native two-connection tests cover shared orders and buckets.
+- Monetary SQL explicitly preserves half-away FX rounding and integer partial-return division on all providers (`round(expr, 0)` and integer accepted-quantity sums).
 - `reports/reports.scale.test.ts` loads a generated store and fails on a full scan of `orders`, `order_items`, `order_payments`, `order_return_lines`, `cod_tracking`, `delivery_shipments` or `customers`, or on an orders index entered on `deleted_at` alone. For a measured run:
 
 ```bash
 ANALYTICS_SCALE_ORDERS=100000 ANALYTICS_SCALE_RUNS=3 ANALYTICS_SCALE_OUT=/tmp/analytics-scale.json \
   pnpm exec vitest run packages/core/src/modules/analytics/reports/reports.scale.test.ts --testTimeout=600000
 ```
+
+The overview gate checks bounded fact/bucket plans and exact mutation parity with the pre-rollup SQLite source query. Its opt-in benchmark writes one disposable file-backed store, reports backfill time/storage, reopens SQLite for each first read, checks month/year comparisons, and measures 99-line writes plus a 500-line stress case:
+
+```bash
+ANALYTICS_SCALE_ORDERS=1000000 ANALYTICS_SCALE_RUNS=1 ANALYTICS_SCALE_OUT=/tmp/analytics-rollup.json \
+  pnpm exec vitest run packages/core/src/modules/analytics/reports/overview-rollup.benchmark.test.ts --maxWorkers=1
+```
+
+Fresh SQLite connections clear the connection page cache; the OS cache remains uncontrolled. The <=300 ms SQL gate does not replace first-request Worker HTTP timings or the browser harness.

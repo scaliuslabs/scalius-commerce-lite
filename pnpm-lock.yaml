@@ -642,6 +642,9 @@ importers:
       '@neondatabase/serverless':
         specifier: 1.2.0
         version: 1.2.0
+      '@scalius/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@tursodatabase/database':
         specifier: ^0.7.2
         version: 0.7.2
