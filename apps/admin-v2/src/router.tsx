@@ -5,7 +5,6 @@ import { routeTree } from "./routeTree.gen";
 import { createAdminQueryClient } from "./lib/admin-query-client";
 import { RouteErrorComponent, RouteNotFoundComponent, RoutePendingComponent } from "./lib/route-error";
 import { getDashboardBasePath } from "./lib/dashboard-base-path";
-import { isOnline } from "./components/admin/states/failure";
 import { BootGate } from "./lib/boot-gate";
 
 /**
@@ -60,7 +59,7 @@ export function getRouter() {
   // download stays failed in the router until the tab reloads. The click
   // itself is handled by the shell's offline guard.
   const preloadRoute = router.preloadRoute;
-  router.preloadRoute = ((options) => (isOnline() ? preloadRoute(options) : Promise.resolve(undefined))) as typeof preloadRoute;
+  router.preloadRoute = ((options) => (navigator.onLine !== false ? preloadRoute(options) : Promise.resolve(undefined))) as typeof preloadRoute;
 
   return router;
 }

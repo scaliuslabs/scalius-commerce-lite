@@ -1,6 +1,6 @@
 import { CloudOff } from "lucide-react";
 import { useMessages } from "~/i18n";
-import { statesMessages } from "~/i18n/states";
+import { shellMessages } from "~/i18n/shell";
 
 /**
  * The calm offline line under the top bar (polish bar R6). The shell, the
@@ -8,7 +8,7 @@ import { statesMessages } from "~/i18n/states";
  * queued. `waiting` says a page the merchant asked for opens on reconnect.
  */
 export function OfflineBanner({ waiting = false }: { waiting?: boolean }) {
-  const t = useMessages(statesMessages);
+  const t = useMessages(shellMessages);
   return (
     <div
       data-slot="offline-banner"

@@ -4,6 +4,9 @@ import { defineMessages } from "./index";
 export const shellMessages = defineMessages({
   en: {
     loadingNextPage: "Loading next page",
+    loading: "Loading…",
+    offlineBanner: "You're offline. Your changes stay here until you reconnect.",
+    offlineWaiting: "You're offline. That page opens when you reconnect.",
     home: "Home",
     orders: "Orders",
     inbox: "Inbox",
@@ -74,6 +77,9 @@ export const shellMessages = defineMessages({
   },
   bn: {
     loadingNextPage: "পরের পেজ লোড হচ্ছে",
+    loading: "লোড হচ্ছে…",
+    offlineBanner: "আপনি অফলাইনে আছেন। আবার সংযোগ পাওয়া পর্যন্ত আপনার পরিবর্তন এখানেই থাকবে।",
+    offlineWaiting: "আপনি অফলাইনে আছেন। সংযোগ পেলে পেজটি খুলবে।",
     home: "হোম",
     orders: "অর্ডার",
     inbox: "ইনবক্স",

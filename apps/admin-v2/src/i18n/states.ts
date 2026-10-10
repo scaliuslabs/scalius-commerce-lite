@@ -7,7 +7,6 @@ import { defineMessages } from "./index";
  */
 export const statesMessages = defineMessages({
   en: {
-    loading: "Loading…",
     emptyHelp: "Questions? Ask the community.",
     filteredTitle: "No results match these filters",
     filteredBody: "Try changing the filters or the search words.",
@@ -40,8 +39,6 @@ export const statesMessages = defineMessages({
     readOnly: "You can view this page but not change it.",
     askOwnerEdit: "Ask the store owner if you need to make changes.",
     askNamedEdit: "Ask {name} if you need to make changes.",
-    offlineBanner: "You're offline. Your changes stay here until you reconnect.",
-    offlineWaiting: "You're offline. That page opens when you reconnect.",
     // Record nouns (singular, as in a sentence) and their lists.
     "noun.order": "order",
     "noun.abandonedCheckout": "abandoned checkout",
@@ -93,7 +90,6 @@ export const statesMessages = defineMessages({
     "list.role": "staff",
   },
   bn: {
-    loading: "লোড হচ্ছে…",
     emptyHelp: "প্রশ্ন আছে? কমিউনিটিকে জিজ্ঞাসা করুন।",
     filteredTitle: "এই ফিল্টারে কিছু মেলেনি",
     filteredBody: "ফিল্টার বা খোঁজার শব্দ বদলে দেখুন।",
@@ -126,8 +122,6 @@ export const statesMessages = defineMessages({
     readOnly: "আপনি এই পেজটি দেখতে পারবেন, কিন্তু বদলাতে পারবেন না।",
     askOwnerEdit: "কিছু বদলাতে হলে স্টোরের মালিককে বলুন।",
     askNamedEdit: "কিছু বদলাতে হলে {name}-কে বলুন।",
-    offlineBanner: "আপনি অফলাইনে আছেন। আবার সংযোগ পাওয়া পর্যন্ত আপনার পরিবর্তন এখানেই থাকবে।",
-    offlineWaiting: "আপনি অফলাইনে আছেন। সংযোগ পেলে পেজটি খুলবে।",
     "noun.order": "অর্ডার",
     "noun.abandonedCheckout": "অসমাপ্ত চেকআউট",
     "noun.product": "পণ্য",

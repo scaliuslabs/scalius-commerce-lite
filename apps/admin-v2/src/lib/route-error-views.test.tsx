@@ -14,7 +14,8 @@ vi.mock("@tanstack/react-router", () => ({
   useMatch: ({ select }: { select: (value: typeof match) => unknown }) => select(match),
 }));
 
-const { RouteErrorComponent, RouteNotFoundComponent, pendingKindForPath } = await import("./route-error");
+const { RouteErrorComponent, RouteNotFoundComponent } = await import("./route-error-views");
+const { pendingKindForPath } = await import("./route-error");
 const { AdminApiResponseError } = await import("./admin-api-error");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

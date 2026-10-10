@@ -2,7 +2,7 @@ import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
-import { statesMessages } from "~/i18n/states";
+import { shellMessages } from "~/i18n/shell";
 
 /** A card of `lines` field-high rows under a card-title bar. */
 function CardSkeleton({ lines }: { lines: number }) {
@@ -51,7 +51,7 @@ export function PageSkeleton({
   side?: readonly number[];
   rows?: number;
 }) {
-  const t = useMessages(statesMessages);
+  const t = useMessages(shellMessages);
   const width = kind === "detail" ? "max-w-5xl" : kind === "settings" ? "max-w-3xl" : undefined;
   return (
     <div data-slot="skeleton" role="status" aria-busy="true" className={cn("mx-auto flex flex-col gap-4", width)}>
@@ -98,7 +98,7 @@ export function PageSkeleton({
 
 /** The quiet boot spinner of index.html, for standalone pages and the first session read. */
 export function BootSpinner() {
-  const t = useMessages(statesMessages);
+  const t = useMessages(shellMessages);
   // Same id as index.html's: the same delayed spinner and the same 12 s "Reload" offer.
   return <div id="boot" role="status" aria-label={t("loading")} />;
 }
