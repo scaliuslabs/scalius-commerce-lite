@@ -234,6 +234,25 @@ SCALIUS_WRANGLER_STATE=/tmp/catalog-scale/state node scripts/deploy.mjs --migrat
 node scripts/catalog-scale-seed.mjs --state /tmp/catalog-scale/state
 ```
 
+#### Huge profile
+
+`--profile huge` makes a store the owner would call hundreds of thousands of products and millions of orders, in proportion: about 50,000 products and 150,000 SKUs, 800 categories, 500 brands, 200,000 customers and 1,000,000 orders over three years with seasonality. The orders have 1-5 lines, real statuses, payment states, fulfilments, returns and refunds, discounts and tax, and a few foreign-currency (USD, EUR) markets. It also writes about 100,000 reviews, 2,000 promotions, gift cards, 20,000 inbox conversations with 150,000 messages, 15 staff users, notification history and audit events. The edge data is mixed in: names over 120 characters, about 20% Bangla names, products with 0 and with 20 images, a 100-SKU product on five option axes, a customer with 500 orders, an order with 99 lines, zero-stock and backorder SKUs, draft, archived and trashed records, and empty optional fields. The whole run takes under about 30 minutes and ends near 4 GB. It stops with no write when less than 6 GB of disk is free. Everything goes through the real constraints and triggers, except the event outbox: the `evt_*` triggers are dropped for the run and recreated at the end, and `event_outbox` is emptied, so the queue does not replay a million order events.
+
+Use an absolute state directory outside the repository:
+
+```sh
+STATE=/absolute/path/outside/the/repo/huge-state
+mkdir -p "$STATE"
+SCALIUS_WRANGLER_STATE="$STATE" node scripts/deploy.mjs --migrate-only --local
+node scripts/catalog-scale-seed.mjs --state "$STATE" --profile huge
+node scripts/catalog-scale-seed.mjs --state "$STATE" --verify --deep   # optional: invariant checks
+pnpm dev --state "$STATE"                                               # in another terminal
+pnpm dev:admin:create --state "$STATE" --no-start --skip-migrations     # once the stack is up (add --api <origin> for non-default ports)
+node scripts/catalog-scale-seed.mjs --state "$STATE" --staff-roles      # after the admin exists
+```
+
+Staff users are written without role assignments, because the one-shot setup (`scripts/dev-admin.mjs`) refuses once any user holds permissions. `--staff-roles` assigns the seeded staff their system roles after the admin exists. If a run stops before it ends, `--restore-triggers` recreates the dropped event triggers (the seed refuses to start while their saved SQL file is present). `--verify` prints one PASS/FAIL line per invariant (unique SKUs and barcodes, the one-default-SKU rule, order totals against line sums, payment ledger, fulfilment projection, customer counters, ledger edges, FTS rows and more); `--deep` adds a foreign-key check and `quick_check`.
+
 Opt-in harnesses use it and skip unless their variable is set (see each header): `scripts/catalog-scale-profile.test.ts` (`CATALOG_SCALE_STATE`; p50, p95, D1 statements, waves and `rows_read` per route on a Miniflare D1 copy), `apps/storefront/src/lib/route-tests/api/catalog-feed-scale.test.ts` (`CATALOG_SCALE_API`; walks the whole XML product feed) and `scripts/cache-dvc-load.test.ts` (replays reads and buyer-visible writes against the dependency cache).
 
 ### Projections
