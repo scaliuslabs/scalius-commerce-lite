@@ -59,7 +59,7 @@ export function HomePageSettings({ theme, setDraft }: { theme: Theme; setDraft: 
       >
         {(["sections", "product"] as const).map((value) => (
           <label key={value} className="flex min-h-11 items-start gap-3 py-1 text-body">
-            <RadioGroupItem value={value} className="mt-0.5" />
+            <span className="flex h-lh items-center"><RadioGroupItem value={value}/></span>
             <span>
               <span className="block font-medium">{t(`homeMode_${value}`)}</span>
               <span className="block text-muted-foreground">{t(`homeMode_${value}Help`)}</span>

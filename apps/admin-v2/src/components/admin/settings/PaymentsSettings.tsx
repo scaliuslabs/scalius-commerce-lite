@@ -692,7 +692,7 @@ export function PaymentOptionsCard() {
       >
         {modes.map(([value, label, description]) => (
           <label key={value} className="flex min-h-11 items-start gap-3 py-1 text-body">
-            <RadioGroupItem value={value} className="mt-0.5" />
+            <span className="flex h-lh items-center"><RadioGroupItem value={value}/></span>
             <span>
               <span className="block font-medium">{t(label)}</span>
               <span className="block text-muted-foreground">{t(description)}</span>

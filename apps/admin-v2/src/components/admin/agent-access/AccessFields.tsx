@@ -61,7 +61,7 @@ export function AccessFields({
         >
           {PRESETS.map((preset) => (
             <label key={preset} className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-body font-medium">
-              <RadioGroupItem value={preset} className="mt-0.5" />
+              <span className="flex h-lh items-center"><RadioGroupItem value={preset}/></span>
               <span className="space-y-0.5">
                 <span className="block">{t(`preset_${preset}`)}</span>
                 <span className="block font-normal text-muted-foreground">{t(`preset_${preset}Help`)}</span>

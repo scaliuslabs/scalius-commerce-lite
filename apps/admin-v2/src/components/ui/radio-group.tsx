@@ -13,15 +13,21 @@ const RadioGroupItem = React.forwardRef<
   React.ComponentRef<typeof RadioGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
 >(({ className, ...props }, ref) => (
+  // A 16px circle with a 24px hit area (44px on phones, C6), hung outside it by negative margins, as Checkbox.
   <RadioGroupPrimitive.Item
     ref={ref}
     className={cn(
-      "flex aspect-square size-4 shrink-0 items-center justify-center rounded-full border border-input bg-card hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary data-[state=checked]:bg-primary",
+      "peer group -m-3.5 inline-flex size-11 shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:-m-1 sm:size-6",
       className,
     )}
     {...props}
   >
-    <RadioGroupPrimitive.Indicator className="size-1.5 rounded-full bg-primary-foreground" />
+    <span
+      aria-hidden="true"
+      className="flex size-4 items-center justify-center rounded-full border border-primary bg-primary group-hover:border-muted-foreground group-aria-invalid:border-destructive group-data-[state=unchecked]:border-input group-data-[state=unchecked]:bg-card"
+    >
+      <RadioGroupPrimitive.Indicator className="size-1.5 rounded-full bg-primary-foreground" />
+    </span>
   </RadioGroupPrimitive.Item>
 ));
 RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName;

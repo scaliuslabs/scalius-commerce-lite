@@ -43,6 +43,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
       <Field id="product-warranty-policy" className="self-stretch" help={selected ? warrantySummary(t, selected) : undefined}>
         <SearchableSelect
         ariaLabel={t("policy")}
+        triggerClassName="w-full"
         options={options}
         value={value ?? NONE}
         disabled={readOnly}

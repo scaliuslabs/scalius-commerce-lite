@@ -22,7 +22,7 @@ type ControlProps = {
  * Whatever the control sets itself wins. One control per `Field`: a second
  * control inside the same field passes its own `id`.
  */
-export function useFieldControl<P extends ControlProps>(props: P): P {
+export function useFieldControl<P extends ControlProps>(props: P): P & ControlProps {
   const field = React.useContext(FieldContext);
   if (!field) return props;
   return {

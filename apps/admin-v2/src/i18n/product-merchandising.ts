@@ -122,7 +122,7 @@ export const productMerchandisingMessages = defineMessages({
     productPage: "প্রোডাক্ট পেজ",
     template: "টেমপ্লেট",
     templateHelp: "এই প্রোডাক্ট কোন প্রোডাক্ট পেজ ব্যবহার করবে। থিমের ডিফল্ট আপনার থিম অনুসরণ করে।",
-    emiEligible: "কার্ডে কিস্তি (EMI)",
+    emiEligible: "কার্ডে EMI কিস্তি",
     emiEligibleHelp: "আপনার EMI প্ল্যান থেকে সবচেয়ে কম মাসিক কিস্তি দেখায়। প্ল্যান ঠিক করুন সেটিংস › পেমেন্টে।",
 
     bundles: "পরিমাণভিত্তিক বান্ডেল",

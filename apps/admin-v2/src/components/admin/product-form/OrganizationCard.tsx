@@ -27,6 +27,7 @@ import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { Category, ProductFormValues } from "./types";
 import { Field } from "~/components/ui/field";
+import { useFieldControl } from "~/components/ui/field";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
@@ -163,11 +164,13 @@ function CategoryCombobox({
   const selected = categories.find((category) => category.id === selectedId);
   const selectedStatus = selected ? statusLabel(selected) : null;
   const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
+  // The trigger is the Category field's control: its label names it.
+  const control = useFieldControl({});
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-invalid={invalid || undefined} className="w-full justify-between">
+        <Button variant="outline" role="combobox" {...control} aria-invalid={invalid || control["aria-invalid"] || undefined} className="w-full justify-between">
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t("chooseCategory")}
           </span>

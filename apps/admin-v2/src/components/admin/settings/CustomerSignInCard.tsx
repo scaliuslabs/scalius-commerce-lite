@@ -127,7 +127,7 @@ export function CustomerSignInCard() {
           >
             {EMAIL_COLLECTION_MODES.map((mode) => (
               <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
-                <RadioGroupItem className="mt-0.5" value={mode} disabled={mode === "hidden" && (emailCodes || phoneless)} />
+                <span className="flex h-lh items-center"><RadioGroupItem value={mode} disabled={mode === "hidden" && (emailCodes || phoneless)} /></span>
                 {t(EMAIL_LABEL[mode])}
               </label>
             ))}
@@ -146,7 +146,7 @@ export function CustomerSignInCard() {
           >
             {WHATSAPP_COLLECTION_MODES.map((mode) => (
               <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
-                <RadioGroupItem className="mt-0.5" value={mode} disabled={mode === "off" && whatsappCodes} />
+                <span className="flex h-lh items-center"><RadioGroupItem value={mode} disabled={mode === "off" && whatsappCodes} /></span>
                 {t(WHATSAPP_LABEL[mode])}
               </label>
             ))}

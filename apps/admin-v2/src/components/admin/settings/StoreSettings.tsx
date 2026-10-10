@@ -811,7 +811,7 @@ function CountryFields() {
       >
         {(["include", "exclude"] as const).map((mode) => (
           <label key={mode} className="flex min-h-11 items-start gap-2 py-3 text-body">
-            <RadioGroupItem className="mt-0.5" value={mode} />
+            <span className="flex h-lh items-center"><RadioGroupItem value={mode} /></span>
             {mode === "include" ? t("onlySelected") : t("allExceptSelected")}
           </label>
         ))}

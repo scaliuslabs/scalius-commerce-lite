@@ -381,13 +381,13 @@ function EmailFields() {
         >
           {(["cloudflare", "resend"] as const).map((provider) => (
             <label key={provider} className="flex min-h-11 items-start gap-2 py-3 text-body">
-              <RadioGroupItem className="mt-0.5" value={provider} />
+              <span className="flex h-lh items-center"><RadioGroupItem value={provider} /></span>
               {t(provider)}
             </label>
           ))}
           {apps.map((provider) => (
             <label key={provider.id} className="flex min-h-11 items-start gap-2 py-3 text-body">
-              <RadioGroupItem className="mt-0.5" value={provider.id} />
+              <span className="flex h-lh items-center"><RadioGroupItem value={provider.id} /></span>
               <span>
                 {provider.name}
                 <span className="block text-muted-foreground">{appT("byApp", { app: provider.appName })}</span>
