@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
+import type { RealtimePresence } from "@scalius/shared/realtime";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { fitColumns } from "~/components/admin/data-table/column-layout";
 import { fitList } from "~/components/admin/data-table/list-width.fixture";
@@ -139,6 +140,20 @@ describe("order list delivery state", () => {
   it("keeps the courier status while the parcel is simply on its way", async () => {
     const view = await render(<FulfillmentCell row={order({})} />);
     expect(view.textContent).toContain("In transit");
+  });
+
+  it("shows presence only on the matching order, in the title cell and phone card", async () => {
+    const people: RealtimePresence[] = [{ id: "usr_sumi", name: "Sumi", editing: true }];
+    const columns = getOrderColumns({ ...handlers, presence: new Map([["o-1", people]]) });
+    const cell = columns.find((column) => column.id === "order")!.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
+    const view = await render(<>
+      <div data-row="present">{cell({ row: { original: order({}) } })}</div>
+      <div data-row="absent">{cell({ row: { original: order({ id: "o-2" }) } })}</div>
+      <OrderMobileCard order={order({})} people={people} dateField="createdAt" selectable={false} isSelected={false} onToggleSelection={vi.fn()} />
+    </>);
+    expect(view.querySelector('[data-row="present"] [data-slot="row-presence"]')?.textContent).toContain("Sumi is editing");
+    expect(view.querySelector('[data-row="absent"] [data-slot="row-presence"]')).toBeNull();
+    expect(view.querySelector('[data-part="order-card"] [data-slot="row-presence"]')?.textContent).toContain("Sumi is editing");
   });
 });
 

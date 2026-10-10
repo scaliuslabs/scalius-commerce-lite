@@ -29,6 +29,7 @@ import { NO_CURSOR, createDataSelector, getCanonicalPageForPagination, isPagingR
 import { runMatching } from "~/lib/bulk-selection";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useListSearch } from "~/lib/list-search";
+import { useListPresence } from "~/lib/realtime/list-presence";
 import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
@@ -79,6 +80,7 @@ export function OrderList({
   const locale = useLocale();
   const tr = useMessages(resourceMessages);
   const orderActions = useOrderActionPermissions();
+  const presence = useListPresence("order");
   const [term, setTerm] = useListSearch(ORDER_SEARCH_LIST);
   const exportDialog = useOrderExportDialog();
   const showArchived = search.archived;
@@ -104,6 +106,7 @@ export function OrderList({
         selectable: true,
         orderActions,
         updatingStatusIds,
+        presence,
         onArchive: (order) => archive([order]),
         onRestore: restore,
         onStatusUpdate: changeStatus,
@@ -112,7 +115,7 @@ export function OrderList({
       }, appExtra),
     // The locale re-labels the columns for the column menu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus, locale, appExtra],
+    [showArchived, dateField, orderActions, updatingStatusIds, presence, archive, restore, changeStatus, locale, appExtra],
   );
 
   const cursored = Boolean(search.after || search.before);
@@ -206,13 +209,14 @@ export function OrderList({
     (row: Row<OrderListItem>) => (
       <OrderMobileCard
         order={row.original}
+        people={presence.get(row.original.id)}
         dateField={dateField}
         selectable
         isSelected={row.getIsSelected()}
         onToggleSelection={() => row.toggleSelected()}
       />
     ),
-    [dateField],
+    [dateField, presence],
   );
 
   const openBulk = (action: OrderBulkAction) => actions.openBulk(action, selectedRows);
@@ -464,4 +468,3 @@ export function OrderList({
     </>
   );
 }
-

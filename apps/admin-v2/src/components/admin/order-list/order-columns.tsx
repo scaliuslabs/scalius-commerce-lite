@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronRight, CircleAlert, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
+import type { RealtimePresence } from "@scalius/shared/realtime";
+import { RowPresence } from "~/components/admin/realtime/RowPresence";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -54,6 +56,7 @@ export interface OrderRowHandlers {
   selectable: boolean;
   orderActions: OrderActionPermissions;
   updatingStatusIds: ReadonlySet<string>;
+  presence?: ReadonlyMap<string, RealtimePresence[]>;
   onArchive: (order: OrderListItem) => void;
   onRestore: (order: OrderListItem) => void;
   onStatusUpdate: (order: OrderListItem, status: string) => void;
@@ -143,11 +146,14 @@ export function AttentionMarker({ order, plain = false }: {
   );
 }
 
-function OrderCell({ order }: { order: OrderListItem }) {
+function OrderCell({ order, people }: { order: OrderListItem; people?: readonly RealtimePresence[] }) {
   return (
-    <div data-part="order" className="flex items-center gap-1.5">
-      <OrderNumberLink order={order} />
-      <AttentionMarker order={order} />
+    <div data-part="order" className="flex min-w-0 flex-col">
+      <span className="flex items-center gap-1.5">
+        <OrderNumberLink order={order} />
+        <AttentionMarker order={order} />
+      </span>
+      <RowPresence people={people} className="max-w-20" />
     </div>
   );
 }
@@ -348,9 +354,9 @@ export const ORDER_COLUMN_LAYOUT = {
 type OrderColumnKey = keyof typeof ORDER_COLUMN_LAYOUT;
 
 /**
- * Shopify's orders columns, one line per cell on every row whatever the
- * order's state: Order, Date, Customer (name over phone, the only two-line
- * cell, on every row), Channel, Total, Payment, Fulfillment, Items, Delivery
+ * Shopify's orders columns: Order (presence beneath its number), Date,
+ * Customer (name over phone on every row), Channel, Total, Payment,
+ * Fulfillment, Items, Delivery
  * status, Delivery method and Status, then any data-backed columns `extra`
  * (apps' fields). Badges are the same size everywhere; an empty cell reads
  * "—". Narrow screens drop the lowest priority first; Order and Date stay.
@@ -366,7 +372,7 @@ export function getOrderColumns(handlers: OrderRowHandlers, extra: ColumnDef<Ord
     cell,
   });
   const columns: ColumnDef<OrderListItem, unknown>[] = [
-    column("order", ({ row }) => <OrderCell order={row.original} />),
+    column("order", ({ row }) => <OrderCell order={row.original} people={handlers.presence?.get(row.original.id)} />),
     column("date", ({ row }) => (
       <div data-part="date">
         <ListDate value={row.original[handlers.dateField]} className="block" />

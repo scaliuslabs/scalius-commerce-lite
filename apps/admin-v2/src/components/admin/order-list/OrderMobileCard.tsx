@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
+import type { RealtimePresence } from "@scalius/shared/realtime";
+import { RowPresence } from "~/components/admin/realtime/RowPresence";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { cn } from "@scalius/shared/utils";
@@ -29,12 +31,14 @@ export { codToCollect } from "./order-row-facts";
  */
 export const OrderMobileCard = memo(function OrderMobileCard({
   order,
+  people,
   dateField,
   selectable,
   isSelected,
   onToggleSelection,
 }: {
   order: OrderListItem;
+  people?: readonly RealtimePresence[];
   dateField: "createdAt" | "updatedAt";
   selectable: boolean;
   isSelected: boolean;
@@ -77,6 +81,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="whitespace-nowrap font-mono font-medium">{orderName(order)}</span>
             <AttentionMarker order={order} plain />
+            <RowPresence people={people} />
           </span>
           <span className="shrink-0 font-medium tabular-nums">{fmtIn(order.totalAmount, order.currencyCode)}</span>
         </span>
