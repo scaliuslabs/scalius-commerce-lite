@@ -99,6 +99,11 @@ export const products = sqliteTable(
             sql`${table.createdAt} DESC`,
         ),
         index("products_deleted_at_idx").on(table.deletedAt),
+        index("products_inventory_idx").on(table.id, table.deletedAt, table.name),
+        index("products_feed_diagnostics_idx").on(
+            sql`CAST(${table.updatedAt} AS INTEGER) DESC`,
+            sql`CAST(${table.createdAt} AS INTEGER) DESC`,
+        ),
         // The dashboard list's sorts, each ending with the keyset tiebreaker `id`.
         index("products_list_updated_idx").on(table.deletedAt, table.updatedAt, table.id),
         index("products_list_name_idx").on(table.deletedAt, table.name, table.id),
@@ -288,6 +293,8 @@ export const productVariants = sqliteTable("product_variants", {
     // A product's live (tracked) SKUs: more key columns than the store-wide
     // track_inventory index, so SQLite (no statistics) picks it per product (0128).
     index("product_variants_product_live_idx").on(table.productId, table.deletedAt, table.trackInventory),
+    // Keep product-scoped stock sums cheaper than the store-wide restock index.
+    index("product_variants_product_stock_idx").on(table.productId, table.deletedAt, table.trackInventory, table.id, table.stock, table.reservedStock),
     uniqueIndex("product_variants_sku_identity_uidx")
         .on(sql`lower(trim(${table.sku}))`),
     uniqueIndex("product_variants_barcode_identity_uidx")
@@ -307,6 +314,11 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
     index("product_variants_image_idx").on(table.imageId),
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
+    index("product_variants_alerts_idx").on(
+        table.trackInventory, table.deletedAt,
+        sql`(${table.stock} - ${table.reservedStock} - CASE WHEN ${table.lowStockThreshold} IS NULL THEN 0 ELSE ${table.lowStockThreshold} END)`,
+        table.id, table.productId, table.isDefault, table.lowStockThreshold, table.stock, table.reservedStock,
+    ),
     // Store shape (`hasDigitalLines`) and digital readiness read only live digital SKUs.
     index("product_variants_digital_live_idx")
         .on(table.productId)

@@ -203,14 +203,11 @@ const ZEROS = sql.raw("0 as x1, 0 as x2, 0 as x3, 0 as x4");
 function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
   const instants = analyticsInstantRange(range, ctx.timeZone);
   const scope: SalesScope = { ...instants, currency: ctx.currency.code };
-  const measures = orderMeasuresSql("ox");
+  const measures = orderMeasuresSql("ox", true);
   return sql`with ${salesOrdersCte(scope, "overview")},
     ${salesLinesCtes()},
     ${orderMetricsCtes()},
-    -- Materialized explicitly: SQLite otherwise inlines a CTE into every
-    -- compound branch and re-reads the period's orders once per grouping.
-    -- Only the columns the groupings read.
-    ox as materialized (
+    od as (
       select om.payment_method, om.channel, om.channel_source, om.city_name,
         om.gross, om.disc, om.returns, om.shipping, om.taxes, om.net_units,
         ${merchantDaySql("om.created_at", scopeOffsets(ctx.timeZone, instants))} as day,
@@ -235,9 +232,19 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
           select dl.id from inventory_locations dl where dl.is_default = 1
         ), '') as location_key
       from om
-      left join cod_tracking ct on ct.order_id = om.id
+      left join cod_tracking ct on ct.order_id = om.id and ct.cod_status = 'collected'
       left join shipping_methods sm on sm.id = om.shipping_method_id
       left join delivery_zones dz on dz.id = sm.zone_id
+    ),
+    -- Collapse identical dimensions once, before the seven breakdown sorts.
+    ox as materialized (
+      select payment_method, channel, channel_source, city_name, day, zone_key, zone_label, location_key,
+        count(*) as order_count,
+        sum(gross) as gross, sum(disc) as disc, sum(returns) as returns,
+        sum(shipping) as shipping, sum(taxes) as taxes, sum(net_units) as net_units,
+        sum(cod) as cod, sum(rts) as rts, sum(cod_delivered) as cod_delivered, sum(refunded) as refunded
+      from od
+      group by payment_method, channel, channel_source, city_name, day, zone_key, zone_label, location_key
     ),
     cu as (
       select ${orderIdentitySql("so")} as identity, max(so.customer_id) as customer_id, max(so.customer_phone) as customer_phone,

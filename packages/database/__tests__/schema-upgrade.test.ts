@@ -646,6 +646,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 7,
         postgresStatements: 7,
       },
+      {
+        version: 130,
+        name: "0130_dashboard_home_reads",
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -824,6 +830,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 127, name: "0127_list_indexes" },
           { version: 128, name: "0128_scale_reads" },
           { version: 129, name: "0129_order_overview_reads" },
+          { version: 130, name: "0130_dashboard_home_reads" },
         ],
       });
     } finally {

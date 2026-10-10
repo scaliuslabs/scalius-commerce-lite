@@ -279,9 +279,9 @@ export function orderMetricsCtes(): SQL {
   )`;
 }
 
-/** Order-level measures over `om` (or any CTE with its columns). */
-export function orderMeasuresSql(alias = "om"): SQL {
-  return sql.raw(`count(*) as orders,
+/** Measures over per-order rows, or dimension groups carrying `order_count`. */
+export function orderMeasuresSql(alias = "om", grouped = false): SQL {
+  return sql.raw(`${grouped ? `coalesce(sum(${alias}.order_count), 0)` : "count(*)"} as orders,
       coalesce(sum(${alias}.gross), 0) as gross_sales,
       coalesce(sum(${alias}.disc), 0) as discounts,
       coalesce(sum(${alias}.returns), 0) as returns,

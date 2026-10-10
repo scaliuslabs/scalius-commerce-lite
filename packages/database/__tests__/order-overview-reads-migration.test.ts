@@ -31,7 +31,7 @@ describe("order detail and overview covering indexes", () => {
       db.exec(statements(migration()).slice(0, -1).join("\n"));
       expect(db.prepare("SELECT id, total_amount_minor, version FROM orders").all()).toEqual(before);
       expect(db.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY name").all()).toEqual(triggers);
-      const authority = CURRENT_DATABASE_SCHEMA_MIGRATIONS.at(-1)!;
+      const authority = CURRENT_DATABASE_SCHEMA_MIGRATIONS.find((entry) => entry.version === 129)!;
       expect(db.prepare("SELECT name, source_sha256 FROM scalius_schema_migrations WHERE version = 129").get())
         .toEqual({ name, source_sha256: authority.sourceSha256 });
     } finally {

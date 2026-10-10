@@ -629,6 +629,7 @@ export const orderReturns = sqliteTable("order_returns", {
 }, (table) => [
     index("order_returns_order_created_idx").on(table.orderId, table.createdAt),
     index("order_returns_order_status_idx").on(table.orderId, table.status),
+    index("order_returns_sales_idx").on(table.id, table.status),
     uniqueIndex("order_returns_source_reference_unique").on(table.source, table.sourceReferenceId),
     uniqueIndex("order_returns_active_order_key_unique").on(table.activeOrderKey),
     check("order_returns_version_positive", sql`${table.version} >= 1`),
@@ -675,6 +676,7 @@ export const orderReturnLines = sqliteTable("order_return_lines", {
 }, (table) => [
     uniqueIndex("order_return_lines_return_item_unique").on(table.returnId, table.orderItemId),
     index("order_return_lines_order_item_idx").on(table.orderId, table.orderItemId),
+    index("order_return_lines_sales_idx").on(table.orderId, table.orderItemId, table.returnId, table.approvedQuantity),
     index("order_return_lines_variant_idx").on(table.variantId),
     check("order_return_lines_requested_positive", sql`${table.requestedQuantity} > 0`),
     check("order_return_lines_quantities_nonnegative", sql`(

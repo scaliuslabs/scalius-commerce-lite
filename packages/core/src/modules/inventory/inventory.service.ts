@@ -603,6 +603,12 @@ export async function getInventoryOverview(db: Database, params: {
             eq(productVariants.trackInventory, true),
             operationalSkuRowPredicate(),
         ];
+        if (aStatus === "active" || aStatus === "acknowledged") {
+            // Seek the restock index before resolving each candidate's exact inherited threshold.
+            const storeThreshold = storeDefaultLowStockThresholdSql();
+            alertConditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock} - CASE WHEN ${productVariants.lowStockThreshold} IS NULL THEN 0 ELSE ${productVariants.lowStockThreshold} END)
+                <= CASE WHEN ${storeThreshold} > 0 THEN ${storeThreshold} ELSE 0 END`);
+        }
         // Live stock decides what needs review; a stored alert row only
         // remembers that the merchant marked it as seen (or that it was low).
         if (aStatus === "active") alertConditions.push(sql`(${needs} AND COALESCE(${acknowledged}, 0) = 0)`);

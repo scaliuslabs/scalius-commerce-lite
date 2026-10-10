@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 129,
-  name: "0129_order_overview_reads",
+  version: 130,
+  name: "0130_dashboard_home_reads",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -426,6 +426,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 129,
     name: "0129_order_overview_reads",
     sourceSha256: "4f41144a82c1af38c4f424420a934349dadee48fb1bd499b0911f5991d2a2f65",
+  },
+  {
+    version: 130,
+    name: "0130_dashboard_home_reads",
+    sourceSha256: "9c267be236741e264c6d958f5c811d23835bf4d98447f4185f5b8e31431a78dc",
   },
 ] as const;
 
