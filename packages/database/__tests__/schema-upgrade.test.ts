@@ -639,6 +639,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 15,
         postgresStatements: 15,
       },
+      {
+        version: 129,
+        name: "0129_order_overview_reads",
+        // Six covering/identity indexes and the ledger.
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -816,6 +823,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 126, name: "0126_plugin_seams" },
           { version: 127, name: "0127_list_indexes" },
           { version: 128, name: "0128_scale_reads" },
+          { version: 129, name: "0129_order_overview_reads" },
         ],
       });
     } finally {

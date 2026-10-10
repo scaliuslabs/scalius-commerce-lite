@@ -204,18 +204,16 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
   const instants = analyticsInstantRange(range, ctx.timeZone);
   const scope: SalesScope = { ...instants, currency: ctx.currency.code };
   const measures = orderMeasuresSql("ox");
-  return sql`with ${salesOrdersCte(scope)},
+  return sql`with ${salesOrdersCte(scope, "overview")},
     ${salesLinesCtes()},
     ${orderMetricsCtes()},
     -- Materialized explicitly: SQLite otherwise inlines a CTE into every
     -- compound branch and re-reads the period's orders once per grouping.
     -- Only the columns the groupings read.
     ox as materialized (
-      select om.status, om.payment_method, om.channel, om.channel_source, om.city_name,
+      select om.payment_method, om.channel, om.channel_source, om.city_name,
         om.gross, om.disc, om.returns, om.shipping, om.taxes, om.net_units,
         ${merchantDaySql("om.created_at", scopeOffsets(ctx.timeZone, instants))} as day,
-        ${orderIdentitySql("om")} as identity,
-        om.customer_id, om.customer_phone,
         case when om.payment_method = 'cod' then 1 else 0 end as cod,
         case when om.payment_method = 'cod' and om.status in ('returned', 'refunded')
           and coalesce(ct.cod_status, '') <> 'collected' then 1 else 0 end as rts,
@@ -242,12 +240,12 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
       left join delivery_zones dz on dz.id = sm.zone_id
     ),
     cu as (
-      select ox.identity, max(ox.customer_id) as customer_id, max(ox.customer_phone) as customer_phone,
+      select ${orderIdentitySql("so")} as identity, max(so.customer_id) as customer_id, max(so.customer_phone) as customer_phone,
         count(*) as n
-      from ox group by ox.identity
+      from so group by ${orderIdentitySql("so")}
     ),
-    -- An earlier order is looked up once per customer, not once per order.
-    cp as (
+    -- Read identities before money enrichment; probe once across all three sums.
+    cp as materialized (
       select cu.n, ${hasPriorSalesOrderSql(instants.start, "cu")} as prior from cu
     )
     -- D1 allows at most five terms per compound SELECT: two groups of terms.

@@ -137,20 +137,24 @@ export function orderIdentitySql(alias = "so"): SQL {
  * `so`: the sales orders of the scope, one row each, with the order columns
  * reports group by and the money columns the residuals need.
  */
-export function salesOrdersCte(scope: SalesScope): SQL {
+export function salesOrdersCte(scope: SalesScope, mode: "report" | "overview" = "report"): SQL {
   const fx = sql.raw("case when o.currency_code = o.shop_currency then 0 else 1 end");
   const fxm = fxMultiplierSql(getDecimalPlaces(scope.currency));
   // Order amounts in the shop currency (see `shopMinorSql`).
   const money = (column: string) => sql.raw(`case when o.currency_code = o.shop_currency then o.${column} else cast(round(o.${column} * `);
   const shop = (column: string) => sql`${money(column)}${fxm}) as bigint) end as ${sql.raw(column)}`;
+  // The overview reads a covering index without materializing report-only fields.
+  const reportFields = mode === "report"
+    ? sql`o.zone_name, o.fulfillment_status, o.customer_name, ${shop("total_amount_minor")}, ${shop("paid_amount_minor")}, ${shop("balance_due_minor")},`
+    : sql.raw("");
   return sql`so as materialized (
     select o.id, o.created_at, o.status, o.payment_method, o.channel, o.channel_source,
-      o.city_name, o.zone_name, o.fulfillment_location_id, o.fulfillment_status,
+      o.city_name, o.fulfillment_location_id,
       o.shipping_method_id, o.shipping_method_kind, o.requires_shipping,
-      o.customer_id, o.customer_phone, o.customer_name,
+      o.customer_id, o.customer_phone,
       o.prices_include_tax as incl,
       ${shop("shipping_amount_minor")}, ${shop("discount_amount_minor")}, ${shop("tax_amount_minor")},
-      ${shop("total_amount_minor")}, ${shop("paid_amount_minor")}, ${shop("balance_due_minor")},
+      ${reportFields}
       ${fx} as fx,
       case when o.currency_code = o.shop_currency then 1.0 else ${fxm} end as fxm,
       case when o.status in (${REVERSED}) then 1 else 0 end as reversed
@@ -159,6 +163,8 @@ export function salesOrdersCte(scope: SalesScope): SQL {
       and o.created_at >= ${scope.start} and o.created_at < ${scope.endExclusive}
       and o.status not in (${NON_SALES})
       and o.shop_currency = ${scope.currency}
+    -- Visit the selected orders in key order so line/payment index pages are reused.
+    ${mode === "overview" ? sql`order by o.id` : sql.raw("")}
   )`;
 }
 

@@ -61,6 +61,8 @@ export const productReviews = sqliteTable("product_reviews", {
     uniqueIndex("product_reviews_live_reviewer_unique")
         .on(table.productId, table.reviewerKey)
         .where(sql`${table.status} IN ('pending', 'published')`),
+    // Order-line extras probe one buyer across up to 90 products (0129).
+    index("product_reviews_reviewer_product_idx").on(table.reviewerKey, table.productId, table.status),
     index("product_reviews_product_published_idx")
         .on(table.productId, table.status, sql`${table.publishedAt} DESC`, table.id),
     // The moderation queue, newest first: a status tab and the All tab. Plain

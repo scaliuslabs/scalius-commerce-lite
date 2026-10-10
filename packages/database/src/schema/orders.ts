@@ -308,7 +308,23 @@ export const orders = sqliteTable("orders", {
     ),
     // Home and activity sum a period from the index alone (migration 0128).
     index("orders_sales_rollup_idx").on(table.deletedAt, table.createdAt, table.status, table.totalShopMinor, table.shopCurrency),
+    // Overview totals read only these fields, in currency/date order (0129).
+    index("orders_overview_idx").on(
+      table.deletedAt, table.shopCurrency, table.createdAt, table.id, table.status,
+      table.paymentMethod, table.channel, table.channelSource, table.cityName,
+      table.fulfillmentLocationId, table.shippingMethodId, table.shippingMethodKind,
+      table.requiresShipping, table.customerId, table.customerPhone, table.pricesIncludeTax,
+      table.shippingAmountMinor, table.discountAmountMinor, table.taxAmountMinor,
+      table.currencyCode, table.currencyDecimalPlaces, table.fxRate,
+    ),
+    index("orders_customer_sales_idx")
+      .on(table.customerId, table.deletedAt, table.createdAt, table.status)
+      .where(sql`${table.customerId} IS NOT NULL`),
     index("orders_customer_phone_idx").on(table.customerPhone),
+    // Guest repeat-purchase checks must seek by phone before walking history (0129).
+    index("orders_guest_sales_idx")
+      .on(table.customerPhone, table.deletedAt, table.createdAt, table.status)
+      .where(sql`${table.customerId} IS NULL`),
     index("orders_customer_email_normalized_idx").on(sql`lower(trim(${table.customerEmail}))`),
     index("orders_shipment_claim_idx")
         .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
@@ -512,6 +528,8 @@ export const orderItems = sqliteTable("order_items", {
     ),
     check("order_items_properties_price_nonnegative", sql`${table.propertiesPriceMinor} >= 0`),
     index("order_items_order_id_idx").on(table.orderId),
+    index("order_items_sales_idx").on(table.orderId, table.id, table.quantity,
+      table.lineSubtotalMinor, table.discountAmountMinor, table.taxAmountMinor, table.fulfillmentType),
     // A product's lines, newest first: "also bought" reads only the latest (0128).
     index("order_items_product_recent_idx").on(table.productId, table.createdAt, table.orderId),
     index("order_items_variant_id_idx").on(table.variantId),
@@ -862,6 +880,8 @@ export const orderPayments = sqliteTable("order_payments", {
         .default(UNIX_NOW),
 }, (table) => [
     index("order_payments_order_id_idx").on(table.orderId),
+    index("order_payments_refund_sum_idx").on(table.orderId, table.paymentType, table.status, table.amountMinor)
+      .where(sql`${table.paymentType} = 'refund' AND ${table.status} = 'refunded'`),
     // One captured payment per provider reference: a replayed webhook or a
     // webhook racing the buyer return can never credit an order twice.
     uniqueIndex("order_payments_provider_ref_unique")
