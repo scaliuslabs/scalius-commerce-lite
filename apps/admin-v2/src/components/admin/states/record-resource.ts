@@ -47,7 +47,10 @@ const RECORDS: Readonly<Record<string, RecordResource>> = {
 /** The record a route path shows, or null for a page that is not one record. */
 export function recordResource(fullPath: string): RecordResource | null {
   const segments = fullPath.replace(/\/+$/, "").split("/");
-  const last = segments.findLastIndex((segment) => segment.startsWith("$"));
+  let last = -1;
+  segments.forEach((segment, index) => {
+    if (segment.startsWith("$")) last = index;
+  });
   if (last < 0) return null;
   return RECORDS[segments.slice(0, last).join("/")] ?? null;
 }
