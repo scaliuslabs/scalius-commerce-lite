@@ -29,7 +29,9 @@ const ADMIN_DIR = "apps/admin-v2";
  */
 export const BUNDLE_BUDGETS = {
   entry: 138,
-  css: 17,
+  // +0.25: grouped rich-text controls, 44px touch targets and fullscreen focus.
+  // Verified stylesheet: 17,536 bytes Brotli; keep 128 bytes of growth headroom.
+  css: 17.25,
   // Editors (rich text preview, forms, validation) sit near 290-350.
   routeDefault: 360,
   routes: {
