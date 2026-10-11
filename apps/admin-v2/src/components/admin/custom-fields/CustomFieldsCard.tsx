@@ -49,6 +49,7 @@ import {
 } from "~/lib/api-query-options/custom-fields";
 import { checkDraft, draftFromValue, sameDraft, valueFromDraft, type CustomFieldDraft, type DraftProblem } from "./custom-field-draft";
 import { CustomFieldInput } from "./CustomFieldInput";
+import { SavedCustomFieldValue } from "./SavedCustomFieldValue";
 
 type Drafts = Record<string, CustomFieldDraft>;
 
@@ -213,10 +214,21 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
         const { definition } = field;
         const id = `custom-field-${definition.id}`;
         const editable = canEdit && writable(field);
-        const problem = serverProblems[definition.id] ?? problems[definition.id];
         const typeLabel = t(`type.${customFieldItemType(definition.type)}` as CustomFieldMessageKey);
+        const label = <>
+          {definition.name}
+          <span className="sr-only"> ({isCustomFieldListType(definition.type) ? t("listOf", { type: typeLabel }) : typeLabel})</span>
+        </>;
+        if (!editable) return (
+          <SavedCustomFieldValue
+            key={definition.id}
+            field={field}
+            label={label}
+            help={definition.namespace !== "custom" ? t("managedBy", { namespace: definition.namespace }) : definition.description}
+          />
+        );
+        const problem = serverProblems[definition.id] ?? problems[definition.id];
         const note = problem
-          ?? (definition.namespace !== "custom" ? t("managedBy", { namespace: definition.namespace }) : null)
           ?? definition.description
           ?? (customFieldItemType(definition.type) === "json" ? t("jsonHelp", { example: "{\"size\": \"M\"}" }) : null)
           ?? (customFieldItemType(definition.type) === "date_time" ? t("dateTimeHelp") : null);
@@ -225,10 +237,7 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
             key={definition.id}
             id={id}
             noteId={`${id}-note`}
-            label={<>
-              {definition.name}
-              <span className="sr-only"> ({isCustomFieldListType(definition.type) ? t("listOf", { type: typeLabel }) : typeLabel})</span>
-            </>}
+            label={label}
             help={problem ? undefined : note}
             error={problem}
           >
@@ -245,7 +254,6 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
                   return rest;
                 });
               }}
-              disabled={!editable}
               invalid={Boolean(problem)}
               describedBy={note ? `${id}-note` : undefined}
               label={definition.name}
@@ -328,7 +336,7 @@ export function VariantCustomFieldsDialog({ variantId, sku, canEdit, open, onOpe
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>{t("cancel")}</Button>
-                <Button
+                {canEdit ? <Button
                   type="button"
                   loading={state.busy}
                   disabled={!state.dirty}
@@ -337,7 +345,7 @@ export function VariantCustomFieldsDialog({ variantId, sku, canEdit, open, onOpe
                   }}
                 >
                   {t("save")}
-                </Button>
+                </Button> : null}
               </DialogFooter>
             </DialogContent>
           </Dialog>
