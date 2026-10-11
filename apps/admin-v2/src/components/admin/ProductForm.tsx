@@ -26,6 +26,7 @@ import {
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { useFieldErrorLines } from "./shared/use-form-save-bar";
 import { useFormWithRefusals } from "~/lib/input-refusals";
+import { sortedUniqueStrings } from "~/lib/form-values";
 import {
   SaveBarProvider,
   SaveErrorBanner,
@@ -238,7 +239,6 @@ function ProductEditor({
       metaDescription: null,
       noIndex: false,
       excludeFromSitemap: false,
-      salesChannelIds: null,
       productCondition: DEFAULT_PRODUCT_CONDITION,
       slug: "",
       media: [],
@@ -254,6 +254,7 @@ function ProductEditor({
       brandId: null,
       customizationSchema: [],
       ...defaultValues,
+      salesChannelIds: defaultValues?.salesChannelIds ? sortedUniqueStrings(defaultValues.salesChannelIds) : null,
       // Empty is one value: a saved "<p></p>" is not a change from nothing.
       description: richTextOrNull(defaultValues?.description),
     },
@@ -291,13 +292,17 @@ function ProductEditor({
       rebase: (latest, keep, restore) => {
         const values = form.getValues();
         const changed = Object.keys(form.formState.dirtyFields) as Array<keyof ProductFormValues>;
-        form.reset({ ...form.formState.defaultValues, ...latest });
+        const baseline = { ...form.formState.defaultValues, ...latest };
+        form.reset({ ...baseline, salesChannelIds: baseline.salesChannelIds ? sortedUniqueStrings(baseline.salesChannelIds) : null });
         for (const key of changed) {
           if (keep && !keep.includes(key)) continue;
           form.setValue(key, values[key] as never, { shouldDirty: true });
         }
         for (const [key, value] of Object.entries(restore ?? {}) as Array<[keyof ProductFormValues, unknown]>) {
-          if (!changed.includes(key)) form.setValue(key, value as never, { shouldDirty: true });
+          if (!changed.includes(key)) {
+            const next = key === "salesChannelIds" && Array.isArray(value) ? sortedUniqueStrings(value as string[]) : value;
+            form.setValue(key, next as never, { shouldDirty: true });
+          }
         }
       },
       changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)

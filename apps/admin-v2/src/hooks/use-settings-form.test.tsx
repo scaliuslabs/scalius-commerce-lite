@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { useSettingsForm } from "./use-settings-form";
+import { normalizeAdminPhone } from "~/components/admin/shared/AdminPhoneInput";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -19,8 +21,10 @@ vi.mock("sonner", () => ({
 
 interface Values {
   label: string;
+  phone?: string;
   caption?: string;
   policy?: { enabled: boolean; channels: string[] };
+  rules?: Array<{ event: string; enabled: boolean }>;
 }
 
 interface HookSnapshot {
@@ -64,13 +68,16 @@ describe("useSettingsForm freshness", () => {
 
   async function mountForm(options: {
     fetchFn?: () => Promise<Partial<Values>>;
-    saveFn: (values: Values) => Promise<Values>;
+    saveFn: (values: Values, expectedRevision: number) => Promise<Values>;
     canonical?: boolean;
+    cached?: Partial<Values>;
+    toDraft?: (values: Values) => Values;
   }) {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     const queryKey = ["settings", "draft"];
+    if (options.cached) queryClient.setQueryData(queryKey, options.cached);
     const hook: { current: HookSnapshot | null } = { current: null };
     function Harness() {
       hook.current = useSettingsForm<Values, Values>({
@@ -79,6 +86,7 @@ describe("useSettingsForm freshness", () => {
         saveFn: options.saveFn,
         resolveSavedValues: options.canonical ? (result) => result : undefined,
         defaultValues: { label: "", caption: "" },
+        toDraft: options.toDraft,
       });
       return null;
     }
@@ -88,6 +96,108 @@ describe("useSettingsForm freshness", () => {
     await vi.waitFor(() => expect(hook.current?.values.label).toBe("before"));
     return { hook, queryClient, queryKey };
   }
+
+  it("uses one draft representation for cached/read values, save acknowledgement, refetch and discard", async () => {
+    const raw = { label: "before", caption: "", phone: "+880 1712-345678" };
+    const { hook, queryClient, queryKey } = await mountForm({
+      cached: raw,
+      fetchFn: async () => raw,
+      saveFn: async (values) => ({ ...values, phone: "+8801712345678" }),
+      canonical: true,
+      toDraft: (values) => ({ ...values, phone: normalizeAdminPhone(values.phone ?? "") }),
+    });
+    expect(hook.current?.values.phone).toBe("01712345678");
+    expect(hook.current?.isDirty).toBe(false);
+    act(() => hook.current?.setValue("phone", "01812345678"));
+    expect(hook.current?.isDirty).toBe(true);
+    act(() => hook.current?.setValue("phone", "01712345678"));
+    expect(hook.current?.isDirty).toBe(false);
+    act(() => hook.current?.setValue("label", "saved"));
+    await act(async () => { await hook.current?.handleSubmit(); });
+    expect(hook.current?.isDirty).toBe(false);
+    expect(hook.current?.values.phone).toBe("01712345678");
+    // Query consumers still see the server representation, not the editor's.
+    expect(queryClient.getQueryData(queryKey)).toMatchObject({ phone: "+8801712345678" });
+    await act(async () => { queryClient.setQueryData(queryKey, { ...raw, label: "saved", phone: "+880 1812-345678" }); });
+    await vi.waitFor(() => expect(hook.current?.values.phone).toBe("01812345678"));
+    expect(hook.current?.isDirty).toBe(false);
+    act(() => hook.current?.setValue("phone", "01912345678"));
+    act(() => hook.current?.reset());
+    expect(hook.current?.values.phone).toBe("01812345678");
+    expect(hook.current?.isDirty).toBe(false);
+  });
+
+  it("normalizes a conflict reload before merging and resubmitting the draft", async () => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce({ label: "before", caption: "", phone: "+8801712345678", revision: 1 })
+      .mockResolvedValue({ label: "before", caption: "their caption", phone: "+880 1712-345678", revision: 2 });
+    const saveFn = vi.fn<(values: Values, revision: number) => Promise<Values>>()
+      .mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "SETTINGS_REVISION_CONFLICT", {
+        document: "business", expectedRevision: 1, currentRevision: 2,
+      }))
+      .mockImplementation(async (values) => ({ ...values, phone: "+8801712345678" }));
+    const { hook } = await mountForm({
+      fetchFn, saveFn, canonical: true,
+      toDraft: (values) => ({ ...values, phone: normalizeAdminPhone(values.phone ?? "") }),
+    });
+    act(() => hook.current?.setValue("label", "mine"));
+    await act(async () => { await hook.current?.handleSubmit(); });
+    expect(saveFn.mock.calls[1]).toEqual([{ label: "mine", caption: "their caption", phone: "01712345678" }, 2]);
+    expect(hook.current?.isDirty).toBe(false);
+  });
+
+  it("clears dirty after reverting equivalent values with reconstructed object keys", async () => {
+    const { hook } = await mountForm({
+      fetchFn: async () => ({ label: "before", caption: "before", policy: { enabled: true, channels: ["email", "sms"] } }),
+      saveFn: async (values) => values,
+    });
+    act(() => hook.current?.setValue("policy", { enabled: false, channels: ["email", "sms"] }));
+    expect(hook.current?.isDirty).toBe(true);
+    act(() => hook.current?.setValues({ policy: { channels: ["email", "sms"], enabled: true }, caption: "before", label: "before" }));
+    expect(hook.current?.isDirty).toBe(false);
+    // Ordered settings (for example payment methods) must still report a move.
+    act(() => hook.current?.setValue("policy", { channels: ["sms", "email"], enabled: true }));
+    expect(hook.current?.isDirty).toBe(true);
+  });
+
+  it("adopts refetched rows after an edit was reverted with different object key order", async () => {
+    const { hook, queryClient, queryKey } = await mountForm({
+      fetchFn: async () => ({ label: "before", rules: [{ event: "order", enabled: true }] }),
+      saveFn: async (values) => values,
+    });
+    act(() => hook.current?.setValue("rules", [{ event: "order", enabled: false }]));
+    act(() => hook.current?.setValue("rules", [{ enabled: true, event: "order" }]));
+    expect(hook.current?.isDirty).toBe(false);
+    await act(async () => {
+      queryClient.setQueryData(queryKey, { label: "before", rules: [{ event: "order", enabled: false }] });
+    });
+    await vi.waitFor(() => expect(hook.current?.values.rules).toEqual([{ event: "order", enabled: false }]));
+    expect(hook.current?.isDirty).toBe(false);
+  });
+
+  it("rebases a pending save after an equivalent row revert, then compares with the resolved baseline", async () => {
+    const save = deferred<Values>();
+    const { hook } = await mountForm({
+      fetchFn: async () => ({ label: "before", rules: [{ event: " order ", enabled: true }] }),
+      saveFn: () => save.promise,
+      canonical: true,
+    });
+    act(() => hook.current?.setValue("label", "submitted"));
+    let submission!: Promise<void>;
+    await act(async () => { submission = hook.current!.handleSubmit(); });
+    act(() => hook.current?.setValue("rules", [{ event: " order ", enabled: false }]));
+    act(() => hook.current?.setValue("rules", [{ enabled: true, event: " order " }]));
+    await act(async () => {
+      save.resolve({ label: "submitted", caption: "", rules: [{ event: "order", enabled: true }] });
+      await submission;
+    });
+    expect(hook.current?.values.rules).toEqual([{ event: "order", enabled: true }]);
+    expect(hook.current?.isDirty).toBe(false);
+    act(() => hook.current?.setValue("rules", [{ event: "order", enabled: false }]));
+    expect(hook.current?.isDirty).toBe(true);
+    act(() => hook.current?.setValue("rules", [{ enabled: true, event: "order" }]));
+    expect(hook.current?.isDirty).toBe(false);
+  });
 
   it("preserves newer fields while acknowledging normalized untouched fields", async () => {
     const save = deferred<Values>();

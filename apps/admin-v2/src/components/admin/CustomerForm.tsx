@@ -20,7 +20,7 @@ import {
 } from "./address/address-draft";
 import { CustomerAddressesCard } from "./customers/CustomerAddressesCard";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
+import { AdminPhoneInput, normalizeAdminPhone } from "@/components/admin/shared/AdminPhoneInput";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/customer-form-schema";
 import type { CustomerDto } from "@/lib/api-query-options/customers";
@@ -121,9 +121,9 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
     defaultValues: {
       name: "",
       email: null,
-      phone: "",
       ...(isEdit ? {} : { address: emptyAddressDraft() }),
       ...defaultValues,
+      phone: normalizeAdminPhone(defaultValues?.phone ?? ""),
     },
   });
 

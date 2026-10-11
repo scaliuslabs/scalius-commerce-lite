@@ -43,15 +43,18 @@ vi.mock("@/components/admin/resource/PageHeader", () => ({ PageHeader: () => nul
 vi.mock("../shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
 vi.mock("./OrderItemsSection", () => ({ OrderItemsSection: () => null }));
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
-// The customer card, reduced to two fields wired like the real ones.
+// The customer card, reduced to the fields under test; the phone control is real.
 vi.mock("./CustomerInfoSection", async () => {
   const { useController } = await import("react-hook-form");
+  const { AdminPhoneInput } = await import("../shared/AdminPhoneInput");
   function CustomerInfoSection() {
     const name = useController({ name: "customerName" });
+    const phone = useController({ name: "customerPhone" });
     const notes = useController({ name: "notes" });
     return (
       <>
         <input aria-label="Name" value={name.field.value ?? ""} onChange={name.field.onChange} />
+        <AdminPhoneInput aria-label="Phone" value={phone.field.value} onChange={phone.field.onChange} onBlur={phone.field.onBlur} />
         <textarea
           aria-label="Notes"
           value={notes.field.value || ""}
@@ -145,6 +148,22 @@ describe("edit order on the save bar", () => {
     expect(saveBar()).toBeNull();
   });
 
+  it("keeps a saved E.164 phone clean after blur, edit/revert and discard", async () => {
+    expect(field("Phone").value).toBe("01712345678");
+    expect(saveBar()).toBeNull();
+    await act(async () => { field("Phone").focus(); field("Phone").blur(); });
+    expect(saveBar()).toBeNull();
+    await type("Phone", "01712345679");
+    expect(saveBar()).not.toBeNull();
+    await type("Phone", "01712345678");
+    expect(saveBar()).toBeNull();
+    await type("Phone", "01712345679");
+    await click("Discard");
+    await click("Discard changes");
+    expect(field("Phone").value).toBe("01712345678");
+    expect(saveBar()).toBeNull();
+  });
+
   it("discards back to the loaded order exactly", async () => {
     await type("Name", "Rahim Uddin");
     await type("Notes", "Leave at the gate");
@@ -171,6 +190,7 @@ describe("edit order on the save bar", () => {
     expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({
       id: "ord_1",
       expectedVersion: 3,
+      customerPhone: order.customerPhone,
       notes: "Call before delivery",
       quoteFingerprint: "f".repeat(64),
     }));

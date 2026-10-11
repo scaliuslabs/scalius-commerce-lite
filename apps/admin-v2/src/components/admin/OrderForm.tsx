@@ -62,6 +62,7 @@ import {
 } from "./order-form/create-order-request-key";
 import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-create-recovery";
 import { takeOrderPrefill } from "./order-form/order-prefill";
+import { normalizeAdminPhone } from "./shared/AdminPhoneInput";
 import { describeAmendment } from "./order-form/amendment-summary";
 import { orderItemVariantLabel } from "./order-form/order-item-presentation";
 import { orderNeedsAddress } from "./order-form/order-line-properties";
@@ -309,7 +310,6 @@ function OrderEditor({
     shouldFocusError: false,
     defaultValues: {
       customerName: "",
-      customerPhone: "",
       customerEmail: null,
       shippingAddress: "",
       city: "",
@@ -324,6 +324,7 @@ function OrderEditor({
       sourceChoice: null,
       sourceName: "",
       ...defaultValues,
+      customerPhone: normalizeAdminPhone(defaultValues?.customerPhone ?? ""),
     },
   });
   const orderId = defaultValues?.id;
@@ -478,11 +479,12 @@ function OrderEditor({
     if (!prefill) return;
     const set = { shouldDirty: true };
     for (const name of [
-      "customerName", "customerPhone", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
+      "customerName", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
       "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode", "city", "zone",
     ] as const) {
       if (prefill[name]) form.setValue(name, prefill[name], set);
     }
+    if (prefill.customerPhone) form.setValue("customerPhone", normalizeAdminPhone(prefill.customerPhone), set);
     if (prefill.customerEmail) form.setValue("customerEmail", prefill.customerEmail, set);
     if (prefill.area) form.setValue("area", prefill.area, set);
     if (prefill.items.length > 0) form.setValue("items", prefill.items, set);

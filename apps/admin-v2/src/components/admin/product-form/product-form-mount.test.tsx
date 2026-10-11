@@ -69,7 +69,7 @@ const newValues = {
   name: "", description: null, price: null, categoryId: "", isActive: false,
   discountType: "percentage" as const, discountPercentage: 0, discountAmount: 0, freeDelivery: false,
   metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false, excludeFromSitemap: false,
-  salesChannelIds: null, productCondition: DEFAULT_PRODUCT_CONDITION, slug: "", media: [],
+  salesChannelIds: null as string[] | null, productCondition: DEFAULT_PRODUCT_CONDITION, slug: "", media: [],
   fulfillmentKind: "physical" as const, customizationSchema: [],
 };
 
@@ -167,6 +167,12 @@ function changedFromLoad(probe: Probe): string[] {
 }
 
 describe("a product page nobody has edited", () => {
+  it("normalizes explicit channel sets at hydration without making null publication explicit", async () => {
+    const probe = await mount(true, { ...savedValues, salesChannelIds: ["sc_online_store", "sc_meta", "sc_meta"] });
+    expect(probe.form!.getValues("salesChannelIds")).toEqual(["sc_meta", "sc_online_store"]);
+    expect(probe.form!.formState.defaultValues?.salesChannelIds).toEqual(["sc_meta", "sc_online_store"]);
+    expect(probe.dirty).toBe(false);
+  });
   it("passes view-only mode to the sidebar while keeping the outer fieldset protection", async () => {
     const probe = await mount(true, savedValues, true);
     expect(container.querySelector('[data-slot="read-only-notice"]')).not.toBeNull();

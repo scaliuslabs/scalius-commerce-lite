@@ -17,6 +17,7 @@ import { getLocale, useMessages } from "~/i18n";
 import { salesChannelsMessages } from "~/i18n/sales-channels";
 import { salesChannelName, salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import type { ProductFormValues } from "./types";
+import { sortedUniqueStrings } from "~/lib/form-values";
 
 export function PublishingChannels({ form, readOnly }: {
   form: UseFormReturn<ProductFormValues>;
@@ -56,7 +57,7 @@ export function PublishingChannels({ form, readOnly }: {
   const toggle = (id: string, on: boolean) => {
     const next = channels.map((channel) => channel.id)
       .filter((channelId) => (channelId === id ? on : published.has(channelId)));
-    form.setValue("salesChannelIds", next, { shouldDirty: true });
+    form.setValue("salesChannelIds", sortedUniqueStrings(next), { shouldDirty: true });
   };
 
   return (

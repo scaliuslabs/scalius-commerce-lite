@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { presenceKey } from "~/lib/realtime/store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
+import type { MediaFile } from "./media-manager";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useTranslateMenuItem } from "@/components/admin/translations/TranslateMenuItem";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
@@ -84,6 +86,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
   const canSave = isEdit ? categoryActions.canEdit : categoryActions.canCreate;
+  const [selectedImage, setSelectedImage] = useState<MediaFile | null>(null);
   const translateItem = useTranslateMenuItem("category", isEdit ? defaultValues?.id : undefined);
 
   const form = useForm<CategoryFormInput, unknown, CategoryFormValues>({
@@ -268,8 +271,12 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 render={({ field, fieldState }) => (
                   <Field error={fieldState.error?.message}>
                     <FormImageUploadField
-                      value={field.value}
-                      onChange={field.onChange}
+                      value={selectedImage?.url === field.value?.url ? selectedImage : field.value}
+                      onChange={(file) => {
+                        setSelectedImage(file);
+                        const saved = form.formState.defaultValues?.image;
+                        field.onChange(file && file.url === saved?.url ? saved : file);
+                      }}
                       triggerLabel={t("chooseImage")}
                       changeTriggerLabel={t("changeImage")}
                       placeholder={t("noImage")}

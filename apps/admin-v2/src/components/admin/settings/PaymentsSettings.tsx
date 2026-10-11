@@ -380,7 +380,7 @@ export function PaymentMethodsCard() {
   // A saved method whose app was removed can't be saved again: the server refuses it.
   const keepsRemovedApp = (draft: PaymentMethods) =>
     rowsFor(draft).some((row) => !row.installed && draft.enabledMethods.includes(row.id));
-  const { values, setValues, isLoadError, refetch } = useSettingsForm<PaymentMethods>({
+  const { values, savedValues, setValues, isLoadError, refetch } = useSettingsForm<PaymentMethods>({
     label: t("methodsTitle"),
     queryKey: paymentMethodsQuery.queryKey,
     fetchFn: paymentMethodsQuery.queryFn,
@@ -416,9 +416,12 @@ export function PaymentMethodsCard() {
       : t("needsCurrency", { currencies: formatList(currencies, getLocale(), "disjunction") });
   const toggle = (method: MethodKey, on: boolean) =>
     setValues((draft) => {
-      const enabledMethods = on
-        ? [...draft.enabledMethods, method]
-        : draft.enabledMethods.filter((item) => item !== method);
+      const enabledMethods = draft.enabledMethods.filter((item) => item !== method);
+      if (on) {
+        // Checkout uses this order. Re-enabling a saved method restores its position.
+        const savedPosition = savedValues.enabledMethods.indexOf(method);
+        enabledMethods.splice(savedPosition < 0 ? enabledMethods.length : savedPosition, 0, method);
+      }
       const next = { ...draft, enabledMethods };
       const options = defaults(next);
       return { ...next, defaultMethod: options.includes(draft.defaultMethod) ? draft.defaultMethod : options[0] ?? draft.defaultMethod };

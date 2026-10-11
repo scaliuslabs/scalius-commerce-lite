@@ -36,7 +36,7 @@ import type { MediaFile } from "~/components/admin/media-manager";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuRadioGroup,
-  DropdownMenuRadioItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenuRadioItem, DropdownMenuSeparator,
 } from "../dropdown-menu";
 import { TOOLBAR_ROW, TOOLBAR_WIDE, TOOLBAR_NARROW } from "./tiptap-toolbar-layout";
 import { ToolbarButton } from "./ToolbarButton";
@@ -234,6 +234,8 @@ export const TiptapMenuBar = ({
   const heading = toolbarState.heading1 ? "1" : toolbarState.heading2 ? "2" : toolbarState.heading3 ? "3" : "paragraph";
   const styleLabel = heading === "paragraph" ? t("paragraph") : t("heading", { level: Number(heading) });
   const alignment = toolbarState.alignCenter ? "center" : toolbarState.alignRight ? "right" : toolbarState.justify ? "justify" : "left";
+  const alignmentLabel = `${t("alignment")}: ${t(alignment === "center" ? "alignCenter" : alignment === "right" ? "alignRight" : alignment === "justify" ? "justify" : "alignLeft")}`;
+  const AlignmentIcon = alignment === "center" ? AlignCenter : alignment === "right" ? AlignRight : alignment === "justify" ? AlignJustify : AlignLeft;
   const insertItems = () => (
     <>
       <DropdownMenuItem onSelect={() => runFromMenu(() => setImageOpen(true))}><ImageIcon />{t("insertImageUrl")}</DropdownMenuItem>
@@ -248,7 +250,7 @@ export const TiptapMenuBar = ({
       <div role="toolbar" aria-label={ariaLabel ?? t("toolbar")} className={TOOLBAR_ROW}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className="h-11 w-14 shrink-0 sm:h-8 sm:w-12 pointer-coarse:h-11 pointer-coarse:w-14 @[38rem]:w-26 pointer-coarse:@[38rem]:w-14" aria-label={`${t("textStyle")}: ${styleLabel}`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-12 pointer-coarse:h-11 pointer-coarse:w-11 @[38rem]:w-26 pointer-coarse:@[38rem]:w-11" aria-label={`${t("textStyle")}: ${styleLabel}`}>
               <Pilcrow className="text-muted-foreground @[38rem]:hidden pointer-coarse:@[38rem]:block" />
               <span className="hidden min-w-0 flex-1 truncate ps-2 text-muted-foreground text-start @[38rem]:inline pointer-coarse:@[38rem]:hidden">{styleLabel}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
@@ -265,19 +267,13 @@ export const TiptapMenuBar = ({
             <DropdownMenuCheckboxItem checked={toolbarState.blockquote} disabled={!toolbarState.canToggleBlockquote} onSelect={() => runFromMenu(() => { toggleRichTextBlockquote(editor); })}>
               <TextQuote />{t("blockquote")}
             </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{t("alignment")}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={alignment} onValueChange={(value) => runFromMenu(() => { editor.chain().focus().setTextAlign(value).run(); })}>
-              <DropdownMenuRadioItem value="left"><AlignLeft />{t("alignLeft")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="center"><AlignCenter />{t("alignCenter")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="right"><AlignRight />{t("alignRight")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="justify"><AlignJustify />{t("justify")}</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
         <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={toolbarState.bold} tooltip={t("bold")}><Bold /></ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={toolbarState.italic} tooltip={t("italic")}><Italic /></ToolbarButton>
+        <div className={TOOLBAR_WIDE}>
+          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={toolbarState.italic} tooltip={t("italic")}><Italic /></ToolbarButton>
+        </div>
         <div className={TOOLBAR_WIDE}>
           <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={toolbarState.underline} tooltip={t("underline")}><UnderlineIcon /></ToolbarButton>
         </div>
@@ -352,7 +348,27 @@ export const TiptapMenuBar = ({
           </PopoverContent>
         </Popover>
 
-
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-12 pointer-coarse:h-11 pointer-coarse:w-11" aria-label={alignmentLabel}>
+                  <AlignmentIcon className="text-muted-foreground" />
+                  <ChevronDown className="text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{alignmentLabel}</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" className="z-[10001]" onCloseAutoFocus={finishMenu}>
+            <DropdownMenuRadioGroup value={alignment} onValueChange={(value) => runFromMenu(() => { editor.chain().focus().setTextAlign(value).run(); })}>
+              <DropdownMenuRadioItem value="left"><AlignLeft />{t("alignLeft")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="center"><AlignCenter />{t("alignCenter")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="right"><AlignRight />{t("alignRight")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="justify"><AlignJustify />{t("justify")}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className={cn(TOOLBAR_WIDE, "items-center gap-0.5")}>
           <ToolbarButton onClick={() => toggleRichTextBulletList(editor)} isActive={toolbarState.bulletList} disabled={!toolbarState.canToggleList} tooltip={t("bulletList")}><List /></ToolbarButton>
           <ToolbarButton onClick={() => toggleRichTextOrderedList(editor)} isActive={toolbarState.orderedList} disabled={!toolbarState.canToggleList} tooltip={t("numberedList")}><ListOrdered /></ToolbarButton>
@@ -373,6 +389,7 @@ export const TiptapMenuBar = ({
               <Button ref={moreTrigger} type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-8 pointer-coarse:h-11 pointer-coarse:w-11" aria-label={t("moreFormatting")}><MoreHorizontal className="text-muted-foreground" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="z-[10001]" onCloseAutoFocus={finishMenu}>
+              <DropdownMenuCheckboxItem checked={toolbarState.italic} onSelect={() => runFromMenu(() => { editor.chain().focus().toggleItalic().run(); })}><Italic />{t("italic")}</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={toolbarState.underline} onSelect={() => runFromMenu(() => { editor.chain().focus().toggleUnderline().run(); })}><UnderlineIcon />{t("underline")}</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={toolbarState.bulletList} disabled={!toolbarState.canToggleList} onSelect={() => runFromMenu(() => { toggleRichTextBulletList(editor); })}><List />{t("bulletList")}</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={toolbarState.orderedList} disabled={!toolbarState.canToggleList} onSelect={() => runFromMenu(() => { toggleRichTextOrderedList(editor); })}><ListOrdered />{t("numberedList")}</DropdownMenuCheckboxItem>

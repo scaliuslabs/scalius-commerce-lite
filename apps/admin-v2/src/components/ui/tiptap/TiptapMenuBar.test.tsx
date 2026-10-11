@@ -187,26 +187,55 @@ describe("TiptapMenuBar", () => {
     }
   });
 
-  it("keeps heading, paragraph, quote and alignment commands in the text-style menu", async () => {
+  it("keeps heading, paragraph and quote in Text style, separate from Alignment", async () => {
     const { editor, chain } = makeEditor();
     act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
-    for (const [label, command] of [["Heading 2", chain.toggleHeading], ["Paragraph", chain.setParagraph], ["Blockquote", chain.toggleBlockquote], ["Align center", chain.setTextAlign]] as const) {
-      await openMenu("Text style and alignment: Paragraph");
+    for (const [label, command] of [["Heading 2", chain.toggleHeading], ["Paragraph", chain.setParagraph], ["Blockquote", chain.toggleBlockquote]] as const) {
+      await openMenu("Text style: Paragraph");
+      expect(document.querySelector('[role="menu"]')?.textContent).not.toContain("Align center");
       await selectItem(label);
       expect(command).toHaveBeenCalled();
     }
     expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 2 });
-    expect(chain.setTextAlign).toHaveBeenCalledWith("center");
+    expect(chain.setTextAlign).not.toHaveBeenCalled();
+  });
+
+  it("keeps all four alignment commands in their own menu", async () => {
+    const { editor, chain } = makeEditor();
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    for (const [label, value] of [["Align left", "left"], ["Align center", "center"], ["Align right", "right"], ["Justify", "justify"]] as const) {
+      await openMenu("Alignment: Align left");
+      expect(document.querySelector('[role="menu"]')?.textContent).not.toContain("Paragraph");
+      await selectItem(label);
+      expect(chain.setTextAlign).toHaveBeenCalledWith(value);
+      expect(chain.focus).toHaveBeenCalled();
+    }
+  });
+
+  it("names and illustrates the current alignment", () => {
+    const { editor } = makeEditor();
+    vi.mocked(editor.isActive).mockImplementation((value: unknown) => typeof value === "object" && value !== null && "textAlign" in value && value.textAlign === "center");
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    expect(host.querySelector('button[aria-label="Alignment: Align center"] .lucide-text-align-center')).not.toBeNull();
   });
 
   it("keeps narrow-layout formatting and history reachable through More", async () => {
     const { editor, chain } = makeEditor();
     act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} compact />));
-    for (const [label, command] of [["Underline (Ctrl+U)", chain.toggleUnderline], ["Bullet list", chain.toggleBulletList], ["Numbered list", chain.toggleOrderedList], ["Undo (Ctrl+Z)", chain.undo], ["Redo (Ctrl+Shift+Z)", chain.redo]] as const) {
+    for (const [label, command] of [["Italic (Ctrl+I)", chain.toggleItalic], ["Underline (Ctrl+U)", chain.toggleUnderline], ["Bullet list", chain.toggleBulletList], ["Numbered list", chain.toggleOrderedList], ["Undo (Ctrl+Z)", chain.undo], ["Redo (Ctrl+Shift+Z)", chain.redo]] as const) {
       await openMenu("More formatting");
       await selectItem(label);
       expect(command).toHaveBeenCalled();
     }
+  });
+
+  it("shows the current Italic state in More", async () => {
+    const { editor } = makeEditor();
+    vi.mocked(editor.isActive).mockImplementation((value: unknown) => value === "italic");
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    await openMenu("More formatting");
+    const item = Array.from(document.querySelectorAll('[role="menuitemcheckbox"]')).find((node) => node.textContent === "Italic (Ctrl+I)");
+    expect(item?.getAttribute("aria-checked")).toBe("true");
   });
 
   it("names the toolbar, menus and actions in Bangla", async () => {
@@ -214,10 +243,10 @@ describe("TiptapMenuBar", () => {
     act(() => setLocale("bn"));
     act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
     expect(host.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe("লেখার ফরম্যাটিং");
-    for (const label of ["বোল্ড (Ctrl+B)", "লিংক যোগ করুন", "পূর্ণ স্ক্রিন", "আরও ফরম্যাটিং", "লেখার ধরন ও অবস্থান: অনুচ্ছেদ"]) {
+    for (const label of ["বোল্ড (Ctrl+B)", "লিংক যোগ করুন", "পূর্ণ স্ক্রিন", "আরও ফরম্যাটিং", "লেখার ধরন: অনুচ্ছেদ", "অবস্থান: বাঁয়ে সাজান"]) {
       expect(host.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
     }
-    await openMenu("লেখার ধরন ও অবস্থান: অনুচ্ছেদ");
+    await openMenu("লেখার ধরন: অনুচ্ছেদ");
     expect(document.querySelector('[role="menu"]')?.textContent).toContain("হেডিং ২");
   });
 });

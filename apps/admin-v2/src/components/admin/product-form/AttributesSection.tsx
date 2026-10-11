@@ -1,11 +1,14 @@
+import { lazy, Suspense } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { FormField } from "@/components/ui/form";
+import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
-import { AttributeManager } from "./AttributeManager";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 import { Field } from "~/components/ui/field";
+
+const AttributeManager = lazy(() => import("./AttributeManager").then((module) => ({ default: module.AttributeManager })));
 
 export function AttributesSection({ form, defaultOpen }: { form: UseFormReturn<ProductFormValues>; defaultOpen: boolean }) {
   const t = useMessages(productMessages);
@@ -21,14 +24,16 @@ export function AttributesSection({ form, defaultOpen }: { form: UseFormReturn<P
         name="attributes"
         render={({ field }) => (
           <Field>
-            <AttributeManager
-              initialAttributes={field.value || []}
-              missingValueRows={missingValueRows}
-              onAttributesChange={(next) =>
-                // A just-added attribute has no value yet: only re-check once a check has failed.
-                form.setValue("attributes", next, { shouldDirty: true, shouldValidate: Boolean(rowErrors) })
-              }
-            />
+            <Suspense fallback={<LoadingFallback height="h-36" />}>
+              <AttributeManager
+                initialAttributes={field.value || []}
+                missingValueRows={missingValueRows}
+                onAttributesChange={(next) =>
+                  // A just-added attribute has no value yet: only re-check once a check has failed.
+                  form.setValue("attributes", next, { shouldDirty: true, shouldValidate: Boolean(rowErrors) })
+                }
+              />
+            </Suspense>
           </Field>
         )}
       />

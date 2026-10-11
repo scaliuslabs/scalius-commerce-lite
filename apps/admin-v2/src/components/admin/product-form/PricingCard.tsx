@@ -107,7 +107,7 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
     control: form.control,
     name: ["price", "discountType", "discountPercentage", "discountAmount"],
   });
-  const saleOf = (base: number | null | undefined, type: typeof discountType, percentage: number | null | undefined, amount: number | null | undefined) =>
+  const saleOf = (base: number | null | undefined, type: typeof discountType | undefined, percentage: number | null | undefined, amount: number | null | undefined) =>
     Number.isFinite(base)
       ? salePrice(base ?? 0, { discountType: type, discountPercentage: percentage, discountAmount: amount })
       : null;
@@ -130,19 +130,28 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
   const change = (next: PricePair) => {
     setPair(next);
     const out = storedFromPair(next, decimalPlaces);
+    const baseline = form.formState.defaultValues;
+    const baseOut = storedFromPair(pairFromStored(baseline?.price ?? null,
+      saleOf(baseline?.price, baseline?.discountType, baseline?.discountPercentage, baseline?.discountAmount)), decimalPlaces);
+    // Returning to the saved pair also restores its percentage/flat representation.
+    const restored = baseline?.discountType !== undefined && !out.problem
+      && out.price === baseOut.price && out.discounted === baseOut.discounted && out.discountAmount === baseOut.discountAmount;
+    const nextType = restored ? baseline.discountType : out.discounted ? "flat" : "percentage";
+    const nextPercentage = restored ? baseline.discountPercentage : 0;
+    const nextAmount = restored ? baseline.discountAmount : out.discountAmount;
     const options = (name: "price" | "discountType" | "discountPercentage" | "discountAmount") =>
       ({ shouldDirty: true, shouldValidate: Boolean(form.getFieldState(name).error) });
     form.setValue("price", out.price, options("price"));
     // A product with no discount keeps its empty discount fields as saved.
-    const touchesDiscount = out.discounted || saleOf(price, discountType, discountPercentage, discountAmount) !== null;
+    const touchesDiscount = restored || out.discounted || saleOf(price, discountType, discountPercentage, discountAmount) !== null;
     if (touchesDiscount) {
-      form.setValue("discountType", out.discounted ? "flat" : "percentage", options("discountType"));
-      form.setValue("discountPercentage", 0, options("discountPercentage"));
-      form.setValue("discountAmount", out.discountAmount, options("discountAmount"));
+      form.setValue("discountType", nextType, options("discountType"));
+      form.setValue("discountPercentage", nextPercentage, options("discountPercentage"));
+      form.setValue("discountAmount", nextAmount, options("discountAmount"));
     }
     form.setValue("compareAtProblem", out.problem, { shouldValidate: Boolean(form.getFieldState("compareAtProblem").error) });
     setSyncedKey(touchesDiscount
-      ? keyOf(out.price, out.discounted ? "flat" : "percentage", 0, out.discountAmount)
+      ? keyOf(out.price, nextType, nextPercentage, nextAmount)
       : keyOf(out.price, discountType, discountPercentage, discountAmount));
   };
 

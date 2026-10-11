@@ -8,6 +8,7 @@ import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import type { MergeOptions } from "~/lib/three-way-merge";
+import { sameFormValue } from "~/lib/form-values";
 
 /**
  * A settings document's revision as its GET returns it (`data.revision`): a
@@ -23,6 +24,8 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
   saveFn: (values: T, expectedRevision: R) => Promise<SaveResult>;
   resolveSavedValues?: (result: SaveResult, submittedValues: T) => T | undefined;
   defaultValues: T;
+  /** The same editable representation for cached reads, reloads and save acknowledgements. */
+  toDraft?: (values: T) => T;
   successMessage?: string;
   errorMessage?: string;
   invalidateQueryKeys?: readonly (readonly unknown[])[];
@@ -57,7 +60,7 @@ export function mergeUneditedFields<T extends object>(current: T, baseline: T, i
   for (const key of Object.keys({ ...baseline, ...current }) as (keyof T)[]) {
     const mine: unknown = current[key];
     const base: unknown = baseline[key];
-    if (JSON.stringify(mine) === JSON.stringify(base)) continue;
+    if (sameFormValue(mine, base)) continue;
     const theirs: unknown = incoming[key];
     next[key] = (isPlainObject(mine) && isPlainObject(base) && isPlainObject(theirs)
       ? mergeUneditedFields(mine, base, theirs)
@@ -79,8 +82,9 @@ function withoutRevision<T extends object>(data: T): T {
   return fields as T;
 }
 
-function formValues<T extends object>(defaults: T, data: Partial<T> | undefined): T {
-  return { ...defaults, ...withoutRevision(data ?? {}) } as T;
+function formValues<T extends object>(defaults: T, data: Partial<T> | undefined, toDraft?: (values: T) => T): T {
+  const values = { ...defaults, ...withoutRevision(data ?? {}) } as T;
+  return toDraft ? toDraft(values) : values;
 }
 
 /**
@@ -99,6 +103,7 @@ export function useSettingsForm<
   saveFn,
   resolveSavedValues,
   defaultValues,
+  toDraft,
   successMessage = translate(saveBarMessages, "saved"),
   errorMessage = translate(saveBarMessages, "notSavedOne"),
   invalidateQueryKeys = [],
@@ -121,11 +126,13 @@ export function useSettingsForm<
   const hasLoaded = data !== undefined && !isError;
 
   const defaultValuesRef = useRef(defaultValues);
+  const toDraftRef = useRef(toDraft);
+  toDraftRef.current = toDraft;
   // Route loaders prefetch settings: seed from the cache so navigation never
   // flashes default values.
   const [{ values, savedValues }, setDraft] = useState(() => {
     const cached = queryClient.getQueryData<Partial<T>>(queryKey as unknown[]);
-    const initial = cached ? formValues(defaultValues, cached) : defaultValues;
+    const initial = formValues(defaultValues, cached, toDraft);
     return { values: initial, savedValues: initial };
   });
   const inSaveBarRef = useRef(false);
@@ -135,7 +142,7 @@ export function useSettingsForm<
   // the same data object. Preserve local edits against the prior saved snapshot.
   useEffect(() => {
     if (data && dataUpdateCount > ignoredReadUpdates.current) {
-      const nextValues = formValues(defaultValuesRef.current, data);
+      const nextValues = formValues(defaultValuesRef.current, data, toDraftRef.current);
       setDraft((current) => ({
         values: mergeUneditedFields(current.values, current.savedValues, nextValues),
         savedValues: nextValues,
@@ -164,7 +171,7 @@ export function useSettingsForm<
     const latest = await fetchFn();
     const revision = readRevision(latest);
     if (revision === undefined) return null;
-    const theirs = formValues(defaultValuesRef.current, latest);
+    const theirs = formValues(defaultValuesRef.current, latest, toDraftRef.current);
     const { mergeSettingsDraft } = await import("~/lib/merge-document");
     const values = await mergeSettingsDraft(savedValuesRef.current, theirs, draft, { coupled, fields });
     return values ? { values, theirs, revision: revision as R } : null;
@@ -196,7 +203,7 @@ export function useSettingsForm<
         // The fields this save changed (names, never values), so other viewers can say what merged.
         const base = savedValuesRef.current as Record<string, unknown>;
         const sent = submittedValues as Record<string, unknown>;
-        announceSave(scopeKey, null, Object.keys(sent).filter((key) => JSON.stringify(sent[key]) !== JSON.stringify(base[key])));
+        announceSave(scopeKey, null, Object.keys(sent).filter((key) => !sameFormValue(sent[key], base[key])));
       }
       const savedRevision = readRevision(result);
       const resolved = resolveSavedValues?.(result, submittedValues);
@@ -212,7 +219,7 @@ export function useSettingsForm<
       // their React effects are still queued.
       ignoredReadUpdates.current =
         queryClient.getQueryState(queryKey as unknown[])?.dataUpdateCount ?? 0;
-      const nextValues = canonicalValues ?? submittedValues;
+      const nextValues = formValues(defaultValuesRef.current, canonicalValues ?? submittedValues, toDraftRef.current);
       // Compare with what this request submitted, including edits that revert
       // to the previous saved value while the request is in flight.
       setDraft((current) => ({
@@ -259,7 +266,7 @@ export function useSettingsForm<
     setValues((prev) => ({ ...prev, [key]: value }));
   }, [setValues]);
 
-  const isDirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+  const isDirty = !sameFormValue(values, savedValues);
   const reset = useCallback(() => {
     setDraft((current) => ({ ...current, values: current.savedValues }));
   }, []);
@@ -285,6 +292,7 @@ export function useSettingsForm<
 
   return {
     values,
+    savedValues,
     setValue,
     setValues,
     isDirty,

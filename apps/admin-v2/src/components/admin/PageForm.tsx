@@ -39,6 +39,7 @@ import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { Field, ChoiceField } from "~/components/ui/field";
+import { richTextOrEmpty } from "~/lib/rich-text-value";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -94,7 +95,6 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       contentType,
       title: "",
       slug: "",
-      content: "",
       excerpt: null,
       author: null,
       tags: [],
@@ -110,6 +110,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       hideTitle: false,
       featuredImage: null,
       ...defaultValues,
+      content: richTextOrEmpty(defaultValues?.content),
     },
   });
 

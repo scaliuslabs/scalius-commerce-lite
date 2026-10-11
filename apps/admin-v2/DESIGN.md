@@ -4,6 +4,12 @@ Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify
 
 Dark mode is only the token file. Never write `dark:` (lint). Never use palette colours such as `bg-red-500` (lint, `no-raw-colors`).
 
+## Design decisions
+
+Before choosing or changing an interaction, research the relevant leading interfaces, compare how they serve the merchant's task, choose the strongest approach, then improve and validate it in Scalius. Judge discoverability, steps, density, phone use, keyboard access, localization, and recovery; popularity alone is not a reason to copy a pattern. Use current primary sources and inspect the actual interaction when accessible. Distinguish documented behavior from hands-on evidence.
+
+Keep the decision beside the owning feature: alternatives, source links, why the chosen pattern fits, its tradeoff, and the improvement to prove. Reuse a still-applicable decision instead of restarting research for each small fix. Validate the result in the real flow on desktop and phone, in English and Bangla, including changed, reverted, loading and failed states. A screenshot or a model's approval alone does not establish that a flow works.
+
 ## Tokens
 
 Use the Tailwind names. Values for both themes are in `global.css`.
@@ -292,6 +298,7 @@ Harness hooks. Shared components carry these `data-slot` names; the harness sele
 | P3 | One composer per purpose: a record has one place to write a team note. | review |
 | P4 | Save is only in the contextual save bar (and Cmd/Ctrl+S). No second Save at the page bottom. | harness → no visible `main button` named Save while `[data-save-bar]` exists |
 | P5 | A create page shows its create action (save bar or a footer primary) before the first edit. | review |
+| P6 | An existing record is dirty only while its editable values differ from the current saved baseline. Editing and restoring those values removes Save/Discard and the leave warning. Normalize display/storage representations at their owning field boundary; ordered content and real dependent changes remain meaningful. A pending save must preserve edits made after submission. | review + focused interaction tests → edit, revert, discard, acknowledged save and edit during save |
 
 ### Overlays and feedback
 

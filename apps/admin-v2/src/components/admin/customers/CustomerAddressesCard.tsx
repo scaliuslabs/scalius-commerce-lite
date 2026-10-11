@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Label } from "~/components/ui/label";
-import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
+import { AdminPhoneInput, normalizeAdminPhone } from "~/components/admin/shared/AdminPhoneInput";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "~/components/admin/address/AddressFields";
 import {
@@ -220,7 +220,7 @@ function AddressDialog({ customerId, editing, isOnlyAddress, onOpenChange, onSav
   useEffect(() => {
     if (!open) return;
     setDraft(current ? addressDraftFrom(current) : emptyAddressDraft());
-    setPhone(current?.phone ?? current?.phoneRaw ?? "");
+    setPhone(normalizeAdminPhone(current?.phone ?? current?.phoneRaw ?? ""));
     setMakeDefault(false);
     setProblems(null);
     setSkipValidation(Boolean(current?.validationSkipped));
@@ -234,7 +234,7 @@ function AddressDialog({ customerId, editing, isOnlyAddress, onOpenChange, onSav
     setFailure(null);
     const body = {
       ...addressDraftInput(draft),
-      phone: phone.trim() || null,
+      phone: phone.trim() ? validateAndFormatPhone(phone) : null,
       ...(makeDefault ? { isDefault: true } : {}),
       ...(skipValidation ? { skipValidation: true } : {}),
     };

@@ -6,8 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { phoneNumberSchema, validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import type { CustomerFormValues } from "~/lib/customer-form-schema";
 import { getStoreRegion } from "~/lib/store-time-zone";
+import { rebaseForm } from "./shared/use-form-save-bar";
 
 type SubmitOptions = {
   createFn: (values: CustomerFormValues) => Promise<unknown>;
@@ -47,6 +49,7 @@ vi.mock("@/components/admin/shared/FormContainer", async () => {
   const { Form } = await import("~/components/ui/form");
   return { FormContainer: ({ heading, children, actions, readOnlyNotice, canSave, form }: ShellProps) => {
     state.form = form;
+    void form.formState.isDirty;
     return <Form {...form}><h1>{heading}</h1>{actions}{readOnlyNotice}<fieldset disabled={!canSave}>{children}</fieldset></Form>;
   } };
 });
@@ -90,12 +93,66 @@ describe("customer saved values without edit permission", () => {
     client.clear();
     host.remove();
   });
-  const render = async (props: Parameters<typeof CustomerForm>[0] = { isEdit: true, defaultValues: saved, record }) => {
-    await act(async () => root.render(<QueryClientProvider client={client}><CustomerForm {...props} /></QueryClientProvider>));
+  const render = async (props: Parameters<typeof CustomerForm>[0] = { isEdit: true, defaultValues: saved, record }, key?: string) => {
+    await act(async () => root.render(<QueryClientProvider client={client}><CustomerForm key={key} {...props} /></QueryClientProvider>));
   };
   const fact = (label: string) => [...host.querySelectorAll('[data-slot="field"]')]
     .find(field => field.querySelector('[data-slot="field-label"]')?.textContent === label)
     ?.querySelector('[data-slot="field-control"]')?.textContent;
+  const typePhone = (value: string) => act(async () => {
+    const input = host.querySelector<HTMLInputElement>('input[type="tel"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  it.each([
+    ["+8801712345678", "01712345678", "01712345679"],
+    ["+14155552671", "+14155552671", "+14155552672"],
+  ])("keeps %s clean after blur and edit/revert with the actual phone control", async (stored, draft, changed) => {
+    state.permissions.add("customers.edit");
+    await render({ isEdit: true, defaultValues: { ...saved, phone: stored }, record: { ...record, phone: stored } });
+    expect(state.form!.getValues("phone")).toBe(draft);
+    expect(state.form!.formState.isDirty).toBe(false);
+    await act(async () => {
+      const input = host.querySelector<HTMLInputElement>('input[type="tel"]')!;
+      input.focus();
+      input.blur();
+    });
+    expect(state.form!.formState.isDirty).toBe(false);
+    await typePhone(changed);
+    expect(state.form!.formState.isDirty).toBe(true);
+    await typePhone(draft);
+    expect(state.form!.formState.isDirty).toBe(false);
+    expect(phoneNumberSchema.parse(draft)).toBe(stored);
+    expect(validateAndFormatPhone(phoneNumberSchema.parse(draft))).toBe(stored);
+    // Address writes carry E.164 too, even when the address is in another country.
+    expect(validateAndFormatPhone(validateAndFormatPhone(draft), undefined, { defaultCountry: "US" })).toBe(stored);
+  });
+
+  it("keeps the phone draft clean after save acknowledgement, discard and a fresh server load", async () => {
+    state.permissions.add("customers.edit");
+    await render();
+    await typePhone("01712345679");
+    expect(state.form!.formState.isDirty).toBe(true);
+    const sent = state.form!.getValues();
+    const save = vi.fn(async (values: CustomerFormValues) => state.submit!.updateFn({ ...values, id: saved.id }));
+    await act(async () => {
+      await state.form!.handleSubmit(save)();
+      rebaseForm(state.form!, sent, sent);
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(state.put).toHaveBeenLastCalledWith({ path: { id: saved.id }, body: { name: saved.name, email: saved.email, phone: "+8801712345679" } });
+    expect(state.form!.getValues("phone")).toBe("01712345679");
+    expect(state.form!.formState.isDirty).toBe(false);
+    await typePhone("01712345678");
+    expect(state.form!.formState.isDirty).toBe(true);
+    act(() => state.form!.reset());
+    expect(state.form!.getValues("phone")).toBe("01712345679");
+    expect(state.form!.formState.isDirty).toBe(false);
+    await render({ isEdit: true, defaultValues: { ...saved, phone: "+8801712345679" }, record }, "refetched");
+    expect(state.form!.getValues("phone")).toBe("01712345679");
+    expect(state.form!.formState.isDirty).toBe(false);
+  });
 
   it("shows saved contact and tag facts without inputs or tag mutation controls", async () => {
     await render();

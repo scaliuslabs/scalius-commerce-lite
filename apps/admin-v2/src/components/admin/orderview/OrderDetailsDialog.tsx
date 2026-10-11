@@ -15,7 +15,7 @@ import {
 } from "~/components/ui/dialog";
 import { Form, FormField } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
-import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
+import { AdminPhoneInput, normalizeAdminPhone } from "~/components/admin/shared/AdminPhoneInput";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "~/components/admin/address/AddressFields";
 import { BillingAddressFields } from "~/components/admin/address/BillingAddressFields";
 import {
@@ -67,7 +67,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
   type Values = z.input<typeof schema>;
   const values = (): Values => ({
     customerName: order.customerName,
-    customerPhone: order.customerPhone ?? "",
+    customerPhone: normalizeAdminPhone(order.customerPhone ?? ""),
     customerEmail: order.customerEmail ?? "",
   });
   const form = useForm<Values>({ resolver: zodResolver(schema), mode: "onBlur", defaultValues: values() });

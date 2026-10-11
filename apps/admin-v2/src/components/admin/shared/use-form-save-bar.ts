@@ -2,6 +2,7 @@ import * as React from "react";
 import type { FieldErrors, FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { sameFormValue } from "~/lib/form-values";
 import { SaveNotCompleted, useSaveBar, useSaveScope } from "./SaveBar";
 
 export { SaveNotCompleted };
@@ -29,8 +30,6 @@ export function copyValues<T>(value: T): T {
   return value;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-
 /**
  * Makes `saved` the form's last-saved values without losing work: a field the
  * merchant changed since `before` was taken (while a save was on its way, or
@@ -45,10 +44,10 @@ export function rebaseForm<T extends FieldValues, C, R extends FieldValues>(
   const current = form.getValues();
   form.reset(saved, { keepValues: true });
   for (const key of Object.keys({ ...saved, ...current }) as Array<Path<T>>) {
-    const edited = !same(current[key], before[key]);
+    const edited = !sameFormValue(current[key], before[key]);
     const next = (edited ? current[key] : saved[key]) as PathValue<T, Path<T>>;
     // Marks the edits dirty again (reset cleared the list) and puts saved values in place.
-    if (!same(next, current[key]) || !same(next, saved[key])) form.setValue(key, next, { shouldDirty: true });
+    if (!sameFormValue(next, current[key]) || !sameFormValue(next, saved[key])) form.setValue(key, next, { shouldDirty: true });
   }
 }
 

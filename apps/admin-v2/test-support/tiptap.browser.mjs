@@ -40,6 +40,8 @@ const bundle = await build({
       const initial = "<p>A comfortable everyday cotton shirt.</p>";
       function Fixture() {
         const [content, setContent] = useState(initial);
+        window.__loadContent = setContent;
+        window.__content = () => content;
         return <main style={{ padding: 16 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             <Button data-sample="empty" variant="outline" onClick={() => setContent("")}>Empty</Button>
@@ -70,11 +72,15 @@ const bundle = await build({
 const browser = await chromium.launch({ headless: true });
 try {
   const cases = [
-    ...["en", "bn"].flatMap((locale) => [390, 768, 1440].map((width) => ({ locale, width, theme: "dark" }))),
+    ...["en", "bn"].flatMap((locale) => [360, 375, 390, 768, 1440].map((width) => ({ locale, width, theme: "dark" }))),
     { locale: "en", width: 1440, theme: "light" },
     { locale: "en", width: 1440, theme: "dark", cardWidth: 380 },
     { locale: "bn", width: 768, theme: "dark", touch: true },
     ...[641, 642, 643].map((cardWidth) => ({ locale: "bn", width: 1440, theme: "dark", cardWidth })),
+    { locale: "en", width: 1440, theme: "dark", cardWidth: 642 },
+    ...[769, 770, 771].map((cardWidth) => ({ locale: "bn", width: 1440, theme: "dark", cardWidth, touch: true })),
+    { locale: "en", width: 1440, theme: "dark", cardWidth: 770, touch: true },
+    ...["en", "bn"].map((locale) => ({ locale, width: 1440, theme: "dark", cardWidth: 341, touch: true })),
   ];
   for (const { locale, width, theme, cardWidth = 660, touch = width < 640 } of cases) {
       const context = await browser.newContext({ offline: true, hasTouch: touch, colorScheme: theme, viewport: { width, height: 900 } });
@@ -96,6 +102,10 @@ try {
         const toolbar = page.getByRole("toolbar");
         const fullscreen = locale === "en" ? "Fullscreen" : "পূর্ণ স্ক্রিন";
         const bold = locale === "en" ? "Bold (Ctrl+B)" : "বোল্ড (Ctrl+B)";
+        const alignment = locale === "en" ? "Alignment" : "অবস্থান";
+        const alignmentMenu = toolbar.getByRole("button", { name: new RegExp(`^${alignment}:`) });
+        const italic = locale === "en" ? "Italic (Ctrl+I)" : "ইটালিক (Ctrl+I)";
+        const moreMenu = toolbar.getByRole("button", { name: locale === "en" ? "More formatting" : "আরও ফরম্যাটিং", exact: true });
         const label = `${theme}/${locale}/${width}/${cardWidth}/${touch ? "touch" : "fine"}`;
         const shotLabel = label.replaceAll("/", "-");
 
@@ -118,10 +128,46 @@ try {
 
         await editor.click();
         await page.keyboard.press("ControlOrMeta+A");
+        const selection = await editor.evaluate((node) => ({ from: node.editor.state.selection.from, to: node.editor.state.selection.to }));
+        for (const [value, name, icon] of [
+          ["center", locale === "en" ? "Align center" : "মাঝখানে সাজান", "center"],
+          ["right", locale === "en" ? "Align right" : "ডানে সাজান", "end"],
+          ["justify", locale === "en" ? "Justify" : "দুই পাশে সমান করুন", "justify"],
+          ["left", locale === "en" ? "Align left" : "বাঁয়ে সাজান", "start"],
+        ]) {
+          await alignmentMenu.click();
+          assert.equal(await page.getByRole("menuitemradio", { name: locale === "en" ? "Paragraph" : "অনুচ্ছেদ", exact: true }).count(), 0, `${label}: Alignment contains paragraph styles`);
+          await page.getByRole("menuitemradio", { name, exact: true }).click();
+          await page.waitForFunction(() => document.activeElement?.classList.contains("ProseMirror"));
+          assert.equal(await editor.locator("p").evaluate((node) => node.style.textAlign), value, `${label}: alignment command`);
+          assert.equal(await alignmentMenu.getAttribute("aria-label"), `${alignment}: ${name}`, `${label}: current alignment label`);
+          assert.equal(await alignmentMenu.locator(`.lucide-text-align-${icon}`).count(), 1, `${label}: current alignment icon`);
+          assert.deepEqual(await editor.evaluate((node) => ({ from: node.editor.state.selection.from, to: node.editor.state.selection.to })), selection, `${label}: alignment lost text selection`);
+        }
+        await alignmentMenu.click();
+        await page.keyboard.press("Escape");
+        await page.getByRole("menu").waitFor({ state: "detached" });
+        await page.waitForFunction((prefix) => document.activeElement?.getAttribute("aria-label")?.startsWith(prefix), `${alignment}:`, { timeout: 2_000 });
+        assert.equal(await alignmentMenu.evaluate((node) => node === document.activeElement), true, `${label}: Alignment cancellation lost trigger focus`);
+        if (await moreMenu.isVisible()) {
+          for (const checked of [false, true]) {
+            await moreMenu.click();
+            const item = page.getByRole("menuitemcheckbox", { name: italic, exact: true });
+            assert.equal(await item.getAttribute("aria-checked"), String(checked), `${label}: Italic checked state`);
+            await item.click();
+            await page.waitForFunction(() => document.activeElement?.classList.contains("ProseMirror"));
+            assert.equal(await editor.locator("em").count() > 0, !checked, `${label}: Italic menu command`);
+          }
+          await page.keyboard.press("ControlOrMeta+I");
+          await editor.locator("em").waitFor();
+          await page.keyboard.press("ControlOrMeta+I");
+          assert.equal(await editor.locator("em").count(), 0, `${label}: collapsed Italic shortcut`);
+        }
+        await editor.focus();
         await toolbar.getByRole("button", { name: bold, exact: true }).click();
         assert.ok(await editor.locator("strong").count(), `${label}: bold command`);
         // Dropdown commands must keep the selected content and return to writing.
-        const styleMenu = toolbar.getByRole("button", { name: locale === "en" ? /^Text style and alignment:/ : /^লেখার ধরন ও অবস্থান:/ });
+        const styleMenu = toolbar.getByRole("button", { name: locale === "en" ? /^Text style:/ : /^লেখার ধরন:/ });
         await styleMenu.click();
         await page.getByRole("menuitemradio", { name: locale === "en" ? "Heading 2" : "হেডিং ২", exact: true }).click();
         await editor.locator("h2 strong").waitFor();
@@ -150,12 +196,13 @@ try {
         assert.equal(await page.evaluate(() => window.__changeCount()), changesBeforeFullscreen, `${label}: fullscreen emitted an edit`);
         if (shots) await page.screenshot({ path: `${shots}/fullscreen-${shotLabel}.png` });
 
-        await styleMenu.click();
+        await alignmentMenu.click();
         await page.getByRole("menu").waitFor();
         await page.keyboard.press("Escape");
         await page.getByRole("menu").waitFor({ state: "detached" });
         assert.ok(await page.locator('[data-rich-text-editor][data-fullscreen]').count(), `${label}: menu Escape closed fullscreen`);
-        await page.waitForFunction(() => document.activeElement?.closest("[data-rich-text-editor]"));
+        await page.waitForFunction((prefix) => document.activeElement?.getAttribute("aria-label")?.startsWith(prefix), `${alignment}:`, { timeout: 2_000 });
+        assert.equal(await alignmentMenu.evaluate((node) => node === document.activeElement), true, `${label}: fullscreen Alignment cancellation lost trigger focus`);
         await page.keyboard.press("Escape");
         await page.locator('[data-rich-text-editor][data-fullscreen]').waitFor({ state: "detached" });
         assert.equal(await editor.innerHTML(), before, `${label}: exit changed draft`);
@@ -214,8 +261,29 @@ try {
           return null;
         });
         assert.ok(scroll && scroll.scrollTop > 0 && scroll.top >= scroll.viewportTop - 1 && scroll.bottom <= scroll.viewportBottom + 1, `${label}: last paragraph is outside the editing scrollport`);
+        if (locale === "en" && width === 1440 && cardWidth === 660 && theme === "dark" && !touch) {
+          for (const baseline of ["<b>x</b>", '<p style="text-align:left">x</p>']) {
+            const beforeLoad = await page.evaluate(() => window.__changeCount());
+            await page.evaluate((html) => window.__loadContent(html), baseline);
+            await page.waitForFunction(() => document.querySelector(".ProseMirror")?.textContent === "x");
+            await editor.focus();
+            await page.keyboard.press("ControlOrMeta+End");
+            assert.equal(await page.evaluate(() => window.__changeCount()), beforeLoad, `${label}: external load/focus emitted an edit`);
+            await page.keyboard.type("y");
+            assert.notEqual(await page.evaluate(() => window.__content()), baseline, `${label}: genuine HTML edit stayed clean`);
+            await page.keyboard.press("Backspace");
+            assert.equal(await page.evaluate(() => window.__content()), baseline, `${label}: reverted HTML stayed dirty`);
+          }
+        }
         assert.equal(errors.length, 0, `${label}: browser errors: ${errors.join("; ")}`);
         console.log(`Offline rich text: ${label} OK`);
+      } catch (error) {
+        if (shots) await page.screenshot({ path: `${shots}/failed-${theme}-${locale}-${width}-${cardWidth}-${touch ? "touch" : "fine"}.png` });
+        console.error("Editor failure geometry", JSON.stringify(await page.getByRole("toolbar").evaluate((node) => ({
+          toolbar: node.getBoundingClientRect().toJSON(),
+          buttons: Array.from(node.querySelectorAll("button")).filter((button) => button.getClientRects().length).map((button) => ({ label: button.getAttribute("aria-label"), rect: button.getBoundingClientRect().toJSON() })),
+        })), null, 2));
+        throw error;
       } finally {
         await context.close();
       }

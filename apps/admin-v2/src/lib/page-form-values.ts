@@ -2,6 +2,7 @@ import type { PageDto } from "~/lib/api-query-options/pages";
 import type { PageFormValues } from "~/lib/form-schemas";
 import { getPagePublicationMode } from "~/lib/page-publication";
 import { unixToDate } from "@scalius/shared/timestamps";
+import { richTextOrEmpty } from "./rich-text-value";
 
 export function toPageFormValues(page: PageDto): PageFormValues {
   return {
@@ -10,7 +11,7 @@ export function toPageFormValues(page: PageDto): PageFormValues {
     contentType: page.contentType,
     title: page.title,
     slug: page.slug,
-    content: page.content,
+    content: richTextOrEmpty(page.content),
     excerpt: page.excerpt,
     author: page.author,
     tags: page.tags,

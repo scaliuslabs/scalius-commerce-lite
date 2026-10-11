@@ -98,6 +98,31 @@ describe("Apply product conflict while editing SKUs", () => {
 });
 
 describe("Merge on save: the pricing group is never mixed", () => {
+  it("keeps the draft and opens the conflict dialog when the merge choice is cancelled", async () => {
+    const base = { ...fixture.product, discountType: "percentage", discountPercentage: 10, discountAmount: 0 };
+    const rebase = vi.fn();
+    fixture.draft = { changed: ["price"], values: { price: 12 }, rebase };
+    fixture.choices = null;
+    fixture.dialog = null;
+    fixture.product = base;
+    fixture.fetchQuery.mockResolvedValue({ ...base, discountPercentage: 20, aggregateRevision: 2 });
+    const root = createRoot(document.createElement("div"));
+    const Page = Route.options.component as ComponentType;
+    try {
+      await act(async () => { root.render(<Page />); });
+      let next: number | null = null;
+      await act(async () => { next = await fixture.form!.resolveRevisionConflict!({ expectedRevision: 1, currentRevision: 2 }); });
+      expect(next).toBeNull();
+      expect(rebase).not.toHaveBeenCalled();
+      expect(fixture.dialog!.open).toBe(true);
+      expect(fixture.dialog!.conflict).toEqual({ expectedRevision: 1, currentRevision: 2 });
+      expect(fixture.dialog!.overlap).toEqual(["price", "discountPercentage"]);
+    } finally {
+      act(() => root.unmount());
+      fixture.draft = null;
+    }
+  });
+
   it.each(["mine", "theirs"] as const)("keeping %s keeps the whole price and discount of that side", async (choice) => {
     // I changed the price; the other save changed the discount.
     const base = { ...fixture.product, discountType: "percentage", discountPercentage: 10, discountAmount: 0 };

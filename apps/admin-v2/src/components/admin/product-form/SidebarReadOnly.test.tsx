@@ -13,6 +13,7 @@ import type { WarrantyPolicy } from "~/lib/api-query-options/warranty";
 import { PublishingChannels } from "./PublishingChannels";
 import { WarrantyPolicyPicker } from "./WarrantyPolicyPicker";
 import type { ProductFormValues } from "./types";
+import { sortedUniqueStrings } from "~/lib/form-values";
 
 const reads = vi.hoisted(() => ({ channels: vi.fn(), policies: vi.fn() }));
 vi.mock("~/lib/api-query-options/sales-channels", async (importOriginal) => ({
@@ -45,7 +46,7 @@ function Harness({ kind, value, readOnly = true }: {
   readOnly?: boolean;
 }) {
   form = useForm<ProductFormValues>({ defaultValues: {
-    salesChannelIds: Array.isArray(value) ? value : null,
+    salesChannelIds: Array.isArray(value) ? sortedUniqueStrings(value) : null,
     warrantyPolicyId: typeof value === "string" ? value : null,
   } });
   void form.formState.isDirty;
@@ -81,6 +82,30 @@ const noEditors = () => {
   expect(host.querySelector("input, select, [role=combobox], [role=checkbox]")).toBeNull();
   expect(form.formState.isDirty).toBe(false);
 };
+
+describe("publishing edits", () => {
+  it("clears dirty after an explicit saved channel is removed and re-added in display order", async () => {
+    await render(<Harness kind="publishing" value={["sc_online_store", "sc_meta"]} readOnly={false} />);
+    await vi.waitFor(() => expect(host.querySelectorAll('[role="checkbox"]')).toHaveLength(2));
+    const toggle = host.querySelector<HTMLElement>('[role="checkbox"]')!;
+    act(() => toggle.click());
+    expect(form.formState.isDirty).toBe(true);
+    act(() => toggle.click());
+    expect(form.getValues("salesChannelIds")).toEqual(["sc_meta", "sc_online_store"]);
+    expect(form.formState.isDirty).toBe(false);
+  });
+
+  it("keeps default null publication distinct from an explicit full list", async () => {
+    await render(<Harness kind="publishing" value={null} readOnly={false} />);
+    await vi.waitFor(() => expect(host.querySelectorAll('[role="checkbox"]')).toHaveLength(2));
+    expect(form.getValues("salesChannelIds")).toBeNull();
+    expect(form.formState.isDirty).toBe(false);
+    const toggle = host.querySelector<HTMLElement>('[role="checkbox"]')!;
+    act(() => toggle.click());
+    act(() => toggle.click());
+    expect(form.formState.isDirty).toBe(true);
+  });
+});
 
 describe("publishing read only", () => {
   it("separates product publication from a globally off channel and preserves navigation", async () => {

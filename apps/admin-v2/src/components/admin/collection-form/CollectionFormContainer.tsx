@@ -40,6 +40,7 @@ import { CustomFieldsCard } from "../custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "../apps/ui/AppActions";
 import { AppResourceCards } from "../apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
+import { sortedUniqueStrings } from "~/lib/form-values";
 
 type CollectionFormApi = UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 
@@ -111,8 +112,12 @@ export function CollectionForm({
       excludeFromSitemap: false,
       metaTitle: null,
       metaDescription: null,
-      config: { ...DEFAULT_CONFIG },
       ...defaultValues,
+      config: {
+        ...DEFAULT_CONFIG,
+        ...defaultValues?.config,
+        categoryIds: sortedUniqueStrings(defaultValues?.config?.categoryIds ?? []),
+      },
       description: richTextOrNull(defaultValues?.description),
       content: richTextOrNull(defaultValues?.content),
     },
@@ -205,7 +210,7 @@ export function CollectionForm({
 
   const setIds = React.useCallback(
     (name: "config.categoryIds" | "config.productIds", ids: string[]) =>
-      form.setValue(name, ids, { shouldDirty: true, shouldValidate: true }),
+      form.setValue(name, name === "config.categoryIds" ? sortedUniqueStrings(ids) : ids, { shouldDirty: true, shouldValidate: true }),
     [form],
   );
 
@@ -257,9 +262,10 @@ export function CollectionForm({
       savedValues={(result) => result as Partial<CollectionFormInput>}
       reload={isEdit && defaultValues?.id ? async () => {
         const latest = await queryClient.fetchQuery({ ...collectionQueryOptions(defaultValues.id!), staleTime: 0 });
+        const config = normalizeCollectionConfig(latest.config);
         rebaseForm(form, copyValues(form.formState.defaultValues as CollectionFormInput), {
           ...latest,
-          config: normalizeCollectionConfig(latest.config),
+          config: { ...config, categoryIds: sortedUniqueStrings(config.categoryIds) },
         });
       } : undefined}
       unsavedLabel={isEdit ? undefined : tf("unsavedCollection")}

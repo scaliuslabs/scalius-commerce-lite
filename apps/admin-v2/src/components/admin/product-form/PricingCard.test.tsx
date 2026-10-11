@@ -9,11 +9,23 @@ import { formatNumber, translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
+import { rebaseForm } from "../shared/use-form-save-bar";
 
-const currency = vi.hoisted(() => ({ sale: null as number | null }));
-vi.mock("@/hooks/use-currency", () => ({
-  useCurrency: () => ({ symbol: "৳", code: "BDT", fmt: (price: number) => `৳${price}`, salePrice: () => currency.sale }),
-}));
+const currency = vi.hoisted(() => ({ sale: null as number | null | undefined }));
+vi.mock("@/hooks/use-currency", async () => {
+  const { discountedPriceMinor, fromMinor, percentToBps, toMinor } = await import("@scalius/shared/money");
+  return {
+    useCurrency: () => ({
+      symbol: "৳", code: "BDT", fmt: (price: number) => `৳${price}`,
+      salePrice: (price: number, discount: Pick<ProductFormValues, "discountType" | "discountPercentage" | "discountAmount">) => {
+        if (currency.sale !== undefined) return currency.sale;
+        const base = toMinor(price, 2);
+        const sale = discountedPriceMinor(base, discount.discountType, percentToBps(discount.discountPercentage), toMinor(discount.discountAmount ?? 0, 2), 100);
+        return sale < base ? fromMinor(sale, 2) : null;
+      },
+    }),
+  };
+});
 
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { PermissionProvider } from "~/contexts/PermissionContext";
@@ -40,15 +52,17 @@ function costStore(cost: number | null) {
   return store;
 }
 
-function Harness({ variantPrices, price = 2600, discount = 0, onForm, readOnly = false }: {
+function Harness({ variantPrices, price = 2600, discount = 0, discountType = "percentage", discountAmount = 0, onForm, readOnly = false }: {
   variantPrices: VariantPriceRange | null;
   price?: number | null;
-  discount?: number;
+  discount?: number | null;
+  discountType?: ProductFormValues["discountType"];
+  discountAmount?: number | null;
   onForm?: (form: UseFormReturn<ProductFormValues>) => void;
   readOnly?: boolean;
 }) {
   const form = useForm<ProductFormValues>({
-    defaultValues: { price, discountType: "percentage", discountPercentage: discount, discountAmount: 0 } as ProductFormValues,
+    defaultValues: { price, discountType, discountPercentage: discount, discountAmount, compareAtProblem: null },
   });
   onForm?.(form);
   // Reading it while rendering subscribes the harness to dirty state.
@@ -79,7 +93,7 @@ describe("PricingCard", () => {
       await render(<Harness readOnly variantPrices={null} price={0} onForm={(f) => { form = f; }} />);
       expect(host.textContent).toContain("৳0");
       expect(host.querySelectorAll("input")).toHaveLength(0);
-      expect(form.getValues("compareAtProblem")).toBeUndefined();
+      expect(form.getValues("compareAtProblem")).toBeNull();
       expect(form.formState.isDirty).toBe(false);
     });
 
@@ -221,6 +235,68 @@ describe("PricingCard", () => {
     expect(form.formState.isDirty).toBe(false);
     await type(field("priceLabel"), "700");
     expect(form.getValues()).toMatchObject({ price: 1000, discountType: "flat", discountAmount: 300 });
+  });
+
+  it.each([[10, 90], [12.5, 88]])("restores the saved %s%% tuple when the rounded visible pair is restored", async (discount, selling) => {
+    currency.sale = undefined;
+    let form!: UseFormReturn<ProductFormValues>;
+    await render(<Harness variantPrices={null} price={100} discount={discount} discountAmount={null} onForm={(next) => { form = next; }} />);
+    const saved = form.getValues();
+    expect(field("priceLabel").value).toBe(String(selling));
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("priceLabel"), "85");
+    expect(form.getValues()).toMatchObject({ discountType: "flat", discountPercentage: 0, discountAmount: 15 });
+    expect(form.formState.isDirty).toBe(true);
+    await type(field("priceLabel"), String(selling));
+    expect(form.getValues()).toEqual(saved);
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("compareAtLabel"), "110");
+    expect(form.formState.isDirty).toBe(true);
+    await type(field("compareAtLabel"), "100");
+    expect(form.getValues()).toEqual(saved);
+    expect(form.formState.isDirty).toBe(false);
+  });
+
+  it.each([null, 0])("preserves an empty discount and a %s price on edit/revert", async (price) => {
+    currency.sale = undefined;
+    let form!: UseFormReturn<ProductFormValues>;
+    await render(<Harness variantPrices={null} price={price} discount={null} discountAmount={null} onForm={(next) => { form = next; }} />);
+    const saved = form.getValues();
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("priceLabel"), "5");
+    expect(form.formState.isDirty).toBe(true);
+    await type(field("compareAtLabel"), "10");
+    expect(form.getValues("discountType")).toBe("flat");
+    await type(field("compareAtLabel"), "");
+    await type(field("priceLabel"), price === null ? "" : "0");
+    expect(form.getValues()).toEqual(saved);
+    expect(form.formState.isDirty).toBe(false);
+  });
+
+  it("uses the acknowledged or reloaded baseline and discards to it", async () => {
+    currency.sale = undefined;
+    let form!: UseFormReturn<ProductFormValues>;
+    await render(<Harness variantPrices={null} price={100} discount={10} onForm={(next) => { form = next; }} />);
+    await type(field("priceLabel"), "85");
+    const sent = form.getValues();
+    act(() => rebaseForm(form, sent, sent));
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("priceLabel"), "80");
+    expect(form.formState.isDirty).toBe(true);
+    await type(field("priceLabel"), "85");
+    expect(form.getValues()).toEqual(sent);
+    expect(form.formState.isDirty).toBe(false);
+    act(() => form.reset({ ...sent, price: 200, discountType: "percentage", discountPercentage: 15, discountAmount: null }));
+    expect(field("priceLabel").value).toBe("170");
+    await type(field("priceLabel"), "160");
+    expect(form.formState.isDirty).toBe(true);
+    await type(field("priceLabel"), "170");
+    expect(form.getValues()).toMatchObject({ price: 200, discountType: "percentage", discountPercentage: 15, discountAmount: null });
+    expect(form.formState.isDirty).toBe(false);
+    await type(field("priceLabel"), "160");
+    act(() => form.reset());
+    expect(field("priceLabel").value).toBe("170");
+    expect(form.formState.isDirty).toBe(false);
   });
 
   it("shows the product discount only for products with options that already have one", async () => {

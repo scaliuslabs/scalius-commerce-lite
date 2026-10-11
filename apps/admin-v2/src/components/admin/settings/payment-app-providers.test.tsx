@@ -137,6 +137,32 @@ describe("app payment providers in payment settings", () => {
     await vi.waitFor(() => expect(container.querySelector(`[data-method="${NAGAD}"]`)).not.toBeNull());
   }
 
+  it("restores a re-enabled method's saved checkout position but keeps intentional reordering dirty", async () => {
+    sdk.getApiV1AdminSettingsPaymentMethods.mockImplementation(() => envelope(methods([BKASH, "cod"])));
+    await renderCard();
+    expect(page?.dirty).toBe(false);
+    await act(async () => toggle(BKASH).click());
+    expect(page?.dirty).toBe(true);
+    await act(async () => toggle(BKASH).click());
+    expect(page?.dirty).toBe(false);
+    const down = row(BKASH).querySelector<HTMLButtonElement>('button[aria-label="Move bKash down"]')!;
+    expect(down).not.toBeNull();
+    await act(async () => down.click());
+    expect(page?.dirty).toBe(true);
+    await act(async () => { await page!.saveAll(); });
+    expect(sdk.postApiV1AdminSettingsPaymentMethods.mock.calls.at(-1)![0].body.enabledMethods).toEqual(["cod", BKASH]);
+  });
+
+  it("does not hide a default-method change made when the old default was disabled", async () => {
+    sdk.getApiV1AdminSettingsPaymentMethods.mockImplementation(() => envelope({ ...methods([BKASH, "cod"]), defaultMethod: BKASH }));
+    await renderCard();
+    await act(async () => toggle(BKASH).click());
+    await act(async () => toggle(BKASH).click());
+    expect(page?.dirty).toBe(true);
+    await act(async () => { await page!.saveAll(); });
+    expect(sdk.postApiV1AdminSettingsPaymentMethods.mock.calls.at(-1)![0].body).toMatchObject({ enabledMethods: [BKASH, "cod"], defaultMethod: "cod" });
+  });
+
   it("lists a ready app provider beside the built-in gateways, with its app and test mode", async () => {
     await renderCard();
 

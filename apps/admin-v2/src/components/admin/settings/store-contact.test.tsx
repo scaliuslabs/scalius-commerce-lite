@@ -9,13 +9,15 @@ const sdk = vi.hoisted(() => ({
   getApiV1AdminSettingsBusiness: vi.fn(),
   getApiV1AdminSettingsAllowedCountries: vi.fn(),
   postApiV1AdminSettingsBusiness: vi.fn(),
+  getApiV1AdminSettingsCurrency: vi.fn(),
+  getApiV1AdminSettingsStoreDefaults: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("../media-manager", () => ({ MediaManager: () => null }));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
-import { BusinessCard } from "./StoreSettings";
+import { BusinessCard, StoreDefaultsCard } from "./StoreSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,8 +72,8 @@ describe("store name and contact", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function openContactDialog(allowedCountries: string[] = []) {
-    sdk.getApiV1AdminSettingsBusiness.mockImplementation(() => envelope(business));
+  async function openContactDialog(allowedCountries: string[] = [], storedPhone = "") {
+    sdk.getApiV1AdminSettingsBusiness.mockImplementation(() => envelope({ ...business, phone: storedPhone }));
     sdk.getApiV1AdminSettingsAllowedCountries.mockImplementation(() =>
       envelope({ allowedCountries, allowedCountriesMode: "include" }));
     sdk.postApiV1AdminSettingsBusiness.mockImplementation(() => envelope({ message: "ok" }));
@@ -94,6 +96,55 @@ describe("store name and contact", () => {
     await vi.waitFor(() => expect(field("business-phone")).not.toBeNull());
     await vi.waitFor(() => expect(sdk.getApiV1AdminSettingsAllowedCountries).toHaveBeenCalled());
   }
+
+  it.each([
+    ["+880 1712-345678", "01712345678"],
+    ["+88029876543", "02-9876543"],
+    ["+44 20 7946 0958", "+44 20 7946 0958"],
+  ])("keeps a saved phone clean after blur and edit/revert: %s", async (stored, displayed) => {
+    await openContactDialog([], stored);
+    const phone = field("business-phone");
+    await vi.waitFor(() => expect(phone.value).toBe(displayed));
+    const save = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Save")!;
+    act(() => phone.focus());
+    leave(phone);
+    expect(save().disabled).toBe(true);
+    type(phone, "01912345678");
+    leave(phone);
+    expect(save().disabled).toBe(false);
+    type(phone, displayed);
+    leave(phone);
+    expect(save().disabled).toBe(true);
+    expect(sdk.postApiV1AdminSettingsBusiness).not.toHaveBeenCalled();
+  });
+
+  it("treats remove/re-add countries as a set without changing its include/exclude policy", async () => {
+    sdk.getApiV1AdminSettingsAllowedCountries.mockImplementation(() =>
+      envelope({ allowedCountries: ["US", "BD", "BD"], allowedCountriesMode: "include" }));
+    sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => envelope({ currencyCode: "BDT", currencySymbol: "৳", decimalPlaces: 2 }));
+    sdk.getApiV1AdminSettingsStoreDefaults.mockImplementation(() => envelope({ timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "kg" }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => root.render(
+      <QueryClientProvider client={client}><PermissionProvider isSuperAdmin><StoreDefaultsCard /></PermissionProvider></QueryClientProvider>,
+    ));
+    const opener = await vi.waitFor(() => {
+      const found = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Phone numbers accepted from"));
+      expect(found).toBeDefined();
+      return found!;
+    });
+    act(() => opener.click());
+    const checkbox = await vi.waitFor(() => {
+      const found = [...document.querySelectorAll("label")].find((label) => label.textContent?.includes("Bangladesh"))?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+      expect(found).toBeDefined();
+      return found!;
+    });
+    const save = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Save")!;
+    expect(save().disabled).toBe(true);
+    act(() => checkbox.click());
+    expect(save().disabled).toBe(false);
+    act(() => checkbox.click());
+    expect(save().disabled).toBe(true);
+  });
 
   it("reads any typing of a Bangladesh mobile, Bangla digits included, as 01XXXXXXXXX", async () => {
     await openContactDialog();

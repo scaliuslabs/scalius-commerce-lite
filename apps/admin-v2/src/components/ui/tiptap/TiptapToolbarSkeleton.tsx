@@ -1,6 +1,6 @@
 import { cn } from "@scalius/shared/utils";
-import { Bold, Italic, Underline, Link, List, ListOrdered, Maximize, Redo, Undo, Pilcrow, ChevronDown, MoreHorizontal, Plus } from "lucide-react";
-import { TOOLBAR_ROW, TOOLBAR_BUTTON, TOOLBAR_STYLE, TOOLBAR_WIDE, TOOLBAR_NARROW, TOOLBAR_INSERT } from "./tiptap-toolbar-layout";
+import { Bold, Italic, Underline, Link, List, ListOrdered, Maximize, Redo, Undo, Pilcrow, ChevronDown, MoreHorizontal, Plus, AlignLeft } from "lucide-react";
+import { TOOLBAR_ROW, TOOLBAR_BUTTON, TOOLBAR_STYLE, TOOLBAR_ALIGNMENT, TOOLBAR_WIDE, TOOLBAR_NARROW, TOOLBAR_INSERT } from "./tiptap-toolbar-layout";
 
 interface TiptapToolbarSkeletonProps {
   compact?: boolean;
@@ -15,9 +15,10 @@ export function TiptapToolbarSkeleton({ isFullscreen = false }: TiptapToolbarSke
         <span className={cn(TOOLBAR_STYLE, slot)}><Pilcrow /><ChevronDown /></span>
         <span className="mx-1 h-5 w-px shrink-0 bg-border" />
         <span className={cn(TOOLBAR_BUTTON, slot)}><Bold /></span>
-        <span className={cn(TOOLBAR_BUTTON, slot)}><Italic /></span>
+        <span className={TOOLBAR_WIDE}><span className={cn(TOOLBAR_BUTTON, slot)}><Italic /></span></span>
         <span className={TOOLBAR_WIDE}><span className={cn(TOOLBAR_BUTTON, slot)}><Underline /></span></span>
         <span className={cn(TOOLBAR_BUTTON, slot)}><Link /></span>
+        <span className={cn(TOOLBAR_ALIGNMENT, slot, "gap-1.5")}><AlignLeft /><ChevronDown /></span>
         <span className={cn(TOOLBAR_WIDE, "items-center gap-0.5")}>
           <span className={cn(TOOLBAR_BUTTON, slot)}><List /></span>
           <span className={cn(TOOLBAR_BUTTON, slot)}><ListOrdered /></span>

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState, useRef, type CSSProperties } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { cn } from "@scalius/shared/utils";
 import {
   hasRenderableHtmlContent,
@@ -46,6 +47,7 @@ export function TiptapEditor({
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const lastExternalContentRef = useRef(content);
   const pendingLocalContentsRef = useRef<string[]>([]);
+  const loadedContentRef = useRef<{ doc: ProseMirrorNode; html: string } | null>(null);
   /** What the form last heard from this editor (or was given), so empty-to-empty is silent. */
   const lastEmittedRef = useRef(richTextOrEmpty(content));
   const editorViewportHeight = compact ? "200px" : "300px";
@@ -157,7 +159,14 @@ export function TiptapEditor({
     onUpdate: ({ editor }) => {
       // An emptied editor is "" whatever its markup (<p></p>, two empty paragraphs), and
       // saying "still empty" again is no change.
-      const nextContent = richTextOrEmpty(editor.getHTML());
+      // Keep the author's representation when an edit returns to the loaded document.
+      // Controlled keystroke echoes must not become a new baseline.
+      const loadedContent = loadedContentRef.current;
+      const nextContent = richTextOrEmpty(
+        loadedContent && editor.state.doc.content.size === loadedContent.doc.content.size && editor.state.doc.eq(loadedContent.doc)
+          ? loadedContent.html
+          : editor.getHTML(),
+      );
       if (nextContent === lastEmittedRef.current) return;
       lastEmittedRef.current = nextContent;
       const pendingLocalContents = pendingLocalContentsRef.current;
@@ -191,6 +200,9 @@ export function TiptapEditor({
     pendingLocalContentsRef.current = reconciliation.pendingLocalContents;
     if (reconciliation.shouldApply) {
       editorInstance.commands.setContent(content, { emitUpdate: false });
+    }
+    if (!loadedContentRef.current || reconciliation.shouldApply) {
+      loadedContentRef.current = { doc: editorInstance.state.doc, html: content };
     }
     lastExternalContentRef.current = content;
     lastEmittedRef.current = richTextOrEmpty(content);

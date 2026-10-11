@@ -9,7 +9,7 @@ import { draftSignature, initialSimpleSku } from "../product-form/variants/optio
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Values = { name: string; revision: number; images: Array<{ id: string; alt: string }> };
+type Values = { name: string; note?: string; revision: number; images: Array<{ id: string; alt: string }> };
 const saved: Values = { name: "Shirt", revision: 1, images: [{ id: "a", alt: "Front" }, { id: "b", alt: "Back" }] };
 
 function mountForm() {
@@ -26,6 +26,53 @@ function mountForm() {
 }
 
 describe("form save baseline", () => {
+  it("requires RHF optional input keys to be materialized consistently in the baseline", () => {
+    const form = mountForm();
+    act(() => form().setValue("note", "Edited", { shouldDirty: true }));
+    act(() => form().setValue("note", undefined, { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(true);
+    act(() => form().reset({ ...saved, note: undefined }));
+    act(() => form().setValue("note", "Edited", { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(true);
+    act(() => form().setValue("note", undefined, { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(false);
+  });
+  it("clears dirty when an ordinary field is changed and reverted", () => {
+    const form = mountForm();
+    act(() => form().setValue("name", "Edited", { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(true);
+    act(() => form().setValue("name", saved.name, { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(false);
+  });
+
+  it("adopts canonical saved rows after an in-flight edit was reverted with different object key order", () => {
+    const form = mountForm();
+    act(() => form().setValue("name", "Shirt 2", { shouldDirty: true }));
+    const sent = copyValues(form().getValues());
+    act(() => form().setValue("images.0.alt", "Edited", { shouldDirty: true }));
+    act(() => form().setValue("images", sent.images.map(({ id, alt }) => ({ alt, id })), { shouldDirty: true }));
+    const canonical = { ...sent, revision: 2, images: [{ id: "a", alt: "Front view" }, sent.images[1]!] };
+    act(() => rebaseForm(form(), sent, canonical));
+    expect(form().getValues()).toEqual(canonical);
+    expect(form().formState.isDirty).toBe(false);
+    act(() => form().setValue("images.0.alt", "Edited", { shouldDirty: true }));
+    act(() => form().setValue("images.0.alt", "Front view", { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(false);
+  });
+
+  it("keeps an in-flight revert to the previous baseline dirty after the submitted value saves", () => {
+    const form = mountForm();
+    act(() => form().setValue("name", "Shirt 2", { shouldDirty: true }));
+    const sent = copyValues(form().getValues());
+    act(() => form().setValue("name", saved.name, { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(false);
+    act(() => rebaseForm(form(), sent, { ...sent, revision: 2 }));
+    expect(form().getValues().name).toBe(saved.name);
+    expect(form().formState.isDirty).toBe(true);
+    act(() => form().setValue("name", sent.name, { shouldDirty: true }));
+    expect(form().formState.isDirty).toBe(false);
+  });
+
   it("keeps edits typed while a save was in flight dirty, and adopts the server's revision", () => {
     const form = mountForm();
     act(() => form().setValue("name", "Shirt 2", { shouldDirty: true }));

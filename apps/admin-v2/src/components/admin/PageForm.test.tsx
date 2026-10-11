@@ -12,7 +12,7 @@ import type { PageFormValues } from "~/lib/form-schemas";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const api = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }));
+const api = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), read: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const granted = vi.hoisted(() => new Set<string>());
@@ -21,6 +21,7 @@ vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminPages: api.create,
   putApiV1AdminPagesById: api.update,
+  getApiV1AdminPagesById: api.read,
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
@@ -177,6 +178,57 @@ describe("PageForm", () => {
     expect(navigate).toHaveBeenCalledWith(
       expect.objectContaining({ to: "/admin/pages/$pageId/edit", params: { pageId: "page_new" } }),
     );
+  });
+
+  it.each(["page", "article"] as const)("compares empty %s content consistently through revert, discard and save", async (contentType) => {
+    await render({ contentType, defaultValues: { ...savedPost, contentType, excerpt: null, author: null, tags: [], canonicalPath: null, content: "<p></p>" }, isEdit: true });
+    expect(byLabel<HTMLTextAreaElement>("Content").value).toBe("");
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+    type(byLabel("Content"), "<p>New content</p>");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    type(byLabel("Content"), "");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+    type(byLabel("Content"), "<p>New content</p>");
+    await settle();
+    await click(button("Discard"));
+    await click(button("Discard changes"));
+    expect(byLabel<HTMLTextAreaElement>("Content").value).toBe("");
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+    type(byLabel("Content"), "<p>New content</p>");
+    await settle();
+    await click(button("Save"));
+    expect(api.update.mock.calls[0]?.[0]?.body.content).toBe("<p>New content</p>");
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+    type(byLabel("Content"), "<p>Another edit</p>");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    type(byLabel("Content"), "<p>New content</p>");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+  });
+
+  it("normalizes an empty server reload while preserving the local edit until discard", async () => {
+    api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "PAGE_REVISION_CONFLICT"));
+    api.read.mockResolvedValue({ ...savedPost, revision: 3, content: "<p></p>", isPublished: false, publishedAt: null });
+    await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
+    type(byLabel("Title"), "My local title");
+    await settle();
+    await click(button("Save"));
+    await click(button("Reload and keep my edits"));
+    expect(api.read).toHaveBeenCalledTimes(1);
+    expect(byLabel<HTMLInputElement>("Title").value).toBe("My local title");
+    expect(byLabel<HTMLTextAreaElement>("Content").value).toBe("");
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    await click(button("Discard"));
+    await click(button("Discard changes"));
+    type(byLabel("Content"), "<p>New content</p>");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    type(byLabel("Content"), "");
+    await settle();
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
   });
 
   it("keeps a scheduled blog post scheduled and moves its main address with the web address", async () => {

@@ -55,7 +55,8 @@ import { storeSettingsMessages } from "~/i18n/settings-store";
 import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
-import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
+import { AdminPhoneInput, adminPhoneProblem, normalizeAdminPhone, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
+import { sortedUniqueStrings } from "~/lib/form-values";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { FieldSet } from "~/components/ui/field";
 
@@ -137,6 +138,7 @@ function useBusinessForm() {
     saveFn: (values, expectedRevision) =>
       apiData(postApiV1AdminSettingsBusiness({ body: { ...values, expectedRevision } })),
     defaultValues: BUSINESS_DEFAULTS,
+    toDraft: (values) => ({ ...values, phone: normalizeBdLandline(values.phone) ?? normalizeAdminPhone(values.phone) }),
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
     isValid: (values) =>
@@ -777,6 +779,7 @@ function CountryFields() {
       })),
     invalidateQueryKeys: [queryKeys.settings.checkoutReadiness()],
     defaultValues: { allowedCountries: [], allowedCountriesMode: "include" },
+    toDraft: (values) => ({ ...values, allowedCountries: sortedUniqueStrings(values.allowedCountries) }),
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
   });
@@ -799,7 +802,7 @@ function CountryFields() {
   const toggle = (code: Country) =>
     setValue(
       "allowedCountries",
-      selected.includes(code) ? selected.filter((item) => item !== code) : [...selected, code],
+      selected.includes(code) ? selected.filter((item) => item !== code) : sortedUniqueStrings([...selected, code]),
     );
 
   return (

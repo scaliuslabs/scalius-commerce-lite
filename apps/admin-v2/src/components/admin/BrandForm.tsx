@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +17,7 @@ import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
+import type { MediaFile } from "./media-manager";
 import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
@@ -89,6 +91,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
   const { categories: can } = useCatalogActionPermissions();
   const isEdit = Boolean(defaultValues?.id);
   const canSave = isEdit ? can.canEdit : can.canCreate;
+  const [selectedLogo, setSelectedLogo] = useState<MediaFile | null>(null);
 
   const form = useForm<BrandFormInput, unknown, BrandFormValues>({
     resolver: zodResolver(brandFormSchema),
@@ -215,8 +218,12 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                 render={({ field, fieldState }) => (
                   <Field error={fieldState.error?.message}>
                     <FormImageUploadField
-                      value={field.value as never}
-                      onChange={field.onChange}
+                      value={selectedLogo?.id === field.value?.id ? selectedLogo : field.value}
+                      onChange={(file) => {
+                        setSelectedLogo(file);
+                        const saved = form.formState.defaultValues?.logo;
+                        field.onChange(file && file.id === saved?.id ? saved : file);
+                      }}
                       aspectRatio="aspect-[3/2]"
                       triggerLabel={t("chooseLogo")}
                       changeTriggerLabel={t("changeLogo")}

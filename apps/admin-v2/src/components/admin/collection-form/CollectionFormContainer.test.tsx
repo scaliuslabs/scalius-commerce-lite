@@ -184,6 +184,19 @@ describe("CollectionForm", () => {
     return api.updateCollection.mock.calls.at(-1)?.[0]?.body;
   }
 
+  it("clears Save when a saved category is removed and added again, regardless of API ID order", async () => {
+    await render({
+      isEdit: true,
+      categories: categories.map((category) => ({ ...category, status: "published" })),
+      defaultValues: { ...savedCollection, config: { ...savedCollection.config!, source: "dynamic", categoryIds: ["cat_draft", "cat_curated", "cat_curated"], productIds: [] } },
+    });
+    expect(() => button("Save")).toThrow();
+    await click(button("Remove Curated Picks"));
+    expect(button("Save")).toBeDefined();
+    await choose("Add a category", "Curated Picks");
+    expect(() => button("Save")).toThrow();
+  });
+
   it("creates an inactive collection and opens it for editing", async () => {
     await render();
     expect(document.querySelector("h1")?.textContent).toBe("Add collection");
