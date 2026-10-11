@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { deps, withDependencyScope } from "../../cache-deps";
 import { buildStorefrontBuyerStateConditions } from "./shared";
+import { getStorefrontCollectionProducts, getStorefrontProducts } from "./listing";
 import {
     declareFacetReadWithoutProducts,
     readCatalogFacetsWithSummary,
@@ -119,6 +120,61 @@ function searchInput(search: string): Partial<CatalogFacetCountInput> {
     };
 }
 
+function plainSearchInput(search = "broad"): Partial<CatalogFacetCountInput> {
+    const input = searchInput(search);
+    return { ...input, identitySearch: { ...input.identitySearch!, unfiltered: true } };
+}
+
+function seedExclusionSearch() {
+    sqlite.exec(`
+        UPDATE products SET name = 'Broad ' || id WHERE id <= 'prod_16' OR id = 'prod_20';
+        UPDATE products SET name = 'Needle broad' WHERE id = 'prod_01';
+        UPDATE products SET is_active = 0 WHERE id = 'prod_20';
+        INSERT INTO categories (id, name, slug, status) VALUES
+            ('cat_broad', 'Broad collection', 'broad-category', 'published'),
+            ('cat_draft', 'Broad hidden', 'broad-hidden', 'draft');
+        UPDATE products SET category_id = 'cat_broad' WHERE id = 'prod_17';
+        UPDATE products SET category_id = 'cat_draft' WHERE id = 'prod_18';
+        UPDATE products SET category_id = NULL WHERE id = 'prod_19';
+        UPDATE product_buyer_state SET category_id = 'cat_broad', from_minor = 25, to_minor = 750 WHERE product_id = 'prod_17';
+        UPDATE product_buyer_state SET category_id = 'cat_draft', from_minor = 1, to_minor = 9000 WHERE product_id = 'prod_18';
+        UPDATE product_buyer_state SET category_id = NULL, from_minor = 2, to_minor = 8000 WHERE product_id = 'prod_19';
+        INSERT INTO products (rowid, id, name, slug, price_minor)
+            VALUES (707, 'prod_21', 'Broad deleted', 'deleted', 100);
+        INSERT INTO product_variants (id, product_id, sku, is_default, price_minor, stock, track_inventory)
+            VALUES ('var_21_a', 'prod_21', 'var_21_a', 1, 100, 0, 0);
+        UPDATE products SET deleted_at = 1700000001 WHERE id = 'prod_21';
+        INSERT INTO product_buyer_state (product_id, is_public, product_created_at, sku_id, from_minor, to_minor, base_minor)
+            VALUES ('prod_21', 0, 1700000000, 'var_21_a', 100, 100, 100);
+        INSERT INTO product_review_stats (product_id, review_count, rating_sum, count_4, count_5, rating_avg_centi, rating_rank_milli) VALUES
+            ('prod_01', 2, 9, 1, 1, 450, 3428),
+            ('prod_17', 1, 4, 1, 0, 400, 3166),
+            ('prod_18', 1, 5, 0, 1, 500, 3333),
+            ('prod_19', 1, 5, 0, 1, 500, 3333),
+            ('prod_20', 1, 5, 0, 1, 500, 3333),
+            ('prod_21', 1, 5, 0, 1, 500, 3333);
+        INSERT INTO product_review_stats (product_id) VALUES ('prod_02');
+    `);
+}
+
+/** Observe the chosen branch and actual rows without changing its predicates. */
+function exclusionVisits(query: Captured) {
+    const seen = { plan: [] as number[], positive: 0, excluded: 0, ratings: 0 };
+    sqlite.function("observe_exclusion_plan", value => { seen.plan.push(Number(value)); return value; });
+    sqlite.function("observe_positive_scope", value => { seen.positive += 1; return value; });
+    sqlite.function("observe_search_exclusion", value => { seen.excluded += 1; return value; });
+    sqlite.function("observe_exclusion_rating", value => { seen.ratings += 1; return value; });
+    const observed = query.sql
+        .replace("THEN 1 ELSE 0 END AS use_exclusions", "THEN observe_exclusion_plan(1) ELSE observe_exclusion_plan(0) END AS use_exclusions")
+        .replaceAll('SELECT "product_buyer_state"."product_id" AS product_id,', 'SELECT observe_positive_scope("product_buyer_state"."product_id") AS product_id,')
+        .replace('SELECT "product_buyer_state"."product_id" AS product_id\n            FROM products',
+            'SELECT observe_search_exclusion("product_buyer_state"."product_id") AS product_id\n            FROM products')
+        .replace("SELECT rating_avg_centi\n                FROM", "SELECT observe_exclusion_rating(rating_avg_centi) AS rating_avg_centi\n                FROM");
+    expect(observed).not.toBe(query.sql);
+    expect(sqlite.prepare(observed).all(...query.params)).toEqual(sqlite.prepare(query.sql).all(...query.params));
+    return seen;
+}
+
 describe("public facet count complements", () => {
     beforeAll(() => {
         ({ sqlite, db } = createSqliteD1Database({ onQuery: (sql, params) => queries.push({ sql, params }) }));
@@ -200,7 +256,7 @@ describe("public facet count complements", () => {
         for (const name of ["label", "sort", "sample", "number"]) {
             expect(plan).toContain(`USING COVERING INDEX product_facet_values_metadata_${name}_idx`);
         }
-        expect(plan.match(/SEARCH metadata_buyer(?: EXISTS)? USING (?:COVERING )?INDEX [^\n]+ \(product_id=\?\)/g)).toHaveLength(4);
+        expect(plan.match(/SEARCH metadata_buyer(?: EXISTS)? USING (?:COVERING )?INDEX [^\n]+ \((?:is_public=\? AND )?product_id=\?\)/g)).toHaveLength(4);
         expect(plan).not.toContain("SCAN metadata_buyer");
         expect(optimized.query.sql.match(/metadata\.product_id NOT IN \(SELECT product_id FROM excluded_products\)/g)).toHaveLength(4);
         expect(optimized.query.sql).not.toContain("metadata.product_id IN (SELECT product_id FROM facet_scope)");
@@ -260,6 +316,177 @@ describe("public facet count complements", () => {
             await read({ ...input, identitySearch: { ...input.identitySearch!, query: "%" } }),
             await read(input, true),
         ]) expect(result.query.sql).not.toContain("identity_scope_plan");
+    });
+
+    it("subtracts broad-search exclusions with the original scope as an independent result and dependency oracle", async () => {
+        seedExclusionSearch();
+        const input = plainSearchInput();
+        const optimized = await read(input);
+        // Removing identitySearch restores the original positive FTS/category
+        // scope; the oracle never constructs any exclusion-first branch.
+        const original = await read({ ...input, identitySearch: undefined });
+        expect(original.query.sql).not.toContain("search_exclusions");
+        expect(optimized.value).toEqual(original.value);
+        expect(optimized.dependencies).toEqual(original.dependencies);
+        expect(optimized.value).toEqual((await read(input, true)).value);
+        expect(optimized.value.summary).toMatchObject({ count: 17, min: 25, max: 750 });
+        expect(optimized.value.rows.find(row => row.facetId === "option.color" && row.valueKey === "blue"))
+            .toMatchObject({ valueCount: 4, valueLabel: "!Excluded", valueSort: -2, sampleProductId: "prod_17" });
+        expect(optimized.value.rows.find(row => row.facetId === "attr_number"))
+            .toMatchObject({ valueCount: 4, valueNumber: 1.00000001, rangeMin: 1.00000001, rangeMax: 2.0000001 });
+        expect(optimized.value.rows.filter(row => row.facetKind === "rating").map(row => row.valueCount)).toEqual([2, 2, 2]);
+        expect(optimized.value.rows.filter(row => row.facetKind === "category").map(row => row.valueKey).sort())
+            .toEqual(["cat_broad", "cat_main"]);
+        expect(optimized.value.rows.some(row => ["red", "private"].includes(row.valueKey))).toBe(false);
+        expect(exclusionVisits(optimized.query)).toEqual({ plan: [1], positive: 0, excluded: 2, ratings: 2 });
+
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${optimized.query.sql}`).all(...optimized.query.params);
+        const summary = plan.find(row => /^(?:CO-ROUTINE|MATERIALIZE) exclusion_summary$/.test(String(row.detail)));
+        expect(summary).toBeDefined();
+        expect(plan.filter(row => row.parent === summary!.id).map(row => String(row.detail)).join("\n"))
+            .toMatch(/SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_scope_idx \(is_public=\?\)/);
+        // The fully enabled case executes all facet families on the test D1
+        // adapter, which enforces workerd's five-term compound SELECT limit.
+        expect(optimized.query.sql).toContain("positive_auxiliary_facets AS MATERIALIZED");
+        expect(optimized.query.sql).toContain("exclusion_auxiliary_facets AS MATERIALIZED");
+    });
+
+    it("keeps NULL and unpublished categories out of category-only search matches but permits their FTS matches", async () => {
+        seedExclusionSearch();
+        for (const status of ["draft", "internal", "published"] as const) {
+            sqlite.prepare("UPDATE categories SET status = ? WHERE id = 'cat_draft'").run(status);
+            const input = plainSearchInput();
+            const optimized = await read(input);
+            expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
+            expect(optimized.value.summary.count).toBe(status === "published" ? 18 : 17);
+        }
+        sqlite.exec(`UPDATE categories SET status = 'draft' WHERE id = 'cat_draft';
+            UPDATE products SET name = 'Broad ' || id WHERE id IN ('prod_18', 'prod_19')`);
+        const input = plainSearchInput();
+        const optimized = await read(input);
+        expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
+        expect(optimized.value.summary).toMatchObject({ count: 19, min: 1, max: 9000 });
+        expect(optimized.value.rows.filter(row => row.facetKind === "category").map(row => row.valueKey).sort())
+            .toEqual(["cat_broad", "cat_main"]);
+    });
+
+    it("visits no negative-search or rating rows for narrow and empty searches, or a mostly private catalog", async () => {
+        seedExclusionSearch();
+        for (const [search, count] of [["needle", 1], ["absentzz", 0]] as const) {
+            const input = plainSearchInput(search);
+            const optimized = await read(input);
+            expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
+            expect(optimized.value.summary.count).toBe(count);
+            expect(exclusionVisits(optimized.query)).toEqual({ plan: [0], positive: count, excluded: 0, ratings: 0 });
+        }
+        sqlite.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'prod_16'");
+        const input = plainSearchInput();
+        const optimized = await read(input);
+        expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
+        expect(exclusionVisits(optimized.query)).toEqual({ plan: [0], positive: 16, excluded: 0, ratings: 0 });
+    });
+
+    it("does no rating scan while reviews are disabled and declares no rating dependency when the facet is absent", async () => {
+        seedExclusionSearch();
+        sqlite.exec(`INSERT INTO settings (id, category, key, type, value)
+            VALUES ('reviews_off', 'reviews', 'document', 'json', '{"enabled":false}')`);
+        const input = plainSearchInput();
+        const disabled = await read(input);
+        const original = await read({ ...input, identitySearch: undefined });
+        expect(disabled.value).toEqual(original.value);
+        expect(disabled.dependencies).toEqual(original.dependencies);
+        expect(disabled.value.rows.filter(row => row.facetKind === "rating")).toEqual([]);
+        expect(exclusionVisits(disabled.query)).toEqual({ plan: [1], positive: 0, excluded: 2, ratings: 0 });
+        for (const ratingFacet of [false, undefined]) {
+            const absent = await read({ ...input, ratingFacet });
+            const baseline = await read({ ...input, ratingFacet, identitySearch: undefined });
+            expect(absent.value).toEqual(baseline.value);
+            expect(absent.dependencies).toEqual(baseline.dependencies);
+            expect(absent.query.sql).not.toContain("product_review_stats");
+            expect(absent.dependencies.keys.some(key => key.includes("reviews"))).toBe(false);
+        }
+    });
+
+    it("keeps the exact summary independent of output caps and emits no rating rows without matching reviews", async () => {
+        seedExclusionSearch();
+        sqlite.exec("DELETE FROM product_review_stats WHERE product_id <= 'prod_17'");
+        const input = { ...plainSearchInput(), valueLimit: 1, attributeLimit: 1 };
+        const optimized = await read(input);
+        const original = await read({ ...input, identitySearch: undefined });
+        expect(optimized.value).toEqual(original.value);
+        expect(optimized.dependencies).toEqual(original.dependencies);
+        expect(optimized.value.summary).toMatchObject({ count: 17, min: 25, max: 750 });
+        expect(optimized.value.rows.filter(row => row.facetKind === "rating")).toEqual([]);
+        expect(exclusionVisits(optimized.query)).toEqual({ plan: [1], positive: 0, excluded: 2, ratings: 0 });
+    });
+
+    it("retains the original selected-filter and unproven-scope paths", async () => {
+        seedExclusionSearch();
+        const input = plainSearchInput();
+        const filters = await resolvePublicAttributeFilters(db, { "option.color": "blue", "option.size": "large" }, []);
+        for (const overrides of [
+            { filters },
+            { minRating: 4 },
+            { identitySearch: { ...input.identitySearch!, unfiltered: false } },
+            { identitySearch: { ...input.identitySearch!, unfiltered: undefined } },
+        ]) {
+            const optimized = await read({ ...input, ...overrides });
+            const original = await read({ ...input, ...overrides, identitySearch: undefined });
+            expect(optimized.value).toEqual(original.value);
+            expect(optimized.dependencies).toEqual(original.dependencies);
+            expect(optimized.query.sql).not.toContain("search_exclusions");
+        }
+    });
+
+    it("enables exclusion-first only for plain search at the listing boundary, never stock, discount or custom scopes", async () => {
+        // The listing's read batch opens its own transaction. Keep it outside
+        // the shared fixture's savepoint without weakening the D1 adapter.
+        const queries: Captured[] = [];
+        const { sqlite: listingSqlite, db } = createSqliteD1Database({ onQuery: (sql, params) => queries.push({ sql, params }) });
+        try {
+            listingSqlite.exec(`
+                INSERT INTO categories (id, name, slug, status) VALUES
+                    ('cat_main', 'Main', 'main', 'published'),
+                    ('cat_broad', 'Broad collection', 'broad-category', 'published');
+                WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 20)
+                INSERT INTO products (id, name, slug, price_minor, category_id, is_active)
+                    SELECT printf('prod_%02d', n), CASE WHEN n <= 16 OR n = 20 THEN 'Broad ' ELSE 'Other ' END || n,
+                        'product-' || n, 100, CASE WHEN n = 17 THEN 'cat_broad' ELSE 'cat_main' END, n <> 20 FROM seq;
+                INSERT INTO product_variants (id, product_id, sku, is_default, price_minor, stock, track_inventory)
+                    SELECT 'var_' || id, id, 'SKU-' || id, 1, 100, 0, 0 FROM products;
+                INSERT INTO product_buyer_state (product_id, is_public, product_created_at, sku_id, from_minor, to_minor, base_minor,
+                    category_id, has_discount, available_for_sale)
+                    SELECT id, is_active, 1700000000, 'var_' || id, 100, 100, 100, category_id,
+                        id <= 'prod_05', id <= 'prod_05' FROM products;
+            `);
+            const facetQuery = () => {
+                const statements = queries.filter(query => query.sql.includes("facet_scope AS MATERIALIZED"));
+                expect(statements).toHaveLength(1);
+                return statements[0]!.sql;
+            };
+            queries.length = 0;
+            const plain = await getStorefrontProducts(db, { search: "broad", limit: 2 });
+            expect(plain.pagination.total).toBe(17);
+            expect(facetQuery()).toContain("search_exclusions");
+            const cases: Array<[Parameters<typeof getStorefrontProducts>[1], number]> = [
+                [{ hasDiscount: "true" }, 5], [{ hasDiscount: "false" }, 12],
+                [{ inStock: "true" }, 5], [{ freeDelivery: "false" }, 17],
+                [{ minPrice: 1 }, 17], [{ maxPrice: 1 }, 17],
+                [{ ids: "prod_01" }, 1], [{ category: "cat_broad" }, 1],
+            ];
+            for (const [params, count] of cases) {
+                queries.length = 0;
+                const result = await getStorefrontProducts(db, { search: "broad", limit: 2, ...params });
+                expect(result.pagination.total).toBe(count);
+                expect(facetQuery()).not.toContain("search_exclusions");
+            }
+            queries.length = 0;
+            const scoped = await getStorefrontCollectionProducts(db, { productIds: ["prod_01", "prod_17"] }, { search: "broad", limit: 2 });
+            expect(scoped.pagination.total).toBe(2);
+            expect(facetQuery()).not.toContain("search_exclusions");
+        } finally {
+            listingSqlite.close();
+        }
     });
 
     it("keeps exactly the same dependency keys and cacheability flags", async () => {

@@ -17,7 +17,8 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(196);
+      expect(d1Tables).toHaveLength(197);
+      expect(d1Tables).toContain("recommendation_order_products");
       expect(d1Tables).toContain("product_facet_public_counts");
       // 0131: private sales and customer projections maintained with their source writes.
       for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_customer_first_sale", "analytics_customer_currency_summary"]) expect(d1Tables).toContain(table);

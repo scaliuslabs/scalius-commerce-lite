@@ -1001,7 +1001,7 @@ const CACHE_DEP_TABLE_RULES = {
     note: "Only live fallback ranking reads private order signals; no order or buyer identifier enters a dependency key.",
     rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
       ...rule,
-      ...(rule.event === "update" ? { changed: ["id", "status", "customer_phone", "created_at", "deleted_at"] } : {}),
+      ...(rule.event === "update" ? { changed: ["id", "status", "customer_phone", "customer_email", "created_at", "deleted_at"] } : {}),
       where: { exists: "SELECT 1 WHERE R.deleted_at IS NULL AND R.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')" },
     })),
   },
@@ -1009,7 +1009,7 @@ const CACHE_DEP_TABLE_RULES = {
     kinds: ["recommendation-signals"], noise: [],
     rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
       ...rule,
-      ...(rule.event === "update" ? { changed: ["product_id", "order_id"] } : {}),
+      ...(rule.event === "update" ? { changed: ["product_id", "order_id", "created_at"] } : {}),
     })),
   },
 } as const satisfies Record<string, CacheDepTableSpec>;
@@ -1046,6 +1046,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Derived or machinery.
   products_fts: FTS,
   product_facet_public_counts: "Derived public facet counts; canonical facet lf and buyer-state lm dependencies cover the exact scope-minus-exclusions result.",
+  recommendation_order_products: "Derived order/product popularity; source orders and order_items advance recommendation-signals in the same transaction, which every live ranking declares.",
   categories_fts: FTS,
   cache_clock: MACHINERY,
   cache_dep: MACHINERY,

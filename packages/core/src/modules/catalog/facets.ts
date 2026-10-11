@@ -35,6 +35,7 @@ import { categoryScope, deps } from "./declare-deps";
 import { reviewsEnabledSql, storeCurrencyCodeSql } from "../settings";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 import { sanitizeFtsQuery } from "../../search/fts5";
+import { productCategoryNameMatch } from "./search-relevance";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
 export const OPTION_FACET_PREFIX = OPTION_FACET_KEY_PREFIX;
@@ -487,7 +488,12 @@ export interface CatalogFacetCountInput {
     /** A base condition reads `products` columns. */
     needsProducts: boolean;
     /** Equivalent plain-search predicates with category read from buyer state for the covering scope only. */
-    identitySearch?: { query: string; baseConditions: SQL[] };
+    identitySearch?: {
+        query: string;
+        baseConditions: SQL[];
+        /** The caller proves there are no scope, price, delivery, discount or stock restrictions. */
+        unfiltered?: boolean;
+    };
     filters: readonly CatalogFacetFilter[] | undefined;
     /** A category listing: its effective attribute set orders and restricts the attribute facets. */
     categoryId?: string;
@@ -637,6 +643,10 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         && minRatingCenti === undefined;
     const identitySearch = complement && input.needsProducts && input.identitySearch
         ? sanitizeFtsQuery(input.identitySearch.query) : "";
+    const exclusionFirst = Boolean(identitySearch && input.identitySearch?.unfiltered && !input.categoryId
+        && (input.categoryFacet === undefined || input.categoryFacet === "product-categories"));
+    const exclusionLimit = (enabled: boolean) => sql`(SELECT CASE WHEN use_exclusions = ${sql.raw(enabled ? "1" : "0")}
+        THEN 9223372036854775807 ELSE 0 END FROM exclusion_plan)`;
     const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;
     // The selected rating narrows every other facet's count (never its own).
     const ratingMatch = minRatingCenti === undefined ? sql`` : sql` AND facet_scope.rating_match = 1`;
@@ -690,12 +700,42 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 THEN 1 ELSE 0 END AS use_covering FROM catalog_sizes
         ),` : sql``}
     ` : sql``;
-    const scopeQuery = identitySearch ? sql`
+    const legacyScopeQuery = identitySearch ? sql`
         SELECT * FROM (${scopeRows()} LIMIT (
             SELECT CASE WHEN use_covering = 0 THEN 9223372036854775807 ELSE 0 END FROM identity_scope_plan
         )) UNION ALL SELECT * FROM (${scopeRows(true)} LIMIT (
             SELECT CASE WHEN use_covering = 1 THEN 9223372036854775807 ELSE 0 END FROM identity_scope_plan
         ))` : scopeRows();
+    // Broad plain searches need only the small set that matches neither
+    // product FTS rowids nor the published-category disjunction. Do not join
+    // every positive match to buyer/review rows just to subtract it again.
+    const exclusionCtes = exclusionFirst ? sql`
+        exclusion_probe AS MATERIALIZED (
+            SELECT CASE WHEN use_covering = 1 AND public_count * 10 >= all_count * 9
+                THEN 1 ELSE 0 END AS enabled
+            FROM identity_scope_plan CROSS JOIN catalog_sizes
+        ),
+        search_exclusions AS MATERIALIZED (
+            SELECT ${buyerState.productId} AS product_id
+            FROM products INDEXED BY sqlite_autoindex_products_1
+            CROSS JOIN ${buyerState}
+            WHERE products.rowid NOT IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${identitySearch})
+              AND ${buyerState.productId} = products.id
+              AND ${publicBuyerStateCondition({ drivenByIdSet: true })}
+              AND COALESCE(${productCategoryNameMatch(db, input.identitySearch!.query, buyerState.categoryId) ?? sql`0`}, 0) = 0
+            LIMIT (SELECT CASE WHEN enabled = 1 THEN 9223372036854775807 ELSE 0 END FROM exclusion_probe)
+        ),
+        exclusion_plan AS MATERIALIZED (
+            SELECT CASE WHEN enabled = 1 AND public_count > excluded_count
+                AND (public_count - excluded_count) * 5 >= public_count * 4
+                THEN 1 ELSE 0 END AS use_exclusions
+            FROM exclusion_probe CROSS JOIN catalog_sizes
+            CROSS JOIN (SELECT COUNT(*) AS excluded_count FROM search_exclusions) AS excluded_size
+        ),
+    ` : sql``;
+    const scopeQuery = exclusionFirst
+        ? sql`SELECT * FROM (${legacyScopeQuery}) AS positive_scope LIMIT ${exclusionLimit(false)}`
+        : legacyScopeQuery;
     const categorySet = input.categoryId
         ? sql`(
             SELECT set_row.attribute_id AS attribute_id,
@@ -840,15 +880,21 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     };
     const complementCtes = complement ? sql`
         facet_plan AS MATERIALIZED (
-            SELECT CASE WHEN matched_count > 0 AND matched_count * 5 >= public_count * 4
+            SELECT CASE ${exclusionFirst ? sql`WHEN (SELECT use_exclusions FROM exclusion_plan) = 1 THEN 1` : sql``}
+                WHEN matched_count > 0 AND matched_count * 5 >= public_count * 4
                 AND public_count * 10 >= all_count * 9 THEN 1 ELSE 0 END AS use_complement
             FROM (SELECT COUNT(*) AS matched_count FROM facet_scope) AS matched_size
             CROSS JOIN catalog_sizes
         ),
         excluded_products AS MATERIALIZED (
+            ${exclusionFirst ? sql`
+            SELECT * FROM (SELECT product_id FROM search_exclusions LIMIT ${exclusionLimit(true)}) AS direct_exclusions
+            UNION ALL SELECT * FROM (` : sql``}
             SELECT product_id FROM product_buyer_state
             WHERE is_public = 1 AND product_id NOT IN (SELECT product_id FROM facet_scope)
-            LIMIT ${branchLimit(true)}
+            LIMIT ${exclusionFirst ? sql`(SELECT CASE WHEN use_exclusions = 0 AND use_complement = 1
+                THEN 9223372036854775807 ELSE 0 END FROM exclusion_plan CROSS JOIN facet_plan)` : branchLimit(true)}
+            ${exclusionFirst ? sql`) AS scope_exclusions` : sql``}
         ),
         excluded_counts AS MATERIALIZED (
             SELECT excluded_row.facet_kind, excluded_row.facet_key, excluded_row.value_key,
@@ -891,17 +937,90 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
             LIMIT ${branchLimit(true)}
         ),
     ` : sql``;
+    const exclusionMembership = sql`${publicBuyerStateCondition()}
+        AND ${buyerState.productId} NOT IN (SELECT product_id FROM excluded_products)`;
+    const exclusionFacetCounts = exclusionFirst ? sql`
+        ${input.brandFacet === false ? sql`` : sql`
+        UNION ALL SELECT * FROM (
+            SELECT 'brand', 'brand', ${buyerState.brandId}, COUNT(*), NULL, NULL, NULL, NULL
+            FROM ${buyerState} INDEXED BY product_buyer_state_brand_newest_idx
+            WHERE ${exclusionMembership} AND ${buyerState.brandId} IS NOT NULL
+            GROUP BY ${buyerState.brandId}
+            LIMIT ${exclusionLimit(true)}
+        ) AS exclusion_brands`}
+        ${input.categoryFacet === "product-categories" ? sql`
+        UNION ALL SELECT * FROM (
+            SELECT 'category', ${CATEGORY_FACET_KEY}, ${buyerState.categoryId}, COUNT(*), NULL, NULL, NULL, NULL
+            FROM ${buyerState} INDEXED BY product_buyer_state_category_newest_idx
+            WHERE ${exclusionMembership} AND ${buyerState.categoryId} IS NOT NULL
+            GROUP BY ${buyerState.categoryId}
+            LIMIT ${exclusionLimit(true)}
+        ) AS exclusion_categories` : sql``}
+        ${input.ratingFacet ? sql`
+        UNION ALL
+        SELECT 'rating', 'rating', CAST(rating_min.value AS TEXT),
+            CASE CAST(rating_min.key AS INTEGER)
+                ${sql.join(ratingStars.map((_, index) => sql`
+                    WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
+            END, NULL, NULL, NULL, NULL
+        FROM (
+            SELECT COUNT(*) AS rated_count,
+                ${sql.join(ratingStars.map((stars, index) => sql`
+                    SUM(CASE WHEN rating_avg_centi >= ${stars * 100} THEN 1 ELSE 0 END)
+                        AS ${sql.raw(`rating_count_${index}`)}`), sql`, `)}
+            FROM (
+                SELECT rating_avg_centi
+                FROM ${reviewStats} AS exclusion_rating INDEXED BY product_review_stats_avg_idx
+                WHERE rating_avg_centi IS NOT NULL
+                  AND product_id NOT IN (SELECT product_id FROM excluded_products)
+                  AND EXISTS (SELECT 1 FROM ${buyerState}
+                      WHERE ${buyerState.productId} = exclusion_rating.product_id AND ${publicBuyerStateCondition()})
+                LIMIT (SELECT CASE WHEN use_exclusions = 1 AND ${reviewsEnabledSql()} = 1
+                    THEN 9223372036854775807 ELSE 0 END FROM exclusion_plan)
+            ) AS public_matching_ratings
+        ) AS rating_counts
+        CROSS JOIN json_each(${JSON.stringify(ratingStars)}) AS rating_min
+        WHERE rating_counts.rated_count > 0` : sql``}
+    ` : sql``;
+    const scopeSummary = sql`
+        SELECT COUNT(*) AS listing_count, MIN(listing_from_minor) AS listing_min, MAX(listing_to_minor) AS listing_max
+        FROM facet_scope
+        WHERE ${attributeMatch()} AND ${optionMatch} AND ${brandMatch}
+          AND ${input.minRating === undefined ? sql`1 = 1`
+                : productMinRatingCondition(sql`facet_scope.product_id`, input.minRating)}`;
+    const summaryRead = exclusionFirst ? sql`
+        SELECT * FROM (${scopeSummary} LIMIT ${exclusionLimit(false)}) AS positive_summary
+        UNION ALL SELECT * FROM (
+            SELECT COUNT(*) AS listing_count, MIN(${buyerState.fromMinor}) AS listing_min, MAX(${buyerState.toMinor}) AS listing_max
+            FROM ${buyerState}
+            WHERE ${exclusionMembership}
+            LIMIT ${exclusionLimit(true)}
+        ) AS exclusion_summary` : scopeSummary;
+    // Keep each compound below D1's term limit. These small aggregates do
+    // not materialize the positive product population on the exclusion path.
+    const emptyFacetRows = sql`SELECT NULL AS facet_kind, NULL AS facet_id, NULL AS value_key,
+        NULL AS value_count, NULL AS value_label, NULL AS value_sort, NULL AS value_number, NULL AS sample_sku
+        WHERE 0 = 1`;
+    const auxiliaryFacetCtes = exclusionFirst ? sql`
+        positive_auxiliary_facets AS MATERIALIZED (
+            ${emptyFacetRows}${brandBranch}${ratingBranch}${categoryBranch}
+        ),
+        exclusion_auxiliary_facets AS MATERIALIZED (
+            ${emptyFacetRows}${exclusionFacetCounts}
+        ),
+    ` : sql``;
 
     return namedRows<FacetResultRow>(db.all(sql`
-        WITH ${scopePlanCtes}
+        WITH ${scopePlanCtes}${exclusionCtes}
         facet_scope AS MATERIALIZED (${scopeQuery}),
         ${complementCtes}
+        ${auxiliaryFacetCtes}
         facet_counts AS (
             ${complement ? sql`SELECT * FROM baseline_facet_counts
                 UNION ALL SELECT * FROM complement_facet_counts` : sourceFacetCounts}
-            ${brandBranch}
-            ${ratingBranch}
-            ${categoryBranch}
+            ${exclusionFirst ? sql`UNION ALL SELECT * FROM positive_auxiliary_facets
+                UNION ALL SELECT * FROM exclusion_auxiliary_facets`
+                : sql`${brandBranch}${ratingBranch}${categoryBranch}`}
         ),
         facet_resolved AS (
             SELECT facet_counts.*,
@@ -1010,12 +1129,9 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         UNION ALL
         SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            'summary', COUNT(*), MIN(listing_from_minor), MAX(listing_to_minor),
+            'summary', listing_count, listing_min, listing_max,
             ${storeCurrencyCodeSql()}, ${summary.categoryAncestors ?? sql`NULL`}
-        FROM facet_scope
-        WHERE ${attributeMatch()} AND ${optionMatch} AND ${brandMatch}
-          AND ${input.minRating === undefined ? sql`1 = 1`
-                : productMinRatingCondition(sql`facet_scope.product_id`, input.minRating)}` : sql``}
+        FROM (${summaryRead}) AS listing_summary` : sql``}
     `), [
         "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
         "facetSlug", "facetDisplay", "facetUnit", "facetOrder", "urlValue", "swatch", "rangeMin", "rangeMax",

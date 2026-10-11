@@ -172,6 +172,7 @@ export const productBuyerState = sqliteTable("product_buyer_state", {
         table.isPublic, table.fromMinor, table.productId,
         table.availableForSale, table.categoryId, table.productCreatedAt,
     ),
+    index("product_buyer_state_scope_idx").on(table.isPublic, table.productId, table.fromMinor, table.toMinor),
 ]);
 
 export const PRODUCT_RECOMMENDATION_REASONS = ["also_bought", "similar", "popular", "new_arrivals"] as const;

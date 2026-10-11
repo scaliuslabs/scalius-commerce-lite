@@ -485,6 +485,7 @@ async function readStorefrontCatalogResults(
             && params.minPrice === undefined && params.maxPrice === undefined && params.freeDelivery === undefined
             ? {
                 query: search,
+                unfiltered: params.hasDiscount === undefined && params.inStock === undefined,
                 baseConditions: buildStorefrontBuyerStateConditions(db, { ...params, ...priceBounds }, {
                     drivenByIdSet: true, searchCategoryFromBuyerState: true,
                 }).conditions,

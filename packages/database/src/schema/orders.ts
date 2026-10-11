@@ -4,7 +4,7 @@
 // The fulfilment ledger lives in fulfilment.ts, threads in conversations.ts
 // and the generic outbox in notifications.ts.
 
-import { sqliteTable, text, integer, unique, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, unique, uniqueIndex, index, check, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { customers } from "./customers";
@@ -544,6 +544,18 @@ export const orderItems = sqliteTable("order_items", {
         .on(table.orderId)
         .where(sql`${table.fulfillmentType} IN ('digital', 'gift_card') AND ${table.fulfilledQuantity} < ${table.quantity}`),
     // Trigger: order_items_warranty_immutable.
+]);
+
+/** One live real-order/product pair, independent of duplicate order lines. */
+export const recommendationOrderProducts = sqliteTable("recommendation_order_products", {
+    orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    productId: text("product_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    buyer: text("buyer"),
+}, (table) => [
+    primaryKey({ columns: [table.orderId, table.productId] }),
+    index("recommendation_order_products_created_idx").on(table.createdAt, table.productId, table.buyer),
+    index("recommendation_order_products_product_idx").on(table.productId, table.createdAt, table.buyer),
 ]);
 
 /** Monotonic authority for invoice numbering. Updated only with invoice issuance. */

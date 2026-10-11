@@ -370,16 +370,16 @@ export async function rankRecommendationRows(
         ? sql`rec_attribute_peer`
         : sql`(${attributePeerRows}) AS rec_attribute_peer`;
 
+    // One maintained row per eligible order/product pair keeps the canonical
+    // order timestamp and buyer; popularity no longer joins every recent line.
     const popularRows = sql`
-        SELECT rec_popular_line.product_id AS product_id,
-               COUNT(DISTINCT ${buyerSql("rec_popular_order")}) AS buyers
+        SELECT rec_popular_projection.product_id AS product_id,
+               COUNT(DISTINCT rec_popular_projection.buyer) AS buyers
         FROM ${sourceIds.length > 0 ? sql`rec_guard AS rec_popular_guard CROSS JOIN` : sql``}
-             orders AS rec_popular_order
-        INNER JOIN order_items AS rec_popular_line ON rec_popular_line.order_id = rec_popular_order.id
-        WHERE ${realOrder("rec_popular_order")}
-          AND rec_popular_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+             recommendation_order_products AS rec_popular_projection
+        WHERE rec_popular_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
           ${sourceIds.length > 0 ? sql`AND rec_popular_guard.qualifies = 0` : sql``}
-        GROUP BY rec_popular_line.product_id
+        GROUP BY rec_popular_projection.product_id
     `;
     const popular = sourceIds.length > 0
         ? sql`rec_popular`
@@ -606,18 +606,14 @@ export async function rankRecommendationRows(
                     AND product_buyer_state.affinity >= rec_affinity_cutoff.affinity))
         ),
         rec_popular AS MATERIALIZED (
-            SELECT rec_peer_popular_line.product_id AS product_id,
-                   COUNT(DISTINCT ${buyerSql("rec_peer_popular_order")}) AS buyers
+            SELECT rec_peer_projection.product_id AS product_id,
+                   COUNT(DISTINCT rec_peer_projection.buyer) AS buyers
             FROM rec_guard AS rec_peer_popular_guard
-            CROSS JOIN orders AS rec_peer_popular_order
-            INNER JOIN order_items AS rec_peer_popular_line
-                ON rec_peer_popular_line.order_id = rec_peer_popular_order.id
+            CROSS JOIN recommendation_order_products AS rec_peer_projection
             WHERE rec_peer_popular_guard.qualifies = 1
-              -- Scan each recent order's few lines once, rather than seek once per winning product.
-              AND CAST(rec_peer_popular_line.product_id AS TEXT) IN (SELECT product_id FROM rec_winning_co)
-              AND ${realOrder("rec_peer_popular_order")}
-              AND rec_peer_popular_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-            GROUP BY rec_peer_popular_line.product_id
+              AND rec_peer_projection.product_id IN (SELECT product_id FROM rec_winning_co)
+              AND rec_peer_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+            GROUP BY rec_peer_projection.product_id
             UNION ALL
             ${popularRows}
         ),

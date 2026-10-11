@@ -205,7 +205,7 @@ describe("review ratings on buyer listings", () => {
         expect(result.rows.filter(row => row.facetKind === "brand")).toHaveLength(1);
         expect(groupCatalogRatingFacet(result.rows)).toHaveLength(1);
         expect(queries).toHaveLength(1);
-        expect(queries[0]!.sql).toContain("'summary', COUNT(*)");
+        expect(queries[0]!.sql).toContain("'summary', listing_count, listing_min, listing_max");
         expect(result.rows.every(row => !("recordType" in row) && !("listingCount" in row))).toBe(true);
         const uncapped = await readCatalogFacetsWithSummary(db, {
             baseConditions: [sql`product_buyer_state.category_id = 'cat_main' AND product_buyer_state.is_public = 1`],
@@ -222,7 +222,7 @@ describe("review ratings on buyer listings", () => {
         expect(result.pagination.total).toBe(0);
         expect(result.priceRange).toEqual({ min: 100, max: 100 });
         expect(queries.some(query => query.sql.startsWith("select count(*)"))).toBe(false);
-        expect(queries.filter(query => query.sql.includes("'summary', COUNT(*)"))).toHaveLength(1);
+        expect(queries.filter(query => query.sql.includes("'summary', listing_count, listing_min, listing_max"))).toHaveLength(1);
         const summary = await readCatalogFacetsWithSummary(db, {
             baseConditions: [sql`product_buyer_state.product_id = 'missing_product'`], needsProducts: false,
             filters: [],

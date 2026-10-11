@@ -102,6 +102,22 @@ const scoreRows = (rows: Array<Record<string, unknown>>) => rows.filter((row) =>
     popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
 }));
 
+function originalOrderPopularity(query: string): string {
+    // Independent source oracle: duplicate lines remain here, and neither
+    // eligibility, parent time nor normalized buyer comes from the projection.
+    const source = query.replaceAll(/\brecommendation_order_products\b/g, `(
+        SELECT original_line.product_id, original_order.created_at,
+            COALESCE(NULLIF(original_order.customer_phone, ''), lower(trim(original_order.customer_email))) AS buyer
+        FROM orders AS original_order
+        INNER JOIN order_items AS original_line ON original_line.order_id = original_order.id
+        WHERE original_order.deleted_at IS NULL
+          AND original_order.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')
+    )`);
+    expect(source).not.toBe(query);
+    expect(source).not.toContain("recommendation_order_products");
+    return source;
+}
+
 function fullUniverseRanking(query: string, limit: number): string {
     // An independent oracle: disable every candidate cutoff, restore a single
     // full affinity scan and use the original full-population popularity windows.
@@ -127,7 +143,7 @@ function fullUniverseRanking(query: string, limit: number): string {
     const originalPopularity = `SUM(CASE WHEN COALESCE(rec_popular.buyers, 0) >= 2 THEN 1 ELSE 0 END) OVER () * 2 >= MIN(COUNT(*) OVER (), ${limit})`;
     const canonical = noAffinityCutoff.replaceAll("(SELECT qualifies FROM rec_popularity_guard) = 1", originalPopularity);
     expect(canonical).not.toBe(noAffinityCutoff);
-    return canonical;
+    return originalOrderPopularity(canonical);
 }
 
 function affinityVisits(query: string, params: readonly SQLInputValue[]) {
@@ -443,12 +459,13 @@ describe("product recommendations", () => {
             .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
         expect(plan).toContain("SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_price_idx (is_public=?)");
         // A non-covering lookup per order/line took 18 seconds at one million orders.
-        for (const alias of ["rec_popular_first", "rec_popular_order"]) {
+        for (const alias of ["rec_popular_first"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_buyers_idx`));
         }
-        for (const alias of ["rec_popular_line", "rec_peer_line"]) {
+        for (const alias of ["rec_peer_line"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
         }
+        expect(plan).toContain("SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
         for (const alias of ["rec_source_order"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_id_buyers_idx \\(id=\\?`));
             expect(plan).not.toMatch(new RegExp(`SEARCH ${alias} USING INDEX sqlite_autoindex_orders_1`));
@@ -460,7 +477,60 @@ describe("product recommendations", () => {
             expect(unhinted).not.toBe(query);
             expect(sqlite.prepare(query).all(...statementParams[index]!).map(Object.values))
                 .toEqual(sqlite.prepare(unhinted).all(...statementParams[index]!).map(Object.values));
+            expect(sqlite.prepare(query).all(...statementParams[index]!))
+                .toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...statementParams[index]!));
         }
+    });
+
+    it("matches original orders for parent-time popularity across source counts and duplicate SKU lines", async () => {
+        for (const id of ["source", "source_b", "peer", "rival"]) product({ id });
+        for (const status of ["pending", "processing", "confirmed", "shipped", "delivered", "completed"]) {
+            order(`buyer_${status}`, ["peer", "peer"], status);
+        }
+        for (const email of [" Buyer@Example.com ", "buyer@example.com"]) {
+            order("", ["peer", "peer"]);
+            sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run(email, `ord_${orderSequence}`);
+        }
+        order("", ["peer"]); // NULL buyer is not a distinct buyer.
+        sqlite.prepare("UPDATE orders SET customer_email = NULL WHERE id = ?").run(`ord_${orderSequence}`);
+        const boundary = NOW - 30 * 86400 + 100;
+        order("boundary", ["peer", "peer"], "completed", boundary);
+        // These old SKU-line times must not remove recent parent orders.
+        sqlite.prepare("UPDATE order_items SET created_at = ?, variant_id = 'var_peer'").run(NOW - 400 * 86400);
+        order("old_parent", ["peer", "peer"], "completed", NOW - 31 * 86400);
+        // Conversely, a fresh line cannot restore an expired parent order.
+        sqlite.prepare("UPDATE order_items SET created_at = ? WHERE order_id = ?").run(NOW, `ord_${orderSequence}`);
+        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) order(`excluded_${status}`, ["peer"], status);
+        order("deleted", ["peer"]);
+        sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
+        await rebuildCatalogProjections(db);
+
+        let lastQuery = "";
+        let lastParams: readonly SQLInputValue[] = [];
+        for (const productIds of [[], ["source"], ["source", "source_b"]]) {
+            statements = [];
+            statementParams = [];
+            const { value, dependencies } = await withDependencyScope(
+                () => rankProductRecommendations(db, { productIds, limit: 3 }), { strict: true, log: () => {} },
+            );
+            expect(value.rows.find(row => row.id === "peer")?.popularBuyers).toBe(8);
+            expect(dependencies.validUntil).toBe((boundary + 30 * 86400 + 1) * 1000);
+            expect(dependencies.uncacheable).toEqual([]);
+            expect(statements).toHaveLength(1);
+            lastQuery = statements[0]!;
+            lastParams = statementParams[0]!;
+            expect(sqlite.prepare(lastQuery).all(...lastParams))
+                .toEqual(sqlite.prepare(originalOrderPopularity(lastQuery)).all(...lastParams));
+            if (productIds.length > 0) {
+                expect(scoreRows(sqlite.prepare(fullUniverseRanking(lastQuery, 3)).all(...lastParams))).toEqual(value.rows);
+            }
+        }
+        // Prove the oracle cannot silently inherit a corrupt projection.
+        const sourceQuery = originalOrderPopularity(lastQuery);
+        const sourceRows = sqlite.prepare(sourceQuery).all(...lastParams);
+        sqlite.exec("DELETE FROM recommendation_order_products");
+        expect(sqlite.prepare(sourceQuery).all(...lastParams)).toEqual(sourceRows);
+        expect(sqlite.prepare(lastQuery).all(...lastParams)).not.toEqual(sourceRows);
     });
 
     it("uses the complete co-buy tier only when its eligible recent witnesses prove the popularity quorum", async () => {
@@ -507,6 +577,7 @@ describe("product recommendations", () => {
         const canonical = fullUniverseRanking(query, 3);
         expect(canonical).not.toBe(query);
         expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(value.rows);
+        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(canonical).all(...params));
 
         const guardValues: number[] = [];
         let fullPopularityVisits = 0;
@@ -514,16 +585,16 @@ describe("product recommendations", () => {
         sqlite.function("observe_full_popularity", (value) => { fullPopularityVisits += 1; return value; });
         const observed = query
             .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
-            .replace("AND rec_popular_order.created_at >= unixepoch()", "AND observe_full_popularity(rec_popular_order.created_at) >= unixepoch()");
+            .replace("WHERE rec_popular_projection.created_at >= unixepoch()", "WHERE observe_full_popularity(rec_popular_projection.created_at) >= unixepoch()");
+        expect(observed).toContain("observe_full_popularity(rec_popular_projection.created_at)");
         expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
         expect(guardValues).toEqual([1]);
         expect(fullPopularityVisits).toBe(0);
         const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => String(row.detail));
         expect(plan.filter((line) => line.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
-        expect(plan.filter((line) => line.startsWith("SEARCH rec_peer_popular_line "))).toEqual([
-            "SEARCH rec_peer_popular_line USING COVERING INDEX order_items_order_product_idx (order_id=?)",
+        expect(plan.filter((line) => line.startsWith("SEARCH rec_peer_projection "))).toEqual([
+            "SEARCH rec_peer_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)",
         ]);
-        expect(plan.join("\n")).toContain("SEARCH rec_peer_popular_order USING COVERING INDEX orders_recommendation_buyers_idx (deleted_at=? AND created_at>?)");
     });
 
     it("keeps global popularity enabled when its recent witnesses are below the winning cutoff", async () => {
@@ -603,9 +674,10 @@ describe("product recommendations", () => {
             expect(result.rows).toHaveLength(3);
             const query = statements[0]!;
             const params = statementParams[0]!;
+            expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...params));
             if (scenario === "no_source") {
                 expect(query).not.toContain("rec_guard");
-                expect(query).not.toContain("rec_peer_popular_order");
+                expect(query).not.toContain("rec_peer_projection");
                 return;
             }
             const canonical = fullUniverseRanking(query, 3);
@@ -617,7 +689,8 @@ describe("product recommendations", () => {
             sqlite.function("observe_peer_popularity", (value) => { peerPopularityVisits += 1; return value; });
             const observed = query
                 .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
-                .replace("AND rec_peer_popular_order.created_at >= unixepoch()", "AND observe_peer_popularity(rec_peer_popular_order.created_at) >= unixepoch()");
+                .replace("AND rec_peer_projection.created_at >= unixepoch()", "AND observe_peer_popularity(rec_peer_projection.created_at) >= unixepoch()");
+            expect(observed).toContain("observe_peer_popularity(rec_peer_projection.created_at)");
             expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(result.rows);
             expect(guardValues).toEqual([0]);
             expect(peerPopularityVisits).toBe(0);
