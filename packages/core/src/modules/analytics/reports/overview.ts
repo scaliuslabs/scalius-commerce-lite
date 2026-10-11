@@ -167,6 +167,25 @@ export function addMeasures(left: SalesMeasures, right: SalesMeasures): SalesMea
   };
 }
 
+const OVERVIEW_FIELDS = [
+  "kind",
+  "k1",
+  "k2",
+  "orders",
+  "gross_sales",
+  "discounts",
+  "returns",
+  "net_sales",
+  "shipping",
+  "taxes",
+  "total_sales",
+  "net_items_sold",
+  "x1",
+  "x2",
+  "x3",
+  "x4",
+] as const;
+
 const ZEROS = sql.raw("0 as x1, 0 as x2, 0 as x3, 0 as x4");
 
 const ROLLUP_MEASURES = [
@@ -346,9 +365,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
 }
 
 function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean) {
-  // Every output column already has its public aggregate alias. Avoid ORM
-  // field decoding for hundreds of day rows; mapOverviewPeriod normalizes them.
-  return ctx.db.all<Record<string, unknown>>(overviewStatement(ctx, range, summarizedCustomers));
+  const fields = Object.fromEntries(
+    OVERVIEW_FIELDS.map((field) => [field, sql`q.${sql.raw(field)}`]),
+  ) as Record<(typeof OVERVIEW_FIELDS)[number], SQL<unknown>>;
+  return ctx.db.select(fields).from(sql`(${overviewStatement(ctx, range, summarizedCustomers)}) as q`);
 }
 
 /** Summaries bound broad reads and historical prefixes; narrow interior ranges use dated facts. */

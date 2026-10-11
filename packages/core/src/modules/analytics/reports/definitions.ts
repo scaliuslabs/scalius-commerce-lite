@@ -1,5 +1,5 @@
 // What each catalogued report reads. Every sales figure goes through the
-// shared CTEs in sales-sql.ts; this file only groups them. Reports that name
+// shared expressions in sales-sql.ts or their stored projections. Reports that name
 // customers are gated by the caller (the route), not here.
 import { sql, type SQL } from "drizzle-orm";
 import { collections, productVariants } from "@scalius/database/schema";
@@ -39,6 +39,7 @@ import {
 } from "./sales-sql";
 import { num, type AnalyticsContext } from "./context";
 import { averageOrderValueMinor, percentOf } from "./overview";
+import { salesOverTimeSql } from "./sales-over-time-sql";
 import type { ReportCell, ReportImplementation, ReportParams, ReportRow, SqlReport } from "./engine";
 
 const DAY_SECONDS = 86_400;
@@ -186,10 +187,7 @@ const salesOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const bucket = bucketStartSql(rangeDaySql(ctx, range, "om.created_at"), granularity, range, ctx.weekStart);
-    const rows = await selectRows(ctx, sql`with ${salesCtes(ctx, range)}
-      select ${bucket} as bucket, ${orderMeasuresSql("om")}
-      from om group by ${bucket}`, ["bucket", ...ORDER_MEASURE_FIELDS]);
+    const rows = await selectRows(ctx, salesOverTimeSql(ctx, range, granularity), ["bucket", ...ORDER_MEASURE_FIELDS]);
     const found = new Map(rows.map((row) => {
       const values: Record<string, ReportCell> = Object.fromEntries(ORDER_MEASURE_FIELDS.map((key) => [key, num(row[key])]));
       finishOrderRow(values);
