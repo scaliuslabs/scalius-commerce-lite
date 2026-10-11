@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
-import { Field } from "@/components/ui/field";
+import { Field, ReadOnlyValue } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
@@ -23,7 +23,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
   const t = useMessages(warrantyMessages);
   const value = useWatch({ control: form.control, name: "warrantyPolicyId" });
   const { data: policies, isError } = useQuery(warrantyPoliciesQueryOptions(true));
-  if (!policies && !isError) return <Skeleton className="h-9 w-full" />;
+  if (!policies && !isError && !(readOnly && value == null)) return <Skeleton className="h-9 w-full" />;
 
   const list = policies ?? [];
   const selected = list.find((policy) => policy.id === value) ?? null;
@@ -40,20 +40,30 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <Field id="product-warranty-policy" className="self-stretch" help={selected ? warrantySummary(t, selected) : undefined}>
-        <SearchableSelect
-        ariaLabel={t("policy")}
-        triggerClassName="w-full"
-        options={options}
-        value={value ?? NONE}
-        disabled={readOnly}
-        placeholder={t("choose")}
-        searchPlaceholder={t("searchPolicies")}
-        emptyMessage={t("noPolicies")}
-        onValueChange={(next) =>
-          form.setValue("warrantyPolicyId", next === NONE ? null : next, { shouldDirty: true })}
+      {readOnly ? (
+        <ReadOnlyValue
+          label={t("policy")}
+          value={value == null ? t("none") : isError ? t("loadFailed") : selected
+            ? (selected.archivedAt ? t("archivedPolicy", { name: selected.name }) : selected.name)
+            : t("policyUnavailable")}
+          help={!isError && selected ? warrantySummary(t, selected) : undefined}
         />
-      </Field>
+      ) : (
+        <Field id="product-warranty-policy" className="self-stretch" help={selected ? warrantySummary(t, selected) : undefined}>
+          <SearchableSelect
+            ariaLabel={t("policy")}
+            triggerClassName="w-full"
+            options={options}
+            value={value ?? NONE}
+            selectedLabel={value && !selected ? t(isError ? "loadFailed" : "policyUnavailable") : undefined}
+            placeholder={t("choose")}
+            searchPlaceholder={t("searchPolicies")}
+            emptyMessage={t("noPolicies")}
+            onValueChange={(next) =>
+              form.setValue("warrantyPolicyId", next === NONE ? null : next, { shouldDirty: true })}
+          />
+        </Field>
+      )}
       <Link to="/admin/settings/policies/warranty" className="inline-flex items-center rounded-md py-0.5 text-body text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t("managePolicies")}
       </Link>

@@ -160,10 +160,7 @@ describe("publishing card", () => {
   it("shows a new product on every channel and keeps the others when one is unticked", async () => {
     const values: Array<string[] | null> = [];
     await render(<PublishingHarness initial={null} onValue={(value) => values.push(value)} />);
-    // On every channel, the card is one line until Change is pressed.
-    await vi.waitFor(() => expect(container.textContent).toContain(t("availableEverywhereNew", { channels: "Online store, Google, Facebook and Instagram, and TikTok Shop" })));
-    expect(container.querySelectorAll("button[role=checkbox]")).toHaveLength(0);
-    act(() => button(t("changeChannels")).click());
+    // A globally off channel cannot be summarized as available, even when selected.
     await vi.waitFor(() => expect(container.textContent).toContain(t("publishingNew")));
     const boxes = () => [...container.querySelectorAll<HTMLButtonElement>("button[role=checkbox]")];
     expect(boxes().map((box) => box.getAttribute("data-state"))).toEqual(["checked", "checked", "checked", "checked"]);

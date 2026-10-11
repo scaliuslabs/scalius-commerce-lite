@@ -529,10 +529,10 @@ function ProductEditor({
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
               <div className="max-lg:order-first">
-                <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
+                <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} readOnly={readOnly} />
               </div>
               <PublishingCard form={form} readOnly={readOnly} />
-              <OrganizationCard form={form} categories={categories} brandName={brandName} />
+              <OrganizationCard form={form} categories={categories} brandName={brandName} readOnly={readOnly} />
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-40" />}>
                   <ProductPageCard productId={productId} readOnly={readOnly} />
@@ -623,15 +623,17 @@ function ProductKindRulesProvider({ form, children }: {
 // read the fields they show with useWatch, so a keystroke in the title
 // re-renders them, not the whole page.
 
-function ProductStatusCard({ form, isEdit, getStorefrontPath }: {
+function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
   form: UseFormReturn<ProductFormValues>;
   isEdit: boolean;
   getStorefrontPath: (path: string) => string;
+  readOnly: boolean;
 }) {
   const slug = useWatch({ control: form.control, name: "slug" });
   return (
     <StatusCard
       form={form}
+      readOnly={readOnly}
       storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
     />
   );

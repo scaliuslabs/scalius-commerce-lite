@@ -26,12 +26,13 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { Category, ProductFormValues } from "./types";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { useFieldControl } from "~/components/ui/field";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
   categories: Category[];
+  readOnly?: boolean;
   /** The saved brand's name, for the picker's label. */
   brandName?: string | null;
 }
@@ -39,11 +40,16 @@ interface OrganizationCardProps {
 // The brand search picker is loaded after the page, so it stays off the product page's first download.
 const BrandPicker = lazy(() => import("./BrandPicker"));
 
+function categoryStatusLabel(t: ReturnType<typeof useMessages<keyof typeof productMessages.en>>, category: Category) {
+  return category.status === "draft" ? t("statusDraft") : category.status === "internal" ? t("categoryHidden") : null;
+}
+
 /** Side card: the product's category (new categories start as drafts) and brand. */
-export const OrganizationCard = memo(function OrganizationCard({ form, categories, brandName = null }: OrganizationCardProps) {
+export const OrganizationCard = memo(function OrganizationCard({ form, categories, brandName = null, readOnly = false }: OrganizationCardProps) {
   const t = useMessages(productMessages);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
   const [brandLabel, setBrandLabel] = useState<string | null>(brandName);
+  const categoryById = useMemo(() => indexCategories(categories), [categories]);
 
   return (
     <Card>
@@ -54,25 +60,35 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
         <FormField
           control={form.control}
           name="categoryId"
-          render={({ field, fieldState }) => (
-            <Field label={t("category")} error={fieldState.error?.message}>
-              <CategoryCombobox
-                categories={availableCategories}
-                selectedId={field.value}
-                invalid={Boolean(fieldState.error)}
-                onSelect={field.onChange}
-                onCreated={(category) => {
-                  setAvailableCategories((current) => [...current, category]);
-                  form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
-                }}
-              />
-            </Field>
-          )}
+          render={({ field, fieldState }) => {
+            if (readOnly) {
+              const category = categoryById.get(field.value);
+              const status = category ? categoryStatusLabel(t, category) : null;
+              const path = categoryPathLabel(field.value, categoryById);
+              return <ReadOnlyValue label={t("category")} value={!field.value ? null : category ? (status ? `${path} · ${status}` : path) : t("savedValueUnavailable")} />;
+            }
+            return (
+              <Field label={t("category")} error={fieldState.error?.message}>
+                <CategoryCombobox
+                  categories={availableCategories}
+                  selectedId={field.value}
+                  invalid={Boolean(fieldState.error)}
+                  onSelect={field.onChange}
+                  onCreated={(category) => {
+                    setAvailableCategories((current) => [...current, category]);
+                    form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
+                  }}
+                />
+              </Field>
+            );
+          }}
         />
         <FormField
           control={form.control}
           name="brandId"
-          render={({ field, fieldState }) => (
+          render={({ field, fieldState }) => readOnly ? (
+            <ReadOnlyValue label={t("brand")} value={field.value ? brandName || t("savedValueUnavailable") : null} />
+          ) : (
             <Field id="product-brand" label={t("brand")} error={fieldState.error?.message}>
               <Suspense fallback={<Skeleton className="h-11 w-full sm:h-9" />}>
                 <BrandPicker
@@ -114,9 +130,6 @@ function CategoryCombobox({
   const [createError, setCreateError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const name = search.trim();
-
-  const statusLabel = (category: Category) =>
-    category.status === "draft" ? t("statusDraft") : category.status === "internal" ? t("categoryHidden") : null;
 
   const handleCreate = async () => {
     if (!name) return;
@@ -162,7 +175,7 @@ function CategoryCombobox({
   );
   const pathOf = (category: Category) => categoryPathLabel(category.id, byId);
   const selected = categories.find((category) => category.id === selectedId);
-  const selectedStatus = selected ? statusLabel(selected) : null;
+  const selectedStatus = selected ? categoryStatusLabel(t, selected) : null;
   const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
   // The trigger is the Category field's control: its label names it.
   const control = useFieldControl({});
@@ -172,7 +185,7 @@ function CategoryCombobox({
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" {...control} aria-invalid={invalid || control["aria-invalid"] || undefined} className="w-full justify-between">
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t("chooseCategory")}
+            {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t(selectedId ? "savedValueUnavailable" : "chooseCategory")}
           </span>
           <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -215,8 +228,8 @@ function CategoryCombobox({
                   >
                     <Check className={cn("me-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
                     <span className="flex-1">{pathOf(category)}</span>
-                    {statusLabel(category) ? (
-                      <span className="text-body text-muted-foreground">{statusLabel(category)}</span>
+                    {categoryStatusLabel(t, category) ? (
+                      <span className="text-body text-muted-foreground">{categoryStatusLabel(t, category)}</span>
                     ) : null}
                   </CommandItem>
                 ))}

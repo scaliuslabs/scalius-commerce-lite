@@ -32,11 +32,12 @@ export default function BrandPicker({
   onChange: (value: string | null, label: string | null) => void;
 }) {
   const t = useMessages(brandMessages);
+  const p = useMessages(productMessages);
   return (
     <SearchableSelect
       id={id}
       value={value ?? ""}
-      selectedLabel={value ? label ?? undefined : undefined}
+      selectedLabel={value ? label || p("savedValueUnavailable") : undefined}
       clearable
       triggerClassName="w-full"
       load={loadBrands}

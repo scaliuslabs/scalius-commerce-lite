@@ -7,21 +7,34 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Form } from "~/components/ui/form";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 import { OrganizationCard } from "./OrganizationCard";
-import type { ProductFormValues } from "./types";
+import type { Category, ProductFormValues } from "./types";
 
-const api = vi.hoisted(() => ({ create: vi.fn(), success: vi.fn(), error: vi.fn() }));
+const api = vi.hoisted(() => ({ create: vi.fn(), success: vi.fn(), error: vi.fn(), brand: vi.fn() }));
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({ postApiV1AdminCategories: api.create }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
+vi.mock("./BrandPicker", () => ({ default: () => { api.brand(); return null; } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Harness() {
-  const form = useForm<ProductFormValues>({ defaultValues: { categoryId: "" } });
+const categories: Category[] = [
+  { id: "cat_parent", name: "Clothing", status: "published" },
+  { id: "cat_1", parentId: "cat_parent", name: "Kurta", status: "internal" },
+];
+
+function Harness({ readOnly = false, categoryId = "", brandId = null, brandName = null }: {
+  readOnly?: boolean;
+  categoryId?: string;
+  brandId?: string | null;
+  brandName?: string | null;
+}) {
+  const form = useForm<ProductFormValues>({ defaultValues: { categoryId, brandId } });
   return (
     <Form {...form}>
-      <OrganizationCard form={form} categories={[{ id: "cat_1", name: "Kurta", status: "published" }]} />
+      <OrganizationCard form={form} categories={categories} brandName={brandName} readOnly={readOnly} />
     </Form>
   );
 }
@@ -63,6 +76,29 @@ describe("OrganizationCard category create", () => {
   }
   const createButton = () =>
     Array.from(document.querySelectorAll("button")).find((node) => node.textContent?.includes("Create"))!;
+
+  it("reads the saved category path and refreshed brand prop without mounting either picker", async () => {
+    await act(async () => root.render(<Harness readOnly categoryId="cat_1" brandId="brd_1" brandName="Acme" />));
+    expect(document.body.textContent).toContain(`Clothing › Kurta · ${translate(productMessages, "categoryHidden")}`);
+    expect(document.body.textContent).toContain("Acme");
+    await act(async () => root.render(<Harness readOnly categoryId="cat_1" brandId="brd_1" brandName="Acme refreshed" />));
+    expect(document.body.textContent).toContain("Acme refreshed");
+    expect(document.querySelector("input, [role=combobox], button")).toBeNull();
+    expect(api.brand).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes empty references from saved references that cannot be resolved", async () => {
+    await act(async () => root.render(<Harness readOnly brandName="Stale brand" />));
+    expect(document.querySelectorAll('[data-slot="field-control"]')).toHaveLength(2);
+    expect([...document.querySelectorAll('[data-slot="field-control"]')].map((node) => node.textContent)).toEqual(["—", "—"]);
+    expect(document.body.textContent).not.toContain("Stale brand");
+    await act(async () => root.render(<Harness key="unresolved" readOnly categoryId="cat_missing" brandId="brd_missing" />));
+    const unavailable = translate(productMessages, "savedValueUnavailable");
+    expect([...document.querySelectorAll('[data-slot="field-control"]')].map((node) => node.textContent)).toEqual([unavailable, unavailable]);
+    expect(document.body.textContent).not.toContain("cat_missing");
+    expect(document.body.textContent).not.toContain("brd_missing");
+  });
 
   it("creates a Bangla-named category without sending a web address", async () => {
     api.create.mockResolvedValue({ id: "cat_new", revision: 1, status: "draft" });

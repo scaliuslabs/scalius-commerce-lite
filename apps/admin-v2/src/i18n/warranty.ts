@@ -63,6 +63,7 @@ export const warrantyMessages = defineMessages({
     // Product editor
     card: "Warranty",
     policy: "Warranty policy",
+    policyUnavailable: "Saved warranty policy unavailable",
     none: "No warranty",
     choose: "Choose a policy",
     searchPolicies: "Search policies",
@@ -176,6 +177,7 @@ export const warrantyMessages = defineMessages({
     actionsFor: "{name}-এর অ্যাকশন",
     card: "ওয়ারেন্টি",
     policy: "ওয়ারেন্টি পলিসি",
+    policyUnavailable: "সংরক্ষিত ওয়ারেন্টি পলিসি পাওয়া যাচ্ছে না",
     none: "ওয়ারেন্টি নেই",
     choose: "একটি পলিসি বেছে নিন",
     searchPolicies: "পলিসি খুঁজুন",

@@ -9,7 +9,7 @@ import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared
 import { useMessages } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
   new: "conditionNew",
@@ -19,11 +19,12 @@ const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
 
 interface StatusCardProps {
   form: UseFormReturn<ProductFormValues>;
+  readOnly?: boolean;
   /** Saved products only. */
   storefrontUrl?: string;
 }
 
-export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: StatusCardProps) {
+export const StatusCard = memo(function StatusCard({ form, storefrontUrl, readOnly = false }: StatusCardProps) {
   const t = useMessages(productMessages);
 
   return (
@@ -35,7 +36,9 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
         <FormField
           control={form.control}
           name="isActive"
-          render={({ field }) => (
+          render={({ field }) => readOnly ? (
+            <ReadOnlyValue label={t("status")} value={t(field.value ? "statusActive" : "statusDraft")} help={t(field.value ? "statusActiveHelp" : "statusDraftHelp")} />
+          ) : (
             <Field help={t(field.value ? "statusActiveHelp" : "statusDraftHelp")}>
               <SearchableSelect
                 value={field.value ? "active" : "draft"}
@@ -53,7 +56,9 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
         <FormField
           control={form.control}
           name="productCondition"
-          render={({ field }) => (
+          render={({ field }) => readOnly ? (
+            <ReadOnlyValue label={t("condition")} value={PRODUCT_CONDITION_VALUES.includes(field.value) ? t(CONDITION_LABELS[field.value]) : null} />
+          ) : (
             <Field label={t("condition")}>
               <SearchableSelect
                 value={field.value}

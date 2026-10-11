@@ -14,14 +14,14 @@ import type { ProductFormValues } from "./types";
 
 let form: UseFormReturn<ProductFormValues> | null = null;
 
-function Harness({ isActive, storefrontUrl }: { isActive: boolean; storefrontUrl?: string }) {
+function Harness({ isActive, storefrontUrl, readOnly = false }: { isActive: boolean; storefrontUrl?: string; readOnly?: boolean }) {
   const hookForm = useForm<ProductFormValues>({
     defaultValues: { isActive, freeDelivery: false, productCondition: "new" } as ProductFormValues,
   });
   form = hookForm;
   return (
     <Form {...hookForm}>
-      <StatusCard form={hookForm} storefrontUrl={storefrontUrl} />
+      <StatusCard form={hookForm} storefrontUrl={storefrontUrl} readOnly={readOnly} />
     </Form>
   );
 }
@@ -43,6 +43,16 @@ describe("StatusCard", () => {
 
   const statusSelect = () =>
     host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${translate(productMessages, "status")}"]`);
+
+  it.each([true, false])("shows saved status and condition without editors when read only (active=%s)", async (isActive) => {
+    await act(async () => root.render(<Harness readOnly isActive={isActive} storefrontUrl="https://shop.example/products/mug" />));
+    expect(host.textContent).toContain(translate(productMessages, isActive ? "statusActive" : "statusDraft"));
+    expect(host.textContent).toContain(translate(productMessages, isActive ? "statusActiveHelp" : "statusDraftHelp"));
+    expect(host.textContent).toContain(translate(productMessages, "conditionNew"));
+    expect(host.querySelector("input, select, [role=combobox]")).toBeNull();
+    expect(host.querySelector("a")?.getAttribute("href")).toBe("https://shop.example/products/mug");
+    expect(form?.formState.isDirty).toBe(false);
+  });
 
   it("shows Active or Draft for the saved isActive value", async () => {
     await act(async () => root.render(<Harness isActive={false} />));

@@ -11,6 +11,7 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReadOnlyValue } from "@/components/ui/field";
 import { formatList } from "@scalius/shared/locale-words";
 import { getLocale, useMessages } from "~/i18n";
 import { salesChannelsMessages } from "~/i18n/sales-channels";
@@ -26,19 +27,28 @@ export function PublishingChannels({ form, readOnly }: {
   const { data: channels, isError } = useQuery(salesChannelsQueryOptions());
   // null: open only while the product is off a channel; a choice, once made, stays.
   const [opened, setOpened] = useState(false);
-  if (isError) return <p className="text-body text-muted-foreground">{t("publishingLoadFailed")}</p>;
+  if (isError) return <p className="text-body text-muted-foreground">{t(readOnly ? "loadFailed" : "publishingLoadFailed")}</p>;
   if (!channels) return <Skeleton className="h-40 w-full" />;
   const published = new Set(chosen ?? channels.map((channel) => channel.id));
-  const everywhere = channels.every((channel) => published.has(channel.id));
+  const everywhere = channels.length > 0 && channels.every((channel) => published.has(channel.id) && channel.status === "active");
+  const availableSomewhere = channels.some((channel) => published.has(channel.id) && channel.status === "active");
+  const manageLink = (
+    <Link to="/admin/settings/sales-channels" className="inline-block text-body text-primary hover:underline">
+      {t("manageChannels")}
+    </Link>
+  );
   if (everywhere && !opened) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-body text-muted-foreground">
-          {t(chosen === null ? "availableEverywhereNew" : "availableEverywhere", { channels: formatList(channels.map(salesChannelName), getLocale()) })}
-        </p>
-        {readOnly ? null : (
-          <Button type="button" variant="outline" size="sm" onClick={() => setOpened(true)}>{t("changeChannels")}</Button>
-        )}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-body text-muted-foreground">
+            {t(chosen === null && !readOnly ? "availableEverywhereNew" : "availableEverywhere", { channels: formatList(channels.map(salesChannelName), getLocale()) })}
+          </p>
+          {readOnly ? null : (
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpened(true)}>{t("changeChannels")}</Button>
+          )}
+        </div>
+        {manageLink}
       </div>
     );
   }
@@ -51,29 +61,34 @@ export function PublishingChannels({ form, readOnly }: {
 
   return (
     <div className="space-y-3">
-      <p className="text-body text-muted-foreground">{chosen === null ? t("publishingNew") : t("publishingHelp")}</p>
+      <p className="text-body text-muted-foreground">{chosen === null && !readOnly ? t("publishingNew") : t("publishingHelp")}</p>
       <ul className="space-y-2">
         {channels.map((channel) => (
           <li key={channel.id}>
-            <label className="flex items-start gap-3 text-body">
-              <Checkbox
-                checked={published.has(channel.id)}
-                disabled={readOnly}
-                onCheckedChange={(checked) => toggle(channel.id, checked === true)}
-                className="mt-0.5"
+            {readOnly ? (
+              <ReadOnlyValue
+                label={salesChannelName(channel)}
+                value={t(published.has(channel.id) ? "on" : "off")}
+                help={channel.status === "active" ? undefined : t("channelOff")}
               />
-              <span className="min-w-0 break-words">
-                {salesChannelName(channel)}
-                {channel.status === "active" ? null : <span className="text-muted-foreground"> · {t("channelOff")}</span>}
-              </span>
-            </label>
+            ) : (
+              <label className="flex items-start gap-3 text-body">
+                <Checkbox
+                  checked={published.has(channel.id)}
+                  onCheckedChange={(checked) => toggle(channel.id, checked === true)}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0 break-words">
+                  {salesChannelName(channel)}
+                  {channel.status === "active" ? null : <span className="text-muted-foreground"> · {t("channelOff")}</span>}
+                </span>
+              </label>
+            )}
           </li>
         ))}
       </ul>
-      {published.size === 0 ? <p className="text-body text-muted-foreground">{t("noChannels")}</p> : null}
-      <Link to="/admin/settings/sales-channels" className="inline-block text-body text-primary hover:underline">
-        {t("manageChannels")}
-      </Link>
+      {!availableSomewhere ? <p className="text-body text-muted-foreground">{t("noChannels")}</p> : null}
+      {manageLink}
     </div>
   );
 }

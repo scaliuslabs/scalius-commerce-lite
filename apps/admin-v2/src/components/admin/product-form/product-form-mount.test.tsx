@@ -33,6 +33,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { useSaveScope } from "~/components/admin/shared/SaveBar";
 import { problemLine, productFieldLabel } from "~/components/admin/product-form/utils";
@@ -147,11 +148,11 @@ function Reader({ probe }: { probe: Probe }) {
   return null;
 }
 
-async function mount(edit: boolean, saved?: typeof savedValues): Promise<Probe> {
+async function mount(edit: boolean, saved?: typeof savedValues, readOnly = false): Promise<Probe> {
   const probe: Probe = { renders: 0, dirty: false, form: null };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
-    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin><Page edit={edit} probe={probe} saved={saved} /></PermissionProvider></QueryClientProvider></StrictMode>);
+    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin={!readOnly} permissions={readOnly ? [PERMISSIONS.PRODUCTS_VIEW] : undefined}><Page edit={edit} probe={probe} saved={saved} /></PermissionProvider></QueryClientProvider></StrictMode>);
   });
   await new Promise((resolve) => setTimeout(resolve, 300));
   await act(async () => {});
@@ -166,6 +167,19 @@ function changedFromLoad(probe: Probe): string[] {
 }
 
 describe("a product page nobody has edited", () => {
+  it("passes view-only mode to the sidebar while keeping the outer fieldset protection", async () => {
+    const probe = await mount(true, savedValues, true);
+    expect(container.querySelector('[data-slot="read-only-notice"]')).not.toBeNull();
+    expect(container.querySelector("fieldset")?.disabled).toBe(true);
+    for (const title of ["Status", "Product organization"]) {
+      const card = [...container.querySelectorAll('[data-slot="card"]')].find((node) => node.firstElementChild?.textContent === title);
+      expect(card).toBeDefined();
+      expect(card!.querySelector('[data-slot="field-control"]')).not.toBeNull();
+      expect(card!.querySelector("input, select, [role=combobox]")).toBeNull();
+    }
+    expect(probe.dirty).toBe(false);
+  });
+
   it("a new product is not unsaved and does not loop", async () => {
     const probe = await mount(false);
     expect(errors.filter((line) => /Maximum update depth|render loop/.test(line))).toEqual([]);
