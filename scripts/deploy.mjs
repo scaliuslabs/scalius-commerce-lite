@@ -1306,6 +1306,13 @@ export async function main() {
       requestedTarget ? `Typecheck ${requestedTarget} workspace` : "Typecheck all workspaces sequentially",
     );
 
+    if (!requestedTarget || requestedTarget === "api") {
+      run(
+        `${pnpm} exec vitest run apps/api/src/runtime/route-family-parity.test.ts --maxWorkers=1`,
+        "Verify every API contract route is mounted in the production runtime",
+      );
+    }
+
     if (requestedTarget) {
       buildTarget(requestedTarget);
       checkDistSecrets([requestedTarget]);
