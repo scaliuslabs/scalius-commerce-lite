@@ -12,7 +12,7 @@ import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 import { richTextOrNull } from "~/lib/rich-text-value";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 const AdditionalInfoManager = lazy(() =>
   import("./AdditionalInfoManager").then((module) => ({
@@ -34,7 +34,9 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
         <FormField
           control={form.control}
           name="name"
-          render={({ field, fieldState }) => (
+          render={({ field, fieldState }) => readOnly ? (
+            <ReadOnlyValue label={t("title")} value={field.value} />
+          ) : (
             <Field label={t("title")} error={fieldState.error?.message}>
               <Input placeholder={t("titlePlaceholder")} {...field} />
             </Field>

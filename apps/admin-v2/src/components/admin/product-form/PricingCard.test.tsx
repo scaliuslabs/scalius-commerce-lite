@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Form } from "@/components/ui/form";
-import { translate } from "~/i18n";
+import { formatNumber, translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
@@ -40,11 +40,12 @@ function costStore(cost: number | null) {
   return store;
 }
 
-function Harness({ variantPrices, price = 2600, discount = 0, onForm }: {
+function Harness({ variantPrices, price = 2600, discount = 0, onForm, readOnly = false }: {
   variantPrices: VariantPriceRange | null;
   price?: number | null;
   discount?: number;
   onForm?: (form: UseFormReturn<ProductFormValues>) => void;
+  readOnly?: boolean;
 }) {
   const form = useForm<ProductFormValues>({
     defaultValues: { price, discountType: "percentage", discountPercentage: discount, discountAmount: 0 } as ProductFormValues,
@@ -52,7 +53,7 @@ function Harness({ variantPrices, price = 2600, discount = 0, onForm }: {
   onForm?.(form);
   // Reading it while rendering subscribes the harness to dirty state.
   void form.formState.isDirty;
-  return <Form {...form}><PricingCard form={form} variantPrices={variantPrices} /></Form>;
+  return <Form {...form}><PricingCard form={form} variantPrices={variantPrices} readOnly={readOnly} /></Form>;
 }
 
 describe("PricingCard", () => {
@@ -70,6 +71,54 @@ describe("PricingCard", () => {
     await render(<SkuCostProvider store={costStore(600)}><Harness variantPrices={null} price={1000} /></SkuCostProvider>, [PERMISSIONS.PRODUCTS_VIEW]);
     expect(host.textContent).not.toContain(translate(productMessages, "costPerItem"));
     expect(host.textContent).not.toContain("৳600");
+  });
+
+  describe("read only", () => {
+    it("shows a zero price as an amount, with no inputs and no form writes", async () => {
+      let form!: UseFormReturn<ProductFormValues>;
+      await render(<Harness readOnly variantPrices={null} price={0} onForm={(f) => { form = f; }} />);
+      expect(host.textContent).toContain("৳0");
+      expect(host.querySelectorAll("input")).toHaveLength(0);
+      expect(form.getValues("compareAtProblem")).toBeUndefined();
+      expect(form.formState.isDirty).toBe(false);
+    });
+
+    it("shows an empty price as empty, not zero", async () => {
+      await render(<Harness readOnly variantPrices={null} price={null} />);
+      expect(host.textContent).toContain("—");
+      expect(host.textContent).not.toContain("৳");
+    });
+
+    it("shows a discounted price with its compare-at price", async () => {
+      currency.sale = 2000;
+      await render(<Harness readOnly variantPrices={null} price={2600} discount={23} />);
+      expect(host.textContent).toContain("৳2000");
+      expect(host.textContent).toContain("৳2600");
+      expect(host.textContent).toContain(translate(productMessages, "compareAtLabel"));
+      expect(host.querySelectorAll("input")).toHaveLength(0);
+    });
+
+    it.each([10, 12.5, 12.55])("shows the option price range and saved %s%% discount as text", async (discount) => {
+      currency.sale = 90;
+      await render(<Harness readOnly variantPrices={{ min: 100, max: 200 }} price={100} discount={discount} />);
+      expect(host.textContent).toContain("৳100–৳200");
+      expect(host.textContent).toContain(translate(productMessages, "discountPercentage"));
+      expect(host.textContent).toContain(formatNumber(discount / 100, { style: "percent", maximumFractionDigits: 2 }));
+      expect(host.querySelectorAll("input, [role=combobox]")).toHaveLength(0);
+    });
+
+    it("shows the cost per item as text only with View product costs", async () => {
+      const store = costStore(600);
+      await render(<SkuCostProvider store={store}><Harness readOnly variantPrices={null} price={1000} /></SkuCostProvider>);
+      expect(host.textContent).toContain(translate(productMessages, "costPerItem"));
+      expect(host.textContent).toContain("৳600");
+      expect(host.querySelectorAll("input")).toHaveLength(0);
+      expect(store.setCosts).not.toHaveBeenCalled();
+      act(() => root.unmount());
+      host.remove();
+      await render(<SkuCostProvider store={costStore(600)}><Harness readOnly variantPrices={null} price={1000} /></SkuCostProvider>, [PERMISSIONS.PRODUCTS_VIEW]);
+      expect(host.textContent).not.toContain("৳600");
+    });
   });
 
   afterEach(() => {

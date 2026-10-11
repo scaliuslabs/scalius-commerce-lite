@@ -473,9 +473,9 @@ function ProductEditor({
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
               <ProductImagesSection form={form} readOnly={readOnly} />
-              <PricingCard form={form} variantPrices={variantPrices} />
+              <PricingCard form={form} variantPrices={variantPrices} readOnly={readOnly} />
               <div ref={setInventorySlot} className="empty:hidden" />
-              <ShippingCard form={form} hasOptions={variantPrices !== null} weightSlot={setShippingSlot} />
+              <ShippingCard form={form} hasOptions={variantPrices !== null} weightSlot={setShippingSlot} readOnly={readOnly} />
               <Card id="product-variants" className="scroll-mt-4">
                 <CardHeader>
                   <CardTitle>{t("variants")}</CardTitle>

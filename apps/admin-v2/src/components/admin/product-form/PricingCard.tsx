@@ -7,7 +7,7 @@ import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { useCurrency } from "@/hooks/use-currency";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pairFromStored, storedFromPair, type PricePair } from "./compare-at";
 import { useProductKindRules } from "./product-kind-rules";
@@ -27,9 +27,11 @@ const ProductDiscountFields = lazy(() => import("./ProductDiscountFields"));
  * shows their range instead of a price nobody pays; a discount saved on the
  * product itself still applies to variants without one, and stays editable.
  */
-export function PricingCard({ form, variantPrices }: {
+export function PricingCard({ form, variantPrices, readOnly = false }: {
   form: UseFormReturn<ProductFormValues>;
   variantPrices: VariantPriceRange | null;
+  /** Viewers read the saved prices as text; nothing that writes the form is mounted. */
+  readOnly?: boolean;
 }) {
   const t = useMessages(productMessages);
   const { showDiscount, giftCard } = useProductKindRules();
@@ -41,6 +43,8 @@ export function PricingCard({ form, variantPrices }: {
   });
   const validPrice = Number.isFinite(price) ? price ?? 0 : 0;
   const sale = salePrice(validPrice, { discountType, discountPercentage, discountAmount });
+  const storedPrice = Number.isFinite(price) ? price ?? null : null;
+  const pair = pairFromStored(storedPrice, storedPrice === null ? null : sale);
 
   return (
     <Card>
@@ -53,13 +57,27 @@ export function PricingCard({ form, variantPrices }: {
             <ReadOnlyValue
               numeric
               label={t("priceLabel")}
-              help={t("variantPricesHint")}
+              help={readOnly ? undefined : t("variantPricesHint")}
               value={variantPrices.min === variantPrices.max
                 ? fmt(variantPrices.min)
                 : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
             />
-            {showDiscount && sale !== null ? <Suspense fallback={null}><ProductDiscountFields form={form} /></Suspense> : null}
+            {showDiscount && sale !== null ? (readOnly ? (
+              <FieldRow>
+                <ReadOnlyValue label={t("discountType")} value={t(discountType === "flat" ? "discountFixed" : "discountPercentage")} />
+                <ReadOnlyValue
+                  numeric
+                  label={t("discount")}
+                  value={discountType === "flat" ? fmt(discountAmount ?? 0) : formatNumber((discountPercentage ?? 0) / 100, { style: "percent", maximumFractionDigits: 2 })}
+                />
+              </FieldRow>
+            ) : <Suspense fallback={null}><ProductDiscountFields form={form} /></Suspense>) : null}
           </>
+        ) : readOnly ? (
+          <FieldRow>
+            <ReadOnlyValue numeric label={t("priceLabel")} value={pair.price === null ? null : fmt(pair.price)} />
+            {showDiscount ? <ReadOnlyValue numeric label={t("compareAtLabel")} value={pair.compareAt === null ? null : fmt(pair.compareAt)} /> : null}
+          </FieldRow>
         ) : (
           // A gift card is worth its price: no compare-at price (the product kind rules).
           <PriceFields form={form} compareAtAllowed={showDiscount} />
@@ -68,7 +86,7 @@ export function PricingCard({ form, variantPrices }: {
         {/* One cost for a product without options; with options each variant has its own.
             A gift card is worth its price, so it has no cost per item. */}
         {costs && !variantPrices && !giftCard ? (
-          <ProductCostFields costs={costs} customerPays={Number.isFinite(price) ? sale ?? price ?? null : null} />
+          <ProductCostFields costs={costs} readOnly={readOnly} customerPays={Number.isFinite(price) ? sale ?? price ?? null : null} />
         ) : null}
       </CardContent>
     </Card>
@@ -178,7 +196,7 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
  * customer pays (after the product discount). Costs keep paisa; customers
  * never see them.
  */
-function ProductCostFields({ costs, customerPays }: { costs: SkuCostStore; customerPays: number | null }) {
+function ProductCostFields({ costs, customerPays, readOnly }: { costs: SkuCostStore; customerPays: number | null; readOnly: boolean }) {
   const t = useMessages(productMessages);
   const { code, fmt } = useCurrency();
   const cost = costs.costOf(costs.simpleKey);
@@ -190,13 +208,17 @@ function ProductCostFields({ costs, customerPays }: { costs: SkuCostStore; custo
   return (
     <div className="border-t pt-4">
       <FieldRow>
-        <Field
-          label={t("costPerItem")}
-          help={t("costHelp")}
-          error={problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : undefined}
-        >
-          <CostInput value={cost} onValueChange={(next) => costs.setCosts([costs.simpleKey], next)} />
-        </Field>
+        {readOnly ? (
+          <ReadOnlyValue numeric label={t("costPerItem")} help={t("costHelp")} value={cost === null ? null : fmt(cost)} />
+        ) : (
+          <Field
+            label={t("costPerItem")}
+            help={t("costHelp")}
+            error={problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : undefined}
+          >
+            <CostInput value={cost} onValueChange={(next) => costs.setCosts([costs.simpleKey], next)} />
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <ReadOnlyValue besideControls numeric label={t("profit")} value={result ? negative(result.profit, fmt(result.profit)) : null} />
           <ReadOnlyValue besideControls numeric label={t("margin")} value={result?.margin != null ? negative(result.margin, formatMargin(result.margin)) : null} />

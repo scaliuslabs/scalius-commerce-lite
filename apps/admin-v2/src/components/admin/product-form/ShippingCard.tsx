@@ -9,7 +9,7 @@ import { productMessages } from "~/i18n/products";
 import type { ProductFulfilmentMode } from "./fulfilment-mode";
 import { useProductKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
-import { Field, ChoiceField } from "~/components/ui/field";
+import { Field, ChoiceField, ReadOnlyValue } from "~/components/ui/field";
 
 const HELP = {
   physical: "fulfilmentPhysicalHelp",
@@ -26,7 +26,9 @@ const HELP = {
  * the table) and free delivery. A gift card is always digital: the card says
  * so instead of offering the select.
  */
-export function ShippingCard({ form, hasOptions, weightSlot }: {
+export function ShippingCard({ form, hasOptions, weightSlot, readOnly = false }: {
+  /** Viewers read the saved fulfilment and free delivery as text. */
+  readOnly?: boolean;
   form: UseFormReturn<ProductFormValues>;
   /** The product has options, so "set per variant" makes sense. */
   hasOptions: boolean;
@@ -37,6 +39,7 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
   const g = useMessages(giftCardProductMessages);
   const { forcedFulfillmentKind, showShipping } = useProductKindRules();
   const mode = useWatch({ control: form.control, name: "fulfillmentKind" }) ?? "physical";
+  const freeDelivery = useWatch({ control: form.control, name: "freeDelivery" });
   const single: ProductFulfilmentMode[] = ["physical", "digital", "service"];
   const choices: ProductFulfilmentMode[] = hasOptions || mode === "mixed" ? [...single, "mixed"] : single;
   const ships = showShipping && (mode === "physical" || mode === "mixed");
@@ -51,6 +54,8 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
             <p className="text-body font-medium">{t(`fulfilmentMode.${forcedFulfillmentKind}`)}</p>
             <p className="text-body text-muted-foreground">{g("fulfilmentForced")}</p>
           </div>
+        ) : readOnly ? (
+          <ReadOnlyValue label={t("fulfilment")} value={t(`fulfilmentMode.${mode}`)} help={t(HELP[mode])} />
         ) : (
           <Field id="product-fulfilment" help={t(HELP[mode])}>
             <SearchableSelect
@@ -68,7 +73,9 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
         <div ref={weightSlot} className="empty:hidden" />
         {ships ? (
           <div className="border-t pt-4">
-            <FormField
+            {readOnly ? (
+              <ReadOnlyValue label={t("freeDelivery")} value={t(freeDelivery ? "freeDeliveryYes" : "freeDeliveryNo")} />
+            ) : <FormField
               control={form.control}
               name="freeDelivery"
               render={({ field }) => (
@@ -78,7 +85,7 @@ export function ShippingCard({ form, hasOptions, weightSlot }: {
                   control={<Checkbox id="product-free-delivery" checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />}
                 />
               )}
-            />
+            />}
           </div>
         ) : null}
       </CardContent>
