@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { reviewsDocument } from "../settings/documents";
-import { readStoreShape } from "./store-shape";
+import { readStoreShape, selectStoreShapeCounts } from "./store-shape";
 
 function setup() {
     const harness = createSqliteD1Database();
@@ -63,5 +63,56 @@ describe("store shape: reviews and digital lines", () => {
 
         sqlite.exec("UPDATE product_variants SET deleted_at = unixepoch() WHERE id = 'v_off'");
         expect((await readStoreShape(db)).hasDigitalLines).toBe(false);
+    });
+
+    it("matches the original digital-SKU join across product and SKU lifecycle states", async () => {
+        const { sqlite, db } = setup();
+        try {
+            const original = sqlite.prepare(`SELECT count(*) AS present FROM (
+                SELECT 1 FROM product_variants v
+                INNER JOIN products p ON p.id = v.product_id
+                WHERE v.fulfillment_kind = 'digital' AND v.deleted_at IS NULL
+                  AND p.deleted_at IS NULL AND p.is_active = 1
+                LIMIT 1
+            )`);
+            const product = sqlite.prepare("UPDATE products SET is_active = ?, deleted_at = ? WHERE id = 'p_off'");
+            const variant = sqlite.prepare("UPDATE product_variants SET fulfillment_kind = ?, deleted_at = ? WHERE id = 'v_off'");
+            for (const kind of ["physical", "digital", "service"]) {
+                for (const active of [0, 1]) {
+                    for (const productDeleted of [null, 1780000000]) {
+                        for (const skuDeleted of [null, 1780000000]) {
+                            product.run(active, productDeleted);
+                            variant.run(kind, skuDeleted);
+                            const [row] = await selectStoreShapeCounts(db);
+                            const expected = Number(kind === "digital" && active === 1 && productDeleted === null && skuDeleted === null);
+                            expect(original.get()).toEqual({ present: expected });
+                            expect(row?.digitalSkuCount).toBe(expected);
+                        }
+                    }
+                }
+            }
+        } finally {
+            sqlite.close();
+        }
+    });
+
+    it("starts digital detection from the partial SKU index before looking up products", () => {
+        const { sqlite, db } = setup();
+        try {
+            const query = selectStoreShapeCounts(db).toSQL();
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>;
+            const start = plan.findIndex(({ detail }) => detail === "CO-ROUTINE capped_digital_skus");
+            const end = plan.findIndex(({ detail }) => detail === "SCAN capped_digital_skus");
+            expect(start).toBeGreaterThanOrEqual(0);
+            expect(end).toBeGreaterThan(start);
+            const digitalPlan = plan.slice(start + 1, end).map(({ detail }) => detail);
+            expect(digitalPlan[0]).toMatch(/^SCAN v USING (?:COVERING )?INDEX product_variants_digital_live_idx$/);
+            expect(digitalPlan).toEqual(expect.arrayContaining([
+                expect.stringMatching(/^SEARCH p(?: EXISTS)? USING INDEX \S+ \(id=\?/),
+            ]));
+            expect(digitalPlan.some((detail) => /products_public_newest_idx|product_variants_product_stock_idx/.test(detail))).toBe(false);
+        } finally {
+            sqlite.close();
+        }
     });
 });

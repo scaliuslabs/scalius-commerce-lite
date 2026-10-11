@@ -26,5 +26,23 @@ describe.skipIf(!postgresUrl)("store shape on PostgreSQL", { timeout: NATIVE_POS
     await client.query(`INSERT INTO product_attributes (id, name, slug, key_spec) VALUES ('attr_cpu', 'Processor', 'processor', 1)`);
     await client.query(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ('pav_f', 'p_f', 'attr_cpu', 'M4')`);
     await expect(readStoreShape(db)).resolves.toMatchObject({ categoryDepth: 4, hasKeySpecs: true });
+
+    for (const [write, hasDigitalLines] of [
+      ["UPDATE product_variants SET fulfillment_kind = 'digital' WHERE id = 'v_p_f'", true],
+      ["UPDATE products SET is_active = 0 WHERE id = 'p_f'", false],
+      ["UPDATE products SET is_active = 1 WHERE id = 'p_f'", true],
+      ["UPDATE products SET deleted_at = 1780000000 WHERE id = 'p_f'", false],
+      ["UPDATE products SET deleted_at = NULL WHERE id = 'p_f'", true],
+      ["UPDATE product_variants SET deleted_at = 1780000000 WHERE id = 'v_p_f'", false],
+    ] as const) {
+      await client.query(write);
+      const original = await client.query(`SELECT count(*) AS present FROM (
+        SELECT 1 FROM product_variants v INNER JOIN products p ON p.id = v.product_id
+        WHERE v.fulfillment_kind = 'digital' AND v.deleted_at IS NULL
+          AND p.deleted_at IS NULL AND p.is_active = 1 LIMIT 1
+      ) AS digital_skus`);
+      expect(Number(original.rows[0].present)).toBe(Number(hasDigitalLines));
+      await expect(readStoreShape(db)).resolves.toMatchObject({ hasDigitalLines });
+    }
   });
 });

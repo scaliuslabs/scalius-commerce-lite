@@ -155,9 +155,12 @@ export function selectStoreShapeCounts<Extra extends Record<string, SQL>>(db: Da
       ) AS capped_reviews)`,
       digitalSkuCount: sql<number>`(SELECT count(*) FROM (
         SELECT 1 FROM "product_variants" v
-        INNER JOIN "products" p ON p."id" = v."product_id"
         WHERE v."fulfillment_kind" = 'digital' AND v."deleted_at" IS NULL
-          AND p."deleted_at" IS NULL AND p."is_active" = 1
+          -- Keep the digital-only index outermost; a join can scan every physical SKU.
+          AND EXISTS (
+            SELECT 1 FROM "products" p WHERE p."id" = v."product_id"
+              AND p."deleted_at" IS NULL AND p."is_active" = 1
+          )
         LIMIT 1
       ) AS capped_digital_skus)`,
       // The `emi` document is on with a plan (the product page's own
