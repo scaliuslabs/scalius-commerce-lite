@@ -481,6 +481,14 @@ async function readStorefrontCatalogResults(
     const facetInput: CatalogFacetCountInput = {
         baseConditions: facetBaseConditions,
         needsProducts: countNeedsProducts,
+        identitySearch: search && !scope.condition && !scope.needsProducts && !params.category && !params.ids
+            && params.minPrice === undefined && params.maxPrice === undefined && params.freeDelivery === undefined
+            ? {
+                query: search,
+                baseConditions: buildStorefrontBuyerStateConditions(db, { ...params, ...priceBounds }, {
+                    drivenByIdSet: true, searchCategoryFromBuyerState: true,
+                }).conditions,
+            } : undefined,
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
         categoryAncestorsDeclared: ancestorsCategoryId !== null,

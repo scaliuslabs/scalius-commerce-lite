@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
-import { and, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
@@ -13,7 +13,7 @@ const MAX_CATEGORY_SLUG_SEARCH_LENGTH = 160;
  * query, so "bags" finds products filed under a "Bags" category even when the
  * product title omits the word.
  */
-export function productCategoryNameMatch(db: Database, query: string): SQL | undefined {
+export function productCategoryNameMatch(db: Database, query: string, category: SQLWrapper = products.categoryId): SQL | undefined {
   const normalizedSlug = query.trim().toLowerCase();
   const categoryMatch = or(
     ftsMatch(db, "categories_fts", "categories", query, { column: "name" }),
@@ -26,7 +26,7 @@ export function productCategoryNameMatch(db: Database, query: string): SQL | und
   // A set of matching category ids, not a per-product EXISTS: OR-ed with the
   // products_fts rowid set, both sides stay index lookups instead of forcing
   // a scan of every product (1.4M rows read per search at 30k products).
-  return sql`${products.categoryId} IN (
+  return sql`${category} IN (
     SELECT "categories"."id"
     FROM "categories"
     WHERE ${and(...publicCategoryConditions())}

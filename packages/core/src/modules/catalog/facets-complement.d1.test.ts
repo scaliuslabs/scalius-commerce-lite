@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deps, withDependencyScope } from "../../cache-deps";
+import { buildStorefrontBuyerStateConditions } from "./shared";
 import {
     declareFacetReadWithoutProducts,
     readCatalogFacetsWithSummary,
@@ -57,6 +58,7 @@ async function read(overrides: Partial<CatalogFacetCountInput> = {}, fallback = 
             deps.listMembership("all");
             deps.listOrder("price", "all");
             deps.listOrder("rating", "all");
+            if (overrides.needsProducts) deps.search();
             const value = await readCatalogFacetsWithSummary(db, {
                 baseConditions: [broadScope], needsProducts: false, filters: [], ratingFacet: true,
                 categoryFacet: "product-categories", ...overrides,
@@ -87,6 +89,34 @@ function visits(query: Captured) {
         .replaceAll("WHERE metadata.facet_kind =", "WHERE observe_metadata() = 1 AND metadata.facet_kind =");
     expect(sqlite.prepare(observed).all(...query.params)).toEqual(sqlite.prepare(query.sql).all(...query.params));
     return seen;
+}
+
+function scopeVisits(query: Captured) {
+    const seen = { plan: [] as number[], rows: [0, 0] };
+    sqlite.function("observe_scope_plan", value => { seen.plan.push(Number(value)); return value; });
+    for (const branch of [0, 1]) {
+        sqlite.function(`observe_scope_${branch}`, value => { seen.rows[branch]! += 1; return value; });
+    }
+    let branch = 0;
+    const observed = query.sql
+        .replace("THEN 1 ELSE 0 END AS use_covering", "THEN observe_scope_plan(1) ELSE observe_scope_plan(0) END AS use_covering")
+        .replaceAll('SELECT "product_buyer_state"."product_id" AS product_id', () =>
+            `SELECT observe_scope_${branch++}("product_buyer_state"."product_id") AS product_id`);
+    expect(branch).toBe(2);
+    expect(sqlite.prepare(observed).all(...query.params)).toEqual(sqlite.prepare(query.sql).all(...query.params));
+    return seen;
+}
+
+function searchInput(search: string): Partial<CatalogFacetCountInput> {
+    const source = buildStorefrontBuyerStateConditions(db, { search });
+    return {
+        needsProducts: source.needsProducts,
+        baseConditions: source.conditions,
+        identitySearch: {
+            query: search,
+            baseConditions: buildStorefrontBuyerStateConditions(db, { search }, { searchCategoryFromBuyerState: true }).conditions,
+        },
+    };
 }
 
 describe("public facet count complements", () => {
@@ -170,6 +200,66 @@ describe("public facet count complements", () => {
         for (const name of ["label", "sort", "sample", "number"]) {
             expect(plan).toContain(`USING COVERING INDEX product_facet_values_metadata_${name}_idx`);
         }
+        expect(plan.match(/SEARCH metadata_buyer(?: EXISTS)? USING (?:COVERING )?INDEX [^\n]+ \(product_id=\?\)/g)).toHaveLength(4);
+        expect(plan).not.toContain("SCAN metadata_buyer");
+        expect(optimized.query.sql.match(/metadata\.product_id NOT IN \(SELECT product_id FROM excluded_products\)/g)).toHaveLength(4);
+        expect(optimized.query.sql).not.toContain("metadata.product_id IN (SELECT product_id FROM facet_scope)");
+    });
+
+    it("excludes metadata from products with missing buyer-state rows", async () => {
+        // Keep their facet rows, including the smallest label, sort, SKU and
+        // numeric values, after removing both a public and a private state.
+        sqlite.exec("DELETE FROM product_buyer_state WHERE product_id IN ('prod_02', 'prod_20')");
+        const optimized = await read();
+        expect(optimized.value).toEqual((await read({}, true)).value);
+        expect(visits(optimized.query).plan).toEqual([1]);
+        expect(optimized.value.summary.count).toBe(15);
+        expect(optimized.value.rows.find(row => row.facetId === "option.color" && row.valueKey === "blue"))
+            .toMatchObject({ valueCount: 2, valueLabel: "Bravo", valueSort: 2, sampleProductId: "prod_01" });
+        expect(optimized.value.rows.find(row => row.facetId === "attr_number"))
+            .toMatchObject({ valueNumber: 1.0000001, rangeMin: 1.0000001, rangeMax: 2.0000001 });
+        expect(optimized.value.rows.some(row => row.valueKey === "private")).toBe(false);
+    });
+
+    it("uses the covering identity scope only for broad FTS matches, without visiting the inactive branch", async () => {
+        sqlite.exec(`UPDATE products SET name = 'Broad ' || id;
+            UPDATE products SET name = 'Needle broad' WHERE id = 'prod_01'`);
+        for (const [search, covering, count] of [["broad", 1, 19], ["needle", 0, 1]] as const) {
+            const input = searchInput(search);
+            const optimized = await read(input);
+            const original = await read({ ...input, identitySearch: undefined });
+            expect(optimized.value).toEqual(original.value);
+            expect(optimized.dependencies).toEqual(original.dependencies);
+            expect(optimized.value.summary.count).toBe(count);
+            const seen = scopeVisits(optimized.query);
+            expect(seen.plan).toEqual([covering]);
+            expect(seen.rows[covering]).toBe(count);
+            expect(seen.rows[1 - covering]).toBe(0);
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${optimized.query.sql}`).all(...optimized.query.params)
+                .map(row => String(row.detail)).join("\n");
+            expect(plan).toContain("SEARCH products USING COVERING INDEX sqlite_autoindex_products_1 (id=?)");
+            expect(plan).toContain("SEARCH products USING INTEGER PRIMARY KEY (rowid=?)");
+            expect(plan).toContain("MULTI-INDEX OR");
+            expect(optimized.query.sql.match(/COUNT\(\*\) AS public_count FROM product_buyer_state/g)).toHaveLength(1);
+            expect(optimized.query.sql.match(/COUNT\(\*\) AS all_count FROM product_buyer_state/g)).toHaveLength(1);
+        }
+    });
+
+    it("includes the eighty-percent FTS boundary and skips adaptive scopes for filters or other providers", async () => {
+        sqlite.exec("UPDATE products SET name = 'Broad ' || id WHERE id <= 'prod_16'");
+        const input = searchInput("broad");
+        expect(scopeVisits((await read(input)).query).plan).toEqual([1]);
+        sqlite.exec("UPDATE products SET name = id WHERE id = 'prod_16'");
+        const below = await read(input);
+        expect(scopeVisits(below.query).plan).toEqual([0]);
+        expect(below.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
+        const filters = await resolvePublicAttributeFilters(db, { "option.color": "blue" }, []);
+        for (const result of [
+            await read({ ...input, filters }),
+            await read({ ...input, minRating: 4 }),
+            await read({ ...input, identitySearch: { ...input.identitySearch!, query: "%" } }),
+            await read(input, true),
+        ]) expect(result.query.sql).not.toContain("identity_scope_plan");
     });
 
     it("keeps exactly the same dependency keys and cacheability flags", async () => {
