@@ -100,6 +100,8 @@ export const products = sqliteTable(
         ),
         index("products_deleted_at_idx").on(table.deletedAt),
         index("products_inventory_idx").on(table.id, table.deletedAt, table.name),
+        index("products_media_text_idx").on(table.id)
+            .where(sql`instr(coalesce(${table.description}, ''), 'media/') > 0`),
         index("products_feed_diagnostics_idx").on(
             sql`CAST(${table.updatedAt} AS INTEGER) DESC`,
             sql`CAST(${table.createdAt} AS INTEGER) DESC`,

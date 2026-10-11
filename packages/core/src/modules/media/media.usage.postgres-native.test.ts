@@ -1,10 +1,37 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { countMediaUsage, loadMediaUsage } from "./media.usage";
+import { MediaDependencyConflictError, permanentlyDeleteMediaFile, trashMediaFile } from "./media.service";
 
 afterAll(closeNativePostgres);
 
 describe.runIf(nativePostgresUrl())("media usage on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
+  it("retains description references and delete guards after the partial-index upgrade", async () => {
+    const { db, client } = await createNativePostgres({ label: "media_text_index" });
+    const deleted: string[] = [];
+    const bucket = { delete: async (key: string) => { deleted.push(key); } } as unknown as R2Bucket;
+    await client.query(`
+      INSERT INTO media (id,filename,kind,object_key,size,mime_type,status)
+        VALUES ('media_text','text.png','image','media/text.png',12,'image/png','ready');
+      INSERT INTO products (id,name,slug,description,deleted_at)
+        VALUES ('prod_text','Text product','text-product','prefixmedia/text.png suffix',1);
+    `);
+    expect((await client.query("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'products_media_text_idx'")).rows)
+      .toEqual([{ indexname: "products_media_text_idx" }]);
+    expect((await countMediaUsage(db, ["media_text"])).get("media_text")).toEqual({ usageCount: 1, keptForOrders: false });
+    const trashed = await trashMediaFile(db, "media_text", 1);
+    await expect(permanentlyDeleteMediaFile(db, "media_text", trashed.version, bucket)).rejects.toBeInstanceOf(MediaDependencyConflictError);
+    expect(deleted).toEqual([]);
+    await client.query("UPDATE products SET description = NULL WHERE id = 'prod_text'");
+    expect((await countMediaUsage(db, ["media_text"])).get("media_text")).toEqual({ usageCount: 0, keptForOrders: false });
+    await client.query("UPDATE products SET description = '<img src=\"/media/text.png\">' WHERE id = 'prod_text'");
+    expect((await loadMediaUsage(db, "media_text")).references)
+      .toEqual([{ kind: "product", id: "prod_text", name: "Text product", trashed: true }]);
+    await client.query("UPDATE products SET description = 'Plain description' WHERE id = 'prod_text'");
+    await permanentlyDeleteMediaFile(db, "media_text", trashed.version, bucket);
+    expect(deleted).toContain("media/text.png");
+  });
+
   it("retains named references, counts and order flags through the production proxy", async () => {
     const { db, client } = await createNativePostgres({ label: "media_usage" });
     await client.query(`

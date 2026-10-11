@@ -175,6 +175,9 @@ describe("media usage", () => {
       const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => row.detail).join("\n");
       expect(plan).toContain("MATERIALIZE text_references");
     }
+    const productTextRead = textReads[0]!;
+    expect(sqlite.prepare(`EXPLAIN QUERY PLAN ${productTextRead.query}`).all(...productTextRead.params).map((row) => row.detail).join("\n"))
+      .toContain("SCAN products USING INDEX products_media_text_idx");
     const orderRead = queries.find(({ query }) => query.includes("requested_media"))!;
     const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${orderRead.query}`).all(...orderRead.params).map((row) => row.detail).join("\n");
     expect(plan).toMatch(/SEARCH order_items\b[^\n]*USING (?:COVERING )?INDEX \S+ \(product_image_media_id=\?\)/);

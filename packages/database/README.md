@@ -75,6 +75,8 @@ The schema files in `src/schema/` are the source of truth for columns. There is 
 
 `analytics.ts` holds the transactional sales projections. Migration 0133 adds the first four and last four sale timestamps per customer/currency, using indexed lookups with offsets at most three. Duplicate timestamps count as separate sales; money, line and refund changes do not write customer summaries. Generate its additive SQL with `pnpm exec tsx packages/database/scripts/analytics-customer-endpoints.ts --write` after Drizzle generation; the 0131 renderer retains its original four-column summary contract.
 
+Migration 0134 indexes product ids only where `instr(coalesce(description, ''), 'media/') > 0`. This exact predicate lets the shared Files usage and permanent-delete queries skip plain descriptions while retaining embedded references in active and trashed products. The index stores no description bodies; normal description writes maintain it.
+
 Single tables with rules:
 
 - `settings` holds typed settings documents. `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the compare-and-swap counter. Fraud-checker provider rows and `notification_provider_health` markers also live here. Each domain declares its documents (see [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Settings documents").
