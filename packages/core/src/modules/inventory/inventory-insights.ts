@@ -137,15 +137,24 @@ function safeMinor(value: unknown): number {
 /** Inventory value per location at current unit costs, plus units in transit. */
 export async function getInventoryValuation(db: Database): Promise<InventoryValuation> {
   const currency = await readStoreCurrency(db);
+  // Materialize current costs once instead of fetching a wide SKU row for every level.
+  const costs = sql`(
+    WITH valuation_costs AS MATERIALIZED (
+      SELECT ${productVariants.id} AS id, ${productVariants.costMinor} AS cost_minor
+      FROM ${productVariants}
+    )
+    SELECT id, cost_minor FROM valuation_costs
+  ) AS valuation_costs`;
+  const costMinor = sql<number | null>`valuation_costs.cost_minor`;
   // Aggregate narrow stock rows before joining and sorting location metadata.
   const stock = db.select({
     locationId: inventoryLevels.locationId,
     units: sql<number>`SUM(${inventoryLevels.onHand})`.as("units"),
-    valueMinor: sql<number>`COALESCE(SUM(${inventoryLevels.onHand} * ${productVariants.costMinor}), 0)`.as("value_minor"),
-    unitsWithoutCost: sql<number>`SUM(CASE WHEN ${productVariants.costMinor} IS NULL THEN ${inventoryLevels.onHand} ELSE 0 END)`.as("units_without_cost"),
-    skusWithoutCost: sql<number>`COUNT(CASE WHEN ${productVariants.costMinor} IS NULL THEN 1 END)`.as("skus_without_cost"),
+    valueMinor: sql<number>`COALESCE(SUM(${inventoryLevels.onHand} * ${costMinor}), 0)`.as("value_minor"),
+    unitsWithoutCost: sql<number>`SUM(CASE WHEN ${costMinor} IS NULL THEN ${inventoryLevels.onHand} ELSE 0 END)`.as("units_without_cost"),
+    skusWithoutCost: sql<number>`COUNT(CASE WHEN ${costMinor} IS NULL THEN 1 END)`.as("skus_without_cost"),
   }).from(inventoryLevels)
-    .leftJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
+    .leftJoin(costs, sql`valuation_costs.id = ${inventoryLevels.variantId}`)
     .where(and(
       // Each location's index range skips its zero-stock levels.
       inArray(inventoryLevels.locationId, db.select({ id: inventoryLocations.id }).from(inventoryLocations)),

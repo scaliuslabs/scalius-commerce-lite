@@ -77,13 +77,30 @@ describe("inventory valuation", () => {
     const locationRead = queries.find(({ query }) => query.includes('"valuation_stock"'))!;
     const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${locationRead.query}`).all(...locationRead.params)
       .map((row) => String(row.detail)).join("\n");
-    expect(plan).toMatch(/SEARCH inventory_levels\b[^\n]*USING (?:COVERING )?INDEX \S+ \(location_id=\? AND on_hand>\?\)/);
+    expect(plan).toContain("SEARCH inventory_levels USING COVERING INDEX inventory_levels_location_idx (location_id=? AND on_hand>?)");
     expect(plan).not.toMatch(/USE TEMP B-TREE FOR GROUP BY/);
+    expect(plan).toContain("MATERIALIZE valuation_costs");
+    expect(plan).toContain("SCAN product_variants USING COVERING INDEX product_variants_valuation_cost_idx");
+    expect(plan).not.toMatch(/SEARCH product_variants\b/);
+    expect(plan).toMatch(/SEARCH valuation_costs\b[^\n]*USING AUTOMATIC (?:PARTIAL )?COVERING INDEX[^\n]*\(id=\?\)/);
     const missingRead = queries.find(({ query }) => query.includes("EXISTS") && query.includes('"cost_minor" IS NULL'))!;
     const missingPlan = sqlite.prepare(`EXPLAIN QUERY PLAN ${missingRead.query}`).all(...missingRead.params)
       .map((row) => String(row.detail)).join("\n");
-    expect(missingPlan).toMatch(/SEARCH inventory_levels\b[^\n]*USING (?:(?:COVERING )?INDEX \S+|PRIMARY KEY) \(variant_id=\?\)/);
+    expect(missingPlan).toMatch(/SEARCH inventory_levels\b[^\n]*USING (?:COVERING )?INDEX inventory_levels_positive_variant_idx \(variant_id=\?\)/);
     expect(missingPlan).not.toMatch(/SCAN inventory_levels|USE TEMP B-TREE/);
+  });
+
+  it("revalues retired stock from its current cost, including zero and unknown costs", async () => {
+    sqlite.prepare(`INSERT INTO settings (id, key, value, type, category)
+      VALUES ('currency_doc', 'document', ?, 'json', 'currency')`).run(JSON.stringify({ currencyCode: "BDT", currencySymbol: "৳" }));
+    sku("var_retired_cost", 3, 125);
+    sqlite.prepare("UPDATE product_variants SET deleted_at = unixepoch() WHERE id = ?").run("var_retired_cost");
+
+    expect((await getInventoryValuation(db)).total).toEqual({ units: 3, value: 3.75, unitsWithoutCost: 0, skusWithoutCost: 0 });
+    sqlite.prepare("UPDATE product_variants SET cost_minor = 0 WHERE id = ?").run("var_retired_cost");
+    expect((await getInventoryValuation(db)).total).toEqual({ units: 3, value: 0, unitsWithoutCost: 0, skusWithoutCost: 0 });
+    sqlite.prepare("UPDATE product_variants SET cost_minor = NULL WHERE id = ?").run("var_retired_cost");
+    expect((await getInventoryValuation(db)).total).toEqual({ units: 3, value: 0, unitsWithoutCost: 3, skusWithoutCost: 1 });
   });
 
   it("keeps empty active locations and returns zero totals without stock or transfers", async () => {

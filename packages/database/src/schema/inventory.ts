@@ -80,7 +80,8 @@ export const inventoryLevels = sqliteTable("inventory_levels", {
         .default(UNIX_NOW),
 }, (table) => [
     primaryKey({ columns: [table.variantId, table.locationId] }),
-    index("inventory_levels_location_idx").on(table.locationId, table.onHand),
+    index("inventory_levels_location_idx").on(table.locationId, table.onHand, table.variantId),
+    index("inventory_levels_positive_variant_idx").on(table.variantId).where(sql`${table.onHand} > 0`),
     check("inventory_levels_on_hand_nonnegative", sql`${table.onHand} >= 0`),
 ]);
 

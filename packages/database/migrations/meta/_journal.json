@@ -946,6 +946,13 @@
       "when": 1791682381663,
       "tag": "0134_media_text_index",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "6",
+      "when": 1791683768362,
+      "tag": "0135_inventory_valuation_indexes",
+      "breakpoints": true
     }
   ]
 }

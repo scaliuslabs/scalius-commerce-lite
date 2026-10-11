@@ -297,6 +297,7 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_product_live_idx").on(table.productId, table.deletedAt, table.trackInventory),
     // Keep product-scoped stock sums cheaper than the store-wide restock index.
     index("product_variants_product_stock_idx").on(table.productId, table.deletedAt, table.trackInventory, table.id, table.stock, table.reservedStock),
+    index("product_variants_valuation_cost_idx").on(table.id, table.costMinor),
     uniqueIndex("product_variants_sku_identity_uidx")
         .on(sql`lower(trim(${table.sku}))`),
     uniqueIndex("product_variants_barcode_identity_uidx")
