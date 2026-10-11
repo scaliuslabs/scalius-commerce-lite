@@ -77,7 +77,7 @@ describe("conversation messages (C3)", () => {
 
     await postConversationMessage(db, thread, { actor: staff, body: "Checking with the courier", visibility: "internal" });
     thread = (await readThread(db, thread.id))!;
-    expect(thread).toMatchObject({ status: "open", lastSeq: 2, staffReadSeq: 2, customerReadSeq: 2 });
+    expect(thread).toMatchObject({ status: "open", lastSeq: 2, staffReadSeq: 0, customerReadSeq: 2 });
 
     await postConversationMessage(db, thread, { actor: staff, body: "It arrives tomorrow." });
     thread = (await readThread(db, thread.id))!;
@@ -109,10 +109,10 @@ describe("conversation messages (C3)", () => {
     expect((await getBuyerThread(db, thread)).unread).toBe(0);
 
     const inbox = await listStaffInbox(db, "staff_1", { status: "all" });
-    expect(inbox.items[0]).toMatchObject({ id: thread.id, orderNumber: "#1057", customerName: "Rahim", unread: 0, preview: "Note" });
+    expect(inbox.items[0]).toMatchObject({ id: thread.id, orderNumber: "#1057", customerName: "Rahim", unread: 1, preview: "Note" });
     await postConversationMessage(db, thread, { actor: buyer, body: "Any update?" });
     expect((await getStaffInboxSummary(db, "staff_1")).open).toBe(1);
-    expect((await listStaffInbox(db, "staff_1", { status: "open", q: "1057" })).items[0]?.unread).toBe(1);
+    expect((await listStaffInbox(db, "staff_1", { status: "open", q: "1057" })).items[0]?.unread).toBe(2);
     await markStaffRead(db, thread.id, 99);
     expect((await readThread(db, thread.id))?.staffReadSeq).toBe(4);
   });

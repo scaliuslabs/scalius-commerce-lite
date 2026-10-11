@@ -367,7 +367,7 @@ export async function openWarrantyClaim(
         body: body.value,
         clientMessageKey: `warranty-claim:${clientKey}`,
         attachmentIds,
-        readBy: [staff ? "staff" : "customer"],
+        readBy: staff ? [] : ["customer"],
       },
     ];
     const plan = planConversationAppend(db, { id: threadId, lastSeq: reserved?.lastSeq ?? 0 }, lines, { notify: true });
@@ -488,7 +488,6 @@ export async function updateWarrantyClaim(
         eventKind: "warranty_claim_status",
         eventData: { fromStatus: claim.status, toStatus: input.status, ...(resolution ? { resolution } : {}), claimId },
         body: claimStatusLine(input.status, resolution),
-        readBy: ["staff"],
       });
     }
     if (message) {
@@ -499,7 +498,6 @@ export async function updateWarrantyClaim(
         authorUserId: input.staffUserId,
         body: message,
         clientMessageKey: input.requestKey ? `warranty-claim-status:${input.requestKey}` : null,
-        readBy: ["staff"],
       });
     }
     const plan = planConversationAppend(db, thread, lines, { notify: true });

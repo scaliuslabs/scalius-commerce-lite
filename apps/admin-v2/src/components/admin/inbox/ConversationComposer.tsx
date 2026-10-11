@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -50,27 +50,50 @@ export function ConversationComposer({
   const [images, setImages] = useState<StagedImage[]>([]);
   const [uploading, setUploading] = useState(0);
   const [imageError, setImageError] = useState<string | null>(null);
-  const requestKey = useRef(newRequestKey());
+  const lastAttempt = useRef<{ signature: string; key: string } | null>(null);
+  const draftRevision = useRef(0);
+  const previewUrls = useRef(new Set<string>());
   const fileInput = useRef<HTMLInputElement>(null);
   const post = usePostMessage({ conversationId, orderId });
   const target = { conversationId, orderId };
+  const lifetime = useRef<object | null>(null);
+  const owner = orderId ? `order:${orderId}` : `conversation:${conversationId}`;
+  useLayoutEffect(() => {
+    lifetime.current = {};
+    lastAttempt.current = null;
+    draftRevision.current += 1;
+    setBody("");
+    setMode("public");
+    setImages([]);
+    setUploading(0);
+    setImageError(null);
+    return () => {
+      lifetime.current = null;
+      for (const preview of previewUrls.current) URL.revokeObjectURL(preview);
+      previewUrls.current.clear();
+    };
+  }, [owner]);
 
   const tooLong = body.length > MAX_BODY_LENGTH;
   const canSend = body.trim().length > 0 && !tooLong && uploading === 0 && !post.isPending;
 
   const send = () => {
     if (!canSend) return;
-    post.mutate({
-      body,
-      visibility: mode,
-      requestKey: requestKey.current,
-      attachmentIds: images.length > 0 ? images.map((image) => image.attachmentId) : undefined,
-    }, {
+    const currentLifetime = lifetime.current;
+    const submittedRevision = draftRevision.current;
+    const payload = { body, visibility: mode, attachmentIds: images.length > 0 ? images.map((image) => image.attachmentId) : undefined };
+    const signature = JSON.stringify(payload);
+    if (lastAttempt.current?.signature !== signature) lastAttempt.current = { signature, key: newRequestKey() };
+    post.mutate({ ...payload, requestKey: lastAttempt.current.key }, {
       onSuccess: (thread) => {
-        for (const image of images) URL.revokeObjectURL(image.preview);
-        setBody("");
-        setImages([]);
-        requestKey.current = newRequestKey();
+        if (lifetime.current !== currentLifetime) return;
+        const sentIds = new Set(images.map((image) => image.attachmentId));
+        for (const image of images) {
+          if (previewUrls.current.delete(image.preview)) URL.revokeObjectURL(image.preview);
+        }
+        if (draftRevision.current === submittedRevision) setBody("");
+        setImages((current) => current.filter((image) => !sentIds.has(image.attachmentId)));
+        lastAttempt.current = null;
         toast.success(t(mode === "public" ? "toast.sent" : "toast.noted"));
         onPosted?.(thread);
       },
@@ -79,26 +102,32 @@ export function ConversationComposer({
 
   const pickImages = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const currentLifetime = lifetime.current;
     const { accepted, rejection } = acceptImages([...files], images.length + uploading);
     setImageError(rejection ? t(rejection) : null);
     setUploading((count) => count + accepted.length);
     for (const file of accepted) {
+      if (lifetime.current !== currentLifetime) break;
       try {
         const uploaded = await uploadConversationImage(file, target);
-        setImages((current) => [...current, { ...uploaded, name: file.name, preview: URL.createObjectURL(file) }]);
+        if (lifetime.current !== currentLifetime) break;
+        const preview = URL.createObjectURL(file);
+        previewUrls.current.add(preview);
+        setImages((current) => [...current, { ...uploaded, name: file.name, preview }]);
       } catch (error) {
+        if (lifetime.current !== currentLifetime) break;
         setImageError(getServerFnError(error));
       } finally {
-        setUploading((count) => count - 1);
+        if (lifetime.current === currentLifetime) setUploading((count) => count - 1);
       }
     }
-    if (fileInput.current) fileInput.current.value = "";
+    if (lifetime.current === currentLifetime && fileInput.current) fileInput.current.value = "";
   };
 
   return (
     <div className="flex flex-col gap-2">
       {allowInternalNotes ? (
-        <Tabs value={mode} onValueChange={(value) => setMode(value as "public" | "internal")}>
+        <Tabs value={mode} onValueChange={(value) => { draftRevision.current += 1; setMode(value as "public" | "internal"); }}>
           <TabsList aria-label={t("replyLabel")}>
             <TabsTrigger value="public">{t("reply")}</TabsTrigger>
             <TabsTrigger value="internal">{t("note")}</TabsTrigger>
@@ -115,7 +144,7 @@ export function ConversationComposer({
         <Textarea
           id={fieldId}
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => { draftRevision.current += 1; setBody(event.target.value); }}
           onKeyDown={(event) => {
             if (matchesShortcut("submit", event)) {
               event.preventDefault();
@@ -143,7 +172,7 @@ export function ConversationComposer({
                 className="absolute -end-2 -top-2"
                 aria-label={t("removeImage")}
                 onClick={() => {
-                  URL.revokeObjectURL(image.preview);
+                  if (previewUrls.current.delete(image.preview)) URL.revokeObjectURL(image.preview);
                   setImages((current) => current.filter((item) => item.attachmentId !== image.attachmentId));
                 }}
               >

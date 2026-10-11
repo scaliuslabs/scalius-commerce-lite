@@ -64,6 +64,7 @@ export function InboxWorkspace({ search, selectedId }: { search: InboxSearch; se
               conversationId={selectedId}
               currentUserId={currentUserId}
               search={search}
+              active={!detailsOpen || wide}
               onThread={setThread}
               className="flex"
             />

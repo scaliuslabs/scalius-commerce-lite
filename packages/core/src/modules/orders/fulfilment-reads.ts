@@ -4,6 +4,7 @@
 import type { Database } from "@scalius/database/client";
 import {
     conversations,
+    conversationMessages,
     deliveryShipments,
     orderFulfillmentLines,
     orderFulfillments,
@@ -12,6 +13,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { fromMinor } from "@scalius/shared/money";
 import { fulfilmentVoidBlockedReason } from "./line-presentation";
+import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
 import { RETIRED_COURIER_PROVIDERS, retiredCourierTrackingUrl } from "../../integrations/retired-providers";
 import type {
     AdminOrderFulfilmentView,
@@ -159,9 +161,7 @@ export async function findOrderConversationForStaff(
 ): Promise<{ id: string; unread: boolean } | null> {
     const row = await db.select({
         id: conversations.id,
-        lastSeq: conversations.lastSeq,
-        staffReadSeq: conversations.staffReadSeq,
-        lastAuthorType: conversations.lastAuthorType,
+        unread: sql<number>`EXISTS (SELECT 1 FROM ${conversationMessages} WHERE ${staffUnreadMessageCondition()})`,
     })
         .from(conversations)
         .where(and(eq(conversations.orderId, orderId), eq(conversations.subjectType, "order")))
@@ -169,7 +169,6 @@ export async function findOrderConversationForStaff(
     if (!row) return null;
     return {
         id: row.id,
-        unread: row.lastSeq > row.staffReadSeq
-            && (row.lastAuthorType === "customer" || row.lastAuthorType === "guest_receipt"),
+        unread: Boolean(row.unread),
     };
 }

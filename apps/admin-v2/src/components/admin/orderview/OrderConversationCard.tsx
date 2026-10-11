@@ -1,5 +1,5 @@
 import { InlineError } from "~/components/admin/states/InlineError";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MessagesSquare } from "lucide-react";
@@ -19,6 +19,7 @@ import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
 import { resolutionsFor } from "./request-resolutions";
 import { orderThreadQueryOptions } from "~/lib/api-query-options/inbox";
+import type { ConversationFollowRequest } from "../inbox/ConversationMessages";
 import { useMarkRead } from "../inbox/inbox-api";
 
 export { resolutionsFor } from "./request-resolutions";
@@ -54,8 +55,9 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
   const thread = useQuery({ ...orderThreadQueryOptions(order.id), enabled: canRead });
   const markRead = useMarkRead();
 
-  useEffect(() => {
-    if (thread.data) markRead(thread.data);
+  const [followRequest, setFollowRequest] = useState<ConversationFollowRequest>();
+  const onReadFrontier = useCallback((seq: number) => {
+    if (thread.data) markRead(thread.data, seq);
   }, [thread.data, markRead]);
 
   // "Review cancellation request" in the header opens the open request here.
@@ -127,6 +129,9 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
               <ConversationMessages
                 thread={conversation}
                 currentUserId={null}
+                active={!open}
+                onReadFrontier={onReadFrontier}
+                followRequest={followRequest}
                 className="max-h-96 overflow-y-auto"
               />
             </Suspense>
@@ -143,7 +148,7 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
         {canRead && canReply ? (
           <Suspense fallback={null}>
             <div className="border-t pt-4">
-              <ConversationComposer primary={false} allowInternalNotes={!actions.canEditOrders} conversationId={conversation?.id ?? null} orderId={order.id} />
+              <ConversationComposer key={order.id} onPosted={(posted) => setFollowRequest({ conversationId: posted.id, seq: posted.messages.at(-1)?.seq ?? 0 })} primary={false} allowInternalNotes={!actions.canEditOrders} conversationId={conversation?.id ?? null} orderId={order.id} />
             </div>
           </Suspense>
         ) : null}

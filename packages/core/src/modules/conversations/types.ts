@@ -117,6 +117,8 @@ export interface StaffConversationThread extends StaffConversationSummary {
 }
 
 export interface StaffInboxSummary {
+  /** Incoming public message lines after the staff marker, across all thread statuses. */
+  unread: number;
   open: number;
   mineOpen: number;
   unassignedOpen: number;

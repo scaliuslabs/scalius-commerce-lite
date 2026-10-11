@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   conversationAttachmentR2Key,
-  conversationUnreadCount,
   isBuyerVisibleMessage,
   isConversationId,
   nextConversationStatus,
@@ -58,9 +57,7 @@ describe("conversation ids, keys and projections", () => {
     expect(() => conversationAttachmentR2Key("cnv_AbC123xyz", "../x")).toThrow();
   });
 
-  it("counts unread messages from sequence markers and hides internal notes from buyers", () => {
-    expect(conversationUnreadCount(7, 4)).toBe(3);
-    expect(conversationUnreadCount(4, 7)).toBe(0);
+  it("hides internal notes from buyers", () => {
     expect(isBuyerVisibleMessage({ visibility: "public" })).toBe(true);
     expect(isBuyerVisibleMessage({ visibility: "internal" })).toBe(false);
   });

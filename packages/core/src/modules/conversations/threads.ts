@@ -10,6 +10,7 @@
 import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   conversationAttachments,
+  conversationInboxCounts,
   conversationMessages,
   conversations,
   customers,
@@ -18,7 +19,6 @@ import {
 } from "@scalius/database/schema";
 import {
   CONVERSATION_LIMITS,
-  conversationUnreadCount,
   normalizeConversationBody,
   normalizeConversationSubject,
   type ConversationAuthorType,
@@ -29,7 +29,9 @@ import {
 } from "@scalius/shared/conversation";
 import { formatOrderNumber, parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { containsText } from "../../utils/text-match";
+import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
 import { nanoid } from "nanoid";
 import {
   ConflictError,
@@ -221,8 +223,8 @@ export interface ConversationLine {
   eventData?: Record<string, unknown> | null;
   clientMessageKey?: string | null;
   attachmentIds?: readonly string[];
-  /** Readers who have seen this line when it lands (the author's side). */
-  readBy?: ReadonlyArray<"customer" | "staff">;
+  /** Customer-side acknowledgement on append. Staff acknowledge displayed lines through markStaffRead. */
+  readBy?: ReadonlyArray<"customer">;
 }
 
 interface PlannedLine {
@@ -302,7 +304,7 @@ export function planConversationAppend(
       version: sql`${conversations.version} + 1`,
       updatedAt: now,
       ...(status ? { status, closedAt: null } : {}),
-      ...(readBy.has("staff") || internalNote ? { staffReadSeq: seq } : {}),
+      // Posting, including a reply or note, does not prove staff saw earlier incoming lines.
       ...(readBy.has("customer")
         ? { customerReadSeq: seq }
         // A note the buyer can never see must not look unread to them.
@@ -487,7 +489,7 @@ export async function postConversationMessage(
     body: body.value,
     clientMessageKey,
     attachmentIds,
-    readBy: [buyer ? "customer" : "staff"],
+    readBy: buyer ? ["customer"] : [],
   };
 
   let current = thread;
@@ -900,11 +902,13 @@ async function staffSummaries(db: Database, rows: Array<{
   assigneeName: string | null;
 }>): Promise<StaffConversationSummary[]> {
   if (rows.length === 0) return [];
+  const unreadMessages = alias(conversationMessages, "unread_message");
   const previews = await db
     .select({
       conversationId: conversationMessages.conversationId,
       kind: conversationMessages.kind,
       body: conversationMessages.body,
+      unread: sql<number>`(SELECT count(*) FROM ${conversationMessages} AS unread_message WHERE ${staffUnreadMessageCondition(unreadMessages)})`,
     })
     .from(conversationMessages)
     .innerJoin(conversations, and(
@@ -915,7 +919,10 @@ async function staffSummaries(db: Database, rows: Array<{
     .all();
   const previewById = new Map(previews.map((row) => [
     row.conversationId,
-    row.kind === "message" && row.body ? row.body.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LENGTH) : null,
+    {
+      preview: row.kind === "message" && row.body ? row.body.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LENGTH) : null,
+      unread: Number(row.unread),
+    },
   ]));
   return rows.map(({ thread, orderNumber, orderCustomerName, customerName, assigneeName }) => ({
     id: thread.id,
@@ -931,8 +938,8 @@ async function staffSummaries(db: Database, rows: Array<{
     assigneeName,
     lastMessageAt: thread.lastMessageAt,
     lastAuthorType: thread.lastAuthorType,
-    preview: previewById.get(thread.id) ?? null,
-    unread: conversationUnreadCount(thread.lastSeq, thread.staffReadSeq),
+    preview: previewById.get(thread.id)?.preview ?? null,
+    unread: previewById.get(thread.id)?.unread ?? 0,
     version: thread.version,
   }));
 }
@@ -991,19 +998,24 @@ export async function listStaffInbox(
 }
 
 export async function getStaffInboxSummary(db: Database, userId: string): Promise<StaffInboxSummary> {
+  const mine = alias(conversationInboxCounts, "mine_inbox_counts");
   const row = await db
     .select({
-      open: sql<number>`count(*)`,
-      mineOpen: sql<number>`coalesce(sum(CASE WHEN ${conversations.assigneeUserId} = ${userId} THEN 1 ELSE 0 END), 0)`,
-      unassignedOpen: sql<number>`coalesce(sum(CASE WHEN ${conversations.assigneeUserId} IS NULL THEN 1 ELSE 0 END), 0)`,
+      unread: conversationInboxCounts.unread,
+      open: conversationInboxCounts.open,
+      mineOpen: sql<number>`coalesce(${mine.open}, 0)`,
+      unassignedOpen: conversationInboxCounts.unassignedOpen,
     })
-    .from(conversations)
-    .where(and(eq(conversations.status, "open"), isNotNull(conversations.lastMessageAt)))
+    .from(conversationInboxCounts)
+    .leftJoin(mine, eq(mine.scope, `u:${userId}`))
+    .where(eq(conversationInboxCounts.scope, "*"))
     .get();
+  if (!row) throw new Error("Conversation inbox counters are not initialized");
   return {
-    open: Number(row?.open ?? 0),
-    mineOpen: Number(row?.mineOpen ?? 0),
-    unassignedOpen: Number(row?.unassignedOpen ?? 0),
+    unread: Number(row.unread),
+    open: Number(row.open),
+    mineOpen: Number(row.mineOpen),
+    unassignedOpen: Number(row.unassignedOpen),
   };
 }
 

@@ -5417,7 +5417,7 @@ export const postApiV1AdminOrdersByIdWarrantyClaims = <ThrowOnError extends bool
 export const getApiV1AdminConversations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError>({ url: '/api/v1/admin/conversations', ...options });
 
 /**
- * Open conversation counts for the navigation badge
+ * Unread message total and open conversation counts
  */
 export const getApiV1AdminConversationsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError>({ url: '/api/v1/admin/conversations/summary', ...options });
 

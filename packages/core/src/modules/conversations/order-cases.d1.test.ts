@@ -60,6 +60,7 @@ describe("support requests as cases on the order thread", () => {
     expect(updated).toMatchObject({ statusChanged: true, previousStatus: "submitted", newStatus: "rejected" });
 
     const staffView = await getStaffThread(db, created.conversationId);
+    expect(staffView).toMatchObject({ unread: 1, staffReadSeq: 0 });
     expect(staffView.messages.slice(-2).map((message) => [message.kind, message.visibility, message.eventKind, message.body])).toEqual([
       ["event", "public", "support_request_status", null],
       ["message", "internal", null, "Already packed; offer a return instead"],

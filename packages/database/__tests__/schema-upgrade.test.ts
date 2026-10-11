@@ -707,6 +707,18 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 18,
         postgresStatements: 18,
       },
+      {
+        version: 140,
+        name: "0140_buyer_public_counts",
+        sqliteStatements: 6,
+        postgresStatements: 6,
+      },
+      {
+        version: 141,
+        name: "0141_conversation_inbox_counts",
+        sqliteStatements: 14,
+        postgresStatements: 14,
+      },
     ]);
   });
 
@@ -895,6 +907,8 @@ describe("provider-neutral schema upgrades", () => {
           { version: 137, name: "0137_recommendation_order_id" },
           { version: 138, name: "0138_facet_public_counts" },
           { version: 139, name: "0139_recommendation_order_products" },
+          { version: 140, name: "0140_buyer_public_counts" },
+          { version: 141, name: "0141_conversation_inbox_counts" },
         ],
       });
     } finally {

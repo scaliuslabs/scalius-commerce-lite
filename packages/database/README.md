@@ -128,6 +128,10 @@ Two trigger families come from generators, not from hand-written SQL:
 
 Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that embeds `SELECT CASE WHEN`, so the guard goes in the trigger `WHEN` clause and the body is one statement.
 
+## Conversation inbox counts
+
+`conversation_inbox_counts` stores one global staff unread/open/unassigned total and one open total per assignee. Migration0141 backfills it from conversations and immutable public customer/receipt messages. Ten triggers from `scripts/conversation-inbox-counts.ts` maintain exact deltas in the source transaction, including read-marker intervals, nullable timestamp transitions and assignee FK deletion. Staff summary reads only the global and current-assignee keys; per-thread unread stays an indexed message suffix count. All provider snapshots include these counters while import maintenance is suspended; do not copy counts with their source triggers enabled. The generator exports an atomic rebuild sequence for controlled repair with stable source authority. No periodic repair or approximate unread count is used.
+
 ## Migrations
 
 `migrations/` holds 122 SQL files, `0000` to `0121`. The latest is `0121_translations`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.

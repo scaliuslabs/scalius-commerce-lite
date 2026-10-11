@@ -68,6 +68,19 @@ export const conversations = sqliteTable("conversations", {
     // conversations_delete_blocked.
 ]);
 
+/** Transactional staff inbox totals; messages and conversation headers remain authoritative. */
+export const conversationInboxCounts = sqliteTable("conversation_inbox_counts", {
+    scope: text("scope").primaryKey().notNull(),
+    unread: integer("unread").notNull().default(0),
+    open: integer("open").notNull().default(0),
+    unassignedOpen: integer("unassigned_open").notNull().default(0),
+}, (table) => [
+    check("conversation_inbox_counts_unread_nonnegative", sql`${table.unread} >= 0`),
+    check("conversation_inbox_counts_open_nonnegative", sql`${table.open} >= 0`),
+    check("conversation_inbox_counts_unassigned_nonnegative", sql`${table.unassignedOpen} >= 0`),
+    check("conversation_inbox_counts_scope", sql`${table.scope} = '*' OR (substr(${table.scope}, 1, 2) = 'u:' AND ${table.unread} = 0 AND ${table.unassignedOpen} = 0)`),
+]);
+
 export const conversationMessages = sqliteTable("conversation_messages", {
     /** `msg_` + random. */
     id: text("id").primaryKey(),

@@ -1131,6 +1131,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   analytics_customer_first_sale: PRIVATE,
   analytics_customer_currency_summary: PRIVATE,
   conversations: PRIVATE,
+  conversation_inbox_counts: PRIVATE,
   conversation_messages: PRIVATE,
   conversation_attachments: PRIVATE,
   meta_conversions_logs: PRIVATE,

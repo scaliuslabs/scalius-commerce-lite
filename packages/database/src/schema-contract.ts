@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 140,
-  name: "0140_buyer_public_counts",
+  version: 141,
+  name: "0141_conversation_inbox_counts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -481,6 +481,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 140,
     name: "0140_buyer_public_counts",
     sourceSha256: "19c716c082664532fb7713c394ba5ad5e22ed10286baffd15334111894a6acf9",
+  },
+  {
+    version: 141,
+    name: "0141_conversation_inbox_counts",
+    sourceSha256: "886ffd9c32edbc158b438a0f8b70bd56ecf360f58731a70998f2ef278230ab17",
   },
 ] as const;
 

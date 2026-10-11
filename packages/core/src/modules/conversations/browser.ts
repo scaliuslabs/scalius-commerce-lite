@@ -5,7 +5,6 @@ export {
   CONVERSATION_STATUSES,
   CONVERSATION_SUBJECT_TYPES,
   CONVERSATION_ATTACHMENT_UPLOAD_TYPES,
-  conversationUnreadCount,
   isConversationAttachmentId,
   isConversationId,
   normalizeConversationBody,

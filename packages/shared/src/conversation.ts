@@ -145,11 +145,6 @@ export function nextConversationStatus(
   }
 }
 
-/** Unread count from the per-thread sequence and a reader's marker: O(1). */
-export function conversationUnreadCount(lastSeq: number, readSeq: number): number {
-  return Math.max(0, lastSeq - readSeq);
-}
-
 /** Buyer projections show public lines only; staff notes never leave the dashboard. */
 export function isBuyerVisibleMessage(message: { visibility: ConversationMessageVisibility }): boolean {
   return message.visibility === "public";

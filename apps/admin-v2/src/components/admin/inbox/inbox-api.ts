@@ -74,19 +74,21 @@ export function useUpdateThread() {
   });
 }
 
-/** Marks a thread read for staff once per new last message. */
+/** Only a displayed frontier advances the shared staff marker. */
 export function useMarkRead() {
   const queryClient = useQueryClient();
   const marked = useRef(new Map<string, number>());
-  return useCallback((thread: Pick<StaffThread, "id" | "lastSeq" | "unread">) => {
-    if (thread.unread <= 0 || (marked.current.get(thread.id) ?? 0) >= thread.lastSeq) return;
-    marked.current.set(thread.id, thread.lastSeq);
-    void apiData(postApiV1AdminConversationsByIdRead({ path: { id: thread.id }, body: { seq: thread.lastSeq } }))
+  return useCallback((thread: Pick<StaffThread, "id" | "staffReadSeq">, seq: number) => {
+    if (!Number.isInteger(seq) || seq <= thread.staffReadSeq || (marked.current.get(thread.id) ?? 0) >= seq) return;
+    marked.current.set(thread.id, seq);
+    void apiData(postApiV1AdminConversationsByIdRead({ path: { id: thread.id }, body: { seq } }))
       .then(() => {
         void queryClient.invalidateQueries({ queryKey: inboxKeys.lists() });
         void queryClient.invalidateQueries({ queryKey: inboxKeys.summary() });
       })
-      .catch(() => marked.current.delete(thread.id));
+      .catch(() => {
+        if (marked.current.get(thread.id) === seq) marked.current.delete(thread.id);
+      });
   }, [queryClient]);
 }
 

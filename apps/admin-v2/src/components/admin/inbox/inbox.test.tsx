@@ -12,6 +12,7 @@ const sdk = vi.hoisted(() => ({
   get: vi.fn(),
   getOrder: vi.fn(),
   post: vi.fn(),
+  postOrder: vi.fn(),
   patch: vi.fn(),
   read: vi.fn(),
 }));
@@ -29,9 +30,11 @@ vi.mock("@scalius/api-client/sdk", () => ({
   patchApiV1AdminConversationsById: sdk.patch,
   postApiV1AdminConversationsByIdMessages: sdk.post,
   postApiV1AdminConversationsByIdRead: sdk.read,
-  postApiV1AdminConversationsOrderByOrderIdMessages: vi.fn(),
+  postApiV1AdminConversationsOrderByOrderIdMessages: sdk.postOrder,
 }));
 
+import { useMarkRead } from "./inbox-api";
+import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { ConversationComposer } from "./ConversationComposer";
 import { OrderConversationCard } from "../orderview/OrderConversationCard";
 import type { Order } from "../orderview/types";
@@ -84,6 +87,8 @@ const thread: StaffThread = {
 describe("dashboard inbox", () => {
   let host: HTMLDivElement;
   let root: Root;
+  const intersections: Array<{ emit: () => void }> = [];
+  const showTail = async () => act(async () => intersections.at(-1)!.emit());
 
   const render = async (node: ReactNode, permissions: string[] = ["conversations.view", "conversations.reply"]) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -93,11 +98,21 @@ describe("dashboard inbox", () => {
       </QueryClientProvider>,
     ));
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    return client;
   };
   const button = (label: string) => [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === label) as HTMLButtonElement | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    intersections.length = 0;
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.stubGlobal("IntersectionObserver", class {
+      target!: Element;
+      constructor(readonly callback: IntersectionObserverCallback) { intersections.push(this); }
+      observe(target: Element) { this.target = target; }
+      disconnect() {}
+      emit() { this.callback([{ target: this.target, isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
+    });
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -107,6 +122,8 @@ describe("dashboard inbox", () => {
   afterEach(() => {
     act(() => root.unmount());
     document.body.innerHTML = "";
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("lists conversations with who wrote, the order, a preview and the unread count", async () => {
@@ -264,6 +281,8 @@ describe("dashboard inbox", () => {
     sdk.get.mockImplementation(() => ok({ conversation: thread }));
     sdk.patch.mockImplementation(() => ok({ conversation: { ...thread, status: "closed", version: 5 } }));
     await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />);
+    expect(sdk.read).not.toHaveBeenCalled();
+    await showTail();
     expect(sdk.read).toHaveBeenCalledWith({ path: { id: thread.id }, body: { seq: 4 } });
     await act(async () => button(en.close)!.click());
     expect(sdk.patch).toHaveBeenCalledWith({ path: { id: thread.id }, body: { version: 4, status: "closed" } });
@@ -275,4 +294,173 @@ describe("dashboard inbox", () => {
     expect(host.textContent).toContain(en.readOnly);
     expect(button(en.close)).toBeUndefined();
   });
+  it.each(["inbox", "order"] as const)("wires displayed read and explicit successful-send following on the real %s caller", async (caller) => {
+    const snapshot = (last: number): StaffThread => ({ ...thread, lastSeq: last + 20, staffReadSeq: 0, unread: last,
+      messages: Array.from({ length: 50 }, (_, index) => ({ ...thread.messages[1]!, id: `m${last - 49 + index}`, seq: last - 49 + index, attachments: [] })), hasMore: false });
+    const first = snapshot(50);
+    sdk.get.mockImplementation(() => ok({ conversation: first }));
+    sdk.getOrder.mockImplementation(() => ok({ conversation: first }));
+    sdk.post.mockImplementation(() => ok({ conversation: snapshot(52) }));
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) { return this.querySelectorAll("[data-message-seq]").length * 20; });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(200);
+    const client = await render(caller === "inbox"
+      ? <ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />
+      : <OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />);
+    await act(async () => { await import("./ConversationMessages"); await import("./ConversationComposer"); });
+    expect(sdk.read).not.toHaveBeenCalled();
+    await showTail();
+    expect(sdk.read).toHaveBeenLastCalledWith({ path: { id: thread.id }, body: { seq: 50 } });
+    const scroller = host.querySelector<HTMLElement>('[role="region"]')!;
+    await act(async () => { scroller.scrollTop = 200; scroller.dispatchEvent(new Event("scroll")); });
+    const stale = intersections.at(-1)!;
+    await act(async () => client.setQueryData(caller === "inbox" ? inboxKeys.thread(thread.id) : inboxKeys.order("ord_1"), snapshot(51)));
+    await act(async () => stale.emit());
+    expect(sdk.read).toHaveBeenCalledTimes(1);
+    expect(scroller.scrollTop).toBe(200);
+    const textarea = host.querySelector("textarea")!;
+    await act(async () => {
+      textarea.focus();
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Local reply");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.send)!.click());
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
+    expect(document.activeElement).toBe(textarea);
+    expect(sdk.read).toHaveBeenCalledTimes(1);
+    await showTail();
+    expect(sdk.read).toHaveBeenLastCalledWith({ path: { id: thread.id }, body: { seq: 52 } });
+  });
+
+  it("keeps newer successful read suppression when an older request fails, and retries its own failed frontier", async () => {
+    let rejectFirst!: (reason: Error) => void;
+    sdk.read.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }));
+    sdk.read.mockImplementation(() => ok({ ok: true }));
+    let mark!: (seq: number) => void;
+    function Marker() {
+      const read = useMarkRead();
+      mark = (seq) => read({ id: thread.id, staffReadSeq: 3 }, seq);
+      return null;
+    }
+    await render(<Marker />);
+    await act(async () => { mark(3); mark(4); mark(5); });
+    expect(sdk.read).toHaveBeenCalledTimes(2);
+    await act(async () => rejectFirst(new Error("older request failed")));
+    await act(async () => mark(5));
+    expect(sdk.read).toHaveBeenCalledTimes(2);
+    sdk.read.mockRejectedValueOnce(new Error("latest failed"));
+    await act(async () => mark(6));
+    await act(async () => mark(6));
+    expect(sdk.read).toHaveBeenCalledTimes(4);
+    expect(sdk.read).toHaveBeenLastCalledWith({ path: { id: thread.id }, body: { seq: 6 } });
+  });
+
+  it("does not signal local success from a deferred composer response after A → B → A", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof ok>>) => void;
+    sdk.post.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const onPosted = vi.fn();
+    await render(<ConversationComposer conversationId={thread.id} onPosted={onPosted} />);
+    const textarea = host.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Deferred reply");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.send)!.click());
+    await render(<ConversationComposer conversationId="cnv_other0000001" onPosted={onPosted} />);
+    await render(<ConversationComposer conversationId={thread.id} onPosted={onPosted} />);
+    await act(async () => resolve(await ok({ conversation: thread })));
+    expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  it("keeps a first order reply's success signal when its newly created conversation enters the cache", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof ok>>) => void;
+    sdk.postOrder.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const onPosted = vi.fn();
+    await render(<ConversationComposer conversationId={null} orderId="ord_1" onPosted={onPosted} />);
+    const textarea = host.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "First reply");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.send)!.click());
+    await render(<ConversationComposer conversationId={thread.id} orderId="ord_1" onPosted={onPosted} />);
+    await act(async () => resolve(await ok({ conversation: thread })));
+    expect(onPosted).toHaveBeenCalledExactlyOnceWith(thread);
+    expect(host.querySelector("textarea")?.value).toBe("");
+  });
+
+  it("drops a late image response after owner change and releases staged previews on unmount", async () => {
+    let resolve!: (value: Response) => void;
+    const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done; }));
+    vi.stubGlobal("fetch", fetch);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:staged");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const pick = async () => act(async () => {
+      const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+      Object.defineProperty(input, "files", { configurable: true, value: [new File(["image"], "image.png", { type: "image/png" })] });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const response = () => new Response(JSON.stringify({ success: true, data: { attachmentId: "att_photo0000001", conversationId: thread.id, width: 10, height: 10 } }), { status: 200 });
+    await render(<ConversationComposer conversationId={thread.id} />);
+    await pick();
+    await render(<ConversationComposer conversationId="cnv_other0000001" />);
+    await act(async () => resolve(response()));
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(host.querySelector("img")).toBeNull();
+    fetch.mockResolvedValueOnce(response());
+    await pick();
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:staged");
+    act(() => root.unmount());
+    root = createRoot(host);
+    expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:staged");
+  });
+
+  it("preserves text and new images written while a reply is pending, revoking only submitted previews", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof ok>>) => void;
+    sdk.post.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const uploaded = (id: string) => new Response(JSON.stringify({ success: true, data: { attachmentId: id, conversationId: thread.id, width: 10, height: 10 } }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(uploaded("att_first")).mockResolvedValueOnce(uploaded("att_next")));
+    vi.spyOn(URL, "createObjectURL").mockReturnValueOnce("blob:first").mockReturnValueOnce("blob:next");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    await render(<ConversationComposer conversationId={thread.id} />);
+    const type = async (value: string) => act(async () => {
+      const field = host.querySelector("textarea")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const pick = async () => act(async () => {
+      const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+      Object.defineProperty(input, "files", { configurable: true, value: [new File(["image"], "image.png", { type: "image/png" })] });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await type("Submitted reply");
+    await pick();
+    await act(async () => button(en.send)!.click());
+    await type("Next draft");
+    await pick();
+    await act(async () => resolve(await ok({ conversation: thread })));
+    expect(host.querySelector("textarea")?.value).toBe("Next draft");
+    expect([...host.querySelectorAll("img")].map((image) => image.getAttribute("src"))).toEqual(["blob:next"]);
+    expect(revoke.mock.calls).toEqual([["blob:first"]]);
+    expect(sdk.post.mock.calls[0]![0].body).toMatchObject({ body: "Submitted reply", attachmentIds: ["att_first"] });
+  });
+
+  it("keeps the key for an unchanged failed retry and replaces it when the payload is edited", async () => {
+    sdk.post.mockImplementation(() => Promise.resolve({ error: { success: false, error: { message: "Network" } }, response: new Response(null, { status: 503 }) }));
+    await render(<ConversationComposer conversationId={thread.id} />);
+    const type = async (value: string) => act(async () => {
+      const field = host.querySelector("textarea")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await type("Original reply");
+    await act(async () => button(en.send)!.click());
+    await act(async () => button(en.send)!.click());
+    await type("Edited reply");
+    await act(async () => button(en.send)!.click());
+    const [first, retry, edited] = sdk.post.mock.calls.map(([options]) => options.body);
+    expect(retry.requestKey).toBe(first.requestKey);
+    expect(edited.requestKey).not.toBe(first.requestKey);
+    expect(edited.body).toBe("Edited reply");
+  });
+
 });

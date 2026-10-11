@@ -99,11 +99,11 @@ app.openapi(createRoute({
   method: "get",
   path: "/summary",
   tags: ["Admin - Conversations"],
-  summary: "Open conversation counts for the navigation badge",
+  summary: "Unread message total and open conversation counts",
   responses: {
     200: {
       description: "Counts",
-      content: { "application/json": { schema: successEnvelope(z.object({ open: z.number().int(), mineOpen: z.number().int(), unassignedOpen: z.number().int() })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ unread: z.number().int(), open: z.number().int(), mineOpen: z.number().int(), unassignedOpen: z.number().int() })) } },
     },
     ...errorResponses,
   },

@@ -22,7 +22,7 @@ Main files:
 
 | Table | Role and constraints |
 |-------|----------------------|
-| `conversations` | One thread. `subject_type` is `order`, `store`, `warranty_claim` or `review`. Unique order thread per order. Unique `(subject_type, subject_id)`. `status` is `open` (waits on staff), `pending` (waits on the buyer) or `closed`. `last_seq` and the two read markers drive unread counts. `version` is the CAS token. |
+| `conversations` | One thread. `subject_type` is `order`, `store`, `warranty_claim` or `review`. Unique order thread per order. Unique `(subject_type, subject_id)`. `status` is `open` (waits on staff), `pending` (waits on the buyer) or `closed`. `last_seq` and the two read markers bound unread queries. `version` is the CAS token. |
 | `conversation_messages` | Append-only. Unique `(conversation_id, seq)`. `kind` is `message` or `event`. `visibility` is `public` or `internal`. Optional unique `client_message_key` per thread. Body up to 5,000 characters. |
 | `conversation_attachments` | One image. `r2_key` under `private/conversations/`. WebP only, at most 5 MiB. Unattached rows have no `message_id`. |
 
@@ -33,6 +33,7 @@ Triggers refuse these writes: a `last_seq` step other than one, a message `seq` 
 - Posting is one batch. It advances `last_seq` by one with a CAS on the old value, inserts the message with that `seq`, attaches its images and writes its notification outbox rows. The post retries up to 3 times, so `seq` stays gap-free under concurrency.
 - On an order thread, buyer access derives from the order: the account that owns it, or a guest holding the order's receipt proof. The thread carries no customer. A store thread belongs to a verified account: claimed, with at least one proven contact.
 - Limits (`CONVERSATION_LIMITS`): 30 buyer messages per thread in 24 hours, 5 open store threads per account, 3 images per message, 50 messages per page.
+- Staff unread counts only public buyer message lines after `staff_read_seq`; replies, notes and events never acknowledge incoming lines. Only the explicit read endpoint advances the staff marker. Page counts use indexed message suffixes for the returned threads; the navigation summary reads transactionally maintained global and assignee counters, independent of thread/message history, while unread still includes every status. Buyer markers keep their existing rules.
 - A buyer sees public lines only. Internal staff notes never pass the projection. Staff identity collapses to "the store". Event data passes only the keys `type`, `status`, `fromStatus`, `toStatus`, `requestId`.
 - The API sniffs each upload, re-encodes it to WebP through the `IMAGES` binding (this strips EXIF and GPS data), and stores it under `private/conversations/<conversation>/<attachment>`. Browsers may upload JPEG, PNG or WebP. Every read passes a thread access check. An uploader holds at most 6 unattached images per thread. `sweepOrphanConversationAttachments` deletes unattached images after 1 hour.
 - Conversations never write `customers` or `orders` and never change payments, stock, delivery or order status. `scripts/check-source-policies.mjs` enforces this.

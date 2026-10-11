@@ -164066,7 +164066,7 @@
         "tags": [
           "Admin - Conversations"
         ],
-        "summary": "Open conversation counts for the navigation badge",
+        "summary": "Unread message total and open conversation counts",
         "responses": {
           "200": {
             "description": "Counts",
@@ -164084,6 +164084,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "unread": {
+                          "type": "integer"
+                        },
                         "open": {
                           "type": "integer"
                         },
@@ -164095,6 +164098,7 @@
                         }
                       },
                       "required": [
+                        "unread",
                         "open",
                         "mineOpen",
                         "unassignedOpen"

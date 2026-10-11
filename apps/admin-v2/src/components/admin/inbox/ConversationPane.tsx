@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, MessagesSquare } from "lucide-react";
@@ -17,7 +17,7 @@ import { inboxMessages } from "~/i18n/inbox";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
 import { ConversationComposer } from "./ConversationComposer";
-import { ConversationMessages } from "./ConversationMessages";
+import { ConversationMessages, type ConversationFollowRequest } from "./ConversationMessages";
 import { threadTitle } from "./conversation-format";
 import { threadQueryOptions, type StaffThread } from "~/lib/api-query-options/inbox";
 import { useMarkRead, useUpdateThread } from "./inbox-api";
@@ -36,12 +36,14 @@ export function ConversationPane({
   search,
   className,
   onThread,
+  active = true,
 }: {
   conversationId: string;
   currentUserId: string | null;
   search: InboxSearch;
   className?: string;
   onThread?: (thread: StaffThread | undefined) => void;
+  active?: boolean;
 }) {
   const t = useMessages(inboxMessages);
   const canReply = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY);
@@ -49,14 +51,14 @@ export function ConversationPane({
   const update = useUpdateThread();
   const markRead = useMarkRead();
   const data = thread.data;
+  const [followRequest, setFollowRequest] = useState<ConversationFollowRequest>();
+  const onReadFrontier = useCallback((seq: number) => {
+    if (data) markRead(data, seq);
+  }, [data, markRead]);
 
   useEffect(() => {
     onThread?.(data);
   }, [data, onThread]);
-
-  useEffect(() => {
-    if (data) markRead(data);
-  }, [data, markRead]);
 
   if (thread.isPending) {
     return (
@@ -91,51 +93,57 @@ export function ConversationPane({
   return (
     <section aria-labelledby="conversation-title" className={cn("flex min-h-0 flex-col", className)}>
       <header className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-        <Button variant="ghost" size="icon" asChild className="lg:hidden">
-          <Link to="/admin/inbox" search={search} aria-label={t("back")}>
-            <ArrowLeft aria-hidden />
-          </Link>
-        </Button>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h2 id="conversation-title" className="break-words text-heading-md">
-            {data.customerName?.trim() || t("unknownCustomer")}
-          </h2>
-          <p className="text-body text-muted-foreground">
-            {threadTitle(t, data)}
-            {data.assigneeName ? ` · ${t("assignedTo", { name: data.assigneeName })}` : ""}
-          </p>
-        </div>
-        <Badge variant={statusBadge(data.status)}>{t(`status.${data.status}`)}</Badge>
-        {canReply ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={update.isPending}
-              onClick={() => change({ assigneeUserId: mine ? null : currentUserId }, mine ? "toast.unassigned" : "toast.assigned")}
-            >
-              {mine ? t("unassign") : t("assignToMe")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              loading={update.isPending}
-              onClick={() => change(
-                { status: data.status === "closed" ? "open" : "closed" },
-                data.status === "closed" ? "toast.reopened" : "toast.closed",
-              )}
-            >
-              {data.status === "closed" ? t("reopen") : t("close")}
-            </Button>
+        <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-64">
+          <Button variant="ghost" size="icon" asChild className="lg:hidden">
+            <Link to="/admin/inbox" search={search} aria-label={t("back")}>
+              <ArrowLeft aria-hidden />
+            </Link>
+          </Button>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <h2 id="conversation-title" className="break-words text-heading-md">
+              {data.customerName?.trim() || t("unknownCustomer")}
+            </h2>
+            <p className="text-body text-muted-foreground">
+              {threadTitle(t, data)}
+              {data.assigneeName ? ` · ${t("assignedTo", { name: data.assigneeName })}` : ""}
+            </p>
           </div>
-        ) : null}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge variant={statusBadge(data.status)}>{t(`status.${data.status}`)}</Badge>
+          {canReply ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={update.isPending}
+                onClick={() => change({ assigneeUserId: mine ? null : currentUserId }, mine ? "toast.unassigned" : "toast.assigned")}
+              >
+                {mine ? t("unassign") : t("assignToMe")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                loading={update.isPending}
+                onClick={() => change(
+                  { status: data.status === "closed" ? "open" : "closed" },
+                  data.status === "closed" ? "toast.reopened" : "toast.closed",
+                )}
+              >
+                {data.status === "closed" ? t("reopen") : t("close")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </header>
-      <ConversationMessages thread={data} currentUserId={currentUserId} className="min-h-0 flex-1 overflow-y-auto p-4" />
+      <ConversationMessages thread={data} currentUserId={currentUserId} active={active} onReadFrontier={onReadFrontier}
+        followRequest={followRequest} className="min-h-0 flex-1 overflow-y-auto p-4" />
       <footer className="border-t p-3">
         {canReply ? (
-          <ConversationComposer key={data.id} conversationId={data.id} />
+          <ConversationComposer key={data.id} conversationId={data.id}
+            onPosted={(posted) => setFollowRequest({ conversationId: posted.id, seq: posted.messages.at(-1)?.seq ?? 0 })} />
         ) : (
           <p className="text-body text-muted-foreground">{t("readOnly")}</p>
         )}

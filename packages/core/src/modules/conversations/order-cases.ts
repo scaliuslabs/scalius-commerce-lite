@@ -280,7 +280,6 @@ export async function updateAdminOrderSupportRequestStatus(
     authorType: "system",
     eventKind: "support_request_status",
     eventData: { requestId, type: current.type, fromStatus: current.status, toStatus: targetStatus },
-    readBy: ["staff"],
   }];
   if (note && input.actorId) {
     lines.push({
@@ -289,7 +288,6 @@ export async function updateAdminOrderSupportRequestStatus(
       authorType: "staff",
       authorUserId: input.actorId,
       body: note,
-      readBy: ["staff"],
     });
   }
 

@@ -47941,6 +47941,7 @@ export type GetApiV1AdminConversationsSummaryResponses = {
     200: {
         success: true;
         data: {
+            unread: number;
             open: number;
             mineOpen: number;
             unassignedOpen: number;
