@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getHomepageData } from "../storefront/storefront.service";
-import { buildCatalogFacetCountQuery, groupCatalogRatingFacet, resolvePublicAttributeFilters } from "./facets";
+import { buildCatalogFacetCountQuery, groupCatalogRatingFacet, readCatalogFacetsWithSummary, resolvePublicAttributeFilters } from "./facets";
 import { getStorefrontCategoryProducts, getStorefrontProducts } from "./listing";
 
 let sqlite: DatabaseSync | null = null;
@@ -193,6 +193,44 @@ describe("review ratings on buyer listings", () => {
             .toEqual([{ min: 4, count: 0 }]);
     });
 
+    it("shares exact listing totals with facets without applying facet self-exclusion or output caps", async () => {
+        const { db, queries } = harness;
+        const filters = await resolvePublicAttributeFilters(db, { brand: ["xenon"] }, []);
+        queries.length = 0;
+        const result = await readCatalogFacetsWithSummary(db, {
+            baseConditions: [sql`product_buyer_state.category_id = 'cat_main' AND product_buyer_state.is_public = 1`],
+            needsProducts: false, filters, minRating: 4, ratingFacet: true, valueLimit: 1,
+        });
+        expect(result.summary).toMatchObject({ count: 1, min: 10000, max: 10000 });
+        expect(result.rows.filter(row => row.facetKind === "brand")).toHaveLength(1);
+        expect(groupCatalogRatingFacet(result.rows)).toHaveLength(1);
+        expect(queries).toHaveLength(1);
+        expect(queries[0]!.sql).toContain("'summary', COUNT(*)");
+        expect(result.rows.every(row => !("recordType" in row) && !("listingCount" in row))).toBe(true);
+        const uncapped = await readCatalogFacetsWithSummary(db, {
+            baseConditions: [sql`product_buyer_state.category_id = 'cat_main' AND product_buyer_state.is_public = 1`],
+            needsProducts: false, filters: [], ratingFacet: true, valueLimit: 1,
+        });
+        expect(uncapped.summary).toMatchObject({ count: 6, min: 10000, max: 10000 });
+    });
+
+    it("keeps a scoped empty count while the price range ignores the selected price bound", async () => {
+        const { db, queries } = harness;
+        queries.length = 0;
+        const result = await getStorefrontCategoryProducts(db, CATEGORY, { limit: 20, minPrice: 101 });
+        expect(result.products).toEqual([]);
+        expect(result.pagination.total).toBe(0);
+        expect(result.priceRange).toEqual({ min: 100, max: 100 });
+        expect(queries.some(query => query.sql.startsWith("select count(*)"))).toBe(false);
+        expect(queries.filter(query => query.sql.includes("'summary', COUNT(*)"))).toHaveLength(1);
+        const summary = await readCatalogFacetsWithSummary(db, {
+            baseConditions: [sql`product_buyer_state.product_id = 'missing_product'`], needsProducts: false,
+            filters: [],
+        });
+        expect(summary.rows).toEqual([]);
+        expect(summary.summary).toMatchObject({ count: 0, min: null, max: null });
+    });
+
     it("counts every rating threshold in one scope pass and keeps zero counts when other filters exclude reviewed products", async () => {
         const { db, sqlite, queries } = harness;
         const filters = await resolvePublicAttributeFilters(db, { brand: ["xenon"] }, []);
@@ -253,6 +291,11 @@ describe("review ratings on buyer listings", () => {
         const result = await getStorefrontCategoryProducts(db, CATEGORY, { page: 1, limit: 20 });
         expect(result.products.every((product) => product.rating === null)).toBe(true);
         expect(result.ratingFacet).toEqual([]);
+        const selectedRating = await getStorefrontCategoryProducts(db, CATEGORY, { limit: 20, minRating: 4 });
+        expect(selectedRating.products.map(product => product.id).sort()).toEqual(["prod_a", "prod_b"]);
+        expect(selectedRating.pagination.total).toBe(2);
+        expect(selectedRating.priceRange).toEqual({ min: 100, max: 100 });
+        expect(selectedRating.products.every(product => product.rating === null)).toBe(true);
         const home = await getHomepageData(db, {
             requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 8 }], mediaIds: [], brandLimit: 0, promotionIds: [], categoryIds: [], collectionIds: [], homeProductId: null },
         });

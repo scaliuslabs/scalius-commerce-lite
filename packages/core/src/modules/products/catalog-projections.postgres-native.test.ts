@@ -109,6 +109,18 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         expect(oneStar.ratingFacet).toEqual([
             { min: 4, count: 1 }, { min: 3, count: 2 }, { min: 2, count: 2 }, { min: 1, count: 3 },
         ]);
+        await client.query(`UPDATE product_variants SET price_minor = CASE product_id
+            WHEN 'title_a' THEN 200000 ELSE 300000 END
+            WHERE product_id IN ('title_a', 'category_a')`);
+        await rebuildCatalogProjections(db);
+        const priced = await getStorefrontProducts(db, { search: "alpha", minPrice: 1500, limit: 20 });
+        expect(priced.products.map(product => product.id)).toEqual(["title_a", "category_a"]);
+        expect(priced.pagination.total).toBe(2);
+        expect(priced.priceRange).toEqual({ min: 1000, max: 3000 });
+        const empty = await getStorefrontProducts(db, { search: "alpha", minPrice: 4000, limit: 20 });
+        expect(empty.products).toEqual([]);
+        expect(empty.pagination.total).toBe(0);
+        expect(empty.priceRange).toEqual(priced.priceRange);
     });
 
     it("keeps populated recommendation scores and strict deadlines through the hinted order joins", async () => {

@@ -30,9 +30,9 @@ import type { Database } from "@scalius/database/client";
 import type { CatalogFacetFilter } from "../products";
 import { publicCategorySubtreeCondition } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
-import { buildStorefrontBuyerStateConditions, reviewStats } from "./shared";
+import { buildStorefrontBuyerStateConditions, productMinRatingCondition, reviewStats } from "./shared";
 import { categoryScope, deps } from "./declare-deps";
-import { reviewsEnabledSql } from "../settings";
+import { reviewsEnabledSql, storeCurrencyCodeSql } from "../settings";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
@@ -537,6 +537,26 @@ export type CatalogFacetCountRow = {
     sampleProductId?: string | null;
 };
 
+export interface CatalogListingSummary {
+    count: number;
+    min: number | null;
+    max: number | null;
+    storeCurrencyCode: string | null;
+    categoryAncestors: string | null;
+    publicCatalogueSize: 0;
+}
+
+type ListingSummaryInput = { categoryAncestors?: SQL<string | null> };
+type FacetRead = { rows: CatalogFacetCountRow[]; summary: CatalogListingSummary | null };
+type FacetResultRow = CatalogFacetCountRow & {
+    recordType?: string;
+    listingCount?: number;
+    listingMin?: number | null;
+    listingMax?: number | null;
+    listingCurrency?: string | null;
+    listingAncestors?: string | null;
+};
+
 /**
  * Every facet's value counts in one statement: attribute values, option
  * values and brands of the scoped public products, each counted against the
@@ -551,15 +571,28 @@ export type CatalogFacetCountRow = {
  * no statistics on D1 and would otherwise walk every option row in the store).
  */
 export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput): Promise<CatalogFacetCountRow[]> {
+    return readCatalogFacets(db, input).then(result => result.rows);
+}
+
+/** Scoped listing totals share the existing materialized facet scope. */
+export async function readCatalogFacetsWithSummary(
+    db: Database, input: CatalogFacetCountInput, summary: ListingSummaryInput = {},
+): Promise<{ rows: CatalogFacetCountRow[]; summary: CatalogListingSummary }> {
+    const result = await readCatalogFacets(db, input, summary);
+    if (!result.summary) throw new Error("The listing facet read did not return its summary.");
+    return { rows: result.rows, summary: result.summary };
+}
+
+function readCatalogFacets(db: Database, input: CatalogFacetCountInput, summary?: ListingSummaryInput): Promise<FacetRead> {
     // Facet names, units, displays and enum labels come from the attribute
     // definitions of whatever the scope holds; brand facets from brand rows.
     deps.anyAttribute();
     if (input.brandFacet !== false) deps.anyBrand();
     // The category facet: which categories are published, and the tree.
     if (input.categoryFacet) deps.anyCategory();
-    const rows = catalogFacetCountRows(db, input).then((facetRows) => {
-        declareOptionFacetNames(facetRows);
-        return facetRows;
+    const rows = catalogFacetCountRows(db, input, summary).then((result) => {
+        declareOptionFacetNames(result.rows);
+        return result;
     });
     if (!input.categoryId || input.categoryAncestorsDeclared || !deps.active()) return rows;
     // The category's effective attribute set is its own and its ancestors'
@@ -592,7 +625,7 @@ export function declareFacetReadWithoutProducts(rows: readonly CatalogFacetCount
     deps.table("product_variants");
 }
 
-function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
+function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summary?: ListingSummaryInput): Promise<FacetRead> {
     const sets = splitFacetFilters(input.filters);
     const minRatingCenti = input.minRating === undefined ? undefined : input.minRating * 100;
     const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;
@@ -710,7 +743,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
     const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
     const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
 
-    return namedRows<CatalogFacetCountRow>(db.all(sql`
+    return namedRows<FacetResultRow>(db.all(sql`
         WITH facet_scope AS MATERIALIZED (
             SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
                 ${buyerState.categoryId} AS category_id,
@@ -721,6 +754,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
                 ${minRatingCenti === undefined
                     ? sql`1`
                     : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
+                ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor` : sql``}
             FROM ${scopeFrom}
             WHERE ${and(...input.baseConditions) ?? sql`1 = 1`}
         ),
@@ -852,15 +886,40 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
                 SELECT sample_variant.product_id FROM product_variants AS sample_variant
                 WHERE sample_variant.id = facet_ranked.sample_sku
             ) END AS sampleProductId
+            ${summary ? sql`, 'facet' AS recordType, NULL AS listingCount, NULL AS listingMin,
+                NULL AS listingMax, NULL AS listingCurrency, NULL AS listingAncestors` : sql``}
         FROM facet_ranked
         WHERE (facet_kind <> 'attribute' OR facet_rank <= ${sql.raw(String(boundedLimit(input.attributeLimit, FACET_ATTRIBUTE_LIMIT)))})
           AND (value_rank <= CASE facet_kind WHEN 'brand' THEN ${sql.raw(String(brandValueLimit))} ELSE ${sql.raw(String(valueLimit))} END OR is_selected = 1)
           AND (facet_display <> 'range' OR value_rank = 1)
+        ${summary ? sql`
+        UNION ALL
+        SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+            'summary', COUNT(*), MIN(listing_from_minor), MAX(listing_to_minor),
+            ${storeCurrencyCodeSql()}, ${summary.categoryAncestors ?? sql`NULL`}
+        FROM facet_scope
+        WHERE ${attributeMatch()} AND ${optionMatch} AND ${brandMatch}
+          AND ${input.minRating === undefined ? sql`1 = 1`
+                : productMinRatingCondition(sql`facet_scope.product_id`, input.minRating)}` : sql``}
     `), [
         "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
         "facetSlug", "facetDisplay", "facetUnit", "facetOrder", "urlValue", "swatch", "rangeMin", "rangeMax",
         "sampleProductId",
-    ]);
+        ...(summary ? ["recordType", "listingCount", "listingMin", "listingMax", "listingCurrency", "listingAncestors"] as const : []),
+    ]).then<FacetRead>((results) => {
+        const summaryRow = results.find(row => row.recordType === "summary");
+        const rows = results.filter(row => row.recordType !== "summary").map((row) => {
+            const { recordType: _recordType, listingCount: _count, listingMin: _min, listingMax: _max,
+                listingCurrency: _currency, listingAncestors: _ancestors, ...facet } = row;
+            return facet;
+        });
+        return { rows, summary: summaryRow ? {
+            count: Number(summaryRow.listingCount), min: summaryRow.listingMin ?? null,
+            max: summaryRow.listingMax ?? null, storeCurrencyCode: summaryRow.listingCurrency ?? null,
+            categoryAncestors: summaryRow.listingAncestors ?? null, publicCatalogueSize: 0,
+        } : null };
+    });
 }
 
 const KIND_ORDER: Record<PublicProductFacetKind, number> = { category: 0, brand: 1, option: 2, attribute: 3 };

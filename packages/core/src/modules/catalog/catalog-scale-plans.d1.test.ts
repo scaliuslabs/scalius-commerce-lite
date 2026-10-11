@@ -107,7 +107,7 @@ describe("catalogue-scale query plans", () => {
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a", "prod_b"]);
         const statePlans = plans(readsBuyerState);
-        expect(statePlans.length).toBeGreaterThanOrEqual(3); // page, count, the facet counts
+        expect(statePlans).toHaveLength(2); // page, facet counts with listing totals
         for (const plan of statePlans) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
             expectBuyerStateListing(plan);
@@ -405,7 +405,7 @@ describe("catalogue-scale query plans", () => {
         expect(result.facets.find((facet) => facet.slug === "display"))
             .toMatchObject({ unit: "in", values: [], range: { min: 15.6, max: 15.6 } });
         const statePlans = plans(readsBuyerState);
-        expect(statePlans).toHaveLength(3); // page, count + price range, every facet
+        expect(statePlans).toHaveLength(2); // page, every facet with count + price range
         for (const plan of statePlans) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
             expect(plan).not.toContain("product_buyer_state_brand_newest_idx");
@@ -639,9 +639,9 @@ describe("catalogue-scale query plans", () => {
         expect(filtered.products.map((product) => product.id)).toEqual(["prod_a"]);
         expect(filtered.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
         expect(filtered.facets.find((facet) => facet.slug === "brand")?.values.map(({ count }) => count)).toEqual([1]);
-        // Still page, count + price range, and every facet (rating included): no new statement.
-        expect(sortedPlans).toHaveLength(3);
-        expect(filteredPlans).toHaveLength(3);
+        // Page, then count + price range sharing every facet's scope (rating included).
+        expect(sortedPlans).toHaveLength(2);
+        expect(filteredPlans).toHaveLength(2);
         for (const plan of [...sortedPlans, ...filteredPlans]) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
             expectBuyerStateListing(plan);

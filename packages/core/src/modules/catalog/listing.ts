@@ -34,12 +34,12 @@ import {
 } from "../translations";
 import {
     buildCatalogFacetCountQuery,
+    readCatalogFacetsWithSummary,
     catalogFacetFilterConditions,
     declareFacetReadWithoutProducts,
     groupCatalogFacets,
     groupCatalogRatingFacet,
     type CatalogFacetCountInput,
-    type CatalogFacetCountRow,
 } from "./facets";
 import {
     priceFilterBoundsMinor,
@@ -466,7 +466,7 @@ async function readStorefrontCatalogResults(
     priceRangeQuery = priceRangeQuery.where(and(...priceRangeConditions));
 
     // Every facet (brand, option axes, attributes) in one statement.
-    const facetReads = () => buildCatalogFacetCountQuery(db, {
+    const facetInput: CatalogFacetCountInput = {
         baseConditions: facetBaseConditions,
         needsProducts: countNeedsProducts,
         filters: params.attributeFilters,
@@ -476,19 +476,23 @@ async function readStorefrontCatalogResults(
         ratingFacet: true,
         minRating,
         categoryFacet: scope.categoryFacet === undefined ? "product-categories" : scope.categoryFacet ?? undefined,
-    });
-    const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
+    };
+    const facetReads = () => buildCatalogFacetCountQuery(db, facetInput);
     // A scoped listing counts its facets in the first wave; the unscoped one
     // learns the catalogue size from its count first (see the limit above).
-    const [fetchedList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
+    const [fetchedList, separateCount, filteredPriceRange, scopedRead] = await Promise.all([
         // One row past the page tells whether another page follows.
         (pageTooDeep ? Promise.resolve([])
             : shelfPreview || relevancePage ? query.orderBy(...cardOrderBy, buyerState.productId).all()
                 : query.orderBy(...cardOrderBy, buyerState.productId).limit(limit + 1).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
-        plainShopAll ? plainShopAllCountQuery().get() : countQuery.get(),
+        !unscoped ? Promise.resolve(null) : plainShopAll ? plainShopAllCountQuery().get() : countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
-        unscoped ? noFacets : facetReads(),
+        unscoped ? Promise.resolve(null) : readCatalogFacetsWithSummary(db, facetInput, {
+            categoryAncestors: ancestorsCategoryId ? categoryAncestorIdsSql(ancestorsCategoryId) : undefined,
+        }),
     ]);
+    const totalCount = scopedRead?.summary ?? separateCount;
+    const scopedFacets = scopedRead?.rows ?? [];
     const listedRows = shelfPreview ? fetchedList : fetchedList.slice(0, limit);
     // The page's market: its cards and price range in the market's prices.
     const market = await marketPriceContextOf(pricing);
