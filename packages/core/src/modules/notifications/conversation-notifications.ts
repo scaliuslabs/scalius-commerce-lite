@@ -1,3 +1,4 @@
+import { recordStaffAlert } from "./staff-alerts";
 // Thread notifications at send time (Wave A §10). The outbox row carries only
 // the thread id and the message seq; this reads the line and resolves the
 // recipients now:
@@ -434,6 +435,7 @@ async function sendMessageToStaff(
     console.warn("[Notifications] Failed to read staff message channels, defaulting to push:", compactProviderLogDetail(error));
   }
   if (channels.length === 0) return buildDispatchResult(outcomes);
+  await recordStaffAlert(db, claim.outboxId, true);
 
   const [party, store] = await Promise.all([readThreadParty(db, thread), readStoreIdentity(db)]);
   const copy = MESSAGE_COPY[store.language].conversation;

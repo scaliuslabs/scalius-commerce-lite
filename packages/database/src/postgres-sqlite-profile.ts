@@ -897,6 +897,7 @@ export function compileSqliteStatementForPostgres(
       continue;
     }
     if (character === '"') {
+      previousWord = "";
       previousWordWasAlias = false;
       output += character;
       cursor += 1;

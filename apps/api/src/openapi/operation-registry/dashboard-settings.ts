@@ -98,6 +98,37 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.markets.get": {},
   "dashboard.markets.list": {},
   "dashboard.markets.update": { revision: "required" },
+  // Personal bell state is a staff browser surface, not a merchant-agent action.
+  "dashboard.notifications.feed": {
+    exposure: "excluded", sensitive: true,
+    reason: "Caller-owned notification history filtered by current resource permissions; personal staff attention state is not an agent capability.",
+    limits: { request: 2_048, response: 65_536 },
+  },
+  "dashboard.notifications.summary": {
+    exposure: "excluded", sensitive: true,
+    reason: "Caller-owned notification frontier and attention state belong to the staff browser.",
+    limits: { request: 1_024, response: 8_192 },
+  },
+  "dashboard.notifications.read": {
+    exposure: "excluded", sensitive: true,
+    reason: "Marks only the signed-in staff member's notification as read.",
+    limits: { request: 1_024, response: 8_192 },
+  },
+  "dashboard.notifications.read_all": {
+    exposure: "excluded", sensitive: true,
+    reason: "Personal read frontiers must reflect the staff member's explicit browser action.",
+    limits: { request: 2_048, response: 8_192 },
+  },
+  "dashboard.notifications.clear_all": {
+    exposure: "excluded", sensitive: true, revision: "required", idempotency: "required",
+    reason: "Dismisses and marks read the caller's shown notification frontier; history is retained and the staff browser owns the action.",
+    limits: { request: 2_048, response: 8_192 },
+  },
+  "dashboard.notifications.undo_clear_all": {
+    exposure: "excluded", sensitive: true, revision: "required",
+    reason: "Restores the caller's matching Clear all frontiers under revision protection; personal staff state is not an agent capability.",
+    limits: { request: 2_048, response: 8_192 },
+  },
   "dashboard.notifications.admin_rules_update": { revision: "required" },
   "dashboard.notifications.customer_rules_get": {},
   "dashboard.notifications.customer_rules_update": { revision: "required" },

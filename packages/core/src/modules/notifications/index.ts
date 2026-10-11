@@ -123,3 +123,9 @@ export type {
   ResolvedNotificationRecipient,
   ResolvedNotificationSend,
 } from "./resolved-notifications";
+
+export * from "./staff-alerts.contract";
+export {
+  recordStaffAlert, readStaffAlerts, readStaffAlertSummary, markStaffAlertRead,
+  markAllStaffAlertsRead, clearStaffAlerts, undoStaffAlertsClear,
+} from "./staff-alerts";

@@ -142,6 +142,10 @@ Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that em
 | `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0121`, 72 files) |
 | `migrations/meta/` | Drizzle journal and snapshots |
 
+### Private staff notification history
+
+Migration `0142_staff_alerts` adds compact event facts, personal inbox rows and per-account/per-scope frontier state. Event recording commits before external staff delivery and uses the current resource permission predicate; the first recording fixes recipients, even when none are eligible. Account delivery sequences serialize through a sentinel update before inbox insertion. Feed/head/revisions and the honest capped 99+ unread count share one statement: at most two limited scope ranges and two 100-entry partial-index probes. Clear all and Undo change guarded frontiers, never delete history. These tables are canonical personal state preserved by normal portable exports/imports, not rebuildable counters. There is no retention job or historical backfill; outbox/subject deletion does not erase alert history.
+
 ### Release ledger
 
 Migration `0050_schema_release_contract` starts the provider-neutral ledger `scalius_schema_migrations` (`version`, `name`, `source_sha256`, `applied_at`). Every migration from `0050` onward must:

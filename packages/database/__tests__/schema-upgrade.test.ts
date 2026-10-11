@@ -719,6 +719,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 14,
         postgresStatements: 14,
       },
+      {
+        version: 142,
+        name: "0142_staff_alerts",
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -909,6 +915,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 139, name: "0139_recommendation_order_products" },
           { version: 140, name: "0140_buyer_public_counts" },
           { version: 141, name: "0141_conversation_inbox_counts" },
+          { version: 142, name: "0142_staff_alerts" },
         ],
       });
     } finally {

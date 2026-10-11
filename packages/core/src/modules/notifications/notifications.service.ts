@@ -2,6 +2,7 @@
 // Centralized notification service for admin push + order notifications.
 
 import { staffPermissionSql, type StaffPermissionRequirement } from "@scalius/core/auth/rbac/helpers";
+import { recordStaffAlert } from "./staff-alerts";
 import { staffPushPermission } from "./staff-push-policy";
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
@@ -365,6 +366,7 @@ export async function sendAdminPush(
 ): Promise<OrderNotificationDispatchResult> {
     const permission = staffPushPermission(spec.receipt.notificationType);
     if (!permission) return EMPTY_DISPATCH_RESULT;
+    await recordStaffAlert(db, spec.outboxId, true);
     const [fcm, web] = await Promise.all([sendAdminFcmPush(db, env, spec, permission), sendStaffWebPush(db, env, spec, permission)]);
     return buildDispatchResult([...fcm.outcomes, ...web]);
 }
@@ -1262,8 +1264,14 @@ export async function sendStaffOrderEmails(
     order: { id: string; customerName: string; notificationType: OrderNotificationType },
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
+    const settings = await notificationsDocument.read(db);
+    // This path runs for every order event, including push disabled/unavailable.
+    // New-order email recipients are their own existing staff-channel setting.
+    await recordStaffAlert(db, options.outboxId,
+        (settings.adminChannels[order.notificationType] ?? []).length > 0
+        || (order.notificationType === "order_created" && settings.staffEmailRecipients.length > 0));
     if (order.notificationType !== "order_created") return EMPTY_DISPATCH_RESULT;
-    const recipients = (await notificationsDocument.read(db)).staffEmailRecipients;
+    const recipients = settings.staffEmailRecipients;
     if (recipients.length === 0) return EMPTY_DISPATCH_RESULT;
 
     const context = once(() => readOrderMessageContext({

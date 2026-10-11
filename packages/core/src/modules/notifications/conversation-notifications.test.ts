@@ -40,6 +40,10 @@ describe("conversation notifications at send time", () => {
           total_amount_minor, subtotal_amount_minor, status, order_number)
         VALUES ('order_1', 'Rahim', '+8801711111111', 'rahim@example.test', 'House 1', 'c', 'z', 'Dhaka', 'Mirpur', 1000, 1000, 'confirmed', 1057);
       INSERT INTO user (id, name, email, email_verified, role) VALUES ('staff_1', 'Nadia', 'nadia@shop.test', 1, 'admin');
+      INSERT INTO permissions (id,name,display_name,resource,action,category)
+        VALUES ('inbox-view','conversations.view','Inbox','conversations','view','Inbox');
+      INSERT INTO user_permissions (id,user_id,permission_id,granted)
+        VALUES ('staff-inbox','staff_1','inbox-view',1);
       INSERT INTO admin_fcm_tokens (id, user_id, token, is_active) VALUES ('tok_1', 'staff_1', 'fcm-token-abcdef123456', 1);
     `);
     setDocument("business", { companyName: "River & Loom" });

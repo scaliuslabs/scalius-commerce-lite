@@ -3330,6 +3330,47 @@ export type WebPushSubscription = {
     deviceLabel?: string;
 };
 
+export type StaffAlertPage = StaffAlertSummary & {
+    items: Array<{
+        seq: number;
+        id: string;
+        scope: 'orders' | 'conversations';
+        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
+        subjectId: string;
+        occurredAt: string;
+        orderNumber: string | null;
+        read: boolean;
+        href: string;
+    }>;
+    nextBefore: number | null;
+};
+
+export type StaffAlertSummary = {
+    head: number;
+    unreadCount: number;
+    unreadCountCapped: boolean;
+    countCap: 99;
+    scopes: Array<{
+        scope: 'orders' | 'conversations';
+        revision: number;
+        readThrough: number;
+        clearedThrough: number;
+    }>;
+};
+
+export type StaffAlertMutation = {
+    summary: StaffAlertSummary;
+    undo?: StaffAlertUndo;
+};
+
+export type StaffAlertUndo = {
+    operationId: string;
+    scopes: Array<{
+        scope: 'orders' | 'conversations';
+        revision: number;
+    }>;
+};
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -62606,6 +62647,325 @@ export type DeleteApiV1AdminWebPushDevicesByIdResponses = {
 };
 
 export type DeleteApiV1AdminWebPushDevicesByIdResponse = DeleteApiV1AdminWebPushDevicesByIdResponses[keyof DeleteApiV1AdminWebPushDevicesByIdResponses];
+
+export type GetApiV1AdminNotificationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        beforeSeq?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/notifications';
+};
+
+export type GetApiV1AdminNotificationsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminNotificationsError = GetApiV1AdminNotificationsErrors[keyof GetApiV1AdminNotificationsErrors];
+
+export type GetApiV1AdminNotificationsResponses = {
+    /**
+     * Bounded caller-owned page
+     */
+    200: {
+        success: true;
+        data: StaffAlertPage;
+    };
+};
+
+export type GetApiV1AdminNotificationsResponse = GetApiV1AdminNotificationsResponses[keyof GetApiV1AdminNotificationsResponses];
+
+export type GetApiV1AdminNotificationsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/notifications/summary';
+};
+
+export type GetApiV1AdminNotificationsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminNotificationsSummaryError = GetApiV1AdminNotificationsSummaryErrors[keyof GetApiV1AdminNotificationsSummaryErrors];
+
+export type GetApiV1AdminNotificationsSummaryResponses = {
+    /**
+     * Caller-owned summary
+     */
+    200: {
+        success: true;
+        data: StaffAlertSummary;
+    };
+};
+
+export type GetApiV1AdminNotificationsSummaryResponse = GetApiV1AdminNotificationsSummaryResponses[keyof GetApiV1AdminNotificationsSummaryResponses];
+
+export type PostApiV1AdminNotificationsBySeqReadData = {
+    body?: never;
+    path: {
+        seq: number;
+    };
+    query?: never;
+    url: '/api/v1/admin/notifications/{seq}/read';
+};
+
+export type PostApiV1AdminNotificationsBySeqReadErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminNotificationsBySeqReadError = PostApiV1AdminNotificationsBySeqReadErrors[keyof PostApiV1AdminNotificationsBySeqReadErrors];
+
+export type PostApiV1AdminNotificationsBySeqReadResponses = {
+    /**
+     * Updated caller-owned bell state
+     */
+    200: {
+        success: true;
+        data: StaffAlertMutation;
+    };
+};
+
+export type PostApiV1AdminNotificationsBySeqReadResponse = PostApiV1AdminNotificationsBySeqReadResponses[keyof PostApiV1AdminNotificationsBySeqReadResponses];
+
+export type PostApiV1AdminNotificationsReadAllData = {
+    body: {
+        through: number;
+        scopes: Array<'orders' | 'conversations'>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/notifications/read-all';
+};
+
+export type PostApiV1AdminNotificationsReadAllErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminNotificationsReadAllError = PostApiV1AdminNotificationsReadAllErrors[keyof PostApiV1AdminNotificationsReadAllErrors];
+
+export type PostApiV1AdminNotificationsReadAllResponses = {
+    /**
+     * Updated caller-owned bell state
+     */
+    200: {
+        success: true;
+        data: StaffAlertMutation;
+    };
+};
+
+export type PostApiV1AdminNotificationsReadAllResponse = PostApiV1AdminNotificationsReadAllResponses[keyof PostApiV1AdminNotificationsReadAllResponses];
+
+export type PostApiV1AdminNotificationsClearAllData = {
+    body: {
+        operationId: string;
+        through: number;
+        scopes: Array<{
+            scope: 'orders' | 'conversations';
+            revision: number;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/notifications/clear-all';
+};
+
+export type PostApiV1AdminNotificationsClearAllErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminNotificationsClearAllError = PostApiV1AdminNotificationsClearAllErrors[keyof PostApiV1AdminNotificationsClearAllErrors];
+
+export type PostApiV1AdminNotificationsClearAllResponses = {
+    /**
+     * Updated caller-owned bell state
+     */
+    200: {
+        success: true;
+        data: StaffAlertMutation;
+    };
+};
+
+export type PostApiV1AdminNotificationsClearAllResponse = PostApiV1AdminNotificationsClearAllResponses[keyof PostApiV1AdminNotificationsClearAllResponses];
+
+export type PostApiV1AdminNotificationsClearAllUndoData = {
+    body: StaffAlertUndo;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/notifications/clear-all/undo';
+};
+
+export type PostApiV1AdminNotificationsClearAllUndoErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminNotificationsClearAllUndoError = PostApiV1AdminNotificationsClearAllUndoErrors[keyof PostApiV1AdminNotificationsClearAllUndoErrors];
+
+export type PostApiV1AdminNotificationsClearAllUndoResponses = {
+    /**
+     * Updated caller-owned bell state
+     */
+    200: {
+        success: true;
+        data: StaffAlertMutation;
+    };
+};
+
+export type PostApiV1AdminNotificationsClearAllUndoResponse = PostApiV1AdminNotificationsClearAllUndoResponses[keyof PostApiV1AdminNotificationsClearAllUndoResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {

@@ -5,7 +5,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
     return "dashboard";
   }
   const segment = pathname.slice("/api/v1/admin/".length).split("/", 1)[0] ?? "";
-  if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup", "web-push"].includes(segment)) {
+  if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup", "web-push", "notifications"].includes(segment)) {
     return "dashboard";
   }
   if (["categories", "brands", "price-lists", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {

@@ -130,6 +130,16 @@ describe("PostgreSQL SQLite-profile compiler", () => {
     expect(compiled.sql).not.toMatch(/time zone|strftime|datetime/i);
   });
 
+  it("does not carry AS across a quoted alias into WHERE or JOIN", () => {
+    for (const query of [
+      'SELECT "staff"."id" FROM "user" AS "staff" WHERE "staff"."id" = ?',
+      'SELECT 1 FROM "user" AS "staff" JOIN "user_roles" AS "roles" ON "roles"."user_id" = "staff"."id"',
+      'SELECT value AS "displayValue" FROM source WHERE value = ?',
+    ]) {
+      expect(compileSqliteStatementForPostgres(query).sql).toBe(query.replace("?", "$1"));
+    }
+  });
+
   it("preserves mixed-case raw aliases and reconstructs named transport rows", () => {
     const compiled = compileSqliteStatementForPostgres(
       "SELECT value AS variantId, CAST(value AS INTEGER) AS stockVersion FROM source",

@@ -1,3 +1,4 @@
+import { recordStaffAlert } from "./staff-alerts";
 // Messages a domain resolves at send time (Wave B §10). The outbox row carries
 // ids only; the API layer's `notification-content/*` resolvers read the
 // domain (digital, gift cards, reviews) when the message is sent and hand the
@@ -316,6 +317,7 @@ export async function sendStaffAlertNotification(
     console.warn(`[Notifications] Failed to read ${type} staff channels, using the defaults:`, compactProviderLogDetail(error));
   }
   if (channels.length === 0) return buildDispatchResult(outcomes);
+  await recordStaffAlert(db, input.outboxId, true);
 
   const [order, store] = await Promise.all([
     db.select({ orderNumber: orders.orderNumber }).from(orders).where(eq(orders.id, input.orderId)).get(),

@@ -4,10 +4,11 @@
 // queue messages carry only the outbox id, and recipients are resolved at
 // send time.
 
-import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index, check, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
+import { user } from "./auth";
 import { orders } from "./orders";
 import { conversations } from "./conversations";
 
@@ -116,3 +117,49 @@ export const notificationDeliveryReceipts = sqliteTable("notification_delivery_r
 
 export type NotificationOutbox = InferSelectModel<typeof notificationOutbox>;
 export type NotificationDeliveryReceipt = InferSelectModel<typeof notificationDeliveryReceipts>;
+
+/** Durable private staff history; delivery failures and closed tabs do not erase it. */
+export const staffAlerts = sqliteTable("staff_alerts", {
+    id: text("id").primaryKey(),
+    scope: text("scope", { enum: ["orders", "conversations"] }).notNull(),
+    kind: text("kind").notNull(),
+    subjectId: text("subject_id").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    recordedAt: integer("recorded_at").notNull().default(UNIX_NOW),
+    orderNumber: text("order_number"),
+    // The first recording transaction fixes recipients, including an empty set.
+    fanoutComplete: integer("fanout_complete", { mode: "boolean" }).notNull().default(false),
+}, (t) => [check("staff_alert_scope", sql`${t.scope} IN ('orders', 'conversations')`)]);
+
+export const staffAlertInbox = sqliteTable("staff_alert_inbox", {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    alertId: text("alert_id").notNull().references(() => staffAlerts.id, { onDelete: "cascade" }),
+    scope: text("scope", { enum: ["orders", "conversations"] }).notNull(),
+    readAt: integer("read_at"),
+}, (t) => [
+    primaryKey({ columns: [t.userId, t.seq] }),
+    uniqueIndex("staff_alert_inbox_event_user_idx").on(t.alertId, t.userId),
+    index("staff_alert_inbox_scope_seq_idx").on(t.userId, t.scope, t.seq),
+    index("staff_alert_inbox_unread_idx").on(t.userId, t.scope, t.seq).where(sql`${t.readAt} IS NULL`),
+    check("staff_alert_inbox_scope", sql`${t.scope} IN ('orders', 'conversations')`),
+    check("staff_alert_inbox_seq", sql`${t.seq} > 0 AND ${t.seq} <= 9007199254740991`),
+]);
+
+export const staffAlertState = sqliteTable("staff_alert_state", {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    scope: text("scope", { enum: ["*", "orders", "conversations"] }).notNull(),
+    lastSeq: integer("last_seq").notNull().default(0),
+    allocatedAlertId: text("allocated_alert_id"),
+    readThrough: integer("read_through").notNull().default(0),
+    clearedThrough: integer("cleared_through").notNull().default(0),
+    previousReadThrough: integer("previous_read_through").notNull().default(0),
+    previousClearedThrough: integer("previous_cleared_through").notNull().default(0),
+    revision: integer("revision").notNull().default(0),
+    clearOperationId: text("clear_operation_id"),
+}, (t) => [
+    primaryKey({ columns: [t.userId, t.scope] }),
+    check("staff_alert_state_scope", sql`${t.scope} IN ('*', 'orders', 'conversations')`),
+    check("staff_alert_state_frontiers", sql`${t.readThrough} >= ${t.clearedThrough} AND ${t.clearedThrough} >= 0 AND ${t.previousReadThrough} >= ${t.previousClearedThrough} AND ${t.previousClearedThrough} >= 0`),
+    check("staff_alert_state_sequence", sql`${t.lastSeq} >= 0 AND ${t.lastSeq} <= 9007199254740991 AND ${t.revision} >= 0`),
+]);

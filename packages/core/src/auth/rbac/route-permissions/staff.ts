@@ -35,6 +35,13 @@ export const STAFF_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/fcm-token": {
     POST: { allowAnyAdmin: true },
   },
+  // The caller owns this bell; core applies fresh resource permissions per scope.
+  "/api/v1/admin/notifications": { GET: { allowAnyAdmin: true } },
+  "/api/v1/admin/notifications/summary": { GET: { allowAnyAdmin: true } },
+  "/api/v1/admin/notifications/*/read": { POST: { allowAnyAdmin: true } },
+  "/api/v1/admin/notifications/read-all": { POST: { allowAnyAdmin: true } },
+  "/api/v1/admin/notifications/clear-all": { POST: { allowAnyAdmin: true } },
+  "/api/v1/admin/notifications/clear-all/undo": { POST: { allowAnyAdmin: true } },
   // Web Push: each staff member subscribes and removes only their own browsers.
   "/api/v1/admin/web-push": {
     GET: { allowAnyAdmin: true },
