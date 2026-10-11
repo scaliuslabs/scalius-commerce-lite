@@ -231,6 +231,46 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         expect(noSource.dependencies.validUntil).toBe(dependencies.validUntil);
     });
 
+    it("keeps fallback affinity ties and counts popularity witnesses outside the cutoff", async () => {
+        const { db, client } = await createNativePostgres({ label: "recommendation_affinity" });
+        const now = Number((await client.query("SELECT unixepoch() AS now")).rows[0].now);
+        const peers = ["peer_a", "peer_b", "peer_c", "peer_d", "peer_e"];
+        await client.query("INSERT INTO categories (id,name,slug,status) VALUES ('cat','Category','cat','published')");
+        for (const [index, id] of ["source", ...peers, "outside"].entries()) {
+            await client.query(`INSERT INTO products
+                (id,name,slug,price_minor,category_id,is_active,created_at,updated_at)
+                VALUES ($1,$1,$1,1000,$2,1,$3,$3)`, [id, id === "outside" ? null : "cat", now - 100 - index]);
+            await client.query(`INSERT INTO product_variants
+                (id,product_id,sku,price_minor,stock,is_default,track_inventory)
+                VALUES ($1,$2,$1,1000,5,1,1)`, [`var_${id}`, id]);
+        }
+        for (const index of [1, 2]) {
+            const id = `order_${index}`;
+            await client.query(`INSERT INTO orders
+                (id,customer_name,customer_phone,shipping_address,city,zone,status,created_at,updated_at)
+                VALUES ($1,'Buyer',$2,'Road','city','zone','completed',$3,$3)`, [id, `buyer_${index}`, now - 3600]);
+            for (const productId of ["peer_e", "outside"]) {
+                await client.query(`INSERT INTO order_items (id,order_id,product_id,quantity,created_at)
+                    VALUES ($1,$2,$3,1,$4)`, [`${id}_${productId}`, id, productId, now - 3600]);
+            }
+        }
+        await rebuildCatalogProjections(db);
+        const ranked = () => withDependencyScope(
+            () => rankRecommendationRows(db, ["source"], 4), { strict: true, log: () => {} },
+        );
+        const enabled = await ranked();
+        expect(enabled.value.map(row => row.id)).toEqual(["peer_e", "peer_a", "peer_b", "peer_c"]);
+        expect(enabled.value[0]).toMatchObject({ alsoBoughtBuyers: 0, relatedScore: 40, popularBuyers: 2, popularOrdering: 2 });
+        expect(enabled.dependencies.validUntil).toBe((now - 3600 + 30 * 86400 + 1) * 1000);
+
+        await client.query("UPDATE products SET is_active=0 WHERE id='outside'");
+        await rebuildCatalogProjections(db);
+        const disabled = await ranked();
+        expect(disabled.value.map(row => row.id)).toEqual(["peer_a", "peer_b", "peer_c", "peer_d"]);
+        expect(disabled.value.every(row => row.popularOrdering === 0)).toBe(true);
+        expect(disabled.dependencies.validUntil).toBe(enabled.dependencies.validUntil);
+    });
+
     it("preserves the global quorum and all cutoff ties for a qualifying 24-row refresh", async () => {
         const { db, client } = await createNativePostgres({ label: "recommendation_winners" });
         const now = Number((await client.query("SELECT unixepoch() AS now")).rows[0].now);

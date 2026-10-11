@@ -344,13 +344,16 @@ export async function rankRecommendationRows(
         ? sql`rec_co_purchase`
         : sql`(${coPurchaseRows}) AS rec_co_purchase`;
 
-    const collectionPeers = sql`(
+    const collectionPeerRows = sql`
         SELECT rec_member.product_id AS product_id, COUNT(DISTINCT rec_member.collection_id) AS shared
         FROM (${collectionMembersSql("rec_peer", sourceCollectionIdsSql(sourceSet))}) AS rec_member
         GROUP BY rec_member.product_id
-    ) AS rec_collection_peer`;
+    `;
+    const collectionPeers = sourceIds.length > 0
+        ? sql`rec_collection_peer`
+        : sql`(${collectionPeerRows}) AS rec_collection_peer`;
 
-    const attributePeers = sql`(
+    const attributePeerRows = sql`
         SELECT rec_peer_value.product_id AS product_id,
                COUNT(DISTINCT rec_peer_value.attribute_id) AS shared
         FROM product_attribute_values AS rec_source_value
@@ -362,7 +365,10 @@ export async function rankRecommendationRows(
            AND rec_peer_value.value = rec_source_value.value
         WHERE rec_source_value.product_id IN ${sourceSet}
         GROUP BY rec_peer_value.product_id
-    ) AS rec_attribute_peer`;
+    `;
+    const attributePeers = sourceIds.length > 0
+        ? sql`rec_attribute_peer`
+        : sql`(${attributePeerRows}) AS rec_attribute_peer`;
 
     const popularRows = sql`
         SELECT rec_popular_line.product_id AS product_id,
@@ -389,7 +395,7 @@ export async function rankRecommendationRows(
         discountBps: sql.raw("rec_band_product.discount_bps"),
         discountAmountMinor: sql.raw("rec_band_product.discount_amount_minor"),
     });
-    const sourceBand = sql`(
+    const sourceBandRows = sql`
         SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
         FROM product_variants AS rec_band_sku
         INNER JOIN products AS rec_band_product ON rec_band_product.id = rec_band_sku.product_id
@@ -397,7 +403,10 @@ export async function rankRecommendationRows(
           AND rec_band_sku.deleted_at IS NULL
           AND rec_band_sku.id <> 'default'
           AND ${operationalSkuRowPredicate("rec_band_sku")}
-    ) AS rec_source_band`;
+    `;
+    const sourceBand = sourceIds.length > 0
+        ? sql`rec_source_band`
+        : sql`(${sourceBandRows}) AS rec_source_band`;
 
     // CROSS JOIN keeps the source products as the driver; the planner
     // otherwise walked every product of every published category.
@@ -432,9 +441,9 @@ export async function rankRecommendationRows(
     // Popularity orders the tail only when it can fill at least half the
     // list; otherwise the tail is plainly newest first ("New arrivals").
     const popularOrdering = sql<number>`CASE
-        WHEN (${sourceIds.length > 0 ? sql`(SELECT qualifies FROM rec_guard) = 1 OR` : sql``}
+        WHEN (${sourceIds.length > 0 ? sql`(SELECT qualifies FROM rec_popularity_guard) = 1` : sql`
               SUM(CASE WHEN ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))} THEN 1 ELSE 0 END) OVER () * 2
-              >= MIN(COUNT(*) OVER (), ${sql.raw(String(limit))}))
+              >= MIN(COUNT(*) OVER (), ${sql.raw(String(limit))})`})
          AND ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
         THEN ${popularBuyers} ELSE 0
     END`;
@@ -477,10 +486,29 @@ export async function rankRecommendationRows(
     // every peer at or above the list's annual-buyer cutoff, including all
     // ties, with exact popularity. The full witness set keeps the global
     // popularity switch on even if its witnesses fall below that cutoff.
-    // Otherwise the same statement uses the unchanged full-catalog ranking.
+    // Otherwise the same statement narrows the full eligible set by affinity
+    // and proves popularity against the original population independently.
     const candidateColumns = sql`${buyerState.productId} AS product_id,
         ${buyerState.fromMinor} AS from_minor, ${buyerState.categoryId} AS category_id,
         ${buyerState.productCreatedAt} AS product_created_at`;
+    // Popularity is the third sort key. Compute the first two once over the
+    // fallback's full eligible set, then keep the limit-th pair and every tie.
+    // Shared peer aggregates also serve the final bounded rows without re-reading
+    // their underlying collection, attribute and SKU data.
+    const fallbackAffinity = db.select({
+        productId: sql`${buyerState.productId}`.as("product_id"),
+        fromMinor: sql`${buyerState.fromMinor}`.as("from_minor"),
+        categoryId: sql`${buyerState.categoryId}`.as("category_id"),
+        productCreatedAt: sql`${buyerState.productCreatedAt}`.as("product_created_at"),
+        alsoBoughtTier: alsoBoughtTier.as("also_bought_tier"),
+        affinity: sql`${relatedScore} + 15 * ${inPriceBand}`.as("affinity"),
+    })
+        .from(sql`rec_guard AS rec_affinity_guard CROSS JOIN ${buyerState}`)
+        .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
+        .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
+        .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
+        .crossJoin(sourceBand)
+        .where(and(sql`rec_affinity_guard.qualifies = 0`, candidateCondition));
     const rankingCtes = sourceIds.length === 0 ? sql`` : sql`
         WITH rec_source_orders AS MATERIALIZED (${sourceOrders}),
         rec_co_purchase AS MATERIALIZED (${coPurchaseRows}),
@@ -508,6 +536,16 @@ export async function rankRecommendationRows(
               AND buyers >= (SELECT buyers FROM rec_eligible_co ORDER BY buyers DESC
                   LIMIT 1 OFFSET ${sql.raw(String(limit - 1))})
         ),
+        rec_collection_peer AS MATERIALIZED (${collectionPeerRows}),
+        rec_attribute_peer AS MATERIALIZED (${attributePeerRows}),
+        rec_source_band AS MATERIALIZED (${sourceBandRows}),
+        rec_fallback_affinity AS MATERIALIZED (${fallbackAffinity.getSQL()}),
+        rec_affinity_cutoff AS MATERIALIZED (
+            SELECT also_bought_tier, affinity
+            FROM rec_fallback_affinity
+            ORDER BY also_bought_tier DESC, affinity DESC
+            LIMIT 1 OFFSET ${sql.raw(String(limit - 1))}
+        ),
         rec_candidates AS (
             SELECT ${candidateColumns}
             FROM rec_guard AS rec_candidate_guard
@@ -516,10 +554,15 @@ export async function rankRecommendationRows(
             UNION ALL
             SELECT ${candidateColumns}
             FROM rec_guard AS rec_candidate_guard
-            CROSS JOIN ${buyerState}
-            WHERE rec_candidate_guard.qualifies = 0 AND ${candidateCondition}
+            CROSS JOIN rec_fallback_affinity AS product_buyer_state
+            LEFT JOIN rec_affinity_cutoff ON 1 = 1
+            WHERE rec_candidate_guard.qualifies = 0
+              AND (rec_affinity_cutoff.also_bought_tier IS NULL
+                OR product_buyer_state.also_bought_tier > rec_affinity_cutoff.also_bought_tier
+                OR (product_buyer_state.also_bought_tier = rec_affinity_cutoff.also_bought_tier
+                    AND product_buyer_state.affinity >= rec_affinity_cutoff.affinity))
         ),
-        rec_popular AS (
+        rec_popular AS MATERIALIZED (
             SELECT rec_peer_popular_line.product_id AS product_id,
                    COUNT(DISTINCT ${buyerSql("rec_peer_popular_order")}) AS buyers
             FROM rec_guard AS rec_peer_popular_guard
@@ -534,6 +577,22 @@ export async function rankRecommendationRows(
             GROUP BY rec_peer_popular_line.product_id
             UNION ALL
             ${popularRows}
+        ),
+        rec_popularity_guard AS MATERIALIZED (
+            SELECT CASE WHEN rec_guard.qualifies = 1 THEN 1 ELSE (
+                SELECT CASE WHEN COUNT(*) * 2 >= (
+                    SELECT COUNT(*) FROM (SELECT 1 FROM rec_fallback_affinity LIMIT ${sql.raw(String(limit))}) AS rec_population_sample
+                ) THEN 1 ELSE 0 END
+                FROM (
+                    SELECT 1
+                    FROM rec_popular
+                    INNER JOIN ${buyerState} ON ${buyerState.productId} = rec_popular.product_id
+                    WHERE ${candidateCondition}
+                      AND rec_popular.buyers >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
+                    LIMIT ${sql.raw(String(Math.ceil(limit / 2)))}
+                ) AS rec_popular_witnesses
+            ) END AS qualifies
+            FROM rec_guard
         )
     `;
     if (!recordBoundary) {
