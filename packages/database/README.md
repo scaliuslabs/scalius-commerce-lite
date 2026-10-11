@@ -79,6 +79,8 @@ Migration 0134 indexes product ids only where `instr(coalesce(description, ''), 
 
 Migration 0135 covers inventory valuation with SKU `(id, cost_minor)` and level `(location_id, on_hand, variant_id)` indexes, plus a partial variant-id index for positive stock. The location index retains its original leading keys. Valuation materializes current SKU costs once, including retired SKUs, and counts missing-cost SKUs once across locations.
 
+Migration 0136 extends `product_buyer_state_price_idx` with availability, category and creation time so live recommendation ranking reads its six candidate fields from the index. Its original `(is_public, from_minor, product_id)` prefix preserves price ordering and pagination; the query, deadline and index count stay unchanged.
+
 Single tables with rules:
 
 - `settings` holds typed settings documents. `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the compare-and-swap counter. Fraud-checker provider rows and `notification_provider_health` markers also live here. Each domain declares its documents (see [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Settings documents").

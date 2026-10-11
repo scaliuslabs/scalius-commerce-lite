@@ -347,6 +347,7 @@ describe("product recommendations", () => {
         expect(statements).toHaveLength(2);
         const plan = statements.flatMap((query, index) => sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`)
             .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
+        expect(plan).toContain("SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_price_idx (is_public=?)");
         // A non-covering lookup per order/line took 18 seconds at one million orders.
         for (const alias of ["rec_popular_first", "rec_popular_order"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_buyers_idx`));

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 135,
-  name: "0135_inventory_valuation_indexes",
+  version: 136,
+  name: "0136_buyer_state_covering_index",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -456,6 +456,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 135,
     name: "0135_inventory_valuation_indexes",
     sourceSha256: "2b1d6f6b768585f73744123210b8e65da0e2cb86ecb80cf0c7f0dd14208fc212",
+  },
+  {
+    version: 136,
+    name: "0136_buyer_state_covering_index",
+    sourceSha256: "a37534e890574e9a2f21de767c61abb402209ff11d3003d8ce26cc40e2282494",
   },
 ] as const;
 

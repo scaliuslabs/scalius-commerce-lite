@@ -148,7 +148,10 @@ export const productBuyerState = sqliteTable("product_buyer_state", {
     index("product_buyer_state_brand_newest_idx")
         .on(table.isPublic, table.brandId, sql`${table.productCreatedAt} DESC`, table.productId)
         .where(sql`${table.brandId} IS NOT NULL`),
-    index("product_buyer_state_price_idx").on(table.isPublic, table.fromMinor, table.productId),
+    index("product_buyer_state_price_idx").on(
+        table.isPublic, table.fromMinor, table.productId,
+        table.availableForSale, table.categoryId, table.productCreatedAt,
+    ),
 ]);
 
 export const PRODUCT_RECOMMENDATION_REASONS = ["also_bought", "similar", "popular", "new_arrivals"] as const;
