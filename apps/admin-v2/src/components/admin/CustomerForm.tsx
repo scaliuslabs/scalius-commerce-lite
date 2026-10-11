@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm, useWatch } from "react-hook-form";
@@ -36,7 +38,7 @@ import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
 
 interface CustomerFormProps {
@@ -127,6 +129,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
 
   // A saved phone can be changed, never removed; a new or phoneless customer may leave it empty.
   const phoneRequired = isEdit && Boolean(record?.phone);
+  const savedPhone = defaultValues?.phone;
   const address = useWatch({ control: form.control, name: "address" });
   const skipAddressValidation = useWatch({ control: form.control, name: "skipAddressValidation" }) ?? false;
   const addressErrors = useAddressErrors(addressProblems, address?.countryCode ?? "BD");
@@ -167,16 +170,18 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <FormField
             control={form.control}
             name="name"
-            render={({ field, fieldState }) => (
+            render={({ field, fieldState }) => canSave ? (
               <Field label={t("name")} help={record?.kind === "guest" ? t("guestNameHint") : undefined} error={fieldState.error?.message}>
                 <Input required autoComplete="off" {...field} />
               </Field>
+            ) : (
+              <ReadOnlyValue label={t("name")} value={defaultValues?.name} help={record?.kind === "guest" ? t("guestNameHint") : undefined} />
             )}
           />
           <FormField
             control={form.control}
             name="phone"
-            render={({ field, fieldState }) => (
+            render={({ field, fieldState }) => canSave ? (
               <div className="flex flex-col gap-2">
                 <Field label={t("phone")} help={phoneRequired ? undefined : t("phoneOptionalHint")} error={fieldState.error?.message}>
                   <AdminPhoneInput
@@ -190,12 +195,14 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                 </Field>
                 {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
               </div>
+            ) : (
+              <ReadOnlyValue label={t("phone")} value={savedPhone ? formatPhoneForDisplay(savedPhone, getStoreRegion()) : null} />
             )}
           />
           <FormField
             control={form.control}
             name="email"
-            render={({ field, fieldState }) => (
+            render={({ field, fieldState }) => canSave ? (
               <Field label={t("email")} error={fieldState.error?.message}>
                 {/* Email is optional: clearing it removes it. */}
                 <Input
@@ -205,13 +212,15 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                   onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
                 />
               </Field>
+            ) : (
+              <ReadOnlyValue label={t("email")} value={defaultValues?.email} />
             )}
           />
         </CardContent>
       </Card>
       {isEdit && defaultValues?.id ? (
         <CustomerAddressesCard customerId={defaultValues.id} addresses={record?.addresses ?? []} canEdit={canSave} />
-      ) : address ? (
+      ) : canSave && address ? (
         <Card>
           <CardHeader>
             <CardTitle>{ta("firstAddress")}</CardTitle>

@@ -17,6 +17,8 @@ interface MediaFilterBarProps {
   view: MediaLibraryView;
   selectedCount: number;
   selectableCount: number;
+  /** Page-local availability; selectedCount still includes other pages. */
+  canSelectAllShown?: boolean;
   selectionMode: boolean;
   folders: MediaFolder[];
   currentFolderId: string | null | "all";
@@ -136,7 +138,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           <span className="me-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
             {r("selected", { count: props.selectedCount })}
           </span>
-          {props.selectableCount > 0 && props.selectedCount < props.selectableCount ? (
+          {(props.canSelectAllShown ?? (props.selectableCount > 0 && props.selectedCount < props.selectableCount)) ? (
             <Button type="button" variant="ghost" size="sm" onClick={props.onSelectAll}>{t("selectAllShown")}</Button>
           ) : null}
           {props.selectedCount > 0 ? (

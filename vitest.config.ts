@@ -56,7 +56,8 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    exclude: [...configDefaults.exclude, ".claude/**"],
+    // Frozen review copies and agent checkouts are not source test suites.
+    exclude: [...configDefaults.exclude, ".claude/**", "audit/**"],
     // Transformed modules persist in node_modules/.vitest-cache between runs.
     fsModuleCache: true,
     projects: [
@@ -76,7 +77,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "app",
-          exclude: [...configDefaults.exclude, ".claude/**", ...PURE_TESTS],
+          exclude: [...configDefaults.exclude, ".claude/**", "audit/**", ...PURE_TESTS],
           // The migrated D1 image, built once for every test process.
           globalSetup: ["./packages/database/src/testing/migrated-image-setup.ts"],
         },

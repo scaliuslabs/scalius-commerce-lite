@@ -70,7 +70,7 @@ function MediaManagerTriggerShell({
   if (isValidElement(trigger)) {
     const triggerElement = trigger as TriggerElement;
 
-    return cloneElement(triggerElement, {
+    return <DialogTrigger asChild>{cloneElement(triggerElement, {
       "aria-busy": isLoading || undefined,
       disabled: isLoading || triggerElement.props.disabled,
       // The code starts downloading as the pointer or focus arrives, before the click.
@@ -88,19 +88,18 @@ function MediaManagerTriggerShell({
           onOpen();
         }
       },
-    });
+    })}</DialogTrigger>;
   }
 
   return (
-    <Button type="button" variant="outline" className="w-full" loading={isLoading} onClick={onOpen}>
+    <DialogTrigger asChild><Button type="button" variant="outline" className="w-full" loading={isLoading} onClick={onOpen}>
       <Upload aria-hidden="true" />
       {triggerLabel ?? t(chooseKey(capability))}
-    </Button>
+    </Button></DialogTrigger>
   );
 }
 
 export function MediaManager(props: MediaManagerProps) {
-  const [shouldLoad, setShouldLoad] = useState(false);
   const [internalOpen, setOpen] = useState(false);
   const controlled = props.open !== undefined;
   const open = props.open ?? internalOpen;
@@ -109,31 +108,25 @@ export function MediaManager(props: MediaManagerProps) {
   openRef.current = open;
 
   const handleOpen = useCallback(() => {
-    setShouldLoad(true);
     setOpen(true);
   }, []);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (!nextOpen) setShouldLoad(false);
     onOpenChange?.(nextOpen);
   }, [onOpenChange]);
 
   if (controlled && !open) return null;
 
-  if (!controlled && !shouldLoad) {
-    return <MediaManagerTriggerShell {...props} onOpen={handleOpen} />;
-  }
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {!controlled && <DialogTrigger asChild>
+      {!controlled && (
         <MediaManagerTriggerShell
           {...props}
-          onOpen={() => setShouldLoad(true)}
+          onOpen={handleOpen}
         />
-      </DialogTrigger>}
-      <Suspense fallback={<MediaManagerLoading capability={props.capability} dialogClassName={props.dialogClassName} onCloseAutoFocus={(event) => {
+      )}
+      {open ? <Suspense fallback={<MediaManagerLoading capability={props.capability} dialogClassName={props.dialogClassName} onCloseAutoFocus={(event) => {
         // Resolving Suspense replaces the loading focus scope while the picker
         // stays open. Only a real close returns focus to the caller.
         if (openRef.current) event.preventDefault();
@@ -144,7 +137,7 @@ export function MediaManager(props: MediaManagerProps) {
           open={open}
           onOpenChange={handleOpenChange}
         />
-      </Suspense>
+      </Suspense> : null}
     </Dialog>
   );
 }

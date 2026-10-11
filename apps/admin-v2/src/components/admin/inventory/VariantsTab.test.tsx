@@ -8,11 +8,11 @@ import { translate } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 
-const mocks = vi.hoisted(() => ({ mobile: false, canEdit: true, canViewCosts: true, list: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mobile: false, canEdit: true, canViewCosts: true, list: vi.fn(), navigate: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
-  useNavigate: () => () => undefined,
+  useNavigate: () => mocks.navigate,
 }));
 vi.mock("~/hooks/use-mobile", () => ({ useIsMobile: () => mocks.mobile }));
 vi.mock("~/hooks/use-currency", () => ({
@@ -39,6 +39,11 @@ vi.mock("@scalius/api-client/sdk", () => ({
   putApiV1AdminInventoryByVariantIdAlertLevel: vi.fn(),
 }));
 
+import {
+  postApiV1AdminInventoryByVariantIdAdjust,
+  postApiV1AdminInventoryStockSet,
+  putApiV1AdminInventoryByVariantIdAlertLevel,
+} from "@scalius/api-client/sdk";
 import { VariantsTab } from "./VariantsTab";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -104,6 +109,56 @@ describe("VariantsTab incoming stock and unit cost", () => {
     expect(host.textContent).toContain(`${t("incomingCount", { count: 5 })} · ${t("costValue", { amount: "৳120.5" })}`);
     expect(host.textContent).toContain(t("noCost"));
     expect(host.textContent).not.toContain(t("incomingCount", { count: 0 }));
+  });
+
+  it.each([false, true])("opens Adjust for the chosen SKU from row actions (phone: %s)", async (mobile) => {
+    mocks.mobile = mobile;
+    await render();
+    const name = "Kori Trainer · 43";
+    const actions = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(resourceMessages, "actionsFor", { name })}"]`)!;
+    expect(actions).not.toBeNull();
+    expect(host.querySelector(`button[aria-label="${t("adjustFor", { name })}"]`)).toBeNull();
+    await act(async () => {
+      if (mobile) actions.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      else actions.click();
+      await import("~/components/admin/data-table/DataTableRowActionsMenu");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const adjust = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+      .find((item) => item.textContent === t("adjust"));
+    expect(adjust).toBeDefined();
+    await act(async () => {
+      adjust!.click();
+      await import("./AdjustStockDialog");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain(t("adjustTitle"));
+    expect(dialog.textContent).toContain("Kori Trainer · 43 · KORI-43");
+    expect(dialog.textContent).not.toContain("KORI-42");
+    const cancel = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === translate(resourceMessages, "cancel"))!;
+    await act(async () => cancel.click());
+    await vi.waitFor(() => {
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      const opener = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(resourceMessages, "actionsFor", { name })}"]`);
+      expect(opener).not.toBeNull();
+      expect(document.activeElement).toBe(opener);
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(postApiV1AdminInventoryByVariantIdAdjust).not.toHaveBeenCalled();
+    expect(postApiV1AdminInventoryStockSet).not.toHaveBeenCalled();
+    expect(putApiV1AdminInventoryByVariantIdAlertLevel).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("omits Adjust actions without stock permission (phone: %s)", async (mobile) => {
+    mocks.mobile = mobile;
+    mocks.canEdit = false;
+    await render();
+    for (const name of ["Kori Trainer · 42", "Kori Trainer · 43"]) {
+      expect(host.querySelector(`button[aria-label="${translate(resourceMessages, "actionsFor", { name })}"]`)).toBeNull();
+    }
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("edits the cost of the selected SKUs in one dialog", async () => {

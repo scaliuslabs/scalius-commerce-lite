@@ -101,6 +101,7 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
     <DocumentList<TransferSummary, TransferTab>
       title={t("transfers")}
       actions={createButton}
+      hideNoticeWhenEmpty
       notice={oneLocation ? (
         <Alert variant="info">
           <AlertDescription>
@@ -124,7 +125,12 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
       layoutKey="inventory-transfers"
       itemLabel={t("transfersItem")}
       rowHref={(row) => `/admin/inventory/transfers/${row.id}`}
-      empty={{
+      empty={oneLocation ? {
+        icon: ArrowLeftRight,
+        title: t("addLocation"),
+        description: t("needTwoLocations"),
+        action: <Button asChild><Link to="/admin/settings/locations">{t("addLocation")}</Link></Button>,
+      } : {
         icon: ArrowLeftRight,
         title: t("emptyTransfersTitle"),
         description: t("emptyTransfersBody"),

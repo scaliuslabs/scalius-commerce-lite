@@ -14,6 +14,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { ReadOnlyValue } from "~/components/ui/field";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
@@ -105,7 +106,10 @@ function StaffMemberPage() {
       title={member.name}
       actions={status !== "ready" ? <Badge variant="secondary">{t(status)}</Badge> : null}
     >
-      <SettingsCard title={member.email} action={actions.resendInvite ? <ResendInvite member={member} status={status} /> : null} />
+      <SettingsCard title={t("staffDetails")} action={actions.resendInvite ? <ResendInvite member={member} status={status} /> : null}>
+        <ReadOnlyValue label={t("email")} value={member.email} />
+        <ReadOnlyValue label={t("twoStepSignIn")} value={t(member.twoFactorEnabled ? "twoStepOn" : "twoStepOff")} />
+      </SettingsCard>
       {actions.editAccess ? <StaffAccessForm key={member.id} member={member} /> : null}
       <AccountActions member={member} actions={actions} />
     </SettingsPage>
@@ -271,7 +275,7 @@ function AccountActions({ member, actions }: { member: AdminUser; actions: Staff
         </Button>
       ) : null}
       {actions.remove ? (
-        <Button type="button" variant="destructive" disabled={busy} onClick={() => setConfirm("remove")}>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirm("remove")}>
           {t("removeStaff")}
         </Button>
       ) : null}

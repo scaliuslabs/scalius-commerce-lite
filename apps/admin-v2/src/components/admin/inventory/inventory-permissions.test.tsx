@@ -51,7 +51,7 @@ import { VariantsTab } from "./VariantsTab";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const adjustLabel = translate(inventoryMessages, "adjustFor", { name: "Kori Trainer · 42" });
+const adjustLabel = translate(resourceMessages, "actionsFor", { name: "Kori Trainer · 42" });
 const markSeen = translate(inventoryMessages, "markSeen");
 const review = translate(inventoryMessages, "review");
 const storeLevel = translate(inventoryMessages, "storeAlertLevelValue", { level: 5 });
@@ -89,6 +89,7 @@ describe("inventory actions follow stock permissions", () => {
     const button = adjustButton();
     if (canEdit) {
       expect(button?.disabled).toBe(false);
+      expect(button?.getAttribute("aria-haspopup")).toBe("menu");
     } else {
       expect(button).toBeUndefined();
     }

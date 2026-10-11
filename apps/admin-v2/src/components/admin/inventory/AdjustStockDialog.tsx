@@ -60,6 +60,7 @@ interface AdjustStockDialogProps {
   initialLocationId?: string | null;
   open: boolean;
   onClose: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onSaved: () => void;
 }
 
@@ -76,6 +77,7 @@ export function AdjustStockDialog({
   initialLocationId = null,
   open,
   onClose,
+  onCloseAutoFocus,
   onSaved,
 }: AdjustStockDialogProps) {
   const t = useMessages(inventoryMessages);
@@ -226,7 +228,7 @@ export function AdjustStockDialog({
 
   return (
     <Dialog open={open && variant !== null} onOpenChange={(next) => { if (!next) onClose(); }}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{t("adjustTitle")}</DialogTitle>
           <DialogDescription>

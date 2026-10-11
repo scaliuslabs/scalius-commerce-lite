@@ -3,6 +3,7 @@ import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
+import { IndexPager } from "~/components/admin/data-table/DataTablePagination";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQueue } from "./components";
 import { OptimizeImagesButton } from "./components/OptimizeImagesButton";
@@ -37,6 +38,29 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
   const { cancelSelection, selectionMode, showPreview } = mm;
   const canUpload = mm.view === "ready";
   const filtered = Boolean(mm.filters.search) || (capability === "both" && Boolean(mm.filters.kind)) || mm.currentFolderId !== "all";
+  const pageStart = mm.pageIndex * mm.pageSize;
+  const visibleFiles = mm.files.slice(pageStart, pageStart + mm.pageSize);
+  const pageSelectableIds = visibleFiles.filter((file) => !mm.isFileUnavailable(file.id)).map((file) => file.id);
+  const selectedIds = new Set(mm.selectedFileIds);
+  const canSelectAllShown = pageSelectableIds.some((id) => !selectedIds.has(id));
+  const hasLoadedNext = pageStart + mm.pageSize < mm.files.length;
+  const busy = mm.isLoading || mm.isLoadingMore;
+  const pager = mm.files.length > 0 && (mm.files.length > mm.pageSize || mm.hasMore) ? (
+    <IndexPager
+      label={r(mm.hasMore ? "showingCapped" : "showing", {
+        start: pageStart + 1, end: pageStart + visibleFiles.length, total: mm.files.length,
+      })}
+      navLabel={r("pagination")}
+      canPrevious={mm.pageIndex > 0}
+      canNext={hasLoadedNext || mm.hasMore}
+      onPrevious={() => { if (!busy) mm.setPageIndex(mm.pageIndex - 1); }}
+      onNext={() => {
+        if (busy) return;
+        if (hasLoadedNext) mm.setPageIndex(mm.pageIndex + 1);
+        else mm.loadMore();
+      }}
+    />
+  ) : null;
   const usedSelected = mm.selectedLibraryFiles.filter((file) => file.usageCount > 0).length;
   const deletable = mm.selectedLibraryFiles.filter(canDeletePermanently);
 
@@ -120,6 +144,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         view={mm.view}
         selectedCount={mm.selectedFileIds.length}
         selectableCount={mm.selectableFileCount}
+        canSelectAllShown={canSelectAllShown}
         selectionMode={mm.selectionMode}
         folders={mm.folders}
         currentFolderId={mm.currentFolderId}
@@ -128,13 +153,13 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         allowManagement={!picker}
         onSearch={mm.applySearch}
         onFiltersChange={mm.applyFilters}
-        onUploadClick={canUpload ? () => inputRef.current?.click() : undefined}
+        onUploadClick={picker && canUpload ? () => inputRef.current?.click() : undefined}
         onFolderSelect={mm.moveToFolder}
         onFolderCreate={mm.createFolder}
         onFolderRename={mm.renameFolder}
         onFolderDelete={mm.deleteFolder}
         onBeginSelection={mm.beginSelection}
-        onSelectAll={mm.selectAllVisible}
+        onSelectAll={() => mm.selectAllVisible(pageSelectableIds)}
         onClearSelection={() => mm.clearSelection(true)}
         onCancelSelection={!picker ? mm.cancelSelection : undefined}
         onMove={(folderId) => void mm.moveSelected(folderId)}
@@ -144,6 +169,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
       <div className={picker ? "min-h-0 flex-1 overflow-y-auto" : undefined}>
         <MediaGallery
           files={mm.files}
+          visibleFiles={visibleFiles}
           selectedFileIds={mm.selectedFileIds}
           isFileUnavailable={mm.isFileUnavailable}
           selectionMode={mm.selectionMode}
@@ -152,7 +178,6 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           filtered={filtered}
           isLoading={mm.isLoading}
           isLoadingMore={mm.isLoadingMore}
-          hasMore={mm.hasMore}
           loadError={mm.loadError}
           onFileSelect={mm.handleFileSelect}
           onFilePreview={(file) => {
@@ -161,12 +186,12 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           }}
           onToggleSelection={mm.toggleSelection}
           onLifecycle={lifecycle}
-          onLoadMore={mm.loadMore}
-          onRetry={() => void mm.refresh()}
+          onRetry={mm.retryFiles}
           onClearFilters={mm.clearFilters}
           onUploadClick={canUpload ? () => inputRef.current?.click() : undefined}
         />
       </div>
+      {pager}
     </>
   );
 
@@ -211,7 +236,15 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         </>
       ) : (
         <>
-          <PageHeader title={t("title")} actions={canUpload ? <OptimizeImagesButton onOptimized={() => void mm.refresh()} /> : null} />
+          <PageHeader
+            title={t("title")}
+            actions={canUpload ? <OptimizeImagesButton onOptimized={() => void mm.refresh()} /> : null}
+            primaryAction={canUpload ? (
+              <Button type="button" onClick={() => inputRef.current?.click()}>
+                <Upload aria-hidden="true" />{t("upload")}
+              </Button>
+            ) : null}
+          />
           <div className="overflow-hidden rounded-xl bg-card shadow-card">{body}</div>
         </>
       )}

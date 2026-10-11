@@ -18,6 +18,8 @@ export interface DocumentListProps<T extends { id: string }, Tab extends string>
   actions?: ReactNode;
   /** A notice above the list (e.g. "Add a second location first"). */
   notice?: ReactNode;
+  /** Hide the notice when the first-run card carries the same guidance. Defaults to false. */
+  hideNoticeWhenEmpty?: boolean;
   tabs: ReadonlyArray<IndexTab<Tab>>;
   tab: Tab;
   onTabChange: (tab: Tab) => void;
@@ -85,7 +87,7 @@ export function DocumentList<T extends { id: string }, Tab extends string>(props
     <div className="mx-auto max-w-7xl pb-8">
       {/* Nothing yet: the first-run card alone, with its own create action (E1, C3). */}
       <PageHeader title={props.title} actions={nothingYet ? undefined : props.actions} />
-      {props.notice ? <div className="mb-4">{props.notice}</div> : null}
+      {props.notice && !(props.hideNoticeWhenEmpty && nothingYet) ? <div className="mb-4">{props.notice}</div> : null}
       {nothingYet ? (
         <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action} />
       ) : (

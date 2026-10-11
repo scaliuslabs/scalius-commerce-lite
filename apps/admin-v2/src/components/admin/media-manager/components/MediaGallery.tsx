@@ -3,6 +3,7 @@ import { AlertCircle, ImageIcon, SearchX, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { DataTableRefetchBar } from "~/components/admin/data-table/DataTableRefetchBar";
 import { EmptyState } from "~/components/admin/resource/EmptyState";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
@@ -13,6 +14,8 @@ import { resolveSavedPoster } from "../utils/poster";
 
 interface MediaGalleryProps {
   files: LibraryMediaFile[];
+  /** At most 50 rows; the full list still resolves off-page posters. */
+  visibleFiles: LibraryMediaFile[];
   selectedFileIds: string[];
   isFileUnavailable: (id: string) => boolean;
   selectionMode: boolean;
@@ -22,13 +25,11 @@ interface MediaGalleryProps {
   filtered: boolean;
   isLoading: boolean;
   isLoadingMore: boolean;
-  hasMore: boolean;
   loadError: string | null;
   onFileSelect: (file: LibraryMediaFile, extendRange?: boolean) => void;
   onFilePreview: (file: LibraryMediaFile) => void;
   onToggleSelection: (id: string, extendRange?: boolean) => void;
   onLifecycle: (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => void;
-  onLoadMore: () => void;
   onRetry: () => void;
   onClearFilters: () => void;
   onUploadClick?: () => void;
@@ -93,7 +94,8 @@ export function MediaGallery(props: MediaGalleryProps) {
   }
 
   return (
-    <>
+    <div className="relative">
+      <DataTableRefetchBar busy={props.isLoading || props.isLoadingMore} />
       {props.loadError ? (
         <Alert variant="warning" className="mx-3 mt-3 w-auto">
           <AlertCircle aria-hidden="true" />
@@ -105,8 +107,8 @@ export function MediaGallery(props: MediaGalleryProps) {
           </AlertDescription>
         </Alert>
       ) : null}
-      <div className={GRID} role="list" aria-label={props.view === "trash" ? r("trash") : t("title")}>
-        {props.files.map((file) => (
+      <div className={GRID} aria-busy={props.isLoading || props.isLoadingMore || undefined} role="list" aria-label={props.view === "trash" ? r("trash") : t("title")}>
+        {props.visibleFiles.map((file) => (
           <MediaCard
             key={file.id}
             file={file}
@@ -126,11 +128,6 @@ export function MediaGallery(props: MediaGalleryProps) {
           />
         ))}
       </div>
-      {props.hasMore ? (
-        <div className="flex justify-center pb-4">
-          <Button type="button" variant="outline" loading={props.isLoadingMore} onClick={props.onLoadMore}>{t("loadMore")}</Button>
-        </div>
-      ) : null}
-    </>
+    </div>
   );
 }

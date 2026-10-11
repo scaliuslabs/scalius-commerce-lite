@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useState } from "react";
+import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaManager } from "./MediaManager";
@@ -12,10 +12,12 @@ import type { MediaFile } from "./types";
 
 const pickerState = vi.hoisted(() => ({
   onSelect: undefined as ((file: MediaFile) => void) | undefined,
+  unmounted: vi.fn(),
 }));
 
 vi.mock("./hooks/useMediaManager", () => ({
   useMediaManager: (options: { onSelect?: (file: MediaFile) => void }) => {
+    useEffect(() => () => pickerState.unmounted(), []);
     pickerState.onSelect = options.onSelect;
     return {
       currentFolderId: "all",
@@ -70,6 +72,7 @@ describe("MediaManager lazy-open lifecycle", () => {
     document.body.append(host);
     root = createRoot(host);
     pickerState.onSelect = undefined;
+    pickerState.unmounted.mockClear();
   });
 
   afterEach(() => {
@@ -158,6 +161,24 @@ describe("MediaManager lazy-open lifecycle", () => {
     await flush();
 
     expect(host.querySelector("[data-selected-file]")?.textContent).toBe("image.webp");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(pickerState.unmounted).toHaveBeenCalledOnce();
+    act(() => click(trigger!));
+    await flush();
+    const close = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Close workspace")!;
+    act(() => click(close));
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(pickerState.unmounted).toHaveBeenCalledTimes(2);
+  });
+  it("honors a custom trigger's prevented click", async () => {
+    const onClick = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    await act(async () => root.render(<LazyMediaManager trigger={<button onClick={onClick}>Add media</button>} />));
+    act(() => click(host.querySelector("button")!));
+    await flush();
+    expect(onClick).toHaveBeenCalledOnce();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("opens a controlled triggerless picker and returns focus on cancellation", async () => {

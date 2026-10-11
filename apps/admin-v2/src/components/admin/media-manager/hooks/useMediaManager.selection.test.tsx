@@ -170,6 +170,46 @@ describe("useMediaManager off-page selection", () => {
     ]);
   });
 
+  it("adds a visible page and anchors the following Shift range in full loaded order", () => {
+    hookState.files = Array.from({ length: 125 }, (_, index) => libraryFile(`file_${index}`, `file-${index}.webp`));
+    unavailableFileIds = ["file_50"];
+    act(() => root.render(<Harness />));
+    act(() => latest.replaceSelection(["off-page", "file_2"]));
+    // Reverse caller order and include a stale ID: loaded order remains authority.
+    act(() => latest.selectAllVisible([...hookState.files.slice(50, 100).map((file) => file.id).reverse(), "not-loaded"]));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_2", ...hookState.files.slice(51, 100).map((file) => file.id)]);
+    act(() => latest.toggleSelection("file_105", true));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_2", ...hookState.files.slice(51, 106).map((file) => file.id)]);
+    expect(latest.selectedFileIds).not.toContain("file_3");
+  });
+
+  it("keeps the original no-scope select-all replacement and first-file anchor", () => {
+    hookState.files = [libraryFile("first", "first.webp"), libraryFile("second", "second.webp")];
+    act(() => root.render(<Harness />));
+    act(() => latest.replaceSelection(["off-page"]));
+    act(() => latest.selectAllVisible());
+    expect(latest.selectedFileIds).toEqual(["first", "second"]);
+    act(() => latest.toggleSelection("first", true));
+    expect(latest.selectedFileIds).toEqual(["first", "second"]);
+  });
+
+  it("skips unavailable middle rows when adding, removing, and re-adding range selections", () => {
+    hookState.files = Array.from({ length: 5 }, (_, index) => libraryFile(`file_${index}`, `file-${index}.webp`));
+    unavailableFileIds = ["temp_file_1", "file_3"];
+    act(() => root.render(<Harness />));
+    act(() => latest.replaceSelection(["off-page", "file_4"]));
+    act(() => latest.toggleSelection("file_0"));
+    act(() => latest.toggleSelection("file_4", true));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_4", "file_0", "file_2"]);
+    // Plain activation removes one item; Shift keeps its existing additive contract.
+    act(() => latest.toggleSelection("file_2"));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_4", "file_0"]);
+    act(() => latest.toggleSelection("file_0", true));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_4", "file_0", "file_2"]);
+    act(() => latest.toggleSelection("file_1", true));
+    expect(latest.selectedFileIds).toEqual(["off-page", "file_4", "file_0", "file_2"]);
+  });
+
   it("keeps already-attached assets out of a new picker selection", () => {
     unavailableFileIds = ["visible", "off-page"];
     act(() => root.render(<Harness />));

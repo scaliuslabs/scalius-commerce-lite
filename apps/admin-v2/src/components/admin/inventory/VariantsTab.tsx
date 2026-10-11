@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { FilteredEmptyState } from "~/components/admin/states";
@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { IdText } from "~/components/admin/data-table/cells";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { DataTableToolbar, IndexBulkBar } from "~/components/admin/data-table/DataTableToolbar";
@@ -197,6 +198,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSession, setAdjustSession] = useState(0);
+  const adjustOpener = useRef<HTMLElement | null>(null);
   // Bulk cost edit of the selected SKUs (products.edit plus "View product costs").
   const [costOpen, setCostOpen] = useState(false);
   const [costSession, setCostSession] = useState(0);
@@ -211,23 +213,22 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
 
   const canAdjustStock = permissions.canAdjustStock;
   const showCosts = permissions.canViewCosts;
-  const adjustButton = useCallback((variant: InventoryVariant) => canAdjustStock ? (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      aria-label={t("adjustFor", {
+  const adjustActions = useCallback((variant: InventoryVariant) => canAdjustStock ? (
+    <DataTableRowActions
+      menuLabel={r("actionsFor", {
         name: [variant.productName ?? variant.sku, variant.optionLabel].filter(Boolean).join(" · "),
       })}
-      onClick={() => {
-        setAdjusting(variant);
-        setAdjustSession((session) => session + 1);
-        setAdjustOpen(true);
-      }}
-    >
-      {t("adjust")}
-    </Button>
-  ) : null, [canAdjustStock, t]);
+      extraActions={[{
+        label: t("adjust"),
+        onClick: (opener) => {
+          adjustOpener.current = opener ?? null;
+          setAdjusting(variant);
+          setAdjustSession((session) => session + 1);
+          setAdjustOpen(true);
+        },
+      }]}
+    />
+  ) : null, [canAdjustStock, r, t]);
 
   // Stable columns keep TanStack's cells, so rows re-render only when their variant changes.
   const columns = useMemo<ColumnDef<InventoryVariant, unknown>[]>(() => [
@@ -290,10 +291,10 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
     },
     {
       id: "actions",
-      cell: ({ row }) => adjustButton(row.original),
+      cell: ({ row }) => adjustActions(row.original),
       enableSorting: false,
     },
-  ], [adjustButton, filterLocation, r, showCosts, storeLevel, t]);
+  ], [adjustActions, filterLocation, r, showCosts, storeLevel, t]);
 
   const { table, isFetching, isLoading, error, refetch, selectedIds, selectedRows, clearSelection } = useServerTable<InventoryVariant>({
     columns,
@@ -358,7 +359,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
             ].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <div className="self-center">{adjustButton(variant)}</div>
+        <div className="self-center">{adjustActions(variant)}</div>
       </div>
     );
   };
@@ -444,6 +445,12 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
             initialLocationId={locationId || null}
             open={adjustOpen && permissions.canAdjustStock}
             onClose={() => setAdjustOpen(false)}
+            onCloseAutoFocus={(event) => {
+              if (adjustOpener.current?.isConnected) {
+                event.preventDefault();
+                adjustOpener.current.focus();
+              }
+            }}
             onSaved={() => void Promise.all([
               queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
               queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),

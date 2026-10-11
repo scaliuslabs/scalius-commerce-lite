@@ -267,12 +267,15 @@ export function useMediaManager({
     setSelectionMode(true);
   }, []);
 
-  const selectAllVisible = useCallback(() => {
+  const selectAllVisible = useCallback((visibleScope?: readonly string[]) => {
+    // A page scope adds its loaded rows and anchors at its first selectable
+    // file. Callers without a scope retain the original replace-all behavior.
+    const scope = visibleScope ? new Set(visibleScope) : null;
     const visibleIds = media.files
       .map((file) => file.id)
-      .filter((id) => !isFileUnavailable(id));
+      .filter((id) => (!scope || scope.has(id)) && !isFileUnavailable(id));
     selectionAnchorId.current = visibleIds[0] ?? null;
-    setSelectedFileIds(selectAllVisibleMedia(visibleIds));
+    setSelectedFileIds((current) => selectAllVisibleMedia(scope ? [...current, ...visibleIds] : visibleIds));
   }, [media.files, isFileUnavailable]);
 
   const clearSelection = useCallback((preserveMode: boolean) => {
@@ -292,7 +295,7 @@ export function useMediaManager({
     setSelectedFileIds((current) => {
       const update = updateMediaSelection({
         selectedIds: current,
-        visibleIds: media.files.map((file) => file.id),
+        visibleIds: media.files.map((file) => file.id).filter((fileId) => !isFileUnavailable(fileId)),
         targetId: id,
         anchorId: selectionAnchorId.current,
         extendRange,

@@ -104,7 +104,9 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
           <span title={metadata} className="truncate text-body text-muted-foreground">
             {metadata}
           </span>
-          {usage ? <span className="text-body text-muted-foreground">{usage}</span> : null}
+          <span className="truncate text-body text-muted-foreground" title={usage ?? undefined} aria-hidden={usage ? undefined : true}>
+            {usage ?? "\u00a0"}
+          </span>
         </div>
       </button>
 

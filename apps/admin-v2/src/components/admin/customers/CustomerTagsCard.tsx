@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX } from "@scalius/shared/customer-marketing";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
 import { saveCustomerTags } from "~/lib/api-mutations/customers";
 import type { CustomerDto } from "~/lib/api-query-options/customers";
@@ -55,21 +56,21 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
         <CardTitle>{t("tags")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Field
-          id="customer-tags"
-          label={t("addTag")}
-          hideLabel
-          help={canEdit ? t("tagsHelp") : tags.length === 0 ? t("noTagsYet") : undefined}
-        >
-        <TagInput
-          id="customer-tags"
-          value={tags}
-          onChange={setTags}
-          max={CUSTOMER_TAGS_PER_CUSTOMER_MAX}
-          disabled={!canEdit}
-          aria-describedby={canEdit ? "customer-tags-help" : undefined}
-        />
-        </Field>
+        {canEdit ? (
+          <Field id="customer-tags" label={t("addTag")} hideLabel help={t("tagsHelp")}>
+            <TagInput
+              id="customer-tags"
+              value={tags}
+              onChange={setTags}
+              max={CUSTOMER_TAGS_PER_CUSTOMER_MAX}
+              aria-describedby="customer-tags-help"
+            />
+          </Field>
+        ) : loaded.length > 0 ? (
+          <ul aria-label={t("tags")} className="flex flex-wrap gap-1.5">
+            {loaded.map(tag => <li key={tag} className="min-w-0 max-w-full"><Badge variant="secondary" className="max-w-full whitespace-normal break-words">{tag}</Badge></li>)}
+          </ul>
+        ) : <p className="text-body text-muted-foreground">{t("noTagsYet")}</p>}
       </CardContent>
     </Card>
   );

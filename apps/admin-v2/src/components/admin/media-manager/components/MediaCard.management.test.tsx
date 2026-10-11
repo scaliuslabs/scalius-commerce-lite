@@ -139,6 +139,19 @@ describe("MediaCard usage", () => {
     return [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent ?? "");
   }
 
+  it("keeps one usage metadata slot without announcing an invented unused state", () => {
+    render("ready", { usageCount: 0 });
+    const empty = host.querySelector("article > button > div:last-child > span:last-child");
+    expect(empty?.getAttribute("aria-hidden")).toBe("true");
+    expect(empty?.hasAttribute("title")).toBe(false);
+    expect(empty?.textContent?.trim()).toBe("");
+    render("trash", { status: "trashed", usageCount: 1 });
+    const used = host.querySelector("article > button > div:last-child > span:last-child");
+    expect(used?.getAttribute("aria-hidden")).toBeNull();
+    expect(used?.getAttribute("title")).toBe("In use, can't be deleted");
+    expect(used?.textContent).toBe("In use, can't be deleted");
+  });
+
   it("says how many places use a file", () => {
     render("ready", { usageCount: 2 });
     expect(host.textContent).toContain("Used in 2 places");

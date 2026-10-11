@@ -42,10 +42,20 @@ describe("the media picker's first click", () => {
     await act(async () => root.render(
       <MediaManager onCloseAutoFocus={onCloseAutoFocus} capability="both" trigger={<button type="button">Add media</button>} onSelect={vi.fn()} />,
     ));
-    await act(async () => host.querySelector("button")!.click());
+    const trigger = host.querySelector("button")!;
+    await act(async () => trigger.click());
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.querySelector('[role="status"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="picker"]')).toBeNull();
+    // Closing before the lazy module arrives restores the same real trigger.
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(onCloseAutoFocus).toHaveBeenCalledOnce();
+    onCloseAutoFocus.mockClear();
+    await act(async () => trigger.click());
+    expect(document.querySelector('[role="status"]')).not.toBeNull();
     await act(async () => { gate.release(); await gate.promise; });
     expect(document.querySelector('[data-testid="picker"]')).not.toBeNull();
     expect(document.querySelector('[role="status"]')).toBeNull();
