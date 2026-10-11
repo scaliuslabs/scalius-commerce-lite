@@ -37,9 +37,11 @@ function seedBoundaries(range: AnalyticsRange, zone: string) {
   order("span_before", "span", start - 0.25);
   order("span_inside", "span", middle);
   order("span_after", "span", end);
-  for (const identity of ["deep_span", "deep_gap"]) {
-    order(`${identity}_first`, identity, start - 2);
-    order(`${identity}_second`, identity, start - 1);
+  for (const [identity, first, second] of [
+    ["deep_span", 2, 1], ["deep_gap", 2, 1], ["z_deep_early", 4, 3], ["a_deep_late", 0.75, 0.5],
+  ] as const) {
+    order(`${identity}_first`, identity, start - first);
+    order(`${identity}_second`, identity, start - second);
     order(`${identity}_last`, identity, end);
   }
   order("deep_span_inside", "deep_span", middle);
@@ -73,13 +75,23 @@ it.each([
   const { period, query } = await parity(range, zone);
   expect(period.customers).toEqual({ customers: 8, newCustomers: 4, returningCustomers: 4, repeatPurchaseRate: 6 / 8 * 100 });
 
-  // The second sale proves span present and gap absent; only deeper histories need probes.
+  // Probe only unresolved histories, in identity order rather than first-sale order.
   const probed: string[] = [];
   f.sqlite.function("customer_boundary_probe", (identity) => { probed.push(String(identity)); return 1; });
-  const instrumented = query.query.replace("else case when exists (", "else customer_boundary_probe(cs.identity) * case when exists (");
+  const instrumented = query.query.replace(/where exists \(\n([\s\S]*?)\n {6}\)/,
+    "where customer_boundary_probe(u.identity) * case when exists (\n$1\n      ) then 1 else 0 end = 1");
   expect(instrumented).not.toBe(query.query);
   expect(f.sqlite.prepare(instrumented).all(...query.values as never[])).toEqual(f.sqlite.prepare(query.query).all(...query.values as never[]));
-  expect(probed.sort()).toEqual(["p:deep_gap", "p:deep_span"]);
+  expect(probed).toEqual(["p:a_deep_late", "p:deep_gap", "p:deep_span", "p:z_deep_early"]);
+  const plan = f.sqlite.prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.values as never[]);
+  const materialized = plan.find((row) => row.detail === "MATERIALIZE unresolved");
+  expect(materialized).toBeDefined();
+  const descendants = new Set([materialized!.id]);
+  for (const row of plan) if (descendants.has(row.parent)) descendants.add(row.id);
+  const materialization = plan.filter((row) => descendants.has(row.id)).map((row) => String(row.detail));
+  expect(materialization).toContain("USE TEMP B-TREE FOR ORDER BY");
+  expect(materialization.some((line) => /SEARCH f /.test(line))).toBe(false);
+  expect(plan.findIndex((row) => row.detail === "SCAN u")).toBeGreaterThan(plan.indexOf(materialized!));
 });
 
 it("refreshes first, second and last sales through status, currency, identity, date and deletion changes", async () => {

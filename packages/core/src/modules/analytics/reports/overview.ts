@@ -206,9 +206,16 @@ function intervalCte(name: string, intervals: readonly (readonly [number, number
 
 function customerCtes(currency: string, start: number, end: number, summarized: boolean): SQL {
   if (summarized) {
-    // First, second and last sales can prove membership or an empty interval.
-    // Probe only histories whose remaining middle sales could lie in the range.
-    return sql`cp as (
+    // Materialize unresolved histories in identity order before probing facts,
+    // so small database page caches reuse the customer index pages.
+    return sql`unresolved as materialized (
+      select cs.identity, cs.shop_currency
+      from analytics_customer_currency_summary cs
+      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
+        and cs.first_sale_at < ${start} and cs.last_sale_at >= ${end} and cs.second_sale_at < ${start}
+      order by cs.identity
+    ),
+    cp as (
       select case when cs.first_sale_at >= ${start} and cs.second_sale_at < ${end} then 2 else 1 end as n,
         case when cs.first_sale_any_currency_at < ${start} then 1 else 0 end as prior
       from analytics_customer_currency_summary cs
@@ -219,11 +226,14 @@ function customerCtes(currency: string, start: number, end: number, summarized: 
           when cs.last_sale_at < ${end} then 1
           when cs.second_sale_at >= ${end} then 0
           when cs.second_sale_at >= ${start} then 1
-          else case when exists (
-            select 1 from analytics_order_facts f
-            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
-              and f.created_at >= ${start} and f.created_at < ${end}
-          ) then 1 else 0 end end = 1
+          else 0 end = 1
+      union all
+      select 1 as n, 1 as prior from unresolved u
+      where exists (
+        select 1 from analytics_order_facts f
+        where f.shop_currency = u.shop_currency and f.identity = u.identity and f.order_count = 1
+          and f.created_at >= ${start} and f.created_at < ${end}
+      )
     )`;
   }
   return sql`cu as (

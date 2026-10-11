@@ -23,8 +23,9 @@ function customerAccessPlan(query: CapturedQuery): string[] {
 function expectCustomerIndex(query: CapturedQuery, summarized: boolean): void {
   if (summarized) {
     const plan = sqlite!.prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.values as never[]).map((row) => String(row.detail));
-    expect(plan.filter((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx.*shop_currency=\? AND first_sale_at>\? AND first_sale_at<\?/.test(line))).toHaveLength(1);
-    expect(plan.filter((line) => /SEARCH f USING COVERING INDEX analytics_facts_customer_identity_idx.*shop_currency=\? AND identity=\? AND created_at>\? AND created_at<\?/.test(line))).toHaveLength(1);
+    expect(plan.filter((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx.*shop_currency=\? AND first_sale_at>\? AND first_sale_at<\?/.test(line))).toHaveLength(2);
+    expect(plan.filter((line) => /SEARCH f (?:EXISTS )?USING COVERING INDEX analytics_facts_customer_identity_idx.*shop_currency=\? AND identity=\? AND created_at>\? AND created_at<\?/.test(line))).toHaveLength(1);
+    expect(plan).toContain("MATERIALIZE unresolved");
     expect(query.query).not.toContain("analytics_customer_first_sale");
     expect(plan.some((line) => /(?:CO-ROUTINE|MATERIALIZE) cu/.test(line))).toBe(false);
     return;
