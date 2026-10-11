@@ -695,6 +695,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 138,
+        name: "0138_facet_public_counts",
+        sqliteStatements: 13,
+        postgresStatements: 13,
+      },
     ]);
   });
 
@@ -881,6 +887,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 135, name: "0135_inventory_valuation_indexes" },
           { version: 136, name: "0136_buyer_state_covering_index" },
           { version: 137, name: "0137_recommendation_order_id" },
+          { version: 138, name: "0138_facet_public_counts" },
         ],
       });
     } finally {

@@ -91,7 +91,14 @@ async function project(db: Parameters<typeof rebuildCatalogProjections>[0], quer
 /** A listing statement over the buyer state never ranks SKUs or evaluates eligibility per request. */
 function expectBuyerStateListing(plan: string) {
     expect(plan).not.toContain("buyer_ranked_skus");
-    expect(plan).not.toMatch(/SCAN (products|product_variants|product_buyer_state)\b/);
+    // The complement strategy counts all buyer-state identities once to
+    // choose its branch. Only that exact covering COUNT(*) subtree is exempt;
+    // scope membership and hydration must still use their bounded indexes.
+    const listingPlan = plan.replace(
+        "MATERIALIZE catalog_size\nSCAN product_buyer_state USING COVERING INDEX sqlite_autoindex_product_buyer_state_1\n",
+        "",
+    );
+    expect(listingPlan).not.toMatch(/SCAN (products|product_variants|product_buyer_state)\b/);
     expect(plan).not.toContain("buyer_active_sku");
 }
 

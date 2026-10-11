@@ -26,7 +26,7 @@ import {
 } from "@scalius/shared/catalog-attributes";
 import { normalizeProductOptionIdentity } from "@scalius/shared/product-options";
 import { ValidationError } from "@scalius/core/errors";
-import type { Database } from "@scalius/database/client";
+import { getDatabaseProviderForClient, type Database } from "@scalius/database/client";
 import type { CatalogFacetFilter } from "../products";
 import { publicCategorySubtreeCondition } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
@@ -566,9 +566,10 @@ type FacetResultRow = CatalogFacetCountRow & {
  * `FACET_ATTRIBUTE_LIMIT` attribute facets are kept.
  *
  * Plan shape: the scope is read once through the listing's own index and
- * materialized with each product's match flags; the facet rows are then
- * probed per scoped product (`CROSS JOIN` fixes that order, since SQLite has
- * no statistics on D1 and would otherwise walk every option row in the store).
+ * materialized with each product's match flags. Filtered and narrow scopes
+ * probe facet rows per product. A broad, unfiltered D1 scope subtracts the
+ * excluded public products from maintained distinct-product counts, then
+ * resolves each independent metadata minimum through its ordered index.
  */
 export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput): Promise<CatalogFacetCountRow[]> {
     return readCatalogFacets(db, input).then(result => result.rows);
@@ -743,22 +744,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
     const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
 
-    return namedRows<FacetResultRow>(db.all(sql`
-        WITH facet_scope AS MATERIALIZED (
-            SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
-                ${buyerState.categoryId} AS category_id,
-                ${productAttributeMissSql(scopeProduct, sets.attributes)} AS attribute_miss,
-                CASE WHEN ${truth(productMatchesOptionFilters(scopeProduct, sets.options))} THEN 1 ELSE 0 END AS option_match,
-                CASE WHEN ${truth(brandMatches(sql`${buyerState.brandId}`, sets.brand))} THEN 1 ELSE 0 END AS brand_match,
-                ${readsRating ? sql`facet_rating.rating_avg_centi` : sql`NULL`} AS rating_centi,
-                ${minRatingCenti === undefined
-                    ? sql`1`
-                    : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
-                ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor` : sql``}
-            FROM ${scopeFrom}
-            WHERE ${and(...input.baseConditions) ?? sql`1 = 1`}
-        ),
-        facet_counts AS (
+    const sourceFacetCounts = sql`
             SELECT 'attribute' AS facet_kind, attribute_row.facet_key AS facet_id, attribute_row.value_key AS value_key,
                 SUM(CASE WHEN ${attributeMatch(sql.raw("attribute_row.facet_key"))} AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END) AS value_count,
                 MIN(attribute_row.value_label) AS value_label,
@@ -785,6 +771,102 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
               AND option_row.facet_key < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}
               AND option_row.facet_kind = 'option'
             GROUP BY option_row.facet_key, option_row.value_key
+    `;
+    const complement = getDatabaseProviderForClient(db) === "d1"
+        && sets.attributes.length === 0 && sets.options.length === 0 && !sets.brand
+        && minRatingCenti === undefined;
+    // With no selections every scoped product contributes once. The public
+    // and scope ratios bound exclusions; private rows are also skipped by
+    // metadata probes. Other providers retain their product-led query.
+    // Each disabled branch exits before opening its facet scan.
+    const branchLimit = (fast: boolean) => sql`(SELECT CASE WHEN use_complement = ${fast ? 1 : 0}
+        THEN 9223372036854775807 ELSE 0 END FROM facet_plan)`;
+    const metadataMinimum = (column: "value_label" | "sort_order" | "variant_id" | "value_number", index: string) => {
+        const kind = column === "variant_id" ? sql`'option'`
+            : column === "value_number" ? sql`'attribute'` : sql`complement_value.facet_kind`;
+        return sql`(SELECT metadata.${sql.raw(column)}
+            FROM product_facet_values AS metadata INDEXED BY ${sql.raw(index)}
+            WHERE metadata.facet_kind = ${kind}
+              AND metadata.facet_key = complement_value.facet_key
+              AND metadata.value_key = complement_value.value_key
+              ${column === "value_number" ? sql`AND metadata.value_number IS NOT NULL` : sql``}
+              AND metadata.product_id IN (SELECT product_id FROM facet_scope)
+            ORDER BY metadata.${sql.raw(column)} LIMIT 1)`;
+    };
+    const complementCtes = complement ? sql`
+        facet_plan AS MATERIALIZED (
+            SELECT CASE WHEN matched_count > 0 AND matched_count * 5 >= public_count * 4
+                AND public_count * 10 >= all_count * 9 THEN 1 ELSE 0 END AS use_complement
+            FROM (SELECT COUNT(*) AS matched_count FROM facet_scope) AS matched_size
+            CROSS JOIN (SELECT COUNT(*) AS public_count FROM product_buyer_state WHERE is_public = 1) AS public_size
+            CROSS JOIN (SELECT COUNT(*) AS all_count FROM product_buyer_state) AS catalog_size
+        ),
+        excluded_products AS MATERIALIZED (
+            SELECT product_id FROM product_buyer_state
+            WHERE is_public = 1 AND product_id NOT IN (SELECT product_id FROM facet_scope)
+            LIMIT ${branchLimit(true)}
+        ),
+        excluded_counts AS MATERIALIZED (
+            SELECT excluded_row.facet_kind, excluded_row.facet_key, excluded_row.value_key,
+                COUNT(DISTINCT excluded_row.product_id) AS product_count
+            FROM excluded_products
+            CROSS JOIN product_facet_values AS excluded_row
+            WHERE excluded_row.product_id = excluded_products.product_id
+            GROUP BY excluded_row.facet_kind, excluded_row.facet_key, excluded_row.value_key
+            LIMIT ${branchLimit(true)}
+        ),
+        complement_values AS MATERIALIZED (
+            SELECT public_value.facet_kind, public_value.facet_key, public_value.value_key,
+                public_value.product_count - COALESCE(excluded_value.product_count, 0) AS value_count
+            FROM product_facet_public_counts AS public_value
+            LEFT JOIN excluded_counts AS excluded_value
+                ON excluded_value.facet_kind = public_value.facet_kind
+               AND excluded_value.facet_key = public_value.facet_key
+               AND excluded_value.value_key = public_value.value_key
+            WHERE public_value.product_count > COALESCE(excluded_value.product_count, 0)
+              AND (public_value.facet_kind = 'attribute' OR (
+                  public_value.facet_key > ${OPTION_FACET_PREFIX}
+                  AND public_value.facet_key < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}
+              ))
+            LIMIT ${branchLimit(true)}
+        ),
+        baseline_facet_counts AS MATERIALIZED (
+            ${sourceFacetCounts}
+            LIMIT ${branchLimit(false)}
+        ),
+        complement_facet_counts AS MATERIALIZED (
+            SELECT complement_value.facet_kind, complement_value.facet_key AS facet_id, complement_value.value_key,
+                complement_value.value_count,
+                ${metadataMinimum("value_label", "product_facet_values_metadata_label_idx")} AS value_label,
+                ${metadataMinimum("sort_order", "product_facet_values_metadata_sort_idx")} AS value_sort,
+                CASE WHEN complement_value.facet_kind = 'attribute' THEN
+                    ${metadataMinimum("value_number", "product_facet_values_metadata_number_idx")} END AS value_number,
+                CASE WHEN complement_value.facet_kind = 'option' THEN
+                    ${metadataMinimum("variant_id", "product_facet_values_metadata_sample_idx")} END AS sample_sku
+            FROM complement_values AS complement_value
+            LIMIT ${branchLimit(true)}
+        ),
+    ` : sql``;
+
+    return namedRows<FacetResultRow>(db.all(sql`
+        WITH facet_scope AS MATERIALIZED (
+            SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
+                ${buyerState.categoryId} AS category_id,
+                ${productAttributeMissSql(scopeProduct, sets.attributes)} AS attribute_miss,
+                CASE WHEN ${truth(productMatchesOptionFilters(scopeProduct, sets.options))} THEN 1 ELSE 0 END AS option_match,
+                CASE WHEN ${truth(brandMatches(sql`${buyerState.brandId}`, sets.brand))} THEN 1 ELSE 0 END AS brand_match,
+                ${readsRating ? sql`facet_rating.rating_avg_centi` : sql`NULL`} AS rating_centi,
+                ${minRatingCenti === undefined
+                    ? sql`1`
+                    : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
+                ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor` : sql``}
+            FROM ${scopeFrom}
+            WHERE ${and(...input.baseConditions) ?? sql`1 = 1`}
+        ),
+        ${complementCtes}
+        facet_counts AS (
+            ${complement ? sql`SELECT * FROM baseline_facet_counts
+                UNION ALL SELECT * FROM complement_facet_counts` : sourceFacetCounts}
             ${brandBranch}
             ${ratingBranch}
             ${categoryBranch}

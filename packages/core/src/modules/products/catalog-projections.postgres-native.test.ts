@@ -57,6 +57,45 @@ const base = {
 };
 
 describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
+    it.each(["populated", "empty"])("repairs %s facet counter drift with coherent cache clocks", async (catalog) => {
+        const { db, client } = await createNativePostgres({ label: `facet_repair_${catalog}` });
+        if (catalog === "populated") {
+            await client.query(`INSERT INTO product_attributes (id,name,slug) VALUES ('attr_mat','Material','material');
+                INSERT INTO products (id,name,slug,price_minor) VALUES ('prod_a','A','a',100),('prod_b','B','b',100);
+                INSERT INTO product_variants (id,product_id,sku,price_minor,is_default,track_inventory)
+                    VALUES ('var_a','prod_a','A',100,1,0),('var_b','prod_b','B',100,1,0);
+                INSERT INTO product_attribute_values (id,product_id,attribute_id,value)
+                    VALUES ('pav_a','prod_a','attr_mat','Cotton'),('pav_b','prod_b','attr_mat','Cotton')`);
+        }
+        await rebuildCatalogProjections(db);
+        const clocks = async () => (await client.query(`SELECT seq AS clock_seq,
+            coalesce((SELECT seq FROM cache_dep WHERE dep='store'),0) AS store_seq
+            FROM cache_clock WHERE id=1`)).rows[0] as { clock_seq: number; store_seq: number };
+        const counts = async () => (await client.query(`SELECT facet_kind,facet_key,value_key,product_count
+            FROM product_facet_public_counts WHERE product_count>0 ORDER BY 1,2,3`)).rows;
+        const expected = await counts();
+        expect(expected).toEqual(catalog === "empty" ? [] : [
+            { facet_kind: "attribute", facet_key: "attr_mat", value_key: "cotton", product_count: 2 },
+        ]);
+        const before = await clocks();
+        await rebuildCatalogProjections(db);
+        expect(await clocks()).toEqual(before);
+
+        // Only the derived counters drift: source projections and their DVC
+        // dependencies remain unchanged until the explicit repair.
+        await client.query("UPDATE product_facet_public_counts SET product_count=0");
+        await client.query("INSERT INTO product_facet_public_counts VALUES ('attribute','stale','stale',8)");
+        expect(await clocks()).toEqual(before);
+        const result = await rebuildCatalogProjections(db);
+        if (catalog === "empty") expect(result).toEqual({ processed: 0, nextAfterProductId: null, done: true });
+        expect(await counts()).toEqual(expected);
+        const repaired = await clocks();
+        expect(repaired).toEqual({ clock_seq: before.clock_seq + 1, store_seq: before.clock_seq + 1 });
+        await rebuildCatalogProjections(db);
+        expect(await clocks()).toEqual(repaired);
+        expect(await counts()).toEqual(expected);
+    });
+
     it("pages fallback search relevance before projecting cards with exact tiers and ties", async () => {
         const { db, client } = await createNativePostgres({ label: "listing_relevance" });
         await client.query(`INSERT INTO categories (id, name, slug, status) VALUES

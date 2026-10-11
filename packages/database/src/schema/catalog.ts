@@ -92,6 +92,26 @@ export const productFacetValues = sqliteTable("product_facet_values", {
     index("product_facet_values_number_idx")
         .on(table.facetKey, table.valueNumber, table.productId)
         .where(sql`${table.valueNumber} IS NOT NULL`),
+    index("product_facet_values_metadata_label_idx").on(table.facetKind, table.facetKey, table.valueKey, table.valueLabel, table.productId),
+    index("product_facet_values_metadata_sort_idx").on(table.facetKind, table.facetKey, table.valueKey, table.sortOrder, table.productId),
+    index("product_facet_values_metadata_sample_idx")
+        .on(table.facetKind, table.facetKey, table.valueKey, table.variantId, table.productId)
+        .where(sql`${table.facetKind} = 'option'`),
+    index("product_facet_values_metadata_number_idx")
+        .on(table.facetKind, table.facetKey, table.valueKey, table.valueNumber, table.productId)
+        .where(sql`${table.facetKind} = 'attribute' AND ${table.valueNumber} IS NOT NULL`),
+]);
+
+/** Exact public DISTINCT-product counts, maintained with the facet/buyer writes. */
+export const productFacetPublicCounts = sqliteTable("product_facet_public_counts", {
+    facetKind: text("facet_kind", { enum: PRODUCT_FACET_KINDS }).notNull(),
+    facetKey: text("facet_key").notNull(),
+    valueKey: text("value_key").notNull(),
+    productCount: integer("product_count").notNull(),
+}, (table) => [
+    primaryKey({ columns: [table.facetKind, table.facetKey, table.valueKey] }),
+    check("product_facet_public_counts_kind", sql`${table.facetKind} IN ('attribute', 'option')`),
+    check("product_facet_public_counts_nonnegative", sql`${table.productCount} >= 0`),
 ]);
 
 export const PRODUCT_BUYER_AVAILABILITY_BANDS = ["untracked", "out_of_stock", "low_stock", "in_stock"] as const;

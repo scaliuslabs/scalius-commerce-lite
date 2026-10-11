@@ -1045,6 +1045,7 @@ export type CacheDepSoftTable = never;
 export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Derived or machinery.
   products_fts: FTS,
+  product_facet_public_counts: "Derived public facet counts; canonical facet lf and buyer-state lm dependencies cover the exact scope-minus-exclusions result.",
   categories_fts: FTS,
   cache_clock: MACHINERY,
   cache_dep: MACHINERY,
