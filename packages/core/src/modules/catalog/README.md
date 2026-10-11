@@ -46,6 +46,7 @@ All paths are under `/api/v1` and public except the last two (admin).
 - Public variants carry `availabilityBand`, never an exact stock count (`maskPublicBuyerAvailability`).
 - Facet filters come from the query string: `?<attribute slug>=<value>` (repeat for OR within a facet, AND across facets), `?<slug>.min=` and `.max=` for number attributes, `?option.<axis>=<value>` (matched on one live SKU) and `?brand=<slug>` (published brands). A request carries at most 90 filter values. Unknown slugs and values are dropped.
 - One statement counts every facet. Each value counts the products that match every other facet's selection. Caps: 50 attribute facets, 100 values per facet, 500 for brands.
+- Rating thresholds share one aggregate over the matching products; expand that aggregate into choices afterward, preserving zero counts and the selected threshold for empty scopes.
 - The category-tree facet (`kind: "category"`) holds links, never a filter. A category's effective attribute set (see `attributes`) orders and restricts its facets.
 - Shop-all facet counts run live only while the public catalogue has at most 2,000 products (`SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT`).
 

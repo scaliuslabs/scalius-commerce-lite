@@ -3,13 +3,14 @@
 // the "N★ & up" facet, all read from the `product_review_stats` trigger
 // projection. Reviews are inserted through SQL on delivered, fulfilled lines,
 // so the real stats triggers compute the aggregates.
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getHomepageData } from "../storefront/storefront.service";
-import { resolvePublicAttributeFilters } from "./facets";
+import { buildCatalogFacetCountQuery, groupCatalogRatingFacet, resolvePublicAttributeFilters } from "./facets";
 import { getStorefrontCategoryProducts, getStorefrontProducts } from "./listing";
 
 let sqlite: DatabaseSync | null = null;
@@ -25,7 +26,8 @@ const CATEGORY = {
 };
 
 async function setup() {
-    const harness = createSqliteD1Database();
+    const queries: Array<{ sql: string; params: readonly SQLInputValue[] }> = [];
+    const harness = createSqliteD1Database({ onQuery: (sql, params) => queries.push({ sql, params }) });
     sqlite = harness.sqlite;
     const s = harness.sqlite;
     s.exec(`
@@ -94,7 +96,7 @@ async function setup() {
         if (chunk.done) break;
         cursor = chunk.nextAfterProductId;
     }
-    return harness;
+    return { ...harness, queries };
 }
 
 describe("review ratings on buyer listings", () => {
@@ -189,6 +191,45 @@ describe("review ratings on buyer listings", () => {
         // A selection with nothing to show keeps its row so the buyer can untick it.
         expect((await getStorefrontCategoryProducts(db, quiet, { page: 1, limit: 20, minRating: 4 })).ratingFacet)
             .toEqual([{ min: 4, count: 0 }]);
+    });
+
+    it("counts every rating threshold in one scope pass and keeps zero counts when other filters exclude reviewed products", async () => {
+        const { db, sqlite, queries } = harness;
+        const filters = await resolvePublicAttributeFilters(db, { brand: ["xenon"] }, []);
+        queries.length = 0;
+        const rows = await buildCatalogFacetCountQuery(db, {
+            baseConditions: [sql`product_buyer_state.product_id = 'prod_e'`],
+            needsProducts: false,
+            filters,
+            ratingFacet: true,
+            minRating: 1,
+        });
+        expect(groupCatalogRatingFacet(rows, 1)).toEqual([
+            { min: 4, count: 0 }, { min: 3, count: 0 }, { min: 2, count: 0 }, { min: 1, count: 0 },
+        ]);
+        expect(queries).toHaveLength(1);
+        const query = queries[0]!;
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params);
+        const aggregate = plan.find((step) => /^(?:CO-ROUTINE|MATERIALIZE) rating_counts$/.test(String(step.detail)));
+        expect(aggregate).toBeDefined();
+        // Threshold expansion consumes one aggregate row, not the full scope.
+        expect(plan.filter((step) => step.parent === aggregate!.id).map((step) => step.detail))
+            .toEqual(["SCAN facet_scope"]);
+    });
+
+    it("emits no aggregate rating rows for empty or unreviewed scopes, retaining only the selected threshold", async () => {
+        for (const productId of ["missing_product", "prod_f"]) {
+            const rows = await buildCatalogFacetCountQuery(harness.db, {
+                baseConditions: [sql`product_buyer_state.product_id = ${productId}`],
+                needsProducts: false,
+                filters: [],
+                ratingFacet: true,
+                minRating: 1,
+            });
+            expect(rows.filter((row) => row.facetKind === "rating")).toEqual([]);
+            expect(groupCatalogRatingFacet(rows)).toEqual([]);
+            expect(groupCatalogRatingFacet(rows, 1)).toEqual([{ min: 1, count: 0 }]);
+        }
     });
 
     it("puts the rating on homepage cards", async () => {

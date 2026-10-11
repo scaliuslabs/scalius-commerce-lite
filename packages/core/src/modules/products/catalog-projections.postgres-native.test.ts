@@ -97,6 +97,18 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
             seen.push(...ids);
         }
         expect(seen).toEqual(expected);
+        await client.query(`INSERT INTO product_review_stats
+            (product_id, review_count, rating_sum, count_1, count_3, count_5, rating_avg_centi, rating_rank_milli)
+            VALUES ('title_new', 1, 5, 0, 0, 1, 500, 3333),
+                ('category_a', 1, 3, 0, 1, 0, 300, 3000),
+                ('description', 1, 1, 1, 0, 0, 100, 2666)`);
+        const rated = await getStorefrontProducts(db, { search: "alpha", minRating: 4, limit: 20 });
+        expect(rated.products.map(product => product.id)).toEqual(["title_new"]);
+        expect(rated.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 2 }, { min: 2, count: 2 }]);
+        const oneStar = await getStorefrontProducts(db, { search: "alpha", minRating: 1, limit: 20 });
+        expect(oneStar.ratingFacet).toEqual([
+            { min: 4, count: 1 }, { min: 3, count: 2 }, { min: 2, count: 2 }, { min: 1, count: 3 },
+        ]);
     });
 
     it("keeps populated recommendation scores and strict deadlines through the hinted order joins", async () => {

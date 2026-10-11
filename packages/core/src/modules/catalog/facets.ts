@@ -656,17 +656,27 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput) {
         ...REVIEW_RATING_FACET_STARS,
         ...(input.minRating === undefined ? [] : [input.minRating]),
     ])];
+    // Count all thresholds in one scope pass, then expand the aggregate row.
+    const ratingCounts = ratingStars.map((stars, index) => sql`
+        SUM(CASE WHEN facet_scope.rating_centi >= ${stars * 100}
+            AND ${attributeMatch()} AND ${optionMatch} AND ${brandMatch} THEN 1 ELSE 0 END)
+            AS ${sql.raw(`rating_count_${index}`)}`);
     const ratingBranch = input.ratingFacet
         ? sql`
             UNION ALL
             SELECT 'rating', 'rating', CAST(rating_min.value AS TEXT),
-                SUM(CASE WHEN facet_scope.rating_centi >= CAST(rating_min.value AS INTEGER) * 100
-                    AND ${attributeMatch()} AND ${optionMatch} AND ${brandMatch} THEN 1 ELSE 0 END),
+                CASE CAST(rating_min.key AS INTEGER)
+                    ${sql.join(ratingStars.map((_, index) => sql`
+                        WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
+                END,
                 NULL, NULL, NULL, NULL
-            FROM json_each(${JSON.stringify(ratingStars)}) AS rating_min
-            CROSS JOIN facet_scope
-            WHERE facet_scope.rating_centi IS NOT NULL
-            GROUP BY rating_min.value`
+            FROM (
+                SELECT COUNT(*) AS rated_count, ${sql.join(ratingCounts, sql`, `)}
+                FROM facet_scope
+                WHERE facet_scope.rating_centi IS NOT NULL
+            ) AS rating_counts
+            CROSS JOIN json_each(${JSON.stringify(ratingStars)}) AS rating_min
+            WHERE rating_counts.rated_count > 0`
         : sql``;
 
     // Sub-listings are counted from the materialized scope too: each scoped
