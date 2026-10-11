@@ -302,10 +302,14 @@ async function main() {
     const { readFileSync, writeFileSync } = await import("node:fs");
     const { dirname, resolve } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
-    const serverDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "apps", "storefront", "dist", "server");
+    const storefrontDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "apps", "storefront");
+    const serverDir = resolve(storefrontDir, "dist", "server");
     const ports = readDevPorts();
     const config = localStorefrontWorkerConfig(JSON.parse(readFileSync(resolve(serverDir, "wrangler.json"), "utf8")), { apiWorkerName: devApiWorkerName(ports), port: ports.storefront });
-    const out = options.out ? resolve(options.out) : resolve(serverDir, "wrangler.local.json");
+    // Wrangler loads local runtime configuration beside the selected config.
+    const out = options.out ? resolve(options.out) : resolve(storefrontDir, "wrangler.local.json");
+    config.main = resolve(serverDir, config.main);
+    if (config.assets?.directory) config.assets.directory = resolve(serverDir, config.assets.directory);
     writeFileSync(out, `${JSON.stringify(config, null, 1)}\n`);
     console.log(`${out}: BACKEND_API -> ${devApiWorkerName(ports)}, port ${ports.storefront}. Serve it with wrangler dev -c <that file> beside the API.`);
     return;

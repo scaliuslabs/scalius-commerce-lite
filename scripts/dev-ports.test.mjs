@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,6 +172,45 @@ describe("local API worker name and the storefront binding", () => {
     expect(built.services[0].service).toBe("scalius-api");
     expect(() => localStorefrontWorkerConfig(built, {})).toThrow(/apiWorkerName/);
     expect(() => localStorefrontWorkerConfig({ services: [] }, { apiWorkerName: "a" })).toThrow(/BACKEND_API/);
+  });
+
+  it.each(["default", "relative", "absolute"])("writes the %s CLI output with paths still pointing at the build", (destination) => {
+    const fixture = realpathSync(mkdtempSync(resolve(tmpdir(), "scalius-built-config-")));
+    try {
+      const storefront = resolve(fixture, "apps/storefront");
+      const server = resolve(storefront, "dist/server");
+      const script = resolve(fixture, "scripts/dev-ports.mjs");
+      mkdirSync(dirname(script), { recursive: true });
+      mkdirSync(server, { recursive: true });
+      copyFileSync(resolve(root, "scripts/dev-ports.mjs"), script);
+      const built = {
+        main: "entry.mjs", assets: { binding: "ASSETS", directory: "../client" }, no_bundle: true,
+        routes: [{ pattern: "storefront.scalius.com", custom_domain: true }],
+        services: [{ binding: "BACKEND_API", service: "scalius-api" }, { binding: "OTHER", service: "other" }],
+        version_metadata: { binding: "CF_VERSION_METADATA" },
+        compatibility_flags: ["nodejs_compat"], rules: [{ type: "ESModule", globs: ["**/*.mjs"] }],
+      };
+      const original = JSON.stringify(built);
+      writeFileSync(resolve(server, "wrangler.json"), original);
+      const out = destination === "default" ? resolve(storefront, "wrangler.local.json") : resolve(fixture, "custom output/wrangler.json");
+      mkdirSync(dirname(out), { recursive: true });
+      const args = destination === "default" ? [] : ["--out", destination === "absolute" ? out : "custom output/wrangler.json"];
+      execFileSync(process.execPath, [script, "storefront-config", ...args], {
+        cwd: fixture,
+        env: { SCALIUS_DEV_API_PORT: "8931", SCALIUS_DEV_STOREFRONT_PORT: "4531", SCALIUS_DEV_ADMIN_PORT: "4532" },
+        stdio: "pipe",
+      });
+      const local = JSON.parse(readFileSync(out, "utf8"));
+      expect(local).toEqual({
+        ...built, routes: undefined,
+        main: resolve(server, "entry.mjs"), assets: { ...built.assets, directory: resolve(storefront, "dist/client") },
+        services: [{ binding: "BACKEND_API", service: "scalius-api-local-8931" }, built.services[1]],
+        dev: { port: 4531, enable_containers: false },
+      });
+      expect(readFileSync(resolve(server, "wrangler.json"), "utf8")).toBe(original);
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
   });
 
   const page = (canonical, img = "") => `<html><head><link rel="canonical" href="${canonical}"><meta property="og:url" content="${canonical}"></head><body>${img}</body></html>`;

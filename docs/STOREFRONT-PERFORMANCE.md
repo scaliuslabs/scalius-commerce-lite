@@ -169,6 +169,15 @@ pnpm perf:storefront --base http://localhost:4391 --d1-explorer http://localhost
 
 Wrangler's dev registry is shared by every local stack, so a built storefront's `BACKEND_API` binding resolves by Worker name (`scalius-api-local-<api port>` on a non-default port; `node scripts/dev-ports.mjs storefront-config` writes the binding). Against a local base the script first checks that the storefront home page carries its own canonical origin, because another stack's API would render that stack's origins. `--media-url` also checks the media origin, and `--no-binding-check` skips the check. `node scripts/dev-ports.mjs verify-binding` runs the same check for a `pnpm dev` stack.
 
+With the local API running and the storefront built, generate and serve its local config from the repo root (set `SCALIUS_DEV_API_PORT` to match a non-default API):
+
+```sh
+SCALIUS_DEV_STOREFRONT_PORT=4391 node scripts/dev-ports.mjs storefront-config
+pnpm --dir apps/storefront exec wrangler dev --config wrangler.local.json --local
+```
+
+The generated `apps/storefront/wrangler.local.json` stays beside the project's runtime configuration so Wrangler loads it normally; placing the config inside `dist/server` can leave the frontier client unavailable and every page a `MISS`. Built entry and asset paths are absolute, including with `--out <file>`. A custom output directory needs its own runtime configuration through Wrangler's supported options. The helper does not read or copy secrets. Fully consume the first anonymous page response and require a repeat request to report `X-Cache-Status: HIT` before timing hits.
+
 ### Live, read-only
 
 A miss cannot be forced on a live store. The first request counts as a miss only when the edge reports `X-Cache-Status: MISS`.
