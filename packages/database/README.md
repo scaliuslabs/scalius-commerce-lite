@@ -81,6 +81,8 @@ Migration 0135 covers inventory valuation with SKU `(id, cost_minor)` and level 
 
 Migration 0136 extends `product_buyer_state_price_idx` with availability, category and creation time so live recommendation ranking reads its six candidate fields from the index. Its original `(is_public, from_minor, product_id)` prefix preserves price ordering and pagination; the query, deadline and index count stay unchanged.
 
+Migration 0137 covers recommendation source-order ID lookups with `(id, deleted_at, status, created_at, customer_phone, customer_email)`. The bounded source sample and exact window deadline use explicit SQLite/Turso index hints; the PostgreSQL profile removes the supported `AS alias INDEXED BY index` form. Sampling, buyer identity, scores and dependency declarations stay unchanged.
+
 Single tables with rules:
 
 - `settings` holds typed settings documents. `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the compare-and-swap counter. Fraud-checker provider rows and `notification_provider_health` markers also live here. Each domain declares its documents (see [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Settings documents").

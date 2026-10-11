@@ -27,7 +27,8 @@ import {
     refreshProductRecommendations,
     refreshProductSalesStats,
 } from "../catalog/recommendation-refresh";
-import { getStorefrontProductRecommendations } from "../catalog/recommendations";
+import { getStorefrontProductRecommendations, rankProductRecommendations } from "../catalog/recommendations";
+import { withDependencyScope } from "../../cache-deps";
 
 vi.mock("../inventory/alerts", async (importOriginal) => ({
     ...await importOriginal<typeof import("../inventory/alerts")>(),
@@ -55,6 +56,62 @@ const base = {
 };
 
 describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
+    it("keeps populated recommendation scores and strict deadlines through the hinted order joins", async () => {
+        const { db, client } = await createNativePostgres({ label: "recommendation_buyers" });
+        const now = Number((await client.query("SELECT unixepoch() AS now")).rows[0].now);
+        await client.query(`INSERT INTO categories (id, name, slug, status) VALUES
+            ('cat_shirts', 'Shirts', 'shirts', 'published'), ('cat_trousers', 'Trousers', 'trousers', 'published')`);
+        for (const [id, category, price, stock, active] of [
+            ["source", "cat_shirts", 100_000, 5, 1], ["peer", "cat_trousers", 900_000, 5, 1],
+            ["similar", "cat_shirts", 100_000, 5, 1], ["sold_out", null, 100_000, 0, 1],
+            ["hidden", null, 100_000, 5, 0],
+        ] as const) {
+            await client.query(`INSERT INTO products
+                (id, name, description, price_minor, category_id, slug, is_active, created_at, updated_at)
+                VALUES ($1, $1, '', $2, $3, $1, $4, $5, $5)`, [id, price, category, active, now - 86_400]);
+            await client.query(`INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+                VALUES ($1, $2, $1, $3, $4, 1, 1)`, [`var_${id}`, id, price, stock]);
+        }
+        const basket = ["source", "source", "peer", "sold_out", "hidden"];
+        const order = async (id: string, phone: string, email: string | null, status: string, createdAt = now - 3_600) => {
+            await client.query(`INSERT INTO orders
+                (id, customer_name, customer_phone, customer_email, shipping_address, city, zone, status, created_at, updated_at)
+                VALUES ($1, 'Buyer', $2, $3, 'Road', 'city', 'zone', $4, $5, $5)`, [id, phone, email, status, createdAt]);
+            await client.query(`INSERT INTO order_items (id, order_id, product_id, quantity, created_at)
+                SELECT $1 || '_line_' || line.ordinality, $1, line.product_id, 1, $3
+                FROM unnest($2::text[]) WITH ORDINALITY AS line(product_id, ordinality)`, [id, basket, createdAt]);
+        };
+        await order("phone_pending", "01711111111", null, "pending");
+        await order("phone_delivered", "01711111111", null, "delivered");
+        await order("email_processing", "NO_PHONE", "buyer@example.com", "processing");
+        await order("email_confirmed", "NO_PHONE", " BUYER@EXAMPLE.COM ", "confirmed");
+        await order("older_buyer", "01722222222", null, "completed", now - 40 * 86_400);
+        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) {
+            await order(`excluded_${status}`, `excluded_${status}`, null, status);
+        }
+        await order("deleted_buyer", "01733333333", null, "confirmed");
+        await client.query("UPDATE orders SET deleted_at = $1 WHERE id = 'deleted_buyer'", [now]);
+        await rebuildCatalogProjections(db);
+        const ranked = () => withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source"], limit: 8 }),
+            { strict: true, log: () => {} },
+        );
+        const { value, dependencies } = await ranked();
+        expect(value).toEqual({ reason: "also_bought", rows: [
+            { id: "peer", alsoBoughtBuyers: 3, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+            { id: "similar", alsoBoughtBuyers: 0, relatedScore: 40, popularBuyers: 0, popularOrdering: 0 },
+        ] });
+        expect(dependencies.validUntil).toBe((now - 3_600 + 30 * 86_400 + 1) * 1_000);
+        expect(dependencies.keys).toContain("recommendation-signals");
+        expect(dependencies.uncacheable).toEqual([]);
+        expect(dependencies.coarseTables).toEqual([]);
+        // The annual source-order boundary can win without changing any scores.
+        await client.query("UPDATE orders SET created_at = $1 WHERE id = 'older_buyer'", [now - 365 * 86_400 + 100]);
+        const annual = await ranked();
+        expect(annual.value).toEqual(value);
+        expect(annual.dependencies.validUntil).toBe((now + 101) * 1_000);
+    });
+
     it("keeps and reads the buyer state and facet rows like D1", async () => {
         const { db, client } = await createNativePostgres({ label: "projections" });
         await client.query(`

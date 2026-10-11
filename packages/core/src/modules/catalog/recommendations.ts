@@ -316,6 +316,8 @@ export async function rankRecommendationRows(
         LIMIT ${sql.raw(String(ALSO_BOUGHT_SOURCE_LINES))}
     ) AS ${sql.raw(alias)}`;
 
+    // Source-order hints keep bounded ID seeks covering; SQLite otherwise
+    // prefers primary-key lookups that fetch the wide order row.
     if (deps.active()) {
         // Inclusive SQL windows stop including an order one second after its
         // boundary. Empty/quiet stores have no deadline, never a routine TTL.
@@ -332,7 +334,7 @@ export async function rankRecommendationRows(
              LIMIT 1)`,
             alsoBoughtAt: sql<number | null>`(SELECT MIN(rec_source_order.created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
              FROM ${sourceLines("rec_boundary_source")}
-             CROSS JOIN orders AS rec_source_order
+             CROSS JOIN orders AS rec_source_order INDEXED BY orders_recommendation_id_buyers_idx
              WHERE rec_source_order.id = rec_boundary_source.order_id
                AND ${realOrder("rec_source_order")}
                AND rec_source_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))})`,
@@ -347,7 +349,7 @@ export async function rankRecommendationRows(
         SELECT rec_peer_line.product_id AS product_id,
                COUNT(DISTINCT ${buyerSql("rec_co_order")}) AS buyers
         FROM ${sourceLines("rec_source_line")}
-        CROSS JOIN orders AS rec_co_order
+        CROSS JOIN orders AS rec_co_order INDEXED BY orders_recommendation_id_buyers_idx
         CROSS JOIN order_items AS rec_peer_line
         WHERE rec_co_order.id = rec_source_line.order_id
           AND rec_peer_line.order_id = rec_source_line.order_id

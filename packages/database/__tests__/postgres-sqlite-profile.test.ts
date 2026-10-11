@@ -23,6 +23,54 @@ describe("PostgreSQL SQLite-profile compiler", () => {
     expect(compiled.readOnly).toBe(true);
   });
 
+  it("omits bare index hints after explicit aliases without changing joins or binds", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      "SELECT s.order_id FROM source AS s "
+        + "CROSS JOIN orders AS rec_co_order INDEXED BY orders_recommendation_id_buyers_idx "
+        + "WHERE rec_co_order.id = s.order_id AND rec_co_order.status = ? "
+        + "AND EXISTS (SELECT 1 FROM orders AS rec_source_order indexed\nby\torders_recommendation_id_buyers_idx "
+        + "WHERE rec_source_order.id = ?)",
+      2,
+    );
+    expect(compiled.sql).toBe(
+      "SELECT s.order_id FROM source AS s "
+        + "CROSS JOIN orders AS rec_co_order  "
+        + "WHERE rec_co_order.id = s.order_id AND rec_co_order.status = $1 "
+        + "AND EXISTS (SELECT 1 FROM orders AS rec_source_order  WHERE rec_source_order.id = $2)",
+    );
+    expect(compiled.parameterCount).toBe(2);
+    expect(compiled.readOnly).toBe(true);
+  });
+
+  it("keeps index-hint text inside escaped literals, identifiers, and comments opaque", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      `SELECT 'it''s AS r INDEXED BY fake ?', "AS r INDEXED BY fake ?", `
+        + '`AS r INDEXED BY fake ?`, [AS r INDEXED BY fake ?] '
+        + "FROM orders AS r /* INDEXED BY fake ? */ INDEXED BY real_idx "
+        + "-- AS r INDEXED BY fake ?\nWHERE r.id = ?",
+      1,
+    );
+    expect(compiled.sql).toBe(
+      `SELECT 'it''s AS r INDEXED BY fake ?', "AS r INDEXED BY fake ?", `
+        + '"AS r INDEXED BY fake ?", "AS r INDEXED BY fake ?" '
+        + "FROM orders AS r /* INDEXED BY fake ? */  "
+        + "-- AS r INDEXED BY fake ?\nWHERE r.id = $1",
+    );
+  });
+
+  it("does not strip unsupported hint forms or an unquoted column named indexed", () => {
+    for (const query of [
+      'SELECT indexed by FROM orders',
+      'SELECT 1 FROM orders AS r INDEXED BY "quoted_idx"',
+      'SELECT 1 FROM orders AS r INDEXED /* keep */ BY idx',
+      'SELECT 1 FROM orders AS r INDEXED BY /* keep */ idx',
+      'SELECT 1 FROM orders AS "r" indexed by idx',
+    ]) expect(compileSqliteStatementForPostgres(query).sql).toBe(query);
+    expect(() => compileSqliteStatementForPostgres(
+      'SELECT 1 FROM orders AS r INDEXED BY "unterminated',
+    )).toThrow(/unterminated/i);
+  });
+
   it("preserves indexed SQLite placeholders and rejects mixed styles", () => {
     const compiled = compileSqliteStatementForPostgres(
       "SELECT ?2, ?1, ?2, '?3' -- ?4\n",

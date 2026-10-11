@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 136,
-  name: "0136_buyer_state_covering_index",
+  version: 137,
+  name: "0137_recommendation_order_id",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -461,6 +461,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 136,
     name: "0136_buyer_state_covering_index",
     sourceSha256: "a37534e890574e9a2f21de767c61abb402209ff11d3003d8ce26cc40e2282494",
+  },
+  {
+    version: 137,
+    name: "0137_recommendation_order_id",
+    sourceSha256: "6ff4dc3443b5a6107534f6cedc89a91afba4379b5d89d80145bb51603064907a",
   },
 ] as const;
 

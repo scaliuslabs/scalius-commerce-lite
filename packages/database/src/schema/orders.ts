@@ -310,6 +310,8 @@ export const orders = sqliteTable("orders", {
     index("orders_sales_rollup_idx").on(table.deletedAt, table.createdAt, table.status, table.totalShopMinor, table.shopCurrency),
     // Recommendation buyer matching reads eligible orders without fetching order rows (0132).
     index("orders_recommendation_buyers_idx").on(table.deletedAt, table.createdAt, table.status, table.id, table.customerPhone, table.customerEmail),
+    // The bounded source-order sample seeks IDs without fetching wide order rows (0137).
+    index("orders_recommendation_id_buyers_idx").on(table.id, table.deletedAt, table.status, table.createdAt, table.customerPhone, table.customerEmail),
     // Overview totals read only these fields, in currency/date order (0129).
     index("orders_overview_idx").on(
       table.deletedAt, table.shopCurrency, table.createdAt, table.id, table.status,

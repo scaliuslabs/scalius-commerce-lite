@@ -312,7 +312,7 @@ describe("product recommendations", () => {
         product({ id: "similar", categoryId: "cat_shirts" });
         product({ id: "sold_out", stock: 0 });
         product({ id: "hidden", isActive: false });
-        const basket = ["source", "peer", "sold_out", "hidden"];
+        const basket = ["source", "source", "peer", "sold_out", "hidden"];
         order("01711111111", basket, "pending");
         order("01711111111", basket, "delivered");
         order("", basket, "processing");
@@ -354,6 +354,18 @@ describe("product recommendations", () => {
         }
         for (const alias of ["rec_popular_line", "rec_peer_line"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
+        }
+        for (const alias of ["rec_source_order", "rec_co_order"]) {
+            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_id_buyers_idx \\(id=\\?`));
+            expect(plan).not.toMatch(new RegExp(`SEARCH ${alias} USING INDEX sqlite_autoindex_orders_1`));
+        }
+        // Compare both exact score rows and the strict boundary with the old
+        // unhinted statements, including duplicate source lines and buyers.
+        for (const [index, query] of statements.entries()) {
+            const unhinted = query.replaceAll(" INDEXED BY orders_recommendation_id_buyers_idx", "");
+            expect(unhinted).not.toBe(query);
+            expect(sqlite.prepare(query).all(...statementParams[index]!).map(Object.values))
+                .toEqual(sqlite.prepare(unhinted).all(...statementParams[index]!).map(Object.values));
         }
     });
 

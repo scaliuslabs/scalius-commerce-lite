@@ -841,6 +841,7 @@ export function compileSqliteStatementForPostgres(
   let parameterCount = 0;
   let placeholderStyle: "anonymous" | "indexed" | null = null;
   let previousWord = "";
+  let previousWordWasAlias = false;
   let output = "";
 
   while (cursor < source.length) {
@@ -889,12 +890,14 @@ export function compileSqliteStatementForPostgres(
     }
 
     if (character === "'") {
+      previousWordWasAlias = false;
       output += character;
       cursor += 1;
       state = "single-quote";
       continue;
     }
     if (character === '"') {
+      previousWordWasAlias = false;
       output += character;
       cursor += 1;
       state = "double-quote";
@@ -921,6 +924,7 @@ export function compileSqliteStatementForPostgres(
       output += quotePostgresIdentifier(identifier.value);
       cursor = identifier.end;
       previousWord = "";
+      previousWordWasAlias = false;
       continue;
     }
     if (character === "?") {
@@ -949,6 +953,7 @@ export function compileSqliteStatementForPostgres(
         cursor += 1;
       }
       previousWord = "";
+      previousWordWasAlias = false;
       continue;
     }
     if (isIdentifierStart(character)) {
@@ -956,6 +961,20 @@ export function compileSqliteStatementForPostgres(
       while (end < source.length && isIdentifierPart(source[end]!)) end += 1;
       const original = source.slice(cursor, end);
       const normalized = original.toLowerCase();
+      // SQLite's access-path contract has no PostgreSQL equivalent. Accept
+      // only AS <bare alias> INDEXED BY <bare index>; the existing scanner
+      // keeps quoted text/identifiers and comments opaque. Other forms stay
+      // unsupported instead of partially removing an unfamiliar clause.
+      if (normalized === "indexed" && previousWordWasAlias) {
+        const by = readFollowingWord(source, end);
+        const index = by?.normalized === "by" ? readFollowingWord(source, by.end) : null;
+        if (index) {
+          cursor = index.end;
+          previousWord = "";
+          previousWordWasAlias = false;
+          continue;
+        }
+      }
       const followedByCall = /^\s*\(/.test(source.slice(end));
       let replacement = original;
       if (normalized === "true") replacement = "1";
@@ -980,6 +999,7 @@ export function compileSqliteStatementForPostgres(
         replacement = quotePostgresIdentifier(original);
       }
       output += replacement;
+      previousWordWasAlias = previousWord === "as" && !POSTGRES_AS_SYNTAX_WORDS.has(normalized);
       previousWord = normalized;
       cursor = end;
       continue;
@@ -987,6 +1007,7 @@ export function compileSqliteStatementForPostgres(
 
     output += character;
     cursor += 1;
+    if (!/\s/.test(character)) previousWordWasAlias = false;
     if (!/\s/.test(character) && character !== ".") previousWord = "";
   }
 

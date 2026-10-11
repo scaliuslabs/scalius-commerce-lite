@@ -689,6 +689,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 137,
+        name: "0137_recommendation_order_id",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
     ]);
   });
 
@@ -874,6 +880,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 134, name: "0134_media_text_index" },
           { version: 135, name: "0135_inventory_valuation_indexes" },
           { version: 136, name: "0136_buyer_state_covering_index" },
+          { version: 137, name: "0137_recommendation_order_id" },
         ],
       });
     } finally {
