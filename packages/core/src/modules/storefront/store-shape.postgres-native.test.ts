@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { readCategoryNavigation } from "../navigation";
 import { readStoreShape } from "./store-shape";
 import { STORE_SHAPE_EXPECTED, STORE_SHAPE_PRODUCTS, STORE_SHAPE_TREE } from "./store-shape.fixture";
 
@@ -26,6 +27,20 @@ describe.skipIf(!postgresUrl)("store shape on PostgreSQL", { timeout: NATIVE_POS
     await client.query(`INSERT INTO product_attributes (id, name, slug, key_spec) VALUES ('attr_cpu', 'Processor', 'processor', 1)`);
     await client.query(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ('pav_f', 'p_f', 'attr_cpu', 'M4')`);
     await expect(readStoreShape(db)).resolves.toMatchObject({ categoryDepth: 4, hasKeySpecs: true });
+
+    expect((await readCategoryNavigation(db)).nodes.map(({ id }) => id)).toEqual(["A", "F", "A1", "A2", "A1a", "A2a", "A2a1"]);
+    for (const [write, ids] of [
+      ["UPDATE categories SET status = 'draft' WHERE id = 'A1a'", ["A", "F", "A2", "A2a", "A2a1"]],
+      ["UPDATE categories SET deleted_at = 1 WHERE id = 'A2a1'", ["F"]],
+      ["UPDATE categories SET status = 'published' WHERE id = 'A1a'", ["A", "F", "A1", "A1a"]],
+      ["UPDATE categories SET status = 'internal' WHERE id = 'A1'", ["A", "F"]],
+      ["UPDATE categories SET status = 'published', deleted_at = 1 WHERE id = 'A1'", ["A", "F"]],
+      ["UPDATE categories SET deleted_at = 1 WHERE id = 'A'", ["F"]],
+    ] as const) {
+      await client.query(write);
+      expect((await readCategoryNavigation(db)).nodes.map(({ id }) => id)).toEqual(ids);
+      expect((await readStoreShape(db)).topCategoryCount).toBe(ids.filter((id) => id === "A" || id === "F").length);
+    }
 
     for (const [write, hasDigitalLines] of [
       ["UPDATE product_variants SET fulfillment_kind = 'digital' WHERE id = 'v_p_f'", true],

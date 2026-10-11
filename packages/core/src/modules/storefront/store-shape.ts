@@ -86,17 +86,19 @@ export function selectStoreShapeCounts<Extra extends Record<string, SQL>>(db: Da
       ) AS capped_skus)`,
       // Published roots with a public product in their published subtree
       // (the listing's own subtree rule, publicCategorySubtreeCondition). The
-      // product check is its own EXISTS per subtree node so the planner walks
-      // the closure first and probes (is_public, category_id) per node; a
-      // join lets SQLite drive from every public product instead.
+      // Keep closure outermost: joining categories can visit every published
+      // category for each root before checking whether it is a descendant.
       topCategoryCount: sql<number>`(SELECT count(*) FROM (
         SELECT 1 FROM "categories" root
         WHERE root."parent_id" IS NULL AND ${published("root")}
           AND EXISTS (
             SELECT 1 FROM "category_closure" subtree
-            INNER JOIN "categories" subtree_category ON subtree_category."id" = subtree."descendant_id"
-            WHERE subtree."ancestor_id" = root."id" AND ${published("subtree_category")}
-              AND ${holdsPublicProduct("subtree_category")}
+            WHERE subtree."ancestor_id" = root."id"
+              AND EXISTS (
+                SELECT 1 FROM "categories" subtree_category
+                WHERE subtree_category."id" = subtree."descendant_id" AND ${published("subtree_category")}
+                  AND ${holdsPublicProduct("subtree_category")}
+              )
           )
         LIMIT ${cap}
       ) AS capped_roots)`,

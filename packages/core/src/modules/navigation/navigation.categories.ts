@@ -65,11 +65,14 @@ export function selectCategoryNavigationRows(db: Database, limit = CATEGORY_NAVI
       )
       AND EXISTS (
         SELECT 1 FROM "category_closure" subtree
-        INNER JOIN "categories" subtree_category ON subtree_category."id" = subtree."descendant_id"
-        WHERE subtree."ancestor_id" = node."id" AND ${published("subtree_category")}
+        WHERE subtree."ancestor_id" = node."id"
           AND EXISTS (
-            SELECT 1 FROM "product_buyer_state" own_product
-            WHERE own_product."is_public" = 1 AND own_product."category_id" = subtree_category."id"
+            SELECT 1 FROM "categories" subtree_category
+            WHERE subtree_category."id" = subtree."descendant_id" AND ${published("subtree_category")}
+              AND EXISTS (
+                SELECT 1 FROM "product_buyer_state" own_product
+                WHERE own_product."is_public" = 1 AND own_product."category_id" = subtree_category."id"
+              )
           )
       )`)
     .orderBy(sql`node."depth"`, sql`node."name"`, sql`node."id"`)
