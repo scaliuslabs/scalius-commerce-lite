@@ -140,9 +140,13 @@ function fullUniverseRanking(query: string, limit: number): string {
         "",
     );
     expect(noAffinityCutoff).not.toBe(fullAffinity);
+    const allPopularity = noAffinityCutoff.replace(
+        "AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)", "",
+    );
+    expect(allPopularity).not.toBe(noAffinityCutoff);
     const originalPopularity = `SUM(CASE WHEN COALESCE(rec_popular.buyers, 0) >= 2 THEN 1 ELSE 0 END) OVER () * 2 >= MIN(COUNT(*) OVER (), ${limit})`;
-    const canonical = noAffinityCutoff.replaceAll("(SELECT qualifies FROM rec_popularity_guard) = 1", originalPopularity);
-    expect(canonical).not.toBe(noAffinityCutoff);
+    const canonical = allPopularity.replaceAll("(SELECT qualifies FROM rec_popularity_guard) = 1", originalPopularity);
+    expect(canonical).not.toBe(allPopularity);
     return originalOrderPopularity(canonical);
 }
 
@@ -465,7 +469,7 @@ describe("product recommendations", () => {
         for (const alias of ["rec_peer_line"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
         }
-        expect(plan).toContain("SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
+        expect(plan).toContain("SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
         for (const alias of ["rec_source_order"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_id_buyers_idx \\(id=\\?`));
             expect(plan).not.toMatch(new RegExp(`SEARCH ${alias} USING INDEX sqlite_autoindex_orders_1`));
@@ -742,6 +746,69 @@ describe("product recommendations", () => {
         // Exact buyer counts survive even when they no longer order the rows.
         expect(disabled.rows[1]).toMatchObject({ popularBuyers: 2, popularOrdering: 0 });
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("counts only finalists while proving the global quorum from distinct eligible buyers", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        for (const id of ["peer_a", "peer_b", "peer_c"]) product({ id, categoryId: "cat_shirts" });
+        product({ id: "outside", categoryId: "cat_trousers" });
+        product({ id: "hidden", isActive: false });
+        product({ id: "sold_out", stock: 0 });
+        order("buyer_a", ["peer_b", "peer_b"]);
+        for (let repeat = 0; repeat < 3; repeat += 1) order("buyer_b", ["peer_b", "peer_b"]);
+        for (let repeat = 0; repeat < 4; repeat += 1) order("buyer_a", ["outside", "outside"]);
+        const outsideOrder = `ord_${orderSequence}`;
+        order("", ["outside"]);
+        sqlite.prepare("UPDATE orders SET customer_email = NULL WHERE id = ?").run(`ord_${orderSequence}`);
+        for (const buyer of ["buyer_a", "buyer_b"]) {
+            order(buyer, ["hidden", "sold_out"]);
+            order(buyer, ["source"]);
+        }
+        await rebuildCatalogProjections(db);
+
+        const read = async (enabled: boolean) => {
+            statements = [];
+            statementParams = [];
+            const { value, dependencies } = await withDependencyScope(
+                () => rankProductRecommendations(db, { productIds: ["source"], limit: 3 }),
+                { strict: true, log: () => {} },
+            );
+            expect(value.rows.map(row => row.id)).toEqual(enabled
+                ? ["peer_b", "peer_a", "peer_c"] : ["peer_a", "peer_b", "peer_c"]);
+            expect(value.rows.find(row => row.id === "peer_b"))
+                .toMatchObject({ popularBuyers: 2, popularOrdering: enabled ? 2 : 0 });
+            const query = statements[0]!;
+            const params = statementParams[0]!;
+            expect(statements).toHaveLength(1);
+            expect(sqlite.prepare(query).all(...params))
+                .toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
+            expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
+            expect(dependencies.uncacheable).toEqual([]);
+
+            const counted = new Set<string>();
+            const quorum = new Map<string, number>();
+            sqlite.function("observe_finalist_buyer", (id, buyer) => { counted.add(String(id)); return buyer; });
+            sqlite.function("observe_quorum_buyer", (id, buyer) => {
+                quorum.set(String(id), (quorum.get(String(id)) ?? 0) + 1);
+                return buyer;
+            });
+            const observed = query
+                .replace("COUNT(DISTINCT rec_popular_projection.buyer)", "COUNT(DISTINCT observe_finalist_buyer(rec_popular_projection.product_id, rec_popular_projection.buyer))")
+                .replace("SELECT DISTINCT rec_quorum_projection.buyer", "SELECT DISTINCT observe_quorum_buyer(rec_quorum_projection.product_id, rec_quorum_projection.buyer)");
+            expect(observed).toContain("SELECT DISTINCT observe_quorum_buyer");
+            expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
+            expect([...counted]).toEqual(["peer_b"]);
+            expect([...quorum.keys()].sort()).toEqual(["outside", "peer_b"]);
+            // The finalist has four orders from two buyers; the second
+            // distinct buyer stops the witness probe before its repeats.
+            expect(quorum.get("peer_b")).toBe(2);
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params)
+                .map(row => String(row.detail)).join("\n");
+            expect(plan).toContain("SEARCH rec_quorum_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
+        };
+        await read(false);
+        sqlite.prepare("UPDATE orders SET customer_phone = 'buyer_b' WHERE id = ?").run(outsideOrder);
+        await read(true);
     });
 
     it("covers every related signal once while keeping popularity witnesses outside the sparse set", async () => {

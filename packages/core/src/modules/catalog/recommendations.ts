@@ -378,7 +378,8 @@ export async function rankRecommendationRows(
         FROM ${sourceIds.length > 0 ? sql`rec_guard AS rec_popular_guard CROSS JOIN` : sql``}
              recommendation_order_products AS rec_popular_projection
         WHERE rec_popular_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-          ${sourceIds.length > 0 ? sql`AND rec_popular_guard.qualifies = 0` : sql``}
+          ${sourceIds.length > 0 ? sql`AND rec_popular_guard.qualifies = 0
+              AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)` : sql``}
         GROUP BY rec_popular_projection.product_id
     `;
     const popular = sourceIds.length > 0
@@ -626,10 +627,19 @@ export async function rankRecommendationRows(
                 ) THEN 1 ELSE 0 END
                 FROM (
                     SELECT 1
-                    FROM rec_popular
-                    INNER JOIN ${buyerState} ON ${buyerState.productId} = rec_popular.product_id
+                    FROM ${buyerState}
                     WHERE ${candidateCondition}
-                      AND rec_popular.buyers >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
+                      -- The switch uses the full eligible population even
+                      -- when exact scores are needed only for finalists.
+                      -- Scalar form preserves DISTINCT; SQLite drops it in EXISTS.
+                      AND (
+                          SELECT DISTINCT rec_quorum_projection.buyer
+                          FROM recommendation_order_products AS rec_quorum_projection
+                          WHERE rec_quorum_projection.product_id = ${buyerState.productId}
+                            AND rec_quorum_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+                            AND rec_quorum_projection.buyer IS NOT NULL
+                          LIMIT 1 OFFSET ${sql.raw(String(MIN_POPULAR_BUYERS - 1))}
+                      ) IS NOT NULL
                     LIMIT ${sql.raw(String(Math.ceil(limit / 2)))}
                 ) AS rec_popular_witnesses
             ) END AS qualifies
