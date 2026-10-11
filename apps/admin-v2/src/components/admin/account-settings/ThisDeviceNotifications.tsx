@@ -3,9 +3,9 @@
  * set up staff push. Every staff member can open it (the devices are their
  * own); the bell and Settings → Notifications link here.
  *
- * - Turning on proves it works: the browser subscribes, a test notification
- *   goes out at once, and the merchant answers "Did it arrive?". "No" opens
- *   the troubleshooting steps and "Send again".
+ * - Turning on sends a test. The merchant confirms a native notification
+ *   with sound, a silent notification, or no notification. Only the last
+ *   opens troubleshooting; a push-service acceptance cannot prove display.
  * - When this browser cannot receive them, it says exactly why: no https store
  *   address, iPhone and iPad need the dashboard on the Home Screen first
  *   (Apple's rule, with the steps), notifications blocked (with how to unblock
@@ -86,8 +86,8 @@ function BlockerNotice({ blocker }: { blocker: PushBlocker }) {
   return <Alert variant="warning">{text}</Alert>;
 }
 
-/** "Did it arrive?" after a test to this device; "No" shows what to check. */
-function ArrivalCheck({ sending, onYes, onSendAgain }: { sending: boolean; onYes: () => void; onSendAgain: () => void }) {
+/** Distinguish native display from sound, which the browser and OS control. */
+function ArrivalCheck({ sending, onArrived, onSendAgain }: { sending: boolean; onArrived: (silent: boolean) => void; onSendAgain: () => void }) {
   const t = useMessages(webPushMessages);
   const [trouble, setTrouble] = useState(false);
   return (
@@ -104,11 +104,15 @@ function ArrivalCheck({ sending, onYes, onSendAgain }: { sending: boolean; onYes
         ) : null}
         <div className="mt-2 flex flex-wrap gap-2">
           {trouble ? (
-            <Button type="button" variant="outline" loading={sending} onClick={onSendAgain}>{t("sendAgain")}</Button>
+            <>
+              <Button type="button" variant="outline" loading={sending} onClick={onSendAgain}>{t("sendAgain")}</Button>
+              <Button type="button" variant="outline" onClick={() => setTrouble(false)}>{t("arrivedLate")}</Button>
+            </>
           ) : (
             <>
-              <Button type="button" variant="outline" onClick={onYes}>{t("yes")}</Button>
-              <Button type="button" variant="outline" onClick={() => setTrouble(true)}>{t("no")}</Button>
+              <Button type="button" variant="outline" onClick={() => onArrived(false)}>{t("arrivedSound")}</Button>
+              <Button type="button" variant="outline" onClick={() => onArrived(true)}>{t("arrivedSilent")}</Button>
+              <Button type="button" variant="outline" onClick={() => setTrouble(true)}>{t("notArrived")}</Button>
             </>
           )}
         </div>
@@ -125,17 +129,31 @@ export function ThisDeviceNotifications() {
   const [checked, setChecked] = useState(0);
   // The device a test just went to on this browser, while we ask whether it arrived.
   const [asking, setAsking] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [silent, setSilent] = useState(false);
   // What a test to another device answered, by device.
   const [results, setResults] = useState<Record<string, TestPushOutcome>>({});
 
   // Whether this browser holds a subscription is the browser's to say, not the server's.
   useEffect(() => {
     let current = true;
-    void thisBrowserIsOn().then((on) => current && setBrowserOn(on));
+    const check = () => {
+      void thisBrowserIsOn(state.data?.publicKey).then((on) => current && setBrowserOn(on));
+    };
+    const onReturn = () => {
+      check();
+      void queryClient.invalidateQueries({ queryKey: webPushQuery.queryKey });
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") onReturn(); };
+    check();
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       current = false;
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [checked]);
+  }, [checked, queryClient, state.data?.publicKey]);
 
   const refresh = () => {
     setChecked((count) => count + 1);
@@ -146,7 +164,10 @@ export function ThisDeviceNotifications() {
   const sendTest = useMutation({
     mutationFn: (id: string) => sendTestPush(id, testText()),
     onSuccess: async (outcome, id) => {
-      if (id === thisDeviceId() && outcome === "sent") setAsking(id);
+      if (id === thisDeviceId() && outcome === "sent") {
+        setAsking(id);
+        setAttempt((value) => value + 1);
+      }
       else setResults((current) => ({ ...current, [id]: outcome }));
       if (outcome !== "sent") setAsking(null);
       await refresh();
@@ -226,14 +247,17 @@ export function ThisDeviceNotifications() {
       ) : null}
       {asking && on ? (
         <ArrivalCheck
+          key={attempt}
           sending={sendTest.isPending}
-          onYes={() => {
+          onArrived={(withoutSound) => {
             setAsking(null);
-            toast.success(t("arrived"));
+            setSilent(withoutSound);
+            if (!withoutSound) toast.success(t("arrived"));
           }}
           onSendAgain={() => sendTest.mutate(asking)}
         />
       ) : null}
+      {silent && on ? <Alert variant="info">{t("silentNote")}</Alert> : null}
       {devices.length > 0 ? (
         <div className="space-y-1">
           <h4 className="text-body font-medium">{t("devicesTitle")}</h4>

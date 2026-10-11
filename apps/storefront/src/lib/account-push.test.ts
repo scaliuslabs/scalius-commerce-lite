@@ -15,9 +15,10 @@ import {
 
 const ENDPOINT = "https://push.example/send/abc123";
 
-function fakeSubscription() {
+function fakeSubscription(key: string | null = "AQAB") {
   return {
     endpoint: ENDPOINT,
+    options: { applicationServerKey: key ? decodePublicKey(key).buffer : null },
     toJSON: () => ({ endpoint: ENDPOINT, expirationTime: null, keys: { p256dh: "pk", auth: "ak" } }),
     unsubscribe: vi.fn(async () => true),
   };
@@ -25,6 +26,7 @@ function fakeSubscription() {
 
 function fakeDeps(options: {
   supported?: boolean;
+  unsupportedReason?: "unsupported" | "homeScreen";
   permission?: NotificationPermission;
   request?: NotificationPermission;
   subscription?: ReturnType<typeof fakeSubscription> | null;
@@ -41,7 +43,8 @@ function fakeDeps(options: {
   });
   const deps: PushDeps = {
     supported: () => options.supported ?? true,
-    permission: () => options.permission ?? "default",
+    unsupportedReason: () => options.unsupportedReason ?? "unsupported",
+    permission: () => options.permission ?? (subscription ? "granted" : "default"),
     requestPermission: vi.fn(async () => options.request ?? "granted"),
     getRegistration: vi.fn(async () => (subscription ? registration : undefined)),
     register: vi.fn(async () => registration),
@@ -56,15 +59,28 @@ afterEach(() => {
 });
 
 describe("browser notifications state", () => {
-  it("is hidden when the browser cannot, the store cannot send, or the answer is unreadable", async () => {
-    expect((await readPushState(fakeDeps({ supported: false }).deps)).view).toBe("hidden");
+  it("shows browser restrictions and unreadable state but hides an unconfigured sender", async () => {
+    expect((await readPushState(fakeDeps({ supported: false }).deps)).view).toBe("unsupported");
+    expect((await readPushState(fakeDeps({ supported: false, unsupportedReason: "homeScreen" }).deps)).view).toBe("homeScreen");
     expect((await readPushState(fakeDeps({ answers: { "/push/state": { publicKey: "AQAB", available: false, subscribed: false } } }).deps)).view).toBe("hidden");
-    expect((await readPushState(fakeDeps({ answers: { "/push/state": { publicKey: null, available: true, subscribed: false } } }).deps)).view).toBe("hidden");
-    expect((await readPushState(fakeDeps({ answers: { "/push/state": null } }).deps)).view).toBe("hidden");
-    expect((await readPushState(fakeDeps({ answers: { "/push/state": "nonsense" } }).deps)).view).toBe("hidden");
+    expect((await readPushState(fakeDeps({ answers: { "/push/state": { publicKey: null, available: true, subscribed: false } } }).deps)).view).toBe("error");
+    expect((await readPushState(fakeDeps({ answers: { "/push/state": null } }).deps)).view).toBe("error");
+    expect((await readPushState(fakeDeps({ answers: { "/push/state": "nonsense" } }).deps)).view).toBe("error");
     const failing = fakeDeps().deps;
     failing.post = vi.fn(async () => { throw new Error("offline"); });
-    expect((await readPushState(failing)).view).toBe("hidden");
+    expect((await readPushState(failing)).view).toBe("error");
+  });
+
+  it("does not claim On for an old or unreadable key, or silently restore a removed endpoint", async () => {
+    for (const key of ["AgAC", null]) {
+      const stale = fakeDeps({ subscription: fakeSubscription(key), answers: { "/push/state": { publicKey: "AQAB", available: true, subscribed: true } } });
+      expect((await readPushState(stale.deps)).view).toBe("off");
+      expect(stale.subscribe).not.toHaveBeenCalled();
+      expect(stale.post).toHaveBeenCalledTimes(1);
+    }
+    const missing = fakeDeps({ subscription: fakeSubscription() });
+    expect((await readPushState(missing.deps)).view).toBe("off");
+    expect(missing.post).toHaveBeenCalledTimes(1);
   });
 
   it("is off with no subscription, on when this browser's subscription is the account's, blocked when denied", async () => {
@@ -88,6 +104,26 @@ describe("browser notifications state", () => {
 });
 
 describe("turning notifications on and off", () => {
+  it("replaces an old or unreadable key only on an explicit enable, even if server cleanup fails", async () => {
+    for (const key of ["AgAC", null]) {
+      const old = fakeSubscription(key);
+      const { deps, post, subscribe } = fakeDeps({ subscription: old, answers: { "/push/unsubscribe": null } });
+      expect(await turnPushOn(deps, "AQAB")).toEqual({ ok: true, view: "on" });
+      expect(old.unsubscribe).toHaveBeenCalledOnce();
+      expect(post).toHaveBeenCalledWith("/push/unsubscribe", { endpoint: ENDPOINT });
+      expect(subscribe).toHaveBeenCalledOnce();
+      expect(old.unsubscribe.mock.invocationCallOrder[0]).toBeLessThan(subscribe.mock.invocationCallOrder[0]!);
+    }
+  });
+
+  it("reuses a matching subscription when explicitly reconnecting it to the account", async () => {
+    const subscription = fakeSubscription();
+    const { deps, post, subscribe } = fakeDeps({ subscription });
+    expect(await turnPushOn(deps, "AQAB")).toEqual({ ok: true, view: "on" });
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith("/push/subscribe", expect.objectContaining({ endpoint: ENDPOINT }));
+  });
   it("asks the browser first, subscribes with the store's key and posts the subscription with a device label", async () => {
     const { deps, post, subscribe } = fakeDeps();
     expect(await turnPushOn(deps, "AQAB")).toEqual({ ok: true, view: "on" });
@@ -117,6 +153,19 @@ describe("turning notifications on and off", () => {
     subscribe.mockResolvedValueOnce(created);
     expect(await turnPushOn(deps, "AQAB")).toEqual({ ok: false, view: "off" });
     expect(created.unsubscribe).toHaveBeenCalled();
+  });
+
+  it("preserves a reused subscription on failed saves and rolls back a newly created one on thrown saves", async () => {
+    const working = fakeSubscription();
+    const reused = fakeDeps({ subscription: working, answers: { "/push/subscribe": null } });
+    expect(await turnPushOn(reused.deps, "AQAB")).toEqual({ ok: false, view: "off" });
+    expect(working.unsubscribe).not.toHaveBeenCalled();
+    const created = fakeSubscription();
+    const fresh = fakeDeps();
+    fresh.subscribe.mockResolvedValueOnce(created);
+    fresh.deps.post = vi.fn(async () => { throw new Error("offline"); });
+    expect(await turnPushOn(fresh.deps, "AQAB")).toEqual({ ok: false, view: "off" });
+    expect(created.unsubscribe).toHaveBeenCalledOnce();
   });
 
   it("reports a failure when the browser refuses to subscribe", async () => {
@@ -157,6 +206,30 @@ describe("pure helpers", () => {
     const noPush = { navigator: { serviceWorker: {} }, Notification: class {} } as unknown as Window & typeof globalThis;
     expect(browserPushDeps(noPush).supported()).toBe(false);
   });
+
+  it("explains Home Screen setup before rejecting iOS Safari's missing PushManager", () => {
+    const win = { navigator: { userAgent: "iPhone", maxTouchPoints: 5 }, matchMedia: () => ({ matches: false }) } as unknown as Window & typeof globalThis;
+    expect(browserPushDeps(win).supported()).toBe(false);
+    expect(browserPushDeps(win).unsupportedReason?.()).toBe("homeScreen");
+  });
+
+  it("waits for the returned push registration to activate instead of another worker's ready promise", async () => {
+    const installing = Object.assign(new EventTarget(), { state: "installing" });
+    const registration = { installing, waiting: null, active: { state: "activated" } };
+    const serviceWorker = {
+      register: vi.fn(async () => registration),
+      get ready() { throw new Error("Unrelated registration must not be used"); },
+    };
+    const win = { navigator: { serviceWorker }, document: { querySelector: () => null } } as unknown as Window & typeof globalThis;
+    let resolved = false;
+    const pending = browserPushDeps(win).register().then((value) => { resolved = true; return value; });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    installing.state = "activated";
+    installing.dispatchEvent(new Event("statechange"));
+    expect(await pending).toBe(registration);
+    expect(serviceWorker.register).toHaveBeenCalledWith("/push-sw.js", { scope: "/" });
+  });
 });
 
 describe("the control", () => {
@@ -175,10 +248,52 @@ describe("the control", () => {
   }
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  it("stays hidden when the browser or the store cannot", async () => {
+  it("stays hidden when the store cannot send", async () => {
     const view = mount();
     await initPushControl(view.section, copy, fakeDeps({ answers: { "/push/state": { publicKey: "AQAB", available: false, subscribed: false } } }).deps);
     expect(view.section.hidden).toBe(true);
+  });
+
+  it("offers Retry after a read failure and recovers without requesting permission", async () => {
+    const view = mount();
+    const { deps, post } = fakeDeps({ answers: { "/push/state": null } });
+    await initPushControl(view.section, copy, deps);
+    expect(view.section.hidden).toBe(false);
+    expect(view.status.textContent).toBe(copy.loadFailed);
+    expect(view.toggle.textContent).toBe(copy.retry);
+    post.mockResolvedValueOnce({ publicKey: "AQAB", available: true, subscribed: false });
+    view.toggle.click();
+    await flush();
+    expect(view.status.textContent).toBe(copy.off);
+    expect(deps.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("shows unsupported and Home Screen guidance without an unusable enable button", async () => {
+    for (const reason of ["unsupported", "homeScreen"] as const) {
+      const view = mount();
+      await initPushControl(view.section, copy, fakeDeps({ supported: false, unsupportedReason: reason }).deps);
+      expect(view.section.hidden).toBe(false);
+      expect(view.status.textContent).toBe(copy[reason]);
+      expect(view.hint.textContent).toBe(copy[`${reason}Hint`]);
+      expect(view.toggle.hidden).toBe(true);
+    }
+  });
+
+  it("rechecks permission and server ownership on return without resubscribing", async () => {
+    const view = mount();
+    const { deps, post, subscribe } = fakeDeps({ permission: "denied" });
+    const controller = new AbortController();
+    await initPushControl(view.section, copy, deps, controller.signal);
+    deps.permission = () => "granted";
+    window.dispatchEvent(new Event("focus"));
+    await flush();
+    expect(view.status.textContent).toBe(copy.off);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(subscribe).not.toHaveBeenCalled();
+    controller.abort();
+    window.dispatchEvent(new Event("focus"));
+    await flush();
+    expect(post).toHaveBeenCalledTimes(2);
   });
 
   it("shows Off, turns on, shows On, turns off again, in words", async () => {

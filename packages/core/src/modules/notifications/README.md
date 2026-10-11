@@ -131,6 +131,8 @@ fact commits
 - `sendStaffAlertNotification()` sends `review_pending` and `digital_keys_exhausted` to staff with no buyer content.
 - `sendConversationNotification()` sends thread notifications. Reply email carries the escaped message text. Reply SMS carries no text and goes out at most once per thread per hour. The staff push for a buyer message names the order number and carries no message text.
 - `sendAdminPushNotice()` is a best-effort push with no outbox row (`sendWebhookDisabledNotice()` uses it).
+- Staff Web Push and FCM recheck current bans, grants, denials and permission prerequisites through `staff-push-policy.ts`; a saved device is not an access grant. Unknown notice types fail closed.
+- Web Push removes subscriptions only on HTTP 404/410 or typed invalid subscriber keys. Other delivery/encryption failures retain subscriptions. Provider acceptance and a service-worker receipt do not prove native display or sound; the account test asks separately about an audible banner, a silent banner, or no banner. Browser/OS audio cannot be guaranteed by `renotify`.
 
 ## OTP delivery
 

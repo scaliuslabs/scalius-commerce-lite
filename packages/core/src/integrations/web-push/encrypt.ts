@@ -58,13 +58,22 @@ export async function encryptWebPushPayload(
   plaintext: Uint8Array,
   options: EncryptOptions = {},
 ): Promise<Uint8Array> {
-  const uaPublic = base64UrlDecode(keys.p256dh);
-  const authSecret = base64UrlDecode(keys.auth);
+  let uaPublic: Uint8Array;
+  let authSecret: Uint8Array;
+  try {
+    uaPublic = base64UrlDecode(keys.p256dh);
+    authSecret = base64UrlDecode(keys.auth);
+  } catch (error) {
+    if (error instanceof WebPushError && error.code === "invalid_key") {
+      throw new WebPushError("invalid_subscriber_key", "Subscription keys must be base64url.");
+    }
+    throw error;
+  }
   if (uaPublic.length !== 65 || uaPublic[0] !== 0x04) {
-    throw new WebPushError("invalid_key", "Subscription p256dh must be a 65-byte uncompressed point.");
+    throw new WebPushError("invalid_subscriber_key", "Subscription p256dh must be a 65-byte uncompressed point.");
   }
   if (authSecret.length !== 16) {
-    throw new WebPushError("invalid_key", "Subscription auth must be 16 bytes.");
+    throw new WebPushError("invalid_subscriber_key", "Subscription auth must be 16 bytes.");
   }
   const recordSize = options.recordSize ?? DEFAULT_RECORD_SIZE;
   if (!Number.isInteger(recordSize) || recordSize <= RECORD_OVERHEAD || recordSize > 0xffffffff) {
@@ -89,7 +98,12 @@ export async function encryptWebPushPayload(
       { name: "ECDH", namedCurve: "P-256" },
       false,
       [],
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof Error && error.name === "DataError") {
+        throw new WebPushError("invalid_subscriber_key", "Subscription p256dh is not a P-256 point.");
+      }
+      throw error;
+    });
     const ecdhSecret = new Uint8Array(
       await crypto.subtle.deriveBits({ name: "ECDH", public: uaKey }, localKeyPair.privateKey, 256),
     );

@@ -21,10 +21,10 @@ export function renderCartIssueAction(
 ): string {
   const jsKey = inlineJsString(cartKey);
   if (issue.action === "reduce_quantity" && typeof issue.availableQuantity === "number" && issue.availableQuantity > 0) {
-    return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" onclick="window.reduceCartIssueItem(${jsKey})">Update quantity</button>`;
+    return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-6" onclick="window.reduceCartIssueItem(${jsKey})">Update quantity</button>`;
   }
   if (issue.action === "refresh_item" && typeof issue.currentPrice === "number") {
-    return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" onclick="window.refreshCartIssueItem(${jsKey})">Refresh price</button>`;
+    return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-6" onclick="window.refreshCartIssueItem(${jsKey})">Refresh price</button>`;
   }
   // A required or refused buyer input: back to the product page with the
   // line's inputs (handed over in session storage, never the URL).
@@ -35,5 +35,5 @@ export function renderCartIssueAction(
   if (issue.action === "select_variant" && productSlug) {
     return `<a class="inline-flex min-h-11 items-center text-xs font-semibold text-foreground underline underline-offset-2 sm:min-h-0" href="${escapeHtml(pagePath(`/products/${encodeURIComponent(productSlug)}`))}">Choose option</a>`;
   }
-  return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-destructive underline underline-offset-2 sm:min-h-0" onclick="window.removeCartIssueItem(${jsKey})">Remove item</button>`;
+  return `<button type="button" class="inline-flex min-h-11 items-center text-xs font-semibold text-destructive underline underline-offset-2 sm:min-h-6" onclick="window.removeCartIssueItem(${jsKey})">Remove item</button>`;
 }

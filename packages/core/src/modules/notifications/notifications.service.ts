@@ -1,11 +1,13 @@
 // src/modules/notifications/notifications.service.ts
 // Centralized notification service for admin push + order notifications.
 
+import { staffPermissionSql, type StaffPermissionRequirement } from "@scalius/core/auth/rbac/helpers";
+import { staffPushPermission } from "./staff-push-policy";
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { isReady } from "@scalius/shared/readiness";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
@@ -276,7 +278,7 @@ export interface AdminPushSpec {
 }
 
 /**
- * A best-effort system notice pushed to every active admin device (no
+ * A best-effort system notice pushed to each authorized active admin device (no
  * outbox row, so no per-token receipts): for facts with no order subject,
  * such as a webhook endpoint turned off after sustained failure. Firebase
  * devices and Web Push browsers both get it; either may be absent.
@@ -286,9 +288,11 @@ export async function sendAdminPushNotice(
     env: Env,
     notice: { title: string; body: string; link: string | null; data: Record<string, string> },
 ): Promise<void> {
+    const permission = staffPushPermission(notice.data.notificationType);
+    if (!permission) return;
     await Promise.all([
-        sendAdminFcmNotice(db, env, notice),
-        sendStaffWebPushNotice(db, env, notice).catch(() => undefined),
+        sendAdminFcmNotice(db, env, notice, permission),
+        sendStaffWebPushNotice(db, env, notice, permission).catch(() => undefined),
     ]);
 }
 
@@ -296,12 +300,13 @@ async function sendStaffWebPushNotice(
     db: Database,
     env: Env,
     notice: { title: string; body: string; link: string | null; data: Record<string, string> },
+    permission: StaffPermissionRequirement,
 ): Promise<void> {
     const sender = await webPushSender(env);
     if (!sender) return;
     // Like Shopify's app: a staff phone gets the push even while a dashboard is open elsewhere
     // (a sleeping laptop's socket must never silence it).
-    await sendWebPushNotification(db, sender, { audience: "staff" }, {
+    await sendWebPushNotification(db, sender, { audience: "staff", requiredPermission: permission }, {
         title: notice.title.slice(0, 120),
         body: notice.body.slice(0, 500),
         ...(notice.link ? { url: notice.link } : {}),
@@ -312,6 +317,7 @@ async function sendAdminFcmNotice(
     db: Database,
     env: Env,
     notice: { title: string; body: string; link: string | null; data: Record<string, string> },
+    permission: StaffPermissionRequirement,
 ): Promise<void> {
     let serviceAccountJson: string | undefined;
     try {
@@ -323,7 +329,7 @@ async function sendAdminFcmNotice(
     const tokens = (await db
         .select({ token: adminFcmTokens.token })
         .from(adminFcmTokens)
-        .where(eq(adminFcmTokens.isActive, true)))
+        .where(and(eq(adminFcmTokens.isActive, true), staffPermissionSql(adminFcmTokens.userId, permission))))
         .map((row) => row.token);
     if (tokens.length === 0) return;
     const response = await messaging.sendEachForMulticast({
@@ -348,7 +354,7 @@ export function resolveDashboardLink(env: object | undefined, path: string): str
 }
 
 /**
- * Sends one push to every active admin device: Firebase devices and Web
+ * Sends one push to each authorized active admin device: Firebase devices and Web
  * Push browsers. When an outbox id is provided, each device is guarded by a
  * durable delivery receipt so retries skip devices that already took it.
  */
@@ -357,7 +363,9 @@ export async function sendAdminPush(
     env: Env,
     spec: AdminPushSpec,
 ): Promise<OrderNotificationDispatchResult> {
-    const [fcm, web] = await Promise.all([sendAdminFcmPush(db, env, spec), sendStaffWebPush(db, env, spec)]);
+    const permission = staffPushPermission(spec.receipt.notificationType);
+    if (!permission) return EMPTY_DISPATCH_RESULT;
+    const [fcm, web] = await Promise.all([sendAdminFcmPush(db, env, spec, permission), sendStaffWebPush(db, env, spec, permission)]);
     return buildDispatchResult([...fcm.outcomes, ...web]);
 }
 
@@ -366,20 +374,21 @@ export async function sendAdminPush(
  * subscription id) when the push has an outbox row. Without a master secret
  * or an https dashboard origin, or without a subscribed browser, nothing.
  */
-async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec): Promise<OrderNotificationChannelOutcome[]> {
+async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec, permission: StaffPermissionRequirement): Promise<OrderNotificationChannelOutcome[]> {
+    const outcomes: OrderNotificationChannelOutcome[] = [];
     try {
         // A Worker that cannot sign reads nothing.
         const sender = await webPushSender(env);
         if (!sender) return [];
-        // Every subscribed staff browser, open dashboard or not: a sleeping laptop's socket must never silence a phone.
-        const subscriptions = await readPushSubscriptions(db, { audience: "staff" });
+        // Every authorized staff browser, open dashboard or not: a sleeping laptop's socket must never silence a phone.
+        const subscriptions = await readPushSubscriptions(db, { audience: "staff", requiredPermission: permission });
         if (subscriptions.length === 0) return [];
         const payload = webPushPayload({
             title: spec.title.slice(0, 120),
             body: spec.body.slice(0, 500),
             ...(spec.link ? { url: spec.link } : {}),
+            ...(spec.outboxId ? { tag: `evt:${spec.outboxId}` } : {}),
         });
-        const outcomes: OrderNotificationChannelOutcome[] = [];
         const receiptFields = { ...spec.receipt, channel: "push" as const, provider: "webpush" };
         for (const subscription of subscriptions) {
             const masked = `web-push-${subscription.id.slice(4, 10)}`;
@@ -405,7 +414,7 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec): Pr
         return outcomes;
     } catch (error: unknown) {
         console.error(`[Notifications] Web Push failed for ${spec.logLabel}:`, error instanceof Error ? error.name : "unknown");
-        return [];
+        return [...outcomes, { channel: "push", provider: "webpush", recipientMasked: "unknown", status: "failed", error: "web_push_dispatch_failed", retryable: true }];
     }
 }
 
@@ -413,6 +422,7 @@ async function sendAdminFcmPush(
     db: Database,
     env: Env,
     spec: AdminPushSpec,
+    permission: StaffPermissionRequirement,
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
     const options = { outboxId: spec.outboxId };
@@ -449,7 +459,7 @@ async function sendAdminFcmPush(
         const tokensSnapshot = await db
             .select({ token: adminFcmTokens.token })
             .from(adminFcmTokens)
-            .where(eq(adminFcmTokens.isActive, true));
+            .where(and(eq(adminFcmTokens.isActive, true), staffPermissionSql(adminFcmTokens.userId, permission)));
 
         if (tokensSnapshot.length === 0) {
             return EMPTY_DISPATCH_RESULT;
@@ -1169,6 +1179,7 @@ async function sendOrderWebPush(options: {
     message: () => Promise<{ title: string; body: string }>;
 }): Promise<OrderNotificationChannelOutcome[]> {
     const { db, orderId, type } = options;
+    const outcomes: OrderNotificationChannelOutcome[] = [];
     try {
         const order = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.id, orderId)).get();
         if (!order?.customerId) return [];
@@ -1205,7 +1216,6 @@ async function sendOrderWebPush(options: {
             url: `/account/orders/${encodeURIComponent(orderId)}`,
             tag: `order:${orderId}`.slice(0, 64),
         });
-        const outcomes: OrderNotificationChannelOutcome[] = [];
         for (const subscription of subscriptions) {
             const masked = `web-push-${subscription.id.slice(4, 10)}`;
             if (!options.receipt) {
@@ -1237,7 +1247,7 @@ async function sendOrderWebPush(options: {
         return outcomes;
     } catch (error: unknown) {
         console.error(`[Notifications] Web Push failed for ${type} (order ${orderId}):`, error instanceof Error ? error.name : "unknown");
-        return [];
+        return [...outcomes, { channel: "push", provider: "webpush", recipientMasked: "unknown", status: "failed", error: "web_push_dispatch_failed", retryable: true }];
     }
 }
 

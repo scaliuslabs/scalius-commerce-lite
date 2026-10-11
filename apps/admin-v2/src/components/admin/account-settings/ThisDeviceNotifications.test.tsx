@@ -18,6 +18,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { setLocale } from "~/i18n";
 import { ThisDeviceNotifications } from "./ThisDeviceNotifications";
+import { applicationServerKey, turnOnThisDevice } from "~/lib/web-push";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,7 +36,7 @@ interface FakeSubscription {
 function fakeSubscription(endpoint = "https://push.example/abc"): FakeSubscription {
   return {
     endpoint,
-    options: { applicationServerKey: null },
+    options: { applicationServerKey: applicationServerKey(PUBLIC_KEY).buffer },
     toJSON: () => ({ endpoint, keys: { p256dh: "p256", auth: "auth" } }),
     unsubscribe: vi.fn(async () => true),
   };
@@ -45,7 +46,7 @@ interface Browser {
   register: ReturnType<typeof vi.fn>;
   getRegistration: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
-  getSubscription: ReturnType<typeof vi.fn>;
+  getSubscription: () => Promise<FakeSubscription | null>;
   requestPermission: ReturnType<typeof vi.fn>;
 }
 
@@ -183,16 +184,26 @@ describe("Notifications on this device", () => {
     }));
     await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith(expect.objectContaining({
       url: "/api/v1/admin/web-push/devices/wpd_this/test",
-      body: { title: "Test notification", body: "Notifications work on this device." },
+      body: { title: "Test notification", body: "This is your test notification from Scalius." },
     })));
-    await vi.waitFor(() => expect(host.textContent).toContain("Did it arrive?"));
+    await vi.waitFor(() => expect(host.textContent).toContain("Did the test notification appear outside the dashboard?"));
     expect(button("Turn off")).toBeDefined();
 
-    await act(async () => button("No")!.click());
+    await act(async () => button("Nothing appeared")!.click());
     expect(host.textContent).toContain("Turn off Focus or Do Not Disturb.");
+    expect(host.textContent).toContain("enable notification sounds");
+    await act(async () => button("It appeared now")!.click());
+    expect(button("Yes, but no sound")).toBeDefined();
+    await act(async () => button("Nothing appeared")!.click());
     await act(async () => button("Send again")!.click());
     await flush();
     expect(api.post.mock.calls.filter(([request]) => (request as { url: string }).url.endsWith("/test"))).toHaveLength(2);
+    expect(button("Yes, with sound")).toBeDefined();
+    await act(async () => button("Yes, but no sound")!.click());
+    expect(host.textContent).toContain("Some browsers, such as Chrome on Mac, show them without sound.");
+    expect(host.textContent).not.toContain("Turn off Focus or Do Not Disturb.");
+    expect(button("Nothing appeared")).toBeUndefined();
+    expect(button("Turn off")).toBeDefined();
   });
 
   it("saves nothing when the person refuses the browser's question", async () => {
@@ -232,8 +243,8 @@ describe("Notifications on this device", () => {
     await mount();
     expect(host.textContent).toContain("Your devices");
     expect(host.textContent).toContain("This device");
-    expect(host.textContent).toContain("No delivery yet");
-    expect(host.textContent).toContain("Last delivery");
+    expect(host.textContent).toContain("No notification sent yet");
+    expect(host.textContent).toContain("Last sent");
     expect(host.textContent).toContain("Not delivering");
 
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send test to Safari on iOS"]')!.click());
@@ -244,5 +255,66 @@ describe("Notifications on this device", () => {
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Remove Safari on iOS"]')!.click());
     await flush();
     expect(api.delete).toHaveBeenCalledWith({ url: "/api/v1/admin/web-push/devices/wpd_phone" });
+  });
+
+  it("shows Off for an old key and replaces it on explicit Turn on", async () => {
+    const subscription = fakeSubscription();
+    subscription.options.applicationServerKey = applicationServerKey("AQAB").buffer;
+    const browser = installBrowser(subscription, "granted");
+    localStorage.setItem("scalius-web-push-device", "wpd_this");
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [THIS] }));
+    api.post.mockImplementation((request: { url: string }) => request.url.endsWith("/test") ? ok({ outcome: "sent" }) : ok({ id: "wpd_this" }));
+    await mount();
+    await vi.waitFor(() => expect(button("Turn on")?.disabled).toBe(false));
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    await act(async () => button("Turn on")!.click());
+    await flush();
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(browser.subscribe).toHaveBeenCalledOnce();
+    expect(api.post).toHaveBeenCalledWith(expect.objectContaining({
+      url: "/api/v1/admin/web-push/subscriptions/remove",
+      body: { endpoint: subscription.endpoint },
+    }));
+    await vi.waitFor(() => expect(button("Turn off")).toBeDefined());
+  });
+
+  it("cleans up only a newly created subscription when saving fails, and clears the remembered id", async () => {
+    for (const reuse of [false, true]) {
+      const existing = fakeSubscription();
+      const browser = installBrowser(reuse ? existing : null, "granted");
+      localStorage.setItem("scalius-web-push-device", "wpd_stale");
+      api.post.mockRejectedValue(new Error("offline"));
+      await expect(turnOnThisDevice(PUBLIC_KEY, "This browser")).rejects.toThrow("offline");
+      const subscription = await browser.getSubscription() as FakeSubscription;
+      expect(subscription.unsubscribe).toHaveBeenCalledTimes(reuse ? 0 : 1);
+      expect(localStorage.getItem("scalius-web-push-device")).toBeNull();
+    }
+  });
+
+  it("reconnects with the new key even when old server-record cleanup fails", async () => {
+    const old = fakeSubscription();
+    old.options.applicationServerKey = applicationServerKey("AQAB").buffer;
+    const browser = installBrowser(old, "granted");
+    api.post.mockImplementation((request: { url: string }) => request.url.endsWith("/remove")
+      ? Promise.reject(new Error("offline")) : ok({ id: "wpd_new" }));
+    await expect(turnOnThisDevice(PUBLIC_KEY, "This browser")).resolves.toEqual({ id: "wpd_new" });
+    expect(old.unsubscribe).toHaveBeenCalledOnce();
+    expect(browser.subscribe).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks on return and leaves a server-removed device off until explicitly enabled", async () => {
+    const browser = installBrowser(fakeSubscription(), "granted");
+    localStorage.setItem("scalius-web-push-device", "wpd_this");
+    let devices = [THIS];
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices }));
+    await mount();
+    await vi.waitFor(() => expect(button("Turn off")).toBeDefined());
+    devices = [];
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await flush();
+    await vi.waitFor(() => expect(button("Turn on")).toBeDefined());
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

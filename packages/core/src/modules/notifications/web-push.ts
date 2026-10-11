@@ -7,8 +7,9 @@
 // subscription: it is deleted. Endpoints, keys and payloads are never logged.
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { pushSubscriptions } from "@scalius/database/schema";
+import { staffPermissionSql, type StaffPermissionRequirement } from "@scalius/core/auth/rbac/helpers";
 import { ValidationError } from "@scalius/core/errors";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { providerErrorOf, type PushNotification, type PushSendInput } from "@scalius/shared/plugins/providers";
@@ -18,15 +19,15 @@ import { notificationsDocument } from "./documents";
 import {
   deriveVapidKeys,
   isAllowedPushEndpoint,
+  MAX_WEB_PUSH_PLAINTEXT,
   sendWebPush,
+  WebPushError,
   type VapidKeys,
   type WebPushOutcome,
 } from "../../integrations/web-push";
 
 /** The most browsers one person keeps subscribed; a new one replaces the oldest. */
 export const PUSH_SUBSCRIPTIONS_PER_OWNER = 10;
-/** A subscription that failed this many sends in a row (not counting `gone`) is dropped. */
-export const PUSH_SUBSCRIPTION_MAX_FAILURES = 5;
 /** Owners per read (one bound parameter each, under D1's 100). */
 const OWNER_CHUNK = 90;
 
@@ -202,6 +203,7 @@ export type PushTarget =
   | {
     audience: "staff";
     userIds?: readonly string[];
+    requiredPermission: StaffPermissionRequirement;
   }
   | { audience: "customer"; customerIds: readonly string[] };
 
@@ -214,15 +216,18 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
     auth: pushSubscriptions.auth,
     userId: pushSubscriptions.userId,
   };
+  const activeStaffOwner = target.audience === "staff"
+    ? staffPermissionSql(pushSubscriptions.userId, target.requiredPermission)
+    : undefined;
   if (target.audience === "staff" && target.userIds === undefined) {
-    return db.select(columns).from(pushSubscriptions).where(eq(pushSubscriptions.audience, "staff")).orderBy(asc(pushSubscriptions.id));
+    return db.select(columns).from(pushSubscriptions).where(and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner)).orderBy(asc(pushSubscriptions.id));
   }
   const owners = [...new Set(target.audience === "staff" ? target.userIds! : target.customerIds)];
   const found: StoredPushSubscription[] = [];
   for (let start = 0; start < owners.length; start += OWNER_CHUNK) {
     const chunk = owners.slice(start, start + OWNER_CHUNK);
     found.push(...await db.select(columns).from(pushSubscriptions).where(target.audience === "staff"
-      ? and(eq(pushSubscriptions.audience, "staff"), inArray(pushSubscriptions.userId, chunk))
+      ? and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner, inArray(pushSubscriptions.userId, chunk))
       : and(eq(pushSubscriptions.audience, "customer"), inArray(pushSubscriptions.customerId, chunk))));
   }
   return found;
@@ -266,18 +271,37 @@ export async function webPushSender(env: { SCALIUS_SECRET?: unknown; BETTER_AUTH
 
 /** The message the service workers show (`title`, `body`, `url`, `tag`). */
 export function webPushPayload(notification: PushNotification): string {
-  return JSON.stringify({
+  const payload = {
     title: notification.title,
     body: notification.body,
     ...(notification.url ? { url: notification.url } : {}),
     ...(notification.tag ? { tag: notification.tag } : {}),
-  });
+  };
+  const encoder = new TextEncoder();
+  if (encoder.encode(JSON.stringify(payload)).length <= MAX_WEB_PUSH_PLAINTEXT) return JSON.stringify(payload);
+
+  // Fit the body by encoded JSON bytes without splitting Unicode or changing its destination.
+  const body = Array.from(payload.body);
+  let low = 0;
+  let high = body.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    payload.body = body.slice(0, middle).join("");
+    if (encoder.encode(JSON.stringify(payload)).length <= MAX_WEB_PUSH_PLAINTEXT) low = middle;
+    else high = middle - 1;
+  }
+  payload.body = body.slice(0, low).join("");
+  const result = JSON.stringify(payload);
+  if (encoder.encode(result).length > MAX_WEB_PUSH_PLAINTEXT) {
+    throw new WebPushError("payload_too_large", "Push metadata is too large.");
+  }
+  return result;
 }
 
 /**
  * Sends one message to one subscription and keeps the table true: `gone`
- * deletes it, a success resets its failures, any other failure counts one
- * (and drops it at PUSH_SUBSCRIPTION_MAX_FAILURES).
+ * deletes it, a success resets its failures, other failures remain diagnostic.
+ * The outbox owns retries; a provider outage must not unsubscribe a browser.
  */
 export async function deliverWebPush(
   db: Database,
@@ -297,9 +321,8 @@ export async function deliverWebPush(
       urgency: options.urgency ?? "normal",
       ...(sender.fetch ? { fetch: sender.fetch } : {}),
     }));
-  } catch {
-    // A key the browser sent that cannot encrypt: the subscription can never work.
-    outcome = "gone";
+  } catch (error) {
+    outcome = error instanceof WebPushError && error.code === "invalid_subscriber_key" ? "gone" : "retry";
   }
   if (outcome === "gone") {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));
@@ -308,10 +331,9 @@ export async function deliverWebPush(
       .set({ failureCount: 0, lastSuccessAt: sql`unixepoch()` })
       .where(eq(pushSubscriptions.id, subscription.id));
   } else {
-    await safeBatch(db, [
-      db.update(pushSubscriptions).set({ failureCount: sql`${pushSubscriptions.failureCount} + 1` }).where(eq(pushSubscriptions.id, subscription.id)),
-      db.delete(pushSubscriptions).where(and(eq(pushSubscriptions.id, subscription.id), sql`${pushSubscriptions.failureCount} >= ${PUSH_SUBSCRIPTION_MAX_FAILURES}`)),
-    ] as never);
+    await db.update(pushSubscriptions)
+      .set({ failureCount: sql`${pushSubscriptions.failureCount} + 1` })
+      .where(eq(pushSubscriptions.id, subscription.id));
   }
   return outcome;
 }

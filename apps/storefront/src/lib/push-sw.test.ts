@@ -58,7 +58,21 @@ describe("push-sw.js", () => {
       icon: `${ORIGIN}/favicon.svg`,
       data: { url: "/account/orders/ord_1" },
       tag: "order-1042",
+      renotify: true,
     });
+  });
+
+  it("requests a fresh native alert for tagged updates but never renotifies an empty tag", async () => {
+    const worker = load();
+    await push(worker, { title: "First", tag: "order:1" });
+    await push(worker, { title: "Update", tag: "order:1" });
+    for (const call of worker.showNotification.mock.calls) {
+      expect((call as unknown[])[1]).toMatchObject({ tag: "order:1", renotify: true });
+      expect((call as unknown[])[1]).not.toHaveProperty("silent");
+    }
+    const untagged = load();
+    await push(untagged, { title: "First", tag: "" });
+    expect((untagged.showNotification.mock.calls[0] as unknown[])[1]).not.toHaveProperty("renotify");
   });
 
   it("accepts an https icon from the media CDN and ignores any other scheme", async () => {

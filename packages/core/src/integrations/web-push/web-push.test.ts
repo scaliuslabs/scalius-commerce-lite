@@ -128,7 +128,7 @@ describe("encryptWebPushPayload", () => {
     ).rejects.toBeInstanceOf(WebPushError);
     await expect(
       encryptWebPushPayload({ ...keys, p256dh: "AAAA" }, new Uint8Array(1)),
-    ).rejects.toMatchObject({ code: "invalid_key" });
+    ).rejects.toMatchObject({ code: "invalid_subscriber_key" });
   });
 });
 

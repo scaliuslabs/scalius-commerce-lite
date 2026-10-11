@@ -1,7 +1,7 @@
 /**
  * Account → Profile → Browser notifications (Web Push): the state logic and
- * the control that drives it. The control exists only when JavaScript runs,
- * the browser has `PushManager`, and the store can send (`available`).
+ * the control that drives it. Unsupported browsers and failed reads stay
+ * visible; an unconfigured store (`available: false`) keeps the control hidden.
  * "Turn on" asks the browser for permission, registers `/push-sw.js`,
  * subscribes with the store's public key and tells the API; "Turn off" does
  * the reverse. The browser's push endpoint is a bearer address for this
@@ -12,7 +12,7 @@ import type { AccountPushCopy } from "./account-push-copy";
 
 export const PUSH_SERVICE_WORKER_PATH = "/push-sw.js";
 
-export type PushViewState = "hidden" | "off" | "on" | "blocked";
+export type PushViewState = "hidden" | "off" | "on" | "blocked" | "unsupported" | "homeScreen" | "error";
 
 interface PushStateAnswer {
   publicKey: string | null;
@@ -23,6 +23,7 @@ interface PushStateAnswer {
 /** The browser and API surface the control uses; tests replace it. */
 export interface PushDeps {
   supported(): boolean;
+  unsupportedReason?(): "unsupported" | "homeScreen";
   permission(): NotificationPermission;
   requestPermission(): Promise<NotificationPermission>;
   /** The registration this control made earlier, if any. */
@@ -41,6 +42,13 @@ export function decodePublicKey(key: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(new ArrayBuffer(binary.length));
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+function sameKey(subscription: PushSubscription, key: Uint8Array): boolean {
+  const current = subscription.options?.applicationServerKey;
+  if (!current) return false;
+  const bytes = new Uint8Array(current);
+  return bytes.length === key.length && bytes.every((byte, index) => byte === key[index]);
 }
 
 /** "Chrome on Android": a coarse name so the buyer can tell their browsers apart; never an exact user agent. */
@@ -78,19 +86,22 @@ export interface PushRead {
   publicKey: string | null;
 }
 
-/** What the control shows now. Anything unreadable hides it: the buyer loses nothing. */
+/** Reading state never enrolls the browser again after a device was removed. */
 export async function readPushState(deps: PushDeps): Promise<PushRead> {
   const hidden: PushRead = { view: "hidden", publicKey: null };
   try {
-    if (!deps.supported()) return hidden;
-    const registration = await deps.getRegistration();
+    const supported = deps.supported();
+    const registration = supported ? await deps.getRegistration() : undefined;
     const existing = await registration?.pushManager.getSubscription();
     const answer = readState(await deps.post("/push/state", existing ? { endpoint: existing.endpoint } : {}));
-    if (!answer || !answer.available || !answer.publicKey) return hidden;
+    if (!answer) return { view: "error", publicKey: null };
+    if (!answer.available) return hidden;
+    if (!answer.publicKey) return { view: "error", publicKey: null };
+    if (!supported) return { view: deps.unsupportedReason?.() ?? "unsupported", publicKey: null };
     if (deps.permission() === "denied") return { view: "blocked", publicKey: answer.publicKey };
-    return { view: existing && answer.subscribed ? "on" : "off", publicKey: answer.publicKey };
+    return { view: existing && answer.subscribed && deps.permission() === "granted" && sameKey(existing, decodePublicKey(answer.publicKey)) ? "on" : "off", publicKey: answer.publicKey };
   } catch {
-    return hidden;
+    return { view: "error", publicKey: null };
   }
 }
 
@@ -101,15 +112,25 @@ export type PushChange = { ok: true; view: PushViewState } | { ok: false; view: 
  * the browser only shows its permission prompt for a user gesture.
  */
 export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<PushChange> {
+  let created: PushSubscription | null = null;
   try {
     const permission = await deps.requestPermission();
     if (permission === "denied") return { ok: true, view: "blocked" };
     if (permission !== "granted") return { ok: true, view: "off" };
     const registration = await deps.register();
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: decodePublicKey(publicKey),
-    });
+    const key = decodePublicKey(publicKey);
+    let subscription = await registration.pushManager.getSubscription();
+    if (subscription && !sameKey(subscription, key)) {
+      const oldEndpoint = subscription.endpoint;
+      await subscription.unsubscribe();
+      // Cleanup is best effort; only this explicit click creates a replacement.
+      await deps.post("/push/unsubscribe", { endpoint: oldEndpoint }).catch(() => null);
+      subscription = null;
+    }
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      created = subscription;
+    }
     const json = subscription.toJSON();
     const saved = await deps.post("/push/subscribe", {
       endpoint: json.endpoint ?? subscription.endpoint,
@@ -117,12 +138,13 @@ export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<Pus
       deviceLabel: deps.deviceLabel(),
     });
     if (!saved) {
-      // The account does not know this browser: do not keep a subscription nobody can send to.
-      await subscription.unsubscribe().catch(() => false);
+      // Roll back only this attempt's new subscription; a reused one may still be working.
+      await created?.unsubscribe().catch(() => false);
       return { ok: false, view: "off" };
     }
     return { ok: true, view: "on" };
   } catch {
+    await created?.unsubscribe().catch(() => false);
     return { ok: false, view: "off" };
   }
 }
@@ -148,6 +170,13 @@ export function browserPushDeps(win: Window & typeof globalThis): PushDeps {
   const scope = "/";
   return {
     supported: () => "serviceWorker" in win.navigator && "PushManager" in win && "Notification" in win,
+    unsupportedReason: () => {
+      const appleMobile = /iPhone|iPad|iPod/.test(win.navigator.userAgent)
+        || (/Macintosh/.test(win.navigator.userAgent) && win.navigator.maxTouchPoints > 1);
+      const standalone = win.matchMedia?.("(display-mode: standalone)").matches === true
+        || (win.navigator as Navigator & { standalone?: boolean }).standalone === true;
+      return appleMobile && !standalone ? "homeScreen" : "unsupported";
+    },
     permission: () => win.Notification.permission,
     requestPermission: () => win.Notification.requestPermission(),
     getRegistration: async () => {
@@ -161,8 +190,22 @@ export function browserPushDeps(win: Window & typeof globalThis): PushDeps {
       // The store's icon rides along as a query so the worker can show it; it is not buyer data.
       const icon = win.document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.href;
       const url = icon ? `${PUSH_SERVICE_WORKER_PATH}?${new URLSearchParams({ icon })}` : PUSH_SERVICE_WORKER_PATH;
-      await win.navigator.serviceWorker.register(url, { scope });
-      return win.navigator.serviceWorker.ready;
+      const registration = await win.navigator.serviceWorker.register(url, { scope });
+      const worker = registration.installing ?? registration.waiting ?? registration.active;
+      if (!worker) throw new Error("The notification worker did not start.");
+      if (worker.state !== "activated") {
+        await new Promise<void>((resolve, reject) => {
+          const settle = () => {
+            if (worker.state !== "activated" && worker.state !== "redundant") return;
+            worker.removeEventListener("statechange", settle);
+            if (worker.state === "activated") resolve();
+            else reject(new Error("The notification worker did not start."));
+          };
+          worker.addEventListener("statechange", settle);
+          settle();
+        });
+      }
+      return registration;
     },
     post: async (path, body) => {
       const response = await win.fetch(`/api/customer-auth${path}`, {
@@ -180,11 +223,11 @@ export function browserPushDeps(win: Window & typeof globalThis): PushDeps {
   };
 }
 
-const STATE_KEY = { on: "on", off: "off", blocked: "blocked" } as const;
+const STATE_KEY = { on: "on", off: "off", blocked: "blocked", unsupported: "unsupported", homeScreen: "homeScreen", error: "loadFailed" } as const;
 
 /**
  * Wires the server-rendered section (`[data-account-push]`, hidden): it shows
- * only when the state reads as on, off or blocked.
+ * when the store is configured, including browser restrictions and failed reads.
  */
 export async function initPushControl(
   section: HTMLElement,
@@ -206,29 +249,49 @@ export async function initPushControl(
     if (view === "hidden") return;
     status.textContent = copy[STATE_KEY[view]];
     status.dataset.state = view;
-    hint.textContent = error ? copy.failed : view === "blocked" ? copy.blockedHint : "";
+    hint.textContent = error ? copy.failed : view === "blocked" ? copy.blockedHint
+      : view === "homeScreen" ? copy.homeScreenHint : view === "unsupported" ? copy.unsupportedHint
+        : view === "on" ? copy.soundHint : "";
     hint.hidden = !hint.textContent;
-    toggle.hidden = view === "blocked";
+    toggle.hidden = view === "blocked" || view === "unsupported" || view === "homeScreen";
     toggle.disabled = busy;
-    toggle.textContent = busy ? copy.working : view === "on" ? copy.turnOff : copy.turnOn;
+    toggle.textContent = busy ? copy.working : view === "on" ? copy.turnOff : view === "error" ? copy.retry : copy.turnOn;
     toggle.setAttribute("aria-pressed", String(view === "on"));
     toggle.setAttribute("aria-busy", String(busy));
   };
 
-  const read = await readPushState(deps);
+  const recheck = async () => {
+    if (busy || signal?.aborted || !section.isConnected) return;
+    busy = true;
+    render();
+    const read = await readPushState(deps);
+    busy = false;
+    if (signal?.aborted) return;
+    view = read.view;
+    publicKey = read.publicKey;
+    render();
+  };
+  await recheck();
   if (signal?.aborted) return;
-  view = read.view;
-  publicKey = read.publicKey;
-  render();
+  const win = section.ownerDocument.defaultView;
+  win?.addEventListener("focus", () => void recheck(), { signal });
+  section.ownerDocument.addEventListener("visibilitychange", () => {
+    if (section.ownerDocument.visibilityState === "visible") void recheck();
+  }, { signal });
 
   toggle.addEventListener("click", () => {
-    if (busy || view === "hidden" || view === "blocked") return;
+    if (busy || view === "hidden" || view === "blocked" || view === "unsupported" || view === "homeScreen") return;
+    if (view === "error") {
+      void recheck();
+      return;
+    }
     busy = true;
     render();
     // No await before the change starts: the permission prompt needs the click.
     const change = view === "on" ? turnPushOff(deps) : publicKey ? turnPushOn(deps, publicKey) : Promise.resolve<PushChange>({ ok: false, view });
     void change.then((result) => {
       busy = false;
+      if (signal?.aborted) return;
       view = result.view;
       render(!result.ok);
       toggle.focus();

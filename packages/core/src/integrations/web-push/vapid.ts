@@ -5,6 +5,7 @@ import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
 
 export type WebPushErrorCode =
   | "invalid_key"
+  | "invalid_subscriber_key"
   | "invalid_subject"
   | "payload_too_large"
   | "encryption_failed";

@@ -18,7 +18,7 @@ export interface WebPushDevice {
   deviceLabel: string | null;
   lastSuccessAt: string | null;
   createdAt: string;
-  /** Sends that failed in a row since the last delivery (0 when the last one arrived). */
+  /** Sends that failed in a row since the push service last accepted one. */
   failureCount: number;
 }
 
@@ -119,7 +119,7 @@ export function applicationServerKey(publicKey: string): Uint8Array<ArrayBuffer>
 
 function sameKey(subscription: PushSubscription, key: Uint8Array): boolean {
   const current = subscription.options?.applicationServerKey;
-  if (!current) return true;
+  if (!current) return false;
   const bytes = new Uint8Array(current);
   return bytes.length === key.length && bytes.every((byte, index) => byte === key[index]);
 }
@@ -187,16 +187,29 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
   // A subscription made with another key (the key was replaced) cannot receive this store's pushes.
   if (subscription && !sameKey(subscription, key)) {
     await subscription.unsubscribe();
+    await apiData(apiClient.post({
+      url: `${WEB_PUSH_URL}/subscriptions/remove`,
+      headers: JSON_HEADERS,
+      body: { endpoint: subscription.endpoint },
+    })).catch(() => undefined);
+    rememberDevice(null);
     subscription = null;
   }
-  subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-  const saved = await apiData(apiClient.post<{ 200: { success: boolean; data: { id: string } } }>({
-    url: `${WEB_PUSH_URL}/subscriptions`,
-    headers: JSON_HEADERS,
-    body: { ...subscription.toJSON(), deviceLabel },
-  }));
-  rememberDevice(saved.id);
-  return { id: saved.id };
+  const created = !subscription;
+  try {
+    subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const saved = await apiData(apiClient.post<{ 200: { success: boolean; data: { id: string } } }>({
+      url: `${WEB_PUSH_URL}/subscriptions`,
+      headers: JSON_HEADERS,
+      body: { ...subscription.toJSON(), deviceLabel },
+    }));
+    rememberDevice(saved.id);
+    return { id: saved.id };
+  } catch (error) {
+    rememberDevice(null);
+    if (created) await subscription?.unsubscribe().catch(() => false);
+    throw error;
+  }
 }
 
 /**
@@ -204,10 +217,11 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
  * subscription, granted permission, and the device id the API gave it.
  * The bell reads this on every page; Settings checks the server's list too.
  */
-export async function thisBrowserIsOn(): Promise<boolean> {
+export async function thisBrowserIsOn(publicKey?: string | null): Promise<boolean> {
   if (!webPushSupported() || Notification.permission !== "granted") return false;
   try {
-    return Boolean(await currentSubscription()) && thisDeviceId() !== null;
+    const subscription = await currentSubscription();
+    return Boolean(subscription && (!publicKey || sameKey(subscription, applicationServerKey(publicKey)))) && thisDeviceId() !== null;
   } catch {
     return false;
   }

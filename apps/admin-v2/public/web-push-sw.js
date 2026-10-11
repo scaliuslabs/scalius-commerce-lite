@@ -18,21 +18,24 @@ self.addEventListener("push", (event) => {
   } catch {
     payload = {};
   }
+  if (!payload || typeof payload !== "object") payload = {};
   const text = (value) => (typeof value === "string" ? value : "");
   const title = text(payload.title) || "Scalius";
+  const tag = text(payload.tag);
   event.waitUntil(
     (async () => {
       await self.registration.showNotification(title, {
         body: text(payload.body),
         icon,
         badge: icon,
-        tag: text(payload.tag) || undefined,
+        ...(tag ? { tag, renotify: true } : {}),
         data: { url: text(payload.url) },
       });
       // Open dashboard tabs list it in the bell too (components/admin/NotificationDropdown.tsx).
+      const receipt = { type: "scalius:push", id: crypto.randomUUID(), at: Date.now(), title, body: text(payload.body), url: text(payload.url) };
       const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const tab of windows) {
-        if (tab.url.startsWith(dashboardRoot)) tab.postMessage({ type: "scalius:push", title, body: text(payload.body), url: text(payload.url) });
+        if (tab.url.startsWith(dashboardRoot)) tab.postMessage(receipt);
       }
     })(),
   );

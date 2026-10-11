@@ -439,13 +439,14 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
     enhanceShippingCountry(form);
   }
 
-  // Browser notifications: the section stays hidden unless this browser can
-  // receive pushes and the store can send them.
+  // Load on unsupported browsers too so setup restrictions and read failures are visible.
   const pushSection = document.querySelector<HTMLElement>("[data-account-push]");
-  if (pushSection && "serviceWorker" in navigator && "PushManager" in window) {
+  if (pushSection) {
+    const pushController = new AbortController();
+    document.addEventListener("astro:before-swap", () => pushController.abort(), { once: true });
     void import("@/lib/account-push").then(({ browserPushDeps, initPushControl }) => {
       try {
-        void initPushControl(pushSection, JSON.parse(pushSection.dataset.copy ?? ""), browserPushDeps(window));
+        void initPushControl(pushSection, JSON.parse(pushSection.dataset.copy ?? ""), browserPushDeps(window), pushController.signal);
       } catch {
         // Unreadable words: the section stays hidden.
       }

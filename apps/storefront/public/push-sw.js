@@ -58,7 +58,10 @@ self.addEventListener("push", function (event) {
     data: { url: typeof data.url === "string" ? sameOriginPath(data.url) : "" },
   };
   var tag = text(data.tag, 80);
-  if (tag) options.tag = tag;
+  if (tag) {
+    options.tag = tag;
+    options.renotify = true;
+  }
   event.waitUntil(self.registration.showNotification(title, options));
 });
 

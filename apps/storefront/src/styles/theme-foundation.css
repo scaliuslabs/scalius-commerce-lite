@@ -281,18 +281,20 @@ html.dark {
 /* No control is under 24 x 24 CSS px (WCAG 2.5.8). Links in running text are
    exempt, so only controls are set here; a list of links sets
    `min-block-size: var(--target-min)` on its own link. */
-.site-root
-  :where(
-    button,
-    summary,
-    select,
-    [role="button"],
-    [role="tab"],
-    [role="menuitem"],
-    input:not([type="hidden"], [type="checkbox"], [type="radio"])
-  ) {
-  min-block-size: var(--target-min);
-  min-inline-size: var(--target-min);
+@layer base {
+  .site-root
+    :where(
+      button,
+      summary,
+      select,
+      [role="button"],
+      [role="tab"],
+      [role="menuitem"],
+      input:not([type="hidden"], [type="checkbox"], [type="radio"])
+    ) {
+    min-block-size: var(--target-min);
+    min-inline-size: var(--target-min);
+  }
 }
 
 /* Focused targets scroll clear of the sticky header (WCAG 2.4.11). */

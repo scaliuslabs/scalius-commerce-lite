@@ -1,5 +1,6 @@
 // src/lib/rbac/helpers.ts
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
@@ -14,7 +15,7 @@ import {
   userPermissions,
 } from "@scalius/database/schema";
 import type { PermissionName, UserPermissionContext } from "./types";
-import { getAllPermissionNames, withoutUnmetPrerequisites } from "./permissions";
+import { getAllPermissionNames, withPrerequisites, withoutUnmetPrerequisites } from "./permissions";
 
 // Every role or assignment mutation clears the affected entries, so the TTL is
 // only a backstop; a long window keeps admin sessions from re-writing KV every
@@ -79,6 +80,41 @@ export async function getFreshUserPermissionsFromD1(
   userId: string,
 ): Promise<Set<string>> {
   return (await resolveUserPermissionsFromD1(db, userId)).permissions;
+}
+
+/** A payload with no narrower resource contract is visible only to super-admins. */
+export type StaffPermissionRequirement = PermissionName | "super_admin";
+
+/**
+ * Fresh set-based recipient authority: the same grants, explicit denials and
+ * prerequisite closure as the resolver, plus current session ban semantics.
+ * Kept in SQL so device fan-out needs no per-user permission/cache reads.
+ */
+export function staffPermissionSql(ownerId: SQLWrapper, required: StaffPermissionRequirement): SQL {
+  const staff = alias(user, "recipient_staff");
+  const effective = required === "super_admin" ? sql`1 = 0` : sql.join(
+    [...withPrerequisites([required])].map((name) => sql`EXISTS (
+      SELECT 1 FROM ${permissions}
+      WHERE ${permissions.name} = ${name}
+        AND NOT EXISTS (SELECT 1 FROM ${userPermissions}
+          WHERE ${userPermissions.userId} = ${staff.id}
+            AND ${userPermissions.permissionId} = ${permissions.id}
+            AND ${userPermissions.granted} = 0)
+        AND (EXISTS (SELECT 1 FROM ${userPermissions}
+          WHERE ${userPermissions.userId} = ${staff.id}
+            AND ${userPermissions.permissionId} = ${permissions.id}
+            AND ${userPermissions.granted} = 1)
+          OR EXISTS (SELECT 1 FROM ${userRoles}
+            INNER JOIN ${rolePermissions} ON ${rolePermissions.roleId} = ${userRoles.roleId}
+            WHERE ${userRoles.userId} = ${staff.id}
+              AND ${rolePermissions.permissionId} = ${permissions.id}))
+    )`), sql` AND `,
+  );
+  return sql`EXISTS (SELECT 1 FROM ${user} AS ${sql.identifier("recipient_staff")}
+    WHERE ${staff.id} = ${ownerId}
+      AND (${staff.banned} = 0 OR ${staff.banned} IS NULL
+        OR (${staff.banExpires} IS NOT NULL AND ${staff.banExpires} <= unixepoch()))
+      AND (${staff.isSuperAdmin} = 1 OR (${effective})))`;
 }
 
 /**
