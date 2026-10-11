@@ -665,6 +665,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 133,
+        name: "0133_customer_sale_endpoints",
+        sqliteStatements: 15,
+        postgresStatements: 15,
+      },
     ]);
   });
 
@@ -846,6 +852,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 130, name: "0130_dashboard_home_reads" },
           { version: 131, name: "0131_analytics_rollup" },
           { version: 132, name: "0132_recommendation_buyers" },
+          { version: 133, name: "0133_customer_sale_endpoints" },
         ],
       });
     } finally {

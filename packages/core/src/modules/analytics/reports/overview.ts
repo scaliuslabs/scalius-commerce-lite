@@ -206,34 +206,29 @@ function intervalCte(name: string, intervals: readonly (readonly [number, number
 
 function customerCtes(currency: string, start: number, end: number, summarized: boolean): SQL {
   if (summarized) {
-    // Materialize unresolved histories in identity order before probing facts,
-    // so small database page caches reuse the customer index pages.
-    return sql`unresolved as materialized (
-      select cs.identity, cs.shop_currency
-      from analytics_customer_currency_summary cs
-      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
-        and cs.first_sale_at < ${start} and cs.last_sale_at >= ${end} and cs.second_sale_at < ${start}
-      order by cs.identity
-    ),
-    cp as (
+    // Stored endpoints prove membership before the unresolved gap touches facts.
+    return sql`cp as (
       select case when cs.first_sale_at >= ${start} and cs.second_sale_at < ${end} then 2 else 1 end as n,
         case when cs.first_sale_any_currency_at < ${start} then 1 else 0 end as prior
       from analytics_customer_currency_summary cs
       where cs.shop_currency = ${currency} and cs.first_sale_at is not null
         and cs.first_sale_at < ${end} and cs.last_sale_at >= ${start}
-        and case
-          when cs.first_sale_at >= ${start} then 1
-          when cs.last_sale_at < ${end} then 1
-          when cs.second_sale_at >= ${end} then 0
-          when cs.second_sale_at >= ${start} then 1
-          else 0 end = 1
-      union all
-      select 1 as n, 1 as prior from unresolved u
-      where exists (
-        select 1 from analytics_order_facts f
-        where f.shop_currency = u.shop_currency and f.identity = u.identity and f.order_count = 1
-          and f.created_at >= ${start} and f.created_at < ${end}
-      )
+        and case when (
+          cs.first_sale_at >= ${start} or cs.last_sale_at < ${end}
+          or (cs.second_sale_at >= ${start} and cs.second_sale_at < ${end})
+          or (cs.third_sale_at >= ${start} and cs.third_sale_at < ${end})
+          or (cs.fourth_sale_at >= ${start} and cs.fourth_sale_at < ${end})
+          or (cs.penultimate_sale_at >= ${start} and cs.penultimate_sale_at < ${end})
+          or (cs.third_last_sale_at >= ${start} and cs.third_last_sale_at < ${end})
+          or (cs.fourth_last_sale_at >= ${start} and cs.fourth_last_sale_at < ${end})
+        ) then 1
+        when cs.fourth_sale_at < ${start} and cs.fourth_last_sale_at >= ${end}
+          then case when exists (
+            select 1 from analytics_order_facts f
+            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
+              and f.created_at >= ${start} and f.created_at < ${end}
+          ) then 1 else 0 end
+        else 0 end = 1
     )`;
   }
   return sql`cu as (

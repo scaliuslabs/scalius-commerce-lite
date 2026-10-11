@@ -73,6 +73,8 @@ For a cutover, an operator sets the `DATABASE_MIGRATION_FREEZE` secret to `1`, `
 
 The schema files in `src/schema/` are the source of truth for columns. There is one file per area (`orders.ts`, `inventory.ts`, `products.ts`, `system.ts` and so on), and `index.ts` re-exports them. Each domain README lists the tables its domain owns. `system.ts` holds the release ledger, `settings`, `checkout_authority`, the cache clock and dependency tables, the theme tables, analytics and checkout languages.
 
+`analytics.ts` holds the transactional sales projections. Migration 0133 adds the first four and last four sale timestamps per customer/currency, using indexed lookups with offsets at most three. Duplicate timestamps count as separate sales; money, line and refund changes do not write customer summaries. Generate its additive SQL with `pnpm exec tsx packages/database/scripts/analytics-customer-endpoints.ts --write` after Drizzle generation; the 0131 renderer retains its original four-column summary contract.
+
 Single tables with rules:
 
 - `settings` holds typed settings documents. `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the compare-and-swap counter. Fraud-checker provider rows and `notification_provider_health` markers also live here. Each domain declares its documents (see [ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Settings documents").

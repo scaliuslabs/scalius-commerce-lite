@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ANALYTICS_FACT_KEYS, ANALYTICS_MEASURES, analyticsBucketsInsert, analyticsOrderFactsSelect, analyticsRollupBackfillStatements } from "../src/analytics-rollup";
+import { ANALYTICS_CUSTOMER_ENDPOINTS, ANALYTICS_FACT_KEYS, ANALYTICS_MEASURES, analyticsBucketsInsert, analyticsOrderFactsSelect, analyticsRollupBackfillStatements } from "../src/analytics-rollup";
 import { compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const ANALYTICS_ROLLUP_MIGRATION = "0131_analytics_rollup";
@@ -31,6 +31,32 @@ const SOURCES: ReadonlyArray<{ table: string; key: string; columns: readonly str
   { table: "cod_tracking", key: "order_id", columns: ["order_id", "cod_status"] },
 ];
 
+function customerSummaryTrigger(event: "insert" | "update" | "delete", includeEndpoints: boolean): AnalyticsRollupTrigger {
+  const refs = event === "insert" ? [["NEW", 1] as const] : event === "delete" ? [["OLD", -1] as const] : [["OLD", -1] as const, ["NEW", 1] as const];
+  const pairs = refs.map(([r]) => `select ${r}.identity as identity, ${r}.shop_currency as shop_currency`).join(" union ");
+    const local = (suffix: string) => `(select f.created_at from analytics_order_facts f
+      where f.shop_currency = affected.shop_currency and f.identity = affected.identity and f.order_count = 1
+      order by f.created_at ${suffix})`;
+    const timestamps = ["first_sale_at", "second_sale_at", "last_sale_at", "first_sale_any_currency_at",
+      ...(includeEndpoints ? ANALYTICS_CUSTOMER_ENDPOINTS.map(([name]) => name) : [])];
+    const endpoints = includeEndpoints ? ANALYTICS_CUSTOMER_ENDPOINTS.map(([, order]) => `, ${local(order)}`).join("") : "";
+    return trigger(`analytics_facts_customer_summary_${event}`, "analytics_order_facts", event.toUpperCase(),
+      `insert into analytics_customer_currency_summary (identity, shop_currency, ${timestamps.join(", ")})
+      select identity, shop_currency, ${local("limit 1")}, ${local("limit 1 offset 1")}, ${local("desc limit 1")},
+        (select f.created_at from analytics_order_facts f where f.identity = affected.identity and f.order_count = 1 order by f.created_at limit 1)${endpoints}
+      from (${pairs}) as affected where 1 = 1
+      on conflict (identity, shop_currency) do update set ${timestamps.map((c) => `${c} = excluded.${c}`).join(", ")}
+      where ${changed(timestamps, "analytics_customer_currency_summary", "excluded")}`,
+      event === "update"
+        ? `(OLD.order_count = 1 OR NEW.order_count = 1) AND (${changed(["identity", "shop_currency", "created_at", "order_count"])})`
+        : `${refs[0]![0]}.order_count = 1`);
+}
+
+/** Current bounded customer witnesses; migration 0131 keeps its original four fields. */
+export function generateAnalyticsCustomerSummaryTriggers(): AnalyticsRollupTrigger[] {
+  return (["insert", "update", "delete"] as const).map((event) => customerSummaryTrigger(event, true));
+}
+
 export function generateAnalyticsRollupTriggers(): AnalyticsRollupTrigger[] {
   const triggers: AnalyticsRollupTrigger[] = [];
   for (const source of SOURCES) {
@@ -57,21 +83,7 @@ export function generateAnalyticsRollupTriggers(): AnalyticsRollupTrigger[] {
       on conflict (identity) do update set first_sale_at = excluded.first_sale_at
       where analytics_customer_first_sale.first_sale_at IS NOT excluded.first_sale_at`,
       event === "update" ? changed(["identity", "created_at", "order_count"]) : `${refs[0]![0]}.order_count = 1`));
-    const pairs = refs.map(([r]) => `select ${r}.identity as identity, ${r}.shop_currency as shop_currency`).join(" union ");
-    const local = (suffix: string) => `(select f.created_at from analytics_order_facts f
-      where f.shop_currency = affected.shop_currency and f.identity = affected.identity and f.order_count = 1
-      order by f.created_at ${suffix})`;
-    const timestamps = ["first_sale_at", "second_sale_at", "last_sale_at", "first_sale_any_currency_at"];
-    triggers.push(trigger(`analytics_facts_customer_summary_${event}`, "analytics_order_facts", event.toUpperCase(),
-      `insert into analytics_customer_currency_summary (identity, shop_currency, ${timestamps.join(", ")})
-      select identity, shop_currency, ${local("limit 1")}, ${local("limit 1 offset 1")}, ${local("desc limit 1")},
-        (select f.created_at from analytics_order_facts f where f.identity = affected.identity and f.order_count = 1 order by f.created_at limit 1)
-      from (${pairs}) as affected where 1 = 1
-      on conflict (identity, shop_currency) do update set ${timestamps.map((c) => `${c} = excluded.${c}`).join(", ")}
-      where ${changed(timestamps, "analytics_customer_currency_summary", "excluded")}`,
-      event === "update"
-        ? `(OLD.order_count = 1 OR NEW.order_count = 1) AND (${changed(["identity", "shop_currency", "created_at", "order_count"])})`
-        : `${refs[0]![0]}.order_count = 1`));
+    triggers.push(customerSummaryTrigger(event, false));
   }
   // Both sibling trigger orders converge: the local UPSERT reads the facts' global minimum itself.
   for (const event of ["insert", "update"] as const) {
@@ -90,17 +102,17 @@ const postgresPath = fileURLToPath(new URL(`../migrations/postgres/${ANALYTICS_R
 /** Drizzle generates tables/indexes/snapshot; this appends the shared set-wise backfill and triggers. */
 export function renderAnalyticsRollupMigration(ddl: readonly string[]): { sqlite: string; postgres: string; digest: string } {
   const triggers = generateAnalyticsRollupTriggers();
-  const body = [...ddl, ...analyticsRollupBackfillStatements().map((s) => `${s};`), ...triggers.map((t) => `${t.sqlite};`)];
+  const body = [...ddl, ...analyticsRollupBackfillStatements(false).map((s) => `${s};`), ...triggers.map((t) => `${t.sqlite};`)];
   const digest = createHash("sha256").update(`${body.join(`\n${BREAKPOINT}\n`)}\n`).digest("hex");
   const ledger = `INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (131, '${ANALYTICS_ROLLUP_MIGRATION}', '${digest}');`;
   return {
     sqlite: [...body, ledger].join(`\n${BREAKPOINT}\n`) + "\n",
-    postgres: [...ddl.map(compileSqliteDdlForPostgres), ...analyticsRollupBackfillStatements().map((s) => `${compileSqliteDdlForPostgres(s)};`), ...triggers.map((t) => compileSqliteTriggerForPostgres({ name: t.name, sql: t.sqlite })), ledger].join(`\n${BREAKPOINT}\n`) + "\n",
+    postgres: [...ddl.map(compileSqliteDdlForPostgres), ...analyticsRollupBackfillStatements(false).map((s) => `${compileSqliteDdlForPostgres(s)};`), ...triggers.map((t) => compileSqliteTriggerForPostgres({ name: t.name, sql: t.sqlite })), ledger].join(`\n${BREAKPOINT}\n`) + "\n",
     digest,
   };
 }
 
-if (process.argv.includes("--write")) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && process.argv.includes("--write")) {
   const ddl = readFileSync(migrationPath, "utf8").split(BREAKPOINT).map((s) => s.trim()).filter((s) => /^CREATE (?:TABLE|INDEX|UNIQUE INDEX) /i.test(s));
   if (ddl.length !== 9) throw new Error("Expected four Drizzle tables and five indexes before adding analytics maintenance.");
   const output = renderAnalyticsRollupMigration(ddl);

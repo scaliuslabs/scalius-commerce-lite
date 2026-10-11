@@ -63,8 +63,14 @@ export const analyticsCustomerCurrencySummary = sqliteTable("analytics_customer_
   secondSaleAt: integer("second_sale_at"),
   lastSaleAt: integer("last_sale_at"),
   firstSaleAnyCurrencyAt: integer("first_sale_any_currency_at"),
+  thirdSaleAt: integer("third_sale_at"),
+  fourthSaleAt: integer("fourth_sale_at"),
+  penultimateSaleAt: integer("penultimate_sale_at"),
+  thirdLastSaleAt: integer("third_last_sale_at"),
+  fourthLastSaleAt: integer("fourth_last_sale_at"),
 }, (t) => [
   primaryKey({ columns: [t.identity, t.shopCurrency] }),
-  index("analytics_customer_currency_range_idx").on(t.shopCurrency, t.firstSaleAt, t.lastSaleAt, t.secondSaleAt, t.firstSaleAnyCurrencyAt, t.identity)
+  index("analytics_customer_currency_range_idx").on(t.shopCurrency, t.firstSaleAt, t.lastSaleAt, t.secondSaleAt, t.firstSaleAnyCurrencyAt, t.identity,
+    t.thirdSaleAt, t.fourthSaleAt, t.penultimateSaleAt, t.thirdLastSaleAt, t.fourthLastSaleAt)
     .where(sql`${t.firstSaleAt} IS NOT NULL`),
 ]);

@@ -88,25 +88,46 @@ export function analyticsBucketsInsert(source: string, delta = false): string {
 }
 
 /** Customer extrema backfill after facts and global-first rows, with maintenance triggers absent. */
-export function analyticsCustomerCurrencyBackfillStatement(): string {
+export function analyticsCustomerCurrencyBackfillStatement(includeEndpoints = true): string {
+  const endpointColumns = includeEndpoints ? `, ${ANALYTICS_CUSTOMER_ENDPOINTS.map(([name]) => name).join(", ")}` : "";
+  const endpoints = includeEndpoints ? ANALYTICS_CUSTOMER_ENDPOINTS.map(([, order]) => `,
+      (select f.created_at from analytics_order_facts f
+        where f.shop_currency = c.shop_currency and f.identity = c.identity and f.order_count = 1
+        order by f.created_at ${order})`).join("") : "";
   return `insert into analytics_customer_currency_summary
-    (identity, shop_currency, first_sale_at, second_sale_at, last_sale_at, first_sale_any_currency_at)
+    (identity, shop_currency, first_sale_at, second_sale_at, last_sale_at, first_sale_any_currency_at${endpointColumns})
     select c.identity, c.shop_currency, c.first_sale_at,
       (select f.created_at from analytics_order_facts f
         where f.shop_currency = c.shop_currency and f.identity = c.identity and f.order_count = 1
         order by f.created_at limit 1 offset 1),
-      c.last_sale_at, fs.first_sale_at
+      c.last_sale_at, fs.first_sale_at${endpoints}
     from (select identity, shop_currency, min(created_at) as first_sale_at, max(created_at) as last_sale_at
       from analytics_order_facts where order_count = 1 group by shop_currency, identity) c
     left join analytics_customer_first_sale fs on fs.identity = c.identity`;
 }
 
 /** Only for empty projections with maintenance triggers absent (migration and the scale fixture). */
-export function analyticsRollupBackfillStatements(): string[] {
+export function analyticsRollupBackfillStatements(includeEndpoints = true): string[] {
   return [
     `insert into analytics_order_facts (${[...ANALYTICS_FACT_KEYS, ...ANALYTICS_MEASURES].join(", ")}) ${analyticsOrderFactsSelect()}`,
     analyticsBucketsInsert("analytics_order_facts"),
     "insert into analytics_customer_first_sale (identity, first_sale_at) select identity, min(created_at) from analytics_order_facts where order_count = 1 group by identity",
-    analyticsCustomerCurrencyBackfillStatement(),
+    analyticsCustomerCurrencyBackfillStatement(includeEndpoints),
   ];
+}
+
+/** Additional bounded witnesses introduced in 0133; offsets count equal timestamps separately. */
+export const ANALYTICS_CUSTOMER_ENDPOINTS = [
+  ["third_sale_at", "limit 1 offset 2"], ["fourth_sale_at", "limit 1 offset 3"],
+  ["penultimate_sale_at", "desc limit 1 offset 1"], ["third_last_sale_at", "desc limit 1 offset 2"],
+  ["fourth_last_sale_at", "desc limit 1 offset 3"],
+] as const;
+
+export function analyticsCustomerEndpointsBackfillStatement(): string {
+  return `update analytics_customer_currency_summary set ${ANALYTICS_CUSTOMER_ENDPOINTS.map(([name, order]) => `${name} =
+    (select f.created_at from analytics_order_facts f
+      where f.shop_currency = analytics_customer_currency_summary.shop_currency
+        and f.identity = analytics_customer_currency_summary.identity and f.order_count = 1
+      order by f.created_at ${order})`).join(", ")}
+    where first_sale_at is not null`;
 }
