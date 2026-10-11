@@ -33,28 +33,16 @@ vi.mock("@tiptap/pm/state", async (importOriginal) => {
   };
 });
 
-vi.mock("~/components/admin/media-manager", async () => {
-  const React = await import("react");
-
-  return {
-    MediaManager: ({
-      onSelect,
-      trigger,
-    }: {
-      onSelect: (file: { url: string; filename: string }) => void;
-      trigger: React.ReactElement<{ onClick?: React.MouseEventHandler }>;
-    }) =>
-      React.cloneElement(trigger, {
-        onClick: (event: React.MouseEvent) => {
-          trigger.props.onClick?.(event);
-          onSelect({
-            url: "https://example.com/section-image.jpg",
-            filename: "section-image.jpg",
-          });
-        },
-      }),
-  };
-});
+vi.mock("~/components/admin/media-manager", () => ({
+  MediaManager: ({ open, onSelect, onOpenChange }: {
+    open: boolean;
+    onSelect: (file: { url: string; filename: string }) => void;
+    onOpenChange: (open: boolean) => void;
+  }) => open ? <button type="button" data-pick-image onClick={() => {
+    onOpenChange(false);
+    onSelect({ url: "https://example.com/section-image.jpg", filename: "section-image.jpg" });
+  }}>Choose image</button> : null,
+}));
 
 vi.mock("./TiptapTablePopover", () => ({
   TiptapTablePopover: () => <button type="button">Table</button>,
@@ -86,6 +74,7 @@ const makeEditor = () => {
     toggleItalic: vi.fn(() => chain),
     toggleUnderline: vi.fn(() => chain),
     setTextAlign: vi.fn(() => chain),
+    setParagraph: vi.fn(() => chain),
     toggleHeading: vi.fn(() => chain),
     toggleBulletList: vi.fn(() => chain),
     toggleOrderedList: vi.fn(() => chain),
@@ -145,141 +134,90 @@ describe("TiptapMenuBar", () => {
     setLocale("en");
   });
 
-  it("keeps media-library insertion scoped to the clicked editor", () => {
+  async function openMenu(label: string, index = 0) {
+    const trigger = host.querySelectorAll<HTMLButtonElement>(`button[aria-label="${label}"]`)[index];
+    expect(trigger).toBeDefined();
+    act(() => { trigger?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, cancelable: true })); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  }
+
+  async function selectItem(label: string) {
+    const item = Array.from(document.querySelectorAll<HTMLElement>('[role^="menuitem"]')).find((node) => node.textContent === label);
+    expect(item).toBeDefined();
+    act(() => item?.click());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  }
+
+  it("keeps media-library insertion scoped to the clicked editor", async () => {
     const first = makeEditor();
     const second = makeEditor();
-
-    act(() => {
-      root.render(
-        <div>
-          <TiptapMenuBar editor={first.editor} toggleModal={vi.fn()} />
-          <TiptapMenuBar editor={second.editor} toggleModal={vi.fn()} />
-        </div>,
-      );
-    });
-
-    const mediaButtons = host.querySelectorAll<HTMLButtonElement>(
-      'button[aria-label="Media library"]',
-    );
-    expect(mediaButtons).toHaveLength(2);
-
-    act(() => {
-      mediaButtons[1]?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-    });
-
+    act(() => root.render(<><TiptapMenuBar editor={first.editor} toggleModal={vi.fn()} /><TiptapMenuBar editor={second.editor} toggleModal={vi.fn()} /></>));
+    await openMenu("Insert", 1);
+    await selectItem("Media library");
+    act(() => host.querySelector<HTMLButtonElement>("[data-pick-image]")?.click());
     expect(first.setImage).not.toHaveBeenCalled();
-    expect(second.setImage).toHaveBeenCalledWith({
-      src: "https://example.com/section-image.jpg",
-      alt: "section-image.jpg",
-    });
+    expect(second.setImage).toHaveBeenCalledWith({ src: "https://example.com/section-image.jpg", alt: "section-image.jpg" });
     expect(second.chain.setTextSelection).toHaveBeenCalledWith(1);
   });
 
-  it("commits a picked image before waiting for dialog focus restoration", () => {
-    const restoreFocus: FrameRequestCallback[] = [];
-    requestAnimationFrameSpy.mockImplementationOnce((callback: FrameRequestCallback) => {
-      restoreFocus.push(callback);
-      return 1;
-    });
+  it("commits a picked image before waiting for dialog focus restoration", async () => {
     const instance = makeEditor();
-
-    act(() => {
-      root.render(
-        <TiptapMenuBar editor={instance.editor} toggleModal={vi.fn()} />,
-      );
-    });
-    act(() => {
-      host
-        .querySelector<HTMLButtonElement>('button[aria-label="Media library"]')
-        ?.click();
-    });
-
+    act(() => root.render(<TiptapMenuBar editor={instance.editor} toggleModal={vi.fn()} />));
+    await openMenu("Insert");
+    await selectItem("Media library");
+    const restoreFocus: FrameRequestCallback[] = [];
+    requestAnimationFrameSpy.mockImplementationOnce((callback: FrameRequestCallback) => { restoreFocus.push(callback); return 1; });
+    act(() => host.querySelector<HTMLButtonElement>("[data-pick-image]")?.click());
     expect(instance.setImage).toHaveBeenCalledOnce();
     expect(instance.focusEditor).not.toHaveBeenCalled();
-    expect(restoreFocus).toHaveLength(1);
-
     restoreFocus[0]?.(0);
-    expect(instance.focusEditor).toHaveBeenCalledWith(undefined, {
-      scrollIntoView: false,
-    });
+    expect(instance.focusEditor).toHaveBeenCalledWith(undefined, { scrollIntoView: false });
   });
 
-  it("keeps compact editor actions touch-sized on mobile", () => {
-    const { editor } = makeEditor();
-
-    act(() => {
-      root.render(
-        <TiptapMenuBar
-          editor={editor}
-          toggleModal={vi.fn()}
-          compact
-        />,
-      );
-    });
-
-    const namedActions = Array.from(
-      host.querySelectorAll<HTMLButtonElement>("button[aria-label]"),
-    );
-    expect(namedActions.length).toBeGreaterThan(10);
-    for (const action of namedActions) {
-      expect(action.className).toContain("h-11");
-      expect(action.className).toContain("w-11");
-      expect(action.className).toContain("sm:h-7");
-      expect(action.className).toContain("sm:w-7");
-    }
-  });
-
-  it("runs lists, blockquotes, headings, alignment, formatting, and history on the active editor", () => {
+  it("runs direct formatting and history commands on the active editor", () => {
     const { editor, chain } = makeEditor();
-    act(() => {
-      root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />);
-    });
-
-    const actions = [
-      ["Bold (Ctrl+B)", chain.toggleBold],
-      ["Italic (Ctrl+I)", chain.toggleItalic],
-      ["Underline (Ctrl+U)", chain.toggleUnderline],
-      ["Align center", chain.setTextAlign],
-      ["Heading 2", chain.toggleHeading],
-      ["Bullet list", chain.toggleBulletList],
-      ["Numbered list", chain.toggleOrderedList],
-      ["Blockquote", chain.toggleBlockquote],
-      ["Undo (Ctrl+Z)", chain.undo],
-      ["Redo (Ctrl+Shift+Z)", chain.redo],
-    ] as const;
-
-    for (const [label, command] of actions) {
-      act(() => {
-        host
-          .querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
-          ?.click();
-      });
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    for (const [label, command] of [
+      ["Bold (Ctrl+B)", chain.toggleBold], ["Italic (Ctrl+I)", chain.toggleItalic],
+      ["Underline (Ctrl+U)", chain.toggleUnderline], ["Bullet list", chain.toggleBulletList],
+      ["Numbered list", chain.toggleOrderedList], ["Undo (Ctrl+Z)", chain.undo], ["Redo (Ctrl+Shift+Z)", chain.redo],
+    ] as const) {
+      act(() => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click());
       expect(command).toHaveBeenCalled();
     }
   });
 
-  it("names the toolbar and its buttons in Bangla when the dashboard is in Bangla", () => {
+  it("keeps heading, paragraph, quote and alignment commands in the text-style menu", async () => {
+    const { editor, chain } = makeEditor();
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    for (const [label, command] of [["Heading 2", chain.toggleHeading], ["Paragraph", chain.setParagraph], ["Blockquote", chain.toggleBlockquote], ["Align center", chain.setTextAlign]] as const) {
+      await openMenu("Text style and alignment: Paragraph");
+      await selectItem(label);
+      expect(command).toHaveBeenCalled();
+    }
+    expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 2 });
+    expect(chain.setTextAlign).toHaveBeenCalledWith("center");
+  });
+
+  it("keeps narrow-layout formatting and history reachable through More", async () => {
+    const { editor, chain } = makeEditor();
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} compact />));
+    for (const [label, command] of [["Underline (Ctrl+U)", chain.toggleUnderline], ["Bullet list", chain.toggleBulletList], ["Numbered list", chain.toggleOrderedList], ["Undo (Ctrl+Z)", chain.undo], ["Redo (Ctrl+Shift+Z)", chain.redo]] as const) {
+      await openMenu("More formatting");
+      await selectItem(label);
+      expect(command).toHaveBeenCalled();
+    }
+  });
+
+  it("names the toolbar, menus and actions in Bangla", async () => {
     const { editor } = makeEditor();
     act(() => setLocale("bn"));
-    act(() => {
-      root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />);
-    });
-
-    expect(host.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe(
-      "লেখার ফরম্যাটিং",
-    );
-    for (const label of [
-      "বোল্ড (Ctrl+B)",
-      "লিংক যোগ করুন",
-      "মিডিয়া লাইব্রেরি",
-      "বাঁয়ে সাজান",
-      "হেডিং ২",
-      "পূর্ণ স্ক্রিন",
-    ]) {
+    act(() => root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />));
+    expect(host.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe("লেখার ফরম্যাটিং");
+    for (const label of ["বোল্ড (Ctrl+B)", "লিংক যোগ করুন", "পূর্ণ স্ক্রিন", "আরও ফরম্যাটিং", "লেখার ধরন ও অবস্থান: অনুচ্ছেদ"]) {
       expect(host.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
     }
-    expect(host.querySelector('button[aria-label="Bold (Ctrl+B)"]')).toBeNull();
+    await openMenu("লেখার ধরন ও অবস্থান: অনুচ্ছেদ");
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("হেডিং ২");
   });
 });

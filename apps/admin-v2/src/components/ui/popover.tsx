@@ -102,4 +102,6 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverTrigger, PopoverContent };
+const PopoverAnchor = PopoverPrimitive.Anchor;
+
+export { PopoverAnchor, Popover, PopoverTrigger, PopoverContent };

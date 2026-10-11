@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
@@ -14,9 +14,11 @@ import {
   List,
   ListOrdered,
   Image as ImageIcon,
-  Heading1,
-  Heading2,
-  Heading3,
+  Pilcrow,
+  ChevronDown,
+  MoreHorizontal,
+  Plus,
+  Table as TableIcon,
   Undo,
   Redo,
   Maximize,
@@ -26,11 +28,17 @@ import {
 } from "lucide-react";
 import { Button } from "../button";
 import { Input } from "../input";
-import { Popover, PopoverContent, PopoverTrigger } from "../popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
 import { MediaManager } from "~/components/admin/media-manager";
 import { normalizeVideoEmbed } from "@scalius/shared/video-embed";
 import type { MediaFile } from "~/components/admin/media-manager";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "../dropdown-menu";
+import { TOOLBAR_ROW, TOOLBAR_WIDE, TOOLBAR_NARROW } from "./tiptap-toolbar-layout";
 import { ToolbarButton } from "./ToolbarButton";
 import { TiptapTablePopover } from "./TiptapTablePopover";
 import { Label } from "../label";
@@ -63,7 +71,6 @@ interface MenuBarProps {
 export const TiptapMenuBar = ({
   editor,
   toggleModal,
-  compact = false,
   isFullscreen = false,
   ariaLabel,
 }: MenuBarProps) => {
@@ -75,6 +82,13 @@ export const TiptapMenuBar = ({
   const imageAltId = `${fieldId}-image-alt`;
   const imageErrorId = `${fieldId}-image-error`;
   const videoErrorId = `${fieldId}-video-error`;
+  const insertAnchor = useRef<HTMLButtonElement | null>(null);
+  const insertTrigger = useRef<HTMLButtonElement | null>(null);
+  const moreTrigger = useRef<HTMLButtonElement | null>(null);
+  const pendingMenuAction = useRef<(() => void) | null>(null);
+  const inserted = useRef(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState<string>("");
   const [linkError, setLinkError] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>("");
@@ -107,6 +121,7 @@ export const TiptapMenuBar = ({
       bulletList: currentEditor?.isActive("bulletList") ?? false,
       orderedList: currentEditor?.isActive("orderedList") ?? false,
       blockquote: currentEditor?.isActive("blockquote") ?? false,
+      table: currentEditor?.isActive("table") ?? false,
       canToggleList: currentEditor ? canToggleRichTextList(currentEditor) : false,
       canToggleBlockquote: currentEditor
         ? canToggleRichTextBlockquote(currentEditor)
@@ -155,6 +170,7 @@ export const TiptapMenuBar = ({
     setImageUrl("");
     setImageAlt("");
     setImageError(false);
+    inserted.current = true;
     setImageOpen(false);
     insertRichTextImage(editor, {
       src: url,
@@ -166,6 +182,7 @@ export const TiptapMenuBar = ({
   };
 
   const handleMediaSelect = (file: MediaFile) => {
+    inserted.current = true;
     insertRichTextImage(editor, {
       src: file.url,
       alt: file.altText?.trim() || file.filename,
@@ -183,6 +200,7 @@ export const TiptapMenuBar = ({
     }
     setVideoUrl("");
     setVideoError(false);
+    inserted.current = true;
     setVideoOpen(false);
     insertRichTextVideo(editor, {
       src: normalized.src,
@@ -197,50 +215,72 @@ export const TiptapMenuBar = ({
   const canOpenLink = toolbarState.hasSelection || hasLinkSelection;
   const linkLabel = t(canOpenLink ? (hasLinkSelection ? "editLink" : "addLink") : "selectTextForLink");
 
-  const iconButtonSize = compact ? "icon-sm" : "icon";
+  // Let Radix release the menu's focus scope before focusing the editor or
+  // opening a persistent sibling panel. Cancelling a menu uses Radix's default.
+  const finishMenu = (event: Event) => {
+    const action = pendingMenuAction.current;
+    pendingMenuAction.current = null;
+    if (!action) return;
+    event.preventDefault();
+    requestAnimationFrame(action);
+  };
+  const runFromMenu = (action: () => void) => { pendingMenuAction.current = action; };
+  const restoreInsertFocus = (event: Event) => {
+    event.preventDefault();
+    if (inserted.current) editor.commands.focus(undefined, { scrollIntoView: false });
+    else insertAnchor.current?.focus();
+    inserted.current = false;
+  };
+  const heading = toolbarState.heading1 ? "1" : toolbarState.heading2 ? "2" : toolbarState.heading3 ? "3" : "paragraph";
+  const styleLabel = heading === "paragraph" ? t("paragraph") : t("heading", { level: Number(heading) });
+  const alignment = toolbarState.alignCenter ? "center" : toolbarState.alignRight ? "right" : toolbarState.justify ? "justify" : "left";
+  const insertItems = () => (
+    <>
+      <DropdownMenuItem onSelect={() => runFromMenu(() => setImageOpen(true))}><ImageIcon />{t("insertImageUrl")}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => runFromMenu(() => setMediaOpen(true))}><FolderOpen />{t("mediaLibrary")}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => runFromMenu(() => setVideoOpen(true))}><VideoIcon />{t("embedVideo")}</DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => runFromMenu(() => setTableOpen(true))}><TableIcon />{t(toolbarState.table ? "editTable" : "insertTable")}</DropdownMenuItem>
+    </>
+  );
 
   return (
-    <div
-      role="toolbar"
-      aria-label={ariaLabel ?? t("toolbar")}
-      className="flex items-center gap-0.5 overflow-hidden bg-card p-1"
-    >
-      <div
-        className={cn(
-          // Phones scroll the buttons sideways; wider screens wrap them, so none hide past the edge.
-          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide sm:overflow-visible",
-          isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1",
-        )}
-      >
-        <div className="flex min-w-max items-center gap-0.5 sm:min-w-0 sm:flex-wrap">
-        {/* Text formatting */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={toolbarState.bold}
-          tooltip={t("bold")}
-          compact={compact}
-        >
-          <Bold />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={toolbarState.italic}
-          tooltip={t("italic")}
-          compact={compact}
-        >
-          <Italic />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={toolbarState.underline}
-          tooltip={t("underline")}
-          compact={compact}
-        >
-          <UnderlineIcon />
-        </ToolbarButton>
-
-        <div className="mx-1 h-6 w-px bg-border" />
-
+    <div className={cn("@container min-w-0 shrink-0 bg-card", isFullscreen && "mx-auto w-full max-w-2xl sm:px-4")}>
+      <div role="toolbar" aria-label={ariaLabel ?? t("toolbar")} className={TOOLBAR_ROW}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-14 shrink-0 sm:h-8 sm:w-12 pointer-coarse:h-11 pointer-coarse:w-14 @[38rem]:w-26 pointer-coarse:@[38rem]:w-14" aria-label={`${t("textStyle")}: ${styleLabel}`}>
+              <Pilcrow className="text-muted-foreground @[38rem]:hidden pointer-coarse:@[38rem]:block" />
+              <span className="hidden min-w-0 flex-1 truncate ps-2 text-muted-foreground text-start @[38rem]:inline pointer-coarse:@[38rem]:hidden">{styleLabel}</span>
+              <ChevronDown className="size-3 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="z-[10001]" onCloseAutoFocus={finishMenu}>
+            <DropdownMenuRadioGroup value={heading} onValueChange={(value) => runFromMenu(() => {
+              if (value === "paragraph") editor.chain().focus().setParagraph().run();
+              else editor.chain().focus().toggleHeading({ level: Number(value) as 1 | 2 | 3 }).run();
+            })}>
+              <DropdownMenuRadioItem value="paragraph">{t("paragraph")}</DropdownMenuRadioItem>
+              {([1, 2, 3] as const).map((level) => <DropdownMenuRadioItem key={level} value={String(level)}>{t("heading", { level })}</DropdownMenuRadioItem>)}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuCheckboxItem checked={toolbarState.blockquote} disabled={!toolbarState.canToggleBlockquote} onSelect={() => runFromMenu(() => { toggleRichTextBlockquote(editor); })}>
+              <TextQuote />{t("blockquote")}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{t("alignment")}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={alignment} onValueChange={(value) => runFromMenu(() => { editor.chain().focus().setTextAlign(value).run(); })}>
+              <DropdownMenuRadioItem value="left"><AlignLeft />{t("alignLeft")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="center"><AlignCenter />{t("alignCenter")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="right"><AlignRight />{t("alignRight")}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="justify"><AlignJustify />{t("justify")}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={toolbarState.bold} tooltip={t("bold")}><Bold /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={toolbarState.italic} tooltip={t("italic")}><Italic /></ToolbarButton>
+        <div className={TOOLBAR_WIDE}>
+          <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={toolbarState.underline} tooltip={t("underline")}><UnderlineIcon /></ToolbarButton>
+        </div>
         {/* Links */}
         <Popover
           open={linkOpen}
@@ -258,12 +298,14 @@ export const TiptapMenuBar = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  size={iconButtonSize}
+                  size="icon"
+                  className="h-11 w-11 shrink-0 sm:h-8 sm:w-8 pointer-coarse:h-11 pointer-coarse:w-11"
+                  onPointerDown={(event) => event.preventDefault()}
                   aria-pressed={toolbarState.link || undefined}
                   aria-label={linkLabel}
                   disabled={!canOpenLink}
                 >
-                  <LinkIcon />
+                  <LinkIcon className={toolbarState.link ? "text-foreground" : "text-muted-foreground"} />
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
@@ -310,6 +352,46 @@ export const TiptapMenuBar = ({
           </PopoverContent>
         </Popover>
 
+
+        <div className={cn(TOOLBAR_WIDE, "items-center gap-0.5")}>
+          <ToolbarButton onClick={() => toggleRichTextBulletList(editor)} isActive={toolbarState.bulletList} disabled={!toolbarState.canToggleList} tooltip={t("bulletList")}><List /></ToolbarButton>
+          <ToolbarButton onClick={() => toggleRichTextOrderedList(editor)} isActive={toolbarState.orderedList} disabled={!toolbarState.canToggleList} tooltip={t("numberedList")}><ListOrdered /></ToolbarButton>
+          <DropdownMenu onOpenChange={(open) => { if (open) { insertAnchor.current = insertTrigger.current; inserted.current = false; } }}>
+            <DropdownMenuTrigger asChild>
+              <Button ref={insertTrigger} type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-20 pointer-coarse:h-11 pointer-coarse:w-11" aria-label={t("insert")}>
+                <Plus className="hidden text-muted-foreground pointer-coarse:block" />
+                <span className="text-body text-muted-foreground pointer-coarse:hidden">{t("insert")}</span>
+                <ChevronDown className="text-muted-foreground pointer-coarse:hidden" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="z-[10001]" onCloseAutoFocus={finishMenu}>{insertItems()}</DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className={TOOLBAR_NARROW}>
+          <DropdownMenu onOpenChange={(open) => { if (open) { insertAnchor.current = moreTrigger.current; inserted.current = false; } }}>
+            <DropdownMenuTrigger asChild>
+              <Button ref={moreTrigger} type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-8 pointer-coarse:h-11 pointer-coarse:w-11" aria-label={t("moreFormatting")}><MoreHorizontal className="text-muted-foreground" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="z-[10001]" onCloseAutoFocus={finishMenu}>
+              <DropdownMenuCheckboxItem checked={toolbarState.underline} onSelect={() => runFromMenu(() => { editor.chain().focus().toggleUnderline().run(); })}><UnderlineIcon />{t("underline")}</DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={toolbarState.bulletList} disabled={!toolbarState.canToggleList} onSelect={() => runFromMenu(() => { toggleRichTextBulletList(editor); })}><List />{t("bulletList")}</DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={toolbarState.orderedList} disabled={!toolbarState.canToggleList} onSelect={() => runFromMenu(() => { toggleRichTextOrderedList(editor); })}><ListOrdered />{t("numberedList")}</DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {insertItems()}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!toolbarState.canUndo} onSelect={() => runFromMenu(() => { editor.chain().focus().undo().run(); })}><Undo />{t("undo")}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!toolbarState.canRedo} onSelect={() => runFromMenu(() => { editor.chain().focus().redo().run(); })}><Redo />{t("redo")}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className={cn(TOOLBAR_WIDE, "ms-auto items-center gap-0.5")}>
+          <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!toolbarState.canUndo} tooltip={t("undo")}><Undo /></ToolbarButton>
+          <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!toolbarState.canRedo} tooltip={t("redo")}><Redo /></ToolbarButton>
+        </div>
+        {!isFullscreen && <div className="ms-auto shrink-0" data-rich-text-fullscreen-toggle>
+          <ToolbarButton onClick={toggleModal} tooltip={t("fullscreen")}><Maximize /></ToolbarButton>
+        </div>}
+      </div>
         {/* Image URL Popover */}
         <Popover
           open={imageOpen}
@@ -318,24 +400,8 @@ export const TiptapMenuBar = ({
             if (!open) setImageError(false);
           }}
         >
-          <Tooltip open={imageOpen ? false : undefined}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size={iconButtonSize}
-                  aria-label={t("insertImageUrl")}
-                >
-                  <ImageIcon />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>{t("insertImageUrl")}</p>
-            </TooltipContent>
-          </Tooltip>
-          <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3">
+          <PopoverAnchor virtualRef={insertAnchor} />
+          <PopoverContent aria-label={t("insertImageUrl")} onCloseAutoFocus={restoreInsertFocus} className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3">
             <div className="space-y-1.5">
               <Label htmlFor={imageUrlId}>{t("imageUrl")}</Label>
               <Input
@@ -366,7 +432,7 @@ export const TiptapMenuBar = ({
                 onChange={(event) => setImageAlt(event.target.value)}
                 placeholder={t("altPlaceholder")}
               />
-              <p className="text-body text-muted-foreground">
+              <p className="text-body">
                 {t("altHelp")}
               </p>
             </div>
@@ -381,22 +447,6 @@ export const TiptapMenuBar = ({
           </PopoverContent>
         </Popover>
 
-        <MediaManager
-          capability="image"
-          onSelect={handleMediaSelect}
-          triggerLabel={t("mediaLibrary")}
-          dialogClassName={isFullscreen ? "z-[10001]" : undefined}
-          trigger={
-            <ToolbarButton
-              onClick={() => undefined}
-              tooltip={t("mediaLibrary")}
-              compact={compact}
-            >
-              <FolderOpen />
-            </ToolbarButton>
-          }
-        />
-
         {/* Video */}
         <Popover
           open={videoOpen}
@@ -405,24 +455,8 @@ export const TiptapMenuBar = ({
             if (!open) setVideoError(false);
           }}
         >
-          <Tooltip open={videoOpen ? false : undefined}>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size={iconButtonSize}
-                  aria-label={t("embedVideo")}
-                >
-                  <VideoIcon />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>{t("embedVideo")}</p>
-            </TooltipContent>
-          </Tooltip>
-          <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm p-3">
+          <PopoverAnchor virtualRef={insertAnchor} />
+          <PopoverContent aria-label={t("embedVideo")} onCloseAutoFocus={restoreInsertFocus} className="z-[10001] w-[calc(100vw-2rem)] max-w-sm p-3">
             <div className="flex gap-2">
               <Input
                 type="url"
@@ -454,150 +488,9 @@ export const TiptapMenuBar = ({
           </PopoverContent>
         </Popover>
 
-        <div className="mx-1 h-6 w-px bg-border" />
 
-        {/* Alignment */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          isActive={toolbarState.alignLeft}
-          tooltip={t("alignLeft")}
-          compact={compact}
-        >
-          <AlignLeft />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          isActive={toolbarState.alignCenter}
-          tooltip={t("alignCenter")}
-          compact={compact}
-        >
-          <AlignCenter />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          isActive={toolbarState.alignRight}
-          tooltip={t("alignRight")}
-          compact={compact}
-        >
-          <AlignRight />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-          isActive={toolbarState.justify}
-          tooltip={t("justify")}
-          compact={compact}
-        >
-          <AlignJustify />
-        </ToolbarButton>
-
-        <div className="mx-1 h-6 w-px bg-border" />
-
-        {/* Headings */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          isActive={toolbarState.heading1}
-          tooltip={t("heading", { level: 1 })}
-          compact={compact}
-        >
-          <Heading1 />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          isActive={toolbarState.heading2}
-          tooltip={t("heading", { level: 2 })}
-          compact={compact}
-        >
-          <Heading2 />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          isActive={toolbarState.heading3}
-          tooltip={t("heading", { level: 3 })}
-          compact={compact}
-        >
-          <Heading3 />
-        </ToolbarButton>
-
-        <div className="mx-1 h-6 w-px bg-border" />
-
-        {/* Lists & blockquote */}
-        <ToolbarButton
-          onClick={() => toggleRichTextBulletList(editor)}
-          isActive={toolbarState.bulletList}
-          disabled={!toolbarState.canToggleList}
-          tooltip={t("bulletList")}
-          compact={compact}
-        >
-          <List />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => toggleRichTextOrderedList(editor)}
-          isActive={toolbarState.orderedList}
-          disabled={!toolbarState.canToggleList}
-          tooltip={t("numberedList")}
-          compact={compact}
-        >
-          <ListOrdered />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => toggleRichTextBlockquote(editor)}
-          isActive={toolbarState.blockquote}
-          disabled={!toolbarState.canToggleBlockquote}
-          tooltip={t("blockquote")}
-          compact={compact}
-        >
-          <TextQuote />
-        </ToolbarButton>
-
-        <div className="mx-1 h-6 w-px bg-border" />
-
-        {/* Table */}
-        <TiptapTablePopover
-          editor={editor}
-          compact={compact}
-          tableRows={tableRows}
-          tableCols={tableCols}
-          tableWithHeader={tableWithHeader}
-          onTableRowsChange={setTableRows}
-          onTableColsChange={setTableCols}
-          onTableWithHeaderChange={setTableWithHeader}
-          isFullscreen={isFullscreen}
-        />
-
-        <div className="mx-1 h-6 w-px bg-border" />
-
-        {/* History */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!toolbarState.canUndo}
-          tooltip={t("undo")}
-          compact={compact}
-        >
-          <Undo />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!toolbarState.canRedo}
-          tooltip={t("redo")}
-          compact={compact}
-        >
-          <Redo />
-        </ToolbarButton>
-        </div>
-      </div>
-
-      {/* Fullscreen toggle */}
-      {!isFullscreen ? (
-        <div className="shrink-0 border-s ps-1" data-rich-text-fullscreen-toggle>
-          <ToolbarButton
-            onClick={toggleModal}
-            tooltip={t("fullscreen")}
-            compact={compact}
-          >
-            <Maximize />
-          </ToolbarButton>
-        </div>
-      ) : null}
+      <MediaManager capability="image" open={mediaOpen} onOpenChange={setMediaOpen} onCloseAutoFocus={restoreInsertFocus} onSelect={handleMediaSelect} dialogClassName={isFullscreen ? "z-[10001]" : undefined} />
+      <TiptapTablePopover editor={editor} open={tableOpen} onOpenChange={setTableOpen} anchorRef={insertAnchor} onCloseAutoFocus={restoreInsertFocus} tableRows={tableRows} tableCols={tableCols} tableWithHeader={tableWithHeader} onTableRowsChange={setTableRows} onTableColsChange={setTableCols} onTableWithHeaderChange={setTableWithHeader} isFullscreen={isFullscreen} />
     </div>
   );
 };

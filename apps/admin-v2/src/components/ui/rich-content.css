@@ -156,6 +156,39 @@
   outline: none;
 }
 
+/* Replace the global contenteditable rectangle with the editor's own frame.
+   Forced colors keeps an explicit outline because shadows may be suppressed. */
+@supports selector(:has(*)) {
+  @media (forced-colors: none) {
+    [data-rich-text-editor] .ProseMirror:focus-visible {
+      outline: none;
+    }
+
+    [data-rich-text-editor]:not([data-fullscreen]):has(.ProseMirror:focus-visible) {
+      border-color: var(--ring);
+      box-shadow: 0 0 0 1px var(--ring);
+    }
+
+    [data-rich-text-editor][data-fullscreen] [data-rich-text-scrollport]:has(.ProseMirror:focus-visible) {
+      border-top-color: var(--ring);
+      box-shadow: inset 0 1px 0 var(--ring);
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  [data-rich-text-editor] .ProseMirror:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
+@media (min-width: 640px) {
+  [data-rich-text-editor][data-fullscreen] .ProseMirror {
+    padding: 1.5rem 2rem;
+  }
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   color: var(--muted-foreground);
   content: attr(data-placeholder);

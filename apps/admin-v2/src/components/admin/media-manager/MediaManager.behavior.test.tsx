@@ -160,4 +160,32 @@ describe("MediaManager lazy-open lifecycle", () => {
     expect(host.querySelector("[data-selected-file]")?.textContent).toBe("image.webp");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
+  it("opens a controlled triggerless picker and returns focus on cancellation", async () => {
+    const onClose = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <button type="button" data-open-controlled onClick={() => setOpen(true)}>Open controlled picker</button>
+        <LazyMediaManager open={open} onOpenChange={setOpen} capability="image" onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onClose();
+          host.querySelector<HTMLButtonElement>("[data-open-controlled]")?.focus();
+        }} />
+      </>;
+    }
+    await act(async () => root.render(<Harness />));
+    expect(host.querySelectorAll("button")).toHaveLength(1);
+    for (let count = 0; count < 2; count++) {
+      act(() => host.querySelector<HTMLButtonElement>("[data-open-controlled]")?.click());
+      await flush();
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      const close = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Close workspace");
+      act(() => click(close!));
+      await flush();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(host.querySelector("[data-open-controlled]"));
+    }
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
 });

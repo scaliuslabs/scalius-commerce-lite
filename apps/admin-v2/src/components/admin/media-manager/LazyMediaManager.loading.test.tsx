@@ -17,7 +17,12 @@ const gate = vi.hoisted(() => {
 
 vi.mock("./MediaManager", async () => {
   await gate.promise;
-  return { MediaManager: () => createElement("div", { "data-testid": "picker" }, "picker ready") };
+  const { DialogContent, DialogTitle } = await import("~/components/ui/dialog");
+  return { MediaManager: ({ onCloseAutoFocus }: { onCloseAutoFocus?: (event: Event) => void }) =>
+    createElement(DialogContent, { onCloseAutoFocus, "aria-describedby": undefined },
+      createElement(DialogTitle, {}, "Picker ready"),
+      createElement("button", { "data-testid": "picker" }, "Choose image")),
+  };
 });
 
 describe("the media picker's first click", () => {
@@ -33,8 +38,9 @@ describe("the media picker's first click", () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
+    const onCloseAutoFocus = vi.fn();
     await act(async () => root.render(
-      <MediaManager capability="both" trigger={<button type="button">Add media</button>} onSelect={vi.fn()} />,
+      <MediaManager onCloseAutoFocus={onCloseAutoFocus} capability="both" trigger={<button type="button">Add media</button>} onSelect={vi.fn()} />,
     ));
     await act(async () => host.querySelector("button")!.click());
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -43,5 +49,8 @@ describe("the media picker's first click", () => {
     await act(async () => { gate.release(); await gate.promise; });
     expect(document.querySelector('[data-testid="picker"]')).not.toBeNull();
     expect(document.querySelector('[role="status"]')).toBeNull();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(onCloseAutoFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="picker"]'));
   });
 });

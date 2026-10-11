@@ -170,7 +170,7 @@ export function TiptapEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-52 max-w-none p-4 text-body focus-visible:outline-none",
+          "min-h-0 flex-1 max-w-none p-4 text-body-lg sm:text-body",
         role: "textbox",
         "aria-label": ariaLabel,
         "aria-multiline": "true",
@@ -210,6 +210,8 @@ export function TiptapEditor({
   const editorContent = (
     <div
       ref={contentWrapperRef}
+      data-rich-text-editor
+      data-fullscreen={isFullscreen || undefined}
       role={isFullscreen ? "dialog" : undefined}
       aria-modal={isFullscreen ? true : undefined}
       aria-labelledby={isFullscreen ? fullscreenTitleId : undefined}
@@ -221,7 +223,7 @@ export function TiptapEditor({
     >
       {/* Fullscreen header */}
       {isFullscreen && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-2 sm:px-4">
           <span id={fullscreenTitleId} className="text-heading-sm">
             {t("editContent")}
           </span>
@@ -267,7 +269,8 @@ export function TiptapEditor({
       {/* Editor content -- always mounted, never unmounts */}
       <div
         ref={editorAreaRef}
-        className={cn("overflow-y-auto border-t", isFullscreen ? "flex-1 bg-background" : "h-(--editor-height)")}
+        data-rich-text-scrollport
+        className={cn("min-h-0 overflow-y-auto border-t", isFullscreen ? "flex-1" : "h-(--editor-height)")}
         style={{ "--editor-height": editorViewportHeight } as CSSProperties}
         onClick={() => {
           // Click-to-focus: when user clicks the editing area background, focus the editor
@@ -276,20 +279,19 @@ export function TiptapEditor({
           }
         }}
       >
-        <div className={cn(
-          isFullscreen
-            ? "mx-auto min-h-full w-full max-w-4xl bg-card px-3 py-4 shadow-card sm:px-8 sm:py-6"
-            : ""
-        )}>
+        <div
+          data-rich-text-surface
+          className={cn("flex min-h-full flex-col", isFullscreen && "mx-auto w-full max-w-2xl")}
+        >
           {editorInstance ? (
-            <EditorContent editor={editorInstance} className="max-w-none" />
+            <EditorContent editor={editorInstance} className="flex min-h-full flex-1 flex-col" />
           ) : hasInitialContent ? (
             <div
-              className="ProseMirror min-h-52 max-w-none p-4 text-body"
+              className="ProseMirror min-h-0 flex-1 max-w-none p-4 text-body-lg sm:text-body"
               dangerouslySetInnerHTML={{ __html: sanitizedInitialContent }}
             />
           ) : (
-            <div className="ProseMirror min-h-52 max-w-none p-4 text-body">
+            <div className="ProseMirror min-h-0 flex-1 max-w-none p-4 text-body-lg sm:text-body">
               <p className="is-editor-empty" data-placeholder={placeholder}>
                 <br />
               </p>

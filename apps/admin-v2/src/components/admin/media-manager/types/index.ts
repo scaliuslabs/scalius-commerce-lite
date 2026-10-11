@@ -107,6 +107,10 @@ export interface UploadQueueItem {
 }
 
 export interface MediaManagerProps {
+  /** Controlled, triggerless picker for callers opening it from a menu. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
   selectedFiles?: MediaFile[];

@@ -11,14 +11,15 @@ interface ToolbarButtonProps {
   children: ReactNode;
 }
 
-export function ToolbarButton({ onClick, isActive, disabled, tooltip, compact = false, children }: ToolbarButtonProps) {
+export function ToolbarButton({ onClick, isActive, disabled, tooltip, children }: ToolbarButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           type="button"
           variant="ghost"
-          size={compact ? "icon-sm" : "icon"}
+          size="icon"
+          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8 pointer-coarse:h-11 pointer-coarse:w-11"
           onClick={onClick}
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
@@ -26,7 +27,7 @@ export function ToolbarButton({ onClick, isActive, disabled, tooltip, compact = 
           aria-label={tooltip}
           aria-pressed={isActive || undefined}
         >
-          {children}
+          <span className={isActive ? "inline-flex text-foreground" : "inline-flex text-muted-foreground"}>{children}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{tooltip}</TooltipContent>

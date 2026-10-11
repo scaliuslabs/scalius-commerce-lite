@@ -1,11 +1,11 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState, type RefObject } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { Table as TableIcon, Eraser, Merge, Split, Rows, Columns, ChevronsLeftRight, type LucideIcon } from "lucide-react";
 import { Button } from "../button";
 import { Input } from "../input";
 import { Label } from "../label";
-import { Popover, PopoverContent, PopoverTrigger } from "../popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../popover";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip";
 import { insertRichTextTable } from "./tiptap-insertions";
@@ -22,6 +22,10 @@ interface TiptapTablePopoverProps {
   onTableColsChange: (value: string) => void;
   onTableWithHeaderChange: (value: boolean) => void;
   isFullscreen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  anchorRef?: RefObject<HTMLButtonElement | null>;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 type TableCommand =
@@ -63,13 +67,20 @@ export function TiptapTablePopover({
   onTableColsChange,
   onTableWithHeaderChange,
   isFullscreen = false,
+  open: controlledOpen,
+  onOpenChange,
+  anchorRef,
+  onCloseAutoFocus,
 }: TiptapTablePopoverProps) {
   const t = useMessages(richTextMessages);
   const fieldId = useId();
   const rowsId = `${fieldId}-table-rows`;
   const columnsId = `${fieldId}-table-columns`;
   const headerId = `${fieldId}-table-header`;
-  const [open, setOpen] = useState(false);
+  const didInsert = useRef(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const rows = Number(tableRows);
   const cols = Number(tableCols);
   const rowsValid = Number.isInteger(rows) && rows >= 1 && rows <= 20;
@@ -90,6 +101,7 @@ export function TiptapTablePopover({
     if (!rowsValid || !colsValid) return;
     const inserted = insertRichTextTable(editor, { rows, cols, withHeaderRow: tableWithHeader });
     if (!inserted) return;
+    didInsert.current = true;
     setOpen(false);
     requestAnimationFrame(() => {
       editor.commands.focus(undefined, { scrollIntoView: false });
@@ -98,7 +110,7 @@ export function TiptapTablePopover({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip open={open ? false : undefined}>
+      {anchorRef ? <PopoverAnchor virtualRef={anchorRef} /> : <Tooltip open={open ? false : undefined}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button
@@ -114,9 +126,15 @@ export function TiptapTablePopover({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom">{triggerLabel}</TooltipContent>
-      </Tooltip>
+      </Tooltip>}
 
-      <PopoverContent className={isFullscreen ? "z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3" : "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3"}>
+      <PopoverContent aria-label={triggerLabel} onCloseAutoFocus={(event) => {
+        if (didInsert.current) {
+          event.preventDefault();
+          editor.commands.focus(undefined, { scrollIntoView: false });
+          didInsert.current = false;
+        } else onCloseAutoFocus?.(event);
+      }} className={isFullscreen ? "z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3" : "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3"}>
         {!isInTable ? (
           <>
             <div className="grid grid-cols-2 gap-3">

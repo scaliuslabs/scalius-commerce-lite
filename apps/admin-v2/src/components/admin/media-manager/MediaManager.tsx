@@ -22,6 +22,7 @@ export function MediaManager({
   dialogClassName,
   open,
   onOpenChange,
+  onCloseAutoFocus,
 }: MediaManagerInternalProps) {
   const t = useMessages(mediaMessages);
   const picker = useMessages(mediaPickerMessages);
@@ -54,7 +55,7 @@ export function MediaManager({
 
   return (
     // eslint-disable-next-line shadcn/require-static-classes -- callers add layout only (z-index over the fullscreen editor)
-    <DialogContent className={cn("flex h-[94svh] max-h-[860px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-6xl", dialogClassName)}>
+    <DialogContent onCloseAutoFocus={onCloseAutoFocus} className={cn("flex h-[94svh] max-h-[860px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-6xl", dialogClassName)}>
       <div className="flex flex-col gap-1 border-b py-3 ps-4 pe-14">
         <DialogTitle>{picker(chooseKey(capability, !!onSelectMultiple))}</DialogTitle>
         <DialogDescription>{t(mediaLimitKey(capability))}</DialogDescription>

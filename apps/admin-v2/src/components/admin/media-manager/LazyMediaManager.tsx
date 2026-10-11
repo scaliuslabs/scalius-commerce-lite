@@ -5,6 +5,7 @@ import {
   Suspense,
   useCallback,
   useState,
+  useRef,
   type ComponentType,
   type FocusEvent,
   type MouseEvent,
@@ -35,10 +36,11 @@ const MediaManagerImpl = lazy(() =>
  * What the dialog shows while its code arrives: the first click on a freshly
  * loaded page is acknowledged at once, never silent.
  */
-function MediaManagerLoading({ capability }: { capability: MediaManagerProps["capability"] }) {
+function MediaManagerLoading({ capability, dialogClassName, onCloseAutoFocus }: Pick<MediaManagerProps, "capability" | "dialogClassName" | "onCloseAutoFocus">) {
   const t = useMessages(mediaPickerMessages);
   return (
-    <DialogContent>
+    // eslint-disable-next-line shadcn/require-static-classes -- same caller-supplied fullscreen stacking as the loaded picker
+    <DialogContent className={dialogClassName} onCloseAutoFocus={onCloseAutoFocus}>
       <DialogTitle>{t(chooseKey(capability ?? "image"))}</DialogTitle>
       <DialogDescription className="sr-only">{t("pickerLoading")}</DialogDescription>
       <p role="status" className="py-6 text-center text-body text-muted-foreground">{t("pickerLoading")}</p>
@@ -99,7 +101,12 @@ function MediaManagerTriggerShell({
 
 export function MediaManager(props: MediaManagerProps) {
   const [shouldLoad, setShouldLoad] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setOpen] = useState(false);
+  const controlled = props.open !== undefined;
+  const open = props.open ?? internalOpen;
+  const onOpenChange = props.onOpenChange;
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const handleOpen = useCallback(() => {
     setShouldLoad(true);
@@ -109,21 +116,29 @@ export function MediaManager(props: MediaManagerProps) {
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
     if (!nextOpen) setShouldLoad(false);
-  }, []);
+    onOpenChange?.(nextOpen);
+  }, [onOpenChange]);
 
-  if (!shouldLoad) {
+  if (controlled && !open) return null;
+
+  if (!controlled && !shouldLoad) {
     return <MediaManagerTriggerShell {...props} onOpen={handleOpen} />;
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
+      {!controlled && <DialogTrigger asChild>
         <MediaManagerTriggerShell
           {...props}
           onOpen={() => setShouldLoad(true)}
         />
-      </DialogTrigger>
-      <Suspense fallback={<MediaManagerLoading capability={props.capability} />}>
+      </DialogTrigger>}
+      <Suspense fallback={<MediaManagerLoading capability={props.capability} dialogClassName={props.dialogClassName} onCloseAutoFocus={(event) => {
+        // Resolving Suspense replaces the loading focus scope while the picker
+        // stays open. Only a real close returns focus to the caller.
+        if (openRef.current) event.preventDefault();
+        else props.onCloseAutoFocus?.(event);
+      }} />}>
         <MediaManagerImpl
           {...props}
           open={open}
