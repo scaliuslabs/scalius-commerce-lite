@@ -49,7 +49,7 @@ function AppRiskChecks({ checks, released }: { checks: OrderAppRiskCheck[]; rele
   const t = useMessages(orderDetailMessages);
   const unchecked = released.filter((hold) => !checks.some((check) => check.appId === hold.appId));
   return (
-    <section className="space-y-3 px-6 py-4">
+    <section className="space-y-3 p-4">
       <div className="space-y-1">
         <h2 className="font-semibold">{t("appRisk.title")}</h2>
         <p className="text-muted-foreground">{t("appRisk.advice")}</p>
@@ -122,7 +122,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   return (
     <Card>
       <div className="divide-y">
-        <section className="space-y-1 px-6 py-4">
+        <section className="space-y-1 p-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-semibold">{t("customer.title")}</h2>
             {canEditDetails ? (
@@ -179,7 +179,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             ) : null}
           </div>
         </section>
-        <section className="space-y-1 px-6 py-4">
+        <section className="space-y-1 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">{t("address.title")}</h2>
             {order.shippingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
@@ -190,7 +190,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
         </section>
         {billingLines || order.billingSameAsShipping ? (
-          <section className="space-y-1 px-6 py-4">
+          <section className="space-y-1 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">{t("billing.title")}</h2>
               {order.billingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
@@ -206,7 +206,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           </section>
         ) : null}
         {actions.canViewFraudCheck ? (
-          <section className="flex items-center justify-between gap-3 px-6 py-4">
+          <section className="flex items-center justify-between gap-3 p-4">
             <div>
               <h2 className="font-semibold">{t("fraud.title")}</h2>
               {/* The courier history is looked up by phone: without one the check is skipped, with the reason. */}

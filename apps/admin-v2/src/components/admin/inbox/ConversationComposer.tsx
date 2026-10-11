@@ -33,11 +33,14 @@ export function ConversationComposer({
   orderId,
   onPosted,
   primary = true,
+  allowInternalNotes = true,
 }: {
   conversationId: string | null;
   orderId?: string | null;
   onPosted?: (thread: StaffThread) => void;
   primary?: boolean;
+  /** Hide when the page already offers a team-note composer for this user. */
+  allowInternalNotes?: boolean;
 }) {
   const t = useMessages(inboxMessages);
   const fieldId = useId();
@@ -94,12 +97,14 @@ export function ConversationComposer({
 
   return (
     <div className="flex flex-col gap-2">
-      <Tabs value={mode} onValueChange={(value) => setMode(value as "public" | "internal")}>
-        <TabsList aria-label={t("replyLabel")}>
-          <TabsTrigger value="public">{t("reply")}</TabsTrigger>
-          <TabsTrigger value="internal">{t("note")}</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {allowInternalNotes ? (
+        <Tabs value={mode} onValueChange={(value) => setMode(value as "public" | "internal")}>
+          <TabsList aria-label={t("replyLabel")}>
+            <TabsTrigger value="public">{t("reply")}</TabsTrigger>
+            <TabsTrigger value="internal">{t("note")}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      ) : null}
       {post.isError ? (
         <Alert variant="destructive">
           <AlertDescription>{getServerFnError(post.error)}</AlertDescription>

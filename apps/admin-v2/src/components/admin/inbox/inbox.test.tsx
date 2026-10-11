@@ -10,6 +10,7 @@ import { inboxMessages } from "~/i18n/inbox";
 const sdk = vi.hoisted(() => ({
   list: vi.fn(),
   get: vi.fn(),
+  getOrder: vi.fn(),
   post: vi.fn(),
   patch: vi.fn(),
   read: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminConversations: sdk.list,
   getApiV1AdminConversationsById: sdk.get,
-  getApiV1AdminConversationsOrderByOrderId: vi.fn(),
+  getApiV1AdminConversationsOrderByOrderId: sdk.getOrder,
   getApiV1AdminConversationsSummary: vi.fn(),
   patchApiV1AdminConversationsById: sdk.patch,
   postApiV1AdminConversationsByIdMessages: sdk.post,
@@ -32,6 +33,8 @@ vi.mock("@scalius/api-client/sdk", () => ({
 }));
 
 import { ConversationComposer } from "./ConversationComposer";
+import { OrderConversationCard } from "../orderview/OrderConversationCard";
+import type { Order } from "../orderview/types";
 import { ConversationMessages } from "./ConversationMessages";
 import { ConversationPane } from "./ConversationPane";
 import { InboxList } from "./InboxList";
@@ -213,6 +216,48 @@ describe("dashboard inbox", () => {
     });
     await act(async () => button(en.addNote)!.click());
     expect(sdk.post.mock.calls[0]![0].body).toMatchObject({ visibility: "internal", body: "Refund approved by owner" });
+  });
+
+  it("keeps existing internal notes but leaves new order-editor notes to the timeline", async () => {
+    sdk.getOrder.mockImplementation(() => ok({ conversation: thread }));
+    sdk.post.mockImplementation(() => ok({ conversation: thread }));
+    await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />,
+      ["conversations.view", "conversations.reply", "orders.edit"]);
+    await act(async () => {
+      await import("./ConversationComposer");
+      await import("./ConversationMessages");
+    });
+    expect(host.textContent).toContain("Check the batch");
+    expect(host.textContent).toContain(en.internalNote);
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(button(en.addNote)).toBeUndefined();
+    const textarea = host.querySelector("textarea")!;
+    expect(textarea.placeholder).toBe(en.replyPlaceholder);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Your replacement is on its way");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.send)!.click());
+    expect(sdk.post.mock.calls[0]![0].body).toMatchObject({ visibility: "public", body: "Your replacement is on its way" });
+  });
+
+  it("keeps order conversation notes for support staff who cannot comment in the timeline", async () => {
+    sdk.getOrder.mockImplementation(() => ok({ conversation: thread }));
+    sdk.post.mockImplementation(() => ok({ conversation: thread }));
+    await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />);
+    await act(async () => { await import("./ConversationComposer"); });
+    const noteTab = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === en.note) as HTMLElement;
+    await act(async () => {
+      noteTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      noteTab.click();
+    });
+    const textarea = host.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Waiting for the courier's reply");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.addNote)!.click());
+    expect(sdk.post.mock.calls[0]![0].body).toMatchObject({ visibility: "internal", body: "Waiting for the courier's reply" });
   });
 
   it("marks the thread read, closes it with its version, and hides replies from read-only staff", async () => {

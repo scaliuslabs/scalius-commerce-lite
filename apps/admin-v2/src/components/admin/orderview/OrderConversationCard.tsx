@@ -143,7 +143,7 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
         {canRead && canReply ? (
           <Suspense fallback={null}>
             <div className="border-t pt-4">
-              <ConversationComposer primary={false} conversationId={conversation?.id ?? null} orderId={order.id} />
+              <ConversationComposer primary={false} allowInternalNotes={!actions.canEditOrders} conversationId={conversation?.id ?? null} orderId={order.id} />
             </div>
           </Suspense>
         ) : null}
