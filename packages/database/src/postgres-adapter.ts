@@ -7,6 +7,7 @@ import { neon } from "@neondatabase/serverless";
 import { Client as PgClient } from "pg";
 
 import { observeStatement } from "./read-observer";
+import { withNamedRawRows } from "./remote-raw-rows";
 import * as schema from "./schema";
 import {
   compileSqliteStatementForPostgres,
@@ -415,7 +416,7 @@ export function createPostgresDatabase(
     }
   };
 
-  const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
+  const executeOne = async (...[sql, params, method]: Parameters<AsyncRemoteCallback>) => {
     observeStatement(sql, params);
     const statement = compileSqliteStatementForPostgres(sql, params.length);
     const normalizedParams = normalizePostgresParameters(params);
@@ -439,7 +440,7 @@ export function createPostgresDatabase(
       statement.readOnly
         ? execute()
         : withSerializationRetry(execute, retryOptions));
-    return { rows: remoteRows(result, method) as never };
+    return { rows: remoteRows(result, method) as never, columns: result.fields.map((field) => field.name) };
   };
 
   const executeBatch: AsyncBatchRemoteCallback = async (statements) => {
@@ -466,6 +467,7 @@ export function createPostgresDatabase(
       throw new Error("PostgreSQL returned an unexpected atomic batch result count.");
     }
     return results.map((result, index) => ({
+      columns: result.fields.map((field) => field.name),
       rows: remoteBatchRows(
         result,
         compiled[index]!.method,
@@ -476,5 +478,5 @@ export function createPostgresDatabase(
 
   // The application intentionally retains one SQLite-shaped query surface.
   // This is the only PostgreSQL transport cast in application code.
-  return drizzleRemote(executeOne, executeBatch, { schema }) as unknown as Database;
+  return withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne) as unknown as Database;
 }

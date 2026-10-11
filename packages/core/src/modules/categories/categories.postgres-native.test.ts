@@ -10,6 +10,7 @@ import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_PO
 import { ValidationError } from "@scalius/core/errors";
 
 import { bulkDeleteCategories, updateCategoryStatus } from "./categories.service";
+import { loadCategoryChildBlockers, loadCategoryTrashedParentBlockers } from "./categories.tree";
 
 const postgresUrl = nativePostgresUrl();
 
@@ -52,5 +53,12 @@ describe.runIf(postgresUrl)("category guards on PostgreSQL", { timeout: NATIVE_P
             ["col_featured", { source: "dynamic", categoryIds: [] }, expect.any(Number)],
             ["col_seasonal", { source: "dynamic", categoryIds: ["cat_keep"] }, 2],
         ]);
+
+        await client.query(`INSERT INTO categories (id,name,slug,parent_id) VALUES
+          ('cat_parent','Parent','parent',NULL),('cat_child','Child','child','cat_parent')`);
+        const expected = [{ id: "cat_child", name: "Child", parentId: "cat_parent" }];
+        expect(await loadCategoryChildBlockers(db, JSON.stringify([{ id: "cat_parent" }]), { liveOnly: true })).toEqual(expected);
+        await client.query("UPDATE categories SET deleted_at = 1 WHERE id = 'cat_parent'");
+        expect(await loadCategoryTrashedParentBlockers(db, JSON.stringify([{ id: "cat_child" }]))).toEqual(expected);
     });
 });

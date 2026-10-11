@@ -61,6 +61,7 @@ function createStatefulConnection(
           }
           prepared.setReturnArrays(true);
           return {
+            columns: prepared.columns().map((column) => column.name),
             rows: prepared.all(
               ...args as SQLInputValue[],
             ) as unknown as SQLOutputValue[][],
@@ -112,6 +113,48 @@ describe("Turso SQLite adapter", () => {
 
     expect(batch).toHaveBeenCalledTimes(1);
     expect(batch.mock.calls[0]?.[1]).toEqual({ raw: true });
+  });
+
+  it("preserves raw objects, positional values and mixed batch composition", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    const modes: Array<string | undefined> = [];
+    const connection = createStatefulConnection(sqlite, modes);
+    const batch = vi.fn(connection.batch);
+    const onOperation = vi.fn();
+    const db = createAdapter(batch, { onOperation });
+    const query = sql`SELECT ${7} AS answer, 'first' AS duplicate, 'last' AS duplicate,
+      'safe' AS "__proto__", NULL AS "with space", 'length' AS length, 'zero' AS "0", 'blank' AS ""`;
+    const row = Object.fromEntries([
+      ["answer", 7], ["duplicate", "last"], ["__proto__", "safe"], ["with space", null],
+      ["length", "length"], ["0", "zero"], ["", "blank"],
+    ]);
+    const values = [7, "first", "last", "safe", null, "length", "zero", "blank"];
+    try {
+      await expect(db.all(query)).resolves.toEqual([row]);
+      await expect(db.get(query)).resolves.toEqual(row);
+      await expect(db.values(query)).resolves.toEqual([values]);
+      await expect(db.all("SELECT 1 AS answer WHERE 0")).resolves.toEqual([]);
+      await expect(db.get("SELECT 1 AS answer WHERE 0")).resolves.toBeUndefined();
+      expect(batch).toHaveBeenCalledTimes(5);
+      expect(onOperation).toHaveBeenCalledTimes(5);
+
+      const mixed = await safeBatch(db, [
+        db.select({ answer: sql<number>`7` }).from(sql`(SELECT 1)`),
+        db.all(query), db.get(query), db.values(query), db.get("SELECT 1 WHERE 0"),
+      ] as const);
+      expect(mixed).toEqual([[{ answer: 7 }], [row], row, [values], undefined]);
+      expect(batch).toHaveBeenCalledTimes(6);
+      expect(modes.at(-1)).toBe("read");
+
+      await db.run(sql`CREATE TABLE raw_writes (value INTEGER)`);
+      const [written, read] = await safeBatch(db, [
+        db.run(sql`INSERT INTO raw_writes VALUES (${9})`),
+        db.get<{ value: number }>(sql`SELECT value FROM raw_writes`),
+      ] as const);
+      expect(written).toMatchObject({ changes: 1, meta: { changes: 1 } });
+      expect(read).toEqual({ value: 9 });
+      expect(modes.at(-1)).toBe("immediate");
+    } finally { sqlite.close(); }
   });
 
   it("maps read-only Drizzle batches to one consistent Turso read transaction", async () => {

@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { createSqliteD1Database, createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import type { Database } from "@scalius/database/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -22,6 +22,8 @@ import {
     getPublicCategoryChildren,
     getPublicCategoryTree,
     listCategoryChildren,
+    loadCategoryChildBlockers,
+    loadCategoryTrashedParentBlockers,
     moveCategory,
 } from "./categories.tree";
 import { getPublicCategoryBySlug } from "./categories.storefront";
@@ -182,6 +184,19 @@ describe("category tree writes through the service", () => {
 });
 
 describe("category trash rules", () => {
+    it.each(["d1", "turso"])("returns named child and parent blockers through %s", async (provider) => {
+        const d1 = database();
+        const db = provider === "turso" ? createSqliteTursoDatabase(sqlite!) : d1;
+        sqlite!.exec(`INSERT INTO categories (id,name,slug,parent_id) VALUES
+          ('cat_parent','Parent','parent',NULL),('cat_child','Child','child','cat_parent')`);
+        const parent = JSON.stringify([{ id: "cat_parent" }]);
+        const child = JSON.stringify([{ id: "cat_child" }]);
+        const expected = [{ id: "cat_child", name: "Child", parentId: "cat_parent" }];
+        expect(await loadCategoryChildBlockers(db, parent, { liveOnly: true })).toEqual(expected);
+        sqlite!.exec("UPDATE categories SET deleted_at = 1 WHERE id = 'cat_parent'");
+        expect(await loadCategoryTrashedParentBlockers(db, child)).toEqual(expected);
+    });
+
     it("refuses to trash a category with live sub-categories unless they go in the same selection", async () => {
         const db = database();
         const [root, child] = await chain(db, 2);

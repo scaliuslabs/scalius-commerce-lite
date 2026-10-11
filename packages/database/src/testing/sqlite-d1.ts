@@ -338,7 +338,7 @@ export function createSqliteTursoDatabase(sqlite: DatabaseSync, hooks: SqliteTur
               return { rows: [], rowsAffected: Number(result.changes) };
             }
             prepared.setReturnArrays(true);
-            return { rows: prepared.all(...values) as unknown[], rowsAffected: 0 };
+            return { columns: prepared.columns().map((column) => column.name), rows: prepared.all(...values) as unknown[], rowsAffected: 0 };
           });
           if (options?.mode === undefined) return run();
           sqlite.exec(options.mode === "read" ? "BEGIN" : "BEGIN IMMEDIATE");

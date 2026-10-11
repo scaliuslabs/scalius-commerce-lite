@@ -9,6 +9,7 @@ import {
   type AsyncRemoteCallback,
 } from "drizzle-orm/sqlite-proxy";
 import { observeStatement } from "./read-observer";
+import { withNamedRawRows } from "./remote-raw-rows";
 import * as schema from "./schema";
 import type { Database } from "./types";
 
@@ -19,6 +20,7 @@ export const TURSO_DEFAULT_QUERY_TIMEOUT_MS = 15_000;
 export type TursoWriteBatchMode = "immediate" | "concurrent";
 
 interface TursoBatchResult {
+  columns?: string[];
   rows?: unknown[];
   rowsAffected?: number;
 }
@@ -235,7 +237,7 @@ export function createTursoDatabase(
     throw new Error("Turso maxConflictAttempts must be a positive safe integer.");
   }
 
-  const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
+  const executeOne = async (...[sql, params, method]: Parameters<AsyncRemoteCallback>) => {
     observeStatement(sql, params);
     const result = requireSingleResult(
       await retryTursoConflicts(
@@ -259,7 +261,7 @@ export function createTursoDatabase(
         meta: { changes: result.rowsAffected ?? 0 },
       };
     }
-    return { rows };
+    return { rows, columns: result.columns };
   };
 
   const executeBatch: AsyncBatchRemoteCallback = async (statements) => {
@@ -299,6 +301,7 @@ export function createTursoDatabase(
 
     return results.map((result) => ({
       rows: result.rows ?? [],
+      columns: result.columns,
       changes: result.rowsAffected ?? 0,
       meta: { changes: result.rowsAffected ?? 0 },
     }));
@@ -306,5 +309,5 @@ export function createTursoDatabase(
 
   // Database intentionally exposes the common SQLite query surface currently
   // shaped by the D1 type. This is the only transport cast in the application.
-  return drizzleRemote(executeOne, executeBatch, { schema }) as unknown as Database;
+  return withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne) as unknown as Database;
 }

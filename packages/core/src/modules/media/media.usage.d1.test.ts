@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { createSqliteD1Database, createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   listMediaFiles,
@@ -49,6 +49,28 @@ describe("media usage", () => {
     );
     return `${BASE}/media/${id}.png`;
   }
+
+  it("retains named usage references and order flags through the Turso proxy", async () => {
+    db = createSqliteTursoDatabase(sqlite);
+    seedMedia("media_proxy");
+    seedMedia("media_unused");
+    sqlite.exec(`
+      INSERT INTO products (id,name,price_minor,slug) VALUES ('prod_proxy','Proxy product',100,'proxy-product');
+      INSERT INTO product_media (id,product_id,media_id,sort_order) VALUES ('pmed_proxy','prod_proxy','media_proxy',0);
+      INSERT INTO orders (id,customer_name,customer_phone,shipping_address,city,zone)
+        VALUES ('ord_proxy','Buyer','+8801700000001','Address','city','zone');
+      INSERT INTO order_items (id,order_id,product_id,quantity,product_image_media_id)
+        VALUES ('item_proxy','ord_proxy','prod_proxy',1,'media_proxy');
+    `);
+    expect([...await countMediaUsage(db, ["media_proxy", "media_unused"])]).toEqual([
+      ["media_proxy", { usageCount: 1, keptForOrders: true }],
+      ["media_unused", { usageCount: 0, keptForOrders: false }],
+    ]);
+    expect(await loadMediaUsage(db, "media_proxy")).toEqual({
+      count: 1, orderCount: 1,
+      references: [{ kind: "product", id: "prod_proxy", name: "Proxy product", trashed: false }],
+    });
+  });
 
   it("counts every place that shows a file, once per place", async () => {
     const photo = seedMedia("media_photo");

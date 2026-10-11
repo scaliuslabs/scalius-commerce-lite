@@ -101,6 +101,43 @@ describe("PostgreSQL HTTP adapter", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("preserves raw names and normalized values in standalone reads and mixed batches", async () => {
+    const columns = ["answer", "duplicate", "duplicate", "__proto__", "with space", "length", "0", ""];
+    const values = [7, "first", "last", "safe", null, "length", "zero", "blank"];
+    const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
+    const connection = createConnection((text) => {
+      if (/\bwhere\b/i.test(text)) return result();
+      if (text.startsWith("DELETE")) return result([], [], "DELETE");
+      const response = result([["7", ...values.slice(1)]], [20, 25, 25, 25, 25, 25, 25, 25]);
+      response.fields.forEach((field, index) => { field.name = columns[index]!; });
+      return response;
+    });
+    const onOperation = vi.fn();
+    const db = createAdapter(connection, { onOperation });
+    const query = sql`SELECT ${7} AS answer, 'first' AS duplicate, 'last' AS duplicate,
+      'safe' AS "__proto__", NULL AS "with space", 'length' AS length, 'zero' AS "0", 'blank' AS ""`;
+    await expect(db.all(query)).resolves.toEqual([row]);
+    await expect(db.get(query)).resolves.toEqual(row);
+    await expect(db.values(query)).resolves.toEqual([values]);
+    await expect(db.all("SELECT 1 WHERE false")).resolves.toEqual([]);
+    await expect(db.get("SELECT 1 WHERE false")).resolves.toBeUndefined();
+    expect(connection.queries).toHaveLength(5);
+    expect(onOperation).toHaveBeenCalledTimes(5);
+
+    await expect(safeBatch(db, [
+      db.select({ answer: sql<number>`7` }).from(sql`(SELECT 1)`),
+      db.all(query), db.get(query), db.values(query), db.get("SELECT 1 WHERE false"),
+    ] as const)).resolves.toEqual([[{ answer: 7 }], [row], row, [values], undefined]);
+    expect(connection.transaction).toHaveBeenCalledTimes(1);
+    expect(connection.transaction).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({ isolationLevel: "RepeatableRead", readOnly: true }));
+
+    await db.run("DELETE FROM checkout_attempts WHERE false");
+    await expect(safeBatch(db, [
+      db.run("DELETE FROM checkout_attempts WHERE false"), db.get(query),
+    ] as const)).resolves.toEqual([{ rows: [], columns: [] }, row]);
+    expect(connection.transaction).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({ isolationLevel: "Serializable", readOnly: false }));
+  });
+
   it("uses one repeatable-read snapshot for read batches", async () => {
     const connection = createConnection(() => result([[1]], [23]));
     const db = createAdapter(connection);
