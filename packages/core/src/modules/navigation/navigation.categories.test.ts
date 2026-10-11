@@ -1,6 +1,7 @@
 // The automatic departments: only categories a buyer can reach that lead to
 // public products, top levels first, bounded, served by the layout batch.
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import type { SQLInputValue } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { getLayoutData } from "../storefront/storefront.service";
@@ -104,7 +105,7 @@ describe("category navigation", () => {
     const { sqlite, db } = await seeded();
     try {
       for (const query of [selectCategoryNavigationRows(db).toSQL(), selectStoreShapeCounts(db).toSQL()]) {
-        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>;
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params as SQLInputValue[]) as Array<{ detail: string }>;
         const details = plan.map(({ detail }) => detail);
         const closure = details.findIndex((detail) => /^SEARCH subtree(?: EXISTS)? USING COVERING INDEX \S+ \(ancestor_id=\?\)$/.test(detail));
         const category = details.findIndex((detail) => /^SEARCH subtree_category(?: EXISTS)? USING INDEX \S+ \(id=\?\)/.test(detail));

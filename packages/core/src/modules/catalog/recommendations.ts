@@ -1,7 +1,7 @@
 // Ranked product recommendations for the product page, cart, search dead
 // ends, 404 and order confirmation.
 //
-// One ranking statement scores every public, buyable product against the
+// One ranking statement scores eligible public, buyable products against the
 // source products with the signals the store really has:
 //   1. also bought — other products in the same real orders (placed, not
 //      cancelled/refunded/returned/unfinished) within a year, counted by
@@ -13,8 +13,8 @@
 //   3. popularity — distinct buyers in the last 30 days, used only when enough
 //      of the list can be filled that way, otherwise newest first.
 // Ties break by newest then id, so the order is deterministic. Card images
-// come from one bounded media read. A recorded live fallback also reads its
-// next semantic ranking-window boundary.
+// come from one bounded media read. A recorded live fallback carries its
+// next semantic ranking-window boundary in the ranking statement.
 //
 // Candidates are the stored buyer state's public, buyable products
 // (buyer-state.ts), so the statement never evaluates eligibility or ranks
@@ -279,10 +279,10 @@ export async function rankProductRecommendations(
 
 /**
  * The ranking statement for up to `limit` rows (the request path caps it at
- * 12; the refresh job stores 24). It reads only the buyer state and the
- * signal sets: every public product is scored, so card columns (names,
- * prices, the card SKU) are read afterwards for the few rows kept
- * (`loadRecommendationCards`). Internal to the catalog domain.
+ * 12; the refresh job stores 24). It reads only buyer state and signal sets,
+ * narrowing to the complete leading co-buy tier when its bounds prove that
+ * no other product can win. Card columns are read afterwards for the few
+ * rows kept (`loadRecommendationCards`). Internal to the catalog domain.
  */
 export async function rankRecommendationRows(
     db: Database,
@@ -316,48 +316,33 @@ export async function rankRecommendationRows(
         LIMIT ${sql.raw(String(ALSO_BOUGHT_SOURCE_LINES))}
     ) AS ${sql.raw(alias)}`;
 
-    // Source-order hints keep bounded ID seeks covering; SQLite otherwise
-    // prefers primary-key lookups that fetch the wide order row.
-    if (deps.active()) {
-        // Inclusive SQL windows stop including an order one second after its
-        // boundary. Empty/quiet stores have no deadline, never a routine TTL.
-        // The first exits: the oldest real order of the popularity window
-        // (read in created_at order from the index) and the oldest real
-        // order among the sampled source lines. Each is a bounded read.
-        const [boundary] = await db.select({
-            popularAt: sql<number | null>`(SELECT rec_popular_first.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
-             FROM orders AS rec_popular_first
-             WHERE ${realOrder("rec_popular_first")}
-               AND rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-               AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_popular_first.id)
-             ORDER BY rec_popular_first.created_at ASC
-             LIMIT 1)`,
-            alsoBoughtAt: sql<number | null>`(SELECT MIN(rec_source_order.created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
-             FROM ${sourceLines("rec_boundary_source")}
-             CROSS JOIN orders AS rec_source_order INDEXED BY orders_recommendation_id_buyers_idx
-             WHERE rec_source_order.id = rec_boundary_source.order_id
-               AND ${realOrder("rec_source_order")}
-               AND rec_source_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))})`,
-        }).from(sql`(SELECT 1) AS rec_boundary`).all();
-        const exits = [boundary?.popularAt, boundary?.alsoBoughtAt]
-            .filter((at): at is number => at !== null && at !== undefined)
-            .map(Number);
-        if (exits.length > 0) deps.validUntil(Math.min(...exits) * 1000);
-    }
-
-    const coPurchase = sql`(
-        SELECT rec_peer_line.product_id AS product_id,
-               COUNT(DISTINCT ${buyerSql("rec_co_order")}) AS buyers
+    const recordBoundary = deps.active();
+    // Materialize the bounded sample once for both co-buy scores and its
+    // freshness deadline; preserve duplicate source lines after LIMIT.
+    const sourceOrders = sql`
+        SELECT rec_source_order.id AS order_id, rec_source_order.created_at,
+               ${buyerSql("rec_source_order")} AS buyer
         FROM ${sourceLines("rec_source_line")}
-        CROSS JOIN orders AS rec_co_order INDEXED BY orders_recommendation_id_buyers_idx
+        CROSS JOIN orders AS rec_source_order INDEXED BY orders_recommendation_id_buyers_idx
+        WHERE rec_source_order.id = rec_source_line.order_id
+          AND ${realOrder("rec_source_order")}
+          AND rec_source_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
+    `;
+    const coPurchaseRows = sql`
+        SELECT rec_peer_line.product_id AS product_id,
+               COUNT(DISTINCT rec_co_order.buyer) AS buyers
+               ${sourceIds.length > 0 ? sql`, COUNT(DISTINCT CASE
+                   WHEN rec_co_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+                   THEN rec_co_order.buyer END) AS recent_buyers` : sql``}
+        FROM ${sourceIds.length > 0 ? sql`rec_source_orders` : sql`(${sourceOrders})`} AS rec_co_order
         CROSS JOIN order_items AS rec_peer_line
-        WHERE rec_co_order.id = rec_source_line.order_id
-          AND rec_peer_line.order_id = rec_source_line.order_id
+        WHERE rec_peer_line.order_id = rec_co_order.order_id
           AND rec_peer_line.product_id NOT IN ${sourceSet}
-          AND ${realOrder("rec_co_order")}
-          AND rec_co_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
         GROUP BY rec_peer_line.product_id
-    ) AS rec_co_purchase`;
+    `;
+    const coPurchase = sourceIds.length > 0
+        ? sql`rec_co_purchase`
+        : sql`(${coPurchaseRows}) AS rec_co_purchase`;
 
     const collectionPeers = sql`(
         SELECT rec_member.product_id AS product_id, COUNT(DISTINCT rec_member.collection_id) AS shared
@@ -379,15 +364,20 @@ export async function rankRecommendationRows(
         GROUP BY rec_peer_value.product_id
     ) AS rec_attribute_peer`;
 
-    const popular = sql`(
+    const popularRows = sql`
         SELECT rec_popular_line.product_id AS product_id,
                COUNT(DISTINCT ${buyerSql("rec_popular_order")}) AS buyers
-        FROM orders AS rec_popular_order
+        FROM ${sourceIds.length > 0 ? sql`rec_guard AS rec_popular_guard CROSS JOIN` : sql``}
+             orders AS rec_popular_order
         INNER JOIN order_items AS rec_popular_line ON rec_popular_line.order_id = rec_popular_order.id
         WHERE ${realOrder("rec_popular_order")}
           AND rec_popular_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+          ${sourceIds.length > 0 ? sql`AND rec_popular_guard.qualifies = 0` : sql``}
         GROUP BY rec_popular_line.product_id
-    ) AS rec_popular`;
+    `;
+    const popular = sourceIds.length > 0
+        ? sql`rec_popular`
+        : sql`(${popularRows}) AS rec_popular`;
 
     const bandPrice = effectivePriceMinorSql({
         priceMinor: sql.raw("rec_band_sku.price_minor"),
@@ -442,30 +432,36 @@ export async function rankRecommendationRows(
     // Popularity orders the tail only when it can fill at least half the
     // list; otherwise the tail is plainly newest first ("New arrivals").
     const popularOrdering = sql<number>`CASE
-        WHEN SUM(CASE WHEN ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))} THEN 1 ELSE 0 END) OVER () * 2
-             >= MIN(COUNT(*) OVER (), ${sql.raw(String(limit))})
+        WHEN (${sourceIds.length > 0 ? sql`(SELECT qualifies FROM rec_guard) = 1 OR` : sql``}
+              SUM(CASE WHEN ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))} THEN 1 ELSE 0 END) OVER () * 2
+              >= MIN(COUNT(*) OVER (), ${sql.raw(String(limit))}))
          AND ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
         THEN ${popularBuyers} ELSE 0
     END`;
-    return await db
+    const candidateCondition = and(
+        publicBuyerStateCondition(),
+        sql`${buyerState.availableForSale} = 1`,
+        sql`${buyerState.productId} NOT IN ${sourceSet}`,
+    );
+    const ranking = db
         .select({
-            id: buyerState.productId,
-            alsoBoughtBuyers: alsoBoughtBuyers.as("rec_also_bought_buyers"),
-            relatedScore: relatedScore.as("rec_related_score"),
-            popularBuyers: popularBuyers.as("rec_popular_buyers"),
-            popularOrdering: popularOrdering.as("rec_popular_ordering"),
+            id: sql<string>`${buyerState.productId}`.as("id"),
+            alsoBoughtBuyers: alsoBoughtBuyers.as("alsoBoughtBuyers"),
+            relatedScore: relatedScore.as("relatedScore"),
+            popularBuyers: popularBuyers.as("popularBuyers"),
+            popularOrdering: popularOrdering.as("popularOrdering"),
+            ...(recordBoundary ? {
+                _priceBand: inPriceBand.as("_price_band"),
+                _createdAt: sql`${buyerState.productCreatedAt}`.as("_created_at"),
+            } : {}),
         })
-        .from(buyerState)
+        .from(sourceIds.length > 0 ? sql`rec_candidates AS product_buyer_state` : buyerState)
         .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
         .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
         .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
         .leftJoin(popular, sql`rec_popular.product_id = ${buyerState.productId}`)
         .crossJoin(sourceBand)
-        .where(and(
-            publicBuyerStateCondition(),
-            sql`${buyerState.availableForSale} = 1`,
-            sql`${buyerState.productId} NOT IN ${sourceSet}`,
-        ))
+        .where(sourceIds.length > 0 ? undefined : candidateCondition)
         .orderBy(
             desc(alsoBoughtTier),
             desc(sql`${relatedScore} + 15 * ${inPriceBand}`),
@@ -473,8 +469,114 @@ export async function rankRecommendationRows(
             desc(buyerState.productCreatedAt),
             buyerState.productId,
         )
-        .limit(limit)
-        .all() as RankedRecommendationRow[];
+        .limit(limit);
+
+    // Enough eligible co-buy peers exclude the zero-co-buy tier from the top
+    // list. Recent co-buyers are a subset of global recent buyers, so half a
+    // list of witnesses proves the existing popularity switch is on. Score
+    // every peer at or above the list's annual-buyer cutoff, including all
+    // ties, with exact popularity. The full witness set keeps the global
+    // popularity switch on even if its witnesses fall below that cutoff.
+    // Otherwise the same statement uses the unchanged full-catalog ranking.
+    const candidateColumns = sql`${buyerState.productId} AS product_id,
+        ${buyerState.fromMinor} AS from_minor, ${buyerState.categoryId} AS category_id,
+        ${buyerState.productCreatedAt} AS product_created_at`;
+    const rankingCtes = sourceIds.length === 0 ? sql`` : sql`
+        WITH rec_source_orders AS MATERIALIZED (${sourceOrders}),
+        rec_co_purchase AS MATERIALIZED (${coPurchaseRows}),
+        rec_eligible_co AS MATERIALIZED (
+            SELECT ${candidateColumns}, rec_co_purchase.buyers, rec_co_purchase.recent_buyers
+            FROM rec_co_purchase
+            CROSS JOIN ${buyerState}
+            WHERE ${buyerState.productId} = rec_co_purchase.product_id
+              AND ${publicBuyerStateCondition({ drivenByIdSet: true })}
+              AND ${buyerState.availableForSale} = 1
+              AND rec_co_purchase.buyers >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))}
+        ),
+        rec_guard AS MATERIALIZED (
+            SELECT CASE WHEN COUNT(*) >= ${sql.raw(String(limit))}
+                AND COALESCE(SUM(CASE WHEN recent_buyers >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
+                    THEN 1 ELSE 0 END), 0) * 2 >= ${sql.raw(String(limit))}
+                THEN 1 ELSE 0 END AS qualifies
+            FROM rec_eligible_co
+        ),
+        rec_winning_co AS MATERIALIZED (
+            SELECT rec_eligible_co.*
+            FROM rec_guard AS rec_winning_guard
+            CROSS JOIN rec_eligible_co
+            WHERE rec_winning_guard.qualifies = 1
+              AND buyers >= (SELECT buyers FROM rec_eligible_co ORDER BY buyers DESC
+                  LIMIT 1 OFFSET ${sql.raw(String(limit - 1))})
+        ),
+        rec_candidates AS (
+            SELECT ${candidateColumns}
+            FROM rec_guard AS rec_candidate_guard
+            CROSS JOIN rec_winning_co AS product_buyer_state
+            WHERE rec_candidate_guard.qualifies = 1
+            UNION ALL
+            SELECT ${candidateColumns}
+            FROM rec_guard AS rec_candidate_guard
+            CROSS JOIN ${buyerState}
+            WHERE rec_candidate_guard.qualifies = 0 AND ${candidateCondition}
+        ),
+        rec_popular AS (
+            SELECT rec_peer_popular_line.product_id AS product_id,
+                   COUNT(DISTINCT ${buyerSql("rec_peer_popular_order")}) AS buyers
+            FROM rec_guard AS rec_peer_popular_guard
+            CROSS JOIN orders AS rec_peer_popular_order
+            INNER JOIN order_items AS rec_peer_popular_line
+                ON rec_peer_popular_line.order_id = rec_peer_popular_order.id
+            WHERE rec_peer_popular_guard.qualifies = 1
+              -- Scan each recent order's few lines once, rather than seek once per winning product.
+              AND CAST(rec_peer_popular_line.product_id AS TEXT) IN (SELECT product_id FROM rec_winning_co)
+              AND ${realOrder("rec_peer_popular_order")}
+              AND rec_peer_popular_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+            GROUP BY rec_peer_popular_line.product_id
+            UNION ALL
+            ${popularRows}
+        )
+    `;
+    if (!recordBoundary) {
+        return sourceIds.length === 0
+            ? await ranking.all() as RankedRecommendationRow[]
+            : await db.all<RankedRecommendationRow>(sql`${rankingCtes} ${ranking.getSQL()}`);
+    }
+
+    // Keep the boundary even when no product ranks, in the same SQL snapshot.
+    // Reapply the existing order only to the already limited (at most 24) rows.
+    const rows = await db.all<Omit<RankedRecommendationRow, "id"> & {
+        id: string | null; popularAt: number | null; alsoBoughtAt: number | null;
+    }>(sql`${rankingCtes}${sourceIds.length > 0 ? sql`,` : sql`WITH`}
+        rec_ranked AS MATERIALIZED (${ranking.getSQL()}),
+        rec_boundary AS MATERIALIZED (
+            SELECT (SELECT rec_popular_first.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
+                FROM orders AS rec_popular_first
+                WHERE ${realOrder("rec_popular_first")}
+                  AND rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
+                  AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_popular_first.id)
+                ORDER BY rec_popular_first.created_at ASC LIMIT 1) AS popular_at,
+                ${sourceIds.length > 0 ? sql`(SELECT MIN(created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
+                    FROM rec_source_orders)` : sql`NULL`} AS also_bought_at
+        )
+        SELECT rec_ranked.id AS "id", rec_ranked."alsoBoughtBuyers" AS "alsoBoughtBuyers",
+            rec_ranked."relatedScore" AS "relatedScore", rec_ranked."popularBuyers" AS "popularBuyers",
+            rec_ranked."popularOrdering" AS "popularOrdering",
+            rec_boundary.popular_at AS popularAt, rec_boundary.also_bought_at AS alsoBoughtAt
+        FROM rec_boundary LEFT JOIN rec_ranked ON 1 = 1
+        ORDER BY CASE WHEN rec_ranked."alsoBoughtBuyers" >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))}
+                THEN rec_ranked."alsoBoughtBuyers" ELSE 0 END DESC,
+            rec_ranked."relatedScore" + 15 * rec_ranked._price_band DESC,
+            rec_ranked."popularOrdering" DESC, rec_ranked._created_at DESC, rec_ranked.id ASC
+    `);
+    // Inclusive windows stop including an order one second after its boundary.
+    // An empty, quiet store has no deadline, never a routine TTL.
+    const exits = [rows[0]?.popularAt, rows[0]?.alsoBoughtAt]
+        .filter((at): at is number => at !== null && at !== undefined).map(Number);
+    if (exits.length > 0) deps.validUntil(Math.min(...exits) * 1000);
+    return rows.flatMap((row) => row.id === null ? [] : [{
+        id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
+        popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
+    }]);
 }
 
 /** Card columns of the given public products (at most 24 ids, one JSON parameter). */

@@ -11,7 +11,8 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { productBuyerState, productFacetValues } from "@scalius/database/schema";
-import { asc } from "drizzle-orm";
+import { asc, is, sql, SQL, StringChunk } from "drizzle-orm";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 import { createProduct } from "../product-admin/write";
 import { deleteProduct, restoreProduct } from "../product-admin/lifecycle";
@@ -27,7 +28,7 @@ import {
     refreshProductRecommendations,
     refreshProductSalesStats,
 } from "../catalog/recommendation-refresh";
-import { getStorefrontProductRecommendations, rankProductRecommendations } from "../catalog/recommendations";
+import { getStorefrontProductRecommendations, rankProductRecommendations, rankRecommendationRows } from "../catalog/recommendations";
 import { withDependencyScope } from "../../cache-deps";
 
 vi.mock("../inventory/alerts", async (importOriginal) => ({
@@ -110,6 +111,101 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         const annual = await ranked();
         expect(annual.value).toEqual(value);
         expect(annual.dependencies.validUntil).toBe((now + 101) * 1_000);
+        await client.query("UPDATE products SET is_active = 0");
+        await rebuildCatalogProjections(db);
+        const rawAll = vi.spyOn(db, "all");
+        const empty = await ranked();
+        expect(rawAll).toHaveBeenCalledTimes(1);
+        rawAll.mockRestore();
+        expect(empty.value.rows).toEqual([]);
+        expect(empty.dependencies.validUntil).toBe(annual.dependencies.validUntil);
+        const noSource = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: [] }), { strict: true, log: () => {} },
+        );
+        expect(noSource.value.rows).toEqual([]);
+        expect(noSource.dependencies.validUntil).toBe(dependencies.validUntil);
+    });
+
+    it("preserves the global quorum and all cutoff ties for a qualifying 24-row refresh", async () => {
+        const { db, client } = await createNativePostgres({ label: "recommendation_winners" });
+        const now = Number((await client.query("SELECT unixepoch() AS now")).rows[0].now);
+        const peers = Array.from({ length: 25 }, (_, index) => `peer_${String(index).padStart(2, "0")}`);
+        const witnesses = Array.from({ length: 12 }, (_, index) => `witness_${index}`);
+        const productIds = ["source", ...peers, ...witnesses];
+        await client.query(`INSERT INTO products
+            (id, name, description, price_minor, slug, is_active, created_at, updated_at)
+            SELECT item.id, item.id, '', 100000, item.id, 1, $2 + item.ordinality, $2 + item.ordinality
+            FROM unnest($1::text[]) WITH ORDINALITY AS item(id, ordinality)`, [productIds, now - 100]);
+        await client.query(`INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+            SELECT 'var_' || id, id, 'sku_' || id, 100000, 5, 1, 1 FROM unnest($1::text[]) AS item(id)`, [productIds]);
+        const order = async (id: string, basket: string[], phone: string, email: string | null,
+            createdAt: number, lineCreatedAt = now - 3600, status = "completed") => {
+            await client.query(`INSERT INTO orders
+                (id, customer_name, customer_phone, customer_email, shipping_address, city, zone, status, created_at, updated_at)
+                VALUES ($1, 'Buyer', $2, $3, 'Road', 'city', 'zone', $4, $5, $5)`, [id, phone, email, status, createdAt]);
+            await client.query(`INSERT INTO order_items (id, order_id, product_id, quantity, created_at)
+                SELECT $1 || '_line_' || line.ordinality, $1, line.product_id, 1, $3
+                FROM unnest($2::text[]) WITH ORDINALITY AS line(product_id, ordinality)`, [id, basket, lineCreatedAt]);
+        };
+        for (let buyer = 0; buyer < 4; buyer += 1) {
+            await order(`annual_${buyer}`, ["source", "source", ...peers], `annual_${buyer}`, null, now - 40 * 86400);
+        }
+        await order("recent_phone", ["source", ...witnesses], "01711111111", null, now - 3600);
+        await order("recent_email", ["source", ...witnesses], "NO_PHONE", "buyer@example.com", now - 3600);
+        await order("recent_email_repeat", ["source", ...witnesses], "NO_PHONE", " BUYER@EXAMPLE.COM ", now - 3600);
+        // Popularity follows the order time even when a line's time is old.
+        for (const buyer of ["popular_a", "popular_b"]) {
+            await order(buyer, [peers[0]!], buyer, null, now - 3600, now - 400 * 86400);
+        }
+        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) {
+            await order(`excluded_${status}`, ["source", ...peers], status, null, now - 3600, now - 3600, status);
+        }
+        await order("deleted", ["source", ...peers], "deleted", null, now - 3600);
+        await client.query("UPDATE orders SET deleted_at = $1 WHERE id = 'deleted'", [now]);
+        await rebuildCatalogProjections(db);
+        const rawAll = vi.spyOn(db, "all");
+        const { value: rows, dependencies } = await withDependencyScope(
+            () => rankRecommendationRows(db, ["source"], 24), { strict: true, log: () => {} },
+        );
+        const expectedIds = [peers[0]!, ...peers.slice(2).reverse()];
+        expect(rows).toEqual(expectedIds.map((id) => ({
+            id, alsoBoughtBuyers: 4, relatedScore: 0,
+            popularBuyers: id === peers[0] ? 2 : 0, popularOrdering: id === peers[0] ? 2 : 0,
+        })));
+        expect(dependencies.validUntil).toBe((now - 3600 + 30 * 86400 + 1) * 1000);
+        expect(dependencies.uncacheable).toEqual([]);
+        expect(dependencies.coarseTables).toEqual([]);
+        expect(rawAll).toHaveBeenCalledTimes(1);
+        const captured = rawAll.mock.calls.at(-1)![0] as SQL;
+        rawAll.mockRestore();
+        const forceCanonical = (statement: SQL): SQL => new SQL(statement.queryChunks.map((chunk) => {
+            if (is(chunk, SQL)) return forceCanonical(chunk);
+            return is(chunk, StringChunk)
+                ? new StringChunk(chunk.value.map((text) => text.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 = 1 AND COUNT(*) >=")))
+                : chunk;
+        }));
+        const canonical = forceCanonical(captured);
+        const dialect = new SQLiteSyncDialect();
+        expect(dialect.sqlToQuery(canonical).sql).not.toBe(dialect.sqlToQuery(captured).sql);
+        const canonicalRows = await db.all<Record<string, unknown>>(canonical);
+        expect(canonicalRows.map((row) => ({
+            id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
+            popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
+        }))).toEqual(rows);
+        expect(canonicalRows.every((row) => Number(row.popularAt) * 1000 === dependencies.validUntil)).toBe(true);
+        // Reuse the shared CTE interpolation before the limited ranking and
+        // deadline wrapper to prove this provider takes the qualifying path.
+        const rankingCtes = captured.queryChunks.find((chunk) => is(chunk, SQL)
+            && dialect.sqlToQuery(chunk).sql.includes("WITH rec_source_orders AS MATERIALIZED")) as SQL;
+        expect(dialect.sqlToQuery(rankingCtes).sql).toContain("WITH rec_source_orders AS MATERIALIZED");
+        const guard = new SQL([rankingCtes]).append(sql`
+            SELECT qualifies, (SELECT COUNT(*) FROM rec_eligible_co) AS eligible,
+                (SELECT COUNT(*) FROM rec_winning_co) AS winners FROM rec_guard`);
+        expect(await db.all(guard))
+            .toEqual([{ qualifies: 1, eligible: 37, winners: 25 }]);
+        await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 1, cleared: 0 });
+        expect((await client.query("SELECT recommended_product_id AS id FROM product_recommendations WHERE product_id = 'source' ORDER BY position")).rows)
+            .toEqual(expectedIds.map((id) => ({ id })));
     });
 
     it("keeps and reads the buyer state and facet rows like D1", async () => {

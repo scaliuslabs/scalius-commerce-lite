@@ -8,6 +8,7 @@ import {
     getStorefrontProductRecommendations,
     MAX_RECOMMENDATION_SOURCE_IDS,
     rankProductRecommendations,
+    rankRecommendationRows,
 } from "./recommendations";
 import { getStorefrontProductBySlug } from "./product-page";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
@@ -96,6 +97,11 @@ async function recommend(productIds: string[], limit = 12) {
     return getStorefrontProductRecommendations(db, { productIds, limit });
 }
 
+const scoreRows = (rows: Array<Record<string, unknown>>) => rows.filter((row) => row.id !== null).map((row) => ({
+    id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
+    popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
+}));
+
 const ids = (result: { products: Array<{ id: string }> }) => result.products.map((item) => item.id);
 
 beforeEach(() => {
@@ -150,6 +156,47 @@ describe("product recommendations", () => {
         expect(dependencies.softMaxAgeSeconds).toBeNull();
     });
 
+    it.each([30, 365])("keeps the %i-day deadline when the ranking has no rows", async (days) => {
+        product({ id: "source", stock: 0 });
+        const createdAt = NOW - days * 86400 + 100;
+        order("buyer", ["source"], "completed", createdAt);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        const { value, dependencies } = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source"] }), { strict: true, log: () => {} },
+        );
+        expect(value.rows).toEqual([]);
+        expect(dependencies.validUntil).toBe((createdAt + days * 86400 + 1) * 1000);
+        expect(statements).toHaveLength(1);
+        if (days === 30) {
+            statements = [];
+            const emptySource = await withDependencyScope(
+                () => rankProductRecommendations(db, { productIds: [] }), { strict: true, log: () => {} },
+            );
+            expect(emptySource.value.rows).toEqual([]);
+            expect(emptySource.dependencies.validUntil).toBe(dependencies.validUntil);
+            expect(statements).toHaveLength(1);
+        }
+    });
+
+    it("preserves price-band, timestamp and id ties through the recorded ranking wrapper", async () => {
+        product({ id: "source" });
+        product({ id: "far_new", priceMinor: 900000, createdAt: NOW - 10 });
+        product({ id: "near_old", createdAt: NOW - 100 });
+        product({ id: "near_b", createdAt: NOW - 50 });
+        product({ id: "near_a", createdAt: NOW - 50 });
+        await rebuildCatalogProjections(db);
+        const direct = await rankProductRecommendations(db, { productIds: ["source"], limit: 4 });
+        expect(direct.rows.map((row) => row.id)).toEqual(["near_a", "near_b", "near_old", "far_new"]);
+        statements = [];
+        const recorded = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source"], limit: 4 }), { strict: true, log: () => {} },
+        );
+        expect(recorded.value).toEqual(direct);
+        expect(recorded.dependencies.validUntil).toBeNull();
+        expect(statements).toHaveLength(1);
+    });
+
     it("reads the live ranking deadline from bounded index reads, never every order of the year", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "peer", categoryId: "cat_shirts" });
@@ -165,8 +212,10 @@ describe("product recommendations", () => {
         const plan = steps.map((step) => String(step.detail));
         // It scanned every live order, probing each for a source line: minutes on a million orders.
         expect(plan.filter((detail) => /^SCAN rec_(popular_first|source_order)|USING (COVERING )?INDEX orders_\w+ \(deleted_at=\?\)$/.test(detail))).toEqual([]);
-        expect(plan.join("\n")).toMatch(/SEARCH rec_boundary_source_sample USING COVERING INDEX order_items_product_recent_idx/);
-        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_boundary_source_sample "))!;
+        expect(plan.filter((detail) => detail.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
+        expect(plan.filter((detail) => detail === "MATERIALIZE rec_source_orders")).toHaveLength(1);
+        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx/);
+        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_source_line_sample "))!;
         expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
             .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
     });
@@ -344,7 +393,7 @@ describe("product recommendations", () => {
         expect(dependencies.keys).toContain("recommendation-signals");
         expect(dependencies.uncacheable).toEqual([]);
         expect(dependencies.coarseTables).toEqual([]);
-        expect(statements).toHaveLength(2);
+        expect(statements).toHaveLength(1);
         const plan = statements.flatMap((query, index) => sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`)
             .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
         expect(plan).toContain("SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_price_idx (is_public=?)");
@@ -355,7 +404,7 @@ describe("product recommendations", () => {
         for (const alias of ["rec_popular_line", "rec_peer_line"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
         }
-        for (const alias of ["rec_source_order", "rec_co_order"]) {
+        for (const alias of ["rec_source_order"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_id_buyers_idx \\(id=\\?`));
             expect(plan).not.toMatch(new RegExp(`SEARCH ${alias} USING INDEX sqlite_autoindex_orders_1`));
         }
@@ -368,6 +417,167 @@ describe("product recommendations", () => {
                 .toEqual(sqlite.prepare(unhinted).all(...statementParams[index]!).map(Object.values));
         }
     });
+
+    it("uses the complete co-buy tier only when its eligible recent witnesses prove the popularity quorum", async () => {
+        for (const [index, id] of ["source", "peer_a", "peer_b", "peer_c", "peer_d", "outsider"].entries()) {
+            product({ id, createdAt: NOW - 100 + index });
+        }
+        product({ id: "hidden", isActive: false });
+        product({ id: "sold_out", stock: 0 });
+        const recentBasket = ["source", "source", "peer_a", "peer_a", "peer_b", "hidden", "sold_out"];
+        order("phone_a", recentBasket);
+        order("phone_a", recentBasket, "delivered");
+        order("", recentBasket);
+        sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run("buyer@example.com", `ord_${orderSequence}`);
+        order("", recentBasket);
+        sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run(" BUYER@EXAMPLE.COM ", `ord_${orderSequence}`);
+        for (const buyer of ["old_a", "old_b"]) order(buyer, ["source", "peer_c", "peer_d"], "completed", NOW - 40 * 86400);
+        for (let buyer = 0; buyer < 4; buyer += 1) {
+            order(`global_${buyer}`, buyer < 3 ? ["peer_c", "peer_d", "outsider"] : ["peer_d", "outsider"]);
+        }
+        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) {
+            order(`excluded_${status}`, ["source", "peer_d"], status);
+        }
+        order("deleted", ["source", "peer_d"]);
+        sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const { value, dependencies } = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source"], limit: 3 }),
+            { strict: true, log: () => {} },
+        );
+        expect(value).toEqual({ reason: "also_bought", rows: [
+            { id: "peer_d", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 4, popularOrdering: 4 },
+            { id: "peer_c", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 3, popularOrdering: 3 },
+            { id: "peer_b", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+        ] });
+        expect(statements).toHaveLength(1);
+        expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
+        expect(dependencies.uncacheable).toEqual([]);
+        expect(dependencies.coarseTables).toEqual([]);
+        const index = statements.findIndex((query) => query.includes("rec_guard AS MATERIALIZED"));
+        const query = statements[index]!;
+        const params = statementParams[index]!;
+        const canonical = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
+        expect(canonical).not.toBe(query);
+        expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(value.rows);
+
+        const guardValues: number[] = [];
+        let fullPopularityVisits = 0;
+        sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
+        sqlite.function("observe_full_popularity", (value) => { fullPopularityVisits += 1; return value; });
+        const observed = query
+            .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
+            .replace("AND rec_popular_order.created_at >= unixepoch()", "AND observe_full_popularity(rec_popular_order.created_at) >= unixepoch()");
+        expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
+        expect(guardValues).toEqual([1]);
+        expect(fullPopularityVisits).toBe(0);
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => String(row.detail));
+        expect(plan.filter((line) => line.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
+        expect(plan.filter((line) => line.startsWith("SEARCH rec_peer_popular_line "))).toEqual([
+            "SEARCH rec_peer_popular_line USING COVERING INDEX order_items_order_product_idx (order_id=?)",
+        ]);
+        expect(plan.join("\n")).toContain("SEARCH rec_peer_popular_order USING COVERING INDEX orders_recommendation_buyers_idx (deleted_at=? AND created_at>?)");
+    });
+
+    it("keeps global popularity enabled when its recent witnesses are below the winning cutoff", async () => {
+        product({ id: "source" });
+        const winners = ["high_a", "high_b", "high_c", "high_d"];
+        for (const [index, id] of winners.entries()) product({ id, createdAt: NOW - 100 + index });
+        for (const id of ["witness_a", "witness_b"]) product({ id });
+        for (let buyer = 0; buyer < 4; buyer += 1) {
+            order(`annual_${buyer}`, ["source", ...winners], "completed", NOW - 40 * 86400);
+        }
+        for (const buyer of ["recent_a", "recent_b"]) {
+            order(buyer, ["source", "witness_a", "witness_b"]);
+            order(buyer, ["high_a"]);
+        }
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 3 });
+        // Only one of four tied winners is popular. The discarded witnesses
+        // still enable the global switch, placing that older winner first.
+        expect(result.rows).toEqual([
+            { id: "high_a", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+            { id: "high_d", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 0, popularOrdering: 0 },
+            { id: "high_c", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 0, popularOrdering: 0 },
+        ]);
+        const query = statements[0]!;
+        const canonical = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
+        expect(canonical).not.toBe(query);
+        expect(scoreRows(sqlite.prepare(canonical).all(...statementParams[0]!))).toEqual(result.rows);
+    });
+
+    it("keeps every cutoff tie and exact scores for the 24-row stored refresh", async () => {
+        product({ id: "source" });
+        const peers = Array.from({ length: 25 }, (_, index) => `peer_${String(index).padStart(2, "0")}`);
+        for (const [index, id] of peers.entries()) product({ id, createdAt: NOW - 100 + index });
+        order("buyer_a", ["source", "source", ...peers]);
+        order("buyer_b", ["source", ...peers]);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const { value: rows, dependencies } = await withDependencyScope(
+            () => rankRecommendationRows(db, ["source"], 24), { strict: true, log: () => {} },
+        );
+        expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
+        expect(rows).toEqual([...peers].reverse().slice(0, 24).map((id) => ({
+            id, alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2,
+        })));
+        expect(statements).toHaveLength(1);
+        const canonical = statements[0]!.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
+        expect(canonical).not.toBe(statements[0]);
+        expect(scoreRows(sqlite.prepare(canonical).all(...statementParams[0]!))).toEqual(rows);
+        await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 1, cleared: 0 });
+        const stored = sqlite.prepare("SELECT recommended_product_id AS id FROM product_recommendations WHERE product_id = 'source' ORDER BY position").all();
+        expect(stored.map((row) => row.id)).toEqual(rows.map((row) => row.id));
+    });
+
+    it.each(["no_source", "no_history", "underfilled", "insufficient_recent"] as const)(
+        "keeps canonical ranking and skips candidate popularity for %s",
+        async (scenario) => {
+            for (const id of ["source", "peer_a", "peer_b", "peer_c", "peer_d"]) product({ id });
+            product({ id: "hidden", isActive: false });
+            product({ id: "sold_out", stock: 0 });
+            for (const buyer of ["global_a", "global_b"]) order(buyer, ["peer_a", "peer_b", "peer_c", "peer_d"]);
+            if (scenario === "underfilled") {
+                for (const buyer of ["co_a", "co_b"]) order(buyer, ["source", "peer_a", "hidden", "sold_out"]);
+            } else if (scenario === "insufficient_recent") {
+                for (const buyer of ["old_a", "old_b"]) order(buyer, ["source", "peer_a", "peer_b", "peer_c", "peer_d"], "completed", NOW - 40 * 86400);
+                for (const buyer of ["co_a", "co_b"]) order(buyer, ["source", "peer_a"]);
+            }
+            await rebuildCatalogProjections(db);
+            statements = [];
+            statementParams = [];
+            const result = await rankProductRecommendations(db, {
+                productIds: scenario === "no_source" ? [] : ["source"], limit: 3,
+            });
+            expect(statements).toHaveLength(1);
+            expect(result.rows).toHaveLength(3);
+            const query = statements[0]!;
+            const params = statementParams[0]!;
+            if (scenario === "no_source") {
+                expect(query).not.toContain("rec_guard");
+                expect(query).not.toContain("rec_peer_popular_order");
+                return;
+            }
+            const canonical = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
+            expect(canonical).not.toBe(query);
+            expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(result.rows);
+            const guardValues: number[] = [];
+            let peerPopularityVisits = 0;
+            sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
+            sqlite.function("observe_peer_popularity", (value) => { peerPopularityVisits += 1; return value; });
+            const observed = query
+                .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
+                .replace("AND rec_peer_popular_order.created_at >= unixepoch()", "AND observe_peer_popularity(rec_peer_popular_order.created_at) >= unixepoch()");
+            expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(result.rows);
+            expect(guardValues).toEqual([0]);
+            expect(peerPopularityVisits).toBe(0);
+        },
+    );
 
     it("recommends for a whole cart, excluding every cart item", async () => {
         product({ id: "shirt", categoryId: "cat_shirts" });

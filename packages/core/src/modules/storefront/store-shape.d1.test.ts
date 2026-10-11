@@ -2,6 +2,7 @@
 // setting on AND a published review; `hasDigitalLines` needs a live digital
 // SKU on a live product. Both come from the one counts statement.
 import { describe, expect, it } from "vitest";
+import type { SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { reviewsDocument } from "../settings/documents";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
@@ -101,7 +102,7 @@ describe("store shape: reviews and digital lines", () => {
         const { sqlite, db } = setup();
         try {
             const query = selectStoreShapeCounts(db).toSQL();
-            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>;
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params as SQLInputValue[]) as Array<{ detail: string }>;
             const start = plan.findIndex(({ detail }) => detail === "CO-ROUTINE capped_digital_skus");
             const end = plan.findIndex(({ detail }) => detail === "SCAN capped_digital_skus");
             expect(start).toBeGreaterThanOrEqual(0);
@@ -152,7 +153,7 @@ describe("store shape: reviews and digital lines", () => {
         const { sqlite, db } = setup();
         try {
             const query = selectStoreShapeCounts(db).toSQL();
-            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>;
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params as SQLInputValue[]) as Array<{ detail: string }>;
             const start = plan.findIndex(({ detail }) => detail === "CO-ROUTINE capped_content_blocks");
             const end = plan.findIndex(({ detail }) => detail === "SCAN capped_content_blocks");
             expect(start).toBeGreaterThanOrEqual(0);
