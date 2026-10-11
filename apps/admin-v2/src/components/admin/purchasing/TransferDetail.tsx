@@ -19,6 +19,7 @@ import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem 
 import { isOpenTransfer, TransferStatusBadge } from "./purchasing-status";
 import { Fact, LineProduct, useUnitsText } from "./purchasing-ui";
 import { Page } from "~/components/admin/resource/Page";
+import { PurchasingLines } from "./PurchasingLines";
 
 /**
  * A transfer once shipped (or a draft for staff who can't edit): what left,
@@ -182,11 +183,11 @@ function TransferLines({ transfer }: { transfer: Transfer }) {
   const t = useMessages(purchasingMessages);
   const isMobile = useIsMobile();
   const returned = transfer.returnedQuantity > 0;
-  if (isMobile) {
-    return (
+  return (
+    <PurchasingLines lines={transfer.lines}>{(pageLines) => isMobile ? (
       <ul className="divide-y border-t">
-        {transfer.lines.map((line) => (
-          <li key={line.id} className="space-y-1 px-4 py-3">
+        {pageLines.map((line) => (
+          <li key={line.id} data-purchasing-line={line.variantId} className="space-y-1 px-4 py-3">
             <LineProduct line={line} retired={line.retired} />
             <dl className="flex flex-wrap gap-x-4 gap-y-1 text-body tabular-nums">
               <div className="flex gap-1"><dt className="text-muted-foreground">{t("colQuantity")}</dt><dd>{formatNumber(line.quantity)}</dd></div>
@@ -199,9 +200,7 @@ function TransferLines({ transfer }: { transfer: Transfer }) {
           </li>
         ))}
       </ul>
-    );
-  }
-  return (
+    ) : (
     <div className="border-t">
       <Table>
         <TableHeader>
@@ -215,8 +214,8 @@ function TransferLines({ transfer }: { transfer: Transfer }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transfer.lines.map((line) => (
-            <TableRow key={line.id}>
+          {pageLines.map((line) => (
+            <TableRow key={line.id} data-purchasing-line={line.variantId}>
               <TableCell className="py-2"><LineProduct line={line} retired={line.retired} /></TableCell>
               <TableCell data-numeric="">{formatNumber(line.quantity)}</TableCell>
               <TableCell data-numeric="">{formatNumber(line.shippedQuantity)}</TableCell>
@@ -228,6 +227,7 @@ function TransferLines({ transfer }: { transfer: Transfer }) {
         </TableBody>
       </Table>
     </div>
+    )}</PurchasingLines>
   );
 }
 

@@ -36,6 +36,7 @@ import { PurchasingProblemBanner, readPurchasingProblem, type PurchasingProblem 
 import { TransferStatusBadge } from "./purchasing-status";
 import { LineProduct, useUnitsText } from "./purchasing-ui";
 import { SkuPicker } from "./SkuPicker";
+import { PurchasingLines, type PurchasingLineReveal } from "./PurchasingLines";
 import {
   transferBody,
   transferDraftFrom,
@@ -80,6 +81,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const [savedFingerprint, setSavedFingerprint] = useState(() => (transfer ? transferFingerprint(transferDraftFrom(transfer, defaults)) : ""));
   const [revision, setRevision] = useState<number | null>(transfer?.revision ?? null);
   const [showErrors, setShowErrors] = useState(false);
+  const [lineReveal, setLineReveal] = useState<PurchasingLineReveal | null>(null);
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const [failedAction, setFailedAction] = useState<"save" | "ship">("save");
   const [busy, setBusy] = useState<Busy>(null);
@@ -142,6 +144,8 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
     if (busy) return;
     if (!validation.valid) {
       setShowErrors(true);
+      const variantId = validation.invalidLines.values().next().value;
+      if (variantId) setLineReveal({ variantId, invalid: true });
       return;
     }
     setBusy("save");
@@ -165,6 +169,8 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
     }
     if (!validation.valid) {
       setShowErrors(true);
+      const variantId = validation.invalidLines.values().next().value;
+      if (variantId) setLineReveal({ variantId, invalid: true });
       return;
     }
     setDialog("ship");
@@ -371,11 +377,15 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                 addedIds={addedIds}
                 disabled={full}
                 location={origin}
-                onPick={(variant) => setDraft((current) => (
-                  current.lines.some((line) => line.variantId === variant.id) || current.lines.length >= PURCHASING_MAX_LINES
-                    ? current
-                    : { ...current, lines: [...current.lines, transferLineFromVariant(variant)] }
-                ))}
+                onPick={(variant) => {
+                  if (addedIds.has(variant.id) || draft.lines.length >= PURCHASING_MAX_LINES) return;
+                  setDraft((current) => (
+                    current.lines.some((line) => line.variantId === variant.id) || current.lines.length >= PURCHASING_MAX_LINES
+                      ? current
+                      : { ...current, lines: [...current.lines, transferLineFromVariant(variant)] }
+                  ));
+                  setLineReveal({ variantId: variant.id, invalid: false });
+                }}
               />
               {full ? <p className="text-body text-muted-foreground">{t("maxTransferLines", { count: PURCHASING_MAX_LINES })}</p> : null}
               {draft.lines.length === 0 ? (
@@ -385,12 +395,14 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
               ) : null}
             </CardContent>
             {draft.lines.length > 0 ? (
-              isMobile ? (
+              <PurchasingLines lines={draft.lines} reveal={lineReveal} invalidIds={new Set(draft.lines.filter(line =>
+                validation.invalidLines.has(line.variantId) && (showErrors || line.quantity !== null)
+              ).map(line => line.variantId))}>{(pageLines) => isMobile ? (
                 <ul className="divide-y border-t">
-                  {draft.lines.map((line) => {
+                  {pageLines.map((line) => {
                     const field = lineFields(line);
                     return (
-                      <li key={line.variantId} className="space-y-2 px-4 py-3">
+                      <li key={line.variantId} data-purchasing-line={line.variantId} className="space-y-2 px-4 py-3">
                         <div className="flex items-start gap-2">
                           <div className="min-w-0 flex-1"><LineProduct line={line} retired={line.retired} /></div>
                           {field.remove}
@@ -418,10 +430,10 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {draft.lines.map((line) => {
+                      {pageLines.map((line) => {
                         const field = lineFields(line);
                         return (
-                          <TableRow key={line.variantId}>
+                          <TableRow key={line.variantId} data-purchasing-line={line.variantId}>
                             <TableCell className="py-2">
                               <LineProduct line={line} retired={line.retired} />
                               {field.note}
@@ -435,7 +447,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                     </TableBody>
                   </Table>
                 </div>
-              )
+              )}</PurchasingLines>
             ) : null}
           </Card>
         </div>

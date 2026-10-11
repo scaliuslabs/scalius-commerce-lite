@@ -46,6 +46,7 @@ import { PurchaseOrderStatusBadge } from "./purchasing-status";
 import { CostInput } from "~/components/admin/shared/MoneyInput";
 import { LineProduct, SummaryRow, useUnitsText } from "./purchasing-ui";
 import { SkuPicker } from "./SkuPicker";
+import { PurchasingLines, type PurchasingLineReveal } from "./PurchasingLines";
 import { SupplierPicker } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
 import { Field } from "~/components/ui/field";
@@ -79,6 +80,7 @@ export function PurchaseOrderEditor({ order, onReload }: {
   // The revision this editor started from (or last saved): a newer one elsewhere is a conflict.
   const [revision, setRevision] = useState<number | null>(order?.revision ?? null);
   const [showErrors, setShowErrors] = useState(false);
+  const [lineReveal, setLineReveal] = useState<PurchasingLineReveal | null>(null);
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const [failedAction, setFailedAction] = useState<Exclude<Busy, null>>("save");
   const [busy, setBusy] = useState<Busy>(null);
@@ -116,6 +118,8 @@ export function PurchaseOrderEditor({ order, onReload }: {
     if (busy) return;
     if (!validation.valid) {
       setShowErrors(true);
+      const variantId = validation.lines.keys().next().value;
+      if (variantId) setLineReveal({ variantId, invalid: true });
       return;
     }
     setBusy("save");
@@ -140,6 +144,8 @@ export function PurchaseOrderEditor({ order, onReload }: {
     }
     if (!validation.valid) {
       setShowErrors(true);
+      const variantId = validation.lines.keys().next().value;
+      if (variantId) setLineReveal({ variantId, invalid: true });
       return;
     }
     setBusy("order");
@@ -322,12 +328,17 @@ export function PurchaseOrderEditor({ order, onReload }: {
             addedIds={addedIds}
             validation={validation}
             showErrors={showErrors}
+            reveal={lineReveal}
             decimals={decimals}
-            onAdd={(variant) => setDraft((current) => (
-              current.lines.some((line) => line.variantId === variant.id) || current.lines.length >= PURCHASING_MAX_LINES
-                ? current
-                : { ...current, lines: [...current.lines, lineFromVariant(variant)] }
-            ))}
+            onAdd={(variant) => {
+              if (addedIds.has(variant.id) || draft.lines.length >= PURCHASING_MAX_LINES) return;
+              setDraft((current) => (
+                current.lines.some((line) => line.variantId === variant.id) || current.lines.length >= PURCHASING_MAX_LINES
+                  ? current
+                  : { ...current, lines: [...current.lines, lineFromVariant(variant)] }
+              ));
+              setLineReveal({ variantId: variant.id, invalid: false });
+            }}
             onChange={updateLine}
             onRemove={(variantId) => setDraft((current) => ({
               ...current,
@@ -397,6 +408,7 @@ function PurchaseOrderLinesCard({
   addedIds,
   validation,
   showErrors,
+  reveal,
   decimals,
   onAdd,
   onChange,
@@ -406,6 +418,7 @@ function PurchaseOrderLinesCard({
   addedIds: ReadonlySet<string>;
   validation: DraftValidation;
   showErrors: boolean;
+  reveal: PurchasingLineReveal | null;
   decimals: number;
   onAdd: Parameters<typeof SkuPicker>[0]["onPick"];
   onChange: (variantId: string, patch: Partial<PurchaseOrderDraftLine>) => void;
@@ -487,12 +500,15 @@ function PurchaseOrderLinesCard({
         ) : null}
       </CardContent>
       {lines.length > 0 ? (
-        isMobile ? (
+        <PurchasingLines lines={lines} reveal={reveal} invalidIds={new Set(lines.filter(line => {
+          const problems = problemsOf(line);
+          return problems.quantity || problems.cost;
+        }).map(line => line.variantId))}>{(pageLines) => isMobile ? (
           <ul className="divide-y border-t">
-            {lines.map((line) => {
+            {pageLines.map((line) => {
               const field = fields(line);
               return (
-                <li key={line.variantId} className="space-y-2 px-4 py-3">
+                <li key={line.variantId} data-purchasing-line={line.variantId} className="space-y-2 px-4 py-3">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1"><LineProduct line={line} retired={line.retired} /></div>
                     {field.remove}
@@ -530,10 +546,10 @@ function PurchaseOrderLinesCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lines.map((line) => {
+                {pageLines.map((line) => {
                   const field = fields(line);
                   return (
-                    <TableRow key={line.variantId}>
+                    <TableRow key={line.variantId} data-purchasing-line={line.variantId}>
                       <TableCell className="py-2">
                         <LineProduct line={line} retired={line.retired} />
                         {field.error}
@@ -553,7 +569,7 @@ function PurchaseOrderLinesCard({
               </TableBody>
             </Table>
           </div>
-        )
+        )}</PurchasingLines>
       ) : null}
     </Card>
   );

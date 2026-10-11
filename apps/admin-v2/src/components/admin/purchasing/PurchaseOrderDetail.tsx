@@ -51,6 +51,7 @@ import { SupplierPicker, type SupplierChoice } from "./SupplierPicker";
 import { DateInput } from "~/components/ui/date-input";
 import { Field, FieldRow } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
+import { PurchasingLines } from "./PurchasingLines";
 
 type DialogName = "details" | "cancel" | null;
 
@@ -318,11 +319,11 @@ function PurchaseOrderLines({ order, showCosts }: { order: PurchaseOrder; showCo
       ? <span className="block text-muted-foreground">{t("costNow", { amount: fmt(line.currentCost) })}</span>
       : null;
 
-  if (isMobile) {
-    return (
+  return (
+    <PurchasingLines lines={order.lines}>{(pageLines) => isMobile ? (
       <ul className="divide-y border-t">
-        {order.lines.map((line) => (
-          <li key={line.id} className="space-y-1 px-4 py-3">
+        {pageLines.map((line) => (
+          <li key={line.id} data-purchasing-line={line.variantId} className="space-y-1 px-4 py-3">
             <LineProduct line={line} retired={line.retired} />
             <p className="flex flex-wrap justify-between gap-x-4 text-body tabular-nums">
               <span className="text-muted-foreground">{t("receivedOf", { received: line.receivedQuantity, total: line.quantity })}</span>
@@ -332,9 +333,7 @@ function PurchaseOrderLines({ order, showCosts }: { order: PurchaseOrder; showCo
           </li>
         ))}
       </ul>
-    );
-  }
-  return (
+    ) : (
     <div className="border-t">
       <Table>
         <TableHeader>
@@ -346,8 +345,8 @@ function PurchaseOrderLines({ order, showCosts }: { order: PurchaseOrder; showCo
           </TableRow>
         </TableHeader>
         <TableBody>
-          {order.lines.map((line) => (
-            <TableRow key={line.id}>
+          {pageLines.map((line) => (
+            <TableRow key={line.id} data-purchasing-line={line.variantId}>
               <TableCell className="py-2"><LineProduct line={line} retired={line.retired} /></TableCell>
               <TableCell data-numeric="">{t("receivedOf", { received: line.receivedQuantity, total: line.quantity })}</TableCell>
               {showCosts ? (
@@ -362,6 +361,7 @@ function PurchaseOrderLines({ order, showCosts }: { order: PurchaseOrder; showCo
         </TableBody>
       </Table>
     </div>
+    )}</PurchasingLines>
   );
 }
 
