@@ -23,6 +23,22 @@ describe.skipIf(!postgresUrl)("store shape on PostgreSQL", { timeout: NATIVE_POS
     await rebuildCatalogProjections(db);
     await expect(readStoreShape(db)).resolves.toMatchObject(STORE_SHAPE_EXPECTED);
 
+    for (const [write, hasContentBlocks] of [
+      ["INSERT INTO product_content_blocks (id, product_id, placement, position, type, version, settings) VALUES ('pcb_shape_test', 'p_f', 'tabs', 0, 'rich-text', 1, '{}')", false],
+      ["UPDATE product_content_blocks SET placement = 'after-description'", true],
+      ["UPDATE product_content_blocks SET type = 'pack-picker'", false],
+      ["UPDATE product_content_blocks SET type = 'faq', placement = 'tabs'", true],
+      ["UPDATE products SET is_active = 0 WHERE id = 'p_f'", false],
+      ["UPDATE products SET is_active = 1 WHERE id = 'p_f'", true],
+      ["UPDATE products SET deleted_at = 1780000000 WHERE id = 'p_f'", false],
+      ["UPDATE products SET deleted_at = NULL WHERE id = 'p_f'", true],
+      ["DELETE FROM product_content_blocks", false],
+    ] as const) {
+      await client.query(write);
+      await rebuildCatalogProjections(db);
+      await expect(readStoreShape(db)).resolves.toMatchObject({ hasContentBlocks });
+    }
+
     await client.query("UPDATE categories SET status = 'published' WHERE id = 'A2'");
     await client.query(`INSERT INTO product_attributes (id, name, slug, key_spec) VALUES ('attr_cpu', 'Processor', 'processor', 1)`);
     await client.query(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ('pav_f', 'p_f', 'attr_cpu', 'M4')`);

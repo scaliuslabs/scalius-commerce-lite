@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { reviewsDocument } from "../settings/documents";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { readStoreShape, selectStoreShapeCounts } from "./store-shape";
 
 function setup() {
@@ -111,6 +112,57 @@ describe("store shape: reviews and digital lines", () => {
                 expect.stringMatching(/^SEARCH p(?: EXISTS)? USING INDEX \S+ \(id=\?/),
             ]));
             expect(digitalPlan.some((detail) => /products_public_newest_idx|product_variants_product_stock_idx/.test(detail))).toBe(false);
+        } finally {
+            sqlite.close();
+        }
+    });
+
+    it("matches the original content-block join through placement, publication and deletion changes", async () => {
+        const { sqlite, db } = setup();
+        try {
+            const original = sqlite.prepare(`SELECT count(*) AS present FROM (
+                SELECT 1 FROM product_content_blocks block
+                INNER JOIN product_buyer_state p ON p.product_id = block.product_id AND p.is_public = 1
+                WHERE block.type IN ('rich-text', 'feature-list', 'faq', 'video', 'statement')
+                  AND NOT (block.type = 'rich-text' AND block.placement = 'tabs') LIMIT 1
+            )`);
+            for (const [write, expected] of [
+                ["SELECT 1", 0],
+                ["INSERT INTO product_content_blocks (id, product_id, placement, position, type, version, settings) VALUES ('pcb_shape_test', 'p_live', 'tabs', 0, 'rich-text', 1, '{}')", 0],
+                ["UPDATE product_content_blocks SET placement = 'after-description'", 1],
+                ["UPDATE product_content_blocks SET type = 'pack-picker'", 0],
+                ["UPDATE product_content_blocks SET type = 'faq', placement = 'tabs'", 1],
+                ["UPDATE products SET is_active = 0 WHERE id = 'p_live'", 0],
+                ["UPDATE products SET is_active = 1 WHERE id = 'p_live'", 1],
+                ["UPDATE products SET deleted_at = 1780000000 WHERE id = 'p_live'", 0],
+                ["UPDATE products SET deleted_at = NULL WHERE id = 'p_live'", 1],
+                ["DELETE FROM product_content_blocks", 0],
+            ] as const) {
+                sqlite.exec(write);
+                await rebuildCatalogProjections(db);
+                expect(original.get()).toEqual({ present: expected });
+                expect((await selectStoreShapeCounts(db))[0]?.contentBlockCount).toBe(expected);
+            }
+        } finally {
+            sqlite.close();
+        }
+    });
+
+    it("starts content detection from blocks before looking up public products", () => {
+        const { sqlite, db } = setup();
+        try {
+            const query = selectStoreShapeCounts(db).toSQL();
+            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>;
+            const start = plan.findIndex(({ detail }) => detail === "CO-ROUTINE capped_content_blocks");
+            const end = plan.findIndex(({ detail }) => detail === "SCAN capped_content_blocks");
+            expect(start).toBeGreaterThanOrEqual(0);
+            expect(end).toBeGreaterThan(start);
+            const blockPlan = plan.slice(start + 1, end).map(({ detail }) => detail);
+            expect(blockPlan[0]).toMatch(/^SCAN block(?: |$)/);
+            expect(blockPlan).toEqual(expect.arrayContaining([
+                expect.stringMatching(/^SEARCH block_product(?: EXISTS)? USING INDEX \S+ \(product_id=\?/),
+            ]));
+            expect(blockPlan.some((detail) => /product_buyer_state_category_newest_idx/.test(detail))).toBe(false);
         } finally {
             sqlite.close();
         }

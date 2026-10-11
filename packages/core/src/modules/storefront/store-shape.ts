@@ -176,14 +176,16 @@ export function selectStoreShapeCounts<Extra extends Record<string, SQL>>(db: Da
       ) AS capped_emi_plans)`,
       // A public product has a block the product page renders, outside the
       // description tabs (rich text there is a tab, and mirrored legacy tabs
-      // are rich text in the tabs). Through the (product, placement, position)
-      // index, the first match ends the read.
+      // are rich text in the tabs). Start with blocks so an empty block table
+      // does not cause a membership probe for every public product.
       contentBlockCount: sql<number>`(SELECT count(*) FROM (
         SELECT 1 FROM "product_content_blocks" block
-        INNER JOIN "product_buyer_state" block_product
-          ON block_product."product_id" = block."product_id" AND block_product."is_public" = 1
         WHERE block."type" IN (${renderedBlockTypes})
           AND NOT (block."type" = 'rich-text' AND block."placement" = 'tabs')
+          AND EXISTS (
+            SELECT 1 FROM "product_buyer_state" block_product
+            WHERE block_product."product_id" = block."product_id" AND block_product."is_public" = 1
+          )
         LIMIT 1
       ) AS capped_content_blocks)`,
       ...extra,
