@@ -133,7 +133,8 @@ it.runIf(Boolean(OUT))("measures one-million-order backfill, fresh-connection re
         const warm = await getAnalyticsOverviewForRequest(ctx, request);
         const warmMs = performance.now() - started;
         expect(warm).toEqual(first);
-        expect(overviewQueries).toHaveLength(3);
+        const sharedCustomers = overviewQueries.some(({ query }) => query.includes("customer_counts as materialized"));
+        expect(overviewQueries).toHaveLength(sharedCustomers ? 2 : 3);
         const statements = overviewQueries.map(({ query, values }) => {
           expect(values.length).toBeLessThanOrEqual(100);
           expect(sqlite!.prepare(query).columns().length).toBeLessThanOrEqual(100);

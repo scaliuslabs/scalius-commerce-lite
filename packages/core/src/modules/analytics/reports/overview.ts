@@ -2,9 +2,9 @@
 // COD and cancellation rates, and breakdowns by channel, payment method,
 // city, delivery zone and location, for a range and its comparison period.
 //
-// A small bucket read chooses each customer path, then one statement per
-// period reads UTC summaries and exact facts. The two periods use two of D1's
-// six connections; labels and merchant days follow the store's current settings.
+// A small bucket read chooses each customer path. Two broad periods share one
+// customer scan; other periods use separate statements, at most two of D1's six
+// connections. Labels and merchant days follow the store's current settings.
 import { sql, type SQL } from "drizzle-orm";
 import {
   analyticsBuckets,
@@ -204,6 +204,46 @@ function intervalCte(name: string, intervals: readonly (readonly [number, number
   )`;
 }
 
+/** One covering scan aggregates both periods without storing customer rows. */
+function summarizedCustomerCtes(currency: string, periods: readonly { start: number; end: number }[]): SQL {
+  const counters = [0, 1].map((period) => sql.raw(`
+    coalesce(sum(case when p.period = ${period} then 1 else 0 end), 0) as customers_${period},
+    coalesce(sum(case when p.period = ${period} and cs.first_sale_any_currency_at < p.lo
+      then 1 else 0 end), 0) as returning_${period},
+    coalesce(sum(case when p.period = ${period} and (cs.first_sale_any_currency_at < p.lo
+      or (cs.first_sale_at >= p.lo and cs.second_sale_at < p.hi)) then 1 else 0 end), 0) as repeat_${period}`));
+  return sql`customer_periods as materialized (
+      select cast(json_extract(value, '$.period') as integer) as period,
+        cast(json_extract(value, '$.start') as bigint) as lo,
+        cast(json_extract(value, '$.end') as bigint) as hi
+      from json_each(${JSON.stringify(periods.map((bounds, period) => ({ period, ...bounds })))})
+    ),
+    customer_counts as materialized (
+      select ${sql.join(counters, sql.raw(","))}
+      from analytics_customer_currency_summary cs cross join customer_periods p
+      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
+        and cs.first_sale_at < ${Math.max(...periods.map((p) => p.end))}
+        and cs.last_sale_at >= ${Math.min(...periods.map((p) => p.start))}
+        and cs.first_sale_at < p.hi and cs.last_sale_at >= p.lo
+        and case when (
+          cs.first_sale_at >= p.lo or cs.last_sale_at < p.hi
+          or (cs.second_sale_at >= p.lo and cs.second_sale_at < p.hi)
+          or (cs.third_sale_at >= p.lo and cs.third_sale_at < p.hi)
+          or (cs.fourth_sale_at >= p.lo and cs.fourth_sale_at < p.hi)
+          or (cs.penultimate_sale_at >= p.lo and cs.penultimate_sale_at < p.hi)
+          or (cs.third_last_sale_at >= p.lo and cs.third_last_sale_at < p.hi)
+          or (cs.fourth_last_sale_at >= p.lo and cs.fourth_last_sale_at < p.hi)
+        ) then 1
+        when cs.fourth_sale_at < p.lo and cs.fourth_last_sale_at >= p.hi
+          then case when exists (
+            select 1 from analytics_order_facts f
+            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
+              and f.created_at >= p.lo and f.created_at < p.hi
+          ) then 1 else 0 end
+        else 0 end = 1
+    )`;
+}
+
 function customerCtes(currency: string, start: number, end: number, summarized: boolean): SQL {
   if (summarized) {
     // Stored endpoints prove membership before the unresolved gap touches facts.
@@ -245,12 +285,19 @@ function customerCtes(currency: string, start: number, end: number, summarized: 
 }
 
 /** UTC totals use daily buckets; only merchant-day boundaries need finer reads. */
-function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean): SQL {
+function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean, sharedPeriod?: 0 | 1): SQL {
   const instants = analyticsInstantRange(range, ctx.timeZone);
   const offsets = scopeOffsets(ctx.timeZone, instants);
   const ranges = overviewReadRanges(instants, offsets);
   const currency = ctx.currency.code;
   const measures = orderMeasuresSql("x", true);
+  const customers = sharedPeriod === undefined
+    ? sql.raw(`count(*), 0, 0, 0, 0, 0, 0, 0, 0,
+        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
+        coalesce(sum(cp.prior), 0),
+        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0`)
+    : sql.raw(`cp.customers_${sharedPeriod}, 0, 0, 0, 0, 0, 0, 0, 0,
+        cp.customers_${sharedPeriod} - cp.returning_${sharedPeriod}, cp.returning_${sharedPeriod}, cp.repeat_${sharedPeriod}, 0`);
   return sql`with
     ${intervalCte("period_edges", ranges.periodEdges)},
     ${intervalCte("quarter_hours", ranges.quarterHours)},
@@ -325,7 +372,9 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
       ), '') else s.key2 end as location_key
       from sales s where s.dimension_kind = 'location'
     ),
-    ${customerCtes(currency, instants.start, instants.endExclusive, summarizedCustomers)}
+    ${sharedPeriod === undefined
+      ? customerCtes(currency, instants.start, instants.endExclusive, summarizedCustomers)
+      : sql`cp as (select * from customer_counts)`}
     -- Keep each compound SELECT within D1's five-term limit.
     select * from (
       select 'total' as kind, '' as k1, '' as k2, ${measures},
@@ -354,10 +403,7 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
       from locations x left join inventory_locations il on il.id = x.location_key
       group by x.location_key, coalesce(il.name, '')
       union all
-      select 'customers', '', '', count(*), 0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
-        coalesce(sum(cp.prior), 0),
-        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0
+      select 'customers', '', '', ${customers}
       from cp
       union all
       select 'placed', '', '',
@@ -369,11 +415,26 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
     ) as other_groups`;
 }
 
-function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean) {
-  const fields = Object.fromEntries(
+function overviewFields() {
+  return Object.fromEntries(
     OVERVIEW_FIELDS.map((field) => [field, sql`q.${sql.raw(field)}`]),
   ) as Record<(typeof OVERVIEW_FIELDS)[number], SQL<unknown>>;
-  return ctx.db.select(fields).from(sql`(${overviewStatement(ctx, range, summarizedCustomers)}) as q`);
+}
+
+function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean) {
+  return ctx.db.select(overviewFields()).from(sql`(${overviewStatement(ctx, range, summarizedCustomers)}) as q`);
+}
+
+function overviewComparisonQuery(ctx: AnalyticsContext, current: AnalyticsRange, previous: AnalyticsRange) {
+  const periods = [current, previous].map((range) => {
+    const { start, endExclusive: end } = analyticsInstantRange(range, ctx.timeZone);
+    return { start, end };
+  });
+  const statement = sql`with ${summarizedCustomerCtes(ctx.currency.code, periods)}
+    select 0 as period, q.* from (${overviewStatement(ctx, current, true, 0)}) as q
+    union all
+    select 1 as period, q.* from (${overviewStatement(ctx, previous, true, 1)}) as q`;
+  return ctx.db.select({ period: sql`q.period`, ...overviewFields() }).from(sql`(${statement}) as q`);
 }
 
 /** Summaries bound broad reads and historical prefixes; narrow interior ranges use dated facts. */
@@ -522,6 +583,10 @@ export async function getAnalyticsOverview(ctx: AnalyticsContext, input: Overvie
   const previousRange = analyticsComparisonRange(input.range, input.comparison);
   const [currentRows, previousRows] = await runAnalyticsQuery("overview", async () => {
     const [currentStrategy, previousStrategy] = await overviewCustomerStrategies(ctx, input.range, previousRange);
+    if (previousRange && currentStrategy && previousStrategy) {
+      const rows = await overviewComparisonQuery(ctx, input.range, previousRange);
+      return [rows.filter((row) => num(row.period) === 0), rows.filter((row) => num(row.period) === 1)] as const;
+    }
     return Promise.all([
       overviewQuery(ctx, input.range, currentStrategy),
       previousRange ? overviewQuery(ctx, previousRange, previousStrategy) : Promise.resolve(null),

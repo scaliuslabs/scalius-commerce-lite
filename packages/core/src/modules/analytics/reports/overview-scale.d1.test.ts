@@ -26,10 +26,18 @@ function expectCustomerIndex(query: CapturedQuery, summarized: boolean): void {
     const plan = sqlite!.prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.values as never[]).map((row) => String(row.detail));
     expect(plan.filter((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx.*shop_currency=\? AND first_sale_at>\? AND first_sale_at<\?/.test(line))).toHaveLength(1);
     expect(plan.filter((line) => /SEARCH f (?:EXISTS )?USING COVERING INDEX analytics_facts_customer_identity_idx.*shop_currency=\? AND identity=\? AND created_at>\? AND created_at<\?/.test(line))).toHaveLength(1);
-    expect(plan).not.toContain("MATERIALIZE unresolved");
-    expect(query.query).toMatch(/cs\.fourth_sale_at < \? and cs\.fourth_last_sale_at >= \?/);
+    if (query.query.includes("customer_counts as materialized")) {
+      expect(plan).toContain("MATERIALIZE customer_periods");
+      expect(plan).toContain("MATERIALIZE customer_counts");
+      expect(plan).not.toContain("MATERIALIZE customer_states");
+      expect(plan).not.toContain("MATERIALIZE unresolved");
+      expect(query.query).toContain("cs.fourth_sale_at < p.lo and cs.fourth_last_sale_at >= p.hi");
+    } else {
+      expect(plan).not.toContain("MATERIALIZE unresolved");
+      expect(query.query).toMatch(/cs\.fourth_sale_at < \? and cs\.fourth_last_sale_at >= \?/);
+    }
     expect(query.query).not.toContain("analytics_customer_first_sale");
-    expect(plan.some((line) => /(?:CO-ROUTINE|MATERIALIZE) cu/.test(line))).toBe(false);
+    expect(plan.some((line) => /(?:CO-ROUTINE|MATERIALIZE) cu(?: |$)/.test(line))).toBe(false);
     return;
   }
   const plan = customerAccessPlan(query);
@@ -88,11 +96,16 @@ it("reads buckets and bounded facts for both periods without reopening the order
     expect(plan.filter((line) => /^SCAN (f|b|fs|analytics_order_facts|analytics_sales_buckets|analytics_customer_first_sale)( |$)/.test(line))).toEqual([]);
   }
   queries.length = 0;
-  // The maximum accepted span includes two DST cycles without one bind per day.
-  await getAnalyticsOverviewForRequest({ ...ctx, timeZone: "America/New_York" }, {
-    from: "2024-01-01", to: "2025-12-31", comparison: "none",
+  // Two broad maximum-span periods share one scan, including multiple DST cycles.
+  const maximumSpan = await getAnalyticsOverviewForRequest({ ...ctx, timeZone: "America/New_York" }, {
+    from: "2024-01-01", to: "2025-12-31", comparison: "previous_period",
+  });
+  expect(maximumSpan.previous!.customers).toEqual({
+    customers: 0, newCustomers: 0, returningCustomers: 0, repeatPurchaseRate: null,
   });
   expect(queries).toHaveLength(2);
+  expect(queries[1]!.query).toContain("select 0 as period, q.*");
+  expectCustomerIndex(queries[1]!, true);
   for (const query of queries) {
     expect(query.values.length).toBeLessThanOrEqual(100);
     expect(sqlite.prepare(query.query).columns().length).toBeLessThanOrEqual(100);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { createSqliteD1Database, createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { analyticsInstantRange, type AnalyticsRange } from "@scalius/shared/analytics-period";
 import type { CapturedQuery } from "../../../testing/list-plans";
 import { createAnalyticsFixture, type AnalyticsFixture } from "./reports.fixture";
@@ -58,26 +58,38 @@ async function parity(range: AnalyticsRange, zone: string, comparison: "none" | 
   const ctx = await createAnalyticsContext(f.db, zone);
   queries.length = 0;
   const result = await getAnalyticsOverview(ctx, { range, comparison, granularity: "day" });
-  expect(queries).toHaveLength(comparison === "none" ? 2 : 3);
+  expect(queries).toHaveLength(2);
   const query = queries[1]!;
   for (const statement of queries) expect(statement.values.length).toBeLessThanOrEqual(100);
   expect(query.query).toContain("analytics_customer_currency_summary");
   expect(query.query).not.toContain("analytics_customer_first_sale");
+  if (comparison !== "none") expect(query.query).toContain("select 0 as period, q.*");
   expect(result.current).toEqual(await sourceOverviewPeriod(ctx, range));
   if (result.previous) expect(result.previous).toEqual(await sourceOverviewPeriod(ctx, result.previous.range));
-  return { period: result.current, query };
+  return { period: result.current, query, result };
 }
 
-function expectBoundaryProbes(query: CapturedQuery) {
-  // The lazy CASE touches facts only for histories unresolved by all eight endpoints.
+function expectBoundaryProbes(query: CapturedQuery, expected = [
+  "p:a_deep_late:0", "p:deep_gap:0", "p:deep_span:0", "p:z_deep_early:0",
+]) {
+  // The membership CASE runs once per identity/period, not once per output counter.
   const probed: string[] = [];
-  f.sqlite.function("customer_boundary_probe", (identity) => { probed.push(String(identity)); return 1; });
+  const shared = query.query.includes("customer_counts as materialized");
+  f.sqlite.function("customer_boundary_probe", (identity, period) => { probed.push(`${String(identity)}:${Number(period)}`); return 1; });
   const instrumented = query.query.replace("then case when exists (",
-    "then customer_boundary_probe(cs.identity) * case when exists (");
+    `then customer_boundary_probe(cs.identity, ${shared ? "p.period" : "0"}) * case when exists (`);
   expect(instrumented).not.toBe(query.query);
   expect(f.sqlite.prepare(instrumented).all(...query.values as never[])).toEqual(f.sqlite.prepare(query.query).all(...query.values as never[]));
-  expect(probed.sort()).toEqual(["p:a_deep_late", "p:deep_gap", "p:deep_span", "p:z_deep_early"]);
+  expect(probed.sort()).toEqual(expected);
   const plan = f.sqlite.prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.values as never[]).map((row) => String(row.detail));
+  if (shared) {
+    // Decode the two period rows once, before the covering customer loop.
+    const periodBuild = plan.indexOf("MATERIALIZE customer_periods");
+    expect(periodBuild).toBeGreaterThanOrEqual(0);
+    expect(periodBuild).toBeLessThan(plan.findIndex((line) => /SEARCH cs USING COVERING INDEX/.test(line)));
+    expect(plan.filter((line) => line === "MATERIALIZE customer_counts")).toHaveLength(1);
+  }
+  expect(plan).not.toContain("MATERIALIZE customer_states");
   expect(plan).not.toContain("MATERIALIZE unresolved");
   expect(plan.filter((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx/.test(line))).toHaveLength(1);
   expect(plan.filter((line) => /SEARCH f (?:EXISTS )?USING COVERING INDEX analytics_facts_customer_identity_idx.*identity=\? AND created_at>\? AND created_at<\?/.test(line))).toHaveLength(1);
@@ -91,7 +103,7 @@ it.each([
   ["Africa/Monrovia", { from: "1971-08-01", to: "1971-08-03" }],
 ] as const)("counts exact customer boundaries and duplicate instants in %s", async (zone, range) => {
   seedBoundaries(range, zone);
-  const { period, query } = await parity(range, zone);
+  const { period, query } = await parity(range, zone, "previous_period");
   expect(period.customers).toEqual({ customers: 8, newCustomers: 4, returningCustomers: 4, repeatPurchaseRate: 6 / 8 * 100 });
   // Eight sales split four/four still need the gap check; a ninth middle sale is present.
   expectBoundaryProbes(query);
@@ -118,10 +130,35 @@ it("proves membership at each added endpoint, including start and fractional end
   expectBoundaryProbes(query);
 });
 
+it("shares one summary scan and aggregates both broad periods without temporary customer rows", async () => {
+  const range = { from: "2026-08-04", to: "2026-08-06" };
+  const { start, middle, end } = seedBoundaries(range, "UTC");
+  const previousStart = start - 3 * 86400;
+  for (let i = 0; i < 120; i++) {
+    order(`shared_current_${i}`, "steady", middle);
+    order(`shared_previous_${i}`, "previous_steady", previousStart + 36 * 3600);
+  }
+  for (const identity of ["both_gap", "both_span"]) {
+    for (let i = 0; i < 4; i++) {
+      order(`${identity}_before_${i}`, identity, previousStart - 0.25);
+      order(`${identity}_after_${i}`, identity, end);
+    }
+  }
+  order("both_span_previous", "both_span", previousStart + 36 * 3600);
+  order("both_span_current", "both_span", middle);
+  const { query, result } = await parity(range, "UTC", "previous_period");
+  expectBoundaryProbes(query, [
+    "p:a_deep_late:0", "p:both_gap:0", "p:both_gap:1", "p:both_span:0", "p:both_span:1",
+    "p:deep_gap:0", "p:deep_span:0", "p:z_deep_early:0",
+  ]);
+  const turso = await createAnalyticsContext(createSqliteTursoDatabase(f.sqlite), "UTC");
+  expect(await getAnalyticsOverview(turso, { range, comparison: "previous_period", granularity: "day" })).toEqual(result);
+});
+
 it("refreshes all sale endpoints through status, currency, identity, date and deletion changes", async () => {
   const range = { from: "2026-08-01", to: "2026-08-03" };
   const { start, middle, end } = seedBoundaries(range, "UTC");
-  await parity(range, "UTC");
+  await parity(range, "UTC", "previous_period");
   for (const statement of [
     "UPDATE orders SET status = 'cancelled' WHERE id = 'tie_b'",
     "UPDATE orders SET status = 'pending' WHERE id = 'tie_b'",
@@ -144,14 +181,14 @@ it("refreshes all sale endpoints through status, currency, identity, date and de
     "DELETE FROM orders WHERE id = 'tie_b'",
   ]) {
     f.sqlite.exec(statement);
-    await parity(range, "UTC");
+    await parity(range, "UTC", "previous_period");
   }
   order("tie_restored", "ties", middle);
-  await parity(range, "UTC");
-  const before = await parity(range, "UTC");
+  await parity(range, "UTC", "previous_period");
+  const before = await parity(range, "UTC", "previous_period");
   f.sqlite.exec("BEGIN");
   f.sqlite.exec("UPDATE orders SET status = 'cancelled' WHERE id = 'cross_prior'");
-  await parity(range, "UTC");
+  await parity(range, "UTC", "previous_period");
   f.sqlite.exec("ROLLBACK");
-  expect((await parity(range, "UTC")).period).toEqual(before.period);
+  expect((await parity(range, "UTC", "previous_period")).period).toEqual(before.period);
 });
