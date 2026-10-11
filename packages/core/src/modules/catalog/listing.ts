@@ -452,13 +452,7 @@ async function readStorefrontCatalogResults(
             storeCurrencyCode: storeCurrencyCodeSql(),
             min: sql<number | null>`MIN(${buyerState.fromMinor})`,
             max: sql<number | null>`MAX(${buyerState.toMinor})`,
-            publicCatalogueSize: unscoped
-                ? boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT)
-                : sql<number>`0`,
-            // Inside a dependency scope: the fixed category's ancestors (its
-            // facets' attribute sets are its own and its ancestors'), read
-            // with the count instead of by a statement of their own.
-            ...(ancestorsCategoryId ? { categoryAncestors: categoryAncestorIdsSql(ancestorsCategoryId) } : {}),
+            publicCatalogueSize: boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT),
         })
         .from(buyerState)
         .$dynamic();
@@ -521,7 +515,7 @@ async function readStorefrontCatalogResults(
     const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
     const shopAllFacetsLive = unscoped
-        && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
+        && Number(separateCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
 
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).

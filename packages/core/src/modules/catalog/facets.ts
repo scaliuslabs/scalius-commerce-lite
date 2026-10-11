@@ -552,7 +552,6 @@ export interface CatalogListingSummary {
     max: number | null;
     storeCurrencyCode: string | null;
     categoryAncestors: string | null;
-    publicCatalogueSize: 0;
 }
 
 type ListingSummaryInput = { categoryAncestors?: SQL<string | null> };
@@ -779,14 +778,15 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         SUM(CASE WHEN facet_scope.rating_centi >= ${stars * 100}
             AND ${attributeMatch()} AND ${optionMatch} AND ${brandMatch} THEN 1 ELSE 0 END)
             AS ${sql.raw(`rating_count_${index}`)}`);
+    const ratingValueCount = sql`CASE CAST(rating_min.key AS INTEGER)
+                    ${sql.join(ratingStars.map((_, index) => sql`
+                        WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
+                END`;
     const ratingBranch = input.ratingFacet
         ? sql`
             UNION ALL
             SELECT 'rating', 'rating', CAST(rating_min.value AS TEXT),
-                CASE CAST(rating_min.key AS INTEGER)
-                    ${sql.join(ratingStars.map((_, index) => sql`
-                        WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
-                END,
+                ${ratingValueCount},
                 NULL, NULL, NULL, NULL
             FROM (
                 SELECT COUNT(*) AS rated_count, ${sql.join(ratingCounts, sql`, `)}
@@ -959,10 +959,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         ${input.ratingFacet ? sql`
         UNION ALL
         SELECT 'rating', 'rating', CAST(rating_min.value AS TEXT),
-            CASE CAST(rating_min.key AS INTEGER)
-                ${sql.join(ratingStars.map((_, index) => sql`
-                    WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
-            END, NULL, NULL, NULL, NULL
+            ${ratingValueCount}, NULL, NULL, NULL, NULL
         FROM (
             SELECT COUNT(*) AS rated_count,
                 ${sql.join(ratingStars.map((stars, index) => sql`
@@ -1147,7 +1144,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         return { rows, summary: summaryRow ? {
             count: Number(summaryRow.listingCount), min: summaryRow.listingMin ?? null,
             max: summaryRow.listingMax ?? null, storeCurrencyCode: summaryRow.listingCurrency ?? null,
-            categoryAncestors: summaryRow.listingAncestors ?? null, publicCatalogueSize: 0,
+            categoryAncestors: summaryRow.listingAncestors ?? null,
         } : null };
     });
 }

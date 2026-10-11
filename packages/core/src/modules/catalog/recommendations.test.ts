@@ -105,8 +105,9 @@ const scoreRows = (rows: Array<Record<string, unknown>>) => rows.filter((row) =>
 function originalOrderPopularity(query: string): string {
     // Independent source oracle: duplicate lines remain here, and neither
     // eligibility, parent time nor normalized buyer comes from the projection.
+    // This also restores the popularity deadline's real-order/has-line set.
     const source = query.replaceAll(/\brecommendation_order_products\b/g, `(
-        SELECT original_line.product_id, original_order.created_at,
+        SELECT original_order.id AS order_id, original_line.product_id, original_order.created_at,
             COALESCE(NULLIF(original_order.customer_phone, ''), lower(trim(original_order.customer_email))) AS buyer
         FROM orders AS original_order
         INNER JOIN order_items AS original_line ON original_line.order_id = original_order.id
@@ -119,8 +120,8 @@ function originalOrderPopularity(query: string): string {
 }
 
 function fullUniverseRanking(query: string, limit: number): string {
-    // An independent oracle: disable every candidate cutoff, restore a single
-    // full affinity scan and use the original full-population popularity windows.
+    // Check optimization equivalence with shared scoring formulas: disable
+    // cutoffs and restore full affinity and full-population popularity reads.
     const noCoBuyCutoff = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
     expect(noCoBuyCutoff).not.toBe(query);
     const noRelatedCutoff = noCoBuyCutoff.replace(
@@ -280,6 +281,9 @@ describe("product recommendations", () => {
         expect(plan.filter((detail) => detail.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
         expect(plan.filter((detail) => detail === "MATERIALIZE rec_source_orders")).toHaveLength(1);
         expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx/);
+        expect(plan.join("\n")).toContain("SEARCH rec_popular_first USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
+        expect(sqlite.prepare(statements[index]!).all(...statementParams[index]!))
+            .toEqual(sqlite.prepare(originalOrderPopularity(statements[index]!)).all(...statementParams[index]!));
         const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_source_line_sample "))!;
         expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
             .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
@@ -463,24 +467,16 @@ describe("product recommendations", () => {
             .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
         expect(plan).toContain("SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_price_idx (is_public=?)");
         // A non-covering lookup per order/line took 18 seconds at one million orders.
-        for (const alias of ["rec_popular_first"]) {
-            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_buyers_idx`));
-        }
+        expect(plan).toContain("SEARCH rec_popular_first USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
         for (const alias of ["rec_peer_line"]) {
             expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
         }
         expect(plan).toContain("SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
-        for (const alias of ["rec_source_order"]) {
-            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX orders_recommendation_id_buyers_idx \\(id=\\?`));
-            expect(plan).not.toMatch(new RegExp(`SEARCH ${alias} USING INDEX sqlite_autoindex_orders_1`));
-        }
+        expect(plan).toMatch(/SEARCH rec_source_pair USING (?:COVERING )?INDEX \S+ \(order_id=\? AND product_id=\?\)/);
+        expect(plan).not.toMatch(/(?:SEARCH|SCAN) rec_source_order(?: |$)/m);
         // Compare both exact score rows and the strict boundary with the old
-        // unhinted statements, including duplicate source lines and buyers.
+        // orders and lines, including duplicate source lines and buyers.
         for (const [index, query] of statements.entries()) {
-            const unhinted = query.replaceAll(" INDEXED BY orders_recommendation_id_buyers_idx", "");
-            expect(unhinted).not.toBe(query);
-            expect(sqlite.prepare(query).all(...statementParams[index]!).map(Object.values))
-                .toEqual(sqlite.prepare(unhinted).all(...statementParams[index]!).map(Object.values));
             expect(sqlite.prepare(query).all(...statementParams[index]!))
                 .toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...statementParams[index]!));
         }
@@ -584,20 +580,20 @@ describe("product recommendations", () => {
         expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(canonical).all(...params));
 
         const guardValues: number[] = [];
-        let fullPopularityVisits = 0;
+        let quorumVisits = 0;
         sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
-        sqlite.function("observe_full_popularity", (value) => { fullPopularityVisits += 1; return value; });
+        sqlite.function("observe_global_quorum", (value) => { quorumVisits += 1; return value; });
         const observed = query
             .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
-            .replace("WHERE rec_popular_projection.created_at >= unixepoch()", "WHERE observe_full_popularity(rec_popular_projection.created_at) >= unixepoch()");
-        expect(observed).toContain("observe_full_popularity(rec_popular_projection.created_at)");
+            .replace("AND rec_quorum_projection.created_at >= unixepoch()", "AND observe_global_quorum(rec_quorum_projection.created_at) >= unixepoch()");
+        expect(observed).toContain("observe_global_quorum(rec_quorum_projection.created_at)");
         expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
         expect(guardValues).toEqual([1]);
-        expect(fullPopularityVisits).toBe(0);
+        expect(quorumVisits).toBe(0);
         const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => String(row.detail));
         expect(plan.filter((line) => line.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
-        expect(plan.filter((line) => line.startsWith("SEARCH rec_peer_projection "))).toEqual([
-            "SEARCH rec_peer_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)",
+        expect(plan.filter((line) => line.startsWith("SEARCH rec_popular_projection "))).toEqual([
+            "SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)",
         ]);
     });
 
@@ -656,7 +652,7 @@ describe("product recommendations", () => {
     });
 
     it.each(["no_source", "no_history", "underfilled", "insufficient_recent"] as const)(
-        "keeps canonical ranking and skips candidate popularity for %s",
+        "keeps canonical ranking through the fallback for %s",
         async (scenario) => {
             for (const id of ["source", "peer_a", "peer_b", "peer_c", "peer_d"]) product({ id });
             product({ id: "hidden", isActive: false });
@@ -681,23 +677,17 @@ describe("product recommendations", () => {
             expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...params));
             if (scenario === "no_source") {
                 expect(query).not.toContain("rec_guard");
-                expect(query).not.toContain("rec_peer_projection");
+                expect(query).not.toContain("rec_candidates");
                 return;
             }
             const canonical = fullUniverseRanking(query, 3);
             expect(canonical).not.toBe(query);
             expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(result.rows);
             const guardValues: number[] = [];
-            let peerPopularityVisits = 0;
             sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
-            sqlite.function("observe_peer_popularity", (value) => { peerPopularityVisits += 1; return value; });
-            const observed = query
-                .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
-                .replace("AND rec_peer_projection.created_at >= unixepoch()", "AND observe_peer_popularity(rec_peer_projection.created_at) >= unixepoch()");
-            expect(observed).toContain("observe_peer_popularity(rec_peer_projection.created_at)");
+            const observed = query.replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies");
             expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(result.rows);
             expect(guardValues).toEqual([0]);
-            expect(peerPopularityVisits).toBe(0);
         },
     );
 

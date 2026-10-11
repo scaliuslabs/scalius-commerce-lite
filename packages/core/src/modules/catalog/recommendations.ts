@@ -38,7 +38,7 @@ import {
     type TranslationScope,
     type TranslatedRowColumns,
 } from "../translations";
-import { contactPhoneSql, productRecommendations, products } from "@scalius/database/schema";
+import { productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
@@ -83,11 +83,6 @@ const ALSO_BOUGHT_WINDOW_SECONDS = 365 * 86_400;
 export const ALSO_BOUGHT_SOURCE_LINES = 1_000;
 const POPULAR_WINDOW_SECONDS = 30 * 86_400;
 
-/**
- * Orders a buyer placed and kept. Pending COD orders count; unfinished hosted
- * payments (`incomplete`), cancellations, refunds and returns do not.
- */
-const REAL_ORDER_STATUSES_SQL = "('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')";
 
 export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
 
@@ -143,18 +138,6 @@ export function normalizeRecommendationSourceIds(ids: readonly string[] | string
 function normalizeLimit(limit: number | undefined): number {
     if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_RECOMMENDATION_LIMIT;
     return Math.min(Math.max(Math.trunc(limit), 1), MAX_RECOMMENDATION_LIMIT);
-}
-
-function realOrder(alias: string): SQL {
-    return sql.raw(`${alias}.status IN ${REAL_ORDER_STATUSES_SQL} AND ${alias}.deleted_at IS NULL`);
-}
-
-/**
- * One buyer of an order: its phone, or its email when it was placed without
- * one (a phoneless order never counts as one shared buyer).
- */
-function buyerSql(alias: string): SQL {
-    return sql`COALESCE(${contactPhoneSql(sql.raw(`${alias}.customer_phone`))}, lower(trim(${sql.raw(`${alias}.customer_email`)})))`;
 }
 
 /** A stored collection id list, or an empty list for a malformed config (json_each fails closed on Postgres). */
@@ -305,7 +288,7 @@ export async function rankRecommendationRows(
     // read newest first from (product_id, created_at, order_id). Older lines
     // never re-enter: anything older leaves the window first.
     const sourceLines = (alias: string) => sql`(
-        SELECT ${sql.raw(alias)}_sample.order_id AS order_id
+        SELECT ${sql.raw(alias)}_sample.order_id AS order_id, ${sql.raw(alias)}_sample.product_id AS product_id
         FROM order_items AS ${sql.raw(alias)}_sample
         WHERE ${sourceIds.length === 1
             // Equality lets the index stop at LIMIT without sorting a bestseller's entire history.
@@ -320,13 +303,12 @@ export async function rankRecommendationRows(
     // Materialize the bounded sample once for both co-buy scores and its
     // freshness deadline; preserve duplicate source lines after LIMIT.
     const sourceOrders = sql`
-        SELECT rec_source_order.id AS order_id, rec_source_order.created_at,
-               ${buyerSql("rec_source_order")} AS buyer
+        SELECT rec_source_pair.order_id, rec_source_pair.created_at, rec_source_pair.buyer
         FROM ${sourceLines("rec_source_line")}
-        CROSS JOIN orders AS rec_source_order INDEXED BY orders_recommendation_id_buyers_idx
-        WHERE rec_source_order.id = rec_source_line.order_id
-          AND ${realOrder("rec_source_order")}
-          AND rec_source_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
+        CROSS JOIN recommendation_order_products AS rec_source_pair
+        WHERE rec_source_pair.order_id = rec_source_line.order_id
+          AND rec_source_pair.product_id = rec_source_line.product_id
+          AND rec_source_pair.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
     `;
     const coPurchaseRows = sql`
         SELECT rec_peer_line.product_id AS product_id,
@@ -375,11 +357,9 @@ export async function rankRecommendationRows(
     const popularRows = sql`
         SELECT rec_popular_projection.product_id AS product_id,
                COUNT(DISTINCT rec_popular_projection.buyer) AS buyers
-        FROM ${sourceIds.length > 0 ? sql`rec_guard AS rec_popular_guard CROSS JOIN` : sql``}
-             recommendation_order_products AS rec_popular_projection
+        FROM recommendation_order_products AS rec_popular_projection
         WHERE rec_popular_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-          ${sourceIds.length > 0 ? sql`AND rec_popular_guard.qualifies = 0
-              AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)` : sql``}
+          ${sourceIds.length > 0 ? sql`AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)` : sql``}
         GROUP BY rec_popular_projection.product_id
     `;
     const popular = sourceIds.length > 0
@@ -606,18 +586,7 @@ export async function rankRecommendationRows(
                 OR (product_buyer_state.also_bought_tier = rec_affinity_cutoff.also_bought_tier
                     AND product_buyer_state.affinity >= rec_affinity_cutoff.affinity))
         ),
-        rec_popular AS MATERIALIZED (
-            SELECT rec_peer_projection.product_id AS product_id,
-                   COUNT(DISTINCT rec_peer_projection.buyer) AS buyers
-            FROM rec_guard AS rec_peer_popular_guard
-            CROSS JOIN recommendation_order_products AS rec_peer_projection
-            WHERE rec_peer_popular_guard.qualifies = 1
-              AND rec_peer_projection.product_id IN (SELECT product_id FROM rec_winning_co)
-              AND rec_peer_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-            GROUP BY rec_peer_projection.product_id
-            UNION ALL
-            ${popularRows}
-        ),
+        rec_popular AS MATERIALIZED (${popularRows}),
         rec_popularity_guard AS MATERIALIZED (
             SELECT CASE WHEN rec_guard.qualifies = 1 THEN 1 ELSE (
                 SELECT CASE WHEN COUNT(*) * 2 >= (
@@ -660,10 +629,8 @@ export async function rankRecommendationRows(
         rec_ranked AS MATERIALIZED (${ranking.getSQL()}),
         rec_boundary AS MATERIALIZED (
             SELECT (SELECT rec_popular_first.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
-                FROM orders AS rec_popular_first
-                WHERE ${realOrder("rec_popular_first")}
-                  AND rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                  AND EXISTS (SELECT 1 FROM order_items AS boundary_line WHERE boundary_line.order_id = rec_popular_first.id)
+                FROM recommendation_order_products AS rec_popular_first
+                WHERE rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
                 ORDER BY rec_popular_first.created_at ASC LIMIT 1) AS popular_at,
                 ${sourceIds.length > 0 ? sql`(SELECT MIN(created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
                     FROM rec_source_orders)` : sql`NULL`} AS also_bought_at
