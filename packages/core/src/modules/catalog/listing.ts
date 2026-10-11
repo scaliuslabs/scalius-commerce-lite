@@ -7,7 +7,7 @@
 import { products, categories } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "./search-correction";
-import { productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
+import { boundedProductSearchPage, productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -345,8 +345,7 @@ async function readStorefrontCatalogResults(
         : undefined;
     // Rank the matching IDs before reading card-only SKU, rating and translation
     // fields. A broad prefix otherwise performs those probes for every match.
-    const relevancePage = !scope.orderBy && sort === "relevance" && search ? sql`(
-        WITH listing_page AS MATERIALIZED (
+    const baselineRelevancePage = !scope.orderBy && sort === "relevance" && search ? sql`
             SELECT ${buyerState.productId} AS page_product_id,
                 ${orderBy[0]!} AS relevance_tier,
                 ${rankJoin ? sql.raw("COALESCE(search_rank.rank_score, 0)") : sql`0`} AS relevance_score
@@ -357,7 +356,20 @@ async function readStorefrontCatalogResults(
             ORDER BY relevance_tier, relevance_score, ${products.name},
                 ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
             LIMIT ${limit + 1} OFFSET ${offset}
-        )
+    ` : null;
+    // The rank prefix already matches the search text. Reuse every other
+    // scope/filter predicate without rerunning the full text/category union.
+    const prefixEligibility = baselineRelevancePage && rankJoin
+        ? buildStorefrontBuyerStateConditions(db, { ...params, search: undefined, ...priceBounds }, { drivenByIdSet: true }).conditions
+        : [];
+    if (scope.condition) prefixEligibility.push(scope.condition);
+    const boundedPage = baselineRelevancePage && rankJoin && search
+        ? boundedProductSearchPage(db, search, {
+            limit, offset, eligibility: [...prefixEligibility, ...facetConditions], fallback: baselineRelevancePage,
+        })
+        : undefined;
+    const relevancePage = baselineRelevancePage ? sql`(
+        WITH listing_page AS MATERIALIZED (${boundedPage ?? baselineRelevancePage})
         SELECT * FROM listing_page
     ) AS listing_page` : null;
     const cardOrderBy = relevancePage

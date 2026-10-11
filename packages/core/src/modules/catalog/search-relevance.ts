@@ -4,6 +4,7 @@ import { and, eq, or, sql, type SQL } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
+import { buyerState } from "./buyer-state";
 
 const MAX_CATEGORY_SLUG_SEARCH_LENGTH = 160;
 
@@ -54,6 +55,60 @@ export function productSearchRelevanceOrder(db: Database, query: string): SQL[] 
 }
 
 const SEARCH_RANK_ALIAS = "search_rank";
+
+/** Only the first 100 rank positions can use the bounded FTS probe. */
+const MAX_RANK_PAGE_POSITION = 100;
+
+/**
+ * A full-query rank prefix can answer a page entirely from title matches
+ * only when it contains every possible tie at that page's cutoff. Otherwise
+ * the original full-tier page runs, including category-only matches.
+ */
+export function boundedProductSearchPage(
+  db: Database,
+  query: string,
+  input: { limit: number; offset: number; eligibility: SQL[]; fallback: SQL },
+): SQL | undefined {
+  const needed = input.offset + input.limit + 1;
+  const sanitized = sanitizeFtsQuery(query);
+  if (!isFts5SearchEnabled(db) || !sanitized || needed > MAX_RANK_PAGE_POSITION) return undefined;
+  const budget = needed * 4 + 1;
+  const count = sql.raw(String(needed));
+  const prefixLimit = sql.raw(String(budget));
+  return sql`
+    WITH rank_prefix AS MATERIALIZED (
+      SELECT rowid AS rank_rowid, rank AS relevance_score
+      FROM products_fts
+      WHERE products_fts MATCH ${sanitized} AND rank MATCH 'bm25(10.0,1.0)'
+      ORDER BY rank LIMIT ${prefixLimit}
+    ), prefix_bounds AS MATERIALIZED (
+      SELECT COUNT(*) AS prefix_count, MAX(relevance_score) AS last_score FROM rank_prefix
+    ), eligible_titles AS MATERIALIZED (
+      SELECT ${buyerState.productId} AS page_product_id, rank_prefix.relevance_score,
+        ${products.name} AS product_name, ${buyerState.productCreatedAt} AS product_created_at
+      FROM rank_prefix
+      CROSS JOIN ${products}
+      CROSS JOIN ${buyerState}
+      WHERE products.rowid = rank_prefix.rank_rowid AND ${buyerState.productId} = ${products.id}
+        AND ${ftsMatch(db, "products_fts", "products", query, { column: "name" })!}
+        AND ${and(...input.eligibility) ?? sql`1 = 1`}
+    ), prefix_proof AS MATERIALIZED (
+      SELECT CASE WHEN COUNT(*) >= ${count} AND (
+        (SELECT prefix_count FROM prefix_bounds) < ${prefixLimit}
+        OR SUM(CASE WHEN relevance_score < (SELECT last_score FROM prefix_bounds) THEN 1 ELSE 0 END) >= ${count}
+      ) THEN 1 ELSE 0 END AS use_prefix FROM eligible_titles
+    ), prefix_page AS MATERIALIZED (
+      SELECT page_product_id, 0 AS relevance_tier, relevance_score FROM eligible_titles
+      ORDER BY relevance_score, product_name, product_created_at DESC, page_product_id
+      LIMIT (SELECT CASE WHEN use_prefix = 1 THEN ${sql.raw(String(input.limit + 1))} ELSE 0 END FROM prefix_proof)
+      OFFSET ${sql.raw(String(input.offset))}
+    ), baseline_page AS MATERIALIZED (
+      SELECT * FROM (${input.fallback})
+      LIMIT (SELECT CASE WHEN use_prefix = 0 THEN 9223372036854775807 ELSE 0 END FROM prefix_proof)
+    )
+    SELECT * FROM prefix_page UNION ALL SELECT * FROM baseline_page
+  `;
+}
 
 /**
  * The bm25 score of every product matching the query, as one set the caller
