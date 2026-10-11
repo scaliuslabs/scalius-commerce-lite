@@ -1,5 +1,6 @@
-import { useRef, useState, type KeyboardEvent } from "react";
-import { ScanBarcode } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ScanBarcode, Search } from "lucide-react";
+import { IndexPager } from "~/components/admin/data-table/DataTablePagination";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -9,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~
 import { useIsMobile } from "~/hooks/use-mobile";
 import { formatNumber, useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
+import { resourceMessages } from "~/i18n/resource";
 import { cn } from "@scalius/shared/utils";
 import { lineName } from "./purchasing-format";
 import { LineProduct } from "./purchasing-ui";
@@ -31,6 +33,9 @@ export interface ReceivableLine {
 }
 
 export type ReceiveQuantities = Record<string, number | null>;
+
+/** Rows shown at once: a long receipt pages instead of mounting every line. */
+const RECEIVE_PAGE_SIZE = 50;
 
 /**
  * The receipt the quantities describe: the lines with units, and the lines
@@ -82,9 +87,44 @@ export function ReceiveLines({
   const [code, setCode] = useState("");
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const r = useMessages(resourceMessages);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [reveal, setReveal] = useState<{ lineId: string; focus: boolean } | null>(null);
   const { invalid } = readReceipt(lines, quantities);
   const receivable = lines.filter((line) => !line.retired && line.open > 0);
   const byId = new Map(lines.map((line) => [line.id, line]));
+  // Search and paging only choose which rows render: quantities, scans and
+  // the receipt always cover every line of the document.
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? lines.filter((line) =>
+      [line.productName, line.optionLabel, line.sku, line.barcode].some((value) => value?.toLowerCase().includes(needle) ?? false))
+    : lines;
+  const pageCount = Math.max(1, Math.ceil(shown.length / RECEIVE_PAGE_SIZE));
+  // A list that shrank (a narrower search, a reload) shows its last page, never a blank one.
+  const current = Math.min(page, pageCount - 1);
+  if (page !== current) setPage(current);
+  const pageStart = current * RECEIVE_PAGE_SIZE;
+  const pageLines = shown.slice(pageStart, pageStart + RECEIVE_PAGE_SIZE);
+
+  useEffect(() => {
+    if (!reveal) return;
+    const row = Array.from(rowsRef.current?.querySelectorAll<HTMLElement>("[data-line-id]") ?? [])
+      .find((element) => element.dataset.lineId === reveal.lineId);
+    // Scans keep keyboard focus; checking an error focuses its quantity.
+    row?.scrollIntoView({ block: "nearest" });
+    if (reveal.focus) row?.querySelector<HTMLInputElement>("input")?.focus();
+  }, [reveal]);
+
+  const revealLine = (lineId: string, focus = false) => {
+    const hidden = !shown.some((line) => line.id === lineId);
+    if (hidden) setQuery("");
+    const index = (hidden ? lines : shown).findIndex((line) => line.id === lineId);
+    if (index >= 0) setPage(Math.floor(index / RECEIVE_PAGE_SIZE));
+    setReveal({ lineId, focus });
+  };
 
   const scan = () => {
     if (!code.trim()) return;
@@ -95,6 +135,7 @@ export function ReceiveLines({
     );
     setOutcome(result.outcome);
     if (result.outcome.kind === "counted") onChange(result.quantities);
+    if (result.outcome.kind !== "unknown") revealLine(result.outcome.lineId);
     setCode("");
   };
 
@@ -157,7 +198,7 @@ export function ReceiveLines({
   };
 
   return (
-    <Card>
+    <Card ref={rowsRef}>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>{t("products")}</CardTitle>
         <div className="flex gap-2">
@@ -206,10 +247,41 @@ export function ReceiveLines({
           {outcomeText?.text ?? ""}
         </p>
       </CardContent>
-      {isMobile ? (
+      <div className="space-y-2 border-t px-4 py-3">
+        <Field id="receive-search" label={t("searchLines")}>
+          <Input
+            type="search"
+            prefix={<Search aria-hidden className="size-4" />}
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+          />
+        </Field>
+        {invalid.size > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={() => revealLine(invalid.values().next().value!, true)}
+          >
+            {t("checkQuantities", { count: invalid.size })}
+          </Button>
+        ) : null}
+      </div>
+      {pageLines.length === 0 ? (
+        <div role="status" className="space-y-1 border-t px-4 py-6 text-center text-body text-muted-foreground">
+          <p className="font-medium text-foreground">{r("noResults")}</p>
+          <p>{r("noResultsHint")}</p>
+        </div>
+      ) : isMobile ? (
         <ul className="divide-y border-t">
-          {lines.map((line) => (
-            <li key={line.id} className="space-y-2 px-4 py-3">
+          {pageLines.map((line) => (
+            <li key={line.id} data-line-id={line.id} className="space-y-2 px-4 py-3">
               <LineProduct line={line} retired={line.retired} />
               <p className="text-body text-muted-foreground tabular-nums">
                 {t("receivedOf", { received: line.received, total: line.total })}
@@ -232,8 +304,8 @@ export function ReceiveLines({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lines.map((line) => (
-                <TableRow key={line.id}>
+              {pageLines.map((line) => (
+                <TableRow key={line.id} data-line-id={line.id}>
                   <TableCell className="py-2">
                     <LineProduct line={line} retired={line.retired} />
                   </TableCell>
@@ -246,6 +318,20 @@ export function ReceiveLines({
           </Table>
         </div>
       )}
+      {shown.length > 0 ? (
+        <IndexPager
+          label={r("showing", {
+            start: formatNumber(pageStart + 1),
+            end: formatNumber(pageStart + pageLines.length),
+            total: formatNumber(shown.length),
+          })}
+          navLabel={r("page", { page: formatNumber(current + 1), pages: formatNumber(pageCount) })}
+          canPrevious={current > 0}
+          canNext={current < pageCount - 1}
+          onPrevious={() => setPage(Math.max(0, current - 1))}
+          onNext={() => setPage(Math.min(pageCount - 1, current + 1))}
+        />
+      ) : null}
     </Card>
   );
 }
