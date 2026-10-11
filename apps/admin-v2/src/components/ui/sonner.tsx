@@ -1,10 +1,13 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { CircleAlert, CircleCheck, Info, Loader2, TriangleAlert, X } from "lucide-react";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 /** Polaris toast: a short near-black message at the bottom; errors are critical red. */
 const inverse = "bg-topbar text-topbar-foreground";
 
 function Toaster(props: ToasterProps) {
+  const t = useMessages(resourceMessages);
   return (
     <Sonner
       position="bottom-center"
@@ -17,6 +20,7 @@ function Toaster(props: ToasterProps) {
       duration={4000}
       toastOptions={{
         unstyled: true,
+        closeButtonAriaLabel: t("close"),
         classNames: {
           toast:
             "flex w-full items-center gap-2.5 rounded-xl py-3 ps-4 pe-2 text-body font-medium shadow-popover",
@@ -29,10 +33,10 @@ function Toaster(props: ToasterProps) {
           content: "min-w-0 flex-1",
           description: "font-normal opacity-80",
           icon: "flex shrink-0 [&_svg]:size-4",
-          actionButton: "shrink-0 rounded-lg px-2 py-1 underline underline-offset-2 hover:no-underline",
-          cancelButton: "shrink-0 rounded-lg px-2 py-1 opacity-80 hover:opacity-100",
+          actionButton: "min-h-11 min-w-11 shrink-0 rounded-lg px-2 py-1 underline underline-offset-2 hover:no-underline sm:min-h-6 sm:min-w-0",
+          cancelButton: "min-h-11 min-w-11 shrink-0 rounded-lg px-2 py-1 opacity-80 hover:opacity-100 sm:min-h-6 sm:min-w-0",
           closeButton:
-            "order-last ms-auto flex size-7 shrink-0 items-center justify-center rounded-lg opacity-80 hover:opacity-100",
+            "order-last ms-auto flex size-11 shrink-0 items-center justify-center rounded-lg opacity-80 hover:opacity-100 sm:size-7",
         },
       }}
       icons={{
