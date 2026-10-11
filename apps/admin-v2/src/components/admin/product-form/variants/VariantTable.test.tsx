@@ -4,12 +4,12 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { translate } from "~/i18n";
+import { formatNumber, translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
-import type { DraftOption, DraftVariant } from "./option-matrix-editor-model";
+import type { DraftIssue, DraftOption, DraftVariant } from "./option-matrix-editor-model";
 
-const mocks = vi.hoisted(() => ({ navigate: vi.fn(), removed: vi.fn() }));
+const mocks = vi.hoisted(() => ({ navigate: vi.fn(), removed: vi.fn(), restored: vi.fn(), restoredAll: vi.fn() }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@/hooks/use-currency", () => {
   const fmt = (price: number) => `৳${price}`;
@@ -35,10 +35,12 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
 const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 let latest: DraftVariant[] = [];
-function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = false }: {
+function Harness({ initial, missing = [], reveal = null, issue = null, fulfilmentColumn = false, opts = options }: {
   initial: DraftVariant[];
+  opts?: DraftOption[];
   missing?: string[][];
   reveal?: { variantId: string; nonce: number } | null;
+  issue?: DraftIssue | null;
   fulfilmentColumn?: boolean;
 }) {
   const [variants, setVariants] = React.useState(initial);
@@ -46,16 +48,16 @@ function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = fals
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   // The table reads apps' variant actions (none here: no apps.view).
   const [queryClient] = React.useState(() => new QueryClient());
-  const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
+  const valueLabel = new Map(opts.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   return (
     <QueryClientProvider client={queryClient}>
     <VariantTable
-      options={options}
+      options={opts}
       variants={variants}
       images={[]}
       productName="Panjabi"
       nameOf={(row) => row.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}
-      issue={null}
+      issue={issue}
       reveal={reveal}
       expandedId={expandedId}
       onExpandedChange={setExpandedId}
@@ -64,8 +66,8 @@ function Harness({ initial, missing = [], reveal = null, fulfilmentColumn = fals
         : row))}
       onRemove={mocks.removed}
       missingCombinations={missing}
-      onRestoreCombination={() => {}}
-      onRestoreAll={() => {}}
+      onRestoreCombination={mocks.restored}
+      onRestoreAll={mocks.restoredAll}
       committedByVariantId={new Map()}
       printingDisabled={false}
       fulfilmentColumn={fulfilmentColumn}
@@ -240,6 +242,218 @@ describe("VariantTable", () => {
     expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
   });
 
+});
+
+describe("VariantTable at 2,000 variants", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  const oneAxis: DraftOption[] = [{
+    id: "o_style", name: "Style", standardMapping: "none",
+    values: Array.from({ length: 2000 }, (_, index) => ({ id: `x${index}`, value: `V${index}` })),
+  }];
+  const flat = () => Array.from({ length: 2000 }, (_, index) =>
+    variant(`v${index}`, `x${index}`, "", 1000, { selectedOptionValueIds: [`x${index}`] }));
+  const twoAxes: DraftOption[] = [
+    { id: "o_size", name: "Size", standardMapping: "size", values: Array.from({ length: 40 }, (_, index) => ({ id: `s${index}`, value: `S${index}` })) },
+    { id: "o_color", name: "Color", standardMapping: "color", values: Array.from({ length: 50 }, (_, index) => ({ id: `c${index}`, value: `C${index}` })) },
+  ];
+  const grid = () => twoAxes[0]!.values.flatMap((size) =>
+    twoAxes[1]!.values.map((color) => variant(`${size.id}${color.id}`, size.id, color.id, 1000)));
+
+  async function render(initial: DraftVariant[], opts: DraftOption[], missing: string[][] = []) {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(<Harness initial={initial} opts={opts} missing={missing} />));
+  }
+  const mounted = () => host.querySelectorAll("[data-variant-row]");
+  const input = (ariaLabel: string) => host.querySelector<HTMLInputElement>(`input[aria-label="${ariaLabel}"]`)!;
+  const button = (text: string) => [...host.querySelectorAll("button")].find((element) => element.textContent?.trim() === text)!;
+  const checkbox = (ariaLabel: string) => host.querySelector<HTMLButtonElement>(`button[role="checkbox"][aria-label="${ariaLabel}"]`)!;
+  const nextPage = () => host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(resourceMessages, "next")}"]`)!;
+  const search = () => host.querySelector<HTMLInputElement>('input[type="search"]')!;
+  const showing = (start: number, end: number, total: number) =>
+    translate(resourceMessages, "showing", { start: formatNumber(start), end: formatNumber(end), total: formatNumber(total) });
+  const type = async (element: HTMLInputElement, value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value);
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const press = async (key: string, shiftKey = false) => {
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey, bubbles: true }));
+    });
+  };
+
+  it("mounts one page of a one-option product, says how many there are, and edits a row on a later page", async () => {
+    await render(flat(), oneAxis);
+    expect(mounted()).toHaveLength(50);
+    expect(host.textContent).toContain(showing(1, 50, 2000));
+    await act(async () => nextPage().click());
+    expect(mounted()).toHaveLength(50);
+    expect(host.querySelector('[data-variant-row="v50"]')).not.toBeNull();
+    expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
+    expect(host.textContent).toContain(showing(51, 100, 2000));
+    await type(input(label("priceFor", { name: "V60" })), "1500");
+    expect(latest.filter((row) => row.price === 1500).map((row) => row.id)).toEqual(["v60"]);
+  });
+
+  it("selects across pages and applies a bulk price to every selected variant in the draft", async () => {
+    await render(flat(), oneAxis);
+    await act(async () => checkbox(translate(resourceMessages, "selectAll")).click());
+    expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 2000 }));
+    await act(async () => nextPage().click());
+    await act(async () => checkbox(translate(resourceMessages, "select", { name: "V75" })).click());
+    expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 1999 }));
+    await act(async () => button(label("editPrices")).click());
+    await type(host.querySelector<HTMLInputElement>('[role="group"][aria-label] input')!, "1999");
+    await act(async () => button(label("apply")).click());
+    expect(latest.filter((row) => row.price === 1999)).toHaveLength(1999);
+    expect(latest.find((row) => row.id === "v75")!.price).toBe(1000);
+  });
+
+  it("pages 150 missing combinations and restores the exact choice on page two", async () => {
+    const missing = oneAxis[0]!.values.slice(1850).map((value) => [value.id]);
+    await render(flat().slice(0, 1850), oneAxis, missing);
+    await act(async () => nextPage().click());
+    await act(async () => button(label("showNotForSale", { count: 150 })).click());
+    expect(host.querySelectorAll("li")).toHaveLength(50);
+    expect(host.textContent).toContain(showing(1, 50, 150));
+    await act(async () => nextPage().click());
+    expect(host.querySelectorAll("li")).toHaveLength(50);
+    expect(host.textContent).toContain(showing(51, 100, 150));
+    const restore = host.querySelector<HTMLButtonElement>(`button[aria-label="${label("turnOn")}: V1900"]`)!;
+    await act(async () => restore.click());
+    expect(mocks.restored.mock.calls).toEqual([[missing[50]]]);
+    await act(async () => button(label("showAllVariants", { count: 1850 })).click());
+    expect(host.querySelector('[data-variant-row="v0"]')).not.toBeNull();
+    expect(host.textContent).toContain(showing(1, 50, 1850));
+  });
+
+  it("searches missing combinations beyond the current page while Restore all remains global", async () => {
+    const missing = grid().slice(1850).map((row) => row.selectedOptionValueIds);
+    await render(grid().slice(0, 1850), twoAxes, missing);
+    await act(async () => button(label("showNotForSale", { count: 150 })).click());
+    expect(host.textContent).toContain(showing(1, 50, 150));
+    expect(host.querySelector('[role="combobox"]')).toBeNull();
+    await type(search(), "s39 c49");
+    expect(host.querySelectorAll("li")).toHaveLength(1);
+    expect(host.textContent).toContain("S39 / C49");
+    await act(async () => button(label("turnAllOn")).click());
+    // The original parent action handles the click; per-combination restoration is unused.
+    expect(mocks.restoredAll).toHaveBeenCalledTimes(1);
+    expect(mocks.restored).not.toHaveBeenCalled();
+    await type(search(), "no such combination");
+    expect(host.querySelectorAll("li")).toHaveLength(0);
+    expect(host.textContent).toContain(translate(resourceMessages, "noResults"));
+    expect(host.querySelector('[data-slot="pagination"]')).toBeNull();
+  });
+
+  it("keeps group edits whole and bounds a broad search that opens every group", async () => {
+    await render(grid(), twoAxes);
+    expect(mounted()).toHaveLength(0);
+    await type(input(label("priceForGroup", { name: "S39" })), "2600");
+    expect(latest.filter((row) => row.price === 2600)).toHaveLength(50);
+    await act(async () => checkbox(label("selectGroup", { name: "S39" })).click());
+    expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 50 }));
+
+    await type(search(), "panjabi");
+    expect(mounted().length).toBeGreaterThan(0);
+    expect(mounted().length).toBeLessThanOrEqual(50);
+    expect(nextPage()).not.toBeNull();
+    await type(search(), "panjabi-s39c49");
+    expect(host.querySelector('[data-variant-row="s39c49"]')).not.toBeNull();
+    expect(mounted()).toHaveLength(1);
+  });
+
+  it("moves the arrow keys across a page edge and back", async () => {
+    await render(flat(), oneAxis);
+    input(label("priceFor", { name: "V49" })).focus();
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "V50" })));
+    expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
+    await press("ArrowUp");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "V49" })));
+  });
+
+  it("skips repeated group headers at page edges without changing ordinary group navigation", async () => {
+    await render(grid(), twoAxes);
+    await type(search(), "panjabi");
+    input(label("priceForGroup", { name: "S0" })).focus();
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "S0 / C0" })));
+    await press("ArrowUp");
+    expect(document.activeElement).toBe(input(label("priceForGroup", { name: "S0" })));
+
+    input(label("priceFor", { name: "S0 / C48" })).focus();
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "S0 / C49" })));
+    await type(document.activeElement as HTMLInputElement, "1700");
+    expect(latest.filter((row) => row.price === 1700).map((row) => row.id)).toEqual(["s0c49"]);
+    await press("ArrowUp");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "S0 / C48" })));
+    await press("Enter");
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "S0 / C49" })));
+    await press("Enter", true);
+    expect(document.activeElement).toBe(input(label("priceFor", { name: "S0 / C48" })));
+    await press("ArrowDown");
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("priceForGroup", { name: "S1" })));
+  });
+
+  it("skips pages without quantity fields and keeps focus when no later or earlier field exists", async () => {
+    await render(flat().map((row, index) => ({ ...row, trackInventory: index === 49 || index === 150 })), oneAxis);
+    input(label("quantityFor", { name: "V49" })).focus();
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("quantityFor", { name: "V150" })));
+    expect(host.textContent).toContain(showing(151, 200, 2000));
+    await press("ArrowDown");
+    expect(document.activeElement).toBe(input(label("quantityFor", { name: "V150" })));
+    await press("ArrowUp");
+    expect(document.activeElement).toBe(input(label("quantityFor", { name: "V49" })));
+    expect(host.textContent).toContain(showing(1, 50, 2000));
+    await press("ArrowUp");
+    expect(document.activeElement).toBe(input(label("quantityFor", { name: "V49" })));
+  });
+
+  it("keeps the clamped page after collapsing and reopening a group", async () => {
+    await render(grid(), twoAxes);
+    const toggle = () => host.querySelector<HTMLButtonElement>('[data-variant-group="s0"] button[aria-expanded]:not([aria-haspopup])')!;
+    await act(async () => toggle().click());
+    await act(async () => nextPage().click());
+    expect(host.querySelector('[data-variant-row="s0c49"]')).not.toBeNull();
+    await act(async () => toggle().click());
+    expect(mounted()).toHaveLength(0);
+    await act(async () => toggle().click());
+    expect(host.querySelector('[data-variant-row="s0c0"]')).not.toBeNull();
+    expect(host.querySelector('[data-variant-row="s0c49"]')).toBeNull();
+  });
+
+  it("reveals and focuses an invalid field on another page after clearing a search hiding it", async () => {
+    const initial = flat();
+    initial[1500]!.price = Number.NaN;
+    await render(initial, oneAxis);
+    await type(search(), "v7");
+    await act(async () => root.render(<Harness initial={initial} opts={oneAxis}
+      reveal={{ variantId: "v1500", nonce: 1 }}
+      issue={{ variantId: "v1500", field: "price", message: "Enter a price" }} />));
+    await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
+    expect(search().value).toBe("");
+    expect(host.querySelector('[data-variant-row="v1500"]')).not.toBeNull();
+    expect(mounted()).toHaveLength(50);
+    expect(host.textContent).toContain(showing(1501, 1550, 2000));
+    const invalid = input(label("priceFor", { name: "V1500" }));
+    expect(invalid.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(invalid);
+  });
 });
 
 describe("VariantTable fulfilment column", () => {

@@ -21,6 +21,8 @@ import {
 import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { IdText } from "~/components/admin/data-table/cells";
 import { DataTableRowActions, type ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
+import { IndexPager } from "~/components/admin/data-table/DataTablePagination";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, readSavedPageSize, writeSavedPageSize } from "~/lib/list-helpers";
 import { cn } from "@scalius/shared/utils";
 import { isWholeUnitIncrement, resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { useCurrency } from "@/hooks/use-currency";
@@ -44,6 +46,7 @@ import {
   type DraftVariant,
   type VariantGroup,
 } from "./option-matrix-editor-model";
+import { pageCount, pageEntries, pageOfVariant, variantEntries } from "./variant-table-paging";
 import { useProductKindRules, isDigitalSku } from "../product-kind-rules";
 import { DigitalStockCell } from "../DigitalStock";
 import { formatMargin } from "~/components/admin/inventory/cost-fields";
@@ -150,16 +153,23 @@ function useStableCallback<Args extends unknown[], Result>(fn: (...args: Args) =
 }
 
 /** Up/Down (and Enter) move between the same field in the rows above and below, like a sheet. */
-function moveBetweenRows(event: React.KeyboardEvent<HTMLElement>) {
+function moveBetweenRows(event: React.KeyboardEvent<HTMLElement>, onEdge?: (cell: string, step: 1 | -1) => boolean) {
   const target = event.target as HTMLInputElement;
   const cell = target.dataset?.cell;
   if (!cell || event.altKey || event.ctrlKey || event.metaKey) return;
   const step = event.key === "ArrowDown" || (event.key === "Enter" && !event.shiftKey) ? 1
     : event.key === "ArrowUp" || (event.key === "Enter" && event.shiftKey) ? -1 : 0;
   if (step === 0) return;
-  const cells = [...event.currentTarget.querySelectorAll<HTMLInputElement>(`input[data-cell="${cell}"]`)];
+  // Repeated headers keep group edits available without inserting another bulk-edit
+  // stop into the sequence of SKU fields. Their own Down key starts at the first SKU.
+  const cells = [...event.currentTarget.querySelectorAll<HTMLInputElement>(`input[data-cell="${cell}"]`)]
+    .filter((input) => !input.closest("[data-repeated-group]"));
   const next = cells[cells.indexOf(target) + step];
-  if (!next) return;
+  if (!next) {
+    // Continue to the next logical field, skipping pages without that column.
+    if (onEdge?.(cell, step as 1 | -1)) event.preventDefault();
+    return;
+  }
   event.preventDefault();
   next.focus();
   next.select();
@@ -190,10 +200,15 @@ export function VariantTable(props: VariantTableProps) {
   const [groupsStartOpen] = React.useState(() => variants.length <= GROUPS_OPEN_LIMIT);
   // Groups the merchant opened or closed against that start.
   const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
-  const isOpen = (valueId: string) => groupsStartOpen !== toggled.has(valueId);
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(() => new Set());
   const [panel, setPanel] = React.useState<BulkPanel>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(() => readSavedPageSize("product-variants") ?? DEFAULT_PAGE_SIZE);
+  // A revealed variant waiting for its page to show.
+  const [revealTarget, setRevealTarget] = React.useState<string | null>(null);
+  // The field that keyboard focus moves to once the next page shows.
+  const pendingFocus = React.useRef<{ cell: string; rowSelector: string } | null>(null);
 
   const valueLabel = React.useMemo(
     () => new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const))),
@@ -207,10 +222,25 @@ export function VariantTable(props: VariantTableProps) {
       `${variant.selectedOptionValueIds.map((id) => valueLabel.get(id) ?? "").join(" ")} ${variant.sku} ${variant.barcode ?? ""}`,
     ).includes(needle));
   }, [query, valueLabel, variants]);
+  const filteredMissing = React.useMemo(() => {
+    const needle = normalized(query);
+    return needle ? missingCombinations.filter((ids) => normalized(ids.map((id) => valueLabel.get(id) ?? "").join(" ")).includes(needle)) : missingCombinations;
+  }, [missingCombinations, query, valueLabel]);
   const groups = React.useMemo(
     () => (grouped ? groupVariants(options, filtered, groupAxis) : []),
     [filtered, groupAxis, grouped, options],
   );
+  // The lines the table may show (a search opens every group). Only one page mounts;
+  // selection, bulk and group edits still cover every variant.
+  const entries = React.useMemo(
+    () => variantEntries(filtered, grouped ? groups : null, (valueId) => Boolean(query) || groupsStartOpen !== toggled.has(valueId)),
+    [filtered, grouped, groups, groupsStartOpen, query, toggled],
+  );
+  const entryCount = view === "notForSale" ? filteredMissing.length : entries.length;
+  const pages = pageCount(entryCount, pageSize);
+  const pageIndex = Math.min(page, pages - 1);
+  if (page !== pageIndex) setPage(pageIndex);
+  const pageItems = React.useMemo(() => pageEntries(entries, pageIndex, pageSize), [entries, pageIndex, pageSize]);
   // A grouped row reads only the other options ("White"); ungrouped rows read in full.
   const labelOf = (variant: DraftVariant) => grouped
     ? variant.selectedOptionValueIds.filter((_, index) => index !== groupAxis).map((id) => valueLabel.get(id) ?? "").join(" / ")
@@ -224,8 +254,11 @@ export function VariantTable(props: VariantTableProps) {
     });
   }, [variants]);
   React.useEffect(() => {
-    if (missingCombinations.length === 0) setView("all");
-  }, [missingCombinations.length]);
+    if (missingCombinations.length === 0 && view !== "all") {
+      setView("all");
+      setPage(0);
+    }
+  }, [missingCombinations.length, view]);
   // A revealed problem may sit in a collapsed group or be hidden by the search.
   React.useEffect(() => {
     const target = props.reveal;
@@ -241,11 +274,25 @@ export function VariantTable(props: VariantTableProps) {
       else next.add(valueId);
       return next;
     });
-    requestAnimationFrame(() => tableRef.current
-      ?.querySelector(`[data-variant-row="${CSS.escape(target.variantId)}"]`)
-      ?.scrollIntoView({ block: "center" }));
+    setRevealTarget(target.variantId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.reveal?.nonce]);
+  // Once its group is open and the search is cleared: turn to its page, then bring it into view.
+  React.useEffect(() => {
+    if (!revealTarget) return;
+    const at = pageOfVariant(entries, revealTarget, pageSize);
+    if (at >= 0 && at !== pageIndex) {
+      setPage(at);
+      return;
+    }
+    setRevealTarget(null);
+    if (at < 0) return;
+    requestAnimationFrame(() => {
+      const shown = tableRef.current?.querySelector<HTMLElement>(`[data-variant-row="${CSS.escape(revealTarget)}"]`);
+      shown?.scrollIntoView({ block: "center" });
+      shown?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus({ preventScroll: true });
+    });
+  }, [entries, pageIndex, pageSize, revealTarget]);
 
   const onChange = useStableCallback((id: string, patch: Partial<DraftVariant>) => props.onChangeMany(new Set([id]), patch));
   const onSelect = useStableCallback((ids: readonly string[], checked: boolean) => setSelected((current) => {
@@ -264,6 +311,31 @@ export function VariantTable(props: VariantTableProps) {
   const onPrint = useStableCallback((ids: readonly string[]) =>
     void navigate({ to: "/admin/inventory/labels", search: { variants: ids.join(",") } }));
   const onCostChange = useStableCallback((id: string, cost: number | null) => costs?.change(new Set([id]), cost));
+  const onEdge = useStableCallback((cell: string, step: 1 | -1) => {
+    const tracked = (variant: DraftVariant) => variant.trackInventory && !isDigitalSku(kindRules, variant);
+    for (let index = step > 0 ? (pageIndex + 1) * pageSize : pageIndex * pageSize - 1;
+      index >= 0 && index < entries.length; index += step) {
+      const entry = entries[index]!;
+      if (cell === "stock" && !(entry.kind === "row" ? tracked(entry.variant) : entry.group.variants.some(tracked))) continue;
+      pendingFocus.current = {
+        cell,
+        rowSelector: entry.kind === "row"
+          ? `[data-variant-row="${CSS.escape(entry.variant.id)}"]`
+          : `[data-variant-group="${CSS.escape(entry.group.valueId)}"]`,
+      };
+      setPage(Math.floor(index / pageSize));
+      return true;
+    }
+    return false;
+  });
+  React.useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    const field = tableRef.current?.querySelector<HTMLInputElement>(`${pending.rowSelector} input[data-cell="${pending.cell}"]`);
+    field?.focus();
+    field?.select();
+  }, [pageIndex]);
   // A saved SKU's custom data, edited in its own dialog (the detail panel unmounts when closed).
   const canEditProducts = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_EDIT);
   const [customDataFor, setCustomDataFor] = React.useState<{ id: string; sku: string } | null>(null);
@@ -327,12 +399,15 @@ export function VariantTable(props: VariantTableProps) {
     <div className="border-t">
       {/* Toolbar: how the rows are grouped, which rows show, and a search. */}
       <div className="flex flex-wrap items-center gap-2 py-2">
-        {options.length >= 2 ? (
+        {view === "all" && options.length >= 2 ? (
           <label className="flex items-center gap-2 text-body text-muted-foreground">
             {t("groupBy")}
             <SearchableSelect
               value={String(grouped ? groupAxis : -1)}
-              onValueChange={(value) => setGroupAxis(Number(value) < 0 ? options.length : Number(value))}
+              onValueChange={(value) => {
+                setGroupAxis(Number(value) < 0 ? options.length : Number(value));
+                setPage(0);
+              }}
               triggerClassName="w-auto min-w-28"
               options={[
                 ...options.map((option, index) => ({ value: String(index), label: option.name.trim() || t("optionNumber", { number: index + 1 }) })),
@@ -350,7 +425,10 @@ export function VariantTable(props: VariantTableProps) {
                 size="sm"
                 variant={view === key ? "secondary" : "ghost"}
                 aria-pressed={view === key}
-                onClick={() => setView(key)}
+                onClick={() => {
+                  setView(key);
+                  setPage(0);
+                }}
               >
                 {key === "all"
                   ? t("showAllVariants", { count: variants.length })
@@ -363,19 +441,22 @@ export function VariantTable(props: VariantTableProps) {
           <span className="sr-only">{t("findVariant")}</span>
           <Search aria-hidden="true" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           {/* eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon, as in the list toolbar */}
-          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("findVariant")} className="w-44 ps-8" />
+          <Input type="search" className="w-44 ps-8" value={query} onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(0);
+          }} placeholder={t("findVariant")} />
         </label>
       </div>
 
       {view === "notForSale" ? (
         <NotForSaleList
-          combinations={missingCombinations}
+          combinations={filteredMissing.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)}
           valueLabel={valueLabel}
           onRestore={props.onRestoreCombination}
           onRestoreAll={props.onRestoreAll}
         />
       ) : (
-        <div ref={tableRef} onKeyDown={moveBetweenRows}>
+        <div ref={tableRef} onKeyDown={(event) => moveBetweenRows(event, onEdge)}>
           {/* The header turns into the bulk bar while rows are selected, so the table never shifts. */}
           <div className={cn(grid, "min-h-11 border-y bg-muted/50 text-body text-muted-foreground")}>
             <div className="flex justify-center">
@@ -437,30 +518,49 @@ export function VariantTable(props: VariantTableProps) {
             <p id="variant-bulk-keep-one" className="border-b px-2 py-1.5 text-body text-muted-foreground">{t("keepOneVariant")}</p>
           ) : null}
 
-          {grouped
-            ? groups.map((group) => {
-                const open = isOpen(group.valueId) || Boolean(query);
-                return (
-                  <React.Fragment key={group.valueId}>
-                    <GroupRow
-                      group={group}
-                      open={open}
-                      images={props.images}
-                      money={money}
-                      selectedCount={group.variants.filter((variant) => selected.has(variant.id)).length}
-                      layout={layout}
-                      onToggle={onToggleGroup}
-                      onSelect={onSelect}
-                      onChangeMany={props.onChangeMany}
-                    />
-                    {open ? group.variants.map((variant) => row(variant, 1)) : null}
-                  </React.Fragment>
-                );
-              })
-            : filtered.map((variant) => row(variant, 0))}
-          {filtered.length === 0 ? <div className="px-3 py-6 text-center text-body text-muted-foreground">{r("noResults")}</div> : null}
+          {pageItems.map((entry) => (entry.kind === "group" ? (
+            <GroupRow
+              key={`group:${entry.group.valueId}`}
+              group={entry.group}
+              open={entry.open}
+              repeated={entry.repeated}
+              images={props.images}
+              money={money}
+              selectedCount={entry.group.variants.filter((variant) => selected.has(variant.id)).length}
+              layout={layout}
+              onToggle={onToggleGroup}
+              onSelect={onSelect}
+              onChangeMany={props.onChangeMany}
+            />
+          ) : row(entry.variant, entry.depth)))}
         </div>
       )}
+      {entryCount === 0 ? <div className="px-3 py-6 text-center text-body text-muted-foreground">{r("noResults")}</div> : null}
+      {entryCount > 0 && (pages > 1 || pageSize !== DEFAULT_PAGE_SIZE) ? (
+        <IndexPager
+          label={view === "all" && grouped
+            ? r("page", { page: formatNumber(pageIndex + 1), pages: formatNumber(pages) })
+            : r("showing", {
+                start: formatNumber(pageIndex * pageSize + 1),
+                end: formatNumber(Math.min((pageIndex + 1) * pageSize, entryCount)),
+                total: formatNumber(entryCount),
+              })}
+          navLabel={r("pagination")}
+          pageSize={{
+            value: pageSize,
+            options: PAGE_SIZE_OPTIONS,
+            onChange: (size) => {
+              writeSavedPageSize("product-variants", size);
+              setPageSize(size);
+              setPage(0);
+            },
+          }}
+          canPrevious={pageIndex > 0}
+          canNext={pageIndex < pages - 1}
+          onPrevious={() => setPage(pageIndex - 1)}
+          onNext={() => setPage(pageIndex + 1)}
+        />
+      ) : null}
       <React.Suspense fallback={null}>
         <VariantCustomFieldsDialog
           variantId={customDataFor?.id ?? null}
@@ -655,6 +755,7 @@ const VariantRow = React.memo(function VariantRow({
 type GroupRowProps = {
   group: VariantGroup;
   open: boolean;
+  repeated?: boolean;
   images: ProductSkuImageChoice[];
   money: Money;
   selectedCount: number;
@@ -667,6 +768,7 @@ type GroupRowProps = {
 /** A group re-renders only when one of its own variants (or its state) changed. */
 function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
   return previous.open === next.open
+    && previous.repeated === next.repeated
     && previous.images === next.images
     && previous.money === next.money
     && previous.selectedCount === next.selectedCount
@@ -677,7 +779,7 @@ function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
     && previous.group.variants.every((variant, index) => variant === next.group.variants[index]);
 }
 
-const GroupRow = React.memo(function GroupRow({ group, open, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
+const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const ids = group.variants.map((variant) => variant.id);
@@ -694,7 +796,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
   const range = prices.length ? `${formatNumber(Math.min(...prices))}–${formatNumber(Math.max(...prices))}` : undefined;
   const allSelected = selectedCount === ids.length;
   return (
-    <div className={cn(layout.grid, "border-b bg-muted/30 py-2")}>
+    <div data-variant-group={group.valueId} data-repeated-group={repeated || undefined} className={cn(layout.grid, "border-b bg-muted/30 py-2")}>
       <div className="flex justify-center">
         <Checkbox
           checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
