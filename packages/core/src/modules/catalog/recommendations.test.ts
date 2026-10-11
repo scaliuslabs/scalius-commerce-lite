@@ -103,19 +103,48 @@ const scoreRows = (rows: Array<Record<string, unknown>>) => rows.filter((row) =>
 }));
 
 function fullUniverseRanking(query: string, limit: number): string {
-    // An independent oracle: disable both candidate cutoffs and restore the
-    // original full-population popularity windows, not the new quorum proof.
+    // An independent oracle: disable every candidate cutoff, restore a single
+    // full affinity scan and use the original full-population popularity windows.
     const noCoBuyCutoff = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
     expect(noCoBuyCutoff).not.toBe(query);
-    const noAffinityCutoff = noCoBuyCutoff.replace(
+    const noRelatedCutoff = noCoBuyCutoff.replace(
+        "SELECT CASE WHEN also_bought_tier > 0 OR affinity > 15 THEN", "SELECT CASE WHEN 0 THEN",
+    );
+    expect(noRelatedCutoff).not.toBe(noCoBuyCutoff);
+    const noRelatedReuse = noRelatedCutoff.replace(
+        /SELECT \* FROM rec_related_affinity(\s+UNION ALL)/, "SELECT * FROM rec_related_affinity WHERE 0 = 1$1",
+    );
+    expect(noRelatedReuse).not.toBe(noRelatedCutoff);
+    const fullAffinity = noRelatedReuse.replace(
+        '"product_buyer_state"."product_id" NOT IN (SELECT product_id FROM rec_related_affinity)', "1 = 1",
+    );
+    expect(fullAffinity).not.toBe(noRelatedReuse);
+    const noAffinityCutoff = fullAffinity.replace(
         /AND \(rec_affinity_cutoff\.also_bought_tier IS NULL[\s\S]*?product_buyer_state\.affinity >= rec_affinity_cutoff\.affinity\)\)/,
         "",
     );
-    expect(noAffinityCutoff).not.toBe(noCoBuyCutoff);
+    expect(noAffinityCutoff).not.toBe(fullAffinity);
     const originalPopularity = `SUM(CASE WHEN COALESCE(rec_popular.buyers, 0) >= 2 THEN 1 ELSE 0 END) OVER () * 2 >= MIN(COUNT(*) OVER (), ${limit})`;
     const canonical = noAffinityCutoff.replaceAll("(SELECT qualifies FROM rec_popularity_guard) = 1", originalPopularity);
     expect(canonical).not.toBe(noAffinityCutoff);
     return canonical;
+}
+
+function affinityVisits(query: string, params: readonly SQLInputValue[]) {
+    const seen = { guard: [] as number[], scored: [[], []] as [string[], string[]] };
+    sqlite.function("observe_related_guard", value => { seen.guard.push(Number(value)); return value; });
+    for (const branch of [0, 1]) {
+        sqlite.function(`observe_affinity_${branch}`, value => { seen.scored[branch]!.push(String(value)); return value; });
+    }
+    let branch = 0;
+    const observed = query
+        .replace(/(rec_related_guard AS MATERIALIZED\s*\(\s*SELECT )COALESCE/, "$1observe_related_guard(COALESCE")
+        .replace(/\), 0\) AS qualifies(\s*\),\s*rec_fallback_affinity)/, "), 0)) AS qualifies$1")
+        .replace(/(select )("product_buyer_state"\."product_id")( as "product_id")/gi,
+            (_match, select, id, alias) => `${select}observe_affinity_${branch++}(${id})${alias}`);
+    expect(branch).toBe(2);
+    expect(sqlite.prepare(observed).all(...params)).toEqual(sqlite.prepare(query).all(...params));
+    return seen;
 }
 
 const ids = (result: { products: Array<{ id: string }> }) => result.products.map((item) => item.id);
@@ -620,6 +649,9 @@ describe("product recommendations", () => {
             const params = statementParams[0]!;
             expect(sqlite.prepare(query).all(...params))
                 .toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
+            const visits = affinityVisits(query, params);
+            expect(visits.guard).toEqual([1]);
+            expect(visits.scored[1]).toEqual([]);
             expect(result.dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
             expect(result.dependencies.uncacheable).toEqual([]);
             expect(result.dependencies.coarseTables).toEqual([]);
@@ -637,6 +669,83 @@ describe("product recommendations", () => {
         // Exact buyer counts survive even when they no longer order the rows.
         expect(disabled.rows[1]).toMatchObject({ popularBuyers: 2, popularOrdering: 0 });
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("covers every related signal once while keeping popularity witnesses outside the sparse set", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        for (const id of ["overlap", "category_peer"]) product({ id, categoryId: "cat_shirts" });
+        for (const id of ["collection_peer", "attribute_peer", "single_peer", "outside_a", "outside_b"]) {
+            product({ id, categoryId: "cat_trousers" });
+        }
+        product({ id: "hidden", categoryId: "cat_shirts", isActive: false });
+        product({ id: "sold_out", categoryId: "cat_shirts", stock: 0 });
+        collection("col_sparse", { source: "manual", productIds: ["source", "overlap", "collection_peer", null] });
+        for (const id of ["source", "overlap", "attribute_peer"]) attribute(id, "attr_sparse", "same");
+        order("single_buyer", ["source", "single_peer"]);
+        for (const buyer of ["global_a", "global_b"]) order(buyer, ["attribute_peer", "outside_a", "outside_b"]);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const result = await withDependencyScope(
+            () => rankProductRecommendations(db, { productIds: ["source", "source"], limit: 5 }),
+            { strict: true, log: () => {} },
+        );
+        expect(result.value.rows.map(row => row.id))
+            .toEqual(["overlap", "category_peer", "collection_peer", "single_peer", "attribute_peer"]);
+        expect(result.value.rows.at(-1)).toMatchObject({ popularBuyers: 2, popularOrdering: 2 });
+        const query = statements[0]!;
+        const params = statementParams[0]!;
+        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 5)).all(...params));
+        const visits = affinityVisits(query, params);
+        expect(visits.guard).toEqual([1]);
+        expect(visits.scored[0].sort()).toEqual(["attribute_peer", "category_peer", "collection_peer", "overlap", "single_peer"]);
+        expect(visits.scored[1]).toEqual([]);
+        expect(result.dependencies.uncacheable).toEqual([]);
+        expect(result.dependencies.coarseTables).toEqual([]);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("reuses dense weak relations and scores only unrelated products when the sparse bound fails", async () => {
+        product({ id: "source" });
+        const peers = Array.from({ length: 20 }, (_, index) => `weak_${index}`);
+        for (const id of peers) product({ id, priceMinor: 300_000 });
+        for (const id of ["outside_a", "outside_b", "outside_c"]) product({ id, createdAt: NOW - 10 });
+        for (const id of ["source", ...peers]) attribute(id, "attr_weak", "same");
+        // Raw relation IDs may contain NULL; the eligible-affinity exclusion cannot.
+        collection("col_null", { source: "manual", productIds: ["source", null] });
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 3 });
+        expect(result.rows.map(row => row.id)).toEqual(["outside_a", "outside_b", "outside_c"]);
+        const query = statements[0]!;
+        const params = statementParams[0]!;
+        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
+        const visits = affinityVisits(query, params);
+        expect(visits.guard).toEqual([0]);
+        expect(visits.scored[0].sort()).toEqual(peers.sort());
+        expect(visits.scored[1].sort()).toEqual(["outside_a", "outside_b", "outside_c"]);
+    });
+
+    it("rejects an exact (zero co-buy tier, fifteen affinity) bound so outside popularity can win", async () => {
+        product({ id: "source" });
+        for (const id of ["peer_a", "peer_b"]) product({ id });
+        product({ id: "outside", createdAt: NOW - 10 });
+        // A real order without a buyer contributes peer IDs but no distinct buyer.
+        order("", ["source", "peer_a", "peer_b"]);
+        for (const buyer of ["global_a", "global_b"]) order(buyer, ["outside"]);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 2 });
+        expect(result.rows[0]).toMatchObject({ id: "outside", popularOrdering: 2 });
+        const query = statements[0]!;
+        const params = statementParams[0]!;
+        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 2)).all(...params));
+        const visits = affinityVisits(query, params);
+        expect(visits.guard).toEqual([0]);
+        expect(visits.scored[0].sort()).toEqual(["peer_a", "peer_b"]);
+        expect(visits.scored[1]).toEqual(["outside"]);
     });
 
     it.each([0, 1, 2, 3])("keeps all %i fallback candidates when the requested list is larger", async (count) => {

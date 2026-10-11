@@ -410,7 +410,7 @@ export async function rankRecommendationRows(
 
     // CROSS JOIN keeps the source products as the driver; the planner
     // otherwise walked every product of every published category.
-    const sameCategory = sql`CASE WHEN ${buyerState.categoryId} IN (
+    const sourceCategoryIds = sql`
         SELECT rec_source_product.category_id
         FROM products AS rec_source_product
         CROSS JOIN categories AS rec_source_category
@@ -418,6 +418,9 @@ export async function rankRecommendationRows(
           AND rec_source_category.id = rec_source_product.category_id
           AND rec_source_category.status = 'published'
           AND rec_source_category.deleted_at IS NULL
+    `;
+    const sameCategory = sql`CASE WHEN ${buyerState.categoryId} IN (
+        ${sourceIds.length > 0 ? sql`SELECT category_id FROM rec_source_categories` : sourceCategoryIds}
     ) THEN 1 ELSE 0 END`;
     const alsoBoughtBuyers = sql<number>`COALESCE(rec_co_purchase.buyers, 0)`;
     const collectionShared = sql`COALESCE(rec_collection_peer.shared, 0)`;
@@ -491,11 +494,13 @@ export async function rankRecommendationRows(
     const candidateColumns = sql`${buyerState.productId} AS product_id,
         ${buyerState.fromMinor} AS from_minor, ${buyerState.categoryId} AS category_id,
         ${buyerState.productCreatedAt} AS product_created_at`;
-    // Popularity is the third sort key. Compute the first two once over the
-    // fallback's full eligible set, then keep the limit-th pair and every tie.
+    // Outside the union of category, collection, attribute and co-buy peers,
+    // a candidate has co-buy tier zero and at most the 15-point price score.
+    // A related-set cutoff strictly above (0, 15) therefore contains every
+    // possible winner. Otherwise compute affinity over the full eligible set.
     // Shared peer aggregates also serve the final bounded rows without re-reading
     // their underlying collection, attribute and SKU data.
-    const fallbackAffinity = db.select({
+    const affinityQuery = (relatedOnly: boolean) => db.select({
         productId: sql`${buyerState.productId}`.as("product_id"),
         fromMinor: sql`${buyerState.fromMinor}`.as("from_minor"),
         categoryId: sql`${buyerState.categoryId}`.as("category_id"),
@@ -503,12 +508,26 @@ export async function rankRecommendationRows(
         alsoBoughtTier: alsoBoughtTier.as("also_bought_tier"),
         affinity: sql`${relatedScore} + 15 * ${inPriceBand}`.as("affinity"),
     })
-        .from(sql`rec_guard AS rec_affinity_guard CROSS JOIN ${buyerState}`)
+        .from(relatedOnly
+            ? sql`rec_guard AS rec_affinity_guard CROSS JOIN rec_related_ids CROSS JOIN ${buyerState}`
+            : sql`rec_guard AS rec_affinity_guard CROSS JOIN ${buyerState}`)
         .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
         .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
         .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
         .crossJoin(sourceBand)
-        .where(and(sql`rec_affinity_guard.qualifies = 0`, candidateCondition));
+        .where(and(sql`rec_affinity_guard.qualifies = 0`, relatedOnly
+            ? and(publicBuyerStateCondition({ drivenByIdSet: true }),
+                sql`${buyerState.availableForSale} = 1`, sql`${buyerState.productId} NOT IN ${sourceSet}`,
+                sql`${buyerState.productId} = rec_related_ids.product_id`)
+            : and(candidateCondition,
+                // These IDs came from eligible buyer-state PKs, so the set
+                // cannot contain NULL (unlike raw collection JSON members).
+                sql`${buyerState.productId} NOT IN (SELECT product_id FROM rec_related_affinity)`)));
+    const unrelatedAffinityLimit = sql`(
+        SELECT CASE WHEN rec_guard.qualifies = 0 AND rec_related_guard.qualifies = 0
+            THEN 9223372036854775807 ELSE 0 END
+        FROM rec_guard CROSS JOIN rec_related_guard
+    )`;
     const rankingCtes = sourceIds.length === 0 ? sql`` : sql`
         WITH rec_source_orders AS MATERIALIZED (${sourceOrders}),
         rec_co_purchase AS MATERIALIZED (${coPurchaseRows}),
@@ -539,7 +558,31 @@ export async function rankRecommendationRows(
         rec_collection_peer AS MATERIALIZED (${collectionPeerRows}),
         rec_attribute_peer AS MATERIALIZED (${attributePeerRows}),
         rec_source_band AS MATERIALIZED (${sourceBandRows}),
-        rec_fallback_affinity AS MATERIALIZED (${fallbackAffinity.getSQL()}),
+        rec_source_categories AS MATERIALIZED (${sourceCategoryIds}),
+        rec_related_ids AS MATERIALIZED (
+            SELECT ${buyerState.productId} AS product_id
+            FROM ${buyerState}
+            WHERE ${publicBuyerStateCondition()}
+              AND ${buyerState.categoryId} IN (SELECT category_id FROM rec_source_categories)
+            UNION SELECT product_id FROM rec_collection_peer
+            UNION SELECT product_id FROM rec_attribute_peer
+            UNION SELECT product_id FROM rec_co_purchase
+            LIMIT (SELECT CASE WHEN qualifies = 0 THEN 9223372036854775807 ELSE 0 END FROM rec_guard)
+        ),
+        rec_related_affinity AS MATERIALIZED (${affinityQuery(true).getSQL()}),
+        rec_related_guard AS MATERIALIZED (
+            SELECT COALESCE((
+                SELECT CASE WHEN also_bought_tier > 0 OR affinity > 15 THEN 1 ELSE 0 END
+                FROM rec_related_affinity
+                ORDER BY also_bought_tier DESC, affinity DESC
+                LIMIT 1 OFFSET ${sql.raw(String(limit - 1))}
+            ), 0) AS qualifies
+        ),
+        rec_fallback_affinity AS MATERIALIZED (
+            SELECT * FROM rec_related_affinity
+            UNION ALL
+            SELECT * FROM (${affinityQuery(false).getSQL()} LIMIT ${unrelatedAffinityLimit}) AS rec_full_affinity_enabled
+        ),
         rec_affinity_cutoff AS MATERIALIZED (
             SELECT also_bought_tier, affinity
             FROM rec_fallback_affinity
@@ -581,6 +624,8 @@ export async function rankRecommendationRows(
         rec_popularity_guard AS MATERIALIZED (
             SELECT CASE WHEN rec_guard.qualifies = 1 THEN 1 ELSE (
                 SELECT CASE WHEN COUNT(*) * 2 >= (
+                    -- The related guard proves at least limit eligible products;
+                    -- otherwise affinity still contains the full population.
                     SELECT COUNT(*) FROM (SELECT 1 FROM rec_fallback_affinity LIMIT ${sql.raw(String(limit))}) AS rec_population_sample
                 ) THEN 1 ELSE 0 END
                 FROM (
