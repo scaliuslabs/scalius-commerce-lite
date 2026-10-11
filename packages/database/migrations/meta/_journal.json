@@ -981,6 +981,13 @@
       "when": 1791712797644,
       "tag": "0139_recommendation_order_products",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "6",
+      "when": 1791745541160,
+      "tag": "0140_buyer_public_counts",
+      "breakpoints": true
     }
   ]
 }

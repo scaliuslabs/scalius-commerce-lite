@@ -75,6 +75,15 @@ async function read(overrides: Partial<CatalogFacetCountInput> = {}, fallback = 
     }
 }
 
+function expectSameDependencies(
+    actual: Awaited<ReturnType<typeof read>>["dependencies"], expected: Awaited<ReturnType<typeof read>>["dependencies"],
+) {
+    const comparable = (proof: typeof actual) => ({
+        ...proof, tables: proof.tables.filter(table => table !== "product_buyer_public_counts"),
+    });
+    expect(comparable(actual)).toEqual(comparable(expected));
+}
+
 /** Count actual row visits, not just the planner's existence of both branches. */
 function visits(query: Captured) {
     const seen = { plan: [] as number[], baseline: 0, excluded: 0, metadata: 0 };
@@ -155,6 +164,19 @@ function seedExclusionSearch() {
             ('prod_21', 1, 5, 0, 1, 500, 3333);
         INSERT INTO product_review_stats (product_id) VALUES ('prod_02');
     `);
+}
+
+function dimensionVisits(query: Captured) {
+    const seen = { excluded: 0, counters: 0 };
+    sqlite.function("observe_dimension_buyer", value => { seen.excluded += 1; return value; });
+    sqlite.function("observe_dimension_counter", () => { seen.counters += 1; return 1; });
+    const observed = query.sql
+        .replace("SELECT dimension_buyer.brand_id, dimension_buyer.category_id",
+            "SELECT observe_dimension_buyer(dimension_buyer.brand_id) AS brand_id, dimension_buyer.category_id")
+        .replaceAll("WHERE public_dimension.dimension =", "WHERE observe_dimension_counter() = 1 AND public_dimension.dimension =");
+    expect(observed).not.toBe(query.sql);
+    expect(sqlite.prepare(observed).all(...query.params)).toEqual(sqlite.prepare(query.sql).all(...query.params));
+    return seen;
 }
 
 /** Observe the chosen branch and actual rows without changing its predicates. */
@@ -285,7 +307,7 @@ describe("public facet count complements", () => {
             const optimized = await read(input);
             const original = await read({ ...input, identitySearch: undefined });
             expect(optimized.value).toEqual(original.value);
-            expect(optimized.dependencies).toEqual(original.dependencies);
+            expectSameDependencies(optimized.dependencies, original.dependencies);
             expect(optimized.value.summary.count).toBe(count);
             const seen = scopeVisits(optimized.query);
             expect(seen.plan).toEqual([covering]);
@@ -327,7 +349,7 @@ describe("public facet count complements", () => {
         const original = await read({ ...input, identitySearch: undefined });
         expect(original.query.sql).not.toContain("search_exclusions");
         expect(optimized.value).toEqual(original.value);
-        expect(optimized.dependencies).toEqual(original.dependencies);
+        expectSameDependencies(optimized.dependencies, original.dependencies);
         expect(optimized.value).toEqual((await read(input, true)).value);
         expect(optimized.value.summary).toMatchObject({ count: 17, min: 25, max: 750 });
         expect(optimized.value.rows.find(row => row.facetId === "option.color" && row.valueKey === "blue"))
@@ -349,6 +371,57 @@ describe("public facet count complements", () => {
         // adapter, which enforces workerd's five-term compound SELECT limit.
         expect(optimized.query.sql).toContain("positive_auxiliary_facets AS MATERIALIZED");
         expect(optimized.query.sql).toContain("exclusion_auxiliary_facets AS MATERIALIZED");
+    });
+
+    it("subtracts exact brand/category dimensions and keeps publication, NULL and zero groups identical to the source oracle", async () => {
+        seedExclusionSearch();
+        sqlite.exec(`
+            INSERT INTO brands (id, name, slug, status) VALUES
+                ('brd_hidden0001', 'Hidden', 'hidden', 'draft'),
+                ('brd_excluded01', 'Excluded', 'excluded', 'published'),
+                ('brd_private001', 'Private', 'private', 'published');
+            INSERT INTO categories (id, name, slug, status) VALUES ('cat_excluded', 'Other', 'other', 'published');
+            UPDATE products SET brand_id = 'brd_hidden0001', category_id = 'cat_draft' WHERE id = 'prod_05';
+            UPDATE products SET brand_id = NULL, category_id = NULL WHERE id = 'prod_06';
+            UPDATE products SET brand_id = 'brd_excluded01', category_id = 'cat_excluded' WHERE id = 'prod_18';
+            UPDATE products SET brand_id = 'brd_private001' WHERE id = 'prod_20';
+            UPDATE product_buyer_state SET
+                brand_id = (SELECT brand_id FROM products WHERE products.id = product_buyer_state.product_id),
+                category_id = (SELECT category_id FROM products WHERE products.id = product_buyer_state.product_id);
+        `);
+        const input = plainSearchInput();
+        const compare = async () => {
+            const optimized = await read(input);
+            const original = await read({ ...input, identitySearch: undefined });
+            expect(original.query.sql).not.toContain("product_buyer_public_counts");
+            expect(optimized.value).toEqual(original.value);
+            expectSameDependencies(optimized.dependencies, original.dependencies);
+            expect(optimized.dependencies.tables).toContain("product_buyer_public_counts");
+            expect(optimized.value.summary).toMatchObject({ count: 17, min: 25, max: 750 });
+            return optimized;
+        };
+        const initial = await compare();
+        expect(initial.value.rows.filter(row => row.facetKind === "brand").map(row => [row.valueKey, row.valueCount]))
+            .toEqual([["brd_main0001", 15]]);
+        expect(initial.value.rows.filter(row => row.facetKind === "category").map(row => [row.valueKey, row.valueCount]).sort())
+            .toEqual([["cat_broad", 1], ["cat_main", 14]]);
+        const seen = dimensionVisits(initial.query);
+        expect(seen.excluded).toBe(2);
+        expect(seen.counters).toBeGreaterThan(0);
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${initial.query.sql}`).all(...initial.query.params)
+            .map(row => String(row.detail)).join("\n");
+        expect(plan).toMatch(/SEARCH dimension_buyer USING (?:COVERING )?INDEX \S+ \(product_id=\?\)/);
+        expect(plan).toMatch(/SEARCH public_dimension USING (?:COVERING )?INDEX \S+ \(dimension=\?\)/);
+        for (const mutation of [
+            "UPDATE brands SET status = 'published' WHERE id = 'brd_hidden0001'; UPDATE categories SET status = 'published' WHERE id = 'cat_draft'",
+            "UPDATE brands SET deleted_at = 1700000001 WHERE id = 'brd_hidden0001'; UPDATE categories SET deleted_at = 1700000001 WHERE id = 'cat_draft'",
+        ]) {
+            sqlite.exec(mutation);
+            await compare();
+        }
+        const withoutDimensions = await read({ ...input, brandFacet: false, categoryFacet: undefined });
+        expect(withoutDimensions.value).toEqual((await read({ ...input, brandFacet: false, categoryFacet: undefined, identitySearch: undefined })).value);
+        expect(dimensionVisits(withoutDimensions.query)).toEqual({ excluded: 0, counters: 0 });
     });
 
     it("keeps NULL and unpublished categories out of category-only search matches but permits their FTS matches", async () => {
@@ -378,12 +451,14 @@ describe("public facet count complements", () => {
             expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
             expect(optimized.value.summary.count).toBe(count);
             expect(exclusionVisits(optimized.query)).toEqual({ plan: [0], positive: count, excluded: 0, ratings: 0 });
+            expect(dimensionVisits(optimized.query)).toEqual({ excluded: 0, counters: 0 });
         }
         sqlite.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'prod_16'");
         const input = plainSearchInput();
         const optimized = await read(input);
         expect(optimized.value).toEqual((await read({ ...input, identitySearch: undefined })).value);
         expect(exclusionVisits(optimized.query)).toEqual({ plan: [0], positive: 16, excluded: 0, ratings: 0 });
+        expect(dimensionVisits(optimized.query)).toEqual({ excluded: 0, counters: 0 });
     });
 
     it("does no rating scan while reviews are disabled and declares no rating dependency when the facet is absent", async () => {
@@ -394,14 +469,14 @@ describe("public facet count complements", () => {
         const disabled = await read(input);
         const original = await read({ ...input, identitySearch: undefined });
         expect(disabled.value).toEqual(original.value);
-        expect(disabled.dependencies).toEqual(original.dependencies);
+        expectSameDependencies(disabled.dependencies, original.dependencies);
         expect(disabled.value.rows.filter(row => row.facetKind === "rating")).toEqual([]);
         expect(exclusionVisits(disabled.query)).toEqual({ plan: [1], positive: 0, excluded: 2, ratings: 0 });
         for (const ratingFacet of [false, undefined]) {
             const absent = await read({ ...input, ratingFacet });
             const baseline = await read({ ...input, ratingFacet, identitySearch: undefined });
             expect(absent.value).toEqual(baseline.value);
-            expect(absent.dependencies).toEqual(baseline.dependencies);
+            expectSameDependencies(absent.dependencies, baseline.dependencies);
             expect(absent.query.sql).not.toContain("product_review_stats");
             expect(absent.dependencies.keys.some(key => key.includes("reviews"))).toBe(false);
         }
@@ -414,7 +489,7 @@ describe("public facet count complements", () => {
         const optimized = await read(input);
         const original = await read({ ...input, identitySearch: undefined });
         expect(optimized.value).toEqual(original.value);
-        expect(optimized.dependencies).toEqual(original.dependencies);
+        expectSameDependencies(optimized.dependencies, original.dependencies);
         expect(optimized.value.summary).toMatchObject({ count: 17, min: 25, max: 750 });
         expect(optimized.value.rows.filter(row => row.facetKind === "rating")).toEqual([]);
         expect(exclusionVisits(optimized.query)).toEqual({ plan: [1], positive: 0, excluded: 2, ratings: 0 });
@@ -433,7 +508,7 @@ describe("public facet count complements", () => {
             const optimized = await read({ ...input, ...overrides });
             const original = await read({ ...input, ...overrides, identitySearch: undefined });
             expect(optimized.value).toEqual(original.value);
-            expect(optimized.dependencies).toEqual(original.dependencies);
+            expectSameDependencies(optimized.dependencies, original.dependencies);
             expect(optimized.query.sql).not.toContain("search_exclusions");
         }
     });

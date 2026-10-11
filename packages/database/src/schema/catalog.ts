@@ -114,6 +114,17 @@ export const productFacetPublicCounts = sqliteTable("product_facet_public_counts
     check("product_facet_public_counts_nonnegative", sql`${table.productCount} >= 0`),
 ]);
 
+/** Exact public product counts by raw brand/category ID, maintained with buyer-state writes. */
+export const productBuyerPublicCounts = sqliteTable("product_buyer_public_counts", {
+    dimension: text("dimension", { enum: ["brand", "category"] }).notNull(),
+    valueId: text("value_id").notNull(),
+    productCount: integer("product_count").notNull(),
+}, (table) => [
+    primaryKey({ columns: [table.dimension, table.valueId] }),
+    check("product_buyer_public_counts_dimension", sql`${table.dimension} IN ('brand', 'category')`),
+    check("product_buyer_public_counts_nonnegative", sql`${table.productCount} >= 0`),
+]);
+
 export const PRODUCT_BUYER_AVAILABILITY_BANDS = ["untracked", "out_of_stock", "low_stock", "in_stock"] as const;
 
 /**

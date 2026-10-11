@@ -942,18 +942,24 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const exclusionFacetCounts = exclusionFirst ? sql`
         ${input.brandFacet === false ? sql`` : sql`
         UNION ALL SELECT * FROM (
-            SELECT 'brand', 'brand', ${buyerState.brandId}, COUNT(*), NULL, NULL, NULL, NULL
-            FROM ${buyerState} INDEXED BY product_buyer_state_brand_newest_idx
-            WHERE ${exclusionMembership} AND ${buyerState.brandId} IS NOT NULL
-            GROUP BY ${buyerState.brandId}
+            SELECT 'brand', 'brand', public_dimension.value_id,
+                public_dimension.product_count - COALESCE(excluded_dimension.product_count, 0), NULL, NULL, NULL, NULL
+            FROM product_buyer_public_counts AS public_dimension
+            LEFT JOIN excluded_dimension_counts AS excluded_dimension
+                ON excluded_dimension.dimension = public_dimension.dimension AND excluded_dimension.value_id = public_dimension.value_id
+            WHERE public_dimension.dimension = 'brand'
+              AND public_dimension.product_count > COALESCE(excluded_dimension.product_count, 0)
             LIMIT ${exclusionLimit(true)}
         ) AS exclusion_brands`}
         ${input.categoryFacet === "product-categories" ? sql`
         UNION ALL SELECT * FROM (
-            SELECT 'category', ${CATEGORY_FACET_KEY}, ${buyerState.categoryId}, COUNT(*), NULL, NULL, NULL, NULL
-            FROM ${buyerState} INDEXED BY product_buyer_state_category_newest_idx
-            WHERE ${exclusionMembership} AND ${buyerState.categoryId} IS NOT NULL
-            GROUP BY ${buyerState.categoryId}
+            SELECT 'category', ${CATEGORY_FACET_KEY}, public_dimension.value_id,
+                public_dimension.product_count - COALESCE(excluded_dimension.product_count, 0), NULL, NULL, NULL, NULL
+            FROM product_buyer_public_counts AS public_dimension
+            LEFT JOIN excluded_dimension_counts AS excluded_dimension
+                ON excluded_dimension.dimension = public_dimension.dimension AND excluded_dimension.value_id = public_dimension.value_id
+            WHERE public_dimension.dimension = 'category'
+              AND public_dimension.product_count > COALESCE(excluded_dimension.product_count, 0)
             LIMIT ${exclusionLimit(true)}
         ) AS exclusion_categories` : sql``}
         ${input.ratingFacet ? sql`
@@ -1001,6 +1007,19 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const auxiliaryFacetCtes = exclusionFirst ? sql`
         positive_auxiliary_facets AS MATERIALIZED (
             ${emptyFacetRows}${brandBranch}${ratingBranch}${categoryBranch}
+        ),
+        excluded_buyer_dimensions AS MATERIALIZED (
+            SELECT dimension_buyer.brand_id, dimension_buyer.category_id
+            FROM excluded_products CROSS JOIN product_buyer_state AS dimension_buyer
+            WHERE dimension_buyer.product_id = excluded_products.product_id
+            LIMIT ${exclusionLimit(true)}
+        ),
+        excluded_dimension_counts AS MATERIALIZED (
+            SELECT 'brand' AS dimension, brand_id AS value_id, COUNT(*) AS product_count
+            FROM excluded_buyer_dimensions WHERE brand_id IS NOT NULL GROUP BY brand_id
+            UNION ALL
+            SELECT 'category', category_id, COUNT(*)
+            FROM excluded_buyer_dimensions WHERE category_id IS NOT NULL GROUP BY category_id
         ),
         exclusion_auxiliary_facets AS MATERIALIZED (
             ${emptyFacetRows}${exclusionFacetCounts}

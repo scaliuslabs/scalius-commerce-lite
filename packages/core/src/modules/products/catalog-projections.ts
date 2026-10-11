@@ -26,6 +26,7 @@ import {
     productAttributeValues,
     productAttributes,
     productBuyerState,
+    productBuyerPublicCounts,
     productFacetValues,
     productFacetPublicCounts,
     productOptionDefinitions,
@@ -427,9 +428,17 @@ export async function rebuildCatalogProjections(
             .innerJoin(productBuyerState, eq(productBuyerState.productId, productFacetValues.productId))
             .where(eq(productBuyerState.isPublic, true))
             .groupBy(productFacetValues.facetKind, productFacetValues.facetKey, productFacetValues.valueKey);
+        const buyerCounts = sql`
+            SELECT 'brand' AS dimension, brand_id AS value_id, COUNT(*) AS product_count
+            FROM product_buyer_state WHERE is_public = 1 AND brand_id IS NOT NULL GROUP BY brand_id
+            UNION ALL
+            SELECT 'category', category_id, COUNT(*)
+            FROM product_buyer_state WHERE is_public = 1 AND category_id IS NOT NULL GROUP BY category_id
+        `;
         await safeBatch(db, [
             db.insert(cacheDep).select(sql`
-                WITH expected AS MATERIALIZED (${counts.getSQL()})
+                WITH expected AS MATERIALIZED (${counts.getSQL()}),
+                    expected_buyer_counts AS MATERIALIZED (${buyerCounts})
                 SELECT 'store', COALESCE((SELECT seq FROM cache_clock WHERE id = 1), 0) + 1
                 WHERE EXISTS (
                     SELECT * FROM expected EXCEPT
@@ -437,6 +446,12 @@ export async function rebuildCatalogProjections(
                 ) OR EXISTS (
                     SELECT facet_kind, facet_key, value_key, product_count FROM product_facet_public_counts WHERE product_count > 0
                     EXCEPT SELECT * FROM expected
+                ) OR EXISTS (
+                    SELECT * FROM expected_buyer_counts EXCEPT
+                    SELECT dimension, value_id, product_count FROM product_buyer_public_counts WHERE product_count > 0
+                ) OR EXISTS (
+                    SELECT dimension, value_id, product_count FROM product_buyer_public_counts WHERE product_count > 0
+                    EXCEPT SELECT * FROM expected_buyer_counts
                 )
             `).onConflictDoUpdate({ target: cacheDep.dep, set: { seq: sql`excluded.seq` } }),
             // PostgreSQL's ordinary dependency writers advance the clock in
@@ -445,6 +460,8 @@ export async function rebuildCatalogProjections(
                 .where(and(eq(cacheClock.id, 1), sql`${cacheClock.seq} < (SELECT seq FROM cache_dep WHERE dep = 'store')`)),
             db.delete(productFacetPublicCounts),
             db.insert(productFacetPublicCounts).select(counts),
+            db.delete(productBuyerPublicCounts),
+            db.insert(productBuyerPublicCounts).select(buyerCounts),
         ] as never);
     }
     let processed = 0;
