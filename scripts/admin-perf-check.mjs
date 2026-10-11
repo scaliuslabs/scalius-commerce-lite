@@ -24,14 +24,12 @@ const ADMIN_DIR = "apps/admin-v2";
 
 /**
  * Brotli KiB budgets. `entry` is what index.html loads before any route; each
- * route is its full first-render JavaScript (entry included). Budgets sit a
- * little above today's sizes: raise one only with a reason in the commit.
+ * route is its full first-render JavaScript (entry included). These are
+ * release ceilings: reduce the output to fit rather than raising a budget.
  */
 export const BUNDLE_BUDGETS = {
   entry: 138,
-  // +0.25: grouped rich-text controls, 44px touch targets and fullscreen focus.
-  // Verified stylesheet: 17,536 bytes Brotli; keep 128 bytes of growth headroom.
-  css: 17.25,
+  css: 17,
   // Editors (rich text preview, forms, validation) sit near 290-350.
   routeDefault: 360,
   routes: {
