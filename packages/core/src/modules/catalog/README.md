@@ -41,6 +41,7 @@ All paths are under `/api/v1` and public except the last two (admin).
 - Public products are the `product_buyer_state` rows with `is_public = 1` (it includes the online store's publication). Live cart and checkout validation stay authoritative.
 - The listing routes take `page` or `cursor`. A cursor continues `newest`, `price-asc` and `price-desc` only. Other orders (relevance, name, discount, rating) page by number. A numbered page past `planLimits().lists.maxOffset` (1,000 on Free, 10,000 on Paid) is empty. The total stops at `lists.countCap`.
 - A search with no hit is retried once with the closest catalogue words. The response carries `correctedQuery`.
+- Relevance search selects the ordered page IDs before loading card SKU, rating and translation fields, within the same statement; counts and facets still cover the full matching set.
 - A category listing includes its published descendants. A draft or internal descendant's products stay out of the parent.
 - Public variants carry `availabilityBand`, never an exact stock count (`maskPublicBuyerAvailability`).
 - Facet filters come from the query string: `?<attribute slug>=<value>` (repeat for OR within a facet, AND across facets), `?<slug>.min=` and `.max=` for number attributes, `?option.<axis>=<value>` (matched on one live SKU) and `?brand=<slug>` (published brands). A request carries at most 90 filter values. Unknown slugs and values are dropped.

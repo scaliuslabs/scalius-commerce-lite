@@ -340,10 +340,33 @@ async function readStorefrontCatalogResults(
         LIMIT ${limit}
     ` : null;
 
+    const rankJoin = !scope.orderBy && sort === "relevance" && search
+        ? productSearchRankJoin(db, search)
+        : undefined;
+    // Rank the matching IDs before reading card-only SKU, rating and translation
+    // fields. A broad prefix otherwise performs those probes for every match.
+    const relevancePage = !scope.orderBy && sort === "relevance" && search ? sql`(
+        WITH listing_page AS MATERIALIZED (
+            SELECT ${buyerState.productId} AS page_product_id,
+                ${orderBy[0]!} AS relevance_tier,
+                ${rankJoin ? sql.raw("COALESCE(search_rank.rank_score, 0)") : sql`0`} AS relevance_score
+            FROM ${buyerState}
+            INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}
+            ${rankJoin ? sql`LEFT JOIN ${rankJoin.table} ON ${rankJoin.on}` : sql``}
+            WHERE ${and(...conditions)}
+            ORDER BY relevance_tier, relevance_score, ${products.name},
+                ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
+            LIMIT ${limit + 1} OFFSET ${offset}
+        )
+        SELECT * FROM listing_page
+    ) AS listing_page` : null;
+    const cardOrderBy = relevancePage
+        ? [sql`listing_page.relevance_tier`, sql`listing_page.relevance_score`, sql`${products.name}`, desc(buyerState.productCreatedAt)]
+        : orderBy;
     const cardSku = buyerStateCardSku();
     // A presence page's cards in its language (MARKETS-DESIGN D9); none at the root.
     const translation = translationScopeOf(pricing);
-    let query = db
+    let cardQuery = db
         .select({
             id: products.id,
             name: products.name,
@@ -368,12 +391,17 @@ async function readStorefrontCatalogResults(
                 ? sql<number | null>`${keysetSort.column}`.as("keyset_value")
                 : sql<number | null>`NULL`.as("keyset_value"),
         })
-        .from(buyerState)
+        .from(relevancePage ?? buyerState)
+        .$dynamic();
+    if (relevancePage) {
+        cardQuery = cardQuery.innerJoin(buyerState, sql`${buyerState.productId} = listing_page.page_product_id`);
+    }
+    const query = cardQuery
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
-        .where(and(...conditions,
+        .where(relevancePage ? undefined : and(...conditions,
             shelfPreview ? sql`${buyerState.productId} IN (
                 SELECT product_id FROM (${pageIds}) AS page_sample
                 UNION ALL
@@ -382,10 +410,6 @@ async function readStorefrontCatalogResults(
             cursorCondition,
         ))
         .$dynamic();
-    const rankJoin = !scope.orderBy && sort === "relevance" && search
-        ? productSearchRankJoin(db, search)
-        : undefined;
-    if (rankJoin) query = query.leftJoin(rankJoin.table, rankJoin.on);
 
     // Without a price filter the price range reads exactly the count's rows,
     // so one statement answers both.
@@ -459,8 +483,8 @@ async function readStorefrontCatalogResults(
     const [fetchedList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
         // One row past the page tells whether another page follows.
         (pageTooDeep ? Promise.resolve([])
-            : shelfPreview ? query.orderBy(...orderBy, buyerState.productId).all()
-                : query.orderBy(...orderBy, buyerState.productId).limit(limit + 1).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
+            : shelfPreview || relevancePage ? query.orderBy(...cardOrderBy, buyerState.productId).all()
+                : query.orderBy(...cardOrderBy, buyerState.productId).limit(limit + 1).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
         plainShopAll ? plainShopAllCountQuery().get() : countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? noFacets : facetReads(),

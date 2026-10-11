@@ -57,6 +57,48 @@ const base = {
 };
 
 describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
+    it("pages fallback search relevance before projecting cards with exact tiers and ties", async () => {
+        const { db, client } = await createNativePostgres({ label: "listing_relevance" });
+        await client.query(`INSERT INTO categories (id, name, slug, status) VALUES
+            ('cat_other', 'Other', 'other', 'published'),
+            ('cat_alpha', 'Alpha group', 'alpha-group', 'published'),
+            ('cat_draft', 'Alpha private', 'alpha-private', 'draft')`);
+        for (const [id, name, description, category, createdAt, active] of [
+            ["title_new", "Alpha", "", "cat_other", 200, 1],
+            ["title_a", "Alpha", "", "cat_other", 100, 1],
+            ["title_b", "Alpha", "", "cat_other", 100, 1],
+            ["category_a", "Kilo", "", "cat_alpha", 100, 1],
+            ["category_b", "Lima", "", "cat_alpha", 100, 1],
+            ["description", "Zulu", "Alpha description", "cat_other", 300, 1],
+            ["inactive", "Alpha", "", "cat_alpha", 400, 0],
+            ["draft_category", "Hidden", "", "cat_draft", 400, 1],
+        ] as const) {
+            await client.query(`INSERT INTO products
+                (id, name, description, price_minor, category_id, slug, created_at, updated_at, is_active)
+                VALUES ($1, $2, $3, 100000, $4, $1, $5, $5, $6)`,
+            [id, name, description, category, createdAt, active]);
+            await client.query(`INSERT INTO product_variants
+                (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+                VALUES ($1, $2, $1, 100000, 0, 1, 0)`, [`var_${id}`, id]);
+        }
+        await rebuildCatalogProjections(db);
+        const expected = ["title_new", "title_a", "title_b", "category_a", "category_b", "description"];
+        const seen: string[] = [];
+        for (const page of [1, 2, 3]) {
+            const { value, dependencies } = await withDependencyScope(
+                () => getStorefrontProducts(db, { search: "alpha", page, limit: 2 }),
+                { strict: true, log: () => {} },
+            );
+            const ids = value.products.map(product => product.id);
+            expect(ids).toEqual(expected.slice((page - 1) * 2, page * 2));
+            expect(value.pagination).toMatchObject({ page, limit: 2, total: 6, totalPages: 3 });
+            expect(dependencies.uncacheable).toEqual([]);
+            expect(dependencies.coarseTables).toEqual([]);
+            seen.push(...ids);
+        }
+        expect(seen).toEqual(expected);
+    });
+
     it("keeps populated recommendation scores and strict deadlines through the hinted order joins", async () => {
         const { db, client } = await createNativePostgres({ label: "recommendation_buyers" });
         const now = Number((await client.query("SELECT unixepoch() AS now")).rows[0].now);
@@ -232,6 +274,8 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
                 ],
             },
         }));
+        // Pin the intentional ID tie before the writes below refresh each projection.
+        await client.query("UPDATE products SET created_at = 1700000000 WHERE id = ANY($1::text[])", [[simple.id, optioned.id]]);
         const skuOf = async (sku: string) => (await client.query("SELECT id FROM product_variants WHERE sku = $1", [sku])).rows[0].id as string;
         await adjustStock(db, await skuOf("PG-LINEN"), -2, `pg_${randomUUID()}`);
         const revision = async (id: string) => Number((await client.query("SELECT aggregate_revision FROM products WHERE id = $1", [id])).rows[0].aggregate_revision);
@@ -302,7 +346,7 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
 
         // Readers.
         const newest = await getStorefrontProducts(db, { page: 1, limit: 10 });
-        // Created in the same second: ties break by product id.
+        // Pinned to the same creation time: ties break by product id.
         expect(newest.products.map((product) => product.id)).toEqual([simple.id, optioned.id].sort());
         expect(newest.products.find((product) => product.id === optioned.id))
             .toMatchObject({ price: 200, discountedPrice: 160, priceVaries: false, hasVariants: true });

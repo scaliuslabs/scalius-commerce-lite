@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -29,6 +29,7 @@ import { search as searchCatalog } from "./site-search";
 let sqlite: DatabaseSync;
 let db: Database;
 let maxBoundParameters: number;
+let readQueries: { query: string; params: readonly SQLInputValue[] }[];
 
 function insertMedia(id: string, kind: "image" | "video", objectKey: string, altText: string, posterMediaId: string | null = null): void {
     sqlite.prepare(
@@ -124,8 +125,10 @@ function insertAttribute(
 describe("storefront feed category search", () => {
     beforeEach(() => {
         maxBoundParameters = 0;
+        readQueries = [];
         ({ sqlite, db } = createSqliteD1Database({
-            onQuery(_query, params) {
+            onQuery(query, params) {
+                readQueries.push({ query, params });
                 maxBoundParameters = Math.max(maxBoundParameters, params.length);
                 if (params.length > 100) {
                     throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
@@ -218,6 +221,53 @@ describe("storefront feed category search", () => {
 
     afterEach(() => {
         sqlite.close();
+    });
+
+    it("keeps one-letter relevance tiers, equal-rank ties and numbered page boundaries exact", async () => {
+        insertCategory({ id: "cat_alpha", name: "Alpha", slug: "alpha" });
+        insertCategory({ id: "cat_alpha_draft", name: "Alpha Draft", slug: "alpha-draft", status: "draft" });
+        const titleIds = Array.from({ length: 6 }, (_, index) => `search_title_${index}`);
+        const categoryIds = Array.from({ length: 3 }, (_, index) => `search_category_${index}`);
+        const descriptionIds = Array.from({ length: 2 }, (_, index) => `search_description_${index}`);
+        for (const [index, id] of [...titleIds, ...categoryIds, ...descriptionIds].entries()) {
+            insertProduct({ id, name: titleIds.includes(id) ? "Alpha" : `Zulu ${String(index).padStart(2, "0")}`,
+                slug: id, categoryId: categoryIds.includes(id) ? "cat_alpha" : "cat_shoes", createdAt: 100 });
+            insertSimpleSku(id);
+            if (descriptionIds.includes(id)) {
+                sqlite.prepare("UPDATE products SET description = 'apricot' WHERE id = ?").run(id);
+            }
+        }
+        insertProduct({ id: "search_draft_category", name: "Zulu private", slug: "zulu-private",
+            categoryId: "cat_alpha_draft", createdAt: 101 });
+        insertSimpleSku("search_draft_category");
+        insertProduct({ id: "search_inactive", name: "Alpha", slug: "alpha-inactive",
+            categoryId: "cat_alpha", createdAt: 102 });
+        insertSimpleSku("search_inactive");
+        sqlite.prepare("UPDATE products SET is_active = 0 WHERE id = 'search_inactive'").run();
+
+        const expected = [...titleIds, ...categoryIds, ...descriptionIds];
+        const seen: string[] = [];
+        for (const page of [1, 2, 3]) {
+            const result = await getStorefrontProducts(db, { search: "a", page, limit: 4 });
+            const ids = result.products.map(product => product.id);
+            expect(ids).toEqual(expected.slice((page - 1) * 4, page * 4));
+            expect(result.pagination).toMatchObject({ page, limit: 4, total: 11, totalPages: 3 });
+            seen.push(...ids);
+        }
+        expect(seen).toEqual(expected);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+        const cardQuery = readQueries.find(({ query }) => query.includes("listing_quick_add_eligible"))!;
+        const pageSql = cardQuery.query.slice(cardQuery.query.indexOf("WITH listing_page"), cardQuery.query.indexOf("SELECT * FROM listing_page"));
+        expect(pageSql).toContain("AS MATERIALIZED");
+        expect(pageSql).toMatch(/LIMIT \? OFFSET \?/);
+        expect(pageSql).not.toMatch(/buyer_state_card_sku|product_review_stats/);
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${cardQuery.query}`).all(...cardQuery.params) as { id: number; parent: number; detail: string }[];
+        const materialized = plan.find(row => row.detail === "MATERIALIZE listing_page")!;
+        expect(materialized).toBeDefined();
+        for (const row of plan.filter(row => /SEARCH (buyer_state_card_sku|product_review_stats) /.test(row.detail))) {
+            expect(row.parent).toBe(0);
+            expect(row.id).toBeGreaterThan(materialized.id);
+        }
     });
 
     it("returns paginated category-name matches whose product titles omit the term", async () => {

@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLOutputValue } from "node:sqlite";
 import { Client, types } from "pg";
 
-import { connectPostgres, createPostgresDatabase } from "../postgres-adapter";
+import { getDb } from "../client";
 import type { Database } from "../types";
 import { createMigratedSqlite } from "./sqlite-d1";
 
@@ -149,7 +149,10 @@ export async function createNativePostgres(options: NativePostgresOptions): Prom
   await client.query(schema.preDataSql);
   if (options.seed !== false) await loadMigrationSeed(client);
   await client.query(schema.postDataSql);
-  return { db: createPostgresDatabase(url.toString(), { connect: connectPostgres }), client, url: url.toString(), name };
+  // Register the provider through the production factory so capability-aware
+  // readers use PostgreSQL's non-FTS path, just as they do in the application.
+  const db = getDb({ DATABASE_PROVIDER: "postgres", POSTGRES_DATABASE_URL: url.toString() });
+  return { db, client, url: url.toString(), name };
 }
 
 /** Drops every database this process created. Call it from `afterAll`. */
