@@ -65,3 +65,19 @@ describe("customer auth proxy", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });
+
+
+it("forwards an origin-less SW session GET, preserving the authoritative customerId and no-store headers", async () => {
+  const body = { success: true, data: { authenticated: true, customer: { customerId: "cust_A", name: "Fixture buyer" } } };
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" } }));
+  const response = await ALL({ request: new Request("https://storefront.example.test/api/customer-auth/me", {
+    headers: { Cookie: "cs_tok=fictional-test-cookie", "Sec-Fetch-Site": "same-origin" },
+  }), params: { path: "me" } } as never) as Response;
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  expect(await response.json()).toEqual(body);
+  const [url, options] = mocks.fetch.mock.calls[0]!;
+  expect(url).toBe("https://api.example.test/api/v1/customer-auth/me");
+  expect(options.method).toBe("GET");
+  expect(options.headers.get("Cookie")).toBe("cs_tok=fictional-test-cookie");
+});

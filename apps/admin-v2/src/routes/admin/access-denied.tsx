@@ -30,6 +30,13 @@ function NoAccess() {
     setSigningOut(true);
     clearAdminRouteContextCache();
     try {
+      // A missing or stalled cleanup chunk must not prevent ordinary sign-out.
+      let loadTimer: number | undefined;
+      const push = await Promise.race([
+        import("~/lib/web-push").catch(() => undefined),
+        new Promise<undefined>((resolve) => { loadTimer = window.setTimeout(resolve, 2_500); }),
+      ]).finally(() => window.clearTimeout(loadTimer));
+      await push?.releaseThisDeviceForSignOut().catch(() => undefined);
       const { authClient } = await import("~/lib/auth-client");
       await authClient.signOut();
       broadcastAdminSignOut();

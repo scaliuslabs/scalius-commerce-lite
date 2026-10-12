@@ -2,6 +2,7 @@
 // buyer's cart, checkout details or payment in progress. Every sign-out path
 // (the account page, the sign-in dialog) goes through here.
 import { logoutCustomer } from "@/lib/api/customer-auth";
+import { browserPushDeps, releasePushForSignOut } from "./account-push";
 import { clearCart } from "@/store/cart";
 import {
   clearCheckoutAttemptSession,
@@ -41,6 +42,7 @@ export function clearBrowserShoppingState(): void {
 
 /** Ends the session, clears the browser's shopping state, then tells the page. */
 export async function signOutCustomer(): Promise<void> {
+  await releasePushForSignOut(browserPushDeps(window));
   await logoutCustomer();
   clearBrowserShoppingState();
   window.dispatchEvent(new CustomEvent("customer-logout"));

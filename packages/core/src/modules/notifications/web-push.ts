@@ -46,7 +46,8 @@ export interface StoredPushSubscription {
   p256dh: string;
   auth: string;
   /** The staff owner (null for a buyer's browser). */
-  userId?: string | null;
+  userId: string | null;
+  customerId: string | null;
 }
 
 /** What the dashboard shows of a staff member's own devices. */
@@ -181,6 +182,8 @@ export async function sendStaffTestPush(
     endpoint: pushSubscriptions.endpoint,
     p256dh: pushSubscriptions.p256dh,
     auth: pushSubscriptions.auth,
+    userId: pushSubscriptions.userId,
+    customerId: pushSubscriptions.customerId,
   }).from(pushSubscriptions)
     .where(and(ownerCondition({ audience: "staff", userId }), eq(pushSubscriptions.id, deviceId)))
     .limit(1);
@@ -215,6 +218,7 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
     p256dh: pushSubscriptions.p256dh,
     auth: pushSubscriptions.auth,
     userId: pushSubscriptions.userId,
+    customerId: pushSubscriptions.customerId,
   };
   const activeStaffOwner = target.audience === "staff"
     ? staffPermissionSql(pushSubscriptions.userId, target.requiredPermission)
@@ -270,15 +274,20 @@ export async function webPushSender(env: { SCALIUS_SECRET?: unknown; BETTER_AUTH
 }
 
 /** The message the service workers show (`title`, `body`, `url`, `tag`). */
-export function webPushPayload(notification: PushNotification): string {
+export function webPushPayload(
+  notification: PushNotification,
+  recipient?: { audience: "staff" | "customer"; id: string },
+): string {
   const payload = {
     title: notification.title,
     body: notification.body,
     ...(notification.url ? { url: notification.url } : {}),
     ...(notification.tag ? { tag: notification.tag } : {}),
   };
+  // Legacy workers see no outer title/body; only owner-aware workers unwrap private content.
+  const encode = () => JSON.stringify(recipient ? { recipient, notification: payload } : payload);
   const encoder = new TextEncoder();
-  if (encoder.encode(JSON.stringify(payload)).length <= MAX_WEB_PUSH_PLAINTEXT) return JSON.stringify(payload);
+  if (encoder.encode(encode()).length <= MAX_WEB_PUSH_PLAINTEXT) return encode();
 
   // Fit the body by encoded JSON bytes without splitting Unicode or changing its destination.
   const body = Array.from(payload.body);
@@ -287,11 +296,11 @@ export function webPushPayload(notification: PushNotification): string {
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
     payload.body = body.slice(0, middle).join("");
-    if (encoder.encode(JSON.stringify(payload)).length <= MAX_WEB_PUSH_PLAINTEXT) low = middle;
+    if (encoder.encode(encode()).length <= MAX_WEB_PUSH_PLAINTEXT) low = middle;
     else high = middle - 1;
   }
   payload.body = body.slice(0, low).join("");
-  const result = JSON.stringify(payload);
+  const result = encode();
   if (encoder.encode(result).length > MAX_WEB_PUSH_PLAINTEXT) {
     throw new WebPushError("payload_too_large", "Push metadata is too large.");
   }
@@ -312,9 +321,16 @@ export async function deliverWebPush(
 ): Promise<WebPushOutcome> {
   let outcome: WebPushOutcome;
   try {
+    const recipient = subscription.userId && !subscription.customerId
+      ? { audience: "staff" as const, id: subscription.userId }
+      : subscription.customerId && !subscription.userId
+        ? { audience: "customer" as const, id: subscription.customerId }
+        : null;
+    if (!recipient) throw new Error("Push recipient is unavailable.");
+    const guardedPayload = webPushPayload(JSON.parse(payload) as PushNotification, recipient);
     ({ outcome } = await sendWebPush({
       subscription: { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
-      payload,
+      payload: guardedPayload,
       vapid: sender.vapid,
       subject: sender.subject,
       ...(options.topic ? { topic: options.topic } : {}),

@@ -6,6 +6,7 @@
  * notifications and says exactly why a browser cannot receive them.
  * Not in the generated SDK yet; the response shapes are typed here.
  */
+import { messagePushWorker, releasePushBeforeSignOut } from "@scalius/shared/push-sign-out";
 import { apiClient, apiData } from "./api";
 import { withDashboardBasePath } from "./dashboard-base-path";
 
@@ -179,14 +180,16 @@ export function thisDeviceId(): string | null {
  * Returns "blocked" when the merchant refuses permission (nothing is saved).
  */
 export async function turnOnThisDevice(publicKey: string, deviceLabel: string): Promise<{ id: string } | "blocked"> {
+  const startedAt = Date.now();
   const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (permission !== "granted") return "blocked";
   const registration = await activeRegistration();
   const key = applicationServerKey(publicKey);
   let subscription = await registration.pushManager.getSubscription();
-  // A subscription made with another key (the key was replaced) cannot receive this store's pushes.
-  if (subscription && !sameKey(subscription, key)) {
-    await subscription.unsubscribe();
+  // Explicit enrollment gets a fresh endpoint; an old logout may still be unsubscribing the previous one.
+  const oldEndpoint = subscription?.endpoint;
+  if (subscription) {
+    if (!await subscription.unsubscribe()) throw new Error("The previous notification subscription is still active.");
     await apiData(apiClient.post({
       url: `${WEB_PUSH_URL}/subscriptions/remove`,
       headers: JSON_HEADERS,
@@ -195,9 +198,12 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
     rememberDevice(null);
     subscription = null;
   }
-  const created = !subscription;
   try {
     subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    if (subscription.endpoint === oldEndpoint) throw new Error("The notification subscription was not replaced.");
+    if (!await messagePushWorker(registration, "scalius:push:enrolled", startedAt)) {
+      throw new Error("The notification worker could not confirm this sign-in.");
+    }
     const saved = await apiData(apiClient.post<{ 200: { success: boolean; data: { id: string } } }>({
       url: `${WEB_PUSH_URL}/subscriptions`,
       headers: JSON_HEADERS,
@@ -207,7 +213,7 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
     return { id: saved.id };
   } catch (error) {
     rememberDevice(null);
-    if (created) await subscription?.unsubscribe().catch(() => false);
+    await subscription?.unsubscribe().catch(() => false);
     throw error;
   }
 }
@@ -225,6 +231,31 @@ export async function thisBrowserIsOn(publicKey?: string | null): Promise<boolea
   } catch {
     return false;
   }
+}
+
+/** Only an explicit sign-out invokes this; another tab's broadcast must never remove a newer device. */
+export async function releaseThisDeviceForSignOut(): Promise<void> {
+  const deviceId = thisDeviceId();
+  await releasePushBeforeSignOut({
+    getRegistration: async () => {
+      if (!webPushSupported()) return undefined;
+      const registration = await navigator.serviceWorker.getRegistration(workerScope());
+      const expected = new URL(workerUrl(), window.location.href);
+      return registration?.scope === new URL(workerScope(), window.location.href).href
+        && [registration.active, registration.waiting, registration.installing].some((worker) => {
+          if (!worker) return false;
+          const url = new URL(worker.scriptURL);
+          return url.origin === expected.origin && url.pathname === expected.pathname;
+        }) ? registration : undefined;
+    },
+    removeSubscription: (endpoint, signal) => apiData(apiClient.post({
+      url: `${WEB_PUSH_URL}/subscriptions/remove`,
+      headers: JSON_HEADERS,
+      body: { endpoint },
+      signal,
+    })),
+    forgetDevice: () => { if (thisDeviceId() === deviceId) rememberDevice(null); },
+  });
 }
 
 /** Unsubscribes this browser and tells the API to forget it. */

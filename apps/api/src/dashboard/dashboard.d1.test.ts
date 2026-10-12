@@ -358,3 +358,28 @@ describe("scanner cookie exchange", () => {
     expect((await exchange()).status).toBe(401);
   });
 });
+
+
+describe("native push first-party session read", () => {
+  it.each(["", "/dashboard"])("serves JSON at the %s base with SW-style same-origin credentials", async (base) => {
+    const origin = base ? STOREFRONT : DASHBOARD;
+    const env = makeEnv({ dashboardUrl: `${origin}${base}` });
+    const userId = await createSuperAdmin(env);
+    const signedIn = await route(env, `${base}/api/auth/sign-in/email`, {
+      method: "POST", headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ email: "owner@shop.test", password: PASSWORD }),
+    }, origin);
+    const cookie = sessionCookie(signedIn);
+    const read = () => route(env, `${base}/api/auth/dashboard-session`, {
+      headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin" },
+    }, origin);
+    const response = await read();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(await response.json()).toMatchObject({ session: { user: { id: userId }, permissions: expect.any(Array) } });
+    await database.db.update(userTable).set({ twoFactorEnabled: true }).where(eq(userTable.id, userId));
+    await database.db.update(sessionTable).set({ twoFactorVerified: false }).where(eq(sessionTable.userId, userId));
+    expect(await (await read()).json()).toMatchObject({ session: { user: { id: userId }, permissions: null } });
+  });
+});

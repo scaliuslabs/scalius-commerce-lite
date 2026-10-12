@@ -8,6 +8,7 @@
  * buyer: it travels in POST bodies to the same-origin account proxy only,
  * never in a URL, a log line or an analytics payload.
  */
+import { messagePushWorker, releasePushBeforeSignOut } from "@scalius/shared/push-sign-out";
 import type { AccountPushCopy } from "./account-push-copy";
 
 export const PUSH_SERVICE_WORKER_PATH = "/push-sw.js";
@@ -31,7 +32,7 @@ export interface PushDeps {
   /** Registers the service worker and waits until it is active. */
   register(): Promise<ServiceWorkerRegistration>;
   /** A JSON POST to the account API; the parsed `data` of a successful envelope, else null. */
-  post(path: string, body: Record<string, unknown>): Promise<unknown | null>;
+  post(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<unknown | null>;
   deviceLabel(): string;
 }
 
@@ -112,6 +113,7 @@ export type PushChange = { ok: true; view: PushViewState } | { ok: false; view: 
  * the browser only shows its permission prompt for a user gesture.
  */
 export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<PushChange> {
+  const startedAt = Date.now();
   let created: PushSubscription | null = null;
   try {
     const permission = await deps.requestPermission();
@@ -120,9 +122,10 @@ export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<Pus
     const registration = await deps.register();
     const key = decodePublicKey(publicKey);
     let subscription = await registration.pushManager.getSubscription();
-    if (subscription && !sameKey(subscription, key)) {
-      const oldEndpoint = subscription.endpoint;
-      await subscription.unsubscribe();
+    // A previous account's timed-out logout must not later unsubscribe this enrollment.
+    const oldEndpoint = subscription?.endpoint;
+    if (subscription) {
+      if (!await subscription.unsubscribe()) return { ok: false, view: "off" };
       // Cleanup is best effort; only this explicit click creates a replacement.
       await deps.post("/push/unsubscribe", { endpoint: oldEndpoint }).catch(() => null);
       subscription = null;
@@ -131,6 +134,14 @@ export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<Pus
       subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       created = subscription;
     }
+    if (subscription.endpoint === oldEndpoint) {
+      await created?.unsubscribe().catch(() => false);
+      return { ok: false, view: "off" };
+    }
+    if (!await messagePushWorker(registration, "scalius:push:enrolled", startedAt)) {
+      await created?.unsubscribe().catch(() => false);
+      return { ok: false, view: "off" };
+    }
     const json = subscription.toJSON();
     const saved = await deps.post("/push/subscribe", {
       endpoint: json.endpoint ?? subscription.endpoint,
@@ -138,7 +149,7 @@ export async function turnPushOn(deps: PushDeps, publicKey: string): Promise<Pus
       deviceLabel: deps.deviceLabel(),
     });
     if (!saved) {
-      // Roll back only this attempt's new subscription; a reused one may still be working.
+      // Roll back only the replacement this explicit attempt created.
       await created?.unsubscribe().catch(() => false);
       return { ok: false, view: "off" };
     }
@@ -163,6 +174,14 @@ export async function turnPushOff(deps: PushDeps): Promise<PushChange> {
   } catch {
     return { ok: false, view: "on" };
   }
+}
+
+/** Release only this browser's owned worker before explicit account logout. */
+export async function releasePushForSignOut(deps: PushDeps): Promise<void> {
+  await releasePushBeforeSignOut({
+    getRegistration: () => deps.supported() ? deps.getRegistration() : Promise.resolve(undefined),
+    removeSubscription: (endpoint, signal) => deps.post("/push/unsubscribe", { endpoint }, signal),
+  });
 }
 
 /** The browser and account API for the real page. */
@@ -207,13 +226,14 @@ export function browserPushDeps(win: Window & typeof globalThis): PushDeps {
       }
       return registration;
     },
-    post: async (path, body) => {
+    post: async (path, body, signal) => {
       const response = await win.fetch(`/api/customer-auth${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         cache: "no-store",
         body: JSON.stringify(body),
+        signal,
       });
       if (!response.ok) return null;
       const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown } | null;

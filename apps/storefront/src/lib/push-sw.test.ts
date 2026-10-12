@@ -18,14 +18,15 @@ function load(scriptUrl = `${ORIGIN}/push-sw.js`) {
     location: new URL(scriptUrl),
     addEventListener: (name: string, listener: Listener) => listeners.set(name, listener),
     skipWaiting: vi.fn(),
-    registration: { showNotification },
+    registration: { showNotification, getNotifications: vi.fn(async () => []) },
     clients: {
       claim: vi.fn(async () => undefined),
       matchAll: vi.fn(async () => clients.list),
       openWindow,
     },
   };
-  new Function("self", "URL", SOURCE)(scope, URL);
+  const fetchSession = vi.fn(async () => new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { customerId: "cust_A" } } })));
+  new Function("self", "URL", "fetch", "AbortController", "setTimeout", "clearTimeout", SOURCE)(scope, URL, fetchSession, AbortController, setTimeout, clearTimeout);
   const wait = async (event: { promise?: Promise<unknown> }) => event.promise;
   return { listeners, showNotification, openWindow, clients, scope, wait };
 }
@@ -33,7 +34,7 @@ function load(scriptUrl = `${ORIGIN}/push-sw.js`) {
 function push(worker: ReturnType<typeof load>, payload: unknown, raw = false) {
   let promise: Promise<unknown> | undefined;
   worker.listeners.get("push")!({
-    data: { json: () => (raw ? JSON.parse(String(payload)) : payload) },
+    data: { json: () => (raw ? JSON.parse(String(payload)) : { recipient: { audience: "customer", id: "cust_A" }, notification: payload }) },
     waitUntil: (value: Promise<unknown>) => { promise = value; },
   });
   return promise;
@@ -56,7 +57,7 @@ describe("push-sw.js", () => {
     expect(worker.showNotification).toHaveBeenCalledWith("Order shipped", {
       body: "Your order #1042 is on its way.",
       icon: `${ORIGIN}/favicon.svg`,
-      data: { url: "/account/orders/ord_1" },
+      data: { url: "/account/orders/ord_1", pushEpoch: 0, pushOwner: "cust_A" },
       tag: "order-1042",
       renotify: true,
     });

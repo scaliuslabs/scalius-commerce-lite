@@ -52,7 +52,7 @@ function base64Url(bytes: Uint8Array): string {
 async function browser(endpoint: string) {
   const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]) as CryptoKeyPair;
   const p256dh = base64Url(new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey)));
-  return { endpoint, keys: { p256dh, auth: base64Url(crypto.getRandomValues(new Uint8Array(16))) } };
+  return { pair, endpoint, keys: { p256dh, auth: base64Url(crypto.getRandomValues(new Uint8Array(16))) } };
 }
 
 function recordingSender(base: WebPushSender, statuses: Record<string, number>) {
@@ -166,7 +166,7 @@ describe("web push delivery", () => {
     const owner = { requiredPermission: "orders.view" as const, audience: "staff" as const, userId: "usr_1" };
     const input = await browser("https://fcm.googleapis.com/fcm/send/healthy");
     const { id } = await savePushSubscription(db, owner, parsePushSubscription(input));
-    const subscription = { id, endpoint: input.endpoint, ...input.keys };
+    const subscription = { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...input.keys };
     const { sender, calls } = recordingSender((await webPushSender(ENV))!, {});
     expect(await deliverWebPush(db, { ...sender, subject: "http://localhost" }, subscription, "{}" )).toBe("retry");
     expect(await deliverWebPush(db, sender, subscription, "x".repeat(MAX_WEB_PUSH_PLAINTEXT + 1))).toBe("retry");
@@ -186,7 +186,7 @@ describe("web push delivery", () => {
       { ...input.keys, p256dh: base64Url(Uint8Array.from([4, ...new Array<number>(64).fill(0)])) },
     ]) {
       const { id } = await savePushSubscription(db, owner, parsePushSubscription(input));
-      expect(await deliverWebPush(db, sender, { id, endpoint: input.endpoint, ...keys }, "{}")).toBe("gone");
+      expect(await deliverWebPush(db, sender, { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...keys }, "{}")).toBe("gone");
       expect(await hasPushSubscription(db, owner, input.endpoint)).toBe(false);
     }
     expect(calls).toHaveLength(0);
@@ -235,4 +235,95 @@ describe("web push delivery", () => {
     await notificationsDocument.write(db, { pushProvider: "acme.push:push" });
     expect(await sendCustomerPush(db, ENV, undefined, { customerId: "cust_2", notification: { title: "Hi", body: "" } })).toEqual({ delivered: false });
   });
+});
+
+
+describe("recipient-bound native payload", () => {
+  it("keeps private text below the envelope so legacy workers show only their neutral fallback", () => {
+    const notification = { title: "Private buyer", body: "Order 1042", url: "/account/orders/ord_1", tag: "order:1" };
+    const recipient = { audience: "customer" as const, id: "cust_1" };
+    const decoded = JSON.parse(webPushPayload(notification, recipient));
+    expect(decoded).toEqual({ recipient, notification });
+    for (const field of ["title", "body", "url", "tag"]) expect(decoded).not.toHaveProperty(field);
+  });
+
+  it("includes recipient proof in the byte budget and preserves unicode and destination", () => {
+    const notification = { title: "Update", body: "অর্ডার 🛍️".repeat(1_000), url: "/account/orders/ord_1" };
+    const recipient = { audience: "customer" as const, id: "cust_1" };
+    const payload = webPushPayload(notification, recipient);
+    expect(new TextEncoder().encode(payload).length).toBeLessThanOrEqual(MAX_WEB_PUSH_PLAINTEXT);
+    const decoded = JSON.parse(payload);
+    expect(decoded.recipient).toEqual(recipient);
+    expect(decoded.notification.url).toBe(notification.url);
+    expect(notification.body.startsWith(decoded.notification.body)).toBe(true);
+  });
+});
+
+
+async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, length: number) {
+  const key = await crypto.subtle.importKey("raw", ikm as BufferSource, "HKDF", false, ["deriveBits"]);
+  return new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: "HKDF", hash: "SHA-256", salt: salt as BufferSource, info: info as BufferSource },
+      key,
+      length * 8,
+    ),
+  );
+}
+
+/** Independent receiver, written from the RFC, used to prove round trips. */
+async function decrypt(message: Uint8Array, receiver: CryptoKeyPair, authB64: string) {
+  const enc = new TextEncoder();
+  const salt = message.slice(0, 16);
+  const idLen = message[20] ?? 0;
+  const asPublic = message.slice(21, 21 + idLen);
+  const uaPublic = new Uint8Array(await crypto.subtle.exportKey("raw", receiver.publicKey));
+  const asKey = await crypto.subtle.importKey("raw", asPublic as BufferSource, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const secret = new Uint8Array(
+    await crypto.subtle.deriveBits({ name: "ECDH", public: asKey }, receiver.privateKey, 256),
+  );
+  const info = new Uint8Array([...enc.encode("WebPush: info\0"), ...uaPublic, ...asPublic]);
+  const ikm = await hkdf(Uint8Array.from(Buffer.from(authB64, "base64url")), secret, info, 32);
+  const cek = await hkdf(salt, ikm, enc.encode("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = await hkdf(salt, ikm, enc.encode("Content-Encoding: nonce\0"), 12);
+  const key = await crypto.subtle.importKey("raw", cek as BufferSource, "AES-GCM", false, ["decrypt"]);
+  const record = new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: nonce as BufferSource },
+      key,
+      message.slice(21 + idLen) as BufferSource,
+    ),
+  );
+  expect(record[record.length - 1]).toBe(0x02);
+  return record.slice(0, -1);
+}
+
+
+it.each(["staff", "customer"] as const)("binds encrypted %s delivery to its actual selected owner", async (audience) => {
+  const input = await browser(`https://fcm.googleapis.com/fcm/send/owner-${audience}`);
+  const owner = audience === "staff" ? { audience, userId: "usr_1" } : { audience, customerId: "cust_1" };
+  await savePushSubscription(db, owner, input);
+  const captured: Uint8Array[] = [];
+  const sender: WebPushSender = { ...(await webPushSender(ENV))!, fetch: (async (_url, init) => {
+    captured.push(Uint8Array.from(init!.body as Uint8Array));
+    return new Response(null, { status: 201 });
+  }) as typeof fetch };
+  const notification = { title: "PRIVATE", body: "Fixture details", url: "/account/orders/fixture" };
+  const target = audience === "staff" ? { audience, requiredPermission: "orders.view" as const } : { audience, customerIds: ["cust_1"] };
+  expect((await sendWebPushNotification(db, sender, target, notification)).sent).toBe(1);
+  const decoded = JSON.parse(new TextDecoder().decode(await decrypt(captured[0]!, input.pair, input.keys.auth)));
+  expect(decoded).toEqual({ recipient: { audience, id: audience === "staff" ? "usr_1" : "cust_1" }, notification });
+  expect(decoded).not.toHaveProperty("title");
+  expect(decoded).not.toHaveProperty("body");
+});
+
+it("does not send or delete a device when owner metadata is missing", async () => {
+  const input = await browser("https://fcm.googleapis.com/fcm/send/no-owner");
+  const { id } = await savePushSubscription(db, { audience: "staff", userId: "usr_1" }, input);
+  const { sender, calls } = recordingSender((await webPushSender(ENV))!, {});
+  // Runtime defensive check for old/untyped callers, in addition to required fields in TypeScript.
+  const unowned = { id, endpoint: input.endpoint, ...input.keys } as Parameters<typeof deliverWebPush>[2];
+  expect(await deliverWebPush(db, sender, unowned, webPushPayload({ title: "Private", body: "" }))).toBe("retry");
+  expect(calls).toHaveLength(0);
+  expect(await hasPushSubscription(db, { audience: "staff", userId: "usr_1" }, input.endpoint)).toBe(true);
 });

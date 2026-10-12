@@ -13,13 +13,18 @@ import {
   type PushDeps,
 } from "./account-push";
 
+vi.mock("@scalius/shared/push-sign-out", async (original) => ({
+  ...await original<typeof import("@scalius/shared/push-sign-out")>(),
+  messagePushWorker: vi.fn(async () => true),
+}));
+
 const ENDPOINT = "https://push.example/send/abc123";
 
-function fakeSubscription(key: string | null = "AQAB") {
+function fakeSubscription(key: string | null = "AQAB", endpoint = ENDPOINT) {
   return {
-    endpoint: ENDPOINT,
+    endpoint,
     options: { applicationServerKey: key ? decodePublicKey(key).buffer : null },
-    toJSON: () => ({ endpoint: ENDPOINT, expirationTime: null, keys: { p256dh: "pk", auth: "ak" } }),
+    toJSON: () => ({ endpoint, expirationTime: null, keys: { p256dh: "pk", auth: "ak" } }),
     unsubscribe: vi.fn(async () => true),
   };
 }
@@ -33,7 +38,7 @@ function fakeDeps(options: {
   answers?: Record<string, unknown>;
 } = {}) {
   const subscription = options.subscription === undefined ? null : options.subscription;
-  const subscribe = vi.fn(async () => fakeSubscription());
+  const subscribe = vi.fn(async () => fakeSubscription("AQAB", subscription ? `${ENDPOINT}/replacement` : ENDPOINT));
   const registration = {
     pushManager: { getSubscription: vi.fn(async () => subscription), subscribe },
   } as unknown as ServiceWorkerRegistration;
@@ -116,13 +121,13 @@ describe("turning notifications on and off", () => {
     }
   });
 
-  it("reuses a matching subscription when explicitly reconnecting it to the account", async () => {
+  it("replaces a matching subscription on explicit enrollment so a previous logout cannot remove it", async () => {
     const subscription = fakeSubscription();
     const { deps, post, subscribe } = fakeDeps({ subscription });
     expect(await turnPushOn(deps, "AQAB")).toEqual({ ok: true, view: "on" });
-    expect(subscribe).not.toHaveBeenCalled();
-    expect(subscription.unsubscribe).not.toHaveBeenCalled();
-    expect(post).toHaveBeenCalledWith("/push/subscribe", expect.objectContaining({ endpoint: ENDPOINT }));
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(post).toHaveBeenCalledWith("/push/subscribe", expect.objectContaining({ endpoint: `${ENDPOINT}/replacement` }));
   });
   it("asks the browser first, subscribes with the store's key and posts the subscription with a device label", async () => {
     const { deps, post, subscribe } = fakeDeps();
@@ -155,11 +160,11 @@ describe("turning notifications on and off", () => {
     expect(created.unsubscribe).toHaveBeenCalled();
   });
 
-  it("preserves a reused subscription on failed saves and rolls back a newly created one on thrown saves", async () => {
+  it("releases the previous endpoint and rolls back a replacement whose save failed", async () => {
     const working = fakeSubscription();
     const reused = fakeDeps({ subscription: working, answers: { "/push/subscribe": null } });
     expect(await turnPushOn(reused.deps, "AQAB")).toEqual({ ok: false, view: "off" });
-    expect(working.unsubscribe).not.toHaveBeenCalled();
+    expect(working.unsubscribe).toHaveBeenCalledOnce();
     const created = fakeSubscription();
     const fresh = fakeDeps();
     fresh.subscribe.mockResolvedValueOnce(created);
@@ -333,4 +338,17 @@ describe("the control", () => {
     expect(view.status.textContent).toBe("এই ব্রাউজারে বন্ধ আছে");
     expect(view.hint.textContent).toBe(accountPushCopy("bn").failed);
   });
+});
+
+
+it("refuses a replacement when native unsubscribe fails or the browser returns the same endpoint", async () => {
+  const old = fakeSubscription();
+  old.unsubscribe.mockResolvedValue(false);
+  const failed = fakeDeps({ subscription: old });
+  expect(await turnPushOn(failed.deps, "AQAB")).toEqual({ ok: false, view: "off" });
+  expect(failed.subscribe).not.toHaveBeenCalled();
+  const same = fakeDeps({ subscription: fakeSubscription() });
+  same.subscribe.mockResolvedValue(fakeSubscription());
+  expect(await turnPushOn(same.deps, "AQAB")).toEqual({ ok: false, view: "off" });
+  expect(same.post).not.toHaveBeenCalledWith("/push/subscribe", expect.anything());
 });

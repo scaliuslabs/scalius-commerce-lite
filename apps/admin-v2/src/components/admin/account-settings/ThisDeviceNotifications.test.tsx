@@ -9,6 +9,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@scalius/shared/push-sign-out", async (original) => ({
+  ...await original<typeof import("@scalius/shared/push-sign-out")>(),
+  messagePushWorker: vi.fn(async () => true),
+}));
+
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }));
 vi.mock("~/lib/api", () => ({
   apiClient: api,
@@ -55,7 +60,7 @@ function installBrowser(existing: FakeSubscription | null = null, permission: No
   let current = existing;
   const getSubscription = vi.fn(async () => current);
   const subscribe = vi.fn(async () => {
-    current = fakeSubscription();
+    current = fakeSubscription(existing ? "https://push.example/replacement" : undefined);
     return current;
   });
   const registration = { active: {}, installing: null, waiting: null, pushManager: { getSubscription, subscribe } };
@@ -287,7 +292,7 @@ describe("Notifications on this device", () => {
       api.post.mockRejectedValue(new Error("offline"));
       await expect(turnOnThisDevice(PUBLIC_KEY, "This browser")).rejects.toThrow("offline");
       const subscription = await browser.getSubscription() as FakeSubscription;
-      expect(subscription.unsubscribe).toHaveBeenCalledTimes(reuse ? 0 : 1);
+      expect(subscription.unsubscribe).toHaveBeenCalledOnce();
       expect(localStorage.getItem("scalius-web-push-device")).toBeNull();
     }
   });

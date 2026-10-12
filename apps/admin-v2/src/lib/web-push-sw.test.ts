@@ -19,16 +19,16 @@ function worker() {
   const scope = {
     location: new URL("https://shop.example/dashboard/web-push-sw.js"),
     addEventListener: (kind: string, listener: (event: unknown) => void) => listeners.set(kind, listener),
-    registration: { showNotification },
+    registration: { showNotification, getNotifications: vi.fn(async () => []) },
   };
-  const randomUUID = vi.fn(() => "receipt-id");
-  runInNewContext(SOURCE, { self: scope, clients, URL, crypto: { randomUUID } });
+  const fetchSession = vi.fn(async () => new Response(JSON.stringify({ session: { user: { id: "usr_A" }, permissions: ["orders.view"] } })));
+  runInNewContext(SOURCE, { self: scope, clients, URL, fetch: fetchSession, AbortController, setTimeout, clearTimeout });
   const push = async (payload: unknown) => {
     let pending: Promise<unknown> | undefined;
-    listeners.get("push")!({ data: { json: () => payload }, waitUntil: (value: Promise<unknown>) => { pending = value; } });
+    listeners.get("push")!({ data: { json: () => ({ recipient: { audience: "staff", id: "usr_A" }, notification: payload }) }, waitUntil: (value: Promise<unknown>) => { pending = value; } });
     await pending;
   };
-  return { push, showNotification, postMessage, secondPost, foreignPost, clients, randomUUID };
+  return { push, showNotification, postMessage, secondPost, foreignPost, clients };
 }
 
 describe("staff push native alerts", () => {
@@ -53,14 +53,14 @@ describe("staff push native alerts", () => {
     expect(sw.showNotification.mock.calls[0]![1]).not.toHaveProperty("tag");
   });
 
-  it("shares one receipt id and timestamp across open tabs and accepts JSON null safely", async () => {
+  it("sends only an account-free refresh hint and treats a missing notification as neutral", async () => {
     const sw = worker();
+    await sw.push({ title: "Private", body: "Buyer details" });
+    expect(sw.postMessage).toHaveBeenCalledWith({ type: "scalius:push" });
+    expect(sw.secondPost.mock.calls[0]![0]).toBe(sw.postMessage.mock.calls[0]![0]);
+    sw.postMessage.mockClear();
     await sw.push(null);
-    expect(sw.showNotification).toHaveBeenCalledWith("Scalius", expect.objectContaining({ body: "" }));
-    expect(sw.randomUUID).toHaveBeenCalledOnce();
-    const receipt = sw.postMessage.mock.calls[0]![0];
-    expect(receipt).toEqual({ type: "scalius:push", id: "receipt-id", at: expect.any(Number), title: "Scalius", body: "", url: "" });
-    expect(sw.secondPost).toHaveBeenCalledWith(receipt);
-    expect(sw.secondPost.mock.calls[0]![0]).toBe(receipt);
+    expect(sw.showNotification).toHaveBeenLastCalledWith("Scalius", expect.not.objectContaining({ body: expect.any(String) }));
+    expect(sw.postMessage).not.toHaveBeenCalled();
   });
 });

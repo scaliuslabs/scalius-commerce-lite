@@ -35,6 +35,13 @@ export default function UserMenuContent({ user, side, children, defaultOpen }: {
     setSigningOut(true);
     try {
       clearAdminRouteContextCache();
+      // A missing or stalled cleanup chunk must not prevent ordinary sign-out.
+      let loadTimer: number | undefined;
+      const push = await Promise.race([
+        import("@/lib/web-push").catch(() => undefined),
+        new Promise<undefined>((resolve) => { loadTimer = window.setTimeout(resolve, 2_500); }),
+      ]).finally(() => window.clearTimeout(loadTimer));
+      await push?.releaseThisDeviceForSignOut().catch(() => undefined);
       const { authClient } = await import("@/lib/auth-client");
       const result = await authClient.signOut();
       if (result.error) throw new Error(result.error.message);

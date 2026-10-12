@@ -2,7 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ logoutCustomer: vi.fn(async () => undefined) }));
+const api = vi.hoisted(() => ({ logoutCustomer: vi.fn(async () => undefined), release: vi.fn(async () => undefined) }));
+vi.mock("./account-push", () => ({ browserPushDeps: () => ({}), releasePushForSignOut: api.release }));
 vi.mock("@/lib/api/customer-auth", () => ({ logoutCustomer: api.logoutCustomer }));
 
 import { addToCart, cartStore, CART_STORAGE_KEY, hydrateCartFromStorage } from "@/store/cart";
@@ -26,6 +27,7 @@ describe("signing out on a shared device", () => {
     localStorage.clear();
     sessionStorage.clear();
     api.logoutCustomer.mockClear();
+    api.release.mockClear();
   });
 
   it("ends the session, empties the cart and every checkout key, then tells the page", async () => {
@@ -41,6 +43,8 @@ describe("signing out on a shared device", () => {
     await signOutCustomer();
     window.removeEventListener("customer-logout", listener);
 
+    expect(api.release).toHaveBeenCalledOnce();
+    expect(api.release.mock.invocationCallOrder[0]).toBeLessThan(api.logoutCustomer.mock.invocationCallOrder[0]!);
     expect(api.logoutCustomer).toHaveBeenCalledTimes(1);
     expect(cartStore.get().totalItems).toBe(0);
     expect(JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? "{}").items).toEqual({});
