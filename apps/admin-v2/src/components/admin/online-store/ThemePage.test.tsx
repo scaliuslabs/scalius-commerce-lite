@@ -63,7 +63,7 @@ const SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
-function workspaceOf(draft: StorefrontThemeDocument, options: { published?: StorefrontThemeDocument; lastPublished?: ThemeWorkspaceDocument["lastPublished"] } = {}) {
+function workspaceOf(draft: StorefrontThemeDocument, options: { published?: StorefrontThemeDocument; lastPublished?: ThemeWorkspaceDocument["lastPublished"]; apps?: ThemeWorkspaceDocument["apps"] } = {}) {
   const published = options.published ?? draft;
   return {
     published: { theme: published, revision: 1 },
@@ -72,7 +72,7 @@ function workspaceOf(draft: StorefrontThemeDocument, options: { published?: Stor
     lastPublished: options.lastPublished ?? null,
     storeShape: SHAPE,
     media: [],
-    apps: [],
+    apps: options.apps ?? [],
   } as unknown as ThemeWorkspaceDocument;
 }
 
@@ -225,6 +225,56 @@ describe("themes page", () => {
     act(() => radio("Boutique").click());
     expect(document.querySelector("[role=alertdialog]")).toBeNull();
     expect(container.textContent).toContain("You can view this theme but not change it.");
+  });
+
+  describe("app templates", () => {
+    const bold = storefrontTemplateTheme("boutique");
+    const STUDIO: ThemeWorkspaceDocument["apps"] = [{
+      id: "acme.studio",
+      name: "Acme Studio",
+      sections: [],
+      slots: [],
+      productBlocks: [],
+      templates: [
+        { key: "acme.studio/bold", id: "bold", name: "Studio Bold", description: "Big type, quiet colours.",
+          theme: { tokens: bold.tokens, apps: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } } } },
+        // A template this document version cannot read is never offered.
+        { key: "acme.studio/future", id: "future", name: "Studio Future", description: null, theme: { tokens: { unknown: true } } },
+      ],
+    }];
+
+    it("lists an app's templates beside the built-in ones with an App badge and the app's name", () => {
+      render(workspaceOf(DEFAULT_STOREFRONT_THEME, { apps: STUDIO }));
+      const templates = container.querySelectorAll("[role=radiogroup]")[0]!;
+      expect(templates.querySelectorAll("[role=radio]")).toHaveLength(6);
+      expect(radio("Studio Bold").textContent).toBe("Studio BoldAppBig type, quiet colours. From Acme Studio");
+      expect(radio("Studio Bold").getAttribute("aria-checked")).toBe("false");
+      expect(radio("Department").getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("applies an app template to the draft after confirmation, keeping the merchant's content", async () => {
+      const theme = withContent(DEFAULT_STOREFRONT_THEME);
+      render(workspaceOf(theme, { apps: STUDIO }));
+      act(() => radio("Studio Bold").click());
+      const dialog = document.querySelector("[role=alertdialog]")!;
+      expect(dialog.textContent).toContain("Replace your changes with Studio Bold?");
+      expect(dialog.textContent).toContain("the homepage sections it brings replace yours");
+      await act(async () => confirm("Replace").click());
+      const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+      expect(saved.tokens).toEqual(bold.tokens);
+      expect(saved.apps).toEqual({ header: { app: "acme.studio/header", values: { tagline: "Hi" } }, template: "acme.studio/bold" });
+      expect(saved.brand).toEqual(theme.brand);
+      expect(saved.pages).toEqual(theme.pages);
+      expect(toasts.success).toHaveBeenCalledWith("Template applied");
+    });
+
+    it("shows the app template the draft was applied from as the current one", () => {
+      const applied = { ...DEFAULT_STOREFRONT_THEME, tokens: bold.tokens, apps: { template: "acme.studio/bold" } };
+      render(workspaceOf(applied, { apps: STUDIO }));
+      expect(radio("Studio Bold").getAttribute("aria-checked")).toBe("true");
+      expect(radio("Department").getAttribute("aria-checked")).toBe("false");
+      expect(current().textContent).toContain("Studio Bold");
+    });
   });
 
   it("previews the saved draft's homepage in a new tab", async () => {

@@ -16,6 +16,8 @@ Real apps in `plugins/`: `bkash` and `nagad` (payment providers) and `bangladesh
 | Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
 | Custom fields, metaobjects | `customFields`, `metaobjects` | `ctx.customFields`, `ctx.api` (`dashboard.metaobjects.*`) |
 | Theme sections, product blocks, checkout and account blocks | `storefront.sections`, `productBlocks`, `blocks` | a public route that answers `{ html }` |
+| Storefront components: sections, header, footer, product card, templates | `storefront.sections` (no `route`), `slots`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
+| Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
 | Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
 | Cron, data updates, lifecycle | `cron`, `migrations` | `cron[name]`, `migrations[version]`, `lifecycle.*` |
@@ -221,6 +223,10 @@ A function is pure: `(input, settings) => output`, with no I/O. The host stops i
 - A theme section or product block route gets `request.render` and answers `{ body: { html, head? } }`. The platform sanitizes and caches the HTML. A render reads only the app's settings and the collections its section lists in `reads`, and stops after 1.5 s. A homepage shows at most 8 app sections and a product page at most 10 app blocks.
 - A checkout or account block (`storefront.blocks: [{ type, name, target, route, reads }]`) renders like a section at its Shopify target (`purchase.checkout.contact.render-after`, `customer-account.order-status.block.render`, …). No forms on checkout targets and no head tags. A page shows at most 12 app blocks.
 - With `storefront.proxy`, `/apps/<id>/*` on the storefront reaches the public routes. `request.customer` holds the signed-in customer's id, never a cookie. Answer `{ page }` or `{ redirect }` for a page navigation.
+
+## Storefront components
+
+An app can redesign the storefront without a fork: component sections, the header, footer and product card, ready-made templates, client islands and a stylesheet, compiled once by `pnpm plugin pack` and run at the edge as a pure function of the page's data. A paid store uploads and activates the app; a free store bundles it with `pnpm plugin add`. Component sections can place the store's own order form (`<Checkout product={...} />`) for single-page order landings. [docs/STOREFRONT-COMPONENTS.md](../../docs/STOREFRONT-COMPONENTS.md) is the guide; `plugins/noor` is a complete theme and `apps/api/src/plugins/testing/apps/studio` a small example.
 
 ## Providers
 

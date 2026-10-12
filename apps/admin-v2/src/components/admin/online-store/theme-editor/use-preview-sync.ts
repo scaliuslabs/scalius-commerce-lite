@@ -5,8 +5,9 @@
  * replaced in place while typing, sections moved and hidden in the page at
  * once, then drawn from the unsaved document by the preview-only render
  * route. What only a whole page can show (a header layout, the product
- * page's modules, a card style) is saved at once and the page loads again
- * in a hidden frame, swapped in when ready.
+ * page's modules, a card style, an app filling the header, footer or card)
+ * is saved at once and the page loads again in a hidden frame, swapped in
+ * when ready.
  */
 import { useEffect, useRef } from "react";
 import {
@@ -17,6 +18,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { canvasTextField } from "./canvas-text";
+import type { AppSectionEntry } from "./editor-state";
 import { pageScope, pageSections, type EditorPage } from "./editor-pages";
 import type { PreviewCommand } from "./use-preview";
 
@@ -56,10 +58,18 @@ function sameShape(left: readonly StorefrontSection[], right: readonly Storefron
 function needsWholePage(before: Theme, after: Theme, page: EditorPage): boolean {
   return !same(before.blocks, after.blocks)
     || !same(before.brand, after.brand)
+    || !same(before.apps, after.apps)
     || (page.kind === "home" && !same(before.pages.homeMode, after.pages.homeMode));
 }
 
-export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave, enabled = true, fieldsEnabled = false, resyncAt = 0 }: {
+/** A changed text's canvas field: the setting path, or an app section's setting key (`values.<key>`). */
+function textFieldOf(section: StorefrontSection, path: string): string | null {
+  if (section.type !== "app") return path;
+  const key = path.startsWith("values.") ? path.slice("values.".length) : "";
+  return key && !key.includes(".") ? key : null;
+}
+
+export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, appSections, onNeedSave, enabled = true, fieldsEnabled = false, resyncAt = 0 }: {
   send: (command: PreviewCommand) => void;
   /** Historical frames must never receive optimistic working-document edits. */
   enabled?: boolean;
@@ -78,6 +88,8 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   presence: string | null;
   /** The marks the shown page has (a moved or shown section already drawn needs no render). */
   marks: readonly string[];
+  /** The active apps' sections: which of an app section's settings are its canvas text. */
+  appSections?: ReadonlyMap<string, AppSectionEntry>;
   /** A change only a reload shows: save it now. */
   onNeedSave: () => void;
 }) {
@@ -169,7 +181,8 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
     for (const section of settingsChanged) {
       const old = was.find((each) => each.id === section.id)!;
       if (fieldsEnabled) for (const text of changedTexts(old.settings, section.settings)) {
-        const field = canvasTextField(section, text.field);
+        const name = textFieldOf(section, text.field);
+        const field = name === null ? null : canvasTextField(section, name, appSections);
         // Removing/defaulting text, paragraph bodies and unknown fields require the renderer.
         if (field?.patch && text.from.trim() && text.to.trim()) emit({ type: "text", id: section.id, field: field.field, value: text.to.trim() });
       }
@@ -227,7 +240,7 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   // The saved draft caught up with a change only a whole page shows: load it again (in a hidden frame).
   useEffect(() => {
     if (!enabled || !reloadAfterSave.current) return;
-    if (!sendable || !same(sendable.blocks, savedTheme.blocks) || !same(sendable.brand, savedTheme.brand)) return;
+    if (!sendable || !same(sendable.blocks, savedTheme.blocks) || !same(sendable.brand, savedTheme.brand) || !same(sendable.apps, savedTheme.apps)) return;
     reloadAfterSave.current = false;
     reload();
   }, [savedTheme]); // eslint-disable-line react-hooks/exhaustive-deps -- once per save

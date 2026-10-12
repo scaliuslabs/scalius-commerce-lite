@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StorefrontExtension, StorefrontRenderBatch, StorefrontRenderReply } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontExtension, StorefrontRenderBatch, StorefrontRenderReply } from "@scalius/shared/plugins/storefront-components";
 import { ExtensionHost, clearExtensionMemo } from "./host";
 import { splitCoreEmbeds } from "./embeds";
 

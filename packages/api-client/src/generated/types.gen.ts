@@ -2240,7 +2240,7 @@ export type AppSettingField = {
     key: string;
     label: string;
     help: string | null;
-    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'link' | 'list';
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'product' | 'link' | 'list';
     required: boolean;
     options: Array<{
         value: string;
@@ -2275,7 +2275,7 @@ export type AppSettingItemField = {
     key: string;
     label: string;
     help: string | null;
-    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'link' | 'list';
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'product' | 'link' | 'list';
     required: boolean;
     options: Array<{
         value: string;
@@ -3183,6 +3183,14 @@ export type AppGrant = {
     storefrontScripts: Array<string>;
     storefrontSurfaces: boolean;
     customFieldOwners: Array<string>;
+    /**
+     * Draws on the storefront with its own code: components, client islands or a stylesheet.
+     */
+    storefrontCode?: true;
+    /**
+     * Hosts the app's storefront islands reach from the buyer's browser.
+     */
+    storefrontConnect?: Array<string>;
 };
 
 export type AppLogLine = {

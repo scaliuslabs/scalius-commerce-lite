@@ -196,9 +196,11 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
 /**
  * Every image a theme names (brand, hero slides, section photos), for the
  * dashboard's previews (the same rules the storefront reads, uncapped).
+ * `appMediaIds` adds the images its apps' settings name (only each app's
+ * own schema says which values are images).
  */
-export async function readThemeMedia(db: Database, theme: StorefrontThemeDocument): Promise<HomeMediaAsset[]> {
-    const plan = planHomeMedia(db, storefrontThemeMediaIds(theme));
+export async function readThemeMedia(db: Database, theme: StorefrontThemeDocument, appMediaIds: readonly string[] = []): Promise<HomeMediaAsset[]> {
+    const plan = planHomeMedia(db, [...new Set([...storefrontThemeMediaIds(theme), ...appMediaIds])]);
     const [statement] = plan.statements;
     if (!statement) return [];
     return plan.resolve([await statement], 0);

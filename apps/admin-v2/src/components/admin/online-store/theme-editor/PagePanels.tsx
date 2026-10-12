@@ -14,23 +14,14 @@ import {
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
 import { Button } from "~/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { ProductSelect } from "../schema-form/resource-fields";
 import { Field } from "../shared";
 import type { SetTheme, Theme } from "../theme-fields";
 import { THEME_FIELD_IDS } from "../theme-settings";
-
-const HOME_PRODUCT_PAGE_SIZE = 20;
-const loadHomeProducts: SearchableSelectLoader = async ({ search, page }) => {
-  const result = await fetchProducts({ page, limit: HOME_PRODUCT_PAGE_SIZE, ...(search ? { search } : {}) });
-  return {
-    options: result.products.map((product) => ({ value: product.id, label: product.name })),
-    hasMore: page < result.pagination.totalPages,
-  };
-};
 
 /**
  * What `/` shows: the homepage sections, or one product's page (a store that
@@ -69,20 +60,14 @@ export function HomePageSettings({ theme, setDraft }: { theme: Theme; setDraft: 
       </RadioGroup>
       {mode.kind === "product" ? (
         <Field id={THEME_FIELD_IDS.homeProduct} label={t("homeProduct")} error={productId ? undefined : t("chooseProduct")}>
-          <SearchableSelect
+          <ProductSelect
             id={THEME_FIELD_IDS.homeProduct}
             value={productId}
-            selectedLabel={productName}
-            load={loadHomeProducts}
-            queryKey={["online-store", "home-product"]}
-            onValueChange={(value) => {
+            name={productName}
+            onChange={(value) => {
               setLastProduct(value);
               setMode({ kind: "product", productId: value });
             }}
-            placeholder={t("chooseProduct")}
-            searchPlaceholder={t("searchProducts")}
-            emptyMessage={t("noProducts")}
-            triggerClassName="w-full"
           />
         </Field>
       ) : null}

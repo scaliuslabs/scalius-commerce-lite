@@ -16,6 +16,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import type { ThemeApp, ThemeAppBlock } from "~/lib/api-query-options/online-store";
 import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
+import type { MediaPreviews } from "../schema-form/media-previews";
 import type { SetTheme, Theme } from "../theme-fields";
 import {
   addProductAppBlock,
@@ -33,11 +34,12 @@ function usePlacementName() {
   return (placement: ThemeAppBlock["placement"]) => (placement === "buy-box" ? t("appBlockPlacement_buyBox") : t("appBlockPlacement_below"));
 }
 
-function AppBlockItem({ block, entry, index, count, setDraft }: {
+function AppBlockItem({ block, entry, index, count, media, setDraft }: {
   block: StorefrontProductAppBlock;
   entry: AppBlockEntry | undefined;
   index: number;
   count: number;
+  media: MediaPreviews;
   setDraft: SetTheme;
 }) {
   const t = useMessages(themeEditorMessages);
@@ -70,6 +72,7 @@ function AppBlockItem({ block, entry, index, count, setDraft }: {
           idPrefix={productAppBlockFieldPrefix(block.id)}
           fields={entry.block.settings}
           values={block.values}
+          media={media}
           onChange={(values) => setDraft((current) => setProductAppBlockValues(current, block.id, values))}
         />
       ) : (
@@ -79,7 +82,7 @@ function AppBlockItem({ block, entry, index, count, setDraft }: {
   );
 }
 
-export function ProductAppBlocksSettings({ theme, apps, setDraft }: { theme: Theme; apps: readonly ThemeApp[]; setDraft: SetTheme }) {
+export function ProductAppBlocksSettings({ theme, apps, media, setDraft }: { theme: Theme; apps: readonly ThemeApp[]; media: MediaPreviews; setDraft: SetTheme }) {
   const t = useMessages(themeEditorMessages);
   const placement = usePlacementName();
   const byKey = appBlocksByKey(apps);
@@ -91,7 +94,7 @@ export function ProductAppBlocksSettings({ theme, apps, setDraft }: { theme: The
       {blocks.length > 0 ? (
         <ol className="space-y-3" aria-label={t("appBlocks")}>
           {blocks.map((block, index) => (
-            <AppBlockItem key={block.id} block={block} entry={byKey.get(block.app)} index={index} count={blocks.length} setDraft={setDraft} />
+            <AppBlockItem key={block.id} block={block} entry={byKey.get(block.app)} index={index} count={blocks.length} media={media} setDraft={setDraft} />
           ))}
         </ol>
       ) : (

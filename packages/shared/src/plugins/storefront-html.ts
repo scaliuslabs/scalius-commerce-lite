@@ -24,22 +24,31 @@ const SAFE_URL = /^(?:[a-z][a-z0-9+.-]*:)?/i;
 const ALLOWED_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:", "sms:"]);
 const UNSAFE_CSS = /expression\s*\(|javascript\s*:|vbscript\s*:|-moz-binding|behavior\s*:|@import/i;
 
+const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+const TEXT_SPECIAL = /[&<>]/;
+const TEXT_SPECIALS = /[&<>]/g;
+const ATTRIBUTE_SPECIAL = /[&<>"]/;
+const ATTRIBUTE_SPECIALS = /[&<>"]/g;
+const escapeOne = (char: string) => ESCAPES[char]!;
+
+// Most text and values need no escaping: test once, replace only then.
 function escapeText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return TEXT_SPECIAL.test(value) ? value.replace(TEXT_SPECIALS, escapeOne) : value;
 }
 
 function escapeAttribute(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return ATTRIBUTE_SPECIAL.test(value) ? value.replace(ATTRIBUTE_SPECIALS, escapeOne) : value;
 }
+
+/** Control characters, whitespace and DEL (everything outside `!`..`~` below U+0080). */
+const URL_NOISE = /[^!-~\u0080-\uffff]/;
+const URL_NOISES = /[^!-~\u0080-\uffff]/g;
+const ATTRIBUTE_NAME = /^[a-z_:][a-z0-9_.:-]*$/i;
 
 /** A URL a component may use: relative, a fragment, or http(s), mailto, tel, sms. */
 export function isSafeStorefrontUrl(value: string): boolean {
   // Control characters and whitespace inside a scheme are how `java\tscript:` hides.
-  let compact = "";
-  for (const char of value) {
-    const code = char.charCodeAt(0);
-    if (code > 0x20 && code !== 0x7f) compact += char;
-  }
+  const compact = URL_NOISE.test(value) ? value.replace(URL_NOISES, "") : value;
   const scheme = SAFE_URL.exec(compact)?.[0] ?? "";
   return scheme === "" || ALLOWED_SCHEMES.has(scheme.toLowerCase());
 }
@@ -58,7 +67,7 @@ function keepAttribute(element: string, name: string, value: string): boolean {
   }
   if (name === "srcset" || name === "imagesrcset") return safeSrcset(value);
   if (name === "style") return !UNSAFE_CSS.test(value);
-  return /^[a-z_:][a-z0-9_.:-]*$/i.test(name);
+  return ATTRIBUTE_NAME.test(name);
 }
 
 export interface StorefrontHtmlResult {
@@ -106,7 +115,8 @@ export function sanitizeStorefrontHtml(input: string): StorefrontHtmlResult {
         return;
       }
       let tag = `<${name}`;
-      for (const [attribute, value] of Object.entries(attributes)) {
+      for (const attribute in attributes) {
+        const value = attributes[attribute]!;
         const key = attribute.toLowerCase();
         if (!keepAttribute(name, key, value)) {
           dropped += 1;

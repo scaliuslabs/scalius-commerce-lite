@@ -2,12 +2,14 @@
  * What autosave sends when part of the working document is not valid yet
  * (research P16: an invalid field blocks only itself). The document splits
  * into parts that are checked one by one: the tokens, the brand, each block,
- * each section, a landing page's own fields and the home mode. A part that
+ * each slot an app fills, each section, a landing page's own fields and the
+ * home mode. A part that
  * fails keeps its last saved value in what is sent (a new section that is
  * not valid yet is left out), while the field keeps the merchant's input and
  * shows its error. Everything else keeps saving.
  */
 import {
+  STOREFRONT_APP_SLOT_KEYS,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
   type StorefrontThemeDocument,
@@ -15,18 +17,29 @@ import {
 import {
   announcementLinkInvalid,
   homeProductMissing,
+  invalidAppSlots,
   productAppBlocksInvalid,
   themeContrastProblems,
   allThemeColorsValid,
   type AppBlockEntry,
+  type AppSlotEntry,
 } from "../theme-settings";
 import { appSectionInvalid, type AppSectionEntry } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
 type Path = ReadonlyArray<string | number>;
 
-/** One independently saved part, by key: `tokens`, `brand`, `block:<slot>`, `section:<list>:<id>`, `list:<list>`, `landing:<slug>`, `homeMode`. */
+/** One independently saved part, by key: `tokens`, `brand`, `block:<slot>`, `app:<slot key>`, `apps`, `section:<list>:<id>`, `list:<list>`, `landing:<slug>`, `homeMode`. */
 export type DraftPart = string;
+
+/** What the store's active apps offer, by key: their values are checked against what each declares. */
+export interface DraftApps {
+  sections: ReadonlyMap<string, AppSectionEntry>;
+  blocks: ReadonlyMap<string, AppBlockEntry>;
+  slots: ReadonlyMap<string, AppSlotEntry>;
+}
+
+type AppsKey = keyof NonNullable<Theme["apps"]>;
 
 /** Section lists by key: `home`, `landing:<slug>`, `template:<kind>`. */
 function sectionList(theme: Theme, list: string): StorefrontSection[] | null {
@@ -54,6 +67,7 @@ export function draftPartOf(theme: Theme, path: Path): DraftPart {
   const [area, second, third, fourth, fifth] = path;
   if (area === "tokens") return "tokens";
   if (area === "brand") return "brand";
+  if (area === "apps") return typeof second === "string" ? `app:${second}` : "apps";
   if (area === "blocks") {
     if (second === "product" && (third === "gallery" || third === "buyBox" || third === "apps")) return `block:product.${third}`;
     return `block:${String(second)}`;
@@ -85,6 +99,18 @@ function withSavedPart(working: Theme, saved: Theme, part: DraftPart): Theme | n
   if (part === "tokens") return { ...working, tokens: saved.tokens };
   if (part === "brand") return { ...working, brand: saved.brand };
   if (part === "homeMode") return { ...working, pages: { ...working.pages, homeMode: saved.pages.homeMode } };
+  if (part === "apps" || part.startsWith("app:")) {
+    const { apps: _apps, ...document } = working;
+    let apps: Theme["apps"] = saved.apps;
+    if (part !== "apps") {
+      // One slot (or the template label) as saved; the rest as edited.
+      const key = part.slice(4) as AppsKey;
+      const { [key]: _edited, ...rest } = working.apps ?? {};
+      const before = saved.apps?.[key];
+      apps = before === undefined ? rest : { ...rest, [key]: before };
+    }
+    return apps && Object.keys(apps).length > 0 ? { ...document, apps } : document;
+  }
   if (part.startsWith("block:product.")) {
     const key = part.slice("block:product.".length) as "gallery" | "buyBox" | "apps";
     const product = { ...working.blocks.product } as Record<string, unknown>;
@@ -130,30 +156,27 @@ function withSavedPart(working: Theme, saved: Theme, part: DraftPart): Theme | n
 }
 
 /** The parts the platform's own checks reject (beyond the schema): readable colours, a usable announcement link, apps' values. */
-function checkedParts(theme: Theme, appSections: ReadonlyMap<string, AppSectionEntry>, appBlocks: ReadonlyMap<string, AppBlockEntry>): DraftPart[] {
+function checkedParts(theme: Theme, apps: DraftApps): DraftPart[] {
   const parts: DraftPart[] = [];
   if (!allThemeColorsValid(theme.tokens.colors) || themeContrastProblems(theme).length > 0) parts.push("tokens");
   if (announcementLinkInvalid(theme)) parts.push("block:topBar");
   if (homeProductMissing(theme)) parts.push("homeMode");
-  if (productAppBlocksInvalid(theme, appBlocks)) parts.push("block:product.apps");
+  if (productAppBlocksInvalid(theme, apps.blocks)) parts.push("block:product.apps");
+  for (const slot of invalidAppSlots(theme, apps.slots)) parts.push(`app:${STOREFRONT_APP_SLOT_KEYS[slot]}`);
   const lists: Array<[string, StorefrontSection[]]> = [
     ["home", theme.pages.home],
     ...Object.entries(theme.pages.landing).map(([slug, page]) => [`landing:${slug}`, page.sections] as [string, StorefrontSection[]]),
     ...Object.entries(theme.pages.templates).map(([kind, template]) => [`template:${kind}`, template.sections] as [string, StorefrontSection[]]),
   ];
   for (const [list, sections] of lists) {
-    for (const section of sections) if (appSectionInvalid(section, appSections)) parts.push(`section:${list}:${section.id}`);
+    for (const section of sections) if (appSectionInvalid(section, apps.sections)) parts.push(`section:${list}:${section.id}`);
   }
   return parts;
 }
 
 /** Every part of the document that is not valid now. */
-export function invalidDraftParts(
-  theme: Theme,
-  appSections: ReadonlyMap<string, AppSectionEntry>,
-  appBlocks: ReadonlyMap<string, AppBlockEntry>,
-): DraftPart[] {
-  const parts = new Set(checkedParts(theme, appSections, appBlocks));
+export function invalidDraftParts(theme: Theme, apps: DraftApps): DraftPart[] {
+  const parts = new Set(checkedParts(theme, apps));
   const result = storefrontThemeDocumentSchema.safeParse(theme);
   if (!result.success) for (const issue of result.error.issues) parts.add(draftPartOf(theme, issue.path as Path));
   return [...parts];
@@ -165,17 +188,12 @@ export function invalidDraftParts(
  * be made (a problem across parts, such as a variant whose colours a
  * merchant's palette cannot read): the status then says what to fix.
  */
-export function saveableDraft(
-  working: Theme,
-  saved: Theme,
-  appSections: ReadonlyMap<string, AppSectionEntry>,
-  appBlocks: ReadonlyMap<string, AppBlockEntry>,
-): { theme: Theme; held: DraftPart[] } | null {
+export function saveableDraft(working: Theme, saved: Theme, apps: DraftApps): { theme: Theme; held: DraftPart[] } | null {
   const held = new Set<DraftPart>();
   let candidate = working;
   // A part held back can make another one invalid (a section list without a new section); three rounds settle it.
   for (let round = 0; round < 3; round += 1) {
-    const invalid = invalidDraftParts(candidate, appSections, appBlocks);
+    const invalid = invalidDraftParts(candidate, apps);
     if (invalid.length === 0) return { theme: candidate, held: [...held] };
     for (const part of invalid) {
       if (part === "document") return null;
@@ -185,5 +203,5 @@ export function saveableDraft(
       held.add(part);
     }
   }
-  return invalidDraftParts(candidate, appSections, appBlocks).length === 0 ? { theme: candidate, held: [...held] } : null;
+  return invalidDraftParts(candidate, apps).length === 0 ? { theme: candidate, held: [...held] } : null;
 }

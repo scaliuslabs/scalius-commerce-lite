@@ -135,6 +135,8 @@ export const installedAppsMessages = defineMessages({
     storefrontSurfaces: "Adds sections and blocks to your storefront",
     publicRoutes: "Answers requests from the internet and your storefront",
     scriptsFrom: "Loads scripts from {host}",
+    storefrontCode: "Redesigns your storefront with its own code (sections, header, footer, product cards)",
+    storefrontConnectTo: "Its storefront code connects to {host} from your buyers' browsers",
     access_hosts: "Websites it connects to",
     access_fields: "Adds its own fields to",
 
@@ -392,6 +394,8 @@ export const installedAppsMessages = defineMessages({
     storefrontSurfaces: "আপনার অনলাইন স্টোরে সেকশন ও ব্লক যোগ করে",
     publicRoutes: "ইন্টারনেট ও আপনার অনলাইন স্টোর থেকে আসা রিকোয়েস্টের উত্তর দেয়",
     scriptsFrom: "{host} থেকে স্ক্রিপ্ট লোড করে",
+    storefrontCode: "নিজের কোড দিয়ে আপনার অনলাইন স্টোরের ডিজাইন বদলায় (সেকশন, হেডার, ফুটার, প্রোডাক্ট কার্ড)",
+    storefrontConnectTo: "এর স্টোরফ্রন্ট কোড ক্রেতার ব্রাউজার থেকে {host}-এ যোগাযোগ করে",
     access_hosts: "যে ওয়েবসাইটগুলোর সাথে যোগাযোগ করে",
     access_fields: "যেখানে নিজের ফিল্ড যোগ করে",
 

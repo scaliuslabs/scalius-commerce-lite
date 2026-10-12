@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_STOREFRONT_THEME, storefrontSectionDefault, type StorefrontSection, type StorefrontSectionType, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { PREVIEW_RENDER_DELAY_MS, usePreviewSync } from "./use-preview-sync";
 import type { EditorPage } from "./editor-pages";
+import { appSectionsByKey } from "./editor-state";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 type Props = Parameters<typeof usePreviewSync>[0];
@@ -190,5 +191,40 @@ describe("field patches and canonical fallback", () => {
     expect(send.mock.calls.some(([command]) => command.type === "text")).toBe(false);
     expect(renders()).toHaveLength(1);
     expect(renders()[0].body.only).toBe("a");
+  });
+});
+
+describe("app sections and slots", () => {
+  const setting = (key: string, type: "text" | "textarea" | "number") => ({
+    key, label: key, help: null, type, required: false, options: null, default: null, min: null, max: null, integer: false, maxLength: null,
+  });
+  const appSections = appSectionsByKey([{
+    id: "acme.studio", name: "Studio", slots: [], templates: [], productBlocks: [],
+    sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true,
+      settings: [setting("quote", "textarea"), setting("author", "text"), setting("size", "number")] }],
+  }]);
+  const quote = (values: Record<string, string | number>): StorefrontSection =>
+    ({ id: "app", type: "app", version: 1, settings: { app: "acme.studio/quote", values } });
+
+  it("patches an app's short text by its setting key and leaves long text to the renderer", () => {
+    start(theme([quote({ quote: "Old words", author: "Rahim", size: 2 })]));
+    update({ appSections });
+    const next = theme([quote({ quote: "New words", author: "Karim", size: 3 })]);
+    update({ working: next, sendable: next }); tick();
+    expect(send.mock.calls.filter(([command]) => command.type === "text").map(([command]) => command)).toEqual([
+      expect.objectContaining({ id: "app", field: "author", value: "Karim" }),
+    ]);
+    expect(renders()).toEqual([expect.objectContaining({ body: expect.objectContaining({ only: "app" }) })]);
+  });
+
+  it("saves at once and loads the page again when an app fills the header", () => {
+    const saved = theme([]);
+    start(saved);
+    const next = { ...saved, apps: { header: { app: "acme.studio/header", values: {} } } };
+    update({ working: next, sendable: next });
+    expect(needSave).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+    update({ savedTheme: next });
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

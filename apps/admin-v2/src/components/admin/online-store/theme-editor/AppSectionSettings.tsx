@@ -9,6 +9,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { sectionFieldPrefix } from "../SectionSettings";
 import { themeAppFields, type AppSettingValues } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
+import type { MediaPreviews } from "../schema-form/media-previews";
 import type { AppSectionEntry } from "./editor-state";
 
 /** The field ids of an app section's settings start with this (`theme-section-app-2-values`). */
@@ -32,11 +33,12 @@ function issuesByKey(issues: ReadonlyMap<string, string> | undefined): { fields:
   return { fields, other };
 }
 
-export function AppSectionSettings({ section, entry, issues, onChange }: {
+export function AppSectionSettings({ section, entry, issues, media, onChange }: {
   section: StorefrontAppSection;
   /** The app's section as the workspace offers it; absent while the app is not active. */
   entry: AppSectionEntry | undefined;
   issues?: ReadonlyMap<string, string>;
+  media: MediaPreviews;
   onChange: (values: AppSettingValues) => void;
 }) {
   const t = useMessages(themeEditorMessages);
@@ -56,6 +58,7 @@ export function AppSectionSettings({ section, entry, issues, onChange }: {
           fields={entry.section.settings}
           values={section.settings.values}
           errors={fields}
+          media={media}
           onChange={onChange}
         />
       ) : (

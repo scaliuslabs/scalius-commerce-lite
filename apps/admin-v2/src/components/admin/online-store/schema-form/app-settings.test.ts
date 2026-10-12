@@ -8,6 +8,8 @@ import {
 import type { ThemeAppSettingField } from "~/lib/api-query-options/online-store";
 import {
   appFieldValue,
+  appListItemDefaults,
+  appListItemProblems,
   appSettingDefaults,
   appSettingProblem,
   appSettingProblems,
@@ -20,6 +22,8 @@ import {
 function workspaceField(field: PluginSettingField): ThemeAppSettingField {
   const options = field.type === "select" || field.type === "multiselect" ? field.options : null;
   return {
+    ...(field.type === "products" ? { limit: field.limit } : {}),
+    ...(field.type === "list" ? { fields: field.fields.map((item) => workspaceField(item)), ...(field.itemLabel ? { itemLabel: field.itemLabel } : {}) } : {}),
     key: field.key,
     label: field.label,
     help: field.help ?? null,
@@ -27,8 +31,8 @@ function workspaceField(field: PluginSettingField): ThemeAppSettingField {
     required: field.required,
     options: options ? options.map((option) => ({ value: option.value, label: option.label })) : null,
     default: field.type !== "secret" && "default" in field && field.default !== undefined ? field.default : null,
-    min: field.type === "number" ? field.min ?? null : null,
-    max: field.type === "number" ? field.max ?? null : null,
+    min: field.type === "number" || field.type === "list" ? field.min ?? null : null,
+    max: field.type === "number" || field.type === "list" ? field.max ?? null : null,
     integer: field.type === "number" ? field.integer : false,
     maxLength: field.type === "text" || field.type === "textarea" ? field.maxLength : null,
   };
@@ -154,5 +158,91 @@ describe("app setting values", () => {
     expect(appValuesInvalid(FIELDS, { ...fresh, intro: "Loved by 2,000 buyers" })).toBe(false);
     // A value of the wrong type (the app changed the setting) needs setting again.
     expect(appSettingProblems(FIELDS, { intro: "Hi", count: "many" }).get("count")).toEqual({ kind: "number" });
+  });
+});
+
+describe("storefront component settings", () => {
+  const COMPONENT = pluginSettingsSchemaSchema.parse([
+    { key: "photo", label: "Photo", type: "image", required: true },
+    { key: "featured", label: "Featured product", type: "product" },
+    { key: "shelf", label: "Products", type: "products", limit: 6, default: "newest" },
+    { key: "cta", label: "Button link", type: "link", default: "/collections/all" },
+    {
+      key: "slides",
+      label: "Slides",
+      type: "list",
+      itemLabel: "Slide",
+      min: 1,
+      max: 3,
+      fields: [
+        { key: "title", label: "Title", type: "text", required: true, maxLength: 40 },
+        { key: "image", label: "Image", type: "image" },
+        { key: "link", label: "Link", type: "link" },
+        { key: "dark", label: "Dark text", type: "boolean", default: true },
+      ],
+    },
+  ]);
+  const fields = COMPONENT.map(workspaceField);
+  const component = (key: string) => fields.find((each) => each.key === key)!;
+  const slides = component("slides");
+
+  it("starts a new list item at its fields' defaults", () => {
+    expect(appListItemDefaults(slides)).toEqual({ dark: true });
+    expect(appSettingDefaults(fields)).toEqual({ shelf: "newest", cta: "/collections/all" });
+  });
+
+  it("says what images, products, links and lists refuse", () => {
+    const cases: Array<[string, unknown, string | null]> = [
+      ["photo", null, "required"],
+      ["photo", "media_1", null],
+      ["photo", "media 1", "invalid"],
+      ["featured", "prod_9", null],
+      ["featured", "prod/9", "invalid"],
+      ["featured", null, null],
+      ["shelf", "collection:", "products"],
+      ["shelf", "category:", "products"],
+      ["shelf", "collection:col_1", null],
+      ["shelf", "popular", null],
+      ["shelf", "trending", "invalid"],
+      ["cta", "/pages/about", null],
+      ["cta", "https://shop.test/sale", null],
+      ["cta", "//evil.test", "link"],
+      ["cta", "http://shop.test", "link"],
+      ["cta", "pages/about", "link"],
+      ["slides", [], "fewItems"],
+      ["slides", [{ title: "A" }, { title: "B" }, { title: "C" }, { title: "D" }], "manyItems"],
+      ["slides", [{ title: "Eid sale", dark: false }], null],
+      ["slides", [{ title: "" }], "items"],
+      ["slides", [{ title: "Eid", link: "nope" }], "items"],
+      ["slides", [{ title: "Eid", gone: "x" }], "invalid"],
+      ["slides", ["Eid"], "invalid"],
+    ];
+    for (const [key, value, kind] of cases) {
+      expect([key, value, appSettingProblem(component(key), value)?.kind ?? null]).toEqual([key, value, kind]);
+    }
+    expect(appSettingProblem(component("shelf"), "category:")).toEqual({ kind: "products", source: "category" });
+    expect(appSettingProblem(slides, [])).toEqual({ kind: "fewItems", min: 1 });
+    expect([...appListItemProblems(slides, { title: "x".repeat(41), link: "nope" })]).toEqual([
+      ["title", { kind: "tooLong", max: 40 }],
+      ["link", { kind: "link" }],
+    ]);
+  });
+
+  it("agrees with the plugin settings validator on every stored value", () => {
+    const values: Array<[string, unknown]> = [
+      ["photo", "media_1"], ["photo", "media 1"], ["photo", ""],
+      ["featured", "prod_9"], ["featured", "prod/9"],
+      ["shelf", "collection:"], ["shelf", "collection:col_1"], ["shelf", "on-sale"], ["shelf", "trending"],
+      ["cta", "/pages/about"], ["cta", "//evil.test"], ["cta", "https://shop.test"], ["cta", "http://shop.test"], ["cta", `/${"a".repeat(2048)}`],
+      ["slides", []], ["slides", [{ title: "A" }]], ["slides", [{ title: "A" }, { title: "B" }, { title: "C" }, { title: "D" }]],
+      ["slides", [{ title: "A", image: "media 1" }]], ["slides", [{ title: "A", link: "" }]], ["slides", [{ title: "A", gone: 1 }]],
+    ];
+    for (const [key, value] of values) {
+      const shared = validatePluginSettingValues([COMPONENT.find((each) => each.key === key)!], { [key]: value }).ok;
+      expect([key, value, appSettingProblem(component(key), value) === null]).toEqual([key, value, shared]);
+    }
+    // The one deliberate difference: an item's required text left empty is nothing written.
+    expect(validatePluginSettingValues([COMPONENT.find((each) => each.key === "slides")!], { slides: [{ title: "" }] }).ok).toBe(true);
+    expect(appListItemProblems(slides, { title: "" }).get("title")).toEqual({ kind: "required" });
   });
 });

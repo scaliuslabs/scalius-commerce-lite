@@ -175,7 +175,7 @@ function themeWith(home: StorefrontSection[], base: StorefrontThemeDocument = DE
   return { ...base, pages: { ...base.pages, home, homeMode: { kind: "sections" } } };
 }
 
-function workspaceOf(draft: StorefrontThemeDocument, published: StorefrontThemeDocument = draft): ThemeWorkspaceDocument {
+function workspaceOf(draft: StorefrontThemeDocument, published: StorefrontThemeDocument = draft, apps: ThemeWorkspaceDocument["apps"] = []): ThemeWorkspaceDocument {
   return {
     published: { theme: published, revision: 1 },
     draft: { theme: draft, revision: 1, basePublishedRevision: 1, updatedAt: null, updatedByName: null },
@@ -183,7 +183,7 @@ function workspaceOf(draft: StorefrontThemeDocument, published: StorefrontThemeD
     lastPublished: null,
     storeShape: SHAPE,
     media: [],
-    apps: [],
+    apps,
   } as unknown as ThemeWorkspaceDocument;
 }
 
@@ -191,9 +191,10 @@ function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
   published?: StorefrontThemeDocument;
   permissions?: string[];
   refetch?: () => Promise<{ data?: ThemeWorkspaceDocument }>;
+  apps?: ThemeWorkspaceDocument["apps"];
 } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  const workspace = workspaceOf(theme, options.published);
+  const workspace = workspaceOf(theme, options.published, options.apps);
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
@@ -677,6 +678,29 @@ describe("theme editor: exact canvas text", () => {
     expect(field("theme-section-faq-heading").value).toBe("Canvas questions");
     key(document.body, { key: "z", ctrlKey: true });
     expect(field("theme-section-faq-heading").value).toBe("Questions");
+    frame.field = null;
+  });
+  it("edits an app section's marked text setting and writes its value", async () => {
+    const apps: ThemeWorkspaceDocument["apps"] = [{
+      id: "acme.studio", name: "Acme Studio", slots: [], templates: [], productBlocks: [],
+      sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true, settings: [
+        { key: "author", label: "Quoted by", help: null, type: "text", required: false, options: null, default: "A buyer", min: null, max: null, integer: false, maxLength: 40 },
+      ] }],
+    }];
+    const quote = { id: "app", type: "app", version: 1, settings: { app: "acme.studio/quote", values: {} } } as StorefrontSection;
+    frame.field = { id: "app", field: "author", rect: [20, 100, 300, 40] };
+    render(themeWith([quote]), { apps });
+    act(() => frame.onSelect!("app", "author"));
+    await ready("#theme-section-app-values-author");
+    act(() => frame.onEditText!("app", "author"));
+    const input = container.querySelector<HTMLInputElement>("[data-canvas-text-editor] input")!;
+    expect(input.value).toBe("A buyer");
+    expect(container.querySelector("[data-canvas-text-editor]")?.textContent).toContain("Quoted by");
+    type(input, "Rahima, Dhaka");
+    key(input, { key: "Enter" });
+    expect(field("theme-section-app-values-author").value).toBe("Rahima, Dhaka");
+    await autosaved();
+    expect(lastSaved().theme.pages.home[0]).toEqual({ ...quote, settings: { app: "acme.studio/quote", values: { author: "Rahima, Dhaka" } } });
     frame.field = null;
   });
   it("keeps a phone tap as selection and Edit text focuses the existing native setting", async () => {

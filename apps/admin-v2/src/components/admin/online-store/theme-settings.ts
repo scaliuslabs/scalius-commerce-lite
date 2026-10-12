@@ -5,9 +5,12 @@ import {
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
   STOREFRONT_TYPE_PAIRING_SPECS,
+  STOREFRONT_APP_SLOT_KEYS,
+  applyStorefrontAppTemplate,
   isStorefrontThemeHexColor,
   listStorefrontThemeDocumentContrastProblems,
   canonicalStorefrontLink,
+  readStorefrontAppTemplateTheme,
   resolveStorefrontTheme,
   storefrontBlockSwitch,
   storefrontBlockValue,
@@ -16,6 +19,8 @@ import {
   storefrontThemeWithContent,
   type ResolvedStorefrontTheme,
   type StoreShape,
+  type StorefrontAppSlot,
+  type StorefrontAppTemplateTheme,
   type StorefrontBlockSlot,
   type StorefrontProductAppBlock,
   type StorefrontProductModule,
@@ -27,7 +32,7 @@ import {
   type StorefrontTypePairing,
 } from "@scalius/shared/storefront-theme";
 import { PLUGIN_PRODUCT_BLOCKS_MAX } from "@scalius/shared/plugins/storefront";
-import type { ThemeApp, ThemeAppBlock } from "~/lib/api-query-options/online-store";
+import type { ThemeApp, ThemeAppBlock, ThemeAppSlot } from "~/lib/api-query-options/online-store";
 import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-settings";
 
 /**
@@ -250,6 +255,28 @@ function sameLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument)
   return same(left.tokens, right.tokens) && same(left.blocks, right.blocks) && same(left.pages, right.pages);
 }
 
+/** A template an app offers: its key (`<app id>/<template id>`), name, app and look. */
+export interface AppTemplateEntry {
+  key: string;
+  name: string;
+  description: string | null;
+  app: ThemeApp;
+  theme: StorefrontAppTemplateTheme;
+}
+
+/** The active apps' templates, each as this document version reads it (one that does not parse is left out). */
+export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
+  return apps.flatMap((app) => app.templates.flatMap((template) => {
+    const theme = readStorefrontAppTemplateTheme(template.theme);
+    return theme ? [{ key: template.key, name: template.name, description: template.description, app, theme }] : [];
+  }));
+}
+
+/** An app template applied to the document (`applyStorefrontAppTemplate`): its look, slots and homepage sections. */
+export function applyAppTemplate(template: AppTemplateEntry, current: StorefrontThemeDocument): StorefrontThemeDocument {
+  return applyStorefrontAppTemplate(current, template.key, template.theme);
+}
+
 /** Each template's complete document, for previews and matching. */
 export const TEMPLATE_THEMES: ReadonlyArray<{ id: StorefrontTemplateId; theme: StorefrontThemeDocument }> =
   STOREFRONT_TEMPLATES.map(({ id }) => ({ id, theme: storefrontTemplateTheme(id) }));
@@ -421,3 +448,49 @@ export function toggleProductModule(
   const at = rest.findIndex((each) => PRODUCT_MODULE_ORDER.indexOf(each) > rank);
   return at < 0 ? [...rest, module] : [...rest.slice(0, at), module, ...rest.slice(at)];
 }
+
+// ─── Theme slots apps fill ────────────────────────────────────────────────
+
+/** The theme slots an app can fill. */
+export type AppSlotKind = ThemeAppSlot["slot"];
+
+/** An app's slot as the workspace offers it, with its app. */
+export interface AppSlotEntry {
+  app: ThemeApp;
+  slot: ThemeAppSlot;
+}
+
+/** The active apps' slots by key (`<plugin id>/<slot id>`). */
+export function appSlotsByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppSlotEntry> {
+  return new Map(apps.flatMap((app) => app.slots.map((slot) => [slot.key, { app, slot }] as const)));
+}
+
+/** The app that fills a slot in the theme, or null for the built-in block. */
+export function themeAppSlot(theme: StorefrontThemeDocument, slot: AppSlotKind): StorefrontAppSlot | null {
+  return theme.apps?.[STOREFRONT_APP_SLOT_KEYS[slot]] ?? null;
+}
+
+/**
+ * The theme with an app filling a slot, or the built-in block back (null).
+ * A theme whose apps fill nothing and name no template has no `apps`, as
+ * before any app filled one.
+ */
+export function setThemeAppSlot(theme: StorefrontThemeDocument, slot: AppSlotKind, value: StorefrontAppSlot | null): StorefrontThemeDocument {
+  const key = STOREFRONT_APP_SLOT_KEYS[slot];
+  const { [key]: _previous, ...rest } = theme.apps ?? {};
+  const apps = value ? { ...rest, [key]: value } : rest;
+  const { apps: _apps, ...document } = theme;
+  return Object.keys(apps).length > 0 ? { ...document, apps } : document;
+}
+
+/** The slots whose values break what their app declares (slots of inactive apps are not judged). */
+export function invalidAppSlots(theme: StorefrontThemeDocument, byKey: ReadonlyMap<string, AppSlotEntry>): AppSlotKind[] {
+  return (Object.keys(STOREFRONT_APP_SLOT_KEYS) as AppSlotKind[]).filter((slot) => {
+    const filled = themeAppSlot(theme, slot);
+    const entry = filled ? byKey.get(filled.app) : undefined;
+    return entry !== undefined && entry.slot.slot === slot && appValuesInvalid(entry.slot.settings, filled!.values);
+  });
+}
+
+/** The field ids of a slot's app settings start with this (`theme-app-slot-header`). */
+export const appSlotFieldPrefix = (slot: AppSlotKind) => `theme-app-slot-${slot}`;

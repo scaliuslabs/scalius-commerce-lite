@@ -2,7 +2,8 @@
  * Theme settings (the editor's second tab, Shopify's): colours, fonts, the
  * brand images and product cards, store-wide. The header (with its
  * announcement bar and menus) and the footer are rows of every page's tree;
- * their settings are here too, for the editor's settings panel.
+ * their settings are here too, for the editor's settings panel. An app can
+ * fill the header, the footer or the product card (AppSlotSettings.tsx).
  */
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
@@ -29,6 +30,7 @@ import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
+import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
@@ -36,6 +38,7 @@ import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } 
 import { TypographyCard } from "../TypographyCard";
 import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
 import { Field } from "~/components/ui/field";
+import { AppSlotSettings, type SlotSettingsPlace } from "./AppSlotSettings";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
@@ -188,12 +191,14 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
   );
 }
 
-export function ThemeSettingsPanel({ theme, resolved, media, setDraft, reveal = null }: {
+export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, reveal = null }: {
   /** Opens the group a "setting to fix" is in. */
   reveal?: ThemeRevealRequest | null;
   theme: Theme;
   resolved: ResolvedStorefrontTheme;
   media: MediaPreviews;
+  /** The active apps (one may draw the product card). */
+  apps: readonly ThemeApp[];
   setDraft: SetTheme;
 }) {
   const t = useMessages(onlineStoreMessages);
@@ -216,10 +221,16 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft, reveal = 
       </SettingsGroup>
       {/* One card for the whole store: its facts, buy action and hover photo; its shape follows the style above. */}
       <SettingsGroup title={t("productCards")} name="productCards">
-        <div className="max-w-48">
-          <CardStyleSketch card={resolved.layout.productCard} />
-        </div>
-        {block.fields("card")}
+        <AppSlotSettings slot="product-card" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+          {() => (
+            <>
+              <div className="max-w-48">
+                <CardStyleSketch card={resolved.layout.productCard} />
+              </div>
+              {block.fields("card")}
+            </>
+          )}
+        </AppSlotSettings>
       </SettingsGroup>
     </OpenGroup.Provider>
     </ThemeRevealContext.Provider>
@@ -250,8 +261,18 @@ export function AnnouncementSettings({ theme, resolved, media, setDraft }: { the
   );
 }
 
-/** The header's layout and the menus it shows on computers and phones. */
-export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
+type PartProps = { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; apps: readonly ThemeApp[]; setDraft: SetTheme };
+
+/** The header's layout and the menus it shows on computers and phones (or the app that draws the header). */
+export function HeaderSettings({ theme, resolved, media, apps, setDraft }: PartProps) {
+  return (
+    <AppSlotSettings slot="header" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+      {(place) => <BuiltInHeaderSettings theme={theme} resolved={resolved} media={media} setDraft={setDraft} place={place} />}
+    </AppSlotSettings>
+  );
+}
+
+function BuiltInHeaderSettings({ theme, resolved, media, setDraft, place }: Omit<PartProps, "apps"> & { place: SlotSettingsPlace }) {
   const t = useMessages(onlineStoreMessages);
   const fitReason = useFitReason(resolved.facts);
   const editor = useMessages(themeEditorMessages);
@@ -259,7 +280,8 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
   const [open, setOpen] = useState<string | null | undefined>(undefined);
   return (
     <OpenGroup.Provider value={{ open, toggle: (id) => setOpen(id || null) }}>
-      <div className="-mx-4 -mt-4">
+      {/* The groups run edge to edge of the panel; inside the fallback, of its box. */}
+      <div className={place === "alone" ? "-mx-4 -mt-4" : place === "below" ? "-mx-4 border-t border-border" : "-mx-3 -mb-3 border-t border-border"}>
       <SettingsGroup title={editor("headerLayoutGroup")} defaultOpen>
         <VisualChoice
           label={t("header")}
@@ -322,21 +344,26 @@ export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Th
   );
 }
 
-export function FooterSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
+/** The footer's layout and words (or the app that draws the footer). */
+export function FooterSettings({ theme, resolved, media, apps, setDraft }: PartProps) {
   const t = useMessages(onlineStoreMessages);
   const block = useBlockChoice(theme, resolved, setDraft, media);
   return (
-    <div className="space-y-3">
-      <p className="text-body text-muted-foreground">{t("footerLayoutHelp")}</p>
-      <VisualChoice
-        label={t("footer")}
-        value={theme.blocks.footer.variant}
-        className="grid-cols-2"
-        options={block.options<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
-        onChange={block.set("footer")}
-      />
-      {block.fitNote("footer", "footer")}
-      {block.fields("footer")}
-    </div>
+    <AppSlotSettings slot="footer" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+      {() => (
+        <div className="space-y-3">
+          <p className="text-body text-muted-foreground">{t("footerLayoutHelp")}</p>
+          <VisualChoice
+            label={t("footer")}
+            value={theme.blocks.footer.variant}
+            className="grid-cols-2"
+            options={block.options<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
+            onChange={block.set("footer")}
+          />
+          {block.fitNote("footer", "footer")}
+          {block.fields("footer")}
+        </div>
+      )}
+    </AppSlotSettings>
   );
 }

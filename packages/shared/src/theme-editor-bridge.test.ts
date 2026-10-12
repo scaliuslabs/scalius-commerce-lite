@@ -113,11 +113,21 @@ describe("field-addressed copy protocol", () => {
   });
   it("refuses index paths, malformed geometry, long text and legacy text matching", () => {
     expect(readThemePreviewMessage(preview({ type: "select", id: "faq", field: "items.0.question" }))).toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "select", id: "banner", field: "cta.text" }))).toBeNull();
     expect(readThemePreviewMessage(preview({ type: "layout", rects: {}, scrollY: 0, height: 10, field: { id: "story", field: "heading", rect: [0, 0, Infinity, 20] } }))).toBeNull();
     for (const rect of [null, [0, 0, Infinity, 20], [0, 0, -1, 20], [0, 0, 20]]) {
       expect(readThemePreviewMessage(preview({ type: "edit-text", id: "story", field: "body", rect }))).toBeNull();
     }
     expect(readThemeEditorMessage(editor({ type: "text", id: "faq", field: "heading", value: "x".repeat(8001) }))).toBeNull();
     expect(readThemeEditorMessage(editor({ type: "text", id: "faq", from: "Same", to: "Other" }))).toBeNull();
+  });
+  it("addresses an app section's text setting by its setting key, never a path or another shape", () => {
+    expect(readThemePreviewMessage(preview({ type: "select", id: "app-2", field: "quote_author" }))).toMatchObject({ field: "quote_author" });
+    expect(readThemeEditorMessage(editor({ type: "text", id: "app-2", field: "quote_author", value: "Rahim" }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "field", target: { id: "app-2", field: "title" } }))).not.toBeNull();
+    for (const field of ["slides.0.title", "Title", "_title", "a".repeat(49), "quote-author", ""]) {
+      expect(readThemePreviewMessage(preview({ type: "select", id: "app-2", field })), field).toBeNull();
+      expect(readThemeEditorMessage(editor({ type: "text", id: "app-2", field, value: "x" })), field).toBeNull();
+    }
   });
 });

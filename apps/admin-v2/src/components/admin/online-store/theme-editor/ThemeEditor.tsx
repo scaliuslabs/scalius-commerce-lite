@@ -48,7 +48,7 @@ import { themeSettingMessages } from "~/i18n/theme-settings";
 import { sectionLabelScope, settingLabelKey } from "../schema-form/labels";
 import type { ThemeTextField, ThemePreviewRect } from "@scalius/shared/theme-editor-bridge";
 import { CanvasTextEditor, type CanvasTextHandle, type CanvasTextSession } from "./CanvasTextEditor";
-import { canvasTextField, commitCanvasText, type CanvasTextResult } from "./canvas-text";
+import { canvasTextControlId, canvasTextField, commitCanvasText, type CanvasTextResult } from "./canvas-text";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { NavigationResourceOption } from "~/lib/api-query-options/navigation";
@@ -59,7 +59,7 @@ import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
-import { appBlocksByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
+import { appBlocksByKey, appSlotsByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
@@ -207,8 +207,12 @@ export function ThemeEditor({ workspace, refetch }: {
   const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const media = useMediaPreviews(workspace.media);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
-  const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
-  const draft = useThemeDraft({ workspace, refetch, canEdit, appSections, appBlocks });
+  const draftApps = useMemo(() => ({
+    sections: appSections,
+    blocks: appBlocksByKey(workspace.apps),
+    slots: appSlotsByKey(workspace.apps),
+  }), [appSections, workspace.apps]);
+  const draft = useThemeDraft({ workspace, refetch, canEdit, apps: draftApps });
   const theme = draft.working;
   const storeShape = workspace.storeShape;
   const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
@@ -329,10 +333,10 @@ export function ThemeEditor({ workspace, refetch }: {
     onSelect: (id, field) => afterText(() => {
       select(id, "preview");
       const section = sections?.find((entry) => entry.id === id);
-      if (field && section && canvasTextField(section, field)) {
+      if (field && section && canvasTextField(section, field, appSections)) {
         setSelectedField(field);
         // Selection reveals the exact setting without moving keyboard focus.
-        focusWhenShown(`theme-section-${id}-${field.replace(/\./g, "-")}`, false);
+        focusWhenShown(canvasTextControlId(section, field), false);
       }
     }),
     onEditText: (id, field, rect) => startText(id, field, rect),
@@ -352,6 +356,7 @@ export function ThemeEditor({ workspace, refetch }: {
     page,
     presence: presence || null,
     marks: preview.marks,
+    appSections,
     onNeedSave: draft.saveSoon,
   });
   // Selecting from the tree brings the part into view only when it is outside it (P8).
@@ -366,12 +371,12 @@ export function ThemeEditor({ workspace, refetch }: {
   function startText(id: string, field: ThemeTextField, gestureRect?: ThemePreviewRect) {
     if (!canStartText) return;
     const section = sections?.find((entry) => entry.id === id);
-    const spec = section && canvasTextField(section, field);
+    const spec = section && canvasTextField(section, field, appSections);
     if (!section || !spec) return;
     // A translated preview edits source-language copy in the existing pane,
     // whose notice explains the distinction. Never overlay source onto a translation.
     if (phone || !sourceLanguage) {
-      const control = document.getElementById(`theme-section-${id}-${field.replace(/\./g, "-")}`);
+      const control = document.getElementById(canvasTextControlId(section, field));
       if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
         control.focus(); control.scrollIntoView({ block: "center" });
       }
@@ -381,23 +386,24 @@ export function ThemeEditor({ workspace, refetch }: {
     const rect = gestureRect ?? (measured?.id === id && measured.field === field ? measured.rect : undefined);
     if (!rect) return;
     afterText(() => {
-      const key = settingLabelKey(sectionLabelScope(section.type), field);
+      // An app's setting is named by its app (plain text); the platform's by the setting catalog.
+      const key = spec.label === null ? settingLabelKey(sectionLabelScope(section.type), field) : null;
       setTextDirty(false);
       setTextSession({ nonce: ++textNonce.current, target: { page, id, type: section.type, field, layout: spec.layout, baseline: spec.value },
-        label: key ? settingText(key) : t("canvasTextEdit"), multiline: spec.multiline, maxLength: spec.maxLength, rect });
+        label: spec.label ?? (key ? settingText(key) : t("canvasTextEdit")), multiline: spec.multiline, maxLength: spec.maxLength, rect });
     });
   }
-  const textState = useRef({ draft, canEdit, previewRevision, textSession });
-  textState.current = { draft, canEdit, previewRevision, textSession };
+  const textState = useRef({ draft, canEdit, previewRevision, textSession, appSections });
+  textState.current = { draft, canEdit, previewRevision, textSession, appSections };
   function commitText(value: string, baseline: string): CanvasTextResult {
     // A deferred composition completion uses the latest rendered authority,
     // not the theme/permissions captured when blur or navigation occurred.
     const current = textState.current;
     if (!current.textSession || !current.canEdit || current.previewRevision !== null || current.draft.busy || current.draft.conflict) return { ok: false, reason: "missing" };
     const target = current.textSession.target;
-    const result = commitCanvasText(current.draft.working, target, value, baseline);
+    const result = commitCanvasText(current.draft.working, target, value, baseline, current.appSections);
     if (result.ok && result.theme !== current.draft.working) current.draft.dispatch({ type: "edit", discrete: true, at: Date.now(), update: (document) => {
-      const checked = commitCanvasText(document, target, value, baseline);
+      const checked = commitCanvasText(document, target, value, baseline, current.appSections);
       return checked.ok ? checked.theme : document;
     } });
     return result;
@@ -566,7 +572,7 @@ export function ThemeEditor({ workspace, refetch }: {
       const target = themeProblemTarget(theme, part);
       if (target.kind === "part") {
         if (target.part === "page" && page.kind !== "home") setPageState({ kind: "home" });
-        select(target.part === "announcement" ? EDITOR_PARTS.announcement : EDITOR_PARTS.page, "tree");
+        select(EDITOR_PARTS[target.part], "tree");
         setRevealErrors(true);
       } else {
         setSelected(null);
@@ -669,7 +675,7 @@ export function ThemeEditor({ workspace, refetch }: {
         || (preview.layout.field?.id === section.id && preview.layout.field.field === selectedField);
       return {
         name,
-        onEditText: canStartText && canPlaceText && selectedField && canvasTextField(section, selectedField) ? () => startText(section.id, selectedField) : undefined,
+        onEditText: canStartText && canPlaceText && selectedField && canvasTextField(section, selectedField, appSections) ? () => startText(section.id, selectedField) : undefined,
         canMoveUp: sectionIndex > 0,
         canMoveDown: sectionIndex < items.length - 1,
         onMoveUp: () => moveSelected(-1),
@@ -736,6 +742,7 @@ export function ThemeEditor({ workspace, refetch }: {
         key={selectedSection.id}
         section={selectedSection}
         entry={appSections.get(selectedSection.settings.app)}
+        media={media}
         onChange={(values) => editSection(selectedSection.id, (section) => (section.type === "app" ? { ...section, settings: { ...section.settings, values } } : section))}
       />
     ) : (
@@ -814,7 +821,7 @@ export function ThemeEditor({ workspace, refetch }: {
       <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
         <fieldset disabled={!canEdit} className="min-w-0">
           <Suspense fallback={null}>
-            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} setDraft={setDraft} reveal={themeReveal} />
+            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} apps={workspace.apps} setDraft={setDraft} reveal={themeReveal} />
           </Suspense>
         </fieldset>
       </TabsContent>

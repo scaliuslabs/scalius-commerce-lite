@@ -38,9 +38,18 @@ const MAX_TOKENS = 96;
 const MAX_TEXT = 8_000;
 /** Scalar merchant copy only; filtered/repeated items require stable item identity. */
 export const THEME_TEXT_FIELDS = ["heading", "text", "cta.label", "body"] as const;
-export type ThemeTextField = (typeof THEME_TEXT_FIELDS)[number];
+/**
+ * An app section's text setting, by its key (the plugin SDK's
+ * `editable(context, key)`): the plugin setting key rule. The storefront
+ * accepts it only inside an app section's mark, the editor only for a
+ * `text` or `textarea` setting the section's app declares.
+ */
+export const THEME_APP_TEXT_FIELD = /^[a-z][a-z0-9_]{0,47}$/;
+/** A platform section's field (`THEME_TEXT_FIELDS`) or an app section's setting key (`THEME_APP_TEXT_FIELD`). */
+export type ThemeTextField = (typeof THEME_TEXT_FIELDS)[number] | (string & {});
 export type ThemePreviewField = { id: string; field: ThemeTextField; rect: ThemePreviewRect };
-const textField = (value: unknown): value is ThemeTextField => typeof value === "string" && (THEME_TEXT_FIELDS as readonly string[]).includes(value);
+const textField = (value: unknown): value is ThemeTextField => typeof value === "string"
+  && ((THEME_TEXT_FIELDS as readonly string[]).includes(value) || THEME_APP_TEXT_FIELD.test(value));
 
 /** A part's box in the frame's viewport, in CSS pixels: start (left), top, width, height. */
 export type ThemePreviewRect = readonly [number, number, number, number];

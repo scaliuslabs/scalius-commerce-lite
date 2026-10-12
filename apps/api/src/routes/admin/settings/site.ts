@@ -1,7 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
-import { readStorefrontAppTemplateTheme } from "@scalius/shared/storefront-theme";
+import { readStorefrontAppTemplateTheme, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
   storefrontLandingSlugSchema,
@@ -83,7 +83,7 @@ import {
 } from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
-import { pluginSurfaceKey } from "@scalius/shared/plugins";
+import { pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -261,9 +261,10 @@ const themeAppSurfacesSchema = z.object({
   })),
 }).openapi("ThemeAppSurfaces");
 
+type PluginInstallations = Awaited<ReturnType<typeof listPluginInstallations>>;
+
 /** Active apps whose approved grant covers storefront surfaces, with what they offer the theme. */
-async function readThemeAppSurfaces(db: Parameters<typeof listPluginInstallations>[0]) {
-  const installations = await listPluginInstallations(db);
+function themeAppSurfaces(installations: PluginInstallations) {
   return installations
     .filter((installation) => installation.status === "active" && installation.grant?.storefrontSurfaces === true)
     .map((installation) => {
@@ -312,6 +313,30 @@ async function readThemeAppSurfaces(db: Parameters<typeof listPluginInstallation
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
+/**
+ * The images the theme's app sections and slots name (`image` settings and
+ * images in `list` items), read with each active app's own schema, so the
+ * editor previews them like the theme's own images.
+ */
+function themeAppMediaIds(theme: StorefrontThemeDocument, installations: PluginInstallations): string[] {
+  const sections = new Map<string, PluginSettingsSchema>();
+  const slots = new Map<string, PluginSettingsSchema>();
+  for (const installation of installations) {
+    if (installation.status !== "active") continue;
+    const { storefront } = installation.manifest;
+    for (const section of storefront.sections) sections.set(pluginSurfaceKey(installation.pluginId, section.type), section.settings);
+    for (const slot of storefront.slots) slots.set(pluginSurfaceKey(installation.pluginId, slot.id), slot.settings);
+  }
+  const placed = [
+    ...theme.pages.home,
+    ...Object.values(theme.pages.landing).flatMap((page) => page.sections),
+    ...Object.values(theme.pages.templates).flatMap((template) => template.sections),
+  ].flatMap((section) => (section.type === "app" ? [{ schema: sections.get(section.settings.app), values: section.settings.values }] : []));
+  const filled = [theme.apps?.header, theme.apps?.footer, theme.apps?.productCard]
+    .flatMap((slot) => (slot ? [{ schema: slots.get(slot.app), values: slot.values }] : []));
+  return [...new Set([...placed, ...filled].flatMap(({ schema, values }) => (schema ? storefrontSettingNeeds(schema, values).mediaIds : [])))];
+}
+
 const getThemeEditorRoute = createRoute({
   method: "get",
   path: "/theme/editor",
@@ -350,11 +375,12 @@ const getThemeEditorRoute = createRoute({
 
 app.openapi(getThemeEditorRoute, async (c) => {
   const db = c.get("db");
+  const installations = listPluginInstallations(db);
   const [[workspace, media], storeShape, apps] = await Promise.all([
-    getThemeWorkspace(db).then(async (workspace) =>
-      [workspace, await readThemeMedia(db, workspace.draft.theme)] as const),
+    Promise.all([getThemeWorkspace(db), installations]).then(async ([workspace, installed]) =>
+      [workspace, await readThemeMedia(db, workspace.draft.theme, themeAppMediaIds(workspace.draft.theme, installed))] as const),
     readStoreShape(db),
-    readThemeAppSurfaces(db),
+    installations.then(themeAppSurfaces),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
   const { updatedBy: _updatedBy, updatedByName, ...draft } = workspace.draft;

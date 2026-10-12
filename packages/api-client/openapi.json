@@ -10653,6 +10653,7 @@
               "color",
               "image",
               "products",
+              "product",
               "link",
               "list"
             ]
@@ -10796,6 +10797,7 @@
               "color",
               "image",
               "products",
+              "product",
               "link",
               "list"
             ]
@@ -14076,6 +14078,20 @@
             "items": {
               "type": "string"
             }
+          },
+          "storefrontCode": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Draws on the storefront with its own code: components, client islands or a stylesheet."
+          },
+          "storefrontConnect": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts the app's storefront islands reach from the buyer's browser."
           }
         },
         "required": [

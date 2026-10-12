@@ -24,10 +24,9 @@ import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { actionErrorText } from "../shared";
-import type { AppBlockEntry } from "../theme-settings";
-import { editorHistory, startHistory, type AppSectionEntry, type EditorAction } from "./editor-state";
+import { editorHistory, startHistory, type EditorAction } from "./editor-state";
 import type { SaveStatus } from "./EditorTopBar";
-import { saveableDraft } from "./saveable-draft";
+import { saveableDraft, type DraftApps } from "./saveable-draft";
 import { themeVersionsKey } from "./theme-history-queries";
 
 type Theme = StorefrontThemeDocument;
@@ -51,12 +50,12 @@ export interface Conflict {
   at: string | null;
 }
 
-export function useThemeDraft({ workspace, refetch, canEdit, appSections, appBlocks }: {
+export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   workspace: ThemeWorkspaceDocument;
   refetch: () => Promise<{ data?: ThemeWorkspaceDocument }>;
   canEdit: boolean;
-  appSections: ReadonlyMap<string, AppSectionEntry>;
-  appBlocks: ReadonlyMap<string, AppBlockEntry>;
+  /** What the active apps declare: their values hold back like any invalid field. */
+  apps: DraftApps;
 }) {
   const t = useMessages(themeEditorMessages);
   const queryClient = useQueryClient();
@@ -79,7 +78,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, appSections, appBlo
   /** Save without waiting (a change the preview shows only once saved). */
   const [urgent, setUrgent] = useState(false);
 
-  const saveable = useMemo(() => saveableDraft(working, saved.theme, appSections, appBlocks), [working, saved.theme, appSections, appBlocks]);
+  const saveable = useMemo(() => saveableDraft(working, saved.theme, apps), [working, saved.theme, apps]);
   const pending = saveable?.theme ?? null;
   const dirty = useMemo(() => pending !== null && !same(pending, lastSent), [pending, lastSent]);
   const held = saveable?.held ?? [];

@@ -3,9 +3,11 @@
  * its draft has unpublished changes and who published last, with Customize
  * (the theme editor, where every setting lives), Preview and Publish; and
  * the template library, where choosing a template restyles the draft while
- * keeping the merchant's content.
+ * keeping the merchant's content. Installed apps' templates sit beside the
+ * built-in ones with an App badge; choosing one applies it to the draft the
+ * same way (`applyStorefrontAppTemplate`).
  */
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -19,6 +21,7 @@ import type {
   StorefrontTemplateId,
   StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -33,7 +36,7 @@ import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/a
 import { OnlineStorePage, SectionCard, actionErrorText } from "./shared";
 import { HeaderRows, ProductTile, Sketch, VisualChoice } from "./ThemeChoices";
 import { useOpenThemePreview } from "./theme-preview";
-import { TEMPLATE_THEMES, applyTemplate, resolveThemeForStore, selectedTemplate } from "./theme-settings";
+import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, applyTemplate, resolveThemeForStore, selectedTemplate } from "./theme-settings";
 
 type Theme = StorefrontThemeDocument;
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
@@ -125,11 +128,18 @@ function ThemeOverview({ workspace, refetch }: {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const storeShape = workspace.storeShape as StoreShape;
   const draft = workspace.draft.theme as Theme;
-  const [pendingTemplate, setPendingTemplate] = useState<StorefrontTemplateId | null>(null);
+  /** A built-in template's id, or an app template's key (`<app id>/<template id>`). */
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [busy, setBusy] = useState<"template" | "publish" | "preview" | null>(null);
-  const selected = selectedTemplate(draft);
   const option = (key: string) => t(key as MessageKey);
+  // Each app template as this draft would look with it applied.
+  const fromApps = useMemo(() => appTemplates(workspace.apps).map((template) => ({ template, theme: applyAppTemplate(template, draft) })), [workspace.apps, draft]);
+  // An applied app template is the current one while the draft names it; otherwise the built-in one its look matches.
+  const appTemplate = draft.apps?.template ? fromApps.find((each) => each.template.key === draft.apps?.template)?.template : undefined;
+  const builtIn = draft.apps?.template ? null : selectedTemplate(draft);
+  const selected = appTemplate?.key ?? builtIn;
+  const templateName = (id: string) => fromApps.find((each) => each.template.key === id)?.template.name ?? option(`template_${id}`);
   const changed = workspace.draftDiffersFromLive;
   const refresh = async () => {
     await refetch();
@@ -140,11 +150,16 @@ function ThemeOverview({ workspace, refetch }: {
     if (isAdminApiConflictError(error)) await refresh();
   };
 
-  const chooseTemplate = async (id: StorefrontTemplateId) => {
+  const chooseTemplate = async (id: string) => {
+    const fromApp = fromApps.find((each) => each.template.key === id);
     setBusy("template");
     try {
       await apiData(postApiV1AdminSettingsThemeDraft({
-        body: { expectedDraftRevision: workspace.draft.revision, basePublishedRevision: workspace.draft.basePublishedRevision, theme: applyTemplate(id, draft) },
+        body: {
+          expectedDraftRevision: workspace.draft.revision,
+          basePublishedRevision: workspace.draft.basePublishedRevision,
+          theme: fromApp ? fromApp.theme : applyTemplate(id as StorefrontTemplateId, draft),
+        },
       }));
       toast.success(editor("templateApplied"));
       await refresh();
@@ -187,7 +202,7 @@ function ThemeOverview({ workspace, refetch }: {
           <div className="min-w-0 flex-1 space-y-3">
             <div className="space-y-1">
               <p className="flex flex-wrap items-center gap-2 text-heading-md">
-                {selected ? option(`template_${selected}`) : t("templateCustomBasedOn", { name: option(`template_${draft.template}`) })}
+                {selected ? templateName(selected) : t("templateCustomBasedOn", { name: option(`template_${draft.template}`) })}
                 <StatusBadge status={changed ? "draft" : "active"}>{changed ? editor("notPublished") : editor("live")}</StatusBadge>
               </p>
               <p className="text-body text-muted-foreground">
@@ -225,12 +240,21 @@ function ThemeOverview({ workspace, refetch }: {
           label={t("themeTemplates")}
           value={selected}
           className="grid-cols-2 sm:grid-cols-3"
-          options={TEMPLATE_THEMES.map((template) => ({
-            value: template.id,
-            label: option(`template_${template.id}`),
-            help: option(`template_${template.id}Help`),
-            sketch: <TemplatePreview theme={template.theme} layout={resolveThemeForStore(template.theme, storeShape).layout} />,
-          }))}
+          options={[
+            ...TEMPLATE_THEMES.map((template) => ({
+              value: template.id as string,
+              label: option(`template_${template.id}`),
+              help: option(`template_${template.id}Help`),
+              sketch: <TemplatePreview theme={template.theme} layout={resolveThemeForStore(template.theme, storeShape).layout} />,
+            })),
+            ...fromApps.map(({ template, theme }) => ({
+              value: template.key,
+              label: template.name,
+              badge: <Badge variant="secondary">{editor("appBadge")}</Badge>,
+              help: [template.description, editor("appFrom", { app: template.app.name })].filter(Boolean).join(" "),
+              sketch: <TemplatePreview theme={theme} layout={resolveThemeForStore(theme, storeShape).layout} />,
+            })),
+          ]}
           onChange={(id) => { if (canEdit && id !== selected && busy === null) setPendingTemplate(id); }}
         />
       </SectionCard>
@@ -238,8 +262,8 @@ function ThemeOverview({ workspace, refetch }: {
       <ConfirmDialog
         open={pendingTemplate !== null}
         onOpenChange={(open) => { if (!open) setPendingTemplate(null); }}
-        title={t("templateReplaceTitle", { name: pendingTemplate ? option(`template_${pendingTemplate}`) : "" })}
-        description={editor("templateReplaceBody")}
+        title={t("templateReplaceTitle", { name: pendingTemplate ? templateName(pendingTemplate) : "" })}
+        description={editor(fromApps.some((each) => each.template.key === pendingTemplate) ? "appTemplateReplaceBody" : "templateReplaceBody")}
         confirmLabel={t("templateReplaceConfirm")}
         variant="default"
         onConfirm={() => {

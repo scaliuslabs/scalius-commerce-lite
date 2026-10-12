@@ -1,7 +1,7 @@
 /**
  * Controls for settings that name store records: categories and collections
- * (one, or an ordered list), a running promotion, an image from Files and a
- * storefront link. The settings form picks them by setting key.
+ * (one, or an ordered list), a product, a running promotion, an image from
+ * Files and a storefront link. The settings form picks them by setting key.
  */
 import { useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -18,7 +18,9 @@ import { apiData } from "~/lib/api";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { collectionsByIdsQueryOptions } from "~/lib/api-query-options/collections";
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
+import { fetchProducts } from "~/lib/api-query-options/products";
 import { formatDateTime, useMessages } from "~/i18n";
+import { fieldMessages } from "~/i18n/field";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import { mediaPreview, moveAt, removeAt, type SectionMediaPreview } from "./media-previews";
@@ -31,7 +33,7 @@ export { mediaPreview, moveAt, removeAt, replaceAt, useMediaPreviews, type Media
  * or browsed, written in its canonical form when the field is left. Text
  * that is not a usable link stays as typed and is marked.
  */
-export function LinkField({ id, label, help, value, onChange, error, nullable = true }: {
+export function LinkField({ id, label, help, value, onChange, error, nullable = true, optional = false }: {
   id: string;
   label: ReactNode;
   help?: ReactNode;
@@ -40,6 +42,8 @@ export function LinkField({ id, label, help, value, onChange, error, nullable = 
   error?: string;
   /** False for a link the setting requires: cleared text stays "" instead of null. */
   nullable?: boolean;
+  /** Says "(optional)" after the label. */
+  optional?: boolean;
 }) {
   const t = useMessages(onlineStoreMessages);
   const [left, setLeft] = useState(false);
@@ -54,7 +58,7 @@ export function LinkField({ id, label, help, value, onChange, error, nullable = 
     onChange(next);
   };
   return (
-    <Field id={id} label={label}>
+    <Field id={id} label={label} optional={optional}>
       <div className="flex gap-2">
         <Input
           id={id}
@@ -104,9 +108,11 @@ export function LinkField({ id, label, help, value, onChange, error, nullable = 
  * One image from Files, stored as its media id: a preview, Select or Change,
  * and Remove when `onRemove` is given. A rejected save marks it by `id`.
  */
-export function MediaField({ id, label, help, mediaId, previews, onPick, onRemove, error, fit = "cover" }: {
+export function MediaField({ id, label, help, mediaId, previews, onPick, onRemove, error, fit = "cover", optional = false }: {
   id: string;
   label: string;
+  /** Says "(optional)" after the label. */
+  optional?: boolean;
   help?: ReactNode;
   mediaId: string | null;
   previews: ReadonlyMap<string, SectionMediaPreview>;
@@ -117,13 +123,17 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
   fit?: "cover" | "contain";
 }) {
   const t = useMessages(onlineStoreMessages);
+  const fields = useMessages(fieldMessages);
   const server = useServerFieldError(id);
   const shown = error ?? server.error;
   const preview = mediaId ? previews.get(mediaId) : undefined;
   return (
     // The label sits above, as every other field's does; the image and its buttons below it.
     <div id={id} role="group" aria-labelledby={`${id}-label`} className="space-y-1.5">
-      <p id={`${id}-label`} className="text-body font-medium">{label}</p>
+      <p id={`${id}-label`} className="text-body font-medium">
+        {label}
+        {optional ? <span className="font-normal text-muted-foreground"> {fields("optional")}</span> : null}
+      </p>
       {help ? <p className="text-body text-muted-foreground">{help}</p> : null}
       <div className="flex items-center gap-3">
       <div className="grid h-16 w-24 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted">
@@ -362,6 +372,44 @@ export function CategorySelect({ id, value, onChange, invalid }: {
       placeholder={t("pickCategory")}
       searchPlaceholder={t("searchCategories")}
       emptyMessage={t("noMoreCategories")}
+      aria-invalid={invalid || undefined}
+      triggerClassName="w-full"
+    />
+  );
+}
+
+const PRODUCT_PAGE_SIZE = 20;
+const loadProducts: SearchableSelectLoader = async ({ search, page }) => {
+  const result = await fetchProducts({ page, limit: PRODUCT_PAGE_SIZE, ...(search ? { search } : {}) });
+  return {
+    options: result.products.map((product) => ({ value: product.id, label: product.name })),
+    hasMore: page < result.pagination.totalPages,
+  };
+};
+
+/** One product, searched in the catalogue; `name` shows the chosen one before its page loads. */
+export function ProductSelect({ id, value, name, onChange, clearable = false, invalid = false }: {
+  id: string;
+  value: string;
+  name?: string;
+  /** "" when cleared. */
+  onChange: (id: string) => void;
+  clearable?: boolean;
+  invalid?: boolean;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  return (
+    <SearchableSelect
+      id={id}
+      value={value}
+      selectedLabel={name}
+      load={loadProducts}
+      queryKey={["online-store", "products"]}
+      clearable={clearable}
+      onValueChange={onChange}
+      placeholder={t("chooseProduct")}
+      searchPlaceholder={t("searchProducts")}
+      emptyMessage={t("noProducts")}
       aria-invalid={invalid || undefined}
       triggerClassName="w-full"
     />

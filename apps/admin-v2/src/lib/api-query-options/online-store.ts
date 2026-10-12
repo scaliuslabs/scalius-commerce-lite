@@ -15,10 +15,12 @@ import type {
 
 /** The published theme, the shared draft, who published last, and what the editor reads (store shape, every image the draft names, app surfaces). */
 export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsThemeEditor>;
-/** An active app with the homepage sections and product-page blocks it offers the theme. */
+/** An active app with the homepage sections, theme slots, templates and product-page blocks it offers the theme. */
 export type ThemeApp = ThemeWorkspaceDocument["apps"][number];
 export type ThemeAppSection = ThemeApp["sections"][number];
 export type ThemeAppBlock = ThemeApp["productBlocks"][number];
+/** A theme slot (header, footer, product card) an app fills, with its settings. */
+export type ThemeAppSlot = ThemeApp["slots"][number];
 /** One setting of an app section or block, as the app's manifest declares it (labels are the app's plain text). */
 export type ThemeAppSettingField = ThemeAppSection["settings"][number];
 /** The menu detail is the stored row: no item or placement counts. */

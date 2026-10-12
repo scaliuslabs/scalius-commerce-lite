@@ -143,11 +143,11 @@ export function PartSettings({ selected, page, theme, resolved, media, apps, cms
   setDraft: SetTheme;
   onRemoveLanding: (slug: string) => void;
 }): ReactNode {
-  const shared = { theme, resolved, media, setDraft };
+  const shared = { theme, resolved, media, apps, setDraft };
   const module = selectedModule(selected);
   if (module) return <ProductModuleSettings theme={theme} module={module} setDraft={setDraft} />;
   switch (selected) {
-    case EDITOR_PARTS.announcement: return <AnnouncementSettings {...shared} />;
+    case EDITOR_PARTS.announcement: return <AnnouncementSettings theme={theme} resolved={resolved} media={media} setDraft={setDraft} />;
     case EDITOR_PARTS.header: return <HeaderSettings {...shared} />;
     case EDITOR_PARTS.footer: return <FooterSettings {...shared} />;
     case EDITOR_PARTS.page:
@@ -157,7 +157,7 @@ export function PartSettings({ selected, page, theme, resolved, media, apps, cms
     case EDITOR_PARTS.pageContent: return <CmsPageContent pageId={cmsPageId} />;
     case EDITOR_PARTS.cart: return <CartContent />;
     case EDITOR_PARTS.productMain: return <ProductMainSettings {...shared} />;
-    case EDITOR_PARTS.productApps: return <ProductAppBlocksSettings theme={theme} apps={apps} setDraft={setDraft} />;
+    case EDITOR_PARTS.productApps: return <ProductAppBlocksSettings theme={theme} apps={apps} media={media} setDraft={setDraft} />;
     case EDITOR_PARTS.listing: return <ListingGridSettings theme={theme} setDraft={setDraft} media={media} search={page.kind === "search"} />;
     case EDITOR_PARTS.listingToolbar: return <ListingToolbarSettings theme={theme} setDraft={setDraft} />;
     case EDITOR_PARTS.listingFilters: return <ListingFilterSettings theme={theme} setDraft={setDraft} search={page.kind === "search"} />;

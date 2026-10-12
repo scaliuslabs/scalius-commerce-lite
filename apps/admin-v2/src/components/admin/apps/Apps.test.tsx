@@ -474,6 +474,22 @@ describe("App page", () => {
     expect(text()).not.toContain("New");
   });
 
+  it("says when an app redesigns the storefront and which hosts its storefront code connects to, marking what an update adds", async () => {
+    await renderApp(
+      detail({
+        request: grant({ storefrontCode: true, storefrontConnect: ["cdn.acme.example", "reviews.acme.example"] }),
+        granted: grant({ storefrontCode: true, storefrontConnect: ["cdn.acme.example"] }),
+        added: grant({ permissions: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [], storefrontConnect: ["reviews.acme.example"] }),
+      }),
+      VIEWER,
+    );
+
+    expect(text()).toContain("Redesigns your storefront with its own code");
+    expect(text()).toContain("Its storefront code connects to cdn.acme.example from your buyers' browsers");
+    const newRows = [...document.querySelectorAll("li")].filter((row) => row.textContent?.includes("New"));
+    expect(newRows.map((row) => row.textContent)).toEqual([expect.stringContaining("reviews.acme.example")]);
+  });
+
   it("says when an app can pause checkout or updates a buyer's record with each order", async () => {
     await renderApp(
       detail({

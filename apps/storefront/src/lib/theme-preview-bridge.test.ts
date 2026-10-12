@@ -488,6 +488,22 @@ describe("explicit field identity in the actual bridge script", () => {
     expect(section.querySelector('[data-theme-field="cta.label"]')!.textContent).toBe("<strong>plain</strong>");
     expect(section.querySelector("strong")).toBeNull();
   });
+  it("patches an app section's own setting keys, and only inside an app section", () => {
+    const harness = start(); connect(harness);
+    const story = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    story.setAttribute("data-home-section", "app");
+    story.innerHTML = '<h2 data-theme-field="kicker">Old</h2><p data-theme-field="body">Old body</p>';
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "kicker", value: "New season" });
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "body", value: "<b>Plain</b> words" });
+    expect(story.querySelector('[data-theme-field="kicker"]')!.textContent).toBe("New season");
+    expect(story.querySelector('[data-theme-field="body"]')!.textContent).toBe("<b>Plain</b> words");
+    expect(story.querySelector("b")).toBeNull();
+    // A platform section keeps its fixed field list.
+    const faq = harness.window.document.querySelector('[data-theme-section-id="faq"]')!;
+    faq.innerHTML = '<h2 data-theme-field="kicker">Kept</h2>';
+    harness.deliver({ source: EDITOR, type: "text", id: "faq", field: "kicker", value: "Wrong" });
+    expect(faq.querySelector('[data-theme-field="kicker"]')!.textContent).toBe("Kept");
+  });
   it("does nothing for absent or duplicate targets, nested section fields and paragraph bodies", () => {
     const harness = start(); connect(harness);
     const section = harness.window.document.querySelector('[data-theme-section-id="story"]')!;

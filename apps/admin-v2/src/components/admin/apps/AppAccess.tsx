@@ -21,7 +21,7 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
   return (list as readonly string[]).includes(value);
 }
 
-type ListKey = { [K in keyof AppGrant]: AppGrant[K] extends string[] ? K : never }[keyof AppGrant];
+type ListKey = { [K in keyof AppGrant]-?: AppGrant[K] extends string[] ? K : never }[keyof AppGrant];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -97,15 +97,22 @@ export function AppAccess({ app }: { app: AppDetail }) {
       </Section>,
     );
   }
-  if (request.storefrontSurfaces || request.publicRoutes || request.storefrontScripts.length > 0) {
+  const connect = request.storefrontConnect ?? [];
+  if (request.storefrontSurfaces || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || connect.length > 0) {
     sections.push(
       <Section key="storefront" title={t("access_storefront")}>
         {request.storefrontSurfaces ? row("surfaces", t("storefrontSurfaces"), added?.storefrontSurfaces === true) : null}
+        {request.storefrontCode ? row("code", t("storefrontCode"), added?.storefrontCode === true) : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {
           // "Loads scripts from {host}", with the host as code wherever the language puts it.
           const [before, after] = t("scriptsFrom", { host: "\u0000" }).split("\u0000");
           return row(`script:${host}`, <span className="break-all">{before}<code>{host}</code>{after}</span>, isNew("storefrontScripts", host));
+        })}
+        {connect.map((host) => {
+          // "Its storefront code connects to {host}" (never loads scripts from it).
+          const [before, after] = t("storefrontConnectTo", { host: "\u0000" }).split("\u0000");
+          return row(`connect:${host}`, <span className="break-all">{before}<code>{host}</code>{after}</span>, added?.storefrontConnect?.includes(host) === true);
         })}
       </Section>,
     );

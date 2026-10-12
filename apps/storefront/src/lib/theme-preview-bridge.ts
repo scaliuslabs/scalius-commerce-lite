@@ -21,6 +21,7 @@
  * origin, and sent only there.
  */
 import {
+  THEME_APP_TEXT_FIELD,
   THEME_EDITOR_SOURCE,
   THEME_TEXT_FIELDS,
   THEME_PREVIEW_BODY_MAX,
@@ -48,6 +49,7 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   const MARK = "data-theme-section-id";
   const FIELD = "data-theme-field";
   const FIELDS = ${json(THEME_TEXT_FIELDS)};
+  const APP_FIELD = new RegExp(${json(THEME_APP_TEXT_FIELD.source)});
   const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
   const NAME = /^[a-z0-9-]{1,64}$/;
   const VALUE = /^[^;{}<>\\\\]{0,240}$/;
@@ -62,16 +64,19 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   let inspector = true;
   let hovered = null;
   let selectedField = null;
+  // An app section's fields are its setting keys (the SDK's editable()); a platform section's are named.
+  const appSection = (section) => section.getAttribute("data-home-section") === "app";
+  const allowed = (section, field) => typeof field === "string" && (appSection(section) ? APP_FIELD.test(field) : FIELDS.includes(field));
   const fieldElement = (id, field) => {
     const section = valid(id) && find(id);
-    if (!section || !FIELDS.includes(field)) return null;
+    if (!section || !allowed(section, field)) return null;
     const found = Array.from(section.querySelectorAll("[" + FIELD + '="' + field + '"]')).filter((element) => owner(element) === section);
     return found.length === 1 ? found[0] : null;
   };
   const fieldAt = (target, section) => {
     const element = target instanceof Element && target.closest("[" + FIELD + "]");
     const field = element && element.getAttribute(FIELD);
-    return element && owner(element) === section && FIELDS.includes(field) ? field : null;
+    return element && owner(element) === section && allowed(section, field) ? field : null;
   };
   // A mark may be display:contents: measure what it holds. Any other mark is
   // its own box (what it holds may overflow it: a sticky bar, a popover).
@@ -157,9 +162,9 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   const patchText = (id, field, value) => {
     // Bodies own paragraph children. Unknown/absent/duplicate targets await the
     // canonical render already scheduled by the dashboard, without guessing.
-    if (field === "body" || typeof value !== "string" || !value.trim() || value.length > 8000) return;
+    if (typeof value !== "string" || !value.trim() || value.length > 8000) return;
     const element = fieldElement(id, field);
-    if (!element) return;
+    if (!element || (field === "body" && !appSection(find(id)))) return;
     element.textContent = value;
     report();
   };
@@ -325,7 +330,9 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
         if (valid(message.id)) reveal(message.id);
         break;
       case "field":
-        selectedField = message.target && valid(message.target.id) && FIELDS.includes(message.target.field)
+        // Checked against its section when measured (the section may draw later).
+        selectedField = message.target && valid(message.target.id) && typeof message.target.field === "string"
+          && (FIELDS.includes(message.target.field) || APP_FIELD.test(message.target.field))
           ? { id: message.target.id, field: message.target.field } : null;
         report();
         break;

@@ -19,4 +19,10 @@ describe("themeProblemTarget", () => {
     expect(themeProblemTarget(DEFAULT_STOREFRONT_THEME, "homeMode")).toMatchObject({ kind: "part", part: "page", fieldId: "theme-home-product" });
     expect(themeProblemTarget(DEFAULT_STOREFRONT_THEME, "block:footer")).toEqual({ kind: "theme" });
   });
+
+  it("opens the part or group an app's slot settings are in", () => {
+    expect(themeProblemTarget(DEFAULT_STOREFRONT_THEME, "app:header")).toMatchObject({ kind: "part", part: "header" });
+    expect(themeProblemTarget(DEFAULT_STOREFRONT_THEME, "app:footer")).toMatchObject({ kind: "part", part: "footer" });
+    expect(themeProblemTarget(DEFAULT_STOREFRONT_THEME, "app:productCard")).toMatchObject({ kind: "group", group: "productCards" });
+  });
 });
