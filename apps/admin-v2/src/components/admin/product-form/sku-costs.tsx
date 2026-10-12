@@ -95,8 +95,8 @@ export function resolveSkuKeys(
 export interface SkuCostStore {
   /** The key of a product without options: its hidden SKU's id, or `NEW_SIMPLE_SKU` before it exists. */
   simpleKey: string;
-  /** The cost the editor shows: the merchant's typed cost, else the saved one (null: none). */
-  costOf: (key: string) => number | null;
+  /** The editor's typed cost, else saved (null: none). Viewers request savedOnly after edit permission changes. */
+  costOf: (key: string, savedOnly?: boolean) => number | null;
   setCosts: (keys: Iterable<string>, cost: number | null) => void;
   /** A typed cost differs from the saved one among these SKUs. */
   isDirty: (keys: readonly string[]) => boolean;
@@ -196,9 +196,9 @@ export function useSkuCostDraft(variants: readonly CostVariant[] = []): SkuCostS
 
     return {
       simpleKey,
-      costOf: (key) => {
+      costOf: (key, savedOnly = false) => {
         const { saved, edits } = draft();
-        return edits.has(key) ? edits.get(key) ?? null : saved.get(key) ?? null;
+        return !savedOnly && edits.has(key) ? edits.get(key) ?? null : saved.get(key) ?? null;
       },
       setCosts: (keys, cost) => update((_saved, edits) => {
         for (const key of keys) edits.set(key, cost);

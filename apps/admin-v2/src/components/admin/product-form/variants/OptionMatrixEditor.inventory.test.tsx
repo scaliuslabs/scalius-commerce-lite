@@ -86,6 +86,21 @@ describe("OptionMatrixEditor inventory for products without options", () => {
   const quantityLabel = translate(productMessages, "quantity");
   const quantityInput = () => host.querySelector<HTMLInputElement>(`input[aria-label="${quantityLabel}"]`);
 
+  it("shows a simple viewer's saved quantity, SKU, barcode and weight as facts", async () => {
+    const ref = React.createRef<OptionMatrixEditorHandle>();
+    const onDirtyChange = vi.fn();
+    await render(<OptionMatrixEditor readOnly ref={ref} productId="prod_1" productName="Mug" productPrice={250} images={[]} variants={[{ ...defaultSku, trackInventory: true }]} onDirtyChange={onDirtyChange} />);
+    expect(host.querySelector("input, [role=checkbox], [role=combobox]")).toBeNull();
+    expect(host.textContent).toContain(defaultSku.sku);
+    expect(host.textContent).toContain(defaultSku.barcode);
+    expect(host.textContent).toContain("300");
+    expect([...host.querySelectorAll("p")].some((field) => field.textContent === `${quantityLabel}: 5`)).toBe(true);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(ref.current!.composition()).toBeNull();
+    await act(async () => ref.current!.save());
+    expect(mocks.putApiV1AdminProductsByIdVariantsByVariantId).not.toHaveBeenCalled();
+  });
+
   it("tracks quantity by default on a new product and sends it with the create request", async () => {
     const onDraftChange = vi.fn<(composition: ProductCreateComposition | null) => void>();
     await render(

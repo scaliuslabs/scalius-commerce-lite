@@ -1,5 +1,6 @@
 import React from "react";
 import { WeightInput, useWeightUnit } from "./WeightInput";
+import { formatWeight } from "./weight-format";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
@@ -74,7 +75,7 @@ import { DigitalStockStatus } from "../DigitalStock";
 import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
 import { useProductEditorSlots } from "../editor-slots";
 import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
-import { Field, FieldRow } from "~/components/ui/field";
+import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { barcodePatch, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
 import { VariantTable, type VariantCosts } from "./VariantTable";
 
@@ -98,6 +99,7 @@ const SERVER_FIELDS: Record<string, DraftIssueField> = {
 
 
 type OptionMatrixEditorProps = {
+  readOnly?: boolean;
   productId?: string;
   productName: string;
   productPrice: number;
@@ -125,7 +127,13 @@ type OptionMatrixEditorProps = {
 const NO_OPTIONS: ProductOptionDefinition[] = [];
 const NO_VARIANTS: ProductVariant[] = [];
 
-export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
+// Changing permission starts a saved viewer or a fresh editor, never a stale draft.
+export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor(props, ref) {
+  return <OptionMatrix key={props.readOnly ? "view" : "edit"} {...props} ref={ref} />;
+});
+
+const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrix({
+  readOnly = false,
   productId,
   productName,
   productPrice,
@@ -327,14 +335,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   }, [costsShown, shownVariants, simpleCostKey, simpleMode, simpleSku.sku]);
   usePublishSkuCostRows(costs, costRows);
   const costKeys = costRows.map((row) => row.key);
-  const costsDirty = costs?.isDirty(costKeys) ?? false;
-  const costTrouble = costs?.problemOf(costKeys) ?? null;
+  const costsDirty = !readOnly && (costs?.isDirty(costKeys) ?? false);
+  const costTrouble = readOnly ? null : costs?.problemOf(costKeys) ?? null;
   const costIssue: DraftIssue | null = costTrouble
     ? { message: costTrouble.message, field: "cost", ...(simpleMode ? {} : { variantId: costTrouble.key }) }
     : null;
   const variantCosts = React.useMemo<VariantCosts | null>(
-    () => (costs ? { of: costs.costOf, change: (ids, cost) => costs.setCosts(ids, cost) } : null),
-    [costs],
+    () => (costs ? { of: (id) => costs.costOf(id, readOnly), change: (ids, cost) => { if (!readOnly) costs.setCosts(ids, cost); } } : null),
+    [costs, readOnly],
   );
 
   const draftIssue = locationIssue ?? (!simpleMode
@@ -348,12 +356,13 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   };
   const draftLine = draftIssue ? lineFor(draftIssue) : null;
   // Problems show at their field once the merchant changed something, or after Save was refused.
-  const shownIssue = serverIssue ?? (dirty || costsDirty || revealed ? draftIssue : null);
+  const shownIssue = readOnly ? null : serverIssue ?? (dirty || costsDirty || revealed ? draftIssue : null);
   const issueFor: IssueFor = (variantId, field) =>
     shownIssue && shownIssue.field === field && shownIssue.variantId === variantId ? shownIssue.message : undefined;
 
   React.useEffect(() => {
     if (!onDraftChange) return;
+    if (readOnly) { onDraftChange(null); return; }
     const sku = shownSimpleSku.sku.trim();
     onDraftChange(draftIssue
       ? null
@@ -368,11 +377,11 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             },
           }
         : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(shownVariants, fulfilmentMode) } } : null);
-  }, [draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
+  }, [readOnly, draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
 
-  React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
+  React.useEffect(() => onDraftIssueChange?.(readOnly ? null : draftLine), [readOnly, draftLine, onDraftIssueChange]);
   // Typed costs count as a variant change: the page's Save sends them after the variants.
-  React.useEffect(() => onDirtyChange?.(dirty || costsDirty), [costsDirty, dirty, onDirtyChange]);
+  React.useEffect(() => onDirtyChange?.(!readOnly && (dirty || costsDirty)), [readOnly, costsDirty, dirty, onDirtyChange]);
   const prices = options.length > 0 ? variants.map((variant) => variant.price).filter(Number.isFinite) : [];
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
@@ -641,7 +650,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   React.useImperativeHandle(ref, () => ({
     save: async (revisionOverride) => {
       const sendCosts = costs !== null && costsDirty;
-      if (!productId || (!dirty && !sendCosts) || mutation.isPending) return;
+      if (readOnly || !productId || (!dirty && !sendCosts) || mutation.isPending) return;
       if (draftIssue) {
         reveal();
         throw new SaveNotCompleted(lineFor(draftIssue));
@@ -664,7 +673,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       await finishSave(dirty, sendCosts);
     },
     composition: () => {
-      if (!productId || !dirty || mutation.isPending) return null;
+      if (readOnly || !productId || !dirty || mutation.isPending) return null;
       if (draftIssue) {
         reveal();
         throw new SaveNotCompleted(lineFor(draftIssue));
@@ -680,7 +689,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     reveal,
     showServerIssue,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [costs, costsDirty, dirty, draft, draftIssue, mutation, onSaved, productId, reveal, showServerIssue]);
+  }), [readOnly, costs, costsDirty, dirty, draft, draftIssue, mutation, onSaved, productId, reveal, showServerIssue]);
 
   // A product without options edits its one hidden SKU here: drawn into the page's
   // Inventory and Shipping cards (editor-slots.ts), or in place outside the page.
@@ -689,6 +698,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       {/* Untracked kinds (gift cards) have no quantity to track. */}
       {kindRules.showInventory ? (
         <div className="space-y-1">
+          {readOnly ? <ReadOnlyValue label={t("trackQuantity")} value={t(simpleSku.trackInventory ? "quantityTracked" : "notTracked")} /> : (
           <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
@@ -697,6 +707,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             />
             {t("trackQuantity")}
           </label>
+          )}
           {digitalSimple ? (
             <p className="text-body text-muted-foreground">
               {d(keepsTracking ? "stockPoolKeepsTracking" : shownSimpleSku.trackInventory ? "stockTrackedHelp" : "stockUntrackedHelp")}
@@ -711,6 +722,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         {shownSimpleSku.trackInventory && !digitalSimple ? (
           <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
               <InventoryQuantityInput
+                readOnly={readOnly}
                 ariaLabel={quantityLabel ?? t("quantity")}
                 value={simpleSku.stock - simpleElsewhere}
                 committed={simpleCommitted}
@@ -723,6 +735,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               />
           </Field>
         ) : null}
+        {readOnly ? <ReadOnlyValue mono label={t("sku")} value={simpleSku.sku} /> : (
         <Field label={t("sku")} error={issueFor(undefined, "sku")}>
             <Input
               value={simpleSku.sku}
@@ -730,6 +743,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               onChange={(event) => updateSimple({ sku: event.target.value })}
             />
         </Field>
+        )}
+        {readOnly ? <ReadOnlyValue mono label={t("barcode")} value={simpleSku.barcode} /> : (
         <Field label={t("barcode")} help={productId ? undefined : t("barcodeHint")} error={issueFor(undefined, "barcode")}>
             <Input
               value={simpleSku.barcode ?? ""}
@@ -738,18 +753,21 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               onChange={(event) => updateSimple(barcodePatch(event.target.value))}
             />
         </Field>
+        )}
       </FieldRow>
     </>
   );
   // Only what is packed is weighed (never a download, a service or a gift card).
   const simpleWeight = kindRules.showWeight ? (
     <FieldRow>
+      {readOnly ? <ReadOnlyValue label={t("weightGrams")} value={simpleSku.weight === null ? null : formatWeight(simpleSku.weight, weightUnit)} /> : (
       <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
           <WeightInput
             grams={simpleSku.weight}
             onGramsChange={(weight) => updateSimple({ weight })}
           />
       </Field>
+      )}
     </FieldRow>
   ) : null;
 
@@ -779,6 +797,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           <div className="divide-y border-b">
             {options.map((option, optionIndex) => (
               <OptionRow
+                readOnly={readOnly}
                 key={option.id}
                 option={option}
                 index={optionIndex}
@@ -803,7 +822,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             ))}
           </div>
         ) : null}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3 text-body">
+        {!readOnly ? <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3 text-body">
           {options.length < MAX_AXES ? (
             <Button
               type="button"
@@ -828,7 +847,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           {options.length >= MAX_AXES ? (
             <span className="text-muted-foreground">{t("optionsAtLimit", { max: formatNumber(MAX_AXES) })}</span>
           ) : null}
-        </div>
+        </div> : null}
       </div>
 
       {/* Option-level problems show once a value is entered (an option still being filled in waits
@@ -841,6 +860,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ) : null}
       {variants.length ? (
         <VariantTable
+          readOnly={readOnly}
           options={options}
           variants={tableVariants}
           images={stableImages}
@@ -892,7 +912,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
 OptionMatrixEditor.displayName = "OptionMatrixEditor";
 
-function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove, onRemoveValue }: {
+function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove, onRemoveValue }: {
+  readOnly: boolean;
   option: DraftOption;
   index: number;
   canMoveUp: boolean;
@@ -925,6 +946,21 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
     if (nextValues.length) onChange({ ...option, values: [...option.values, ...nextValues] });
     setValueInput(repeated.join(", "));
   };
+
+  if (readOnly) {
+    const mapping = { none: "optionTypeOther", size: "optionTypeSize", color: "optionTypeColor", material: "optionTypeMaterial", pattern: "optionTypePattern" } as const;
+    return (
+      <div className="min-w-0 space-y-3 py-3">
+        <FieldRow>
+          <ReadOnlyValue label={t("optionNameLabel")} value={optionLabel} />
+          <ReadOnlyValue label={t("optionFilterAs")} value={t(mapping[option.standardMapping])} />
+        </FieldRow>
+        <ReadOnlyValue label={t("optionValuesLabel")} value={option.values.length ? (
+          <ul className="flex flex-wrap gap-x-3 gap-y-1">{option.values.map((value) => <li key={value.id} className="min-w-0">{value.value}</li>)}</ul>
+        ) : null} />
+      </div>
+    );
+  }
 
   // Shopify's option editor: the name (with how customers filter it) on one line, its values below.
   return (

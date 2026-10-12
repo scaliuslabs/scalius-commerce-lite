@@ -208,7 +208,7 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
 function ProductCostFields({ costs, customerPays, readOnly }: { costs: SkuCostStore; customerPays: number | null; readOnly: boolean }) {
   const t = useMessages(productMessages);
   const { code, fmt } = useCurrency();
-  const cost = costs.costOf(costs.simpleKey);
+  const cost = costs.costOf(costs.simpleKey, readOnly);
   const problem = costProblem(cost);
   const result = costMargin(customerPays, cost, getDecimalPlaces(code));
   const negative = (value: number | null | undefined, text: string) =>

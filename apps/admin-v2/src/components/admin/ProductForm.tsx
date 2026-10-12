@@ -111,6 +111,7 @@ interface ProductFormProps {
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   optionManager: (context: {
+    readOnly: boolean;
     skuImages: ProductSkuImageChoice[];
     productName: string;
     productPrice: number;
@@ -474,13 +475,15 @@ function ProductEditor({
               (title, media, pricing, inventory, shipping, variants), then the advanced cards, each
               always listed by title and closed while empty. The side column holds status,
               organisation and the page template. */}
-          <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
               <ProductImagesSection form={form} readOnly={readOnly} />
               <PricingCard form={form} variantPrices={variantPrices} readOnly={readOnly} />
               <div ref={setInventorySlot} className="empty:hidden" />
               <ShippingCard form={form} hasOptions={variantPrices !== null} weightSlot={setShippingSlot} readOnly={readOnly} />
+              </fieldset>
               <Card id="product-variants" className="scroll-mt-4">
                 <CardHeader>
                   <CardTitle>{t("variants")}</CardTitle>
@@ -491,6 +494,7 @@ function ProductEditor({
                     if (
                       event.key === "Enter" &&
                       event.target instanceof HTMLElement &&
+                      (!readOnly || event.target instanceof HTMLInputElement) &&
                       event.target.closest("[data-variant-editor]") &&
                       !event.target.closest("[data-option-value-composer]")
                     ) {
@@ -498,9 +502,10 @@ function ProductEditor({
                     }
                   }}
                 >
-                  <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} />
+                  <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} readOnly={readOnly} />
                 </CardContent>
               </Card>
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
               <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
               {isEdit && productId ? (
@@ -530,12 +535,14 @@ function ProductEditor({
               )}
               <AttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
+              </fieldset>
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
-              <div className="max-lg:order-first">
+              <fieldset disabled={readOnly} className="min-w-0 max-lg:order-first">
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} readOnly={readOnly} />
-              </div>
+              </fieldset>
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <PublishingCard form={form} readOnly={readOnly} />
               <OrganizationCard form={form} categories={categories} brandName={brandName} readOnly={readOnly} />
               {isEdit && productId ? (
@@ -548,8 +555,9 @@ function ProductEditor({
               <WarrantyCard form={form} readOnly={readOnly} />
               {isEdit && productId ? <LazyCustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
               {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}
+              </fieldset>
             </div>
-          </fieldset>
+          </div>
           </ProductEditorSlotsContext.Provider>
           </ProductSectionsProvider>
           </ProductKindRulesProvider>
@@ -644,7 +652,8 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
   );
 }
 
-function ProductVariants({ form, optionManager, onPricesChange }: {
+function ProductVariants({ form, optionManager, onPricesChange, readOnly }: {
+  readOnly: boolean;
   form: UseFormReturn<ProductFormValues>;
   optionManager: ProductFormProps["optionManager"];
   onPricesChange: (range: VariantPriceRange | null) => void;
@@ -669,8 +678,8 @@ function ProductVariants({ form, optionManager, onPricesChange }: {
   const productPrice = React.useDeferredValue(Number.isFinite(price) ? price ?? 0 : 0);
   const mode = fulfilmentMode ?? "physical";
   return React.useMemo(
-    () => optionManager({ skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
-    [optionManager, skuImages, productName, productPrice, isActive, onPricesChange, mode],
+    () => optionManager({ readOnly, skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
+    [readOnly, optionManager, skuImages, productName, productPrice, isActive, onPricesChange, mode],
   );
 }
 

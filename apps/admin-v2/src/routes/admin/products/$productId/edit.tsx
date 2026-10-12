@@ -405,9 +405,10 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
-        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
+        optionManager={({ readOnly, skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
+              readOnly={readOnly}
               requirePositivePrice={isActive}
               ref={matrixRef}
               key={`matrix-${matrixGeneration}`}

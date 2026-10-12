@@ -101,7 +101,8 @@ describe("OptionMatrixEditor cost per item", () => {
     host.remove();
   });
 
-  function Page({ variants, options = [], editorRef, onDirtyChange, onSaved }: {
+  function Page({ readOnly = false, variants, options = [], editorRef, onDirtyChange, onSaved }: {
+    readOnly?: boolean;
     variants: ProductVariant[];
     options?: (typeof sizeOption)[];
     editorRef: React.Ref<OptionMatrixEditorHandle>;
@@ -112,6 +113,7 @@ describe("OptionMatrixEditor cost per item", () => {
     return (
       <SkuCostProvider store={store}>
         <OptionMatrixEditor
+          readOnly={readOnly}
           ref={editorRef}
           productId="prod_1"
           productName="Mug"
@@ -127,15 +129,49 @@ describe("OptionMatrixEditor cost per item", () => {
     );
   }
 
-  function render(element: React.ReactElement) {
+  function render(element: React.ReactElement, canViewCosts = true) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     // Costs reach the editor only with "View product costs".
     return act(async () => root.render(
-      <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW_COSTS]}>
+      <PermissionProvider permissions={canViewCosts ? [PERMISSIONS.PRODUCTS_VIEW_COSTS] : []}>
         <QueryClientProvider client={client}>{element}</QueryClientProvider>
       </PermissionProvider>,
     ));
   }
+
+  it("revokes editing without showing unsaved SKU or cost drafts, and still gates saved costs", async () => {
+    const ref = React.createRef<OptionMatrixEditorHandle>();
+    const onDirtyChange = vi.fn();
+    const variants = [sized("var_s", "pval_s", "S", 10), sized("var_m", "pval_m", "M", 80)];
+    const page = (readOnly: boolean) => <Page readOnly={readOnly} variants={variants} options={[sizeOption]} editorRef={ref} onDirtyChange={onDirtyChange} />;
+    await render(page(false));
+    const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "priceFor", { name: "S" })}"]`)!;
+    await act(async () => {
+      setInput(price, "999");
+      price.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      store.setCosts(["var_s"], 777);
+    });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    await render(page(true));
+    const row = host.querySelector('[data-variant-row="var_s"]')!;
+    expect(row.textContent).toContain("৳250");
+    expect(row.textContent).not.toContain("৳999");
+    expect(host.querySelector("input:not([type=search]), [role=checkbox]")).toBeNull();
+    const expand = row.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productMessages, "moreFieldsFor", { name: "S" })}"]`)!;
+    await act(async () => expand.click());
+    const cost = [...row.querySelectorAll('[data-slot="field"]')].find((field) => field.querySelector('[data-slot="field-label"]')?.textContent === translate(productMessages, "costPerItem"))!;
+    expect(cost.querySelector('[data-slot="field-control"]')?.textContent).toBe("৳10");
+    expect(store.costOf("var_s")).toBe(777); // The route store survived the matrix remount.
+    expect(store.costOf("var_s", true)).toBe(10);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(ref.current!.composition()).toBeNull();
+    await act(async () => ref.current!.save());
+    expect(mocks.putApiV1AdminProductsByIdOptionsMatrix).not.toHaveBeenCalled();
+    expect(mocks.putApiV1AdminInventoryCosts).not.toHaveBeenCalled();
+    await render(page(true), false);
+    expect(host.textContent).not.toContain(translate(productMessages, "costPerItem"));
+    expect(host.textContent).not.toContain("96.0%");
+  });
 
   it("saves a changed cost of a product without options on its own, with the cost it replaces", async () => {
     const ref = React.createRef<OptionMatrixEditorHandle>();

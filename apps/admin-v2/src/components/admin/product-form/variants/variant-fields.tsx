@@ -1,11 +1,12 @@
 // The fields of one variant, shared by the simple-product inventory card and the variant table.
 import { WeightInput, useWeightUnit } from "./WeightInput";
+import { formatWeight } from "./weight-format";
 import React from "react";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput, PercentInput } from "@/components/ui/number-input";
-import { Field, FieldRow } from "~/components/ui/field";
+import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -17,7 +18,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
 import { useProductKindRules } from "../product-kind-rules";
@@ -47,7 +48,8 @@ export interface IncomingUnits {
   transfers: number;
 }
 
-export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false, cell, elsewhere, incoming }: {
+export function InventoryQuantityInput({ readOnly = false, value, committed, onChange, ariaLabel, invalid = false, cell, elsewhere, incoming }: {
+  readOnly?: boolean;
   /** Marks the field for the table's arrow-key navigation (see VariantTable). */
   cell?: string;
   /** With several locations: the default location's on-hand (the SKU's otherwise). */
@@ -67,7 +69,7 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
   const incomingUnits = (incoming?.purchaseOrders ?? 0) + (incoming?.transfers ?? 0);
   return (
     <div className="space-y-1">
-      <NumberInput
+      {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{ariaLabel ?? t("quantity")}: </span>{formatNumber(value)}</p> : <NumberInput
         value={value}
         integer
        
@@ -75,7 +77,7 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
         data-cell={cell}
         // Empty or not a number stays visible as a problem instead of turning into 0.
         onValueChange={(next) => onChange(next ?? Number.NaN)}
-      />
+      />}
       {committed > 0 && Number.isFinite(value) ? (
         <p className="text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
           {t("availableToSell", { count: available })}
@@ -97,7 +99,8 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
 }
 
 // Variant photo = an exact product image, or null to use the product's main photo.
-export function VariantImagePicker({ value, images, onChange, label, allowNoChange = false, invalid = false }: {
+export function VariantImagePicker({ readOnly = false, value, images, onChange, label, allowNoChange = false, invalid = false }: {
+  readOnly?: boolean;
   value: string | null | undefined;
   images: ProductSkuImageChoice[];
   onChange: (value: string | null | undefined) => void;
@@ -123,6 +126,16 @@ export function VariantImagePicker({ value, images, onChange, label, allowNoChan
       ? t("mainPhoto")
       : photoName(selectedIndex);
   const triggerLabel = `${label ?? t("variantPhoto")}: ${state}`;
+  if (readOnly) {
+    // Only an exact SKU image or the explicit primary fallback; mixed groups have no image.
+    const image = selected ?? (value === null ? images.find((entry) => entry.isPrimary) : undefined);
+    const description = value === undefined ? t("mixedValues") : value !== null && !selected ? t("savedValueUnavailable") : state;
+    return (
+      <span role="img" aria-label={`${label ?? t("variantPhoto")}: ${description}`} className="flex size-11 items-center justify-center overflow-hidden rounded border sm:size-9">
+        {image ? <img src={mediaImageUrl(image.url, 80)} alt="" className="h-full w-full object-contain" /> : <ImageIcon aria-hidden="true" className="size-4 text-muted-foreground" />}
+      </span>
+    );
+  }
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -255,11 +268,12 @@ export interface SkuCostField {
 }
 
 /** Cost per item, with the profit and margin it gives underneath. */
-function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
+function CostField({ cost, name, readOnly = false }: { cost: SkuCostField; name: string; readOnly?: boolean }) {
   const t = useMessages(productMessages);
   const { code, fmt } = useCurrency();
   const problem = costProblem(cost.value);
   const result = costMargin(cost.customerPays, cost.value, getDecimalPlaces(code));
+  if (readOnly) return <ReadOnlyValue numeric label={t("costPerItem")} value={cost.value === null ? null : fmt(cost.value)} help={result ? t("profitAndMargin", { profit: fmt(result.profit), margin: formatMargin(result.margin) }) : t("costHelp")} />;
   return (
     <Field
       label={t("costPerItem")}
@@ -276,7 +290,8 @@ function CostField({ cost, name }: { cost: SkuCostField; name: string }) {
   );
 }
 
-export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
+export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, onChange, cost }: {
+  readOnly?: boolean;
   variant: DraftVariant;
   name: string;
   issueFor: IssueFor;
@@ -286,10 +301,29 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
 }) {
   const t = useMessages(productMessages);
   const weightUnit = useWeightUnit();
+  const { fmt } = useCurrency();
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
+  if (readOnly) {
+    const barcodeNames = { ean13: "EAN-13", upc: "UPC", isbn: "ISBN", gtin: "GTIN", code128: "Code 128", custom: t("barcodeCustom") };
+    return (
+      <div className="min-w-0">
+        <FieldRow inset>
+          <ReadOnlyValue mono label={t("sku")} value={variant.sku} />
+          {cost && !giftCard ? <CostField cost={cost} name={name} readOnly /> : null}
+          {showDiscount ? <ReadOnlyValue numeric label={t("discount")} value={variant.discountType === "flat"
+            ? variant.discountAmount ? fmt(variant.discountAmount) : t("noDiscount")
+            : variant.discountPercentage ? formatNumber(variant.discountPercentage / 100, { style: "percent", maximumFractionDigits: 2 }) : t("noDiscount")} /> : null}
+          <ReadOnlyValue mono label={t("barcode")} value={variant.barcode} />
+          <ReadOnlyValue label={t("barcodeType")} value={variant.barcodeType ? barcodeNames[variant.barcodeType] : t("noBarcode")} />
+          {showWeight ? <ReadOnlyValue label={t("weightGrams")} value={variant.weight === null ? null : formatWeight(variant.weight, weightUnit)} /> : null}
+          {showInventory ? <ReadOnlyValue label={t("trackQuantity")} value={t(variant.trackInventory ? "quantityTracked" : "notTracked")} /> : null}
+        </FieldRow>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3">
     <FieldRow inset>

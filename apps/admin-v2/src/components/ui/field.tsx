@@ -201,7 +201,7 @@ export function ReadOnlyValue({ label, value, help, mono = false, numeric = fals
       <div
         data-slot="field-control"
         className={cn(
-          "text-body break-words",
+          "text-body wrap-anywhere",
           besideControls && "flex min-h-11 items-center sm:min-h-9",
           mono && "font-mono",
           numeric && "tabular-nums",

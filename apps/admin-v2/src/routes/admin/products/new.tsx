@@ -81,9 +81,10 @@ function NewProductPage() {
           setOptionMatrixIssue(null);
           setOptionMatrixDirty(false);
         }}
-        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
+        optionManager={({ readOnly, skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
+              readOnly={readOnly}
               ref={matrixRef}
               requirePositivePrice={isActive}
               productName={productName}

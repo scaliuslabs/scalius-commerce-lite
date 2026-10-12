@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Blocks, ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Inset } from "~/components/ui/field";
+import { Inset, ReadOnlyValue } from "~/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -109,6 +109,7 @@ export interface VariantCosts {
 export const GROUPS_OPEN_LIMIT = 30;
 
 export type VariantTableProps = {
+  readOnly?: boolean;
   options: DraftOption[];
   variants: DraftVariant[];
   images: ProductSkuImageChoice[];
@@ -176,7 +177,7 @@ function moveBetweenRows(event: React.KeyboardEvent<HTMLElement>, onEdge?: (cell
 }
 
 export function VariantTable(props: VariantTableProps) {
-  const { options, variants, missingCombinations } = props;
+  const { options, variants, missingCombinations, readOnly = false } = props;
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
@@ -363,6 +364,7 @@ export function VariantTable(props: VariantTableProps) {
   const row = (variant: DraftVariant, depth: 0 | 1) => (
     <VariantRow
       key={variant.id}
+      readOnly={readOnly}
       variant={variant}
       name={props.nameOf(variant)}
       label={labelOf(variant)}
@@ -379,7 +381,7 @@ export function VariantTable(props: VariantTableProps) {
       cost={costs ? costs.of(variant.id) : undefined}
       images={props.images}
       money={money}
-      canRemove={canRemoveAny}
+      canRemove={!readOnly && canRemoveAny}
       printable={!props.printingDisabled && variant.id.startsWith("var_")}
       customData={variant.id.startsWith("var_")}
       layout={layout}
@@ -390,7 +392,7 @@ export function VariantTable(props: VariantTableProps) {
       onRemove={onRemove}
       onPrint={onPrint}
       onCustomData={onCustomData}
-      appActions={variant.id.startsWith("var_") ? appActionItems : NO_APP_ACTIONS}
+      appActions={!readOnly && variant.id.startsWith("var_") ? appActionItems : NO_APP_ACTIONS}
       onAppAction={onAppAction}
     />
   );
@@ -450,6 +452,7 @@ export function VariantTable(props: VariantTableProps) {
 
       {view === "notForSale" ? (
         <NotForSaleList
+          readOnly={readOnly}
           combinations={filteredMissing.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)}
           valueLabel={valueLabel}
           onRestore={props.onRestoreCombination}
@@ -460,13 +463,13 @@ export function VariantTable(props: VariantTableProps) {
           {/* The header turns into the bulk bar while rows are selected, so the table never shifts. */}
           <div className={cn(grid, "min-h-11 border-y bg-muted/50 text-body text-muted-foreground")}>
             <div className="flex justify-center">
-              <Checkbox
+              {!readOnly ? <Checkbox
                 checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
                 onCheckedChange={() => onSelect(visibleIds, !allVisibleSelected)}
                 aria-label={r("selectAll")}
-              />
+              /> : null}
             </div>
-            {selectedCount > 0 ? (
+            {!readOnly && selectedCount > 0 ? (
               <BulkBar
                 count={selectedCount}
                 allSelected={selectedCount >= variants.length}
@@ -495,7 +498,7 @@ export function VariantTable(props: VariantTableProps) {
               </>
             )}
           </div>
-          {selectedCount > 0 && panel ? (
+          {!readOnly && selectedCount > 0 && panel ? (
             <BulkPanelRow
               panel={panel}
               options={options}
@@ -514,12 +517,13 @@ export function VariantTable(props: VariantTableProps) {
               onCancel={() => setPanel(null)}
             />
           ) : null}
-          {selectedCount >= variants.length ? (
+          {!readOnly && selectedCount >= variants.length ? (
             <p id="variant-bulk-keep-one" className="border-b px-2 py-1.5 text-body text-muted-foreground">{t("keepOneVariant")}</p>
           ) : null}
 
           {pageItems.map((entry) => (entry.kind === "group" ? (
             <GroupRow
+              readOnly={readOnly}
               key={`group:${entry.group.valueId}`}
               group={entry.group}
               open={entry.open}
@@ -565,12 +569,12 @@ export function VariantTable(props: VariantTableProps) {
         <VariantCustomFieldsDialog
           variantId={customDataFor?.id ?? null}
           sku={customDataFor?.sku ?? ""}
-          canEdit={canEditProducts}
+          canEdit={!readOnly && canEditProducts}
           open={customDataFor !== null}
           onOpenChange={(open) => (open ? undefined : setCustomDataFor(null))}
         />
       </React.Suspense>
-      {appActions.dialogs}
+      {!readOnly ? appActions.dialogs : null}
     </div>
   );
 }
@@ -580,6 +584,7 @@ type AppRowAction = { key: string; label: string; destructive: boolean };
 const NO_APP_ACTIONS: readonly AppRowAction[] = [];
 
 type VariantRowProps = {
+  readOnly: boolean;
   variant: DraftVariant;
   name: string;
   label: string;
@@ -616,7 +621,7 @@ type VariantRowProps = {
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, digital, productId, cost, images, money, canRemove,
+  readOnly, variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, digital, productId, cost, images, money, canRemove,
   printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData, appActions, onAppAction,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
@@ -634,19 +639,20 @@ const VariantRow = React.memo(function VariantRow({
   const customerPays = Number.isFinite(variant.price) ? sale ?? variant.price : null;
   const margin = cost === undefined ? null : costMargin(customerPays, cost, getDecimalPlaces(money.code));
   const actions = React.useMemo<ExtraAction[]>(() => [
-    { label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) },
+    ...(!readOnly ? [{ label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) }] : []),
     ...(printable ? [{ label: t("printLabels"), icon: Printer, onClick: () => onPrint([variant.id]) }] : []),
     ...(customData ? [{ label: cf("variantAction"), icon: Database, onClick: () => onCustomData(variant.id) }] : []),
     ...appActions.map((action) => ({ label: action.label, icon: Blocks, destructive: action.destructive, onClick: () => onAppAction(action.key, variant.id) })),
     ...(canRemove ? [{ label: t("stopSelling"), icon: Trash2, destructive: true, onClick: () => onRemove(variant.id) }] : []),
-  ], [appActions, canRemove, cf, customData, onAppAction, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
+  ], [readOnly, appActions, canRemove, cf, customData, onAppAction, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
 
   return (
     <div data-variant-row={variant.id} className={cn(layout.grid, "border-b py-1.5", selected && "bg-muted/50")}>
       <div className="flex justify-center">
-        <Checkbox checked={selected} onCheckedChange={(checked) => onSelect([variant.id], checked === true)} aria-label={r("select", { name })} />
+        {!readOnly ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelect([variant.id], checked === true)} aria-label={r("select", { name })} /> : null}
       </div>
       <VariantImagePicker
+        readOnly={readOnly}
         value={variant.imageId}
         images={images}
         invalid={Boolean(photoError)}
@@ -682,14 +688,14 @@ const VariantRow = React.memo(function VariantRow({
       <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
         <div className="min-w-0">
           <span className="block text-body text-muted-foreground md:hidden">{t("price")}</span>
-          <MoneyInput
+          {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("priceFor", { name })}: </span>{money.fmt(variant.price)}</p> : <MoneyInput
             currencyCode={money.code}
             value={variant.price}
             data-cell="price"
             aria-invalid={Boolean(priceError)}
             aria-label={t("priceFor", { name })}
             onValueChange={(price) => change({ price: price ?? Number.NaN })}
-          />
+          />}
           {priceError ? <p className="text-body text-destructive">{priceError}</p> : margin ? (
             <p
               className={cn("text-end text-body tabular-nums", margin.margin !== null && margin.margin < 0 ? "text-destructive" : "text-muted-foreground")}
@@ -706,6 +712,7 @@ const VariantRow = React.memo(function VariantRow({
               <DigitalStockCell productId={productId} variantId={variant.id} tracked={variant.trackInventory} />
             ) : variant.trackInventory ? (
               <InventoryQuantityInput
+                readOnly={readOnly}
                 cell="stock"
                 ariaLabel={t("quantityFor", { name })}
                 invalid={Boolean(stockError)}
@@ -725,6 +732,7 @@ const VariantRow = React.memo(function VariantRow({
           <div className="col-span-2 min-w-0 md:col-span-1">
             <span className="block text-body text-muted-foreground md:hidden">{t("fulfilment")}</span>
             <KindSelect
+              readOnly={readOnly}
               value={variant.fulfillmentKind === "service" ? "service" : "physical"}
               label={t("fulfilmentFor", { name })}
               onChange={(fulfillmentKind) => change({ fulfillmentKind })}
@@ -733,11 +741,13 @@ const VariantRow = React.memo(function VariantRow({
         ) : null}
       </div>
       <div className={cn(layout.actions, "row-start-1 flex justify-end")}>
-        <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} />
+        {actions.length ? <DataTableRowActions extraActions={actions} menuLabel={r("actionsFor", { name })} /> : null}
       </div>
       {expanded ? (
         <Inset className="col-span-full mt-2">
+          {readOnly ? <ReadOnlyValue label={t("variant")} value={name} className="mb-3" /> : null}
           <AdvancedSkuFields
+            readOnly={readOnly}
             variant={variant}
             name={name}
             issueFor={issueFor}
@@ -745,7 +755,7 @@ const VariantRow = React.memo(function VariantRow({
             cost={cost === undefined ? null : { value: cost, customerPays, onChange: (next) => onCostChange(variant.id, next) }}
           />
           {/* Apps' cards for this saved SKU (`resource=variant`), inside the variant card. */}
-          {customData ? <AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /> : null}
+          {customData ? <fieldset disabled={readOnly} className="min-w-0"><AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /></fieldset> : null}
         </Inset>
       ) : null}
     </div>
@@ -753,6 +763,7 @@ const VariantRow = React.memo(function VariantRow({
 });
 
 type GroupRowProps = {
+  readOnly: boolean;
   group: VariantGroup;
   open: boolean;
   repeated?: boolean;
@@ -767,7 +778,8 @@ type GroupRowProps = {
 
 /** A group re-renders only when one of its own variants (or its state) changed. */
 function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
-  return previous.open === next.open
+  return previous.readOnly === next.readOnly
+    && previous.open === next.open
     && previous.repeated === next.repeated
     && previous.images === next.images
     && previous.money === next.money
@@ -779,7 +791,7 @@ function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
     && previous.group.variants.every((variant, index) => variant === next.group.variants[index]);
 }
 
-const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
+const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const ids = group.variants.map((variant) => variant.id);
@@ -798,13 +810,14 @@ const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, m
   return (
     <div data-variant-group={group.valueId} data-repeated-group={repeated || undefined} className={cn(layout.grid, "border-b bg-muted/30 py-2")}>
       <div className="flex justify-center">
-        <Checkbox
+        {!readOnly ? <Checkbox
           checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
           onCheckedChange={() => onSelect(ids, !allSelected)}
           aria-label={t("selectGroup", { name: group.label })}
-        />
+        /> : null}
       </div>
       <VariantImagePicker
+        readOnly={readOnly}
         value={commonImage}
         images={images}
         label={t("photoForGroup", { name: group.label })}
@@ -823,7 +836,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, m
         <span className="shrink-0 font-normal text-muted-foreground">{t("variantCount", { count: group.variants.length })}</span>
       </button>
       <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
-        <MoneyInput
+        {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("priceForGroup", { name: group.label })}: </span>{commonPrice === undefined ? prices.length ? `${money.fmt(Math.min(...prices))}–${money.fmt(Math.max(...prices))}` : "—" : money.fmt(commonPrice)}</p> : <MoneyInput
           currencyCode={money.code}
           value={commonPrice ?? null}
           placeholder={commonPrice === undefined ? t("mixedValues") : undefined}
@@ -833,9 +846,9 @@ const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, m
           onValueChange={(price) => {
             if (price !== null && Number.isFinite(price)) onChangeMany(new Set(ids), { price: Math.max(0, price) });
           }}
-        />
+        />}
         {!layout.quantity ? null : tracked.length > 0 ? (
-          <NumberInput
+          readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("quantityForGroup", { name: group.label })}: </span>{commonStock === undefined ? t("mixedValues") : formatNumber(commonStock)}</p> : <NumberInput
             integer
             value={commonStock ?? null}
             placeholder={commonStock === undefined ? t("mixedValues") : undefined}
@@ -851,6 +864,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, m
         {kindColumn ? (
           <div className="col-span-2 min-w-0 md:col-span-1">
             <KindSelect
+              readOnly={readOnly}
               value={same(group.variants.map((variant): EditableKind => (variant.fulfillmentKind === "service" ? "service" : "physical")))}
               label={t("fulfilmentForGroup", { name: group.label })}
               onChange={(fulfillmentKind) => onChangeMany(new Set(ids), { fulfillmentKind })}
@@ -863,12 +877,14 @@ const GroupRow = React.memo(function GroupRow({ group, open, repeated, images, m
 }, sameGroupRow);
 
 /** Physical (ship or pickup) or a service, for one row or a whole group ("Mixed" until chosen). */
-function KindSelect({ value, label, onChange }: {
+function KindSelect({ value, label, onChange, readOnly = false }: {
+  readOnly?: boolean;
   value: EditableKind | undefined;
   label: string;
   onChange: (kind: EditableKind) => void;
 }) {
   const t = useMessages(productMessages);
+  if (readOnly) return <p className="py-2 text-body"><span className="sr-only">{label}: </span>{t(value === undefined ? "mixedValues" : value === "service" ? "fulfilmentServiceShort" : "fulfilmentPhysicalShort")}</p>;
   return (
     <SearchableSelect
       value={value ?? ""}
@@ -1049,7 +1065,8 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   );
 }
 
-function NotForSaleList({ combinations, valueLabel, onRestore, onRestoreAll }: {
+function NotForSaleList({ readOnly, combinations, valueLabel, onRestore, onRestoreAll }: {
+  readOnly: boolean;
   combinations: string[][];
   valueLabel: ReadonlyMap<string, string>;
   onRestore: (valueIds: string[]) => void;
@@ -1058,19 +1075,19 @@ function NotForSaleList({ combinations, valueLabel, onRestore, onRestoreAll }: {
   const t = useMessages(productMessages);
   return (
     <div className="border-y">
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-2 py-2">
+      {!readOnly ? <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-2 py-2">
         <p className="text-body text-muted-foreground">{t("notForSaleHint")}</p>
         <Button type="button" variant="outline" size="sm" onClick={onRestoreAll}>{t("turnAllOn")}</Button>
-      </div>
+      </div> : null}
       <ul className="divide-y">
         {combinations.map((valueIds) => {
           const label = valueIds.map((id) => valueLabel.get(id) ?? "?").join(" / ");
           return (
             <li key={combinationKey(valueIds)} className="flex min-h-11 items-center justify-between gap-3 px-2 py-1.5 text-body">
               <span className="truncate text-muted-foreground">{label}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => onRestore(valueIds)} aria-label={`${t("turnOn")}: ${label}`}>
+              {!readOnly ? <Button type="button" variant="ghost" size="sm" onClick={() => onRestore(valueIds)} aria-label={`${t("turnOn")}: ${label}`}>
                 {t("turnOn")}
-              </Button>
+              </Button> : null}
             </li>
           );
         })}

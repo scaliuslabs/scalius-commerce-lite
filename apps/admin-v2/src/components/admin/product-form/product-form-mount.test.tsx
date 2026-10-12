@@ -113,10 +113,11 @@ function Page({ edit, probe, saved = savedValues }: { edit: boolean; probe: Prob
         optionMatrixIssue={issue}
         optionMatrixDirty={matrixDirty}
         onDiscard={() => {}}
-        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
+        optionManager={({ readOnly, skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
           <>
             <Reader probe={probe} />
             <OptionMatrixEditor
+              readOnly={readOnly}
               ref={matrixRef}
               productId={edit ? "prod_1" : undefined}
               requirePositivePrice={isActive}
@@ -173,13 +174,23 @@ describe("a product page nobody has edited", () => {
     expect(probe.form!.formState.defaultValues?.salesChannelIds).toEqual(["sc_meta", "sc_online_store"]);
     expect(probe.dirty).toBe(false);
   });
-  it("passes view-only mode to the sidebar while keeping the outer fieldset protection", async () => {
+  it("enables variant browsing while retaining disabled sibling-card protection", async () => {
     const probe = await mount(true, savedValues, true);
     expect(container.querySelector('[data-slot="read-only-notice"]')).not.toBeNull();
-    expect(container.querySelector("fieldset")?.disabled).toBe(true);
+    const matrix = container.querySelector("[data-option-matrix]")!;
+    expect(matrix.closest("fieldset[disabled]")).toBeNull();
+    const search = matrix.querySelector<HTMLInputElement>('input[type="search"]')!;
+    expect(search.matches(":disabled")).toBe(false);
+    expect(matrix.querySelector("input:not([type=search]), [role=checkbox]")).toBeNull();
+    const expand = matrix.querySelector<HTMLButtonElement>('button[aria-label="More fields for S"]')!;
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    expand.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     for (const title of ["Status", "Product organization"]) {
       const card = [...container.querySelectorAll('[data-slot="card"]')].find((node) => node.firstElementChild?.textContent === title);
       expect(card).toBeDefined();
+      expect(card!.closest("fieldset[disabled]")).not.toBeNull();
       expect(card!.querySelector('[data-slot="field-control"]')).not.toBeNull();
       expect(card!.querySelector("input, select, [role=combobox]")).toBeNull();
     }

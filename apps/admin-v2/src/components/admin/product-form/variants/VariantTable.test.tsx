@@ -4,13 +4,14 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatNumber, translate } from "~/i18n";
+import { formatNumber, setLocale, translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { DraftIssue, DraftOption, DraftVariant } from "./option-matrix-editor-model";
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn(), removed: vi.fn(), restored: vi.fn(), restoredAll: vi.fn() }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+vi.mock("~/lib/api-query-options/store-defaults", () => ({ useStoreUnits: () => ({ weightUnit: "g", dimensionUnit: "cm" }) }));
 vi.mock("@/hooks/use-currency", () => {
   const fmt = (price: number) => `৳${price}`;
   const salePrice = (price: number, discount: { discountPercentage?: number | null }) =>
@@ -35,7 +36,8 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
 const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 let latest: DraftVariant[] = [];
-function Harness({ initial, missing = [], reveal = null, issue = null, fulfilmentColumn = false, opts = options }: {
+function Harness({ readOnly = false, initial, missing = [], reveal = null, issue = null, fulfilmentColumn = false, opts = options }: {
+  readOnly?: boolean;
   initial: DraftVariant[];
   opts?: DraftOption[];
   missing?: string[][];
@@ -52,6 +54,7 @@ function Harness({ initial, missing = [], reveal = null, issue = null, fulfilmen
   return (
     <QueryClientProvider client={queryClient}>
     <VariantTable
+      readOnly={readOnly}
       options={opts}
       variants={variants}
       images={[]}
@@ -95,8 +98,9 @@ describe("VariantTable", () => {
     });
   };
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); setLocale("en"); localStorage.clear(); });
   afterEach(() => {
+    setLocale("en");
     act(() => root.unmount());
     host.remove();
   });
@@ -107,6 +111,48 @@ describe("VariantTable", () => {
     variant("mw", "m", "w", 2200),
     variant("mb", "m", "b", 2400, { trackInventory: false, stock: 0 }),
   ];
+
+  it.each(["en", "bn"] as const)("lets a %s viewer page and find off-page variants without edit controls", async (locale) => {
+    setLocale(locale);
+    const values = Array.from({ length: 125 }, (_, index) => ({ id: `v${index}`, value: `Size ${index}` }));
+    const opts: DraftOption[] = [{ id: "size", name: "Size", standardMapping: "size", values }];
+    const initial = values.map((value, index) => variant(`var_${index}`, value.id, "", 250, { selectedOptionValueIds: [value.id] }));
+    await render([]);
+    await act(async () => root.render(<Harness readOnly initial={initial} opts={opts} key="viewer" />));
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(50);
+    const next = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(resourceMessages, "next")}"]`)!;
+    expect(next.disabled).toBe(false);
+    await act(async () => next.click());
+    expect(host.querySelector('[data-variant-row="var_50"]')).not.toBeNull();
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(50);
+    await type(host.querySelector<HTMLInputElement>('input[type="search"]')!, "PANJABI-VAR_124");
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(1);
+    const row = host.querySelector('[data-variant-row="var_124"]')!;
+    await act(async () => row.querySelector<HTMLButtonElement>(`button[aria-label="${label("moreFieldsFor", { name: "Size 124" })}"]`)!.click());
+    expect(row.textContent).toContain("PANJABI-VAR_124");
+    expect(row.querySelector("input, [role=checkbox], [role=combobox], [role=switch]")).toBeNull();
+    expect(latest).toEqual(initial);
+    expect(mocks.removed).not.toHaveBeenCalled();
+    expect(mocks.restored).not.toHaveBeenCalled();
+  });
+
+  it("opens closed groups and shows missing combinations without restore actions", async () => {
+    const initial = Array.from({ length: 40 }, (_, index) => variant(`var_${index}`, index < 20 ? "s" : "m", index % 2 ? "w" : "b", 250));
+    await render([]);
+    await act(async () => root.render(<Harness readOnly initial={initial} missing={[["s", "b"]]} key="group-viewer" />));
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(0);
+    const group = host.querySelector('[data-variant-group="s"]')!;
+    const toggle = group.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+    expect(toggle.disabled).toBe(false);
+    await act(async () => toggle.click());
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(20);
+    expect(host.querySelector('input[data-cell], [role=checkbox]')).toBeNull();
+    await act(async () => button(label("showNotForSale", { count: 1 })).click());
+    expect(host.textContent).toContain("S / কালো");
+    expect(host.textContent).not.toContain(label("turnOn"));
+    expect(host.textContent).not.toContain(label("turnAllOn"));
+    expect(mocks.restoredAll).not.toHaveBeenCalled();
+  });
 
   it("shows each variant on one line: ৳ price, SKU with copy, the discounted price as a short note", async () => {
     await render(rows());
@@ -248,8 +294,9 @@ describe("VariantTable at 2,000 variants", () => {
   let host: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); setLocale("en"); localStorage.clear(); });
   afterEach(() => {
+    setLocale("en");
     act(() => root.unmount());
     host.remove();
   });
@@ -461,6 +508,7 @@ describe("VariantTable fulfilment column", () => {
   let root: Root;
 
   afterEach(() => {
+    setLocale("en");
     act(() => root.unmount());
     host.remove();
   });
