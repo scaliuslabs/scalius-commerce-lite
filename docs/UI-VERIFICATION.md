@@ -18,6 +18,8 @@ consumer and a different transition that could violate the same invariant.
 | Buy now removes an existing cart line | Cart changes follow the buyer's action and preserve unrelated lines | Add A then Buy B means A+B, quantity limits, reload/back, checkout recovery and new lines added during checkout |
 | Delivery text disagrees between surfaces | Commerce claims come from the applicable authoritative quote | Free delivery, app rates, markets, unavailable zones and stale merchant-written copy |
 | A portrait preview is clipped | Preview lets the user inspect the whole asset | Panorama, small images, zoom, fullscreen, narrow screens and metadata panels |
+| Canvas scrolling redraws the whole editor | Transient frame geometry updates only its visual overlay | Hover, inline text, duplicate geometry, session replacement, latest scroll restoration and stale frame messages |
+| Choosing a section changes the draft before confirmation | Browsing previews is read-only; Add inserts exactly once at the current anchor | Core and unused active apps, real styles, empty content, rapid selection, expired sessions, cancel, keyboard and touch |
 | A builder notice blocks editing | Notices can collapse without losing recovery actions or covering selection controls | Route, version, conflict and failure notices; hidden-frame refresh; new messages; narrow canvas and retained focus |
 | Banner arrives without sound | Delivery, in-page audio and native device sound are different outcomes | Browser permission, service worker, foreground/background, OS settings and actual device observation |
 
@@ -110,7 +112,12 @@ are required scope to investigate, **not a claim that they currently pass**:
    publish; inspect real preview messages and buyer output, including delayed
    responses and plugin update/deactivation fallback. Collapse/reopen notices
    with a part selected; verify toolbar hit targets, refresh persistence and
-   the way back to the draft when a historical preview fails.
+   the way back to the draft when a historical preview fails. Section-library
+   browsing and cancellation must leave draft/history unchanged; inspect real
+   core/app previews and confirm one Add/Undo. On touch, distinguish grip drag,
+   tap, row swipe and cancelled drag, including hybrid pointer devices. Measure
+   canvas scrolling separately from edit-to-preview latency; development render
+   counts are not production timing claims.
 8. Merchant forms, rich text and media: normalize/revert, failed save, keyboard,
    fullscreen, portrait/panorama and dense/sparse lists.
 9. Notifications: empty/few/many, unread/read/clear, arrival during an overlay,

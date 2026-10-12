@@ -29,7 +29,9 @@ const ADMIN_DIR = "apps/admin-v2";
  */
 export const BUNDLE_BUDGETS = {
   entry: 138,
-  css: 17,
+  // +0.1: rendered section-library layouts and shared hybrid touch controls.
+  // Measured 17,486 bytes after deduplicating unchanged dark-theme tokens.
+  css: 17.1,
   // Editors (rich text preview, forms, validation) sit near 290-350.
   routeDefault: 360,
   routes: {

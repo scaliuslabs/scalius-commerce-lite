@@ -122,23 +122,35 @@ function Row({ entry, selected, focused, expanded, picked, onFocusRow, onSelect,
         else onSelect();
       }}
       className={cn(
-        "group relative flex h-10 translate-y-(--sort-y) cursor-pointer items-center gap-0.5 rounded-lg ps-(--indent) pe-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative flex min-h-10 translate-y-(--sort-y) cursor-pointer items-center gap-0.5 rounded-lg ps-(--indent) pe-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
         selected && "bg-accent",
         picked && "bg-accent ring-2 ring-ring",
-        sortable.isDragging ? "z-20 bg-card opacity-80 shadow-popover" : "transition-[translate] duration-200 motion-reduce:transition-none",
+        sortable.isDragging ? "z-20 bg-card opacity-80 shadow-popover" : "transition-transform duration-200 motion-reduce:transition-none",
       )}
     >
       {item.move ? (
-        <span
-          ref={sortable.setActivatorNodeRef}
-          {...sortable.listeners}
-          aria-hidden="true"
-          className="grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 pointer-coarse:hidden"
-        >
-          <GripVertical className="size-4" />
+        <span className="theme-layer-grip flex shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            ref={sortable.setActivatorNodeRef}
+            {...sortable.attributes}
+            {...sortable.listeners}
+            tabIndex={-1}
+            aria-label={`${item.name}: ${t("treePickUp")}`}
+            onFocus={onFocusRow}
+            onClick={(event) => {
+              event.stopPropagation();
+              event.currentTarget.closest<HTMLElement>("[data-tree-row]")?.focus();
+            }}
+            className="cursor-grab touch-none"
+          >
+            <GripVertical className="size-4" aria-hidden="true" />
+          </Button>
         </span>
       ) : (
-        <span className="size-7 shrink-0 pointer-coarse:hidden" aria-hidden="true" />
+        <span className="theme-layer-grip size-7 shrink-0" aria-hidden="true" />
       )}
       {hasChildren ? (
         <Button
@@ -174,7 +186,7 @@ function Row({ entry, selected, focused, expanded, picked, onFocusRow, onSelect,
       </span>
       {item.onToggleHidden ? (
         // A shown row's eye appears on hover or focus (always on touch screens); a hidden row's stays, so the state reads at a glance.
-        <span className={cn("flex", !item.hidden && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100")}>
+        <span className={cn("flex", !item.hidden && "touch-reveal opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>
           <Button
             type="button"
             variant="ghost"

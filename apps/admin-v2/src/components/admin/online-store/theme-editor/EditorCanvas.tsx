@@ -11,14 +11,14 @@
  * device, the width and the zoom do. Notices overlay the top of the canvas
  * instead of pushing the frame down.
  */
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Trash2, Pencil, X, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { frameBox, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
-import type { PreviewLayout, PreviewPhase } from "./use-preview";
+import type { PreviewLayout, PreviewPhase, PreviewVisualSource } from "./use-preview";
 
 export interface SelectionActions {
   name: string;
@@ -89,107 +89,28 @@ export interface PreviewNotice {
   content: ReactNode;
 }
 
-export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, noticeCollapsed = false, onToggleNotice, behind = false, textEditor, onRetry, onScaleChange }: {
-  device: PreviewDevice;
-  desktopWidth: DesktopWidth;
-  zoom: PreviewZoom;
-  phase: PreviewPhase;
-  frames: ReadonlyArray<{ id: number; src: string }>;
-  activeId: number | null;
-  register: (id: number) => (element: HTMLIFrameElement | null) => void;
-  layout: PreviewLayout;
+interface CanvasVisualProps {
+  visuals: PreviewVisualSource;
+  inspector: boolean;
+  /** A tree hover takes precedence over the active frame's hover. */
   hovered: string | null;
   /** The selected mark (a section's, or a fixed part's). */
   selected: string | null;
   names: Readonly<Record<string, { name: string; shared?: boolean }>>;
   actions: SelectionActions | null;
-  /** A notice over the top of the canvas (conflict, failed save, version preview). */
-  notice?: PreviewNotice | null;
-  noticeCollapsed?: boolean;
-  onToggleNotice?: () => void;
-  /** The page has not confirmed the latest edits yet (it is slow or reconnecting). */
-  behind?: boolean;
-  textEditor?: (box: FrameBox) => ReactNode;
-  onRetry: () => void;
-  onScaleChange: (box: FrameBox) => void;
-}) {
+  textEditor?: (box: FrameBox, layout: PreviewLayout) => ReactNode;
+}
+
+/** Only moving outlines and inline text subscribe to frame geometry. */
+function CanvasVisuals({ visuals, inspector, hovered: treeHovered, selected, names, actions, textEditor, box, ready }: CanvasVisualProps & { box: FrameBox; ready: boolean }) {
   const t = useMessages(themeEditorMessages);
-  const stage = useRef<HTMLDivElement>(null);
-  const noticeContentId = useId();
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    const element = stage.current;
-    if (!element) return;
-    const measure = () => setSize({ width: element.clientWidth, height: element.clientHeight });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  const box = frameBox(size, device, desktopWidth, zoom);
-  const reported = useRef("");
-  useLayoutEffect(() => {
-    const key = `${box.width}:${box.scale}`;
-    if (key !== reported.current) {
-      reported.current = key;
-      onScaleChange(box);
-    }
-  });
+  const { layout, hovered: frameHovered } = useSyncExternalStore(visuals.subscribe, visuals.getSnapshot, visuals.getSnapshot);
+  const hovered = inspector ? treeHovered ?? frameHovered : null;
   const hoverRect = hovered && hovered !== selected ? layout.rects[hovered] : undefined;
   const selectedRect = selected ? layout.rects[selected] : undefined;
-  const ready = phase === "ready";
-  // Every box here is placed by the same four custom properties (one set of CSS rules).
-  const boxStyle = { "--ox": `${box.offsetX}px`, "--ow": `${box.screenWidth}px`, "--oh": `${box.screenHeight}px` } as CSSProperties;
-  const frameStyle = { "--ow": `${box.width}px`, "--oh": `${box.height}px`, "--fs": String(box.scale) } as CSSProperties;
   const overlayStyle = { "--oh": `${box.screenHeight}px` } as CSSProperties;
   return (
-    <main
-      ref={stage}
-      aria-label={t("canvas")}
-      data-editor-canvas
-      // The frame keeps its true width; at 100% wider than the canvas, the canvas scrolls sideways.
-      // A frame wider than the canvas (100% of a wide width) scrolls sideways, with a scrollbar that stays visible.
-      className="relative min-h-0 min-w-0 overflow-x-auto overflow-y-hidden bg-muted [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
-    >
-      <div
-        data-preview-box
-        style={boxStyle}
-        className="absolute left-(--ox) top-4 h-(--oh) w-(--ow) overflow-clip rounded-lg bg-card shadow-card"
-      >
-        {frames.map((frame) => (
-          <iframe
-            key={frame.id}
-            ref={register(frame.id)}
-            src={frame.src}
-            title={t("previewFrame")}
-            referrerPolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-forms"
-            data-preview-frame={frame.id === activeId ? "shown" : "loading"}
-            style={frameStyle}
-            aria-hidden={frame.id === activeId ? undefined : true}
-            tabIndex={frame.id === activeId ? undefined : -1}
-            className={cn(
-              "absolute left-0 top-0 h-(--oh) w-(--ow) origin-top-left scale-(--fs) border-0 bg-card",
-              frame.id !== activeId && "invisible",
-            )}
-          />
-        ))}
-        {!ready ? (
-          <div className="absolute inset-0 grid place-items-center bg-card p-6 text-center">
-            <div className="max-w-sm space-y-3">
-              <p role="status" className="text-body text-muted-foreground">
-                {phase === "connecting" ? t("previewLoading")
-                  : phase === "blocked" ? t("previewBlocked")
-                    : phase === "no-url" ? t("previewNeedsUrl")
-                      : t("previewFailed")}
-              </p>
-              {phase === "failed" || phase === "blocked" ? (
-                <Button type="button" variant="outline" onClick={onRetry}>{t("previewRetry")}</Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
+    <>
       {ready ? (
         <div data-preview-overlay aria-hidden={actions ? undefined : true} style={overlayStyle} className="pointer-events-none absolute inset-x-0 top-4 h-(--oh) overflow-clip">
           {hoverRect ? (
@@ -240,7 +161,104 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           ) : null}
         </div>
       ) : null}
-      {textEditor ? <div data-canvas-text-layer style={overlayStyle} className="pointer-events-none absolute inset-x-0 top-4 h-(--oh) overflow-clip">{textEditor(box)}</div> : null}
+      {textEditor ? <div data-canvas-text-layer style={overlayStyle} className="pointer-events-none absolute inset-x-0 top-4 h-(--oh) overflow-clip">{textEditor(box, layout)}</div> : null}
+    </>
+  );
+}
+
+export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, visuals, inspector, hovered: treeHovered, selected, names, actions, notice, noticeCollapsed = false, onToggleNotice, behind = false, textEditor, onRetry, onScaleChange }: CanvasVisualProps & {
+  device: PreviewDevice;
+  desktopWidth: DesktopWidth;
+  zoom: PreviewZoom;
+  phase: PreviewPhase;
+  frames: ReadonlyArray<{ id: number; src: string }>;
+  activeId: number | null;
+  register: (id: number) => (element: HTMLIFrameElement | null) => void;
+  /** A notice over the top of the canvas (conflict, failed save, version preview). */
+  notice?: PreviewNotice | null;
+  noticeCollapsed?: boolean;
+  onToggleNotice?: () => void;
+  /** The page has not confirmed the latest edits yet (it is slow or reconnecting). */
+  behind?: boolean;
+  onRetry: () => void;
+  onScaleChange: (box: FrameBox) => void;
+}) {
+  const t = useMessages(themeEditorMessages);
+  const stage = useRef<HTMLDivElement>(null);
+  const noticeContentId = useId();
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const element = stage.current;
+    if (!element) return;
+    const measure = () => setSize({ width: element.clientWidth, height: element.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const box = frameBox(size, device, desktopWidth, zoom);
+  const reported = useRef("");
+  useLayoutEffect(() => {
+    const key = `${box.width}:${box.scale}`;
+    if (key !== reported.current) {
+      reported.current = key;
+      onScaleChange(box);
+    }
+  });
+  const ready = phase === "ready";
+  // Every box here is placed by the same four custom properties (one set of CSS rules).
+  const boxStyle = { "--ox": `${box.offsetX}px`, "--ow": `${box.screenWidth}px`, "--oh": `${box.screenHeight}px` } as CSSProperties;
+  const frameStyle = { "--ow": `${box.width}px`, "--oh": `${box.height}px`, "--fs": String(box.scale) } as CSSProperties;
+  return (
+    <main
+      ref={stage}
+      aria-label={t("canvas")}
+      data-editor-canvas
+      // The frame keeps its true width; at 100% wider than the canvas, the canvas scrolls sideways.
+      // A frame wider than the canvas (100% of a wide width) scrolls sideways, with a scrollbar that stays visible.
+      className="relative min-h-0 min-w-0 overflow-x-auto overflow-y-hidden bg-muted [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+    >
+      <div
+        data-preview-box
+        style={boxStyle}
+        className="absolute left-(--ox) top-4 h-(--oh) w-(--ow) overflow-clip rounded-lg bg-card shadow-card"
+      >
+        {frames.map((frame) => (
+          <iframe
+            key={frame.id}
+            ref={register(frame.id)}
+            src={frame.src}
+            title={t("previewFrame")}
+            referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-forms"
+            data-preview-frame={frame.id === activeId ? "shown" : "loading"}
+            style={frameStyle}
+            aria-hidden={frame.id === activeId ? undefined : true}
+            tabIndex={frame.id === activeId ? undefined : -1}
+            className={cn(
+              "absolute left-0 top-0 h-(--oh) w-(--ow) origin-top-left scale-(--fs) border-0 bg-card",
+              frame.id !== activeId && "invisible",
+            )}
+          />
+        ))}
+        {!ready ? (
+          <div className="absolute inset-0 grid place-items-center bg-card p-6 text-center">
+            <div className="max-w-sm space-y-3">
+              <p role="status" className="text-body text-muted-foreground">
+                {phase === "connecting" ? t("previewLoading")
+                  : phase === "blocked" ? t("previewBlocked")
+                    : phase === "no-url" ? t("previewNeedsUrl")
+                      : t("previewFailed")}
+              </p>
+              {phase === "failed" || phase === "blocked" ? (
+                <Button type="button" variant="outline" onClick={onRetry}>{t("previewRetry")}</Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <CanvasVisuals visuals={visuals} inspector={inspector} hovered={treeHovered} selected={selected}
+        names={names} actions={actions} textEditor={textEditor} box={box} ready={ready} />
       <p role="status" className={cn("pointer-events-none absolute end-6 bottom-6 z-10 rounded-full bg-card px-3 py-1 text-caption text-muted-foreground shadow-popover", !(ready && behind) && "invisible")}>
         {t("previewUpdating")}
       </p>

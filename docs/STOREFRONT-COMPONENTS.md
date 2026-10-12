@@ -112,6 +112,17 @@ The SDK's primitives:
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
 
+### Section library previews
+
+The editor renders a selected section through the same storefront renderer,
+saved theme styles and active app assets, using the section's normal Add
+defaults. There is no separate preview component for plugin authors to maintain.
+The request carries the intended page context but fetches no buyer resource for
+that path. Only the selected section renders; an empty result is shown as needing
+content. Browsing is private and read-only: links, forms and network actions are
+disabled, and the draft changes only when the merchant chooses Add. Test real
+interaction in the main editor or storefront, not inside this library preview.
+
 ### Shared header behavior
 
 Put `stickyHeader()` on the box with `position: sticky` or `fixed` and a top inset.

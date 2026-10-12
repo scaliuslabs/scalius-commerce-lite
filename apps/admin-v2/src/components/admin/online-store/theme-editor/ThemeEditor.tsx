@@ -388,7 +388,7 @@ export function ThemeEditor({ workspace, refetch }: {
       }
       return;
     }
-    const measured = preview.layout.field;
+    const measured = preview.visuals.getSnapshot().layout.field;
     const rect = gestureRect ?? (measured?.id === id && measured.field === field ? measured.rect : undefined);
     if (!rect) return;
     afterText(() => {
@@ -494,7 +494,15 @@ export function ThemeEditor({ workspace, refetch }: {
   };
 
   // ── Library and AI ───────────────────────────────────────────────────────
-  const [libraryAt, setLibraryAt] = useState<number | null>(null);
+  const [libraryAnchor, setLibraryAnchor] = useState<{ before: PageItem | null } | null>(null);
+  const setLibraryAt = (at: number | null) => setLibraryAnchor(at === null ? null : { before: items[at] ?? null });
+  // Undo or a refreshed draft can move the insertion point while the library is open.
+  const libraryAt = libraryAnchor === null ? null : (() => {
+    const before = libraryAnchor.before;
+    const index = before ? items.findIndex((item) => before.kind === "fixed"
+      ? item.kind === "fixed" : item.kind === "section" && item.section.id === before.section.id) : -1;
+    return index < 0 ? items.length : index;
+  })();
   const [aiOpen, setAiOpen] = useState(false);
   // Always offered to editors: without an AI app or agent, the dialog says what to turn on.
   const aiAvailable = canEdit;
@@ -678,7 +686,7 @@ export function ThemeEditor({ workspace, refetch }: {
     if (sectionIndex >= 0) {
       const section = (items[sectionIndex] as { section: Section }).section;
       const canPlaceText = phone || !sourceLanguage
-        || (preview.layout.field?.id === section.id && preview.layout.field.field === selectedField);
+        || (preview.fieldTarget?.id === section.id && preview.fieldTarget.field === selectedField);
       return {
         name,
         onEditText: canStartText && canPlaceText && selectedField && canvasTextField(section, selectedField, appSections) ? () => startText(section.id, selectedField) : undefined,
@@ -835,7 +843,7 @@ export function ThemeEditor({ workspace, refetch }: {
   );
 
   // Hover from the tree outlines the part in the preview; the preview's own hover too.
-  const outlined = hovered ? selectionMark(hovered) : preview.hovered;
+  const outlined = hovered ? selectionMark(hovered) : null;
   const notice: PreviewNotice | null = draft.conflict ? {
     id: JSON.stringify(["conflict", draft.conflict]), tone: "warning", content: (
       <Alert variant="warning">
@@ -1009,13 +1017,14 @@ export function ThemeEditor({ workspace, refetch }: {
           frames={preview.frames}
           activeId={preview.activeId}
           register={preview.register}
-          layout={preview.layout}
+          visuals={preview.visuals}
+          inspector={inspector}
           hovered={inspector ? outlined : null}
           selected={selectionMark(selected)}
           names={names}
           actions={canvasActions}
-          textEditor={textSession ? (box) => <CanvasTextEditor key={textSession.nonce} session={textSession} box={box} controlRef={textControl}
-            rect={preview.layout.field?.id === textSession.target.id && preview.layout.field.field === textSession.target.field ? preview.layout.field.rect : undefined}
+          textEditor={textSession ? (box, layout) => <CanvasTextEditor key={textSession.nonce} session={textSession} box={box} controlRef={textControl}
+            rect={layout.field?.id === textSession.target.id && layout.field.field === textSession.target.field ? layout.field.rect : undefined}
             onCommit={commitText} onDirtyChange={setTextDirty} onClose={(restoreFocus) => {
               setTextSession(null);
               setTextDirty(false);
@@ -1087,6 +1096,7 @@ export function ThemeEditor({ workspace, refetch }: {
             onOpenChange={(open) => { if (!open) setLibraryAt(null); }}
             theme={theme}
             options={libraryOptions}
+            preview={{ origin: preview.origin, ready: preview.phase === "ready", path, revision: draft.saved.revision, retry: preview.retry }}
             apps={workspace.apps}
             aiAvailable={aiAvailable}
             onAdd={addFromLibrary}

@@ -34,7 +34,7 @@ export function IdText({
           type="button"
           aria-label={copied ? t("copied") : t("copy", { value })}
           data-row-click-ignore=""
-          className="flex size-11 sm:size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/id:opacity-100 pointer-coarse:opacity-100"
+          className="flex size-11 sm:size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/id:opacity-100 touch-reveal"
           onClick={() => {
             void navigator.clipboard?.writeText(value).then(() => {
               setCopied(true);

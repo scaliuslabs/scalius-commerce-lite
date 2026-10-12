@@ -43,6 +43,9 @@ let server: ViteDevServer;
 let container: Container;
 let HomePage: unknown;
 let RenderPage: unknown;
+let LibraryPage: unknown;
+let extensionHost: typeof import("../extensions/host").ExtensionHost;
+let bundledExtensions: Record<string, import("../extensions/loaders").BundledStorefrontExtension>;
 let paintRoute: { ALL(context: { request: Request; locals: object }): Promise<Response> };
 let LandingPage: unknown;
 let runtimeModule: RuntimeModule;
@@ -77,6 +80,9 @@ beforeAll(async () => {
   });
   HomePage = (await server.ssrLoadModule("/src/pages/index.astro")).default;
   RenderPage = (await server.ssrLoadModule("/src/pages/theme-preview/render.astro")).default;
+  bundledExtensions = (await server.ssrLoadModule("/src/extensions/bundled.gen.ts")).BUNDLED_STOREFRONT_EXTENSIONS;
+  extensionHost = (await server.ssrLoadModule("/src/lib/extensions/host.ts")).ExtensionHost;
+  LibraryPage = (await server.ssrLoadModule("/src/pages/theme-preview/library.astro")).default;
   paintRoute = (await server.ssrLoadModule("/src/pages/theme-preview/paint.ts")) as typeof paintRoute;
   LandingPage = (await server.ssrLoadModule("/src/pages/pages/[slug].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
@@ -87,6 +93,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -190,7 +197,8 @@ interface Api {
   /** Platform origins in the layout (always with a preview). */
   platform?: boolean;
   unavailable?: string[];
-  previewData?: ReturnType<typeof sectionData>;
+  previewData?: ReturnType<typeof sectionData> & { apps?: unknown[] };
+  appExtensions?: unknown;
   storeShape?: StoreShape;
   onPreviewSections?: (ids: string[]) => void;
 }
@@ -202,6 +210,7 @@ function stubApi(api: Api) {
     if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope({
       ...layout(api.document, api.platform === true || api.preview !== undefined),
       ...(api.storeShape ? { storeShape: api.storeShape } : {}),
+      ...(api.appExtensions ? { appExtensions: api.appExtensions } : {}),
     }) };
     if (path === "/api/v1/storefront/homepage") {
       return { status: 200, body: envelope({ seo: { homepageTitle: null, homepageMetaDescription: null }, sections: sectionData() }) };
@@ -618,5 +627,142 @@ describe("the preview paint route", () => {
     expect(stale.response.status).toBe(401);
     expect(stale.response.headers.get("Set-Cookie")).toContain("Max-Age=0");
     for (const result of [stale, get]) expect(result.response.headers.get("Cache-Control")).toContain("no-store");
+  });
+});
+
+
+describe("one private library document", () => {
+  const url = (section = "product-grid", page = "/") => `https://shop.test/theme-preview/library?${new URLSearchParams({ section, page, v: "library-document-1" })}`;
+  it("renders the real selected product grid with saved styles and one bounded data request", async () => {
+    const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme() }, { url: url(), cookie: PREVIEW_COOKIE });
+    expect(result.response.status).toBe(200);
+    // Astro's container omits the doctype (as in the published snapshot),
+    // but this route must still render a complete Layout document.
+    expect(result.html).toMatch(/^<html[^>]*>/);
+    expect(result.html).toContain("<head>");
+    expect(result.html).toContain("</body></html>");
+    expect(result.html).not.toContain('const SELF = "scalius-theme-preview"');
+    expect(result.html).not.toContain('const EDITOR = "scalius-theme-editor"');
+    expect(result.html).toContain('data-home-section="product-grid"');
+    expect(result.html).toContain("Product 1");
+    expect(result.html).not.toContain("Our story");
+    expect(result.html).toContain("data-library-preview");
+    expect(result.html).toContain("connect-src 'none'; form-action 'none'");
+    expect(result.html).toContain("<div inert>");
+    expect(result.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(result.response.headers.get("Vary")).toBe("Cookie");
+    expect(result.response.headers.get("X-Robots-Tag")).toContain("noindex");
+    expect(result.calls.filter((call) => call.includes("theme-preview/homepage"))).toHaveLength(1);
+    expect(result.calls.some((call) => /products|shipping|checkout|orders/.test(call))).toBe(false);
+    expect(result.response.headers.get("Set-Cookie")).toBeNull();
+  });
+  it("renders honest empty defaults without catalog reads or made-up example content", async () => {
+    const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme() }, { url: url("faq"), cookie: PREVIEW_COOKIE });
+    expect(result.response.status).toBe(200);
+    expect(result.html).not.toContain('data-home-render-unit=""');
+    expect(result.calls.some((call) => call.includes("theme-preview/homepage"))).toBe(false);
+    expect(result.html).toContain("scalius:library-preview");
+  });
+  it("refuses missing/expired auth, invalid selectors, unknown apps and unknown saved landing scopes", async () => {
+    for (const [api, options, status] of [
+      [{ document: fixedTheme() }, { url: url() }, 401],
+      [{ document: fixedTheme() }, { url: url(), cookie: PREVIEW_COOKIE }, 401],
+      [{ document: fixedTheme(), preview: fixedTheme() }, { url: url("unknown"), cookie: PREVIEW_COOKIE }, 400],
+      [{ document: fixedTheme(), preview: fixedTheme() }, { url: url("faq", "/account"), cookie: PREVIEW_COOKIE }, 400],
+      [{ document: fixedTheme(), preview: fixedTheme() }, { url: url("acme.inactive/hero"), cookie: PREVIEW_COOKIE }, 404],
+      [{ document: fixedTheme(), preview: fixedTheme() }, { url: url("faq", "/pages/unknown"), cookie: PREVIEW_COOKIE }, 404],
+    ] as const) {
+      const result = await renderPage(LibraryPage, api, options);
+      expect(result.response.status).toBe(status);
+      expect(result.response.headers.get("Cache-Control")).toContain("no-store");
+      expect(result.response.headers.get("Vary")).toBe("Cookie");
+      expect(result.response.headers.get("Location")).toBeNull();
+    }
+  });
+  it("links the selected active app's immutable stylesheet even when the saved theme never uses it", async () => {
+    const release = "e".repeat(64);
+    const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release,
+      sections: ["hero"], sectionSettings: { hero: [] }, slots: [], islands: ["motion"], stylesheet: true, connect: [] };
+    const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app],
+      previewData: { ...sectionData(), apps: [{ sectionId: "library-section", html: "<h2>App default</h2>", head: { meta: [], jsonLd: [] } }] },
+    }, { url: url("acme.theme/hero"), cookie: PREVIEW_COOKIE });
+    expect(result.response.status).toBe(200);
+    expect(result.html).toContain("App default");
+    expect(result.html).toContain(`/_x/acme.theme/${release}/styles.css`);
+    expect(result.html.match(/data-app-stylesheet/g)).toHaveLength(1);
+  });
+  it("distinguishes a failed component renderer from a valid empty result only in the library", async () => {
+    const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
+      sections: ["hero"], sectionSettings: { hero: [] }, slots: [], islands: [], stylesheet: false, connect: [] };
+    const api = { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app], previewData: { ...sectionData(), apps: [{
+      sectionId: "library-section", html: "", head: { meta: [], jsonLd: [] },
+      component: { pluginId: "acme.theme", type: "hero", values: {}, media: [], lists: [] },
+    }] } };
+    const render = vi.spyOn(extensionHost.prototype, "render").mockResolvedValue(null);
+    const failed = await renderPage(LibraryPage, api, { url: url("acme.theme/hero"), cookie: PREVIEW_COOKIE });
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(failed.html).toContain("<template data-library-render-failed");
+    render.mockResolvedValue("");
+    const empty = await renderPage(LibraryPage, api, { url: url("acme.theme/hero"), cookie: PREVIEW_COOKIE });
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(empty.html).not.toContain("<template data-library-render-failed");
+    render.mockResolvedValue(null);
+    const canvas = await renderPage(RenderPage, api, { url: "https://shop.test/theme-preview/render", cookie: PREVIEW_COOKIE,
+      post: { body: { scope: { kind: "home" }, sections: [{ id: "library-section", type: "app", version: 1, settings: { app: "acme.theme/hero", values: {} } }] } },
+    });
+    expect(render).toHaveBeenCalledTimes(3);
+    expect(canvas.html).not.toContain("data-library-render-failed");
+  });
+  it.each([
+    ["/products/current-product", "product", "product"],
+    ["/categories/current-category", "listing", "collection"],
+    ["/cart", "cart", "cart"],
+  ] as const)("passes %s to the real extension host and renders only the selected placement", async (path, kind, template) => {
+    const release = "a".repeat(64);
+    const contexts: Array<import("@scalius/shared/plugins/storefront-components").StorefrontRenderContext> = [];
+    const pluginId = "library.context-test";
+    bundledExtensions[pluginId] = {
+      release,
+      files: async () => ({ FILES: {} }),
+      module: async () => ({ default: { abi: 1, render(batch) {
+        contexts.push(batch.context);
+        return { abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: "<section><p>Selected app only</p></section>" })) };
+      } } }),
+    };
+    try {
+      const document = fixedTheme();
+      document.pages.templates[template] = { main: 1, sections: [
+        section("editorial", "existing-before", { heading: "Do not draw before" }),
+        section("editorial", "existing-after", { heading: "Do not draw after" }),
+      ] };
+      const app = { pluginId, version: "1.0.0", source: "bundled", release,
+        sections: ["hero"], sectionSettings: { hero: [] }, slots: [], islands: [], stylesheet: false, connect: [] };
+      const requested: string[][] = [];
+      const result = await renderPage(LibraryPage, { document, preview: document, appExtensions: [app],
+        onPreviewSections: (ids) => requested.push(ids), previewData: { ...sectionData(), apps: [{
+          sectionId: "library-section", html: "", head: { meta: [], jsonLd: [] },
+          component: { pluginId, type: "hero", values: {}, media: [], lists: [] },
+        }] },
+      }, { url: url(`${pluginId}/hero`, path), cookie: PREVIEW_COOKIE });
+      expect(result.response.status).toBe(200);
+      // This is the actual ExtensionHost batch, after layout and saved-theme
+      // resolution, not a unit assertion of the override setter.
+      expect(contexts).toHaveLength(1);
+      expect(contexts[0]).toMatchObject({ page: { kind, path }, preview: true });
+      expect(requested).toEqual([["library-section"]]);
+      expect(result.html).toContain("Selected app only");
+      expect(result.html).not.toContain("Do not draw before");
+      expect(result.html).not.toContain("Do not draw after");
+      expect(result.html.match(/data-home-section=/g)).toHaveLength(1);
+      expect(result.calls.every((call) => ["/api/v1/storefront/layout", "/api/v1/storefront/theme-preview/resolve", "/api/v1/storefront/theme-preview/homepage"].includes(call))).toBe(true);
+      expect(document.pages.templates[template].main).toBe(1);
+    } finally {
+      delete bundledExtensions[pluginId];
+    }
+  });
+  it("fails honestly when selected-section data is unavailable", async () => {
+    const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme(), unavailable: ["/api/v1/storefront/theme-preview/homepage"] }, { url: url(), cookie: PREVIEW_COOKIE });
+    expect(result.response.status).toBe(503);
+    expect(result.html).not.toContain("Product 1");
   });
 });

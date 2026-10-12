@@ -27,6 +27,7 @@ interface Props {
 
 const { section, surface, headerLead = false } = Astro.props;
 const component = surface.component;
+const libraryPreview = (Astro.locals as { sectionLibraryPreview?: boolean }).sectionLibraryPreview === true;
 let html: string | null = null;
 let base = "";
 let pluginId = "";
@@ -68,6 +69,9 @@ if (component) {
 
 {/* Public guard for a header that used this declared lead before the app rendered. */}
 {headerLead && component && !html?.trim() && <template data-scalius-lead-empty></template>}
+{/* Only the isolated library reports a failed module; a valid empty string
+    still means the app intentionally has nothing to display. */}
+{libraryPreview && component && html === null && <template data-library-render-failed></template>}
 {component
   ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} />
   : (

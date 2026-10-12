@@ -12,15 +12,11 @@
 export const partial = true;
 export const prerender = false;
 
-import { storefrontPreviewRenderSchema, storefrontScopeRegions, storefrontThemeWithScope, homeSectionsShowDeliveryFacts, homeSectionRequests, homeSectionRequestsEmpty } from "@scalius/shared/storefront-theme";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { storefrontPreviewRenderSchema, storefrontScopeRegions, storefrontThemeWithScope, homeSectionRequests, homeSectionRequestsEmpty } from "@scalius/shared/storefront-theme";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
-import { getCheckoutConfig, isCheckoutConfigReadFailure, getShippingMethods, getThemePreviewHomepageSections } from "@/lib/api";
-import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
-import { buildDeliveryFacts } from "@/lib/delivery-facts";
-import { formatMoney } from "@/lib/currency";
 import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent, homepageLeadSection } from "@/lib/homepage-sections";
 import { readStoreShape, requestThemeFor } from "@/lib/storefront-theme-context";
+import { readThemePreviewContent } from "@/lib/theme-preview-content";
 import { THEME_PREVIEW_ROUTE_HEADERS, readThemePreviewPost, themePreviewRefusal } from "@/lib/theme-preview-post";
 
 const post = await readThemePreviewPost(Astro, storefrontPreviewRenderSchema);
@@ -46,33 +42,9 @@ const standalone = section && !(section.type === "banner" && section.settings.la
 const shown = standalone ? [section] : regionSections;
 const presence = body.presence ?? null;
 
-const sectionData = homeSectionRequestsEmpty(homeSectionRequests(shown))
-  ? EMPTY_HOMEPAGE_SECTION_DATA
-  : await getThemePreviewHomepageSections(token, {
-      ...(body.scope.kind === "landing" ? { pageSlug: body.scope.slug } : {}),
-      sections: shown,
-      presence,
-    });
-if (sectionData === null) return themePreviewRefusal(503);
-const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
-const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
-const showsDeliveryFacts = homeSectionsShowDeliveryFacts(shown);
-const [shippingMethods, checkoutConfig] = showsDeliveryFacts
-  ? await Promise.all([getShippingMethods(), getCheckoutConfig()])
-  : [null, null];
-if (showsDeliveryFacts && (shippingMethods === null || checkoutConfig === null || isCheckoutConfigReadFailure(checkoutConfig))) {
-  return themePreviewRefusal(503);
-}
-const deliveryFacts = showsDeliveryFacts
-  ? buildDeliveryFacts({
-      shippingMethods,
-      checkoutConfig,
-      returnPolicy: layoutData.seo?.returnPolicy,
-      formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
-      countries: presenceMarketCountries(layoutData.markets, presence),
-    })
-  : [];
-const content = homepageContent(sectionData, deliveryFacts);
+const data = await readThemePreviewContent(token, shown, layoutData, presence, body.scope.kind === "landing" ? body.scope.slug : undefined);
+if (!data) return themePreviewRefusal(503);
+const { content, currencySymbol, currencyCode } = data;
 // The layout is the previewed market's (lib/theme-preview-post.ts): its language's words.
 const languageCode = layoutData.storefrontCopy?.languageCode;
 ---

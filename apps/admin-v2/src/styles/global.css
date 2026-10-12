@@ -17,6 +17,19 @@
 /* Right-to-left follows the `dir` the locale sets on <html> (i18n/index.ts), as the [dir="rtl"] rules below do; Tailwind's default lists every RTL language tag in each rule. */
 @custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
 
+/* Layer handles and their spacers share one touch target, including hybrids. */
+@media (any-pointer: coarse) {
+  .theme-layer-grip,
+  .theme-layer-grip > button {
+    width: 2.75rem;
+    height: 2.75rem;
+    -webkit-touch-callout: none;
+  }
+  .touch-reveal {
+    opacity: 1;
+  }
+}
+
 /*
  * Design tokens (see DESIGN.md). Values follow Shopify Polaris: neutral greys,
  * white cards on a light grey page, near-black primary actions and five tones.
@@ -155,9 +168,7 @@
   --primary-foreground: #1a1a1a;
   --destructive: #d6343f;
   --destructive-hover: #c42b36;
-  --destructive-foreground: #ffffff;
   --border: #4a4a4a;
-  --input: #8a8a8a;
   --ring: #4b9bff;
   --link: #7cb5ff;
   --overlay: rgb(0 0 0 / 0.6);
@@ -167,38 +178,20 @@
   --success-surface: #133b2c;
   --success-border: #23694d;
   --success-text: #8ae6b8;
-  --warning: #ffb800;
-  --warning-foreground: #251a00;
   --warning-surface: #452e0b;
   --warning-border: #7a5210;
   --warning-text: #ffc96b;
-  --caution: #ffe600;
-  --caution-foreground: #332e00;
   --caution-surface: #3b3508;
   --caution-border: #6e6212;
   --caution-text: #f2e27a;
   --critical: #d6343f;
-  --critical-foreground: #ffffff;
   --critical-surface: #4d1a20;
   --critical-border: #8a2a33;
   --critical-text: #ffa3aa;
-  --info: #91d0ff;
-  --info-foreground: #002133;
   --info-surface: #10304d;
   --info-border: #1f5585;
   --info-text: #9dd4ff;
 
-  --topbar: #0a0a0a;
-  --topbar-foreground: #dcdcdc;
-  --topbar-subdued: #282828;
-  --topbar-hover: #333333;
-  /* The search pill's (and save bar's) 1px edge, and the save bar's white Save. */
-  --topbar-border: #3d3d3d;
-  --topbar-primary: #ffffff;
-  --topbar-primary-foreground: #303030;
-  /* The page-loading bar: the accent, bright enough on the black top bar in both themes. */
-  --topbar-progress: #4b9bff;
-  --scrollbar-thumb: #8a8a8a;
   --scrollbar-thumb-hover: #b5b5b5;
 
   /* The frame goes a step darker than the dark canvas, so the canvas still reads as a sheet. */

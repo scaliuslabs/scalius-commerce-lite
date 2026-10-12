@@ -48,12 +48,15 @@ class FakeResizeObserver {
 let root: Root;
 let container: HTMLDivElement;
 const handle: { preview: ReturnType<typeof usePreview> | null; rerender: Dispatch<SetStateAction<number>> | null } = { preview: null, rerender: null };
+const registerFrame = vi.fn((id: number) => handle.preview!.register(id));
 const connectedCount = { value: 0 };
+let ownerRenders = 0;
 const selectedField = vi.fn();
 const editText = vi.fn();
 let setSourceRevision: Dispatch<SetStateAction<number | null>>;
 
 function Harness() {
+  ownerRenders += 1;
   const [tick, setTick] = useState(0);
   const [sourceRevision, setRevision] = useState<number | null>(null);
   setSourceRevision = setRevision;
@@ -78,12 +81,14 @@ function Harness() {
         phase={preview.phase}
         frames={preview.frames}
         activeId={preview.activeId}
-        register={preview.register}
-        layout={preview.layout}
+        register={registerFrame}
+        visuals={preview.visuals}
+        inspector
         hovered={null}
         selected={null}
-        names={{}}
+        names={{ hero: { name: "Hero" }, faq: { name: "FAQ" } }}
         actions={null}
+        textEditor={(_box, layout) => <output data-field-box>{JSON.stringify(layout.field?.rect ?? null)}</output>}
         onRetry={() => {}}
         onScaleChange={() => {}}
       />
@@ -92,9 +97,10 @@ function Harness() {
 }
 
 const frames = () => [...container.querySelectorAll<HTMLIFrameElement>("iframe")];
-const deliver = (frame: HTMLIFrameElement, data: Record<string, unknown>) => act(() => {
+const dispatchMessage = (frame: HTMLIFrameElement, data: Record<string, unknown>) => {
   window.dispatchEvent(new MessageEvent("message", { data: { source: "scalius-theme-preview", ...data }, origin: STORE, source: windowOf(frame) as unknown as Window }));
-});
+};
+const deliver = (frame: HTMLIFrameElement, data: Record<string, unknown>) => act(() => dispatchMessage(frame, data));
 const deliverRaw = (frame: HTMLIFrameElement, data: Record<string, unknown>) => act(() => {
   window.dispatchEvent(new MessageEvent("message", { data, origin: STORE, source: windowOf(frame) as unknown as Window }));
 });
@@ -135,6 +141,8 @@ beforeEach(() => {
   act(() => setLocale("en"));
   windows.clear();
   connectedCount.value = 0;
+  ownerRenders = 0;
+  registerFrame.mockClear();
   selectedField.mockClear();
   editText.mockClear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
@@ -156,6 +164,75 @@ afterEach(() => {
 });
 
 describe("the preview channel", () => {
+  it("repaints frame geometry and hover without rerendering the editor owner", async () => {
+    const frame = await connectFirstFrame();
+    const before = ownerRenders;
+    const frameHostRenders = registerFrame.mock.calls.length;
+    const source = handle.preview!.visuals;
+    for (let step = 1; step <= 8; step += 1) {
+      deliver(frame, { type: "layout", rects: { hero: [10, step * 10, 300, 80], faq: [10, step * 20, 300, 80] }, scrollY: step * 10, height: 2000 });
+      deliver(frame, { type: "hover", id: step % 2 ? "hero" : "faq" });
+    }
+    expect(ownerRenders).toBe(before);
+    expect(registerFrame).toHaveBeenCalledTimes(frameHostRenders);
+    expect(handle.preview!.visuals).toBe(source);
+    expect(container.querySelector('[data-outline="hover"]')?.textContent).toBe("FAQ");
+    expect(container.querySelector<HTMLElement>('[data-outline="hover"]')?.style.getPropertyValue("--oy")).toBe("16px");
+    expect(source.getSnapshot().layout.scrollY).toBe(80);
+  });
+
+  it("keeps identical geometry cached and stops notifying an unsubscribed listener", async () => {
+    const frame = await connectFirstFrame();
+    const source = handle.preview!.visuals;
+    const listener = vi.fn();
+    const unsubscribe = source.subscribe(listener);
+    const layout = { type: "layout", rects: { hero: [10, 20, 300, 80] }, scrollY: 10, height: 2000,
+      field: { id: "hero", field: "heading", rect: [10, 30, 300, 40] } };
+    deliver(frame, layout);
+    const snapshot = source.getSnapshot();
+    listener.mockClear();
+    deliver(frame, layout); // Message decoding allocates new records and tuples.
+    expect(source.getSnapshot()).toBe(snapshot);
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+    deliver(frame, { ...layout, scrollY: 20 });
+    expect(source.getSnapshot().layout.scrollY).toBe(20);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("publishes field identity to the owner only when availability changes, while moving inline text locally", async () => {
+    const frame = await connectFirstFrame();
+    const layout = (field: Record<string, unknown> | null) => ({ type: "layout", rects: {}, scrollY: 0, height: 2000, field });
+    deliver(frame, layout({ id: "faq", field: "heading", rect: [10, 20, 300, 40] }));
+    expect(handle.preview!.fieldTarget).toEqual({ id: "faq", field: "heading" });
+    const identity = handle.preview!.fieldTarget;
+    const before = ownerRenders;
+    deliver(frame, layout({ id: "faq", field: "heading", rect: [10, 90, 300, 40] }));
+    expect(ownerRenders).toBe(before);
+    expect(handle.preview!.fieldTarget).toBe(identity);
+    expect(container.querySelector("[data-field-box]")?.textContent).toBe("[10,90,300,40]");
+    deliver(frame, layout({ id: "hero", field: "heading", rect: [10, 30, 300, 40] }));
+    expect(handle.preview!.fieldTarget).toEqual({ id: "hero", field: "heading" });
+    deliver(frame, layout(null));
+    expect(handle.preview!.fieldTarget).toBeNull();
+    expect(container.querySelector("[data-field-box]")?.textContent).toBe("null");
+  });
+
+  it("clears visual state when the preview session changes and rejects the removed frame", async () => {
+    const frame = await connectFirstFrame();
+    const layout = { type: "layout", rects: { hero: [10, 20, 300, 80] }, scrollY: 100, height: 2000,
+      field: { id: "hero", field: "heading", rect: [10, 30, 300, 40] } };
+    deliver(frame, layout);
+    deliver(frame, { type: "hover", id: "hero" });
+    await act(async () => { setSourceRevision(9); });
+    const cleared = handle.preview!.visuals.getSnapshot();
+    expect(cleared).toEqual({ layout: { rects: {}, scrollY: 0, height: 0 }, hovered: null });
+    expect(handle.preview!.fieldTarget).toBeNull();
+    deliver(frame, layout);
+    deliver(frame, { type: "hover", id: "hero" });
+    expect(handle.preview!.visuals.getSnapshot()).toBe(cleared);
+  });
+
   it("delivers every command kind after the editor re-rendered (frames keep their registration)", async () => {
     const frame = await connectFirstFrame();
     rerender();
@@ -240,12 +317,21 @@ describe("the preview channel", () => {
     act(() => handle.preview!.reload());
     await vi.waitFor(() => expect(frames()).toHaveLength(2));
     const second = frames()[1]!;
-    deliver(second, { type: "hello", path: "/" });
-    expect(posted(second)).toEqual([{ source: "scalius-theme-editor", type: "connect", inspector: true, scrollY: 0 }]);
+    // A scroll and replacement handshake may arrive before React commits either event.
+    act(() => {
+      dispatchMessage(first, { type: "layout", rects: {}, scrollY: 482, height: 2000 });
+      dispatchMessage(second, { type: "hello", path: "/" });
+    });
+    expect(posted(second)).toEqual([{ source: "scalius-theme-editor", type: "connect", inspector: true, scrollY: 482 }]);
     deliver(second, { type: "ready", path: "/", marks: ["header", "faq"] });
     await vi.waitFor(() => expect(frames()).toHaveLength(1));
     expect(posted(second)).toContainEqual(expect.objectContaining({ type: "arrange", order: ["faq"] }));
     expect(connectedCount.value).toBe(2);
+    expect(handle.preview!.visuals.getSnapshot().layout.scrollY).toBe(0);
+    const shown = handle.preview!.visuals.getSnapshot();
+    deliver(first, { type: "layout", rects: {}, scrollY: 900, height: 2000 });
+    deliver(first, { type: "hover", id: "hero" });
+    expect(handle.preview!.visuals.getSnapshot()).toBe(shown);
     // Later commands go to the new frame only, after more re-renders.
     rerender();
     windowOf(first).postMessage.mockClear();
@@ -325,7 +411,7 @@ describe("frame-specific scalar text capability", () => {
   it("forwards a validated gesture box without waiting for field layout", async () => {
     const frame = await connectFirstFrame();
     deliver(frame, { type: "ready", path: "/", marks: ["faq"], fields: 1 });
-    expect(handle.preview!.layout.field).toBeUndefined();
+    expect(handle.preview!.visuals.getSnapshot().layout.field).toBeUndefined();
     deliver(frame, { type: "edit-text", id: "faq", field: "heading", rect: [10, 20, Infinity, 40] });
     expect(editText).not.toHaveBeenCalled();
     deliver(frame, { type: "edit-text", id: "faq", field: "heading", rect: [10, 20, 300, 40] });

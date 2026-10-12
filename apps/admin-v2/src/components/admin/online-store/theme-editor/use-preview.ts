@@ -78,6 +78,19 @@ export interface PreviewLayout {
   field?: ThemePreviewField | null;
 }
 
+export type PreviewFieldTarget = Pick<ThemePreviewField, "id" | "field">;
+
+export interface PreviewVisualSnapshot {
+  layout: PreviewLayout;
+  hovered: string | null;
+}
+
+/** Frame geometry changes independently of the editor's working document. */
+export interface PreviewVisualSource {
+  getSnapshot: () => PreviewVisualSnapshot;
+  subscribe: (listener: () => void) => () => void;
+}
+
 interface Frame {
   id: number;
   src: string;
@@ -86,6 +99,42 @@ interface Frame {
 }
 
 const EMPTY_LAYOUT: PreviewLayout = { rects: {}, scrollY: 0, height: 0 };
+
+function sameRect(left: ThemePreviewRect, right: ThemePreviewRect): boolean {
+  return left.every((value, index) => value === right[index]);
+}
+
+function sameLayout(left: PreviewLayout, right: PreviewLayout): boolean {
+  if (left === right) return true;
+  if (left.scrollY !== right.scrollY || left.height !== right.height) return false;
+  if (left.field?.id !== right.field?.id || left.field?.field !== right.field?.field) return false;
+  if (left.field && right.field && !sameRect(left.field.rect, right.field.rect)) return false;
+  const ids = Object.keys(left.rects);
+  return ids.length === Object.keys(right.rects).length
+    && ids.every((id) => right.rects[id] !== undefined && sameRect(left.rects[id]!, right.rects[id]!));
+}
+
+function createPreviewVisuals() {
+  let snapshot: PreviewVisualSnapshot = { layout: EMPTY_LAYOUT, hovered: null };
+  const listeners = new Set<() => void>();
+  const publish = (next: PreviewVisualSnapshot) => {
+    snapshot = next;
+    for (const listener of listeners) listener();
+  };
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    setLayout: (layout: PreviewLayout) => {
+      if (!sameLayout(snapshot.layout, layout)) publish({ ...snapshot, layout });
+    },
+    setHovered: (hovered: string | null) => {
+      if (hovered !== snapshot.hovered) publish({ ...snapshot, hovered });
+    },
+  };
+}
 
 export function usePreview({ draftRevision, sourceRevision, path, inspector, onSelect, onEditText, onKey, onConnected }: {
   /** The saved draft revision a session opens on (it then follows every save). */
@@ -105,9 +154,19 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const [origin, setOrigin] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [layout, setLayout] = useState<PreviewLayout>(EMPTY_LAYOUT);
+  const [visuals] = useState(createPreviewVisuals);
+  const visualSource: PreviewVisualSource = visuals;
+  const [fieldTarget, setFieldTarget] = useState<PreviewFieldTarget | null>(null);
+  const setLayout = useCallback((layout: PreviewLayout) => {
+    const previous = visuals.getSnapshot().layout.field;
+    const next = layout.field;
+    // Only field availability affects editor actions; its moving box belongs to the canvas.
+    if (previous?.id !== next?.id || previous?.field !== next?.field) {
+      setFieldTarget(next ? { id: next.id, field: next.field } : null);
+    }
+    visuals.setLayout(layout);
+  }, [visuals]);
   const [fieldsEnabled, setFieldsEnabled] = useState(false);
-  const [hovered, setHovered] = useState<string | null>(null);
   const [marks, setMarks] = useState<readonly string[]>([]);
   /** Where the shown frame is now (a link the merchant followed moves it). */
   const [shownPath, setShownPath] = useState<string | null>(null);
@@ -126,8 +185,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const [behind, setBehind] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resyncAt, setResyncAt] = useState(0);
-  const latest = useRef({ inspector, onSelect, onEditText, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
-  latest.current = { inspector, onSelect, onEditText, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision };
+  const latest = useRef({ inspector, onSelect, onEditText, onKey, onConnected, activeId, path, draftRevision, sourceRevision });
+  latest.current = { inspector, onSelect, onEditText, onKey, onConnected, activeId, path, draftRevision, sourceRevision };
 
   const frameWindow = (id: number | null) => (id === null ? null : elements.current.get(id)?.contentWindow ?? null);
 
@@ -245,12 +304,17 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   useEffect(() => {
     setFrames([]);
     setActiveId(null);
+    latest.current.activeId = null;
+    setLayout(EMPTY_LAYOUT);
+    visuals.setHovered(null);
     setFieldsEnabled(false);
+    elements.current.clear();
+    refs.current.clear();
     connected.current.clear();
     outbox.current.clear();
     setFailed(false);
     void open();
-  }, [open, sourceRevision]);
+  }, [open, sourceRevision, setLayout, visuals]);
   const firstPath = useRef(true);
   useEffect(() => {
     if (firstPath.current) {
@@ -286,7 +350,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           window.clearTimeout(helloTimer.current);
           connected.current.add(id);
           // A replacing frame opens where the shown one is.
-          const scrollY = id === active ? null : latest.current.layout.scrollY;
+          const scrollY = id === active ? null : visuals.getSnapshot().layout.scrollY;
           element.contentWindow!.postMessage({ source: THEME_EDITOR_SOURCE, type: "connect", inspector: latest.current.inspector, scrollY }, origin);
           if (id === active) setShownPath(message.path);
           break;
@@ -299,6 +363,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
             setFrames((current) => current.filter((each) => each.id === id || each.id > id));
             for (const old of connected.current) if (old < id) connected.current.delete(old);
             setLayout(EMPTY_LAYOUT);
+            visuals.setHovered(null);
           }
           setShownPath(message.path);
           setMarks(message.marks);
@@ -330,7 +395,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           if (id === active || active === null) setLayout({ rects: message.rects, scrollY: message.scrollY, height: message.height, field: message.field });
           break;
         case "hover":
-          if (id === active) setHovered(message.id);
+          if (id === active) visuals.setHovered(message.id);
           break;
         case "select":
           if (id === active) latest.current.onSelect(message.id, message.field);
@@ -352,7 +417,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [origin, open, load, flush]);
+  }, [origin, open, load, flush, setLayout, visuals]);
 
   // The first frame of a session becomes the shown one when its relay hands over.
   useEffect(() => {
@@ -362,8 +427,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   // The inspector follows the toggle.
   useEffect(() => {
     send({ type: "inspector", on: inspector });
-    if (!inspector) setHovered(null);
-  }, [inspector, send]);
+    if (!inspector) visuals.setHovered(null);
+  }, [inspector, send, visuals]);
 
   useEffect(() => () => {
     window.clearTimeout(helloTimer.current);
@@ -407,8 +472,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     origin,
     frames,
     activeId,
-    layout,
-    hovered,
+    visuals: visualSource,
+    fieldTarget,
     fieldsEnabled,
     marks,
     shownPath,

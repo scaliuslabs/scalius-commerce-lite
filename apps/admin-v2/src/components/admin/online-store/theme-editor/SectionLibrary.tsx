@@ -4,22 +4,24 @@
  * categories, a thumbnail of each section drawn in the store's own colours,
  * apps' sections with an App badge, and sections that cannot be added here
  * saying why (Webflow's slot restrictions). "Draft with AI" sits at the top.
- * A click adds the section after the place the library was opened for.
+ * Selection previews one real section; Add alone changes the draft.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Search, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Search, Sparkles, X } from "lucide-react";
 import { STOREFRONT_SECTION_RENDERERS, type StorefrontSectionType, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Input } from "~/components/ui/input";
+import { useMediaQuery } from "~/hooks/use-media-query";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { Sketch, type SketchPalette } from "../ThemeChoices";
+import { SectionLibraryPreview, type LibraryPreviewContext } from "./SectionLibraryPreview";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 type Category = "all" | "banners" | "products" | "text" | "apps";
@@ -117,12 +119,13 @@ function SectionSketch({ type }: { type: StorefrontSectionType | "app" }): React
   }
 }
 
-export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAvailable, onAdd, onDraftWithAi }: {
+export function SectionLibrary({ open, onOpenChange, theme, options, apps, preview, aiAvailable, onAdd, onDraftWithAi }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   theme: StorefrontThemeDocument;
   options: readonly LibraryOption[];
   apps: readonly ThemeApp[];
+  preview: LibraryPreviewContext;
   /** Whether "Draft with AI" leads somewhere (a provider, or the steps to connect one). */
   aiAvailable: boolean;
   onAdd: (choice: LibraryChoice) => void;
@@ -130,10 +133,20 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
 }) {
   const t = useMessages(themeEditorMessages);
   const store = useMessages(onlineStoreMessages);
+  const desktop = useMediaQuery("(min-width: 768px)");
+  const [detail, setDetail] = useState(false);
+  const back = useRef<HTMLButtonElement>(null);
+  const selectedButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open && !desktop) (detail ? back.current : selectedButton.current)?.focus();
+  }, [open, desktop, detail]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
   useEffect(() => {
     if (!open) {
+      setSelected(null);
+      setDetail(false);
       setQuery("");
       setCategory("all");
     }
@@ -164,6 +177,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
       app: entry ? { id: entry.app.id, name: entry.app.name } : null,
     };
   });
+  const active = entries.find((entry) => entry.key === selected);
   const needle = query.trim().toLowerCase();
   const shown = entries.filter((entry) =>
     (category === "all" || entry.category === category)
@@ -171,7 +185,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
   const categories: Category[] = ["all", "banners", "products", "text", ...(entries.some((entry) => entry.category === "apps") ? ["apps" as const] : [])];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex flex-col gap-3 p-4 sm:max-w-md" data-section-library>
+      <SheetContent side="left" className="flex flex-col gap-3 p-4 sm:max-w-6xl" data-section-library>
         <div className="flex items-start gap-2">
           <SheetHeader className="min-w-0 flex-1">
             <SheetTitle>{t("libraryTitle")}</SheetTitle>
@@ -181,6 +195,8 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
             <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")}><X aria-hidden="true" /></Button>
           </SheetClose>
         </div>
+        <div className="flex min-h-0 flex-1 gap-4">
+        <div className={cn("min-h-0 max-w-sm flex-1 flex-col gap-3", active && detail ? "hidden md:flex" : "flex")}>
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           {/* eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field */}
@@ -205,16 +221,30 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {shown.length === 0 ? <p className="p-4 text-center text-body text-muted-foreground">{t("libraryEmpty")}</p> : null}
-          <ul className="grid grid-cols-2 gap-3">
+          <ul className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t("libraryTitle")}>
             {shown.map((entry) => (
               <li key={entry.key}>
                 <button
                   type="button"
-                  disabled={entry.option.blocked !== null}
+                  role="radio"
+                  aria-checked={selected === entry.key}
+                  tabIndex={selected === entry.key || (!shown.some((item) => item.key === selected) && shown[0]?.key === entry.key) ? 0 : -1}
                   aria-describedby={`library-${entry.key}-note`}
-                  onClick={() => onAdd(entry.option.choice)}
+                  ref={selected === entry.key ? selectedButton : undefined}
+                  onClick={() => { setSelected(entry.key); setDetail(true); }}
+                  onKeyDown={(event) => {
+                    const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+                    if (!delta) return;
+                    event.preventDefault();
+                    const next = shown[(shown.indexOf(entry) + delta + shown.length) % shown.length];
+                    if (next) {
+                      setSelected(next.key);
+                      setDetail(true);
+                      event.currentTarget.closest('[role="radiogroup"]')?.querySelector<HTMLButtonElement>(`[data-library-item="${CSS.escape(next.key)}"]`)?.focus();
+                    }
+                  }}
                   data-library-item={entry.key}
-                  className="flex w-full flex-col gap-1.5 rounded-xl bg-card p-1.5 text-start shadow-button hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className={cn("flex w-full flex-col gap-1.5 rounded-xl bg-card p-1.5 text-start shadow-button hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected === entry.key && "ring-2 ring-ring")}
                 >
                   <Sketch palette={palette}>
                     <SectionSketch type={entry.sketch} />
@@ -235,6 +265,22 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, aiAva
               </li>
             ))}
           </ul>
+        </div>
+        </div>
+        <div className={cn("min-h-0 min-w-0 flex-1 flex-col gap-3", active && detail ? "flex" : "hidden md:flex")}>
+          {active ? <>
+            <div className="flex items-start gap-2">
+              <span className="md:hidden"><Button type="button" variant="ghost" size="icon-sm" aria-label={t("libraryBack")} ref={back} onClick={() => setDetail(false)}><ArrowLeft aria-hidden="true" /></Button></span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-heading-sm">{active.name}</h3>
+                <p className="text-body text-muted-foreground">{active.description}</p>
+              </div>
+            </div>
+            {open && (desktop || detail) ? <SectionLibraryPreview selection={active.key} name={active.name} preview={preview} /> : null}
+            {active.option.blocked || active.option.note ? <p className={cn("text-body", active.option.blocked ? "text-destructive" : "text-muted-foreground")}>{active.option.blocked ?? active.option.note}</p> : null}
+            <Button type="button" disabled={active.option.blocked !== null} onClick={() => onAdd(active.option.choice)}>{t("libraryAdd", { name: active.name })}</Button>
+          </> : <p className="m-auto p-6 text-center text-body text-muted-foreground">{t("librarySelectPrompt")}</p>}
+        </div>
         </div>
       </SheetContent>
     </Sheet>

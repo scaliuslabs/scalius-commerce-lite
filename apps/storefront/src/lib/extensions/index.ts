@@ -28,6 +28,13 @@ interface RequestExtensions {
   host: ExtensionHost;
 }
 
+// Only the authenticated library route supplies a validated intended page.
+// It is context for a renderer, never a destination for an API request.
+const previewPages = new WeakMap<object, string>();
+export function setExtensionPreviewPage(locals: object, path: string): void {
+  previewPages.set(locals, path);
+}
+
 const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
 
 function runtimeEnv(): ExtensionRuntime["env"] {
@@ -60,7 +67,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
           language: theme.language,
           timeZone: layout?.timeZone?.trim() || "Asia/Dhaka",
         },
-        page: { kind: pageKind(url.pathname), path: url.pathname },
+        page: { kind: pageKind(previewPages.get(locals) ?? url.pathname), path: previewPages.get(locals) ?? url.pathname },
         assets: "",
         preview: theme.preview !== null,
       };

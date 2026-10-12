@@ -95,9 +95,11 @@ describe("canvas blur and deferred-authority regressions", () => {
 
 describe("one canvas editing surface across preview phases", () => {
   it("keeps the same native buffer when the iframe reconnects", () => {
+    const snapshot = { layout: { rects: {}, scrollY: 0, height: 1000 }, hovered: null };
+    const visuals = { getSnapshot: () => snapshot, subscribe: () => () => {} };
     const draw = (phase: "ready" | "connecting") => act(() => root.render(<EditorCanvas
       device="desktop" desktopWidth={1280} zoom="fit" phase={phase} frames={[]} activeId={null} register={() => () => {}}
-      layout={{ rects: {}, scrollY: 0, height: 1000 }} hovered={null} selected={null} names={{}} actions={null}
+      visuals={visuals} inspector={true} hovered={null} selected={null} names={{}} actions={null}
       onRetry={() => {}} onScaleChange={() => {}}
       textEditor={(currentBox) => <CanvasTextEditor key={session.nonce} session={session} box={currentBox} controlRef={ref} onCommit={commit} onClose={close} />}
     />));

@@ -1,0 +1,70 @@
+---
+// One selected library section, rendered as a complete private document. No
+// writes, draft transport, buyer resource fetch, or alternative renderer.
+export const prerender = false;
+import { marketOfPresence } from "@scalius/shared/markets";
+import { storefrontScopeRegions, storefrontThemeWithScope } from "@scalius/shared/storefront-theme";
+import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
+import Layout from "@/layouts/Layout.astro";
+import HomepageSections from "@/components/homepage/HomepageSections.astro";
+import { getLayoutData } from "@/lib/api";
+import { getRuntimeDashboardUrl, renderForPresence } from "@/lib/api/runtime";
+import { setExtensionPreviewPage } from "@/lib/extensions";
+import { homepageLeadSection } from "@/lib/homepage-sections";
+import { readStoreShape, requestThemeFor, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import { readThemePreviewContent } from "@/lib/theme-preview-content";
+import { libraryPreviewScript, readLibrarySelection } from "@/lib/theme-preview-library";
+import { THEME_PREVIEW_ROUTE_HEADERS, themePreviewRefusal } from "@/lib/theme-preview-post";
+
+const refuse = (status: number) => themePreviewRefusal(status, { Vary: "Cookie" });
+if (Astro.request.method !== "GET") return themePreviewRefusal(405, { Allow: "GET", Vary: "Cookie" });
+const token = readThemePreviewCookie(Astro.request.headers.get("cookie"));
+if (!token) return refuse(401);
+const selection = readLibrarySelection(Astro.url);
+if (!selection) return refuse(400);
+if (selection.presence) renderForPresence(selection.presence);
+const layoutData = await getLayoutData();
+if (!layoutData) return refuse(503);
+const saved = await resolveRequestTheme(Astro, layoutData);
+if (!saved.preview) return refuse(401);
+const dashboard = themeEditorOrigin(getRuntimeDashboardUrl());
+if (!dashboard || dashboard === Astro.url.origin) return refuse(403);
+if (selection.presence && (!layoutData.markets || !marketOfPresence(layoutData.markets, selection.presence))) return refuse(404);
+if (selection.scope.kind === "landing" && !saved.theme.pages.landing[selection.scope.slug]) return refuse(404);
+
+// Per-request only. Layout, card slots and selected-app CSS all resolve the
+// same saved styles with this one placement; no draft or cookie is changed.
+const theme = storefrontThemeWithScope(saved.theme, selection.scope, [selection.section]);
+const requestTheme = requestThemeFor(theme, readStoreShape(layoutData.storeShape), {
+  previewToken: token, preview: saved.preview, brand: saved.preview.brand,
+  languageCode: layoutData.storefrontCopy?.languageCode,
+});
+(Astro.locals as { storefrontTheme?: Promise<typeof requestTheme> }).storefrontTheme = Promise.resolve(requestTheme);
+setExtensionPreviewPage(Astro.locals, selection.path);
+(Astro.locals as { sectionLibraryPreview?: boolean }).sectionLibraryPreview = true;
+const sections = storefrontScopeRegions(requestTheme.resolved.pages, selection.scope).flatMap((region) => region.sections);
+const data = await readThemePreviewContent(token, sections, layoutData, selection.presence,
+  selection.scope.kind === "landing" ? selection.scope.slug : undefined);
+if (!data) return refuse(503);
+// The API's token-scoped reader only returns active, approved app sections.
+// An unknown/removed app must never silently preview a different section.
+if (selection.section.type === "app" && !data.content.apps?.has(selection.section.id)) return refuse(404);
+for (const [name, value] of Object.entries(THEME_PREVIEW_ROUTE_HEADERS)) Astro.response.headers.set(name, value);
+Astro.response.headers.set("Vary", "Cookie");
+const { content, currencySymbol, currencyCode } = data;
+---
+<Layout title="Section preview" layoutData={layoutData} hideHeader hideFooter hideNavigationSidebar noindex analytics={false} libraryPreview>
+  <Fragment slot="head">
+    {/* Islands use their immutable scripts, but this read-only document cannot
+        fetch buyer/app APIs, send beacons, submit forms or navigate links. */}
+    <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'" />
+    <script is:inline set:html={libraryPreviewScript(dashboard, selection.nonce)} />
+  </Fragment>
+  <div inert>
+    <HomepageSections sections={sections} content={content}
+      leadSectionId={homepageLeadSection(sections, content)?.id ?? null}
+      currencySymbol={currencySymbol} currencyCode={currencyCode}
+      languageCode={layoutData.storefrontCopy?.languageCode} />
+  </div>
+</Layout>

@@ -237,7 +237,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
             rel="noopener noreferrer"
             aria-label={t("viewStore")}
             onClick={onClose}
-            className={cn(NAV_ICON_BUTTON, "absolute inset-e-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100")}
+            className={cn(NAV_ICON_BUTTON, "absolute inset-e-0 top-0 opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100 touch-reveal")}
           >
             <Eye aria-hidden />
           </a>

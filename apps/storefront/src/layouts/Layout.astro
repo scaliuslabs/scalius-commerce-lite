@@ -104,6 +104,8 @@ interface Props {
    * confirm and unsubscribe pages), so no third party reads the token.
    */
   analytics?: boolean;
+  /** A private section-library document: no buyer chrome or actions. */
+  libraryPreview?: boolean;
 }
 
 const {
@@ -124,6 +126,7 @@ const {
   documentLanguage = "en",
   localizedPaths = null,
   analytics = true,
+  libraryPreview = false,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -144,7 +147,7 @@ const isThemePreview = themePreview !== null;
 // The stylesheets of the apps the theme names (their slots and sections): immutable, cached files.
 const appStylesheets = themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions));
 // The theme editor's bridge, only under a valid preview: buyers never get it.
-const themeEditorBridge = isThemePreview
+const themeEditorBridge = isThemePreview && !libraryPreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
   : "";
 // The merchant browsing the storefront under a live preview is told so, and can leave it.
@@ -395,6 +398,7 @@ const pageStoreTimeZone = storeTimeZone();
 
 <!doctype html>
 <html
+  data-library-preview={libraryPreview ? "" : undefined}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
   data-market-presence={marketPresence ?? undefined}
@@ -591,7 +595,7 @@ const pageStoreTimeZone = storeTimeZone();
         UI first. The guard is installed before click IDs can create a private
         session signal. */}
     <script is:inline set:html={privateSessionPrefetchGuardScript} />
-    <script is:inline set:html={AD_CLICK_ID_SCRIPT} />
+    {!libraryPreview && <script is:inline set:html={AD_CLICK_ID_SCRIPT} />}
 
     {/* Stale-asset recovery, installed before deferred module execution. */}
     <script is:inline set:html={STALE_ASSET_RECOVERY_SCRIPT} />
@@ -611,9 +615,11 @@ const pageStoreTimeZone = storeTimeZone();
       import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";
       import { installStorefrontActions } from "@/scripts/storefront-actions";
       import { installStorefrontChrome } from "@/scripts/storefront-chrome";
-      installLazyGlobalUi();
-      installStorefrontActions();
-      installStorefrontChrome();
+      if (!document.documentElement.hasAttribute("data-library-preview")) {
+        installLazyGlobalUi();
+        installStorefrontActions();
+        installStorefrontChrome();
+      }
     </script>
   </body>
 </html>

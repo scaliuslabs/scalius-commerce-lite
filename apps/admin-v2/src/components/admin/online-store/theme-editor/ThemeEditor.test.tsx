@@ -82,9 +82,10 @@ vi.mock("./use-preview", () => ({
     frame.onSelect = options.onSelect;
     frame.onEditText = options.onEditText;
     useEffect(() => options.onConnected(), []); // eslint-disable-line react-hooks/exhaustive-deps -- once, as a frame connects
+    const snapshot = { layout: { rects: frame.rects, field: frame.field, scrollY: 0, height: 2000 }, hovered: null };
     return {
       phase: "ready", origin: "https://shop.test", frames: [{ id: 1, src: "about:blank" }], activeId: 1,
-      layout: { rects: frame.rects, field: frame.field, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: frame.shownPath ?? options.path, fieldsEnabled: true, loading: frame.loading, failed: frame.failed,
+      visuals: { getSnapshot: () => snapshot, subscribe: () => () => {} }, fieldTarget: frame.field, marks: ["rail", "faq", "story"], shownPath: frame.shownPath ?? options.path, fieldsEnabled: true, loading: frame.loading, failed: frame.failed,
       send: frame.send, reload: frame.reload, retry: vi.fn(), register: () => () => {},
     };
   },
@@ -508,6 +509,24 @@ describe("theme editor: live preview and saving", () => {
 });
 
 describe("theme editor: sections and blocks", () => {
+  it("keeps the insertion beside the same section when Undo moves it during browsing", async () => {
+    render();
+    frame.rects = { faq: [0, 400, 1280, 300] };
+    act(() => row("faq").focus());
+    key(row("faq"), { key: "ArrowDown", altKey: true });
+    act(() => row("faq").click());
+    await ready('button[aria-label="Add section above"]');
+    act(() => button("Add section above").click());
+    await ready("[data-section-library]");
+    key(document.body, { key: "z", ctrlKey: true });
+    expect(pageRows()).toEqual(["page-settings", "rail", "faq", "story", "add-section"]);
+    act(() => document.querySelector<HTMLButtonElement>("[data-library-item='newsletter']")!.click());
+    act(() => button("Add Newsletter").click());
+    expect(pageRows()).toEqual(["page-settings", "rail", "newsletter", "faq", "story", "add-section"]);
+    act(() => button("Undo").click());
+    expect(pageRows()).toEqual(["page-settings", "rail", "faq", "story", "add-section"]);
+  });
+
   it("adds a section from the library, saying why a second hero cannot be added", async () => {
     render(themeWith([section("hero", "hero"), ...HOME]));
     act(() => row("add-section").click());
@@ -515,9 +534,13 @@ describe("theme editor: sections and blocks", () => {
     const library = document.querySelector("[data-section-library]")!;
     expect(library).toBeTruthy();
     const hero = library.querySelector<HTMLButtonElement>("[data-library-item='hero']")!;
-    expect(hero.disabled).toBe(true);
+    expect(hero.disabled).toBe(false);
     expect(hero.textContent).toContain("This page already has one.");
+    act(() => hero.click());
+    expect(button("Add Banners").disabled).toBe(true);
     act(() => library.querySelector<HTMLButtonElement>("[data-library-item='newsletter']")!.click());
+    expect(pageRows()).toEqual(["page-settings", "hero", "rail", "faq", "story", "add-section"]);
+    act(() => button("Add Newsletter").click());
     expect(pageRows()).toEqual(["page-settings", "hero", "rail", "faq", "story", "newsletter", "add-section"]);
     expect(row("newsletter").getAttribute("aria-selected")).toBe("true");
     await autosaved();
