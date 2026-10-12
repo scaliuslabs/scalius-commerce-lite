@@ -9,10 +9,10 @@ const PAGE = `
   <style data-theme-fonts></style>
   <div class="flex flex-col" data-theme-region="page">
     <div class="contents home-render-unit" data-home-render-unit data-theme-section-id="story">
-      <section><h2>Our story</h2><a href="/about">Read more</a></section>
+      <section><h2 data-theme-field="heading">Our story</h2><a href="/about">Read more</a></section>
     </div>
     <div class="contents home-render-unit" data-home-render-unit data-theme-section-id="faq">
-      <section><h2>Questions</h2></section>
+      <section><h2 data-theme-field="heading">Questions</h2></section>
     </div>
     <div class="contents home-render-unit" data-home-render-unit data-theme-section-id="seo">
       <section><h2>About us</h2></section>
@@ -100,10 +100,10 @@ describe("the storefront preview bridge", () => {
     harness.deliver({ ...answer, source: "elsewhere" });
     expect(harness.posted()).toHaveLength(1);
     // Edits before the editor connected change nothing.
-    harness.deliver({ source: EDITOR, type: "text", id: "story", from: "Our story", to: "Changed" });
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "heading", value: "Changed" });
     expect(harness.window.document.body.textContent).toContain("Our story");
     connect(harness);
-    expect(harness.of("ready")).toEqual([{ source: "scalius-theme-preview", type: "ready", path: "/", marks: ["story", "faq", "seo"] }]);
+    expect(harness.of("ready")).toEqual([{ source: "scalius-theme-preview", type: "ready", path: "/", marks: ["story", "faq", "seo"], fields: 1 }]);
     expect(harness.posted().every(([, origin]) => origin === DASHBOARD)).toBe(true);
   });
 
@@ -189,11 +189,11 @@ describe("the storefront preview bridge", () => {
   it("patches a section's text in place and leaves the rest alone", () => {
     const harness = start();
     connect(harness);
-    harness.deliver({ source: EDITOR, type: "text", id: "story", from: "Our story", to: "Our new story" });
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "heading", value: "Our new story" });
     const headings = Array.from(harness.window.document.querySelectorAll("h2"), (heading) => heading.textContent);
     expect(headings).toEqual(["Our new story", "Questions", "About us"]);
     // Text that only another section holds is not touched.
-    harness.deliver({ source: EDITOR, type: "text", id: "story", from: "Questions", to: "Nope" });
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "heading", value: "Nope" });
     expect(harness.window.document.body.textContent).toContain("Questions");
   });
 
@@ -239,7 +239,7 @@ describe("the storefront preview bridge", () => {
     harness.deliver({ source: EDITOR, type: "tokens", vars: { "color-bg": "#ffffff" }, seq: 2 });
     harness.deliver({ source: EDITOR, type: "reveal", id: "faq", seq: 3 });
     harness.deliver({ source: EDITOR, type: "arrange", region: "page", order: ["faq", "story"], seq: 4 });
-    harness.deliver({ source: EDITOR, type: "text", id: "faq", from: "Questions", to: "Questions?", seq: 5 });
+    harness.deliver({ source: EDITOR, type: "text", id: "faq", field: "heading", value: "Questions?", seq: 5 });
     harness.deliver({ source: EDITOR, type: "inspector", on: false, seq: 6 });
     expect(harness.of("ack").map((message) => message.seq)).toEqual([2, 3, 4, 5, 6]);
     harness.fetch.mockResolvedValueOnce(new Response("", { status: 500 }));
@@ -475,4 +475,79 @@ describe("the storefront preview bridge", () => {
     expect(harness.window.document.body.innerHTML).toBe(before);
   });
 
+});
+
+describe("explicit field identity in the actual bridge script", () => {
+  it("changes only the addressed leaf when sibling fields contain identical words", () => {
+    const harness = start(); connect(harness);
+    const section = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    section.innerHTML = '<h2 data-theme-field="heading">Same</h2><p data-theme-field="text">Same</p><a href="/"><span data-theme-field="cta.label">Same</span></a>';
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "heading", value: "Changed" });
+    expect([...section.querySelectorAll("[data-theme-field]")].map((node) => node.textContent)).toEqual(["Changed", "Same", "Same"]);
+    harness.deliver({ source: EDITOR, type: "text", id: "story", field: "cta.label", value: "<strong>plain</strong>" });
+    expect(section.querySelector('[data-theme-field="cta.label"]')!.textContent).toBe("<strong>plain</strong>");
+    expect(section.querySelector("strong")).toBeNull();
+  });
+  it("does nothing for absent or duplicate targets, nested section fields and paragraph bodies", () => {
+    const harness = start(); connect(harness);
+    const section = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    section.innerHTML = '<h2 data-theme-field="heading">One</h2><h2 data-theme-field="heading">Two</h2><div data-theme-field="body"><p>First</p><p>Second</p></div><section data-theme-section-id="nested"><p data-theme-field="text">Child</p></section>';
+    const before = section.innerHTML;
+    for (const field of ["heading", "text", "body", "items.0.question"]) harness.deliver({ source: EDITOR, type: "text", id: "story", field, value: "Wrong" });
+    expect(section.innerHTML).toBe(before);
+  });
+  it("selects the exact field, requests editing on double click, and leaves inspector-off links native", () => {
+    const harness = start(); connect(harness);
+    const heading = harness.window.document.querySelector('[data-theme-field="heading"]')!;
+    Object.defineProperty(heading, "getBoundingClientRect", { value: () => ({ left: 12, top: 20, width: 300, height: 42 }) });
+    click(harness, heading);
+    expect(harness.of("select").at(-1)).toMatchObject({ id: "story", field: "heading" });
+    const htmlBefore = heading.outerHTML;
+    heading.dispatchEvent(new harness.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    expect(harness.of("edit-text")).toEqual([expect.objectContaining({ id: "story", field: "heading" })]);
+    expect(heading.outerHTML).toBe(htmlBefore);
+    harness.deliver({ source: EDITOR, type: "inspector", on: false });
+    heading.dispatchEvent(new harness.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    expect(harness.of("edit-text")).toHaveLength(1);
+    expect(click(harness, harness.window.document.querySelector("a")!).defaultPrevented).toBe(false);
+  });
+  it("reports one field in viewport coordinates and clears it when its node disappears", async () => {
+    const harness = start(); connect(harness);
+    const heading = harness.window.document.querySelector('[data-theme-field="heading"]')!;
+    Object.defineProperty(heading, "getBoundingClientRect", { value: () => ({ left: 12, top: -10, width: 300, height: 42 }) });
+    Object.defineProperty(harness.window, "scrollY", { configurable: true, value: 500 });
+    harness.deliver({ source: EDITOR, type: "field", target: { id: "story", field: "heading" } });
+    await vi.waitFor(() => expect(harness.of("layout").at(-1)).toMatchObject({ scrollY: 500, field: { id: "story", field: "heading", rect: [12, -10, 300, 42] } }));
+    heading.remove();
+    harness.deliver({ source: EDITOR, type: "field", target: { id: "story", field: "heading" } });
+    await vi.waitFor(() => expect(harness.of("layout").at(-1)).toMatchObject({ field: null }));
+  });
+});
+
+describe("paragraph field geometry", () => {
+  it("sends the first double-click box before queued selection layout, using paragraph Range geometry", () => {
+    const harness = start(); connect(harness);
+    const section = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    section.innerHTML = '<div data-theme-field="body" style="display: contents"><p>First</p><p>Second</p></div>';
+    const range = harness.window.document.createRange();
+    Object.defineProperty(range, "getBoundingClientRect", { value: () => ({ left: 12, top: -8, width: 400, height: 90 }) });
+    vi.spyOn(harness.window.document, "createRange").mockReturnValue(range);
+    const paragraph = section.querySelector("p")!;
+    click(harness, paragraph); click(harness, paragraph);
+    paragraph.dispatchEvent(new harness.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    expect(harness.of("layout").at(-1)).toMatchObject({ field: null });
+    expect(harness.of("edit-text")).toEqual([expect.objectContaining({ id: "story", field: "body", rect: [12, -8, 400, 90] })]);
+    expect(section.querySelectorAll("p")).toHaveLength(2);
+  });
+  it("uses the existing Range measurement for display:contents body wrappers", async () => {
+    const harness = start(); connect(harness);
+    const section = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    section.innerHTML = '<div data-theme-field="body" style="display: contents"><p>First</p><p>Second</p></div>';
+    const range = harness.window.document.createRange();
+    Object.defineProperty(range, "getBoundingClientRect", { value: () => ({ left: 12, top: 88, width: 400, height: 90 }) });
+    vi.spyOn(harness.window.document, "createRange").mockReturnValue(range);
+    harness.deliver({ source: EDITOR, type: "field", target: { id: "story", field: "body" } });
+    await vi.waitFor(() => expect(harness.of("layout").at(-1)).toMatchObject({ field: { id: "story", field: "body", rect: [12, 88, 400, 90] } }));
+    expect(section.querySelectorAll("p")).toHaveLength(2);
+  });
 });

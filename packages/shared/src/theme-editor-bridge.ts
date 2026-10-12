@@ -36,24 +36,30 @@ export const THEME_PREVIEW_TOKEN_NAME = /^[a-z0-9-]{1,64}$/;
 export const THEME_PREVIEW_TOKEN_VALUE = /^[^;{}<>\\]{0,240}$/;
 const MAX_TOKENS = 96;
 const MAX_TEXT = 8_000;
+/** Scalar merchant copy only; filtered/repeated items require stable item identity. */
+export const THEME_TEXT_FIELDS = ["heading", "text", "cta.label", "body"] as const;
+export type ThemeTextField = (typeof THEME_TEXT_FIELDS)[number];
+export type ThemePreviewField = { id: string; field: ThemeTextField; rect: ThemePreviewRect };
+const textField = (value: unknown): value is ThemeTextField => typeof value === "string" && (THEME_TEXT_FIELDS as readonly string[]).includes(value);
 
 /** A part's box in the frame's viewport, in CSS pixels: start (left), top, width, height. */
 export type ThemePreviewRect = readonly [number, number, number, number];
 
 /** Keys the preview forwards to the editor while the frame has focus (its shortcuts). */
-export const THEME_PREVIEW_FORWARDED_KEYS = ["z", "y", "s", "d", "h", "/", "\\", "Escape", "Delete", "Backspace"] as const;
+export const THEME_PREVIEW_FORWARDED_KEYS = ["z", "y", "s", "d", "h", "/", "\\", "Escape", "Enter", "Delete", "Backspace"] as const;
 
 /** Preview → dashboard. */
 export type ThemePreviewMessage =
   /** The bridge loaded and waits for `connect`. */
   | { source: typeof THEME_PREVIEW_SOURCE; type: "hello"; path: string }
   /** After `connect` (and after a swap): the page's marks, in page order. */
-  | { source: typeof THEME_PREVIEW_SOURCE; type: "ready"; path: string; marks: string[] }
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "ready"; path: string; marks: string[]; fields?: 1 }
   /** Where each shown mark is, the scroll position and the page height. */
-  | { source: typeof THEME_PREVIEW_SOURCE; type: "layout"; rects: Record<string, ThemePreviewRect>; scrollY: number; height: number }
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "layout"; rects: Record<string, ThemePreviewRect>; scrollY: number; height: number; field?: ThemePreviewField | null }
   | { source: typeof THEME_PREVIEW_SOURCE; type: "hover"; id: string | null }
   /** The merchant clicked a marked part with the inspector on. */
-  | { source: typeof THEME_PREVIEW_SOURCE; type: "select"; id: string }
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "select"; id: string; field?: ThemeTextField }
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "edit-text"; id: string; field: ThemeTextField; rect?: ThemePreviewRect }
   /** A shortcut pressed while the frame had focus. */
   | { source: typeof THEME_PREVIEW_SOURCE; type: "key"; key: string; mod: boolean; shift: boolean; alt: boolean }
   /** A preview-only render failed: the editor shows the saved page instead. */
@@ -75,11 +81,13 @@ export type ThemeEditorCommand =
   | { source: typeof THEME_EDITOR_SOURCE; type: "tokens"; vars: Record<string, string> }
   /** The whole unsaved document: the storefront paints tokens, fonts and card attributes from it. */
   | { source: typeof THEME_EDITOR_SOURCE; type: "paint"; theme: unknown }
-  /** One text setting of a section changed: replace its text where the page shows it. */
-  | { source: typeof THEME_EDITOR_SOURCE; type: "text"; id: string; from: string; to: string }
+  /** Track one explicitly addressed field's viewport rect. Null clears it. */
+  | { source: typeof THEME_EDITOR_SOURCE; type: "field"; target: { id: string; field: ThemeTextField } | null }
+  /** Replace one explicitly marked leaf; canonical rendering follows every settings change. */
+  | { source: typeof THEME_EDITOR_SOURCE; type: "text"; id: string; field: ThemeTextField; value: string }
   /** A region's shown sections, in order: the others hide. */
   | { source: typeof THEME_EDITOR_SOURCE; type: "arrange"; region: string; order: string[] }
-  /** Draw unsaved sections through the preview-only route (`after` places a new one). */
+  /** Draw unsaved sections through the preview-only route (canonical regions place new units). */
   | { source: typeof THEME_EDITOR_SOURCE; type: "render"; body: unknown; after: string | null };
 
 export type ThemeEditorMessage =
@@ -115,19 +123,26 @@ export function readThemePreviewMessage(data: unknown): ThemePreviewMessage | nu
       return path(message.path) ? { source, type: "hello", path: message.path } : null;
     case "ready":
       return path(message.path) && Array.isArray(message.marks) && message.marks.length <= THEME_PREVIEW_MARKS_MAX && message.marks.every(markId)
-        ? { source, type: "ready", path: message.path, marks: [...message.marks] }
+        ? { source, type: "ready", path: message.path, marks: [...message.marks], ...(message.fields === 1 ? { fields: 1 as const } : {}) }
         : null;
     case "layout": {
       const rects = record(message.rects);
       if (!rects || !finite(message.scrollY) || !finite(message.height)) return null;
       const entries = Object.entries(rects);
       if (entries.length > THEME_PREVIEW_MARKS_MAX || !entries.every(([id, box]) => markId(id) && rect(box))) return null;
-      return { source, type: "layout", rects: Object.fromEntries(entries) as Record<string, ThemePreviewRect>, scrollY: message.scrollY, height: message.height };
+      const field = record(message.field);
+      if (message.field !== undefined && message.field !== null && (!field || !markId(field.id) || !textField(field.field) || !rect(field.rect))) return null;
+      return { source, type: "layout", rects: Object.fromEntries(entries) as Record<string, ThemePreviewRect>, scrollY: message.scrollY, height: message.height,
+        ...(message.field === undefined ? {} : { field: field ? { id: field.id as string, field: field.field as ThemeTextField, rect: field.rect as ThemePreviewRect } : null }) };
     }
     case "hover":
       return message.id === null || markId(message.id) ? { source, type: "hover", id: message.id } : null;
     case "select":
-      return markId(message.id) ? { source, type: "select", id: message.id } : null;
+      return markId(message.id) && (message.field === undefined || textField(message.field))
+        ? { source, type: "select", id: message.id, ...(textField(message.field) ? { field: message.field } : {}) } : null;
+    case "edit-text":
+      return markId(message.id) && textField(message.field) && (message.rect === undefined || rect(message.rect))
+        ? { source, type: "edit-text", id: message.id, field: message.field, ...(rect(message.rect) ? { rect: message.rect } : {}) } : null;
     case "key":
       return typeof message.key === "string" && (THEME_PREVIEW_FORWARDED_KEYS as readonly string[]).includes(message.key)
         && typeof message.mod === "boolean" && typeof message.shift === "boolean" && typeof message.alt === "boolean"
@@ -184,11 +199,14 @@ function readThemeEditorCommand(message: Record<string, unknown>): ThemeEditorCo
     }
     case "paint":
       return record(message.theme) && size(message.theme) ? { source, type: "paint", theme: message.theme } : null;
+    case "field": {
+      const target = record(message.target);
+      return message.target === null ? { source, type: "field", target: null }
+        : target && markId(target.id) && textField(target.field) ? { source, type: "field", target: { id: target.id, field: target.field } } : null;
+    }
     case "text":
-      return markId(message.id) && typeof message.from === "string" && typeof message.to === "string"
-        && message.from.length <= MAX_TEXT && message.to.length <= MAX_TEXT
-        ? { source, type: "text", id: message.id, from: message.from, to: message.to }
-        : null;
+      return markId(message.id) && textField(message.field) && typeof message.value === "string" && message.value.length <= MAX_TEXT
+        ? { source, type: "text", id: message.id, field: message.field, value: message.value } : null;
     case "arrange":
       return markId(message.region) && Array.isArray(message.order) && message.order.length <= THEME_PREVIEW_MARKS_MAX && message.order.every(markId)
         ? { source, type: "arrange", region: message.region, order: [...message.order] }

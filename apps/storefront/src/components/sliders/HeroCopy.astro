@@ -10,6 +10,7 @@
 import Button from "@/components/ui/Button.astro";
 
 interface Props {
+  previewFields?: boolean;
   heading?: string;
   text?: string;
   /** The button's words; none draws no button. */
@@ -22,7 +23,7 @@ interface Props {
   headingLevel?: "p" | "h2";
 }
 
-const { heading, text, buttonLabel, tone = "band", size = "lg", headingId, headingLevel = "p" } = Astro.props;
+const { previewFields = false, heading, text, buttonLabel, tone = "band", size = "lg", headingId, headingLevel = "p" } = Astro.props;
 const Heading = headingLevel;
 ---
 
@@ -30,10 +31,10 @@ const Heading = headingLevel;
   <div class="hero-copy" data-tone={tone} data-size={size}>
     {tone === "band" && <div class="hero-copy-lead" aria-hidden="true" />}
     <div class="hero-copy-body">
-      {heading && <Heading id={headingId} class="hero-copy-heading">{heading}</Heading>}
-      {text && <p class="hero-copy-text">{text}</p>}
+      {heading && <Heading data-theme-field={previewFields ? "heading" : undefined} id={headingId} class="hero-copy-heading">{heading}</Heading>}
+      {text && <p data-theme-field={previewFields ? "text" : undefined} class="hero-copy-text">{text}</p>}
       {buttonLabel && (
-        <Button as="span" variant="primary" class="hero-copy-button">{buttonLabel}</Button>
+        <Button data-theme-field={previewFields ? "cta.label" : undefined} as="span" variant="primary" class="hero-copy-button">{buttonLabel}</Button>
       )}
     </div>
   </div>

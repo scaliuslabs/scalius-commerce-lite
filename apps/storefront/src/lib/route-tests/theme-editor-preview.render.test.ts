@@ -383,7 +383,7 @@ const marked = (html: string) => [...html.matchAll(/ data-theme-section-id="([a-
 describe("a theme preview of the homepage", () => {
   it("marks every section and carries the bridge for the dashboard origin, only under a valid preview", async () => {
     const buyer = await renderPage(HomePage, { document: fixedTheme() });
-    for (const marker of ["data-theme-section-id", "data-theme-region", "scalius-theme-preview", "admin.shop.test"]) {
+    for (const marker of ["data-theme-section-id", "data-theme-field", "data-theme-region", "scalius-theme-preview", "admin.shop.test"]) {
       expect(buyer.html).not.toContain(marker);
     }
 
@@ -398,6 +398,11 @@ describe("a theme preview of the homepage", () => {
     expect(marked(preview.html)).toEqual(["announcement", "header", "hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo", "footer"]);
     expect(regionsOf(preview.html)).toEqual(["page"]);
     expect(preview.html).not.toContain("data-theme-preview-layout");
+    expect(preview.html).toContain('data-theme-field="heading"');
+    expect(preview.html).toContain('data-theme-field="body"');
+    const hero = /data-theme-section-id="hero"([\s\S]*?)data-theme-section-id="usp"/.exec(preview.html)?.[1];
+    expect(hero).toBeTruthy();
+    expect(hero).not.toContain("data-theme-field");
     // The bridge talks to the dashboard origin only; it names no token.
     expect(preview.html).toContain("scalius-theme-preview");
     expect(preview.html).toContain(JSON.stringify("https://admin.shop.test"));

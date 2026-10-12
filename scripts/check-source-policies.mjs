@@ -382,6 +382,7 @@ export const PHYSICAL_UTILITY_ALLOW = {
   "apps/admin-v2/src/components/admin/analytics/SalesTrendChart.tsx": ["left-(--dot-x)", "left-(--tip-edge)", "right-(--tip-edge)"],
   // The preview frame and its outlines sit at measured pixels from the canvas' left edge (the frame never mirrors).
   "apps/admin-v2/src/components/admin/online-store/theme-editor/EditorCanvas.tsx": ["left-(--ox)", "left-0", "left-1/2"],
+  "apps/admin-v2/src/components/admin/online-store/theme-editor/CanvasTextEditor.tsx": ["left-(--ox)"],
   "apps/storefront/src/components/header/variants/ClassicHeader.astro": ["left-1/2"],
   "apps/storefront/src/components/sliders/CustomCarousel.astro": ["left-1/2"],
 };

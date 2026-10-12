@@ -49,6 +49,8 @@ let root: Root;
 let container: HTMLDivElement;
 const handle: { preview: ReturnType<typeof usePreview> | null; rerender: Dispatch<SetStateAction<number>> | null } = { preview: null, rerender: null };
 const connectedCount = { value: 0 };
+const selectedField = vi.fn();
+const editText = vi.fn();
 let setSourceRevision: Dispatch<SetStateAction<number | null>>;
 
 function Harness() {
@@ -61,7 +63,8 @@ function Harness() {
     sourceRevision,
     path: "/",
     inspector: true,
-    onSelect: () => {},
+    onSelect: selectedField,
+    onEditText: editText,
     onKey: () => {},
     onConnected: () => { connectedCount.value += 1; },
   });
@@ -123,7 +126,7 @@ const COMMANDS: PreviewCommand[] = [
   { type: "reveal", id: "faq" },
   { type: "tokens", vars: { "color-bg": "#ffffff" } },
   { type: "paint", theme: { version: 8 } },
-  { type: "text", id: "faq", from: "Questions", to: "Questions?" },
+  { type: "text", id: "faq", field: "heading", value: "Questions?" },
   { type: "arrange", region: "page", order: ["faq", "hero"] },
   { type: "render", body: { scope: { kind: "home" }, sections: [], only: "faq" }, after: null },
 ];
@@ -132,6 +135,8 @@ beforeEach(() => {
   act(() => setLocale("en"));
   windows.clear();
   connectedCount.value = 0;
+  selectedField.mockClear();
+  editText.mockClear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("fetch", vi.fn(async () => new Response("")));
   vi.spyOn(HTMLIFrameElement.prototype, "contentWindow", "get").mockImplementation(function (this: HTMLIFrameElement) {
@@ -213,7 +218,7 @@ describe("the preview channel", () => {
     const frame = await connectFirstFrame();
     // Fast typing: each keystroke patches the text, and the section is drawn again.
     for (let at = 1; at <= 20; at += 1) {
-      send({ type: "text", id: "faq", from: "Q".repeat(at), to: "Q".repeat(at + 1) });
+      send({ type: "text", id: "faq", field: "heading", value: "Q".repeat(at + 1) });
       send({ type: "render", body: { scope: { kind: "home" }, sections: [], only: "faq", n: at }, after: null });
     }
     send({ type: "tokens", vars: { "color-bg": "#333333" } });
@@ -258,7 +263,7 @@ describe("the preview channel", () => {
   });
 
   it("keys commands by what they replace", () => {
-    expect(previewCommandKey({ type: "text", id: "faq", from: "a", to: "b" })).toBeNull();
+    expect(previewCommandKey({ type: "text", id: "faq", field: "heading", value: "b" })).toBeNull();
     expect(previewCommandKey({ type: "arrange", region: "before", order: [] })).toBe("arrange:before");
     expect(previewCommandKey({ type: "render", body: { only: "faq" }, after: null })).toBe("render:faq");
     expect(previewCommandKey({ type: "render", body: {}, after: null })).toBe("render:regions");
@@ -314,4 +319,33 @@ describe("the preview channel", () => {
     expect(frames()).toEqual([frame]);
   });
 
+});
+
+describe("frame-specific scalar text capability", () => {
+  it("forwards a validated gesture box without waiting for field layout", async () => {
+    const frame = await connectFirstFrame();
+    deliver(frame, { type: "ready", path: "/", marks: ["faq"], fields: 1 });
+    expect(handle.preview!.layout.field).toBeUndefined();
+    deliver(frame, { type: "edit-text", id: "faq", field: "heading", rect: [10, 20, Infinity, 40] });
+    expect(editText).not.toHaveBeenCalled();
+    deliver(frame, { type: "edit-text", id: "faq", field: "heading", rect: [10, 20, 300, 40] });
+    expect(editText).toHaveBeenCalledExactlyOnceWith("faq", "heading", [10, 20, 300, 40]);
+  });
+  it("defaults older bridges to canonical rendering and drops field events from replaced frames", async () => {
+    const first = await connectFirstFrame();
+    expect(handle.preview!.fieldsEnabled).toBe(false);
+    deliver(first, { type: "ready", path: "/", marks: ["faq"], fields: 1 });
+    expect(handle.preview!.fieldsEnabled).toBe(true);
+    deliver(first, { type: "select", id: "faq", field: "heading" });
+    expect(selectedField).toHaveBeenLastCalledWith("faq", "heading");
+    act(() => handle.preview!.reload());
+    await vi.waitFor(() => expect(frames()).toHaveLength(2));
+    const second = frames()[1]!;
+    deliver(second, { type: "hello", path: "/" });
+    deliver(second, { type: "ready", path: "/", marks: ["faq"] });
+    expect(handle.preview!.fieldsEnabled).toBe(false);
+    const before = editText.mock.calls.length;
+    deliver(first, { type: "edit-text", id: "faq", field: "heading", rect: [10, 20, 300, 40] });
+    expect(editText).toHaveBeenCalledTimes(before);
+  });
 });

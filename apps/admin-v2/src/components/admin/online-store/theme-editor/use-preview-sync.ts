@@ -16,7 +16,7 @@ import {
   type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+import { canvasTextField } from "./canvas-text";
 import { pageScope, pageSections, type EditorPage } from "./editor-pages";
 import type { PreviewCommand } from "./use-preview";
 
@@ -28,16 +28,16 @@ const same = (left: unknown, right: unknown) => left === right || JSON.stringify
 export const PREVIEW_RENDER_DELAY_MS = 90;
 
 /** The string values that changed between two values (same shape), each with where it was. */
-export function changedTexts(before: unknown, after: unknown, limit = 12): Array<{ from: string; to: string }> {
-  const found: Array<{ from: string; to: string }> = [];
-  const walk = (left: unknown, right: unknown) => {
+export function changedTexts(before: unknown, after: unknown, limit = 12): Array<{ field: string; from: string; to: string }> {
+  const found: Array<{ field: string; from: string; to: string }> = [];
+  const walk = (left: unknown, right: unknown, field = "") => {
     if (found.length >= limit || left === right) return;
     if (typeof left === "string" && typeof right === "string") {
-      if (left.trim()) found.push({ from: left, to: right });
+      found.push({ field, from: left, to: right });
       return;
     }
-    if (left && right && typeof left === "object" && typeof right === "object") {
-      for (const key of Object.keys(right as object)) walk((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]);
+    if (left && right && typeof left === "object" && typeof right === "object" && !Array.isArray(left) && !Array.isArray(right)) {
+      for (const key of Object.keys(right as object)) walk((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key], field ? `${field}.${key}` : key);
     }
   };
   walk(before, after);
@@ -59,10 +59,12 @@ function needsWholePage(before: Theme, after: Theme, page: EditorPage): boolean 
     || (page.kind === "home" && !same(before.pages.homeMode, after.pages.homeMode));
 }
 
-export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave, enabled = true, resyncAt = 0 }: {
+export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave, enabled = true, fieldsEnabled = false, resyncAt = 0 }: {
   send: (command: PreviewCommand) => void;
   /** Historical frames must never receive optimistic working-document edits. */
   enabled?: boolean;
+  /** Optional capability from the active bridge; older previews use canonical renders only. */
+  fieldsEnabled?: boolean;
   /** A stale response needs the latest complete document once, after edits settle. */
   resyncAt?: number;
   reload: () => void;
@@ -166,7 +168,11 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
     // Reorder and settings can change in the same history step: handle both.
     for (const section of settingsChanged) {
       const old = was.find((each) => each.id === section.id)!;
-      for (const text of changedTexts(old.settings, section.settings)) emit({ type: "text", id: section.id, ...text });
+      if (fieldsEnabled) for (const text of changedTexts(old.settings, section.settings)) {
+        const field = canvasTextField(section, text.field);
+        // Removing/defaulting text, paragraph bodies and unknown fields require the renderer.
+        if (field?.patch && text.from.trim() && text.to.trim()) emit({ type: "text", id: section.id, field: field.field, value: text.to.trim() });
+      }
       // Empty-to-visible has no reliable DOM anchor (several may appear together).
       // A canonical region render preserves page/before/after and document order.
       if (!drawn.has(section.id)) regionsNeeded = true;
@@ -197,13 +203,7 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
       }
     }
 
-    // Shared words show while typing; anything else outside the sections needs the page again, saved.
-    if (!same(before.blocks.topBar, working.blocks.topBar)) {
-      for (const text of changedTexts(before.blocks.topBar.settings, working.blocks.topBar.settings)) emit({ type: "text", id: THEME_EDITOR_MARKS.announcement, ...text });
-    }
-    if (!same(before.blocks.footer, working.blocks.footer)) {
-      for (const text of changedTexts(before.blocks.footer.settings, working.blocks.footer.settings)) emit({ type: "text", id: THEME_EDITOR_MARKS.footer, ...text });
-    }
+    // Unmarked/shared copy uses the existing saved-page refresh, never word matching.
     if (needsWholePage(before, working, page)) {
       reloadAfterSave.current = true;
       onNeedSave();

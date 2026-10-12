@@ -40,7 +40,7 @@ export interface EditorHistory {
 }
 
 export type EditorAction =
-  | { type: "edit"; update: (theme: Theme) => Theme; at: number }
+  | { type: "edit"; update: (theme: Theme) => Theme; at: number; discrete?: boolean }
   | { type: "undo" }
   | { type: "redo" }
   /** A newer saved draft under the edits (a reload after a conflict, a restore): history starts again from it. */
@@ -119,12 +119,12 @@ export function editorHistory(state: EditorHistory, action: EditorAction): Edito
       if (next === state.present) return state;
       // Typing in one field (the same value changing again within a moment) is one undo step.
       const key = changedLeaf(state.present, next);
-      const merge = key !== null && state.last?.key === key && action.at - state.last.at < HISTORY_COALESCE_MS;
+      const merge = !action.discrete && key !== null && state.last?.key === key && action.at - state.last.at < HISTORY_COALESCE_MS;
       return {
         past: merge ? state.past : [...state.past, state.present].slice(-HISTORY_LIMIT),
         present: next,
         future: [],
-        last: key === null ? null : { key, at: action.at },
+        last: key === null || action.discrete ? null : { key, at: action.at },
       };
     }
     case "undo": {

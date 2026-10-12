@@ -12,7 +12,7 @@
  * instead of pushing the frame down.
  */
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Trash2, Pencil } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
@@ -26,6 +26,7 @@ export interface SelectionActions {
   shared?: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
+  onEditText?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onDuplicate?: () => void;
@@ -64,14 +65,14 @@ function Outline({ box, rect, tone, dashed, label, children }: {
         dashed && "border-dashed",
       )}
     >
-      <span
+      {label ? <span
         className={cn(
           "absolute start-0 top-(--ct) flex h-6 max-w-[45%] items-center gap-1 truncate rounded-ee-md px-2 text-caption font-medium",
           tone === "shared" ? "bg-success text-success-foreground" : "bg-ring text-primary-foreground",
         )}
       >
         {label}
-      </span>
+      </span> : null}
       {children}
     </div>
   );
@@ -79,9 +80,9 @@ function Outline({ box, rect, tone, dashed, label, children }: {
 
 /** Whether a selection has any toolbar action (a part that cannot move or change shows only its name). */
 const hasToolbar = (actions: SelectionActions) =>
-  Boolean(actions.onMoveUp || actions.onMoveDown || actions.onDuplicate || actions.onToggleHidden || actions.onRemove);
+  Boolean(actions.onEditText || actions.onMoveUp || actions.onMoveDown || actions.onDuplicate || actions.onToggleHidden || actions.onRemove);
 
-export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, behind = false, onRetry, onScaleChange }: {
+export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, behind = false, textEditor, onRetry, onScaleChange }: {
   device: PreviewDevice;
   desktopWidth: DesktopWidth;
   zoom: PreviewZoom;
@@ -99,6 +100,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
   notice?: ReactNode;
   /** The page has not confirmed the latest edits yet (it is slow or reconnecting). */
   behind?: boolean;
+  textEditor?: (box: FrameBox) => ReactNode;
   onRetry: () => void;
   onScaleChange: (box: FrameBox) => void;
 }) {
@@ -183,6 +185,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           {hoverRect ? (
             <Outline box={box} rect={hoverRect} tone={names[hovered!]?.shared ? "shared" : "selection"} dashed label={names[hovered!]?.name ?? ""} />
           ) : null}
+          {selected && layout.field?.id === selected ? <Outline box={box} rect={layout.field.rect} tone="selection" dashed label="" /> : null}
           {selectedRect && actions ? (
             <Outline box={box} rect={selectedRect} tone={actions.shared ? "shared" : "selection"} label={actions.name}>
               {hasToolbar(actions) ? (
@@ -191,6 +194,9 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
                   aria-label={t("selectionToolbar", { name: actions.name })}
                   className="pointer-events-auto absolute end-1 top-[calc(var(--ct)+0.25rem)] flex items-center gap-0.5 rounded-lg bg-card p-0.5 shadow-popover"
                 >
+                  {actions.onEditText ? (
+                    <Button type="button" data-canvas-edit-text variant="ghost" size="icon-sm" className="min-h-11 min-w-11" aria-label={t("canvasTextEdit")} onClick={actions.onEditText}><Pencil aria-hidden="true" /></Button>
+                  ) : null}
                   {actions.onMoveUp ? (
                     <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveUp")} disabled={!actions.canMoveUp} onClick={actions.onMoveUp}><ArrowUp aria-hidden="true" /></Button>
                   ) : null}
@@ -224,6 +230,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
           ) : null}
         </div>
       ) : null}
+      {textEditor ? <div data-canvas-text-layer style={overlayStyle} className="pointer-events-none absolute inset-x-0 top-4 h-(--oh) overflow-clip">{textEditor(box)}</div> : null}
       <p role="status" className={cn("pointer-events-none absolute end-6 bottom-6 z-10 rounded-full bg-card px-3 py-1 text-caption text-muted-foreground shadow-popover", !(ready && behind) && "invisible")}>
         {t("previewUpdating")}
       </p>

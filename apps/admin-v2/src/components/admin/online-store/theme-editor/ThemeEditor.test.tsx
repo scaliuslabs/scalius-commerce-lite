@@ -13,6 +13,7 @@ import {
   type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import type { ThemeTextField, ThemePreviewField, ThemePreviewRect } from "@scalius/shared/theme-editor-bridge";
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
@@ -29,10 +30,13 @@ const api = vi.hoisted(() => ({
 const frame = vi.hoisted(() => ({
   send: vi.fn(), reload: vi.fn(),
   path: null as string | null,
-  onSelect: null as null | ((id: string) => void),
+  onSelect: null as null | ((id: string, field?: ThemeTextField) => void),
+  onEditText: null as null | ((id: string, field: ThemeTextField, rect?: ThemePreviewRect) => void),
+  field: null as ThemePreviewField | null,
   rects: {} as Record<string, readonly [number, number, number, number]>,
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const navigation = vi.hoisted(() => ({ blocker: vi.fn((_options: { enableBeforeUnload?: boolean }) => ({ status: "idle" })) }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -61,7 +65,7 @@ vi.mock("../type-preview-fonts", () => ({ registerTypePreviewFonts: vi.fn() }));
 vi.mock("../theme-preview", () => ({ useOpenThemePreview: () => vi.fn(), isSafeThemePreviewContinuation: () => true }));
 vi.mock("~/components/admin/media-manager", () => ({ MediaManager: ({ trigger }: { trigger: ReactNode }) => <span>{trigger}</span> }));
 vi.mock("@tanstack/react-router", () => ({
-  useBlocker: vi.fn(() => ({ status: "idle" })),
+  useBlocker: navigation.blocker,
   useNavigate: () => vi.fn(),
   Link: ({ to, children, params: _params, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params?: unknown; children: ReactNode }) => (
     <a href={to} {...props}>{children}</a>
@@ -70,13 +74,14 @@ vi.mock("@tanstack/react-router", () => ({
 // The frame and its bridge are their own units (the storefront's bridge tests): here a ready frame records commands.
 vi.mock("./use-preview", () => ({
   PREVIEW_HELLO_TIMEOUT_MS: 15_000,
-  usePreview: (options: { path: string | null; onSelect: (id: string) => void; onConnected: () => void }) => {
+  usePreview: (options: { path: string | null; onSelect: (id: string, field?: ThemeTextField) => void; onEditText: (id: string, field: ThemeTextField, rect?: ThemePreviewRect) => void; onConnected: () => void }) => {
     frame.path = options.path;
     frame.onSelect = options.onSelect;
+    frame.onEditText = options.onEditText;
     useEffect(() => options.onConnected(), []); // eslint-disable-line react-hooks/exhaustive-deps -- once, as a frame connects
     return {
       phase: "ready", origin: "https://shop.test", frames: [{ id: 1, src: "about:blank" }], activeId: 1,
-      layout: { rects: frame.rects, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: null,
+      layout: { rects: frame.rects, field: frame.field, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: options.path, fieldsEnabled: true,
       send: frame.send, reload: frame.reload, retry: vi.fn(), register: () => () => {},
     };
   },
@@ -123,6 +128,7 @@ let container: HTMLDivElement;
 beforeEach(() => {
   vi.clearAllMocks();
   frame.rects = {};
+  frame.field = null;
   act(() => setLocale("en"));
   setViewport(1440);
   try { window.localStorage.clear(); } catch { /* none */ }
@@ -269,12 +275,12 @@ describe("theme editor: layers", () => {
 });
 
 describe("theme editor: live preview and saving", () => {
-  it("shows typed words in the frame at once, draws the section again, then autosaves", async () => {
+  it("draws unmarked catalog copy canonically, then autosaves", async () => {
     render();
     act(() => row("rail").click());
     await ready("#theme-section-rail-title");
     type(field("theme-section-rail-title"), "Fresh honey");
-    expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({ type: "text", id: "rail", from: "New honey", to: "Fresh honey", revision: expect.any(Number) }));
+    expect(frame.send.mock.calls.some(([command]) => command.type === "text")).toBe(false);
     await vi.waitFor(() => expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({
       type: "render",
       body: expect.objectContaining({ scope: { kind: "home" }, only: "rail" }),
@@ -596,4 +602,91 @@ describe("theme editor: the frame never moves", () => {
       expect(frameStyle()).toBe(before);
     });
   }
+});
+
+describe("theme editor: exact canvas text", () => {
+  it.each([
+    { measured: null, enabled: false },
+    { measured: { id: "story", field: "heading", rect: [20, 100, 500, 50] }, enabled: false },
+    { measured: { id: "faq", field: "body", rect: [20, 100, 500, 50] }, enabled: false },
+    { measured: { id: "faq", field: "heading", rect: [20, 100, 500, 50] }, enabled: true },
+  ])("offers desktop toolbar editing only with its matching field box (%j)", ({ measured, enabled }) => {
+    frame.rects = { faq: [20, 100, 500, 200] };
+    frame.field = measured as ThemePreviewField | null;
+    render(); act(() => frame.onSelect!("faq", "heading"));
+    const edit = container.querySelector<HTMLButtonElement>("[data-canvas-edit-text]");
+    expect(Boolean(edit)).toBe(enabled);
+    if (edit) {
+      act(() => edit.click());
+      expect(container.querySelector("[data-canvas-text-editor] input")).not.toBeNull();
+    }
+  });
+  it.each([null, { id: "faq", field: "heading", rect: [1, 2, 30, 40] } as ThemePreviewField])("opens the first paragraph edit before its selection layout arrives (%j)", (previousField) => {
+    frame.field = previousField;
+    render(themeWith([section("editorial", "story", { layout: "rich-text", heading: "Story", body: "First paragraph.\n\nদ্বিতীয় অনুচ্ছেদ।" })]));
+    // The click selection and double-click intent arrive before React can use a new field layout.
+    act(() => {
+      frame.onSelect!("story", "body");
+      frame.onEditText!("story", "body", [20, 100, 500, 90]);
+    });
+    const input = container.querySelector<HTMLTextAreaElement>("[data-canvas-text-editor] textarea");
+    expect(input).not.toBeNull();
+    expect(input!.value).toBe("First paragraph.\n\nদ্বিতীয় অনুচ্ছেদ।");
+    expect(document.activeElement).toBe(input);
+    expect(api.draft).not.toHaveBeenCalled();
+  });
+  it("warns only while the native buffer differs from its baseline, without saving keystrokes", async () => {
+    frame.field = { id: "faq", field: "heading", rect: [20, 100, 500, 50] };
+    render(); act(() => frame.onSelect!("faq", "heading"));
+    await ready("#theme-section-faq-heading");
+    act(() => frame.onEditText!("faq", "heading"));
+    const input = container.querySelector<HTMLInputElement>("[data-canvas-text-editor] input")!;
+    const guarded = () => navigation.blocker.mock.lastCall?.[0]?.enableBeforeUnload;
+    expect(guarded()).toBe(false);
+    type(input, "Changed questions");
+    expect(guarded()).toBe(true);
+    expect(field("theme-section-faq-heading").value).toBe("Questions");
+    expect(api.draft).not.toHaveBeenCalled();
+    type(input, "Questions");
+    expect(guarded()).toBe(false);
+    key(input, { key: "Enter" });
+    expect(guarded()).toBe(false);
+    expect(api.draft).not.toHaveBeenCalled();
+    expect(button("Undo").disabled).toBe(true);
+  });
+  it("selects a field without stealing focus, applies one completed session, and undoes it", async () => {
+    frame.field = { id: "faq", field: "heading", rect: [20, 100, 500, 50] };
+    render();
+    act(() => frame.onSelect!("faq", "heading"));
+    await ready("#theme-section-faq-heading");
+    expect(document.activeElement?.id).not.toBe("theme-section-faq-heading");
+    const otherButton = document.createElement("button"); container.append(otherButton);
+    act(() => otherButton.focus());
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    act(() => otherButton.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(false);
+    expect(container.querySelector("[data-canvas-text-editor]")).toBeNull();
+    otherButton.remove();
+    act(() => frame.onEditText!("faq", "heading"));
+    const input = container.querySelector<HTMLInputElement>("[data-canvas-text-editor] input")!;
+    expect(input).toBeTruthy(); expect(document.activeElement).toBe(input);
+    type(input, "Canvas questions");
+    expect(field("theme-section-faq-heading").value).toBe("Questions");
+    key(input, { key: "Enter" });
+    expect(container.querySelector("[data-canvas-text-editor]")).toBeNull();
+    expect(field("theme-section-faq-heading").value).toBe("Canvas questions");
+    key(document.body, { key: "z", ctrlKey: true });
+    expect(field("theme-section-faq-heading").value).toBe("Questions");
+    frame.field = null;
+  });
+  it("keeps a phone tap as selection and Edit text focuses the existing native setting", async () => {
+    setViewport(390); frame.field = { id: "faq", field: "heading", rect: [20, 100, 300, 50] };
+    render(); act(() => frame.onSelect!("faq", "heading"));
+    await ready("#theme-section-faq-heading");
+    expect(document.activeElement?.id).not.toBe("theme-section-faq-heading");
+    act(() => frame.onEditText!("faq", "heading"));
+    expect(document.activeElement?.id).toBe("theme-section-faq-heading");
+    expect(container.querySelector("[data-canvas-text-editor]")).toBeNull();
+    frame.field = null;
+  });
 });

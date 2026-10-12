@@ -25,7 +25,7 @@ function update(next: Partial<Props>) {
   act(() => root.render(<Harness {...props} />));
 }
 function start(savedTheme: StorefrontThemeDocument, page: EditorPage = { kind: "home" }, marks?: string[]) {
-  props = { send, reload, onNeedSave: needSave, connectedAt: 1, working: savedTheme,
+  props = { send, reload, onNeedSave: needSave, fieldsEnabled: true, connectedAt: 1, working: savedTheme,
     sendable: savedTheme, savedTheme, page, presence: null, marks: marks ?? savedTheme.pages.home.map(each => each.id) };
   update({});
 }
@@ -45,7 +45,7 @@ describe("preview document synchronization", () => {
     const next = theme([b, section("faq", "a", { heading: "New" })]);
     update({ working: next, sendable: next }); tick();
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "arrange", order: ["b", "a"] }));
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "text", id: "a", from: "Old", to: "New" }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: "text", id: "a", field: "heading", value: "New" }));
     expect(renders()).toEqual([expect.objectContaining({ body: expect.objectContaining({ only: "a", region: "page" }), after: "b" })]);
     expect(new Set(send.mock.calls.map(([command]) => command.revision)).size).toBe(1);
   });
@@ -166,4 +166,29 @@ describe("preview document synchronization", () => {
     ]);
   });
 
+});
+
+describe("field patches and canonical fallback", () => {
+  it("addresses duplicate words by field and matches renderer trimming", () => {
+    start(theme([section("banner", "a", { heading: "Same", text: "Same", cta: { label: "Same", href: "/" } })]));
+    const next = theme([section("banner", "a", { heading: "  Changed  ", text: "Same", cta: { label: "Same", href: "/" } })]);
+    update({ working: next, sendable: next });
+    expect(send.mock.calls.filter(([command]) => command.type === "text").map(([command]) => command)).toEqual([
+      expect.objectContaining({ id: "a", field: "heading", value: "Changed" }),
+    ]);
+    tick(); expect(renders()).toHaveLength(1);
+  });
+  it.each(["legacy", "empty", "body", "list"])("keeps %s on canonical rendering, without guessing at text nodes", (kind) => {
+    const before = kind === "body" ? section("editorial", "a", { layout: "rich-text", heading: "Heading", body: "First\n\nSecond" })
+      : section("faq", "a", { heading: "Heading", items: [{ question: "Q", answer: "A" }] });
+    start(theme([before]));
+    if (kind === "legacy") update({ fieldsEnabled: false });
+    const next = theme([{ ...before, settings: { ...before.settings,
+      ...(kind === "body" ? { body: "Next\n\nLast" } : kind === "list" ? { items: [{ question: "Changed", answer: "A" }] } : { heading: kind === "empty" ? "" : "Changed" }),
+    } } as StorefrontSection]);
+    update({ working: next, sendable: next }); tick();
+    expect(send.mock.calls.some(([command]) => command.type === "text")).toBe(false);
+    expect(renders()).toHaveLength(1);
+    expect(renders()[0].body.only).toBe("a");
+  });
 });

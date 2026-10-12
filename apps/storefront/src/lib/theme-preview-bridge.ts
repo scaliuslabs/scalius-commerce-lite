@@ -22,6 +22,7 @@
  */
 import {
   THEME_EDITOR_SOURCE,
+  THEME_TEXT_FIELDS,
   THEME_PREVIEW_BODY_MAX,
   THEME_PREVIEW_FORWARDED_KEYS,
   THEME_PREVIEW_MARKS_MAX,
@@ -45,6 +46,8 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   const MAX_MARKS = ${THEME_PREVIEW_MARKS_MAX};
   const MAX_BODY = ${THEME_PREVIEW_BODY_MAX};
   const MARK = "data-theme-section-id";
+  const FIELD = "data-theme-field";
+  const FIELDS = ${json(THEME_TEXT_FIELDS)};
   const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
   const NAME = /^[a-z0-9-]{1,64}$/;
   const VALUE = /^[^;{}<>\\\\]{0,240}$/;
@@ -58,6 +61,18 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   let connected = false;
   let inspector = true;
   let hovered = null;
+  let selectedField = null;
+  const fieldElement = (id, field) => {
+    const section = valid(id) && find(id);
+    if (!section || !FIELDS.includes(field)) return null;
+    const found = Array.from(section.querySelectorAll("[" + FIELD + '="' + field + '"]')).filter((element) => owner(element) === section);
+    return found.length === 1 ? found[0] : null;
+  };
+  const fieldAt = (target, section) => {
+    const element = target instanceof Element && target.closest("[" + FIELD + "]");
+    const field = element && element.getAttribute(FIELD);
+    return element && owner(element) === section && FIELDS.includes(field) ? field : null;
+  };
   // A mark may be display:contents: measure what it holds. Any other mark is
   // its own box (what it holds may overflow it: a sticky bar, a popover).
   const box = (element) => {
@@ -78,7 +93,13 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
       if (!rect.width && !rect.height) continue;
       rects[id] = [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)];
     }
-    post({ type: "layout", rects, scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight });
+    let field = null;
+    const element = selectedField && fieldElement(selectedField.id, selectedField.field);
+    if (element && !element.closest("[hidden]")) {
+      const rect = box(element);
+      if (rect.width > 0 && rect.height > 0) field = { ...selectedField, rect: [rect.left, rect.top, rect.width, rect.height] };
+    }
+    post({ type: "layout", rects, field, scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight });
   };
   // Scrolls and resizes report once per frame. A hidden frame (a reload
   // waiting to swap in) may get no animation frames: a timer stands in.
@@ -96,7 +117,7 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   };
   // The first layout goes with ready: outlines never wait for a frame.
   const ready = () => {
-    post({ type: "ready", path: location.pathname, marks: marks() });
+    post({ type: "ready", path: location.pathname, marks: marks(), fields: 1 });
     observe();
     measure();
   };
@@ -133,13 +154,13 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     }
     report();
   };
-  const patchText = (id, from, to) => {
-    const element = typeof from === "string" && from.trim() && typeof to === "string" ? find(id) : null;
+  const patchText = (id, field, value) => {
+    // Bodies own paragraph children. Unknown/absent/duplicate targets await the
+    // canonical render already scheduled by the dashboard, without guessing.
+    if (field === "body" || typeof value !== "string" || !value.trim() || value.length > 8000) return;
+    const element = fieldElement(id, field);
     if (!element) return;
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (node.nodeValue.trim() === from.trim()) node.nodeValue = node.nodeValue.replace(from.trim(), to);
-    }
+    element.textContent = value;
     report();
   };
   const unitOf = (element) => element && (element.closest("[data-home-render-unit]") || element);
@@ -298,16 +319,21 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     switch (message.type) {
       case "inspector":
         inspector = message.on === true;
-        if (!inspector) post({ type: "hover", id: null });
+        if (!inspector) { selectedField = null; post({ type: "hover", id: null }); report(); }
         break;
       case "reveal":
         if (valid(message.id)) reveal(message.id);
+        break;
+      case "field":
+        selectedField = message.target && valid(message.target.id) && FIELDS.includes(message.target.field)
+          ? { id: message.target.id, field: message.target.field } : null;
+        report();
         break;
       case "tokens":
         tokens(message.vars);
         break;
       case "text":
-        if (valid(message.id)) patchText(message.id, message.from, message.to);
+        if (valid(message.id)) patchText(message.id, message.field, message.value);
         break;
       case "arrange":
         if (valid(message.region)) arrange(message.region, message.order);
@@ -346,7 +372,24 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     if (!id) return;
     event.preventDefault();
     event.stopPropagation();
-    post({ type: "select", id });
+    const field = fieldAt(event.target, element);
+    selectedField = field ? { id, field } : null;
+    post({ type: "select", id, ...(field ? { field } : {}) });
+    report();
+  }, true);
+  document.addEventListener("dblclick", (event) => {
+    if (!connected || !inspector) return;
+    const element = owner(event.target);
+    const id = element && valid(element.getAttribute(MARK));
+    const field = id && fieldAt(event.target, element);
+    const target = field && fieldElement(id, field);
+    if (!target || target.closest("[hidden]")) return;
+    const rect = box(target);
+    if (rect.width <= 0 || rect.height <= 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // The first gesture must not wait for the queued selection layout.
+    post({ type: "edit-text", id, field, rect: [rect.left, rect.top, rect.width, rect.height] });
   }, true);
   document.addEventListener("submit", (event) => {
     if (connected && inspector) event.preventDefault();
@@ -360,6 +403,7 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const mod = event.ctrlKey || event.metaKey;
     // Without the inspector the page keeps its own keys; only shortcuts with Ctrl or Cmd reach the editor.
     if (!KEYS.includes(key) || (!mod && (!inspector || (key.length === 1 && key !== "\\\\")))) return;
+    if (key === "Enter" && !selectedField) return;
     event.preventDefault();
     post({ type: "key", key, mod, shift: event.shiftKey, alt: event.altKey });
   }, true);

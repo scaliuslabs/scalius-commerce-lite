@@ -39,7 +39,7 @@ describe("theme editor messages", () => {
     expect(readThemeEditorMessage(editor({ type: "connect", inspector: true, scrollY: null })))
       .toEqual(editor({ type: "connect", inspector: true, scrollY: null }));
     expect(readThemeEditorMessage(editor({ type: "tokens", vars: { primary: "#112233", "theme-font-heading": "\"Inter\", sans-serif" } }))).not.toBeNull();
-    expect(readThemeEditorMessage(editor({ type: "text", id: "hero", from: "Eid", to: "Eid sale" }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "text", id: "hero", field: "heading", value: "Eid sale" }))).not.toBeNull();
     expect(readThemeEditorMessage(editor({ type: "arrange", region: "page", order: ["faq", "hero"] }))).not.toBeNull();
     expect(readThemeEditorMessage(editor({ type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null }))).not.toBeNull();
     for (const bad of [
@@ -88,7 +88,7 @@ describe("theme editor messages", () => {
     expect(themeEditorOrigin(undefined)).toBe("");
   });
   it("validates document revisions and explicit stale/failed acknowledgements", () => {
-    const command = editor({ type: "text", id: "faq", from: "a", to: "b", seq: 8, revision: 3 });
+    const command = editor({ type: "text", id: "faq", field: "heading", value: "b", seq: 8, revision: 3 });
     expect(readThemeEditorMessage(command)).toEqual(command);
     for (const revision of [0, -1, 1.5, "3"]) expect(readThemeEditorMessage({ ...command, revision })).toBeNull();
     for (const status of ["stale", "failed"]) {
@@ -98,4 +98,26 @@ describe("theme editor messages", () => {
     expect(readThemePreviewMessage(preview({ type: "ack", seq: 8, status: "success-ish" }))).toBeNull();
   });
 
+});
+
+describe("field-addressed copy protocol", () => {
+  it("accepts optional capability, exact selection, field box and bounded scalar commands", () => {
+    expect(readThemePreviewMessage(preview({ type: "ready", path: "/", marks: [], fields: 1 }))).toMatchObject({ fields: 1 });
+    expect(readThemePreviewMessage(preview({ type: "select", id: "banner", field: "cta.label" }))).toMatchObject({ field: "cta.label" });
+    expect(readThemePreviewMessage(preview({ type: "edit-text", id: "story", field: "body" }))).not.toBeNull();
+    const gesture = preview({ type: "edit-text", id: "story", field: "body", rect: [10, -20, 300, 40] });
+    expect(readThemePreviewMessage(gesture)).toEqual(gesture);
+    expect(readThemePreviewMessage(preview({ type: "layout", rects: {}, scrollY: 99, height: 1000, field: { id: "story", field: "heading", rect: [10, -20, 300, 40] } }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "field", target: { id: "story", field: "body" } }))).not.toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "field", target: null }))).not.toBeNull();
+  });
+  it("refuses index paths, malformed geometry, long text and legacy text matching", () => {
+    expect(readThemePreviewMessage(preview({ type: "select", id: "faq", field: "items.0.question" }))).toBeNull();
+    expect(readThemePreviewMessage(preview({ type: "layout", rects: {}, scrollY: 0, height: 10, field: { id: "story", field: "heading", rect: [0, 0, Infinity, 20] } }))).toBeNull();
+    for (const rect of [null, [0, 0, Infinity, 20], [0, 0, -1, 20], [0, 0, 20]]) {
+      expect(readThemePreviewMessage(preview({ type: "edit-text", id: "story", field: "body", rect }))).toBeNull();
+    }
+    expect(readThemeEditorMessage(editor({ type: "text", id: "faq", field: "heading", value: "x".repeat(8001) }))).toBeNull();
+    expect(readThemeEditorMessage(editor({ type: "text", id: "faq", from: "Same", to: "Other" }))).toBeNull();
+  });
 });

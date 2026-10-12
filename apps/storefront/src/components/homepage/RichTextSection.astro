@@ -5,12 +5,13 @@ import { richTextParagraphs } from "@/lib/homepage-sections";
 import Container from "@/components/ui/Container.astro";
 
 interface Props {
+  previewMarks?: boolean;
   id: string;
   heading: string;
   body: string;
 }
 
-const { id, heading, body } = Astro.props;
+const { id, heading, body, previewMarks = false } = Astro.props;
 const title = heading.trim();
 const paragraphs = richTextParagraphs(body);
 const headingId = `home-section-${id}-title`;
@@ -25,11 +26,13 @@ const headingId = `home-section-${id}-title`;
     <Container>
       <div class="max-w-3xl [overflow-wrap:anywhere]">
         {title && (
-          <h2 id={headingId} class="section-heading text-foreground">
+          <h2 data-theme-field={previewMarks ? "heading" : undefined} id={headingId} class="section-heading text-foreground">
             {title}
           </h2>
         )}
-        {paragraphs.map((paragraph) => (
+        {previewMarks ? <div data-theme-field="body" style="display: contents">
+          {paragraphs.map((paragraph) => <p class="mt-3 whitespace-pre-line text-base leading-relaxed text-foreground">{paragraph}</p>)}
+        </div> : paragraphs.map((paragraph) => (
           <p class="mt-3 whitespace-pre-line text-base leading-relaxed text-foreground">{paragraph}</p>
         ))}
       </div>

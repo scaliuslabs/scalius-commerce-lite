@@ -26,6 +26,8 @@ import {
   readThemePreviewMessage,
   type ThemeEditorMessage,
   type ThemePreviewRect,
+  type ThemePreviewField,
+  type ThemeTextField,
 } from "@scalius/shared/theme-editor-bridge";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { apiData } from "~/lib/api";
@@ -47,7 +49,7 @@ const RELAY_ACCEPTED = "scalius-continuation-accepted-v1";
 type Outgoing<Message> = Message extends { source: string } ? Omit<Message, "source" | "seq"> : never;
 export type PreviewCommand = Exclude<Outgoing<ThemeEditorMessage>, { type: "connect" }>;
 
-/** The outbox key of a command: its latest one replaces an older one with the same key (text patches chain, so they are not kept). */
+/** The outbox key of a command: its latest one replaces an older one with the same key (canonical renders follow text patches, so patches are not kept). */
 export function previewCommandKey(command: PreviewCommand): string | null {
   switch (command.type) {
     case "text": return null;
@@ -73,6 +75,7 @@ export interface PreviewLayout {
   rects: Readonly<Record<string, ThemePreviewRect>>;
   scrollY: number;
   height: number;
+  field?: ThemePreviewField | null;
 }
 
 interface Frame {
@@ -84,7 +87,7 @@ interface Frame {
 
 const EMPTY_LAYOUT: PreviewLayout = { rects: {}, scrollY: 0, height: 0 };
 
-export function usePreview({ draftRevision, sourceRevision, path, inspector, onSelect, onKey, onConnected }: {
+export function usePreview({ draftRevision, sourceRevision, path, inspector, onSelect, onEditText, onKey, onConnected }: {
   /** The saved draft revision a session opens on (it then follows every save). */
   draftRevision: number;
   /** A published version to preview instead of the draft. */
@@ -92,7 +95,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   /** The page to show (with the market's subfolder). */
   path: string | null;
   inspector: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, field?: ThemeTextField) => void;
+  onEditText?: (id: string, field: ThemeTextField, rect?: ThemePreviewRect) => void;
   onKey: (key: { key: string; mod: boolean; shift: boolean; alt: boolean }) => void;
   /** A frame became the shown one (the editor sends it the unsaved state). */
   onConnected: () => void;
@@ -102,6 +106,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const [frames, setFrames] = useState<Frame[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [layout, setLayout] = useState<PreviewLayout>(EMPTY_LAYOUT);
+  const [fieldsEnabled, setFieldsEnabled] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [marks, setMarks] = useState<readonly string[]>([]);
   /** Where the shown frame is now (a link the merchant followed moves it). */
@@ -121,8 +126,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const [behind, setBehind] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resyncAt, setResyncAt] = useState(0);
-  const latest = useRef({ inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
-  latest.current = { inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision };
+  const latest = useRef({ inspector, onSelect, onEditText, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
+  latest.current = { inspector, onSelect, onEditText, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision };
 
   const frameWindow = (id: number | null) => (id === null ? null : elements.current.get(id)?.contentWindow ?? null);
 
@@ -240,6 +245,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   useEffect(() => {
     setFrames([]);
     setActiveId(null);
+    setFieldsEnabled(false);
     connected.current.clear();
     outbox.current.clear();
     setFailed(false);
@@ -296,6 +302,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           }
           setShownPath(message.path);
           setMarks(message.marks);
+          setFieldsEnabled(message.fields === 1);
           setPhase("ready");
           setFailed(false);
           // A (re)connected page gets every command it has not acknowledged, then the unsaved edits.
@@ -320,13 +327,16 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           break;
         }
         case "layout":
-          if (id === active || active === null) setLayout({ rects: message.rects, scrollY: message.scrollY, height: message.height });
+          if (id === active || active === null) setLayout({ rects: message.rects, scrollY: message.scrollY, height: message.height, field: message.field });
           break;
         case "hover":
           if (id === active) setHovered(message.id);
           break;
         case "select":
-          if (id === active) latest.current.onSelect(message.id);
+          if (id === active) latest.current.onSelect(message.id, message.field);
+          break;
+        case "edit-text":
+          if (id === active) latest.current.onEditText?.(message.id, message.field, message.rect);
           break;
         case "key":
           if (id === active) latest.current.onKey(message);
@@ -399,6 +409,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     activeId,
     layout,
     hovered,
+    fieldsEnabled,
     marks,
     shownPath,
     behind,

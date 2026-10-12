@@ -3,6 +3,15 @@ import { defineMessages } from "./index";
 /** The theme editor: pages, sections and blocks, theme settings, versions and the storefront preview. */
 export const themeEditorMessages = defineMessages({
   en: {
+    canvasTextEdit: "Edit text",
+    canvasTextSingle: "Enter to apply · Escape to cancel",
+    canvasTextMultiline: "Ctrl/⌘ + Enter to apply · Escape to cancel",
+    canvasTextChanged: "This text changed while you were editing. Replace it with your text or cancel.",
+    canvasTextMissing: "This field can no longer be edited. Your text is still here to copy.",
+    canvasTextTooLong: "This text exceeds the field limit. Shorten it in the settings panel.",
+    canvasTextReplace: "Replace text",
+    canvasTextCancel: "Cancel",
+    canvasTextDone: "Done",
     title: "Theme editor",
     back: "Back to Themes",
     customize: "Customize",
@@ -456,6 +465,15 @@ export const themeEditorMessages = defineMessages({
     closeSettings: "Close settings",
   },
   bn: {
+    canvasTextEdit: "লেখা সম্পাদনা",
+    canvasTextSingle: "প্রয়োগ করতে Enter · বাতিল করতে Escape",
+    canvasTextMultiline: "প্রয়োগ করতে Ctrl/⌘ + Enter · বাতিল করতে Escape",
+    canvasTextChanged: "আপনি সম্পাদনা করার সময় লেখাটি বদলেছে। আপনার লেখা দিয়ে প্রতিস্থাপন করুন বা বাতিল করুন।",
+    canvasTextMissing: "এই ঘরটি আর সম্পাদনা করা যাচ্ছে না। আপনার লেখা কপি করার জন্য এখানেই আছে।",
+    canvasTextTooLong: "লেখাটি এই ঘরের সীমা ছাড়িয়েছে। সেটিংস প্যানেলে ছোট করুন।",
+    canvasTextReplace: "লেখা প্রতিস্থাপন",
+    canvasTextCancel: "বাতিল",
+    canvasTextDone: "সম্পন্ন",
     title: "থিম এডিটর",
     back: "থিমে ফিরে যান",
     customize: "কাস্টমাইজ করুন",

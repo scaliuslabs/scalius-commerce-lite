@@ -12,9 +12,10 @@ import Container from "@/components/ui/Container.astro";
 
 interface Props {
   section: StorefrontSectionOf<"faq">;
+  previewMarks?: boolean;
 }
 
-const { section } = Astro.props;
+const { section, previewMarks = false } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).home;
 const heading = section.settings.heading.trim() || copy.questions;
@@ -23,7 +24,7 @@ const headingId = `home-${section.id}-title`;
 
 <section class="home-section w-full" aria-labelledby={headingId}>
   <Container width="text">
-    <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{heading}</h2>
+    <h2 data-theme-field={previewMarks ? "heading" : undefined} id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{heading}</h2>
     <div class="divide-y divide-border rounded-xl border border-border bg-card">
       {section.settings.items.map((item) => (
         <details class="group">

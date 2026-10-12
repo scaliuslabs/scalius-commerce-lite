@@ -223,18 +223,19 @@ const root = only
         )}
 
         {section.type === "banner" && (
-          <BannerRow layout="full" banners={[{ section, photo: homepageMedia(content, section.settings.mediaId) }]} aboveFold={lead} />
+          <BannerRow previewMarks={marks} layout="full" banners={[{ section, photo: homepageMedia(content, section.settings.mediaId) }]} aboveFold={lead} />
         )}
 
         {section.type === "editorial" && (
           <EditorialSection
+            previewMarks={marks}
             section={section}
             photo={section.settings.layout === "image-with-text" ? homepageMedia(content, section.settings.mediaId) : null}
             aboveFold={lead}
           />
         )}
 
-        {section.type === "faq" && <FaqSection section={section} />}
+        {section.type === "faq" && <FaqSection previewMarks={marks} section={section} />}
 
         {section.type === "metaobjects" && metaobject && (
           <MetaobjectsSection section={section} metaobject={metaobject} media={content.media} {...money} {language} />

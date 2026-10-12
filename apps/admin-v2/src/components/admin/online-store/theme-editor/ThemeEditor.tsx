@@ -44,6 +44,11 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatDateTime, getLocale, useMessages } from "~/i18n";
+import { themeSettingMessages } from "~/i18n/theme-settings";
+import { sectionLabelScope, settingLabelKey } from "../schema-form/labels";
+import type { ThemeTextField, ThemePreviewRect } from "@scalius/shared/theme-editor-bridge";
+import { CanvasTextEditor, type CanvasTextHandle, type CanvasTextSession } from "./CanvasTextEditor";
+import { canvasTextField, commitCanvasText, type CanvasTextResult } from "./canvas-text";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { NavigationResourceOption } from "~/lib/api-query-options/navigation";
@@ -144,13 +149,13 @@ function PhoneBottomBar({ label, children }: { label: string; children: ReactNod
 }
 
 /** Puts the cursor in a field once the (lazy) pane draws it. */
-function focusWhenShown(id: string) {
+function focusWhenShown(id: string, focus = true) {
   let tries = 0;
   const attempt = () => {
     const field = document.getElementById(id);
     const target = field?.matches("input, textarea, button, select") ? field : field?.querySelector<HTMLElement>("input, textarea, button, select");
     if (target) {
-      target.focus();
+      if (focus) target.focus();
       target.scrollIntoView({ block: "center" });
     } else if (tries++ < 60) requestAnimationFrame(attempt);
   };
@@ -197,6 +202,7 @@ export function ThemeEditor({ workspace, refetch }: {
   refetch: () => Promise<{ data?: ThemeWorkspaceDocument }>;
 }) {
   const t = useMessages(themeEditorMessages);
+  const settingText = useMessages(themeSettingMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const media = useMediaPreviews(workspace.media);
@@ -216,12 +222,17 @@ export function ThemeEditor({ workspace, refetch }: {
   const wide = useMediaQuery("(min-width: 1600px)");
   const desktop = useMediaQuery("(min-width: 1024px)");
   const phone = !useMediaQuery("(min-width: 768px)");
+  const [textSession, setTextSession] = useState<CanvasTextSession | null>(null);
+  const [textDirty, setTextDirty] = useState(false);
+  const textControl = useRef<CanvasTextHandle>(null);
+  const textNonce = useRef(0);
+  const afterText = (action: () => void) => textControl.current ? textControl.current.finish(action) : action();
   const [view, setViewState] = useState<ViewChoices>(readView);
-  const setView = (next: Partial<ViewChoices>) => setViewState((current) => {
+  const setView = (next: Partial<ViewChoices>) => afterText(() => setViewState((current) => {
     const value = { ...current, ...next };
     writeView(value);
     return value;
-  });
+  }));
   /** The panel slides only after a toggle the merchant made, never on load (P14). */
   const [animated, setAnimated] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -263,6 +274,7 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // ── Selection ────────────────────────────────────────────────────────────
   const [tab, setTab] = useState<"sections" | "theme">("sections");
+  const [selectedField, setSelectedField] = useState<ThemeTextField | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const sections = pageSections(theme, page);
@@ -271,11 +283,12 @@ export function ThemeEditor({ workspace, refetch }: {
   const block = parseBlockId(selected);
   const selectedSection = sections?.find((section) => section.id === (block?.sectionId ?? selected)) ?? null;
 
-  const setPage = (next: EditorPage) => {
+  const setPage = (next: EditorPage) => afterText(() => {
     setPageState(next);
     setSelected(null);
     setTab("sections");
-  };
+    setSelectedField(null);
+  });
   // A landing page undone or restored away: back to the homepage.
   useEffect(() => {
     if (page.kind === "landing" && !theme.pages.landing[page.slug]) setPage({ kind: "home" });
@@ -296,6 +309,7 @@ export function ThemeEditor({ workspace, refetch }: {
   const [themeReveal, setThemeReveal] = useState<ThemeRevealRequest | null>(null);
   const select = useCallback((id: string | null, from: "tree" | "preview" | "other" = "other") => {
     setSelected(id);
+    setSelectedField(null);
     setRevealErrors(false);
     setThemeReveal(null);
     if (!id) return;
@@ -312,7 +326,16 @@ export function ThemeEditor({ workspace, refetch }: {
     sourceRevision: previewRevision,
     path: draft.saved.revision > 0 ? path : null,
     inspector,
-    onSelect: (id) => select(id, "preview"),
+    onSelect: (id, field) => afterText(() => {
+      select(id, "preview");
+      const section = sections?.find((entry) => entry.id === id);
+      if (field && section && canvasTextField(section, field)) {
+        setSelectedField(field);
+        // Selection reveals the exact setting without moving keyboard focus.
+        focusWhenShown(`theme-section-${id}-${field.replace(/\./g, "-")}`, false);
+      }
+    }),
+    onEditText: (id, field, rect) => startText(id, field, rect),
     onKey: (press) => handleKey(press, null),
     onConnected: () => setConnectedAt((count) => count + 1),
   });
@@ -321,6 +344,7 @@ export function ThemeEditor({ workspace, refetch }: {
     reload: preview.reload,
     enabled: previewRevision === null,
     resyncAt: preview.resyncAt,
+    fieldsEnabled: preview.fieldsEnabled,
     connectedAt,
     working: theme,
     sendable: previewRevision === null ? draft.pending : null,
@@ -335,6 +359,55 @@ export function ThemeEditor({ workspace, refetch }: {
   useEffect(() => {
     if (mark) preview.send({ type: "reveal", id: mark });
   }, [mark]); // eslint-disable-line react-hooks/exhaustive-deps -- once per selection
+
+  const canStartText = canEdit && previewRevision === null && !draft.busy && !draft.conflict
+    && inspector && preview.fieldsEnabled && preview.phase === "ready" && preview.shownPath === path;
+  const sourceLanguage = previewLocale === defaultLocale;
+  function startText(id: string, field: ThemeTextField, gestureRect?: ThemePreviewRect) {
+    if (!canStartText) return;
+    const section = sections?.find((entry) => entry.id === id);
+    const spec = section && canvasTextField(section, field);
+    if (!section || !spec) return;
+    // A translated preview edits source-language copy in the existing pane,
+    // whose notice explains the distinction. Never overlay source onto a translation.
+    if (phone || !sourceLanguage) {
+      const control = document.getElementById(`theme-section-${id}-${field.replace(/\./g, "-")}`);
+      if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+        control.focus(); control.scrollIntoView({ block: "center" });
+      }
+      return;
+    }
+    const measured = preview.layout.field;
+    const rect = gestureRect ?? (measured?.id === id && measured.field === field ? measured.rect : undefined);
+    if (!rect) return;
+    afterText(() => {
+      const key = settingLabelKey(sectionLabelScope(section.type), field);
+      setTextDirty(false);
+      setTextSession({ nonce: ++textNonce.current, target: { page, id, type: section.type, field, layout: spec.layout, baseline: spec.value },
+        label: key ? settingText(key) : t("canvasTextEdit"), multiline: spec.multiline, maxLength: spec.maxLength, rect });
+    });
+  }
+  const textState = useRef({ draft, canEdit, previewRevision, textSession });
+  textState.current = { draft, canEdit, previewRevision, textSession };
+  function commitText(value: string, baseline: string): CanvasTextResult {
+    // A deferred composition completion uses the latest rendered authority,
+    // not the theme/permissions captured when blur or navigation occurred.
+    const current = textState.current;
+    if (!current.textSession || !current.canEdit || current.previewRevision !== null || current.draft.busy || current.draft.conflict) return { ok: false, reason: "missing" };
+    const target = current.textSession.target;
+    const result = commitCanvasText(current.draft.working, target, value, baseline);
+    if (result.ok && result.theme !== current.draft.working) current.draft.dispatch({ type: "edit", discrete: true, at: Date.now(), update: (document) => {
+      const checked = commitCanvasText(document, target, value, baseline);
+      return checked.ok ? checked.theme : document;
+    } });
+    return result;
+  }
+  useEffect(() => {
+    if (preview.fieldsEnabled) preview.send({ type: "field", target: inspector && selected && selectedField ? { id: selected, field: selectedField } : null });
+  }, [selected, selectedField, inspector, connectedAt, preview.fieldsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps -- exact selected field per connection
+  // A spontaneous frame/viewport change cannot unmount a composing native control.
+  // Finish once composition settles; captured-page CAS protects the destination.
+  useEffect(() => { textControl.current?.finish(); }, [preview.activeId, phone]);
 
   // ── Edits ────────────────────────────────────────────────────────────────
   const { setDraft } = draft;
@@ -525,8 +598,9 @@ export function ThemeEditor({ workspace, refetch }: {
   // ── Keyboard (research P18) ──────────────────────────────────────────────
   const handleKey = (press: { key: string; mod: boolean; shift: boolean; alt: boolean }, event: KeyboardEvent | null) => {
     const handled = () => event?.preventDefault();
-    if (matchesEditorShortcut("undo", press)) { handled(); draft.dispatch({ type: "undo" }); }
-    else if (matchesEditorShortcut("redo", press)) { handled(); draft.dispatch({ type: "redo" }); }
+    if (event === null && press.key === "Enter" && !press.mod && !press.alt && selected && selectedField) { handled(); startText(selected, selectedField); }
+    else if (matchesEditorShortcut("undo", press)) { handled(); afterText(() => draft.dispatch({ type: "undo" })); }
+    else if (matchesEditorShortcut("redo", press)) { handled(); afterText(() => draft.dispatch({ type: "redo" })); }
     else if (matchesEditorShortcut("save", press)) { handled(); void draft.save(); }
     else if (matchesEditorShortcut("shortcuts", press)) { handled(); setShortcutsOpen(true); }
     else if (matchesEditorShortcut("sidebar", press)) { handled(); toggleSidebar(); }
@@ -591,8 +665,11 @@ export function ThemeEditor({ workspace, refetch }: {
     if (!canEdit || previewRevision !== null) return { name, shared };
     if (sectionIndex >= 0) {
       const section = (items[sectionIndex] as { section: Section }).section;
+      const canPlaceText = phone || !sourceLanguage
+        || (preview.layout.field?.id === section.id && preview.layout.field.field === selectedField);
       return {
         name,
+        onEditText: canStartText && canPlaceText && selectedField && canvasTextField(section, selectedField) ? () => startText(section.id, selectedField) : undefined,
         canMoveUp: sectionIndex > 0,
         canMoveDown: sectionIndex < items.length - 1,
         onMoveUp: () => moveSelected(-1),
@@ -714,7 +791,7 @@ export function ThemeEditor({ workspace, refetch }: {
           resource={resource}
           loading={defaults.loading}
           failed={defaults.failed}
-          onChange={(next) => setResources((current) => ({ ...current, [resourceKind]: next }))}
+          onChange={(next) => afterText(() => setResources((current) => ({ ...current, [resourceKind]: next })))}
         />
       ) : (
         <PageStrip text={page.kind === "landing" ? t("landingSlugHelp", { path: `/pages/${page.slug}` }) : t(`pageHint_${page.kind}`)} />
@@ -829,28 +906,28 @@ export function ThemeEditor({ workspace, refetch }: {
                   // Another person's save loads at once while this editor has nothing unsaved (with
                   // unsaved edits, the next autosave meets their revision and the conflict names them).
                   onRemoteSave={() => {
-                    if (!draft.unsavedEdits && !draft.busy) void draft.reload(false);
+                    if (!draft.unsavedEdits && !textSession && !draft.busy) void draft.reload(false);
                   }}
                 />
               </div>
             )}
-            <MarketSwitcher options={marketOptions} value={presence} onChange={setPresence} />
+            <MarketSwitcher options={marketOptions} value={presence} onChange={(next) => afterText(() => setPresence(next))} />
           </>
         )}
         device={device}
-        onDevice={(next) => setDevice(next)}
+        onDevice={(next) => afterText(() => setDevice(next))}
         desktopWidth={view.desktopWidth}
         onDesktopWidth={(desktopWidth) => setView({ desktopWidth })}
         zoom={view.zoom}
         onZoom={(zoom) => setView({ zoom })}
         scale={scale}
         inspector={inspector}
-        onInspector={setInspector}
+        onInspector={(next) => afterText(() => setInspector(next))}
         canUndo={draft.history.past.length > 0}
         canRedo={draft.history.future.length > 0}
-        onUndo={() => draft.dispatch({ type: "undo" })}
-        onRedo={() => draft.dispatch({ type: "redo" })}
-        onHistory={() => setHistoryOpen(true)}
+        onUndo={() => afterText(() => draft.dispatch({ type: "undo" }))}
+        onRedo={() => afterText(() => draft.dispatch({ type: "redo" }))}
+        onHistory={() => afterText(() => setHistoryOpen(true))}
         onShortcuts={() => setShortcutsOpen(true)}
         onDraftWithAi={aiAvailable ? () => setAiOpen(true) : null}
         draftHere={sections !== null}
@@ -861,10 +938,10 @@ export function ThemeEditor({ workspace, refetch }: {
           });
         } : null}
         canDiscard={canEdit && draft.differsFromLive && !draft.busy}
-        onDiscard={() => setConfirmDiscard(true)}
+        onDiscard={() => afterText(() => setConfirmDiscard(true))}
         canPublish={publishable}
         publishing={draft.publishing}
-        onPublish={() => setPublishOpen(true)}
+        onPublish={() => afterText(() => setPublishOpen(true))}
         phone={phone}
       />
 
@@ -909,6 +986,13 @@ export function ThemeEditor({ workspace, refetch }: {
           selected={selectionMark(selected)}
           names={names}
           actions={canvasActions}
+          textEditor={textSession ? (box) => <CanvasTextEditor key={textSession.nonce} session={textSession} box={box} controlRef={textControl}
+            rect={preview.layout.field?.id === textSession.target.id && preview.layout.field.field === textSession.target.field ? preview.layout.field.rect : undefined}
+            onCommit={commitText} onDirtyChange={setTextDirty} onClose={(restoreFocus) => {
+              setTextSession(null);
+              setTextDirty(false);
+              if (restoreFocus) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-canvas-edit-text]")?.focus());
+            }} /> : undefined}
           notice={conflictNotice}
           behind={preview.behind}
           onRetry={preview.retry}
@@ -965,7 +1049,7 @@ export function ThemeEditor({ workspace, refetch }: {
         </PhoneBottomBar>
       ) : <span />}
 
-      <UnsavedChangesGuard isDirty={draft.unsavedEdits} isSubmitting={false} />
+      <UnsavedChangesGuard isDirty={draft.unsavedEdits || textDirty} isSubmitting={false} />
       {libraryMounted ? (
         <Suspense fallback={null}>
           <SectionLibrary
@@ -1025,10 +1109,10 @@ export function ThemeEditor({ workspace, refetch }: {
             previewRevision={previewRevision}
             busy={draft.busy || !canEdit}
             sectionName={sectionName}
-            onPreview={(revision) => {
+            onPreview={(revision) => afterText(() => {
               setPreviewRevision(revision);
               setHistoryOpen(false);
-            }}
+            })}
             onRestore={(revision) => setPendingRestore({ version: revision })}
             onRestorePoint={(id) => setPendingRestore({ point: id })}
           />

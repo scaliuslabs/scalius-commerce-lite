@@ -287,3 +287,19 @@ describe("app sections", () => {
     expect(appSectionInvalid(HOME[0]!, byKey)).toBe(false);
   });
 });
+
+describe("discrete canvas text history", () => {
+  it("keeps a completed canvas session separate from both neighboring pane edits", () => {
+    let state = startHistory(theme());
+    state = editorHistory(state, { type: "edit", update: setTitle("Pane before"), at: 1 });
+    state = editorHistory(state, { type: "edit", update: setTitle("Canvas session"), at: 2, discrete: true });
+    state = editorHistory(state, { type: "edit", update: setTitle("Pane after"), at: 3 });
+    expect(state.past).toHaveLength(3);
+    state = editorHistory(state, { type: "undo" });
+    expect(state.present.pages.home[1]?.settings).toMatchObject({ title: "Canvas session" });
+    state = editorHistory(state, { type: "undo" });
+    expect(state.present.pages.home[1]?.settings).toMatchObject({ title: "Pane before" });
+    state = editorHistory(state, { type: "redo" });
+    expect(state.present.pages.home[1]?.settings).toMatchObject({ title: "Canvas session" });
+  });
+});
